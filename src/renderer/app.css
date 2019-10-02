@@ -1,0 +1,37 @@
+body {
+  padding: 50px 50px 0px 50px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#app {
+  text-align: center;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.rpi-logo {
+  width: calc(100% - 200px);
+  /*max-width: 100%;*/
+  padding-left: 100px;
+  padding-right: 100px;
+  /*padding-top: 50px;*/
+  /*padding-bottom: 50px;*/
+}
+
+.form-selector {
+  width: 100%;
+  text-align: left;
+}
+
+.disable-focus:focus {
+  background-color: initial;
+  outline: initial;
+}
+
+.hidden-overflow {
+  overflow: hidden;
+}

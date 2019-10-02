@@ -1,0 +1,5 @@
+.DS_Store
+dist/
+build-out/
+node_modules/
+thumbs.db

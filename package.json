@@ -1,0 +1,52 @@
+{
+  "name": "imagewriter",
+  "displayName": "Raspberry Pi Image Writer",
+  "version": "1.0.0",
+  "description": "The official Raspberry Pi SD card image writer",
+  "homepage": "https://www.raspberrypi.org/downloads/",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:raspberrypi/imagewriter.git"
+  },
+  "author": "David Ferguson <david.ferguson@raspberrypi.org>",
+  "scripts": {
+    "start": "electron-webpack dev",
+    "build": "electron-webpack",
+    "package": "npm run build && electron-builder",
+    "test": "standard",
+    "postinstall": "electron-rebuild"
+  },
+  "optionalDependencies": {
+    "elevator": "^2.2.3"
+  },
+  "dependencies": {
+    "@material-ui/core": "^4.4.3",
+    "@material-ui/icons": "^4.4.3",
+    "axios": "^0.19.0",
+    "etcher-sdk": "^2.0.15",
+    "is-elevated": "^3.0.0",
+    "node-sass": "^4.12.0",
+    "pretty-bytes": "^5.3.0",
+    "react": "^16.10.1",
+    "react-dom": "^16.10.1",
+    "source-map-support": "^0.5.13",
+    "sudo-prompt": "^9.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.6.2",
+    "@babel/preset-react": "^7.0.0",
+    "babel-eslint": "^10.0.3",
+    "electron": "^6.0.11",
+    "electron-builder": "^21.2.0",
+    "electron-rebuild": "^1.8.6",
+    "electron-webpack": "^2.7.4",
+    "standard": "^14.3.1",
+    "webpack": "^4.41.0"
+  },
+  "build": {
+    "appId": "org.raspberrypi.imagewriter",
+    "directories": {
+      "output": "build-out"
+    }
+  }
+}
