@@ -23,7 +23,7 @@ import './app.css'
 const raspiTheme = createMuiTheme({
   palette: {
     primary: {
-      main: '#c51a4a'
+      main: '#f7dfe8'
     },
     secondary: {
       main: '#6cc04a'
@@ -64,7 +64,7 @@ class App extends React.Component {
     this.handleWriteClicked = this.handleWriteClicked.bind(this)
     this.setupListeners = this.setupListeners.bind(this)
     this.dialogShow = this.dialogShow.bind(this)
-    this.handleDialogClose = this.handleDialogClose.bind(this)
+    this.handleDialogClose = this.dialogClose.bind(this)
     this.resetState = this.resetState.bind(this)
 
     this.setupListeners()
@@ -224,7 +224,9 @@ class App extends React.Component {
           <Grid item xs={12}>
             <img className='rpi-logo' src={getStatic('rpi.png')} />
           </Grid>
-          <Grid item xs={6}>
+        </Grid>
+        <Grid container spacing={3} className="grid">
+          <Grid item xs={4}>
             <OSButton
               list={this.state.os.list}
               value={this.state.os.chosen}
@@ -233,7 +235,7 @@ class App extends React.Component {
               online={this.state.os.online}
             />
           </Grid>
-          <Grid item xs={6}>
+          <Grid item xs={4}>
             <SDButton
               list={this.state.sd.list}
               value={this.state.sd.chosen}
@@ -241,7 +243,7 @@ class App extends React.Component {
               writing={this.state.writing}
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid item xs={4}>
             {this.state.writing ? writeProgress : writeButton}
           </Grid>
         </Grid>
@@ -252,6 +254,7 @@ class App extends React.Component {
           body={this.state.dialog.body}
           quitButton={this.state.dialog.quit}
           dismissButton={this.state.dialog.dismiss}
+          className="dialog"
         />
       </ThemeProvider>
     )

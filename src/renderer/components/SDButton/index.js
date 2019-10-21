@@ -17,7 +17,7 @@ class SDButton extends React.Component {
     this.handleDialogClose = this.handleDialogClose.bind(this)
   }
 
-  sdDialogClose (val) {
+  handleDialogClose (val) {
     this.setState({
       open: false
     })
@@ -29,14 +29,14 @@ class SDButton extends React.Component {
 
   render () {
     const loaded = this.props.list !== null
-    const placeholder = loaded ? 'Choose SD' : <i>Loading...</i>
+    const placeholder = loaded ? 'Choose Card' : <i>Loading...</i>
     const buttonText = this.props.value === null ? placeholder : this.props.value.description
     const buttonDisabled = !loaded || this.props.writing
 
     return (
       <FormControl className='form-selector'>
-        <FormHelperText>SD Card</FormHelperText>
-        <Button className='disable-focus hidden-overflow' variant='outlined' color='primary' disabled={buttonDisabled} onClick={() => this.setState({ open: true })}>
+        <FormHelperText className='form-helper'>SD Card</FormHelperText>
+        <Button className='hidden-overflow' variant='contained' color='primary' disabled={buttonDisabled} onClick={() => this.setState({ open: true })}>
           {buttonText}
         </Button>
         <SDDialog options={this.props.list} open={this.state.open} onClose={this.handleDialogClose} />

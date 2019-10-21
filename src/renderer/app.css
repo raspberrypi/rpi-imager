@@ -1,7 +1,8 @@
 body {
-  padding: 50px 50px 0px 50px;
   -webkit-user-select: none;
   user-select: none;
+  background-color: #c51a4a;
+  margin: 0px;
 }
 
 #app {
@@ -14,17 +15,19 @@ img {
 }
 
 .rpi-logo {
-  width: calc(100% - 200px);
+  width: calc(100% - 300px);
   /*max-width: 100%;*/
-  padding-left: 100px;
-  padding-right: 100px;
-  /*padding-top: 50px;*/
-  /*padding-bottom: 50px;*/
+  padding-left: 150px;
+  padding-right: 150px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+  background-color: white;
 }
 
 .form-selector {
   width: 100%;
   text-align: left;
+  padding-bottom: 20px;
 }
 
 .disable-focus:focus {
@@ -34,4 +37,27 @@ img {
 
 .hidden-overflow {
   overflow: hidden;
+}
+
+.form-helper {
+  padding: 0px 0px 10px 0px;
+}
+
+.grid {
+  padding: 10px 50px 0px 50px;
+}
+
+.dialog {
+ border: 0px;
+}
+
+button.MuiButtonBase-root {
+    border-radius: 1px;
+    background-color: white;
+    color: #c51a4a;
+}
+
+p.MuiFormHelperText-root {
+    color: white;
+    text-align:center;
 }

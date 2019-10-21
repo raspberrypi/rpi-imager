@@ -1,5 +1,7 @@
 import React from 'react'
 import Button from '@material-ui/core/Button'
+import FormHelperText from '@material-ui/core/FormHelperText'
+import FormControl from '@material-ui/core/FormControl'
 
 class WriteButton extends React.Component {
   constructor (props) {
@@ -29,15 +31,17 @@ class WriteButton extends React.Component {
 
   render () {
     return (
+      <FormControl className='form-selector'>
+        <FormHelperText className="form-helper"></FormHelperText>
       <Button
         variant='contained'
         color='primary'
-        size='large'
         disabled={!this.writeButtonEnabled()}
         onClick={this.props.onClick}
       >
         Write
       </Button>
+      </FormControl>
     )
   }
 }

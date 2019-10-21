@@ -35,8 +35,8 @@ class OSButton extends React.Component {
 
     return (
       <FormControl className='form-selector'>
-        <FormHelperText>Operating System</FormHelperText>
-        <Button className='disable-focus hidden-overflow' variant='outlined' color='primary' disabled={buttonDisabled} onClick={() => this.setState({ open: true })}>
+        <FormHelperText className='form-helper'>Operating System</FormHelperText>
+        <Button className='hidden-overflow' variant='contained' color='primary' disabled={buttonDisabled} onClick={() => this.setState({ open: true })}>
           {buttonText}
         </Button>
         <OSDialog

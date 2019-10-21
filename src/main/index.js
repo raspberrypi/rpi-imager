@@ -15,7 +15,7 @@ let mainWindow
 function createMainWindow () {
   const window = new BrowserWindow({
     width: 640,
-    height: 357 + 22, // add on mac titlebar
+    height: 400 + 22, // add on mac titlebar
     resizable: false,
     maximizable: false,
     fullscreenable: false,
