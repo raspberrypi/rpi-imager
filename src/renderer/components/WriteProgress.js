@@ -7,7 +7,7 @@ import FormControl from '@material-ui/core/FormControl'
 import {
   PROGRESS_START_TYPE,
   PROGRESS_VERIFY_TYPE
-} from 'common/consts'
+} from '../../common/consts'
 
 class WriteProgress extends React.Component {
   render () {

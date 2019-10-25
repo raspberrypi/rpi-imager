@@ -7,7 +7,7 @@ import {
   VALIDATE_WRITE,
   INCLUDE_SYSTEM,
   LOCAL_JSON_NAME
-} from 'common/consts'
+} from '../common/consts'
 
 const arch = require('process').arch
 const sdk = require('etcher-sdk')

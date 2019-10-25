@@ -6,8 +6,6 @@ import { createMuiTheme } from '@material-ui/core/styles'
 import { ThemeProvider } from '@material-ui/styles'
 import Grid from '@material-ui/core/Grid'
 
-import { getStatic } from 'common/static'
-
 import OSButton from './components/OSButton'
 import SDButton from './components/SDButton'
 import WriteButton from './components/WriteButton'
@@ -16,9 +14,7 @@ import Dialog from './components/Dialog'
 
 import {
   PROGRESS_START_TYPE
-} from 'common/consts'
-
-import './app.css'
+} from '../common/consts'
 
 const raspiTheme = createMuiTheme({
   palette: {
@@ -222,7 +218,7 @@ class App extends React.Component {
       <ThemeProvider theme={raspiTheme}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <img className='rpi-logo' src={getStatic('rpi.png')} />
+            <img className='rpi-logo' src='./rpi.png' />
           </Grid>
           <Grid item xs={6}>
             <OSButton

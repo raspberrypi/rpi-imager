@@ -14,7 +14,7 @@ import ComputerIcon from '@material-ui/icons/Computer'
 
 import {
   OS_CACHE_TYPE
-} from 'common/consts'
+} from '../../../common/consts'
 
 class OSDialog extends React.Component {
   constructor (props) {
