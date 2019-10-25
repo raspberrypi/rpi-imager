@@ -177,7 +177,7 @@ class App extends React.Component {
     })
   }
 
-  dialogClose () {
+  handleDialogClose () {
     this.setState(prevState => ({
       dialog: {
         ...prevState.dialog,
