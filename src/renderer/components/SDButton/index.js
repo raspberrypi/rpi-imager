@@ -17,7 +17,7 @@ class SDButton extends React.Component {
     this.handleDialogClose = this.handleDialogClose.bind(this)
   }
 
-  sdDialogClose (val) {
+  handleDialogClose (val) {
     this.setState({
       open: false
     })
