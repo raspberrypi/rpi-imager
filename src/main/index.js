@@ -7,8 +7,6 @@ import './os-list'
 import './sd-list'
 import './writer'
 
-const IS_DEVELOPMENT = process.env.NODE_ENV !== 'production'
-
 // global reference to mainWindow (necessary to prevent window from being garbage collected)
 let mainWindow
 
@@ -26,15 +24,11 @@ function createMainWindow () {
     }
   })
 
-  if (IS_DEVELOPMENT) {
-    window.loadURL(`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}`)
-  } else {
-    window.loadURL(formatUrl({
-      pathname: path.join(__dirname, 'index.html'),
-      protocol: 'file',
-      slashes: true
-    }))
-  }
+  window.loadURL(formatUrl({
+    pathname: path.join(__dirname, '../renderer/index.html'),
+    protocol: 'file',
+    slashes: true
+  }))
 
   window.on('closed', () => {
     mainWindow = null

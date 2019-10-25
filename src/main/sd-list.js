@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { INCLUDE_SYSTEM } from 'common/consts'
+import { INCLUDE_SYSTEM } from '../common/consts'
 
 const sdk = require('etcher-sdk') // for some reason import doesn't work?
 

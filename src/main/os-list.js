@@ -9,7 +9,7 @@ import {
   OS_CACHE_TYPE,
   OS_CUSTOM_TYPE,
   LOCAL_JSON_NAME
-} from 'common/consts'
+} from '../common/consts'
 
 function mapOs (os, type) {
   return {
