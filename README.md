@@ -30,7 +30,7 @@ git clone --depth 1 https://github.com/raspberrypi/imagewriter
 #### Build the Debian package
 
 ```
-cd imagingutility
+cd imagewriter
 debuild -uc -us
 ```
 
