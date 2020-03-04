@@ -1,0 +1,21 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>qtquickcontrols2.conf</file>
+        <file>icons/rpi.png</file>
+        <file>icons/imagingutility.ico</file>
+        <file>icons/rpi2.png</file>
+        <file>fonts/Roboto-Bold.ttf</file>
+        <file>fonts/Roboto-Light.ttf</file>
+        <file>fonts/Roboto-Regular.ttf</file>
+        <file>icons/ic_chevron_right_40px.png</file>
+        <file>icons/ic_chevron_left_40px.png</file>
+        <file>icons/ic_computer_40px.png</file>
+        <file>icons/ic_delete_40px.png</file>
+        <file>icons/ic_usb_40px.png</file>
+        <file>icons/ic_storage_40px.png</file>
+        <file>icons/ic_sd_storage_40px.png</file>
+        <file>icons/ic_build_40px.png</file>
+        <file>icons/ic_close_18px.png</file>
+    </qresource>
+</RCC>
