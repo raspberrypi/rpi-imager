@@ -24,7 +24,7 @@ sudo apt install --no-install-recommends build-essential devscripts debhelper cm
 #### Get the source
 
 ```
-git clone --depth 1 https://github.com/raspberrypi/imagingutility
+git clone --depth 1 https://github.com/raspberrypi/imagewriter
 ```
 
 #### Build the Debian package
@@ -89,6 +89,18 @@ During installation, choose a Qt 5.x edition and CMake.
 - Menu "Build" -> "Build all"
 - Result will be in ../build_imagingutility_someversion
 - For distribution to others: code sign the .app, create a DMG, code sign the DMG, submit it for notarization to Apple and staple the notarization ticket to the DMG.
+
+E.g.:
+
+```
+cd build-imagingutility-Desktop_Qt_5_14_1_clang_64bit-Release/
+codesign --deep --force --verify --verbose --sign "YOUR KEYID" --options runtime imagingutility.app
+mv imagingutility.app "Raspberry Pi Imager.app"
+create-dmg Raspberry\ Pi\ Imager.app
+mv Raspberry\ Pi\ Imager\ .dmg imager.dmg
+xcrun altool --notarize-app -t osx -f imager.dmg --primary-bundle-id="org.raspberrypi.imagingutility" -u YOUR-EMAIL-ADDRESS -p YOUR-APP-SPECIFIC-APPLE-PASSWORD -itc_provider TEAM-ID-IF-APPLICABLE
+xcrun stapler staple imager.dmg
+```
 
 ## Other notes
 
