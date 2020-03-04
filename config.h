@@ -8,7 +8,6 @@
 
 
 /* Repository URL */
-// #define OSLIST_URL                          "http://f.maxnet.eu/os_list_imagingutility.json"
 #define OSLIST_URL                        "https://downloads.raspberrypi.org/os_list_imagingutility.json"
 
 /* Hash algorithm for verifying (uncompressed image) checksum */
