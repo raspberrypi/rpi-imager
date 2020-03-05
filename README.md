@@ -1,4 +1,4 @@
-# imagingutility
+# rpi-imager
 
 Raspberry Pi Imaging Utility
 
@@ -39,7 +39,7 @@ Can install it with apt:
 
 ```
 cd ..
-sudo apt install ./imagingutility*.deb
+sudo apt install ./rpi-imager*.deb
 ```
 
 It should create an icon in the start menu under "Utilities" or "Accessories".
@@ -68,10 +68,10 @@ Building can be done manually using the command-line, using "cmake", "make", etc
 - Open CMakeLists.txt in Qt creator.
 - For builds you distribute to others, make sure you choose "Release" in the toolchain settings and not the debug flavour.
 - Menu "Build" -> "Build all"
-- Result will be in ../build_imagingutility_someversion
+- Result will be in ../build_rpi-imager_someversion
 - Go to the BUILD folder, right click on the .nsi script "Compile NSIS script", to create installer.
 
-Note: the CMake integration in Qt Creator is a bit flaky at times. If you made any custom changes to the CMakeLists.txt file and it subsequently gets in an endless loop where it never finishes the "configures" stage while re-processing the file, delete "build_imagingutility_someversion" directory and try again.
+Note: the CMake integration in Qt Creator is a bit flaky at times. If you made any custom changes to the CMakeLists.txt file and it subsequently gets in an endless loop where it never finishes the "configures" stage while re-processing the file, delete "build_rpi-imager_someversion" directory and try again.
 
 ### Mac OS X
 
@@ -87,15 +87,15 @@ During installation, choose a Qt 5.x edition and CMake.
 - Download source .zip from github and extract it to a folder on disk
 - Start Qt Creator (may need to start "finder" navigate to home folder using the "Go" menu, and find Qt folder to start it manually as it may not have created icon in Applications), and open CMakeLists.txt
 - Menu "Build" -> "Build all"
-- Result will be in ../build_imagingutility_someversion
+- Result will be in ../build_rpi-imager_someversion
 - For distribution to others: code sign the .app, create a DMG, code sign the DMG, submit it for notarization to Apple and staple the notarization ticket to the DMG.
 
 E.g.:
 
 ```
-cd build-imagingutility-Desktop_Qt_5_14_1_clang_64bit-Release/
-codesign --deep --force --verify --verbose --sign "YOUR KEYID" --options runtime imagingutility.app
-mv imagingutility.app "Raspberry Pi Imager.app"
+cd build-rpi-imager-Desktop_Qt_5_14_1_clang_64bit-Release/
+codesign --deep --force --verify --verbose --sign "YOUR KEYID" --options runtime rpi-imager.app
+mv rpi-imager.app "Raspberry Pi Imager.app"
 create-dmg Raspberry\ Pi\ Imager.app
 mv Raspberry\ Pi\ Imager\ .dmg imager.dmg
 xcrun altool --notarize-app -t osx -f imager.dmg --primary-bundle-id="org.raspberrypi.imagingutility" -u YOUR-EMAIL-ADDRESS -p YOUR-APP-SPECIFIC-APPLE-PASSWORD -itc_provider TEAM-ID-IF-APPLICABLE
@@ -111,5 +111,5 @@ On Windows start the application with the command-line option --debug to let it 
 
 ### Custom repository
 
-If the application is started with "--repo <your own URL>" it will use a custom image repository.
+If the application is started with "--repo [your own URL]" it will use a custom image repository.
 So can simply create another 'start menu shortcut' to the application with that parameter to use the application with your own images.

@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
     app.setOrganizationName("Raspberry Pi");
     app.setOrganizationDomain("raspberrypi.org");
     app.setApplicationName("Imager");
-    app.setWindowIcon(QIcon(":/icons/imagingutility.ico"));
+    app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
     ImageWriter imageWriter;
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;

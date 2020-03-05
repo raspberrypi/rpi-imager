@@ -15,7 +15,7 @@
 !define VERSION "00.00.00.01"
 !define COPYRIGHT "Raspberry Pi"
 !define DESCRIPTION "Raspberry Pi Imager"
-!define MAIN_APP_EXE "imagingutility.exe"
+!define MAIN_APP_EXE "rpi-imager.exe"
 !define INSTALL_TYPE "SetShellVarContext current"
 !define REG_ROOT "HKCU"
 !define REG_APP_PATH "Software\Microsoft\Windows\CurrentVersion\App Paths\${MAIN_APP_EXE}"
@@ -136,7 +136,7 @@ File "deploy\Qt5QuickControls2.dll"
 File "deploy\Qt5QuickTemplates2.dll"
 File "deploy\Qt5Svg.dll"
 File "deploy\Qt5Widgets.dll"
-File "deploy\imagingutility.exe"
+File "deploy\rpi-imager.exe"
 SetOutPath "$INSTDIR\styles"
 File "deploy\styles\qwindowsvistastyle.dll"
 SetOutPath "$INSTDIR\QtQuick.2"
@@ -559,7 +559,7 @@ WriteRegStr SHCTX "Software\Classes\.gz\OpenWithProgIds" "RPI_IMAGINGUTILITY" ""
 WriteRegStr SHCTX "Software\Classes\.xz\OpenWithProgIds" "RPI_IMAGINGUTILITY" ""
 WriteRegStr SHCTX "Software\Classes\.img\OpenWithProgIds" "RPI_IMAGINGUTILITY" ""
 WriteRegStr SHCTX "Software\Classes\RPI_IMAGINGUTILITY\shell\open" "FriendlyAppName" "Raspberry Pi Imager"
-WriteRegStr SHCTX "Software\Classes\RPI_IMAGINGUTILITY\shell\open\command" "" '"$INSTDIR\imagingutility.exe" "%1"'
+WriteRegStr SHCTX "Software\Classes\RPI_IMAGINGUTILITY\shell\open\command" "" '"$INSTDIR\rpi-imager.exe" "%1"'
 
 SectionEnd
 
@@ -589,7 +589,9 @@ Delete "$INSTDIR\Qt5QuickControls2.dll"
 Delete "$INSTDIR\Qt5QuickTemplates2.dll"
 Delete "$INSTDIR\Qt5Svg.dll"
 Delete "$INSTDIR\Qt5Widgets.dll"
+# Old name
 Delete "$INSTDIR\imagingutility.exe"
+Delete "$INSTDIR\rpi-imager.exe"
 Delete "$INSTDIR\styles\qwindowsvistastyle.dll"
 Delete "$INSTDIR\QtQuick.2\plugins.qmltypes"
 Delete "$INSTDIR\QtQuick.2\qmldir"

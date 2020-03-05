@@ -1,7 +1,7 @@
 #include <windows.h>
 
-IDI_ICON1 ICON DISCARDABLE "../icons/imagingutility.ico"
-CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "imagingutility.manifest"
+IDI_ICON1 ICON DISCARDABLE "../icons/rpi-imager.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "rpi-imager.manifest"
 
 1 VERSIONINFO
 FILEVERSION 1,0,0,0

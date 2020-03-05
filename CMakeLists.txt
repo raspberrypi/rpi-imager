@@ -6,7 +6,7 @@ if (APPLE)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.12" CACHE STRING "" FORCE)
 endif()
 
-project(imagingutility LANGUAGES CXX)
+project(rpi-imager LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -18,16 +18,16 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
 
 # Add 3rd-party dependencies
 if (APPLE)
-set_source_files_properties("icons/imagingutility.icns" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+set_source_files_properties("icons/rpi-imager.icns" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 set(DEPENDENCIES mac/macfile.cpp mac/macfile.h dependencies/mountutils/src/darwin/functions.cpp
-    dependencies/drivelist/src/darwin/list.mm dependencies/drivelist/src/darwin/REDiskList.m icons/imagingutility.icns)
+    dependencies/drivelist/src/darwin/list.mm dependencies/drivelist/src/darwin/REDiskList.m icons/rpi-imager.icns)
 enable_language(OBJC C)
 elseif (UNIX)
 set(DEPENDENCIES dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp linux/udisks2api.cpp linux/udisks2api.h)
 elseif (WIN32)
 set(DEPENDENCIES dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
     windows/winfile.cpp windows/winfile.h
-    windows/imagingutility.rc)
+    windows/rpi-imager.rc)
 set(EXTRALIBS setupapi)
 endif()
 
@@ -140,12 +140,12 @@ if (WIN32)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMAKE_CURRENT_SOURCE_DIR}/windows/imagingutility.nsi"
+            "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi"
             "${CMAKE_BINARY_DIR}")
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND "${WINDEPLOYQT}" --no-translations --no-webkit2 --no-opengl-sw --angle --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/imagingutility.exe")
+        COMMAND "${WINDEPLOYQT}" --no-translations --no-webkit2 --no-opengl-sw --angle --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/rpi-imager.exe")
 
     # Remove excess files
     add_custom_command(TARGET ${PROJECT_NAME}
@@ -186,7 +186,7 @@ elseif(APPLE)
     set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES
         MACOSX_BUNDLE_BUNDLE_NAME "Raspberry Pi Imager"
         MACOSX_BUNDLE_GUI_IDENTIFIER "org.raspberrypi.imagingutility"
-        MACOSX_BUNDLE_ICON_FILE "imagingutility.icns")
+        MACOSX_BUNDLE_ICON_FILE "rpi-imager.icns")
 
     find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt5_DIR}/../../../bin")
     if (NOT MACDEPLOYQT)
@@ -203,9 +203,9 @@ else()
     find_package(Qt5 COMPONENTS DBus)
     set(EXTRALIBS Qt5::DBus)
 
-    install(TARGETS imagingutility DESTINATION bin)
-    install(FILES icons/imagingutility.png DESTINATION share/pixmaps)
-    install(FILES linux/imagingutility.desktop DESTINATION share/applications)
+    install(TARGETS rpi-imager DESTINATION bin)
+    install(FILES icons/rpi-imager.png DESTINATION share/pixmaps)
+    install(FILES linux/rpi-imager.desktop DESTINATION share/applications)
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR})
