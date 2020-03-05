@@ -198,7 +198,6 @@ elseif(APPLE)
         COMMAND "${MACDEPLOYQT}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}")
 
 else()
-    find_package(ZLIB REQUIRED)
     find_package(CURL REQUIRED)
     find_package(LibArchive REQUIRED)
     find_package(Qt5 COMPONENTS DBus)
