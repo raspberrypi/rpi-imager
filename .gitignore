@@ -1,0 +1,4 @@
+
+CMakeLists.txt.user
+.DS_Store
+dependencies/libarchive-3.4.2/build/pkgconfig/libarchive.pc

@@ -16,5 +16,7 @@
         <file>icons/ic_sd_storage_40px.png</file>
         <file>icons/ic_build_40px.png</file>
         <file>icons/ic_close_18px.png</file>
+        <file>i18n/zh_cn.qm</file>
+        <file>i18n/zh_cn.ts</file>
     </qresource>
 </RCC>
