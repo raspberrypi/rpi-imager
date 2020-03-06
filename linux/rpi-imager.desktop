@@ -5,5 +5,5 @@ Name=Imager
 Comment=Raspberry Pi Imager
 Icon=rpi-imager
 Exec=rpi-imager
-Categories=Utility
+Categories=Utility;
 StartupNotify=false
