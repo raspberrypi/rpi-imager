@@ -14,7 +14,7 @@ set(CMAKE_AUTORCC ON)
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h driveformatthread.h powersaveblocker.h
-    downloadthread.h downloadextractthread.h dependencies/mountutils/src/mountutils.hpp)
+    downloadthread.h downloadextractthread.h i18n.h dependencies/mountutils/src/mountutils.hpp)
 
 # Add 3rd-party dependencies
 if (APPLE)

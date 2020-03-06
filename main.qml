@@ -603,6 +603,38 @@ ApplicationWindow {
                 }
             }
         }
+
+        ColumnLayout {
+            spacing: 10
+            Text {
+                text: qsTr("Language List")
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                Layout.fillWidth: true
+                Layout.topMargin: 10
+                font.family: roboto.name
+                font.bold: true
+            }
+
+            Item {
+                clip: true
+                width: langlist.width
+                height: langlist.height
+
+                ListView {
+                    id: langlist
+                    model: driveListModel
+                    delegate: dstdelegate
+                    width: window.width-100
+                    height: window.height-170
+                    focus: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ScrollBar {
+                        width: 10
+                    }
+                }
+            }
+        }
     }
 
     Component {

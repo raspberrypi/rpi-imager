@@ -13,6 +13,7 @@
 #include "imagewriter.h"
 #include "drivelistmodel.h"
 #include "networkaccessmanagerfactory.h"
+#include "i18n.h"
 #include <QtWidgets/QApplication>
 #include <QMessageLogContext>
 #include <QQuickWindow>
@@ -40,6 +41,11 @@ int main(int argc, char *argv[])
     ImageWriter imageWriter;
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;
+
+    /* Add i18n */
+    I18n i18n;
+    QObject::connect(&i18n, &I18n::retransRequest, &engine, &QQmlApplicationEngine::retranslate);
+    engine.rootContext()->setContextProperty("i18n", &i18n);
 
     /* Parse commandline arguments (if any) */
     QString customRepo;
