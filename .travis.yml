@@ -8,7 +8,7 @@ before_install:
   - sudo apt-get update -qq
 
 install:
-  - sudo apt-get -y install qt514base qt514declarative libgl1-mesa-dev curl libarchive-dev
+  - sudo apt-get -y install qt514base qt514declarative qt514quickcontrols libgl1-mesa-dev curl libarchive-dev
   - source /opt/qt*/bin/qt*-env.sh
   
 script:
