@@ -610,7 +610,7 @@ bool DownloadThread::_verify()
 
     while (_verifyEnabled && _lastVerifyNow < _verifyTotal && !_cancelled)
     {
-        qint64 lenRead = _file.read(verifyBuf, IMAGEWRITER_VERIFY_BLOCKSIZE);
+        qint64 lenRead = _file.read(verifyBuf, qMin((qint64) IMAGEWRITER_VERIFY_BLOCKSIZE, (qint64) (_verifyTotal-_lastVerifyNow) ));
         if (lenRead == -1)
         {
             DownloadThread::_onDownloadError(tr("Error reading from storage.\n"
