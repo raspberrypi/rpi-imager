@@ -39,6 +39,17 @@ ApplicationWindow {
             source: "icons/rpi2.png"
         }
 
+        ComboBox {
+            Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+            model: [
+                "en",
+                "zh"
+            ]
+            onCurrentTextChanged: {
+                i18n.reTrans(currentText);
+            }
+        }
+
         Rectangle {
             color: "#c31c4a"
             implicitWidth: window.width
@@ -603,38 +614,6 @@ ApplicationWindow {
                 }
             }
         }
-
-        ColumnLayout {
-            spacing: 10
-            Text {
-                text: qsTr("Language List")
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                Layout.fillWidth: true
-                Layout.topMargin: 10
-                font.family: roboto.name
-                font.bold: true
-            }
-
-            Item {
-                clip: true
-                width: langlist.width
-                height: langlist.height
-
-                ListView {
-                    id: langlist
-                    model: driveListModel
-                    delegate: dstdelegate
-                    width: window.width-100
-                    height: window.height-170
-                    focus: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar {
-                        width: 10
-                    }
-                }
-            }
-        }
     }
 
     Component {
@@ -865,8 +844,8 @@ ApplicationWindow {
         } else {
             newPos = 0
         }
-        if (progressBar.value != newPos) {
-            if (progressText.text == qsTr("Cancelling..."))
+        if (progressBar.value !== newPos) {
+            if (progressText.text === qsTr("Cancelling..."))
                 return
 
             progressText.text = qsTr("Writing... %1%").arg(Math.floor(newPos*100))
@@ -883,13 +862,13 @@ ApplicationWindow {
             newPos = 0
         }
 
-        if (progressBar.value != newPos) {
+        if (progressBar.value !== newPos) {
             if (cancelwritebutton.visible) {
                 cancelwritebutton.visible = false
                 cancelverifybutton.visible = true
             }
 
-            if (progressText.text == qsTr("Finalizing..."))
+            if (progressText.text === qsTr("Finalizing..."))
                 return
 
             progressText.text = qsTr("Verifying... %1%").arg(Math.floor(newPos*100))

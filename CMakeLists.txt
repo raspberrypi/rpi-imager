@@ -12,6 +12,16 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+set(TRANSLATIONS
+    i18n/en_us.ts
+    i18n/zh_cn.ts
+)
+
+find_package(Qt5LinguistTools)
+qt5_add_translation(QM_FILES ${TRANSLATIONS})
+set(QM_FILES ${QM_FILES} PARENT_SCOPE)
+add_custom_target(translations ALL DEPENDS ${QM_FILES})
+
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h driveformatthread.h powersaveblocker.h
     downloadthread.h downloadextractthread.h i18n.h dependencies/mountutils/src/mountutils.hpp)
