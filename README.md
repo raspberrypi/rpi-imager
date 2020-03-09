@@ -24,13 +24,13 @@ sudo apt install --no-install-recommends build-essential devscripts debhelper cm
 #### Get the source
 
 ```
-git clone --depth 1 https://github.com/raspberrypi/imagewriter
+git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 ```
 
 #### Build the Debian package
 
 ```
-cd imagewriter
+cd rpi-imager
 debuild -uc -us
 ```
 
