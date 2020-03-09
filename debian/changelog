@@ -1,3 +1,12 @@
+rpi-imager (1.1) unstable; urgency=medium
+
+  * Fix verification on images that are uncompressed or have
+    a size that is not dividable by 128 KB.
+  * Round instead of floor size of SD card up and show 1 decimal
+  * Executable name changed from imagingutility to rpi-imager
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Mon, 09 Mar 2020 12:25:24 +0100
+
 rpi-imager (1.0) unstable; urgency=medium
 
   * Initial Release.

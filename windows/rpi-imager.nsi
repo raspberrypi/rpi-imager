@@ -12,7 +12,7 @@
 !define APP_NAME "Raspberry Pi Imager"
 !define COMP_NAME "Raspberry Pi"
 #!define WEB_SITE "https://www.raspberrypi.org/"
-!define VERSION "00.00.00.01"
+!define VERSION "01.01.00.00"
 !define COPYRIGHT "Raspberry Pi"
 !define DESCRIPTION "Raspberry Pi Imager"
 !define MAIN_APP_EXE "rpi-imager.exe"
