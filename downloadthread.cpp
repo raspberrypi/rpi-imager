@@ -631,8 +631,7 @@ bool DownloadThread::_verify()
     }
     else
     {
-        DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of SD card is different then what was written to it."
-                                            /*"SD card may be broken, or other application may have accessed storage."*/));
+        DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of SD card is different from what was written to it."));
     }
 
     return false;
