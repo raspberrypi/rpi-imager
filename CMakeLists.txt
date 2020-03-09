@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 2.8.12)
 if (APPLE)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.12" CACHE STRING "" FORCE)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
 endif()
 
 project(rpi-imager LANGUAGES CXX)
