@@ -648,7 +648,7 @@ ApplicationWindow {
                         verticalAlignment: Text.AlignVCenter
                         font.family: roboto.name
                         text: {
-                            var txt = "<p><font size='4'>"+description+" - "+Math.floor(size/1000000000)+" GB"+"</font></p>"
+                            var txt = "<p><font size='4'>"+description+" - "+(size/1000000000).toFixed(1)+" GB"+"</font></p>"
                             if (mountpoints.length > 0) {
                                 txt += "<font color='grey'>"+qsTr("Mounted as %1").arg(mountpoints.join(", "))+"</font>"
                             }
