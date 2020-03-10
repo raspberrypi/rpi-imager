@@ -1,6 +1,7 @@
 rpi-imager (1.2) unstable; urgency=medium
 
   * Mention version number in title bar.
+  * Performance improvements
 
  -- Floris Bos <bos@je-eigen-domein.nl>  Tue, 10 Mar 2020 17:08:11 +0100
 

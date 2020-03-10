@@ -18,6 +18,7 @@
 #include <regex>
 #include <QDebug>
 #include <QProcess>
+#include <QtConcurrent/QtConcurrent>
 
 #ifdef Q_OS_LINUX
 #include <sys/ioctl.h>
@@ -33,7 +34,7 @@ int DownloadThread::_curlCount = 0;
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
-    _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM)
+    _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _inputBufferSize(0)
 {
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -279,6 +280,8 @@ void DownloadThread::run()
     curl_easy_setopt(_c, CURLOPT_FAILONERROR, 1);
     curl_easy_setopt(_c, CURLOPT_HEADERFUNCTION, &DownloadThread::_curl_header_callback);
     curl_easy_setopt(_c, CURLOPT_HEADERDATA, this);
+    if (_inputBufferSize)
+        curl_easy_setopt(_c, CURLOPT_BUFFERSIZE, _inputBufferSize);
 
     if (!_useragent.isEmpty())
         curl_easy_setopt(_c, CURLOPT_USERAGENT, _useragent.constData());
@@ -379,22 +382,26 @@ void DownloadThread::setCacheFile(const QString &filename, qint64 filesize)
     }
 }
 
+void DownloadThread::_hashData(const char *buf, size_t len)
+{
+    _writehash.addData(buf, len);
+}
+
 size_t DownloadThread::_writeFile(const char *buf, size_t len)
 {
     if (_cancelled)
         return len;
 
-    _writehash.addData(buf, len);
-
     if (!_firstBlock)
     {
+        _writehash.addData(buf, len);
         _firstBlock = (char *) qMallocAligned(len, 4096);
         _firstBlockSize = len;
         ::memcpy(_firstBlock, buf, len);
-        //_firstBlock = QByteArray(buf, len);
 
         return _file.seek(len) ? len : 0;
     }
+    QFuture<void> wh = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
 
     qint64 written = _file.write(buf, len);
     _bytesWritten += written;
@@ -402,12 +409,9 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
     if ((size_t) written != len)
     {
         qDebug() << "Write error:" << _file.errorString() << "while writing len:" << len;
-        if (len % 512)
-            qDebug() << "NOT SECTOR SIZE write len:" << len;
-        if (((uintptr_t)buf) % 512)
-            qDebug() << "Memory not aligned to sector size";
     }
 
+    wh.waitForFinished();
     return (written < 0) ? 0 : written;
 }
 
@@ -645,4 +649,9 @@ void DownloadThread::setVerifyEnabled(bool verify)
 bool DownloadThread::isImage()
 {
     return true;
+}
+
+void DownloadThread::setInputBufferSize(int len)
+{
+    _inputBufferSize = len;
 }

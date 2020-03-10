@@ -172,6 +172,7 @@ void ImageWriter::startWrite()
     else
     {
         _thread = new DownloadThread(urlstr, _dst.toLatin1(), _expectedHash, this);
+        _thread->setInputBufferSize(IMAGEWRITER_UNCOMPRESSED_BLOCKSIZE);
     }
 
     _powersave.applyBlock(tr("Downloading and writing image"));

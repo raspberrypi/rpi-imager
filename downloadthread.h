@@ -105,6 +105,11 @@ public:
     void setCacheFile(const QString &filename, qint64 filesize = 0);
 
     /*
+     * Set input buffer size
+     */
+    void setInputBufferSize(int len);
+
+    /*
      * Thread safe download progress query functions
      */
     uint64_t dlNow();
@@ -114,6 +119,7 @@ public:
     uint64_t bytesWritten();
 
     virtual bool isImage();
+    size_t _writeFile(const char *buf, size_t len);
 
 signals:
     void success();
@@ -126,7 +132,7 @@ protected:
     virtual void _onDownloadSuccess();
     virtual void _onDownloadError(const QString &msg);
 
-    size_t _writeFile(const char *buf, size_t len);
+    void _hashData(const char *buf, size_t len);
     void _writeComplete();
     bool _verify();
     int _authopen(const QByteArray &filename);
@@ -155,6 +161,7 @@ protected:
     bool _cancelled, _successful, _verifyEnabled, _cacheEnabled;
     time_t _lastModified, _serverTime, _lastFailureTime;
     QElapsedTimer _timer;
+    int _inputBufferSize;
 
 #ifdef Q_OS_WIN
     WinFile _file, _volumeFile;

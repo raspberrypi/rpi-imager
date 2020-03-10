@@ -45,10 +45,11 @@ protected:
 
 DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
     : DownloadThread(url, localfilename, expectedHash, parent), _abufsize(IMAGEWRITER_BLOCKSIZE), _ethreadStarted(false),
-      _isImage(true), _inputHash(OSLIST_HASH_ALGORITHM)
+      _isImage(true), _inputHash(OSLIST_HASH_ALGORITHM), _activeBuf(0), _writeThreadStarted(false)
 {
     _extractThread = new _extractThreadClass(this);
-    _abuf = (char *) qMallocAligned(_abufsize, 4096);
+    _abuf[0] = (char *) qMallocAligned(_abufsize, 4096);
+    _abuf[1] = (char *) qMallocAligned(_abufsize, 4096);
 }
 
 DownloadExtractThread::~DownloadExtractThread()
@@ -59,7 +60,8 @@ DownloadExtractThread::~DownloadExtractThread()
     }
     _queue.clear();
     _cv.notify_one();
-    qFreeAligned(_abuf);
+    qFreeAligned(_abuf[0]);
+    qFreeAligned(_abuf[1]);
 }
 
 size_t DownloadExtractThread::_writeData(const char *buf, size_t len)
@@ -147,24 +149,34 @@ void DownloadExtractThread::extractImageRun()
 
         while (true)
         {
-            ssize_t size = archive_read_data(a, _abuf, _abufsize);
+            ssize_t size = archive_read_data(a, _abuf[_activeBuf], _abufsize);
             if (size < 0)
                 throw runtime_error(archive_error_string(a));
             if (size == 0)
                 break;
 
-            if (_writeFile(_abuf, size) != (size_t) size)
+            if (_writeThreadStarted)
             {
-                if (!_cancelled)
+                //if (_writeFile(_abuf, size) != (size_t) size)
+                if (!_writeFuture.result())
                 {
-                    DownloadThread::cancelDownload();
-                    emit error(tr("Error writing to storage"));
+                    if (!_cancelled)
+                    {
+                        DownloadThread::cancelDownload();
+                        emit error(tr("Error writing to storage"));
+                    }
+                    archive_read_free(a);
+                    return;
                 }
-                archive_read_free(a);
-                return;
             }
+
+            _writeFuture = QtConcurrent::run(static_cast<DownloadThread *>(this), &DownloadThread::_writeFile, _abuf[_activeBuf], size);
+            _activeBuf = _activeBuf ? 0 : 1;
+            _writeThreadStarted = true;
         }
 
+        if (_writeThreadStarted)
+            _writeFuture.waitForFinished();
         _writeComplete();
     }
     catch (exception &e)

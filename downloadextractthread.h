@@ -9,6 +9,7 @@
 #include "downloadthread.h"
 #include <deque>
 #include <condition_variable>
+#include <QtConcurrent/QtConcurrent>
 
 class _extractThreadClass;
 
@@ -32,7 +33,7 @@ public:
     virtual void enableMultipleFileExtraction();
 
 protected:
-    char *_abuf;
+    char *_abuf[2];
     size_t _abufsize;
     _extractThreadClass *_extractThread;
     std::deque<QByteArray> _queue;
@@ -41,6 +42,9 @@ protected:
     std::condition_variable _cv;
     bool _ethreadStarted, _isImage;
     QCryptographicHash _inputHash;
+    int _activeBuf;
+    bool _writeThreadStarted;
+    QFuture<size_t> _writeFuture;
 
     QByteArray _popQueue();
     void _pushQueue(const char *data, size_t len);
