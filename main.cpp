@@ -107,7 +107,13 @@ int main(int argc, char *argv[])
         }
         else if (args[i] == "--help")
         {
-            cerr << args[0] << " [--debug] [--repo <repository URL>] [<image file to write>]" << endl;
+            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [<image file to write>]" << endl;
+            return 0;
+        }
+        else if (args[i] == "--version")
+        {
+            cerr << args[0] << " version " << imageWriter.constantVersion() << endl;
+            cerr << "Repository: " << imageWriter.constantOsListUrl().toString() << endl;
             return 0;
         }
         else

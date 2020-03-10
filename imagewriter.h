@@ -59,6 +59,9 @@ public:
     /* Function to return OS list URL */
     Q_INVOKABLE QUrl constantOsListUrl() const;
 
+    /* Function to return version */
+    Q_INVOKABLE QString constantVersion() const;
+
     /* Set custom repository */
     Q_INVOKABLE void setCustomOsListUrl(const QUrl &url);
 

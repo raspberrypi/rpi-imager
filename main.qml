@@ -20,7 +20,7 @@ ApplicationWindow {
     minimumHeight: 420
     maximumHeight: 420
 
-    title: qsTr("Raspberry Pi Imager")
+    title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
 
     FontLoader {id: roboto;      source: "fonts/Roboto-Regular.ttf"}
     FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}

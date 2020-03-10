@@ -1,3 +1,9 @@
+rpi-imager (1.2) unstable; urgency=medium
+
+  * Mention version number in title bar.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Tue, 10 Mar 2020 17:08:11 +0100
+
 rpi-imager (1.1) unstable; urgency=medium
 
   * Fix verification on images that are uncompressed or have

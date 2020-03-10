@@ -12,7 +12,7 @@
 !define APP_NAME "Raspberry Pi Imager"
 !define COMP_NAME "Raspberry Pi"
 #!define WEB_SITE "https://www.raspberrypi.org/"
-!define VERSION "01.01.00.00"
+!define VERSION "@IMAGER_VERSION_STR@"
 !define COPYRIGHT "Raspberry Pi"
 !define DESCRIPTION "Raspberry Pi Imager"
 !define MAIN_APP_EXE "rpi-imager.exe"
@@ -23,7 +23,7 @@
 
 ######################################################################
 
-VIProductVersion  "${VERSION}"
+VIProductVersion "@IMAGER_VERSION_MAJOR@.@IMAGER_VERSION_MINOR@.0.0"
 VIAddVersionKey "ProductName"  "${APP_NAME}"
 VIAddVersionKey "CompanyName"  "${COMP_NAME}"
 VIAddVersionKey "LegalCopyright"  "${COPYRIGHT}"

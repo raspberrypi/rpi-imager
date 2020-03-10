@@ -7,6 +7,12 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
 endif()
 
 project(rpi-imager LANGUAGES CXX)
+set(IMAGER_VERSION_MAJOR 1)
+set(IMAGER_VERSION_MINOR 2)
+set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}")
+set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},0,0")
+add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
+add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -57,7 +63,6 @@ set(SOURCES "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
      "driveformatthread.cpp" "powersaveblocker.cpp" "qml.qrc")
 
 if (WIN32)
-    set(CMAKE_CXX_FLAGS "-s -O2")
     # Adding WIN32 prevents a console window being opened on Windows
     add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS} ${DEPENDENCIES})
 else()
@@ -103,6 +108,11 @@ if (WIN32)
     add_subdirectory(dependencies/fat32format)
     add_dependencies(${PROJECT_NAME} fat32format)
 
+    # Strip debug symbols
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_STRIP} "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
+
     # Code signing
     find_program(SIGNTOOL "signtool.exe" PATHS "c:/Program Files (x86)/Microsoft SDKs/ClickOnce/SignTool")
     if (NOT SIGNTOOL)
@@ -137,11 +147,10 @@ if (WIN32)
             "${Qt5_DIR}/../../../bin/libssl-1_1.dll" "${Qt5_DIR}/../../../bin/libcrypto-1_1.dll"
             "${CMAKE_BINARY_DIR}/deploy")
 
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi"
-            "${CMAKE_BINARY_DIR}")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi"
+        @ONLY)
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD

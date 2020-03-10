@@ -288,6 +288,12 @@ QUrl ImageWriter::constantOsListUrl() const
     return _repo;
 }
 
+/* Function to return version */
+QString ImageWriter::constantVersion() const
+{
+    return IMAGER_VERSION_STR;
+}
+
 void ImageWriter::setCustomOsListUrl(const QUrl &url)
 {
     _repo = url;
