@@ -30,7 +30,7 @@ bool WinFile::open(QIODevice::OpenMode)
 
     for (int attempt = 0; attempt < 20; attempt++)
     {
-        _h = CreateFileA(n.data(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        _h = CreateFileA(n.data(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
         if (_h != INVALID_HANDLE_VALUE)
             break;
 
@@ -143,8 +143,9 @@ bool WinFile::flush()
 {
     if (!FlushFileBuffers(_h))
     {
-        _lasterror = qt_error_string();
-        return false;
+        // Windows 7 does not support flush properly, so ignore errors
+        //_lasterror = qt_error_string();
+        //return false;
     }
 
     return true;
