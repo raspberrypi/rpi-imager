@@ -226,6 +226,7 @@ else()
     install(TARGETS rpi-imager DESTINATION bin)
     install(FILES icons/rpi-imager.png DESTINATION share/pixmaps)
     install(FILES linux/rpi-imager.desktop DESTINATION share/applications)
+    install(FILES linux/rpi-imager.metainfo.xml DESTINATION share/metainfo)
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR})
