@@ -61,7 +61,6 @@ ApplicationWindow {
                     id: columnLayout
                     spacing: 0
                     Layout.fillWidth: true
-                    anchors.top: parent.top
 
                     Text {
                         id: text1
@@ -96,7 +95,6 @@ ApplicationWindow {
                     id: columnLayout2
                     spacing: 0
                     Layout.fillWidth: true
-                    anchors.top: parent.top
 
                     Text {
                         id: text2
@@ -131,7 +129,6 @@ ApplicationWindow {
                 ColumnLayout {
                     spacing: 0
                     Layout.fillWidth: true
-                    anchors.top: parent.top
 
                     Text {
                         text: " "
@@ -741,8 +738,7 @@ ApplicationWindow {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 Layout.fillWidth: true
-                anchors.top: parent.top
-                anchors.topMargin: 10
+                Layout.topMargin: 10
                 font.family: roboto.name
                 font.bold: true
             }
