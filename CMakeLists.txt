@@ -25,7 +25,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
 # Add 3rd-party dependencies
 if (APPLE)
 set_source_files_properties("icons/rpi-imager.icns" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-set(DEPENDENCIES mac/macfile.cpp mac/macfile.h dependencies/mountutils/src/darwin/functions.cpp
+set(DEPENDENCIES mac/macfile.cpp mac/macfile.h mac/Info.plist dependencies/mountutils/src/darwin/functions.cpp
     dependencies/drivelist/src/darwin/list.mm dependencies/drivelist/src/darwin/REDiskList.m icons/rpi-imager.icns)
 enable_language(OBJC C)
 elseif (UNIX)
@@ -192,10 +192,7 @@ elseif(APPLE)
     #find_package(Qt5 COMPONENTS Svg)
     #set(EXTRALIBS ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} Qt5::Svg)
     set(EXTRALIBS ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa})
-    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES
-        MACOSX_BUNDLE_BUNDLE_NAME "Raspberry Pi Imager"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "org.raspberrypi.imagingutility"
-        MACOSX_BUNDLE_ICON_FILE "rpi-imager.icns")
+    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist)
 
     find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt5_DIR}/../../../bin")
     if (NOT MACDEPLOYQT)
