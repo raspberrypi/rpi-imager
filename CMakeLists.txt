@@ -224,7 +224,7 @@ else()
     endif()
 
     install(TARGETS rpi-imager DESTINATION bin)
-    install(FILES icons/rpi-imager.png DESTINATION share/pixmaps)
+    install(FILES icons/rpi-imager.png DESTINATION share/icons/hicolor/128x128/apps)
     install(FILES linux/rpi-imager.desktop DESTINATION share/applications)
 endif()
 
