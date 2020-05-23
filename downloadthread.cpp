@@ -603,6 +603,11 @@ bool DownloadThread::_verify()
     QElapsedTimer t1;
     t1.start();
 
+#ifdef Q_OS_LINUX
+    /* Make sure we are reading from the drive and not from cache */
+    fcntl(_file.handle(), F_SETFL, O_DIRECT | fcntl(_file.handle(), F_GETFL));
+#endif
+
     if (!_firstBlock)
     {
         _file.seek(0);
