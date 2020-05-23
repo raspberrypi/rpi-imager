@@ -16,6 +16,8 @@
 #include <QtWidgets/QApplication>
 #include <QMessageLogContext>
 #include <QQuickWindow>
+#include <QTranslator>
+#include <QLocale>
 
 static QTextStream cerr(stderr);
 
@@ -40,6 +42,9 @@ int main(int argc, char *argv[])
     ImageWriter imageWriter;
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;
+    QTranslator translator;
+    if (translator.load(QLocale(), "rpi-imager", "_", QLatin1String(":/i18n")))
+        QCoreApplication::installTranslator(&translator);
 
     /* Parse commandline arguments (if any) */
     QString customRepo;

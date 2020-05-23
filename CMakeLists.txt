@@ -8,7 +8,7 @@ endif()
 
 project(rpi-imager LANGUAGES CXX)
 set(IMAGER_VERSION_MAJOR 1)
-set(IMAGER_VERSION_MINOR 2)
+set(IMAGER_VERSION_MINOR 3)
 set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}")
 set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},0,0")
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
@@ -62,14 +62,19 @@ set(SOURCES "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
      "driveformatthread.cpp" "powersaveblocker.cpp" "qml.qrc")
 
+find_package(Qt5 COMPONENTS Core Quick Widgets LinguistTools REQUIRED)
+
+#qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} i18n/rpi-imager_nl.ts i18n/rpi-imager_zh_cn.ts)
+qt5_add_translation(QM_FILES i18n/rpi-imager_nl.ts i18n/rpi-imager_zh_cn.ts)
+configure_file(i18n/translations.qrc "${CMAKE_CURRENT_BINARY_DIR}" COPYONLY)
+set(SOURCES ${SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/translations.qrc ${QM_FILES})
+
 if (WIN32)
     # Adding WIN32 prevents a console window being opened on Windows
     add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS} ${DEPENDENCIES})
 else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${DEPENDENCIES})
 endif()
-
-find_package(Qt5 COMPONENTS Core Quick Widgets REQUIRED)
 
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)
