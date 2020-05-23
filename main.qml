@@ -892,7 +892,10 @@ ApplicationWindow {
 
     function onSuccess() {
         msgpopupheader.text = qsTr("Write Successful")
-        msgpopupbody.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
+        if (osbutton.text === qsTr("Erase"))
+            msgpopupbody.text = qsTr("<b>%2</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
+        else
+            msgpopupbody.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
         msgpopup.open()
         imageWriter.setDst("")
         dstbutton.text = qsTr("CHOOSE SD CARD")
