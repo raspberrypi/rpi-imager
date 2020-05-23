@@ -75,6 +75,12 @@ void DriveListModel::refreshDriveList()
         if (i.size == 0 || i.isVirtual)
             continue;
 
+#ifdef Q_OS_DARWIN
+        // Skip time machine backup. FIXME: is this best way to detect them?
+        if (i.mountpointLabels.size() && i.mountpointLabels.front() == "Time Machine Backups")
+            continue;
+#endif
+
         QString device = QString::fromStdString(i.device);
         drivesInNewList.insert(device);
 
