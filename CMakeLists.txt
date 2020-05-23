@@ -20,7 +20,7 @@ set(CMAKE_AUTORCC ON)
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h driveformatthread.h powersaveblocker.h
-    downloadthread.h downloadextractthread.h dependencies/mountutils/src/mountutils.hpp)
+    downloadthread.h downloadextractthread.h acceleratedcryptographichash.h dependencies/mountutils/src/mountutils.hpp)
 
 # Add 3rd-party dependencies
 if (APPLE)
@@ -60,8 +60,9 @@ endif()
 
 set(SOURCES "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
-     "driveformatthread.cpp" "powersaveblocker.cpp" "qml.qrc")
+     "driveformatthread.cpp" "powersaveblocker.cpp" "acceleratedcryptographichash.cpp" "qml.qrc")
 
+find_package(OpenSSL REQUIRED)
 find_package(Qt5 COMPONENTS Core Quick Widgets LinguistTools REQUIRED)
 
 #qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} i18n/rpi-imager_nl.ts i18n/rpi-imager_zh_cn.ts)
@@ -233,5 +234,5 @@ else()
     install(FILES linux/rpi-imager.desktop DESTINATION share/applications)
 endif()
 
-include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Widgets ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Widgets ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})

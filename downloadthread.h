@@ -9,12 +9,12 @@
 #include <QString>
 #include <QThread>
 #include <QFile>
-#include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <fstream>
 #include <atomic>
 #include <time.h>
 #include <curl/curl.h>
+#include "acceleratedcryptographichash.h"
 
 #ifdef Q_OS_WIN
 #include "windows/winfile.h"
@@ -172,7 +172,7 @@ protected:
 #endif
     QFile _cachefile;
 
-    QCryptographicHash _writehash, _verifyhash;
+    AcceleratedCryptographicHash _writehash, _verifyhash;
 };
 
 #endif // DOWNLOADTHREAD_H

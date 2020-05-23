@@ -600,6 +600,8 @@ bool DownloadThread::_verify()
     char *verifyBuf = (char *) qMallocAligned(IMAGEWRITER_VERIFY_BLOCKSIZE, 4096);
     _lastVerifyNow = 0;
     _verifyTotal = _file.pos();
+    QElapsedTimer t1;
+    t1.start();
 
     if (!_firstBlock)
     {
@@ -627,6 +629,7 @@ bool DownloadThread::_verify()
     }
     qFreeAligned(verifyBuf);
 
+    qDebug() << "Verify done in" << t1.elapsed() / 1000.0 << "seconds";
     qDebug() << "Verify hash:" << _verifyhash.result().toHex();
 
     if (_verifyhash.result() == _writehash.result() || !_verifyEnabled || _cancelled)

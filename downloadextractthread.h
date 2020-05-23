@@ -41,7 +41,7 @@ protected:
     std::mutex _queueMutex;
     std::condition_variable _cv;
     bool _ethreadStarted, _isImage;
-    QCryptographicHash _inputHash;
+    AcceleratedCryptographicHash _inputHash;
     int _activeBuf;
     bool _writeThreadStarted;
     QFuture<size_t> _writeFuture;
