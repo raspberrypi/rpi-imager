@@ -301,7 +301,7 @@ ApplicationWindow {
                         boundsBehavior: Flickable.StopAtBounds
                         ScrollBar.vertical: ScrollBar {
                             width: 10
-                            //policy: ScrollBar.AlwaysOn
+                            policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
                         }
                     }
 
@@ -314,7 +314,7 @@ ApplicationWindow {
                         boundsBehavior: Flickable.StopAtBounds
                         ScrollBar.vertical: ScrollBar {
                             width: 10
-                            //policy: ScrollBar.AlwaysOn
+                            policy: suboslist.contentHeight > suboslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
                         }
                     }
                 }
@@ -605,6 +605,7 @@ ApplicationWindow {
                     boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollBar {
                         width: 10
+                        policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
                     }
                 }
             }
