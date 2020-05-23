@@ -71,6 +71,10 @@ void DriveListModel::refreshDriveList()
                 continue;
         }
 
+        // Skip zero-sized and virtual devices
+        if (i.size == 0 || i.isVirtual)
+            continue;
+
         QString device = QString::fromStdString(i.device);
         drivesInNewList.insert(device);
 
