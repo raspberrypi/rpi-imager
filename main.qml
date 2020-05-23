@@ -61,7 +61,6 @@ ApplicationWindow {
                     id: columnLayout
                     spacing: 0
                     Layout.fillWidth: true
-                    anchors.top: parent.top
 
                     Text {
                         id: text1
@@ -96,7 +95,6 @@ ApplicationWindow {
                     id: columnLayout2
                     spacing: 0
                     Layout.fillWidth: true
-                    anchors.top: parent.top
 
                     Text {
                         id: text2
@@ -131,7 +129,6 @@ ApplicationWindow {
                 ColumnLayout {
                     spacing: 0
                     Layout.fillWidth: true
-                    anchors.top: parent.top
 
                     Text {
                         text: " "
@@ -224,7 +221,6 @@ ApplicationWindow {
             }
         }
     }
-
 
     /*
       Popup for OS selection
@@ -341,6 +337,7 @@ ApplicationWindow {
             subitems: []
             name: qsTr("Erase")
             description: qsTr("Format card as FAT32")
+            tooltip: ""
         }
 
         ListElement {
@@ -380,6 +377,7 @@ ApplicationWindow {
             subitems: []
             name: qsTr("Back")
             description: qsTr("Go back to main menu")
+            tooltip: ""
         }
     }
 
@@ -445,6 +443,13 @@ ApplicationWindow {
 
                             return txt;
                         }
+
+                        ToolTip {
+                            visible: osMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
+                            delay: 1000
+                            text: typeof(tooltip) == "string" ? tooltip : ""
+                            clip: false
+                        }
                     }
 
                 }
@@ -459,6 +464,7 @@ ApplicationWindow {
             }
 
             MouseArea {
+                id: osMouseArea
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
@@ -594,7 +600,7 @@ ApplicationWindow {
                     model: driveListModel
                     delegate: dstdelegate
                     width: window.width-100
-                    height: window.height-170
+                    height: window.height-100
                     focus: true
                     boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollBar {
@@ -741,8 +747,7 @@ ApplicationWindow {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 Layout.fillWidth: true
-                anchors.top: parent.top
-                anchors.topMargin: 10
+                Layout.topMargin: 10
                 font.family: roboto.name
                 font.bold: true
             }
@@ -833,8 +838,8 @@ ApplicationWindow {
         } else {
             newPos = 0
         }
-        if (progressBar.value != newPos) {
-            if (progressText.text == qsTr("Cancelling..."))
+        if (progressBar.value !== newPos) {
+            if (progressText.text === qsTr("Cancelling..."))
                 return
 
             progressText.text = qsTr("Writing... %1%").arg(Math.floor(newPos*100))
@@ -851,13 +856,13 @@ ApplicationWindow {
             newPos = 0
         }
 
-        if (progressBar.value != newPos) {
+        if (progressBar.value !== newPos) {
             if (cancelwritebutton.visible) {
                 cancelwritebutton.visible = false
                 cancelverifybutton.visible = true
             }
 
-            if (progressText.text == qsTr("Finalizing..."))
+            if (progressText.text === qsTr("Finalizing..."))
                 return
 
             progressText.text = qsTr("Verifying... %1%").arg(Math.floor(newPos*100))
