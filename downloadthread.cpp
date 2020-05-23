@@ -266,6 +266,14 @@ void DownloadThread::run()
         return;
     }
 
+    qDebug() << "Image URL:" << _url;
+    if (_url.startsWith("file://") && _url.at(7) != '/')
+    {
+        /* libcurl does not like UNC paths in the form of file://1.2.3.4/share */
+        _url.replace("file://", "file:////");
+        qDebug() << "Corrected UNC URL to:" << _url;
+    }
+
     char errorBuf[CURL_ERROR_SIZE] = {0};
     _c = curl_easy_init();
     curl_easy_setopt(_c, CURLOPT_NOSIGNAL, 1);
@@ -332,7 +340,10 @@ void DownloadThread::run()
             break;
         default:
             deleteDownloadedFile();
-            _onDownloadError(errorBuf);
+            if (!errorBuf[0])
+                _onDownloadError("Unspecified libcurl error");
+            else
+                _onDownloadError(errorBuf);
     }
 }
 
