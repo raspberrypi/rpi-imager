@@ -138,6 +138,7 @@ protected:
     int _authopen(const QByteArray &filename);
     bool _openAndPrepareDevice();
     void _writeCache(const char *buf, size_t len);
+    qint64 _sectorsWritten();
 
     /*
      * libcurl callbacks
@@ -153,6 +154,7 @@ protected:
     CURL *_c;
     curl_off_t _startOffset;
     std::atomic<std::uint64_t> _lastDlTotal, _lastDlNow, _verifyTotal, _lastVerifyNow, _bytesWritten;
+    qint64 _sectorsStart;
     QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash;
     char *_firstBlock;
     size_t _firstBlockSize;

@@ -32,7 +32,7 @@ QByteArray DownloadThread::_proxy;
 int DownloadThread::_curlCount = 0;
 
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
-    QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _url(url), _filename(localfilename), _expectedHash(expectedHash),
+    QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
     _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _inputBufferSize(0)
 {
@@ -253,6 +253,7 @@ bool DownloadThread::_openAndPrepareDevice()
             qDebug() << "BLKDISCARD successful";
         }
     }
+    _sectorsStart = _sectorsWritten();
 #endif
 
     return true;
@@ -287,7 +288,6 @@ void DownloadThread::run()
         curl_easy_setopt(_c, CURLOPT_USERAGENT, _useragent.constData());
     if (!_proxy.isEmpty())
         curl_easy_setopt(_c, CURLOPT_PROXY, _proxy.constData());
-
 
     _timer.start();
     CURLcode ret = curl_easy_perform(_c);
@@ -503,7 +503,10 @@ uint64_t DownloadThread::verifyTotal()
 
 uint64_t DownloadThread::bytesWritten()
 {
-    return _bytesWritten;
+    if (_sectorsStart != -1)
+        return (_sectorsWritten()-_sectorsStart)*512;
+    else
+        return _bytesWritten;
 }
 
 void DownloadThread::_onDownloadSuccess()
@@ -662,4 +665,24 @@ bool DownloadThread::isImage()
 void DownloadThread::setInputBufferSize(int len)
 {
     _inputBufferSize = len;
+}
+
+qint64 DownloadThread::_sectorsWritten()
+{
+#ifdef Q_OS_LINUX
+    if (!_filename.startsWith("/dev/"))
+        return -1;
+
+    QFile f("/sys/class/block/"+_filename.mid(5)+"/stat");
+    if (!f.open(f.ReadOnly))
+        return -1;
+    QByteArray ioline = f.readAll().simplified();
+    f.close();
+
+    QList<QByteArray> stats = ioline.split(' ');
+
+    if (stats.count() >= 6)
+        return stats.at(6).toLongLong(); /* write sectors */
+#endif
+    return -1;
 }
