@@ -192,8 +192,8 @@ Bestandsgrootte %1 bytes is geen veelvoud van 512 bytes.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="33"/>
-        <source>Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>Imager is nog niet klaar.&lt;br&gt;Weet u zeker dat u wilt afsluiten?</translation>
+        <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
+        <translation>Raspberry Pi Imager is nog niet klaar.&lt;br&gt;Weet u zeker dat u wilt afsluiten?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="78"/>

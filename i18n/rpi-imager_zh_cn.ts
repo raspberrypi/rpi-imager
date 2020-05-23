@@ -189,7 +189,7 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     </message>
     <message>
         <location filename="../main.qml" line="33"/>
-        <source>Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
+        <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

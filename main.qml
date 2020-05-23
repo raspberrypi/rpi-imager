@@ -30,7 +30,7 @@ ApplicationWindow {
         if (progressBar.visible) {
             close.accepted = false
             msgpopupheader.text = qsTr("Are you sure you want to quit?")
-            msgpopupbody.text = qsTr("Imager is still busy.<br>Are you sure you want to quit?")
+            msgpopupbody.text = qsTr("Raspberry Pi Imager is still busy.<br>Are you sure you want to quit?")
             quitbutton.visible = true
             msgpopup.open()
         }
