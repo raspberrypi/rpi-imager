@@ -26,6 +26,16 @@ ApplicationWindow {
     FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}
     FontLoader {id: robotoBold;  source: "fonts/Roboto-Bold.ttf"}
 
+    onClosing: {
+        if (progressBar.visible) {
+            close.accepted = false
+            msgpopupheader.text = qsTr("Are you sure you want to quit?")
+            msgpopupbody.text = qsTr("Imager is still busy.<br>Are you sure you want to quit?")
+            quitbutton.visible = true
+            msgpopup.open()
+        }
+    }
+
     ColumnLayout {
         id: bg
         spacing: 0
@@ -783,7 +793,10 @@ ApplicationWindow {
                 Button {
                     id: continuebutton
                     text: qsTr("CONTINUE")
-                    onClicked: msgpopup.close()
+                    onClicked: {
+                        msgpopup.close()
+                        quitbutton.visible = false
+                    }
                     Material.foreground: "#ffffff"
                     Material.background: "#c51a4a"
                     font.family: roboto.name

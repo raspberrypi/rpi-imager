@@ -85,13 +85,13 @@ Kaart geeft mogelijk onjuiste capaciteit aan (mogelijk counterfeit)</translation
         <translation>Fout bij schrijven naar eerste deel van kaart (partitie tabel)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="620"/>
+        <location filename="../downloadthread.cpp" line="622"/>
         <source>Error reading from storage.
 SD card may be broken.</source>
         <translation>Fout bij lezen van SD kaart. Kaart is mogelijk defect.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="638"/>
+        <location filename="../downloadthread.cpp" line="641"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Verificatie mislukt. De gegevens die op de SD kaart staan wijken af van wat er naar geschreven is.</translation>
     </message>
@@ -173,7 +173,7 @@ Bestandsgrootte %1 bytes is geen veelvoud van 512 bytes.</translation>
         <translation>Downloaden en schrijven van image</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="379"/>
+        <location filename="../imagewriter.cpp" line="380"/>
         <source>Select image</source>
         <translation>Selecteer image</translation>
     </message>
@@ -186,158 +186,168 @@ Bestandsgrootte %1 bytes is geen veelvoud van 512 bytes.</translation>
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="68"/>
-        <location filename="../main.qml" line="276"/>
+        <location filename="../main.qml" line="32"/>
+        <source>Are you sure you want to quit?</source>
+        <translation>Weet u zeker dat u wilt afsluiten?</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="33"/>
+        <source>Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
+        <translation>Imager is nog niet klaar.&lt;br&gt;Weet u zeker dat u wilt afsluiten?</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="78"/>
+        <location filename="../main.qml" line="286"/>
         <source>Operating System</source>
         <translation>Besturingssysteem</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="80"/>
+        <location filename="../main.qml" line="90"/>
         <source>CHOOSE OS</source>
         <translation>SELECTEER OS</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="102"/>
-        <location filename="../main.qml" line="584"/>
+        <location filename="../main.qml" line="112"/>
+        <location filename="../main.qml" line="594"/>
         <source>SD Card</source>
         <translation>SD kaart</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="114"/>
-        <location filename="../main.qml" line="901"/>
+        <location filename="../main.qml" line="124"/>
+        <location filename="../main.qml" line="914"/>
         <source>CHOOSE SD CARD</source>
         <translation>SELECTEER SD KAART</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="141"/>
+        <location filename="../main.qml" line="151"/>
         <source>WRITE</source>
         <translation>SCHRIJF</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="156"/>
-        <location filename="../main.qml" line="846"/>
+        <location filename="../main.qml" line="166"/>
+        <location filename="../main.qml" line="859"/>
         <source>Writing... %1%</source>
         <translation>Schrijven... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="194"/>
+        <location filename="../main.qml" line="204"/>
         <source>CANCEL WRITE</source>
         <translation>Annuleer schrijven</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="197"/>
-        <location filename="../main.qml" line="843"/>
+        <location filename="../main.qml" line="207"/>
+        <location filename="../main.qml" line="856"/>
         <source>Cancelling...</source>
         <translation>Annuleren...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="208"/>
+        <location filename="../main.qml" line="218"/>
         <source>CANCEL VERIFY</source>
         <translation>ANNULEER VERIFICATIE</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="211"/>
-        <location filename="../main.qml" line="866"/>
-        <location filename="../main.qml" line="919"/>
+        <location filename="../main.qml" line="221"/>
+        <location filename="../main.qml" line="879"/>
+        <location filename="../main.qml" line="932"/>
         <source>Finalizing...</source>
         <translation>Afronden...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="338"/>
-        <location filename="../main.qml" line="895"/>
+        <location filename="../main.qml" line="348"/>
+        <location filename="../main.qml" line="908"/>
         <source>Erase</source>
         <translation>Wissen</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="339"/>
+        <location filename="../main.qml" line="349"/>
         <source>Format card as FAT32</source>
         <translation>Formatteer kaart als FAT32</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="346"/>
+        <location filename="../main.qml" line="356"/>
         <source>Use custom</source>
         <translation>Gebruik eigen bestand</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="347"/>
+        <location filename="../main.qml" line="357"/>
         <source>Select a custom .img from your computer</source>
         <translation>Selecteer een eigen .img bestand</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="354"/>
-        <location filename="../main.qml" line="507"/>
+        <location filename="../main.qml" line="364"/>
+        <location filename="../main.qml" line="517"/>
         <source>Error parsing os_list.json</source>
         <translation>Fout bij parsen os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="378"/>
+        <location filename="../main.qml" line="388"/>
         <source>Back</source>
         <translation>Terug</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="379"/>
+        <location filename="../main.qml" line="389"/>
         <source>Go back to main menu</source>
         <translation>Terug naar hoofdmenu</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="434"/>
+        <location filename="../main.qml" line="444"/>
         <source>Released: %1</source>
         <translation>Release datum: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="437"/>
+        <location filename="../main.qml" line="447"/>
         <source>Cached on your computer</source>
         <translation>Opgeslagen op computer</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="439"/>
+        <location filename="../main.qml" line="449"/>
         <source>Online - %1 GB download</source>
         <translation>Online %1 GB download</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="660"/>
+        <location filename="../main.qml" line="670"/>
         <source>Mounted as %1</source>
         <translation>Mounted op %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="775"/>
+        <location filename="../main.qml" line="785"/>
         <source>QUIT APP</source>
         <translation>AFSLUITEN</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="785"/>
+        <location filename="../main.qml" line="795"/>
         <source>CONTINUE</source>
         <translation>VERDER GAAN</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="825"/>
+        <location filename="../main.qml" line="838"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Fout bij downloaden van lijst met besturingssystemen</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="869"/>
+        <location filename="../main.qml" line="882"/>
         <source>Verifying... %1%</source>
         <translation>Verifiëren... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="887"/>
+        <location filename="../main.qml" line="900"/>
         <source>Error</source>
         <translation>Fout</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="894"/>
+        <location filename="../main.qml" line="907"/>
         <source>Write Successful</source>
         <translation>Klaar met schrijven</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="896"/>
+        <location filename="../main.qml" line="909"/>
         <source>&lt;b&gt;%2&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%2&lt;/b&gt; is gewist&lt;br&gt;&lt;br&gt;U kunt nu de SD kaart uit de lezer halen</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="898"/>
+        <location filename="../main.qml" line="911"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation type="unfinished">&lt;b&gt;%1&lt;/b&gt; is geschreven naar &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;U kunt nu de SD kaart uit de lezer halen</translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; is geschreven naar &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;U kunt nu de SD kaart uit de lezer halen</translation>
     </message>
 </context>
 </TS>
