@@ -76,6 +76,7 @@ InstallDir "$PROGRAMFILES\Raspberry Pi Imager"
 
 
 !include "MUI.nsh"
+!include "WinVer.nsh"
 
 !define MUI_ABORTWARNING
 !define MUI_UNABORTWARNING
@@ -1026,6 +1027,10 @@ Function .onInit
   SetSilent silent
   WriteUninstaller "$%TEMP%\uninstall.exe"
   Quit  ; just bail out quickly when running the "inner" installer
+!else
+  ${IfNot} ${AtLeastWin7}
+    MessageBox MB_OK "Windows 7 or above required"
+    Quit
+  ${EndIf}
 !endif
 FunctionEnd
-
