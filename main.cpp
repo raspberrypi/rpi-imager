@@ -13,11 +13,13 @@
 #include "imagewriter.h"
 #include "drivelistmodel.h"
 #include "networkaccessmanagerfactory.h"
-#include <QtWidgets/QApplication>
 #include <QMessageLogContext>
 #include <QQuickWindow>
 #include <QTranslator>
 #include <QLocale>
+#ifndef QT_NO_WIDGETS
+#include <QtWidgets/QApplication>
+#endif
 
 static QTextStream cerr(stderr);
 
@@ -29,12 +31,16 @@ static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QStri
 
 int main(int argc, char *argv[])
 {
-    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #ifdef Q_OS_WIN
     // prefer ANGLE (DirectX) over desktop OpenGL
-    QApplication::setAttribute(Qt::AA_UseOpenGLES);
+    QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
 #endif
+#ifdef QT_NO_WIDGETS
+    QGuiApplication app(argc, argv);
+#else
     QApplication app(argc, argv);
+#endif
     app.setOrganizationName("Raspberry Pi");
     app.setOrganizationDomain("raspberrypi.org");
     app.setApplicationName("Imager");
@@ -146,6 +152,7 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(fileSelected(QVariant)), qmlwindow, SLOT(onFileSelected(QVariant)));
     qmlwindow->connect(&imageWriter, SIGNAL(cancelled()), qmlwindow, SLOT(onCancelled()));
     qmlwindow->connect(&imageWriter, SIGNAL(finalizing()), qmlwindow, SLOT(onFinalizing()));
+    qmlwindow->connect(&imageWriter, SIGNAL(networkOnline()), qmlwindow, SLOT(fetchOSlist()));
 
     int rc = app.exec();
     return rc;

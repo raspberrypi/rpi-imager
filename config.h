@@ -10,6 +10,9 @@
 /* Repository URL */
 #define OSLIST_URL                        "https://downloads.raspberrypi.org/os_list_imagingutility.json"
 
+/* Time synchronization URL (only used on eglfs QPA platform, URL must be HTTP) */
+#define TIME_URL                          "http://downloads.raspberrypi.org/os_list_imagingutility.json?time_synchronization"
+
 /* Hash algorithm for verifying (uncompressed image) checksum */
 #define OSLIST_HASH_ALGORITHM             QCryptographicHash::Sha256
 

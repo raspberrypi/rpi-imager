@@ -7,6 +7,11 @@
  */
 
 #include <QCryptographicHash>
+
+#ifdef Q_OS_DARWIN
+typedef QCryptographicHash AcceleratedCryptographicHash;
+#else
+
 #include "openssl/sha.h"
 
 class AcceleratedCryptographicHash
@@ -22,4 +27,5 @@ protected:
     SHA256_CTX _sha256;
 };
 
+#endif
 #endif // ACCELERATEDCRYPTOGRAPHICHASH_H

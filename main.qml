@@ -36,6 +36,16 @@ ApplicationWindow {
         }
     }
 
+    Shortcut {
+        sequence: StandardKey.Quit
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            if (!progressBar.visible) {
+                Qt.quit()
+            }
+        }
+    }
+
     ColumnLayout {
         id: bg
         spacing: 0
@@ -358,17 +368,9 @@ ApplicationWindow {
         }
 
         Component.onCompleted: {
-            httpRequest(imageWriter.constantOsListUrl(), function (x) {
-                var o = JSON.parse(x.responseText)
-                if (!"os_list" in o) {
-                    onError(qsTr("Error parsing os_list.json"))
-                    return;
-                }
-                var oslist = o["os_list"]
-                for (var i in oslist) {
-                    osmodel.insert(osmodel.count-2, oslist[i])
-                }
-            })
+            if (imageWriter.isOnline()) {
+                fetchOSlist();
+            }
         }
     }
 
@@ -525,7 +527,13 @@ ApplicationWindow {
                             osswipeview.setCurrentIndex(1)
                         }
                     } else if (url == "") {
-                        imageWriter.openFileDialog()
+                        if (!imageWriter.isEmbeddedMode()) {
+                            imageWriter.openFileDialog()
+                        }
+                        else {
+                            // FIXME: provide QML file dialog
+                            onError("Using custom images is not implemented on this platform yet.")
+                        }
                     } else {
                         imageWriter.setSrc(url, image_download_size, extract_size, typeof(extract_sha256) != "undefined" ? extract_sha256 : "", typeof(contains_multiple_files) != "undefined" ? contains_multiple_files : false)
                         osbutton.text = name
@@ -787,7 +795,7 @@ ApplicationWindow {
                     Material.foreground: "#ffffff"
                     Material.background: "#c51a4a"
                     font.family: roboto.name
-                    visible: false
+                    visible: imageWriter.isEmbeddedMode()
                 }
 
                 Button {
@@ -795,7 +803,7 @@ ApplicationWindow {
                     text: qsTr("CONTINUE")
                     onClicked: {
                         msgpopup.close()
-                        quitbutton.visible = false
+                        quitbutton.visible = imageWriter.isEmbeddedMode()
                     }
                     Material.foreground: "#ffffff"
                     Material.background: "#c51a4a"
@@ -930,5 +938,19 @@ ApplicationWindow {
 
     function onFinalizing() {
         progressText.text = qsTr("Finalizing...")
+    }
+
+    function fetchOSlist() {
+        httpRequest(imageWriter.constantOsListUrl(), function (x) {
+            var o = JSON.parse(x.responseText)
+            if (!"os_list" in o) {
+                onError(qsTr("Error parsing os_list.json"))
+                return;
+            }
+            var oslist = o["os_list"]
+            for (var i in oslist) {
+                osmodel.insert(osmodel.count-2, oslist[i])
+            }
+        })
     }
 }

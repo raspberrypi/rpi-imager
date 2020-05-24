@@ -17,6 +17,7 @@
 
 class QQmlApplicationEngine;
 class DownloadThread;
+class QNetworkReply;
 
 class ImageWriter : public QObject
 {
@@ -71,6 +72,11 @@ public:
     /* Return filename part of URL set */
     Q_INVOKABLE QString srcFileName();
 
+    /* Returns true if online */
+    Q_INVOKABLE bool isOnline();
+
+    Q_INVOKABLE bool isEmbeddedMode();
+
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
 
@@ -81,16 +87,19 @@ signals:
     void fileSelected(QVariant filename);
     void cancelled();
     void finalizing();
+    void networkOnline();
 
 protected slots:
 
     void pollProgress();
+    void pollNetwork();
     void onSuccess();
     void onError(QString msg);
     void onFileSelected(QString filename);
     void onCancelled();
     void onCacheFileUpdated(QByteArray sha256);
     void onFinalizing();
+    void onTimeSyncReply(QNetworkReply *reply);
 
 protected:
     QUrl _src, _repo;
@@ -99,10 +108,10 @@ protected:
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
     QQmlApplicationEngine *_engine;
-    QTimer _polltimer;
+    QTimer _polltimer, _networkchecktimer;
     PowerSaveBlocker _powersave;
     DownloadThread *_thread;
-    bool _verifyEnabled, _multipleFilesInZip, _cachingEnabled;
+    bool _verifyEnabled, _multipleFilesInZip, _cachingEnabled, _embeddedMode, _online;
     QSettings _settings;
 
     void _parseCompressedFile();

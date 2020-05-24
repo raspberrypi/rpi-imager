@@ -20,21 +20,29 @@ set(CMAKE_AUTORCC ON)
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h driveformatthread.h powersaveblocker.h
-    downloadthread.h downloadextractthread.h acceleratedcryptographichash.h dependencies/mountutils/src/mountutils.hpp)
+    downloadthread.h downloadextractthread.h dependencies/mountutils/src/mountutils.hpp)
 
-# Add 3rd-party dependencies
+# Add dependencies
 if (APPLE)
-set_source_files_properties("icons/rpi-imager.icns" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-set(DEPENDENCIES mac/macfile.cpp mac/macfile.h mac/Info.plist dependencies/mountutils/src/darwin/functions.cpp
-    dependencies/drivelist/src/darwin/list.mm dependencies/drivelist/src/darwin/REDiskList.m icons/rpi-imager.icns)
-enable_language(OBJC C)
+    set_source_files_properties("icons/rpi-imager.icns" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+    set(DEPENDENCIES mac/macfile.cpp mac/macfile.h mac/Info.plist dependencies/mountutils/src/darwin/functions.cpp
+        dependencies/drivelist/src/darwin/list.mm dependencies/drivelist/src/darwin/REDiskList.m icons/rpi-imager.icns)
+    enable_language(OBJC C)
 elseif (UNIX)
-set(DEPENDENCIES dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp linux/udisks2api.cpp linux/udisks2api.h)
+    set(DEPENDENCIES acceleratedcryptographichash.cpp dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp)
+    find_package(Qt5DBus)
+    if(Qt5DBus_FOUND)
+        set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
+        set(EXTRALIBS Qt5::DBus)
+        message("udisks2 support enabled")
+    else()
+        message("DBUS not found. Disabling udisks2 support")
+    endif()
 elseif (WIN32)
-set(DEPENDENCIES dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
-    windows/winfile.cpp windows/winfile.h
-    windows/rpi-imager.rc)
-set(EXTRALIBS setupapi)
+    set(DEPENDENCIES acceleratedcryptographichash.cpp dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
+        windows/winfile.cpp windows/winfile.h
+        windows/rpi-imager.rc)
+    set(EXTRALIBS setupapi)
 endif()
 
 include_directories(BEFORE .)
@@ -60,10 +68,12 @@ endif()
 
 set(SOURCES "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
-     "driveformatthread.cpp" "powersaveblocker.cpp" "acceleratedcryptographichash.cpp" "qml.qrc")
+     "driveformatthread.cpp" "powersaveblocker.cpp" "qml.qrc")
 
-find_package(OpenSSL REQUIRED)
-find_package(Qt5 COMPONENTS Core Quick Widgets LinguistTools REQUIRED)
+find_package(Qt5 COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets)
+if (Qt5Widgets_FOUND)
+    set(EXTRALIBS ${EXTRALIBS} Qt5::Widgets)
+endif()
 
 #qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} i18n/rpi-imager_nl.ts i18n/rpi-imager_zh_cn.ts)
 qt5_add_translation(QM_FILES i18n/rpi-imager_nl.ts i18n/rpi-imager_zh_cn.ts)
@@ -81,6 +91,8 @@ endif()
 if (WIN32)
     # Target Windows 7 (needed for drivelist module)
     add_definitions(-DWINVER=0x0601 -D_WIN32_WINNT=0x0601)
+
+    find_package(OpenSSL REQUIRED)
 
     # Bundled zlib
     add_subdirectory(dependencies/zlib-1.2.11)
@@ -195,9 +207,7 @@ elseif(APPLE)
     find_library(CoreFoundation CoreFoundation)
     find_library(DiskArbitration DiskArbitration)
     find_library(Security Security)
-    #find_package(Qt5 COMPONENTS Svg)
-    #set(EXTRALIBS ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} Qt5::Svg)
-    set(EXTRALIBS ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa})
+    set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa})
     set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist)
 
     find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt5_DIR}/../../../bin")
@@ -212,8 +222,7 @@ elseif(APPLE)
 else()
     find_package(CURL REQUIRED 7.32.0)
     find_package(LibArchive REQUIRED 3.2.0)
-    find_package(Qt5 COMPONENTS DBus)
-    set(EXTRALIBS Qt5::DBus)
+    find_package(OpenSSL REQUIRED)
     if (NOT CMAKE_CROSSCOMPILING)
         find_program(LSBLK "lsblk")
         if (NOT LSBLK)
@@ -232,4 +241,4 @@ else()
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Widgets ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})

@@ -134,6 +134,7 @@ void DriveFormatThread::run()
     {
         /* Not running as root, try to outsource formatting to udisks2 */
 
+#ifndef QT_NO_DBUS
         UDisks2Api udisks2;
         if (udisks2.formatDrive(_device))
         {
@@ -141,8 +142,11 @@ void DriveFormatThread::run()
         }
         else
         {
+#endif
             emit error(tr("Error formatting (through udisks2)"));
+#ifndef QT_NO_DBUS
         }
+#endif
 
         return;
     }

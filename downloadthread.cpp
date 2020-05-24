@@ -178,6 +178,7 @@ bool DownloadThread::_openAndPrepareDevice()
     if (!_file.open(QIODevice::ReadWrite | QIODevice::Unbuffered))
     {
 #ifdef Q_OS_LINUX
+#ifndef QT_NO_DBUS
         /* Opening device directly did not work, ask udisks2 to do it for us,
          * if necessary prompting for authorization */
         UDisks2Api udisks;
@@ -187,11 +188,10 @@ bool DownloadThread::_openAndPrepareDevice()
             _file.open(fd, QIODevice::ReadWrite | QIODevice::Unbuffered, QFileDevice::AutoCloseHandle);
         }
         else
-        {
 #endif
+        {
             emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
             return false;
-#ifdef Q_OS_LINUX
         }
 #endif
     }

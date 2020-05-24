@@ -14,11 +14,19 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QProcess>
-#include <QFileDialog>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QWindow>
+#include <QGuiApplication>
+#include <QNetworkInterface>
+#include <QHostAddress>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QDateTime>
 #include <QDebug>
+#ifndef QT_NO_WIDGETS
+#include <QFileDialog>
+#endif
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -27,9 +35,18 @@
 
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
-      _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false)
+      _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
+      _embeddedMode(false), _online(false)
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
+
+    QString platform = QGuiApplication::platformName();
+    if (platform == "eglfs" || platform == "wayland" || platform == "linuxfb")
+    {
+        _embeddedMode = true;
+        connect(&_networkchecktimer, SIGNAL(timeout()), SLOT(pollNetwork()));
+        _networkchecktimer.start(100);
+    }
 
 #ifdef Q_OS_WIN
     QProcess *p = new QProcess(this);
@@ -63,7 +80,7 @@ ImageWriter::ImageWriter(QObject *parent)
     }
 
     _settings.beginGroup("caching");
-    _cachingEnabled = _settings.value("enabled", IMAGEWRITER_ENABLE_CACHE_DEFAULT).toBool();
+    _cachingEnabled = !_embeddedMode && _settings.value("enabled", IMAGEWRITER_ENABLE_CACHE_DEFAULT).toBool();
     _cachedFileHash = _settings.value("lastDownloadSHA256").toByteArray();
     _cacheFileName = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+QDir::separator()+"lastdownload.cache";
     if (!_cachedFileHash.isEmpty())
@@ -377,6 +394,7 @@ void ImageWriter::onFinalizing()
 
 void ImageWriter::openFileDialog()
 {
+#ifndef QT_NO_WIDGETS
     QFileDialog *fd = new QFileDialog(nullptr, tr("Select image"),
                                       QStandardPaths::writableLocation(QStandardPaths::DownloadLocation),
                                       "Image files (*.img *.zip *.gz *.xz);;All files (*.*)");
@@ -394,6 +412,7 @@ void ImageWriter::openFileDialog()
     }
 
     fd->show();
+#endif
 }
 
 void ImageWriter::onFileSelected(QString filename)
@@ -439,6 +458,66 @@ void ImageWriter::_parseCompressedFile()
         _multipleFilesInZip = true;
 
     qDebug() << "Parsed .zip file containing" << numFiles << "files, uncompressed size:" << _extrLen;
+}
+
+bool ImageWriter::isOnline()
+{
+    return _online || !_embeddedMode;
+}
+
+void ImageWriter::pollNetwork()
+{
+#ifdef Q_OS_LINUX
+    /* Check if we have an IP-address other than localhost */
+    QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+
+    foreach (QHostAddress a, addresses)
+    {
+        if (!a.isLoopback() && a.scopeId().isEmpty())
+        {
+            /* Not a loopback or IPv6 link-local address, so online */
+            _online = true;
+            break;
+        }
+    }
+
+    if (_online)
+    {
+        _networkchecktimer.stop();
+        qDebug() << "Network online. Synchronizing time.";
+        QNetworkAccessManager *manager = new QNetworkAccessManager(this);
+        connect(manager, SIGNAL(finished(QNetworkReply*)), SLOT(onTimeSyncReply(QNetworkReply*)));
+        manager->head(QNetworkRequest(QUrl(TIME_URL)));
+    }
+#endif
+}
+
+void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
+{
+#ifdef Q_OS_LINUX
+    if (reply->hasRawHeader("Date"))
+    {
+        QDateTime dt = QDateTime::fromString(reply->rawHeader("Date"), Qt::RFC2822Date);
+        qDebug() << "Received current time from server:" << dt;
+        struct timeval tv = {
+            (time_t) dt.toSecsSinceEpoch(), 0
+        };
+        ::settimeofday(&tv, NULL);
+
+        emit networkOnline();
+    }
+    else
+    {
+        // TODO: try again later?
+    }
+
+    reply->deleteLater();
+#endif
+}
+
+bool ImageWriter::isEmbeddedMode()
+{
+    return _embeddedMode;
 }
 
 void MountUtilsLog(std::string msg) {

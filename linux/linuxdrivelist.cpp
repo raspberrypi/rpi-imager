@@ -103,6 +103,12 @@ namespace Drivelist
                 bdev["vendor"].toString().trimmed(),
                 bdev["model"].toString().trimmed()
             };
+            if (name == "/dev/mmcblk0")
+            {
+                dp.removeAll("");
+                if (dp.empty())
+                    dp.append(QObject::tr("Internal SD card reader"));
+            }
 
             QString mp = bdev["mountpoint"].toString();
             if (!mp.isEmpty())
