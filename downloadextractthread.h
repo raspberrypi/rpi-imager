@@ -48,13 +48,13 @@ protected:
 
     QByteArray _popQueue();
     void _pushQueue(const char *data, size_t len);
-    void _cancelExtract();
+    virtual void _cancelExtract();
     virtual size_t _writeData(const char *buf, size_t len);
     virtual void _onDownloadSuccess();
     virtual void _onDownloadError(const QString &msg);
 
-    ssize_t _on_read(struct archive *a, const void **buff);
-    int _on_close(struct archive *a);
+    virtual ssize_t _on_read(struct archive *a, const void **buff);
+    virtual int _on_close(struct archive *a);
 
     static ssize_t _archive_read(struct archive *a, void *client_data, const void **buff);
     static int _archive_close(struct archive *a, void *client_data);

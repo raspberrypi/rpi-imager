@@ -382,12 +382,12 @@ int DownloadExtractThread::_on_close(struct archive *)
 // static callback functions that call object oriented equivalents
 ssize_t DownloadExtractThread::_archive_read(struct archive *a, void *client_data, const void **buff)
 {
-   return static_cast<DownloadExtractThread *>(client_data)->_on_read(a, buff);
+   return qobject_cast<DownloadExtractThread *>((QObject *) client_data)->_on_read(a, buff);
 }
 
 int DownloadExtractThread::_archive_close(struct archive *a, void *client_data)
 {
-   return static_cast<DownloadExtractThread *>(client_data)->_on_close(a);
+   return qobject_cast<DownloadExtractThread *>((QObject *) client_data)->_on_close(a);
 }
 
 bool DownloadExtractThread::isImage()

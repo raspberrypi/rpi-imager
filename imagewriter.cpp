@@ -8,6 +8,7 @@
 #include "downloadextractthread.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "driveformatthread.h"
+#include "localfileextractthread.h"
 #include <archive.h>
 #include <archive_entry.h>
 #include <QFileInfo>
@@ -182,7 +183,11 @@ void ImageWriter::startWrite()
         urlstr = QUrl::fromLocalFile(_cacheFileName).toString(_src.FullyEncoded).toLatin1();
     }
 
-    if (compressed)
+    if (QUrl(urlstr).isLocalFile())
+    {
+        _thread = new LocalFileExtractThread(urlstr, _dst.toLatin1(), _expectedHash, this);
+    }
+    else if (compressed)
     {
         _thread = new DownloadExtractThread(urlstr, _dst.toLatin1(), _expectedHash, this);
     }
