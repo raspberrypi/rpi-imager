@@ -75,7 +75,15 @@ public:
     /* Returns true if online */
     Q_INVOKABLE bool isOnline();
 
+    /* Returns true if run on embedded Linux platform */
     Q_INVOKABLE bool isEmbeddedMode();
+
+    /* Mount any USB sticks that can contain source images under /media
+       Returns true if at least one device was mounted */
+    Q_INVOKABLE bool mountUsbSourceMedia();
+
+    /* Returns a json formatted list of the OS images found on USB stick */
+    Q_INVOKABLE QByteArray getUsbSourceOSlist();
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
@@ -93,6 +101,7 @@ protected slots:
 
     void pollProgress();
     void pollNetwork();
+    void syncTime();
     void onSuccess();
     void onError(QString msg);
     void onFileSelected(QString filename);

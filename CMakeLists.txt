@@ -240,5 +240,12 @@ else()
     install(FILES linux/rpi-imager.desktop DESTINATION share/applications)
 endif()
 
+get_target_property(QT_TARGET_TYPE Qt5::Core TYPE)
+if(${QT_TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
+    find_package(Qt5QmlImportScanner REQUIRED)
+    qt5_import_qml_plugins(${PROJECT_NAME})
+    qt5_import_plugins(${PROJECT_NAME} INCLUDE Qt5::QSvgPlugin)
+endif()
+
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Quick Qt5::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Core Qt5::Quick Qt5::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})

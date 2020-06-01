@@ -13,12 +13,13 @@ import Qt.labs.settings 1.0
 ApplicationWindow {
     id: window
     visible: true
-    width: 680
-    height: 420
-    minimumWidth: 680
-    maximumWidth: 680
-    minimumHeight: 420
-    maximumHeight: 420
+
+    width: imageWriter.isEmbeddedMode() ? -1 : 680
+    height: imageWriter.isEmbeddedMode() ? -1 : 420
+    minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
+    maximumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
+    minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
+    maximumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
 
@@ -50,13 +51,18 @@ ApplicationWindow {
         id: bg
         spacing: 0
 
-        Image {
-            id: image
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-            Layout.preferredWidth: window.width
-            fillMode: Image.PreserveAspectFit
-            source: "icons/rpi2.png"
+        Rectangle {
+            implicitHeight: window.height/2
+
+            Image {
+                id: image
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+                fillMode: Image.PreserveAspectFit
+                source: imageWriter.isEmbeddedMode() ? "icons/rpi2-hires.png" : "icons/rpi2.png"
+                width: window.width
+                height: window.height/2
+            }
         }
 
         Rectangle {
@@ -347,7 +353,7 @@ ApplicationWindow {
 
         ListElement {
             url: "internal://format"
-            icon: "icons/ic_delete_40px.png"
+            icon: "icons/ic_delete_40px.svg"
             extract_size: 0
             image_download_size: 0
             extract_sha256: ""
@@ -362,7 +368,7 @@ ApplicationWindow {
 
         ListElement {
             url: ""
-            icon: "icons/ic_computer_40px.png"
+            icon: "icons/ic_computer_40px.svg"
             name: qsTr("Use custom")
             description: qsTr("Select a custom .img from your computer")
         }
@@ -379,7 +385,7 @@ ApplicationWindow {
 
         ListElement {
             url: ""
-            icon: "icons/ic_chevron_left_40px.png"
+            icon: "icons/ic_chevron_left_40px.svg"
             extract_size: 0
             image_download_size: 0
             extract_sha256: ""
@@ -421,7 +427,7 @@ ApplicationWindow {
                     width: 64
 
                     Image {
-                        source: icon == "icons/ic_build_48px.svg" ? "icons/ic_build_40px.png": icon
+                        source: icon == "icons/ic_build_48px.svg" ? "icons/ic_build_40px.svg": icon
                         verticalAlignment: Image.AlignVCenter
                         height: parent.parent.parent.height
                         fillMode: Image.Pad
@@ -447,6 +453,8 @@ ApplicationWindow {
                             if (typeof(url) == "string" && url != "" && url != "internal://format") {
                                 if (typeof(extract_sha256) != "undefined" && imageWriter.isCached(url,extract_sha256)) {
                                     txt += "<br>"+qsTr("Cached on your computer")
+                                } else if (url.startsWith("file://")) {
+                                    txt += "<br>"+qsTr("Local file")
                                 } else {
                                     txt += "<br>"+qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1));
                                 }
@@ -467,7 +475,7 @@ ApplicationWindow {
                 }
                 Column {
                     Image {
-                        source: "icons/ic_chevron_right_40px.png"
+                        source: "icons/ic_chevron_right_40px.svg"
                         visible: (typeof(subitems) == "object" && subitems.count) || (typeof(subitems_url) == "string" && subitems_url != "" && subitems_url != "internal://back")
                         height: parent.parent.parent.height
                         fillMode: Image.Pad
@@ -531,8 +539,22 @@ ApplicationWindow {
                             imageWriter.openFileDialog()
                         }
                         else {
-                            // FIXME: provide QML file dialog
-                            onError("Using custom images is not implemented on this platform yet.")
+                            if (imageWriter.mountUsbSourceMedia()) {
+                                if (subosmodel.count>1)
+                                {
+                                    subosmodel.remove(1, subosmodel.count-1)
+                                }
+
+                                var oslist = JSON.parse(imageWriter.getUsbSourceOSlist())
+                                for (var i in oslist) {
+                                    subosmodel.append(oslist[i])
+                                }
+                                osswipeview.setCurrentIndex(1)
+                            }
+                            else
+                            {
+                                onError(qsTr("Connect an USB stick containing images first.<br>The images must be located in the root folder of the USB stick."))
+                            }
                         }
                     } else {
                         imageWriter.setSrc(url, image_download_size, extract_size, typeof(extract_sha256) != "undefined" ? extract_sha256 : "", typeof(contains_multiple_files) != "undefined" ? contains_multiple_files : false)
@@ -546,7 +568,6 @@ ApplicationWindow {
             }
         }
     }
-
 
     /*
       Popup for SD card device selection
@@ -658,7 +679,7 @@ ApplicationWindow {
                     width: 64
 
                     Image {
-                        source: isUsb ? "icons/ic_usb_40px.png" : isScsi ? "icons/ic_storage_40px.png" : "icons/ic_sd_storage_40px.png"
+                        source: isUsb ? "icons/ic_usb_40px.svg" : isScsi ? "icons/ic_storage_40px.svg" : "icons/ic_sd_storage_40px.svg"
                         verticalAlignment: Image.AlignVCenter
                         height: parent.parent.parent.height
                         fillMode: Image.Pad

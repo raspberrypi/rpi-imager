@@ -17,6 +17,7 @@
 #include <QQuickWindow>
 #include <QTranslator>
 #include <QLocale>
+#include <QScreen>
 #ifndef QT_NO_WIDGETS
 #include <QtWidgets/QApplication>
 #endif
@@ -37,6 +38,15 @@ int main(int argc, char *argv[])
     QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
 #endif
 #ifdef QT_NO_WIDGETS
+    {
+        QGuiApplication tmp(argc, argv);
+        int h = QGuiApplication::primaryScreen()->geometry().height();
+        if (h > 720)
+        {
+            qputenv("QT_SCALE_FACTOR", QByteArray::number(h / 720.0, 'f', 2));
+        }
+    }
+
     QGuiApplication app(argc, argv);
 #else
     QApplication app(argc, argv);

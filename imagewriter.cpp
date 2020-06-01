@@ -476,6 +476,7 @@ void ImageWriter::pollNetwork()
         if (!a.isLoopback() && a.scopeId().isEmpty())
         {
             /* Not a loopback or IPv6 link-local address, so online */
+            qDebug() << "IP:" << a;
             _online = true;
             break;
         }
@@ -484,11 +485,20 @@ void ImageWriter::pollNetwork()
     if (_online)
     {
         _networkchecktimer.stop();
-        qDebug() << "Network online. Synchronizing time.";
-        QNetworkAccessManager *manager = new QNetworkAccessManager(this);
-        connect(manager, SIGNAL(finished(QNetworkReply*)), SLOT(onTimeSyncReply(QNetworkReply*)));
-        manager->head(QNetworkRequest(QUrl(TIME_URL)));
+
+        // Wait another 0.1 sec, as dhcpcd may not have set up nameservers yet
+        QTimer::singleShot(100, this, SLOT(syncTime()));
     }
+#endif
+}
+
+void ImageWriter::syncTime()
+{
+#ifdef Q_OS_LINUX
+    qDebug() << "Network online. Synchronizing time.";
+    QNetworkAccessManager *manager = new QNetworkAccessManager(this);
+    connect(manager, SIGNAL(finished(QNetworkReply*)), SLOT(onTimeSyncReply(QNetworkReply*)));
+    manager->head(QNetworkRequest(QUrl(TIME_URL)));
 #endif
 }
 
@@ -508,7 +518,8 @@ void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
     }
     else
     {
-        // TODO: try again later?
+        qDebug() << "Error synchronizing time. Trying again in 3 seconds";
+        QTimer::singleShot(3000, this, SLOT(syncTime()));
     }
 
     reply->deleteLater();
@@ -518,6 +529,76 @@ void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
 bool ImageWriter::isEmbeddedMode()
 {
     return _embeddedMode;
+}
+
+/* Mount any USB sticks that can contain source images under /media */
+bool ImageWriter::mountUsbSourceMedia()
+{
+    int devices = 0;
+#ifdef Q_OS_LINUX
+    QDir dir("/sys/class/block");
+    QStringList list = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+
+    if (!dir.exists("/media"))
+        dir.mkdir("/media");
+
+    for (auto devname : list)
+    {
+        if (!devname.startsWith("mmcblk0") && !QFile::symLinkTarget("/sys/class/block/"+devname).contains("/devices/virtual/"))
+        {
+            QString mntdir = "/media/"+devname;
+
+            if (dir.exists(mntdir))
+            {
+                devices++;
+                continue;
+            }
+
+            dir.mkdir(mntdir);
+            QStringList args = { "-o", "ro", QString("/dev/")+devname, mntdir };
+
+            if ( QProcess::execute("mount", args) == 0 )
+                devices++;
+            else
+                dir.rmdir(mntdir);
+        }
+    }
+#endif
+    return devices > 0;
+}
+
+QByteArray ImageWriter::getUsbSourceOSlist()
+{
+#ifdef Q_OS_LINUX
+    QJsonArray oslist;
+    QDir dir("/media");
+    QStringList medialist = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    QStringList namefilters = {"*.img", "*.zip", "*.gz", "*.xz"};
+
+    for (auto devname : medialist)
+    {
+        QDir subdir("/media/"+devname);
+        QStringList files = subdir.entryList(namefilters, QDir::Files, QDir::Name);
+        for (auto file : files)
+        {
+            QString path = "/media/"+devname+"/"+file;
+            QFileInfo fi(path);
+
+            QJsonObject f = {
+                {"name", file},
+                {"description", devname+"/"+file},
+                {"url", QUrl::fromLocalFile(path).toString() },
+                {"release_date", ""},
+                {"image_download_size", fi.size()}
+            };
+            oslist.append(f);
+        }
+    }
+
+    return QJsonDocument(oslist).toJson();
+#else
+    return QByteArray();
+#endif
 }
 
 void MountUtilsLog(std::string msg) {

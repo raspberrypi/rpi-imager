@@ -186,7 +186,7 @@ void DriveFormatThread::run()
         return;
     }
 
-    proc.execute("partprobe");
+    proc.execute("partprobe", QStringList() );
 
     args.clear();
     args << fatpartition;
