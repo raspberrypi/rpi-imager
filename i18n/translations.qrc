@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/i18n">
+        <file>rpi-imager_en.qm</file>
         <file>rpi-imager_nl.qm</file>
         <file>rpi-imager_zh_cn.qm</file>
     </qresource>
