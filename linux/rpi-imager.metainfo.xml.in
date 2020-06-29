@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<!--Copyright 2020 Flathub maintainers-->
 <component type="desktop-application">
   <id>org.raspberrypi.rpi-imager</id>
   <metadata_license>CC0-1.0</metadata_license>
@@ -56,7 +55,7 @@
     <binary>rpi-imager</binary>
   </provides>
   <releases>
-    <release version="1.2" date="2020-03-10" />
+    <release version="@IMAGER_VERSION_STR@" />
   </releases>
   <content_rating type="oars-1.1" />
 </component>
