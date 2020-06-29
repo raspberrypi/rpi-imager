@@ -515,7 +515,7 @@ uint64_t DownloadThread::verifyTotal()
 uint64_t DownloadThread::bytesWritten()
 {
     if (_sectorsStart != -1)
-        return (_sectorsWritten()-_sectorsStart)*512;
+        return qMin((uint64_t) (_sectorsWritten()-_sectorsStart)*512, (uint64_t) _bytesWritten);
     else
         return _bytesWritten;
 }
@@ -619,7 +619,8 @@ bool DownloadThread::_verify()
 
 #ifdef Q_OS_LINUX
     /* Make sure we are reading from the drive and not from cache */
-    fcntl(_file.handle(), F_SETFL, O_DIRECT | fcntl(_file.handle(), F_GETFL));
+    //fcntl(_file.handle(), F_SETFL, O_DIRECT | fcntl(_file.handle(), F_GETFL));
+    posix_fadvise(_file.handle(), 0, 0, POSIX_FADV_DONTNEED);
 #endif
 
     if (!_firstBlock)
