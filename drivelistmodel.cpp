@@ -81,10 +81,10 @@ void DriveListModel::refreshDriveList()
             continue;
 #endif
 
-        QString device = QString::fromStdString(i.device);
-        drivesInNewList.insert(device);
+        QString deviceNamePlusSize = QString::fromStdString(i.device)+":"+QString::number(i.size);
+        drivesInNewList.insert(deviceNamePlusSize);
 
-        if (!_drivelist.contains(device))
+        if (!_drivelist.contains(deviceNamePlusSize))
         {
             // Found new drive
             if (!changes)
@@ -93,7 +93,7 @@ void DriveListModel::refreshDriveList()
                 changes = true;
             }
 
-            _drivelist[device] = new DriveListItem(device, QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, mountpoints, this);
+            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, mountpoints, this);
         }
     }
 
