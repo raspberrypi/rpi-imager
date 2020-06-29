@@ -30,10 +30,7 @@ ApplicationWindow {
     onClosing: {
         if (progressBar.visible) {
             close.accepted = false
-            msgpopupheader.text = qsTr("Are you sure you want to quit?")
-            msgpopupbody.text = qsTr("Raspberry Pi Imager is still busy.<br>Are you sure you want to quit?")
-            quitbutton.visible = true
-            msgpopup.open()
+            quitpopup.openPopup()
         }
     }
 
@@ -111,9 +108,18 @@ ApplicationWindow {
                         topPadding: 0
                         Layout.minimumHeight: 40
                         Layout.fillWidth: true
-                        onClicked: ospopup.open()
+                        onClicked: {
+                            ospopup.open()
+                            if (osswipeview.currentIndex == 0)
+                                oslist.forceActiveFocus()
+                            else
+                                suboslist.forceActiveFocus()
+                        }
                         Material.background: "#ffffff"
                         Material.foreground: "#c51a4a"
+                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.description: qsTr("Select this button to change the operating system")
+                        Accessible.onPressAction: clicked()
                     }
                 }
 
@@ -146,9 +152,13 @@ ApplicationWindow {
                             imageWriter.refreshDriveList()
                             drivePollTimer.start()
                             dstpopup.open()
+                            dstlist.forceActiveFocus()
                         }
                         Material.background: "#ffffff"
                         Material.foreground: "#c51a4a"
+                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.description: qsTr("Select this button to change the destination SD card")
+                        Accessible.onPressAction: clicked()
                     }
                 }
 
@@ -168,6 +178,8 @@ ApplicationWindow {
                         font.family: roboto.name
                         Layout.minimumHeight: 40
                         Layout.fillWidth: true
+                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.description: qsTr("Select this button to start writing the image")
 
                         enabled: false
                         Material.background: "#ffffff"
@@ -175,20 +187,10 @@ ApplicationWindow {
                         onClicked: {
                             if (!imageWriter.readyToWrite())
                                 return;
-                            enabled = false
-                            cancelwritebutton.enabled = true
-                            cancelwritebutton.visible = true
-                            cancelverifybutton.enabled = true
-                            progressText.text = qsTr("Writing... %1%").arg("0")
-                            progressText.visible = true
-                            progressBar.visible = true
-                            progressBar.indeterminate = true
-                            progressBar.Material.accent = "#ffffff"
-                            osbutton.enabled = false
-                            dstbutton.enabled = false
-                            imageWriter.setVerifyEnabled(true)
-                            imageWriter.startWrite()
+
+                            confirmwritepopup.askForConfirmation()
                         }
+                        Accessible.onPressAction: clicked()
                     }
                 }
 
@@ -228,6 +230,7 @@ ApplicationWindow {
                         Layout.alignment: Qt.AlignRight
                         visible: false
                         font.family: roboto.name
+                        Accessible.onPressAction: clicked()
                     }
                     Button {
                         id: cancelverifybutton
@@ -242,6 +245,7 @@ ApplicationWindow {
                         Layout.alignment: Qt.AlignRight
                         visible: false
                         font.family: roboto.name
+                        Accessible.onPressAction: clicked()
                     }
                 }
             }
@@ -258,7 +262,6 @@ ApplicationWindow {
         width: parent.width-100
         height: parent.height-50
         padding: 0
-        focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         // background of title
@@ -320,27 +323,46 @@ ApplicationWindow {
                     ListView {
                         id: oslist
                         model: osmodel
+                        currentIndex: -1
                         delegate: osdelegate
                         width: window.width-100
                         height: window.height-100
-                        focus: true
                         boundsBehavior: Flickable.StopAtBounds
+                        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
                         ScrollBar.vertical: ScrollBar {
                             width: 10
                             policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                        }
+                        Keys.onSpacePressed: {
+                            if (currentIndex != -1)
+                                selectOSitem(model.get(currentIndex), true)
+                        }
+                        Accessible.onPressAction: {
+                            if (currentIndex != -1)
+                                selectOSitem(model.get(currentIndex), true)
                         }
                     }
 
                     ListView {
                         id: suboslist
                         model: subosmodel
+                        currentIndex: -1
                         delegate: osdelegate
                         width: window.width-100
                         height: window.height-100
                         boundsBehavior: Flickable.StopAtBounds
+                        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
                         ScrollBar.vertical: ScrollBar {
                             width: 10
                             policy: suboslist.contentHeight > suboslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                        }
+                        Keys.onSpacePressed: {
+                            if (currentIndex != -1)
+                                selectOSitem(model.get(currentIndex))
+                        }
+                        Accessible.onPressAction: {
+                            if (currentIndex != -1)
+                                selectOSitem(model.get(currentIndex))
                         }
                     }
                 }
@@ -405,12 +427,14 @@ ApplicationWindow {
         Item {
             width: window.width-100
             height: image_download_size ? 100 : 60
+            Accessible.name: name+".\n"+description
 
             Rectangle {
                id: bgrect
                anchors.fill: parent
                color: "#f5f5f5"
-               visible: false
+               visible: mouseOver && parent.ListView.view.currentIndex !== index
+               property bool mouseOver: false
             }
             Rectangle {
                id: borderrect
@@ -464,6 +488,13 @@ ApplicationWindow {
                             return txt;
                         }
 
+                        /*
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: name+".\n"+description
+                        Accessible.focusable: true
+                        Accessible.focused: parent.parent.parent.ListView.view.currentIndex === index
+                        */
+
                         ToolTip {
                             visible: osMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
                             delay: 1000
@@ -490,80 +521,15 @@ ApplicationWindow {
                 hoverEnabled: true
 
                 onEntered: {
-                    bgrect.visible = true
+                    bgrect.mouseOver = true
                 }
 
                 onExited: {
-                    bgrect.visible = false
+                    bgrect.mouseOver = false
                 }
 
                 onClicked: {
-                    if (typeof(subitems) == "object" && subitems.count) {
-                        if (subosmodel.count>1)
-                        {
-                            subosmodel.remove(1, subosmodel.count-1)
-                        }
-                        for (var i=0; i<subitems.count; i++)
-                        {
-                            subosmodel.append(subitems.get(i))
-                        }
-
-                        osswipeview.setCurrentIndex(1)
-                    } else if (typeof(subitems_url) == "string" && subitems_url != "") {
-                        if (subitems_url == "internal://back")
-                        {
-                            osswipeview.setCurrentIndex(0)
-                        }
-                        else
-                        {
-                            if (subosmodel.count>1)
-                            {
-                                subosmodel.remove(1, subosmodel.count-1)
-                            }
-
-                            httpRequest(subitems_url, function (x) {
-                                var o = JSON.parse(x.responseText)
-                                if (!"os_list" in o) {
-                                    onError(qsTr("Error parsing os_list.json"))
-                                    return;
-                                }
-                                var oslist = o["os_list"]
-                                for (var i in oslist) {
-                                    subosmodel.append(oslist[i])
-                                }
-                            })
-                            osswipeview.setCurrentIndex(1)
-                        }
-                    } else if (url == "") {
-                        if (!imageWriter.isEmbeddedMode()) {
-                            imageWriter.openFileDialog()
-                        }
-                        else {
-                            if (imageWriter.mountUsbSourceMedia()) {
-                                if (subosmodel.count>1)
-                                {
-                                    subosmodel.remove(1, subosmodel.count-1)
-                                }
-
-                                var oslist = JSON.parse(imageWriter.getUsbSourceOSlist())
-                                for (var i in oslist) {
-                                    subosmodel.append(oslist[i])
-                                }
-                                osswipeview.setCurrentIndex(1)
-                            }
-                            else
-                            {
-                                onError(qsTr("Connect an USB stick containing images first.<br>The images must be located in the root folder of the USB stick."))
-                            }
-                        }
-                    } else {
-                        imageWriter.setSrc(url, image_download_size, extract_size, typeof(extract_sha256) != "undefined" ? extract_sha256 : "", typeof(contains_multiple_files) != "undefined" ? contains_multiple_files : false)
-                        osbutton.text = name
-                        ospopup.close()
-                        if (imageWriter.readyToWrite()) {
-                            writebutton.enabled = true
-                        }
-                    }
+                    selectOSitem(model)
                 }
             }
         }
@@ -579,7 +545,6 @@ ApplicationWindow {
         width: parent.width-100
         height: parent.height-50
         padding: 0
-        focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         // background of title
@@ -640,11 +605,36 @@ ApplicationWindow {
                     delegate: dstdelegate
                     width: window.width-100
                     height: window.height-100
-                    focus: true
                     boundsBehavior: Flickable.StopAtBounds
+                    highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
                     ScrollBar.vertical: ScrollBar {
                         width: 10
                         policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                    }
+
+                    Keys.onSpacePressed: {
+                        if (currentIndex == -1)
+                            return
+
+                        drivePollTimer.stop()
+                        dstpopup.close()
+                        imageWriter.setDst(currentItem.device, currentItem.size)
+                        dstbutton.text = currentItem.description
+                        if (imageWriter.readyToWrite()) {
+                            writebutton.enabled = true
+                        }
+                    }
+                    Accessible.onPressAction: {
+                        if (currentIndex == -1)
+                            return
+
+                        drivePollTimer.stop()
+                        dstpopup.close()
+                        imageWriter.setDst(currentItem.device, currentItem.size)
+                        dstbutton.text = currentItem.description
+                        if (imageWriter.readyToWrite()) {
+                            writebutton.enabled = true
+                        }
                     }
                 }
             }
@@ -657,12 +647,24 @@ ApplicationWindow {
         Item {
             width: window.width-100
             height: 60
+            Accessible.name: {
+                var txt = description+" - "+(size/1000000000).toFixed(1)+" gigabytes"
+                if (mountpoints.length > 0) {
+                    txt += qsTr("Mounted as %1").arg(mountpoints.join(", "))
+                }
+                return txt;
+            }
+            property string description: model.description
+            property string device: model.device
+            property string size: model.size
 
             Rectangle {
                id: dstbgrect
                anchors.fill: parent
                color: "#f5f5f5"
-               visible: false
+               visible: mouseOver && parent.ListView.view.currentIndex !== index
+               property bool mouseOver: false
+
             }
             Rectangle {
                id: dstborderrect
@@ -710,11 +712,11 @@ ApplicationWindow {
                 hoverEnabled: true
 
                 onEntered: {
-                    dstbgrect.visible = true
+                    dstbgrect.mouseOver = true
                 }
 
                 onExited: {
-                    dstbgrect.visible = false
+                    dstbgrect.mouseOver = false
                 }
 
                 onClicked: {
@@ -730,109 +732,48 @@ ApplicationWindow {
         }
     }
 
-    Popup {
+    MsgPopup {
         id: msgpopup
-        x: 75
-        y: parent.height/2-100
-        width: parent.width-150
-        height: msgpopupbody.implicitHeight+150 //200
-        padding: 0
-        focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    }
 
-        // background of title
-        Rectangle {
-            color: "#f5f5f5"
-            anchors.right: parent.right
-            anchors.top: parent.top
-            height: 35
-            width: parent.width
+    MsgPopup {
+        id: quitpopup
+        continueButton: false
+        yesButton: true
+        noButton: true
+        title: qsTr("Are you sure you want to quit?")
+        text: qsTr("Raspberry Pi Imager is still busy.<br>Are you sure you want to quit?")
+        onYes: {
+            Qt.quit()
         }
-        // line under title
-        Rectangle {
-            color: "#afafaf"
-            width: parent.width
-            y: 35
-            implicitHeight: 1
-        }
+    }
 
-        Text {
-            id: msgx
-            text: "X"
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: roboto.name
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    if (continuebutton.visible)
-                        msgpopup.close()
-                    else
-                        Qt.quit()
-                }
-            }
+    MsgPopup {
+        id: confirmwritepopup
+        continueButton: false
+        yesButton: true
+        noButton: true
+        title: qsTr("Warning")
+        onYes: {
+            writebutton.enabled = false
+            cancelwritebutton.enabled = true
+            cancelwritebutton.visible = true
+            cancelverifybutton.enabled = true
+            progressText.text = qsTr("Writing... %1%").arg("0")
+            progressText.visible = true
+            progressBar.visible = true
+            progressBar.indeterminate = true
+            progressBar.Material.accent = "#ffffff"
+            osbutton.enabled = false
+            dstbutton.enabled = false
+            imageWriter.setVerifyEnabled(true)
+            imageWriter.startWrite()
         }
 
-        ColumnLayout {
-            spacing: 20
-            anchors.fill: parent
-
-            Text {
-                id: msgpopupheader
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                Layout.fillWidth: true
-                Layout.topMargin: 10
-                font.family: roboto.name
-                font.bold: true
-            }
-
-            Text {
-                id: msgpopupbody
-                font.pointSize: 12
-                wrapMode: Text.Wrap
-                textFormat: Text.StyledText
-                font.family: roboto.name
-                Layout.maximumWidth: msgpopup.width-50
-                Layout.fillHeight: true
-                Layout.leftMargin: 25
-                Layout.topMargin: 25
-            }
-
-            RowLayout {
-                Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
-                Layout.bottomMargin: 10
-                spacing: 20
-
-                Button {
-                    id: quitbutton
-                    text: qsTr("QUIT APP")
-                    onClicked: Qt.quit()
-                    Material.foreground: "#ffffff"
-                    Material.background: "#c51a4a"
-                    font.family: roboto.name
-                    visible: imageWriter.isEmbeddedMode()
-                }
-
-                Button {
-                    id: continuebutton
-                    text: qsTr("CONTINUE")
-                    onClicked: {
-                        msgpopup.close()
-                        quitbutton.visible = imageWriter.isEmbeddedMode()
-                    }
-                    Material.foreground: "#ffffff"
-                    Material.background: "#c51a4a"
-                    font.family: roboto.name
-                }
-
-                Text { text: " " }
-            }
+        function askForConfirmation()
+        {
+            text = qsTr("All existing data on '%1' will be erased.<br>Are you sure you want to continue?").arg(dstbutton.text)
+            openPopup()
         }
     }
 
@@ -926,19 +867,19 @@ ApplicationWindow {
     }
 
     function onError(msg) {
-        msgpopupheader.text = qsTr("Error")
-        msgpopupbody.text = msg
-        msgpopup.open()
+        msgpopup.title = qsTr("Error")
+        msgpopup.text = msg
+        msgpopup.openPopup()
         resetWriteButton()
     }
 
     function onSuccess() {
-        msgpopupheader.text = qsTr("Write Successful")
+        msgpopup.title = qsTr("Write Successful")
         if (osbutton.text === qsTr("Erase"))
-            msgpopupbody.text = qsTr("<b>%2</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
+            msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
         else
-            msgpopupbody.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
-        msgpopup.open()
+            msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
+        msgpopup.openPopup()
         imageWriter.setDst("")
         dstbutton.text = qsTr("CHOOSE SD CARD")
         resetWriteButton()
@@ -973,5 +914,88 @@ ApplicationWindow {
                 osmodel.insert(osmodel.count-2, oslist[i])
             }
         })
+    }
+
+    function selectOSitem(d, selectFirstSubitem)
+    {
+        if (typeof(d.subitems) == "object" && d.subitems.count) {
+            if (subosmodel.count>1)
+            {
+                subosmodel.remove(1, subosmodel.count-1)
+            }
+            for (var i=0; i<d.subitems.count; i++)
+            {
+                subosmodel.append(d.subitems.get(i))
+            }
+
+            if (selectFirstSubitem === true)
+                suboslist.currentIndex = 0
+            else
+                suboslist.currentIndex = -1
+            osswipeview.setCurrentIndex(1)
+        } else if (typeof(d.subitems_url) == "string" && d.subitems_url !== "") {
+            if (d.subitems_url === "internal://back")
+            {
+                osswipeview.setCurrentIndex(0)
+            }
+            else
+            {
+                if (subosmodel.count>1)
+                {
+                    subosmodel.remove(1, subosmodel.count-1)
+                }
+
+                httpRequest(d.subitems_url, function (x) {
+                    var o = JSON.parse(x.responseText)
+                    if (!"os_list" in o) {
+                        onError(qsTr("Error parsing os_list.json"))
+                        return;
+                    }
+                    var oslist = o["os_list"]
+                    for (var i in oslist) {
+                        subosmodel.append(oslist[i])
+                    }
+                })
+
+                if (selectFirstSubitem === true)
+                    suboslist.currentIndex = 0
+                else
+                    suboslist.currentIndex = -1
+                osswipeview.setCurrentIndex(1)
+            }
+        } else if (d.url === "") {
+            if (!imageWriter.isEmbeddedMode()) {
+                imageWriter.openFileDialog()
+            }
+            else {
+                if (imageWriter.mountUsbSourceMedia()) {
+                    if (subosmodel.count>1)
+                    {
+                        subosmodel.remove(1, subosmodel.count-1)
+                    }
+
+                    var oslist = JSON.parse(imageWriter.getUsbSourceOSlist())
+                    for (var i in oslist) {
+                        subosmodel.append(oslist[i])
+                    }
+                    if (selectFirstSubitem === true)
+                        suboslist.currentIndex = 0
+                    else
+                        suboslist.currentIndex = -1
+                    osswipeview.setCurrentIndex(1)
+                }
+                else
+                {
+                    onError(qsTr("Connect an USB stick containing images first.<br>The images must be located in the root folder of the USB stick."))
+                }
+            }
+        } else {
+            imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false)
+            osbutton.text = d.name
+            ospopup.close()
+            if (imageWriter.readyToWrite()) {
+                writebutton.enabled = true
+            }
+        }
     }
 }

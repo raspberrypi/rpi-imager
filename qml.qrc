@@ -16,5 +16,6 @@
         <file>icons/ic_sd_storage_40px.svg</file>
         <file>icons/ic_storage_40px.svg</file>
         <file>icons/ic_usb_40px.svg</file>
+        <file>MsgPopup.qml</file>
     </qresource>
 </RCC>
