@@ -48,10 +48,13 @@ public:
     /* Return true if url is in our local disk cache */
     Q_INVOKABLE bool isCached(const QUrl &url, const QByteArray &sha256);
 
-    /* Refresh the list of available drives */
-    Q_INVOKABLE void refreshDriveList();
+    /* Start polling the list of available drives */
+    Q_INVOKABLE void startDriveListPolling();
 
-    /* Return list of available drives. Call refreshDriveList() first */
+    /* Stop polling the list of available drives */
+    Q_INVOKABLE void stopDriveListPolling();
+
+    /* Return list of available drives. Call startDriveListPolling() first */
     DriveListModel *getDriveList();
 
     /* Utility function to return filename part from URL */

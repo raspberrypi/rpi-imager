@@ -20,6 +20,9 @@ DriveListModel::DriveListModel(QObject *parent)
         {isScsiRole, "isScsi"},
         {mountpointsRole, "mountpoints"}
     };
+
+    // Enumerate drives in seperate thread, but process results in UI thread
+    connect(&_thread, SIGNAL(newDriveList(std::vector<Drivelist::DeviceDescriptor>)), SLOT(processDriveList(std::vector<Drivelist::DeviceDescriptor>)));
 }
 
 int DriveListModel::rowCount(const QModelIndex &) const
@@ -45,11 +48,10 @@ QVariant DriveListModel::data(const QModelIndex &index, int role) const
         return _drivelist.values().at(row)->property(propertyName);
 }
 
-void DriveListModel::refreshDriveList()
+void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l)
 {
     bool changes = false;
     bool filterSystemDrives = DRIVELIST_FILTER_SYSTEM_DRIVES;
-    auto l = Drivelist::ListStorageDevices();
     QSet<QString> drivesInNewList;
 
     for (auto &i: l)
@@ -116,4 +118,14 @@ void DriveListModel::refreshDriveList()
 
     if (changes)
         endResetModel();
+}
+
+void DriveListModel::startPolling()
+{
+    _thread.start();
+}
+
+void DriveListModel::stopPolling()
+{
+    _thread.stop();
 }

@@ -149,8 +149,7 @@ ApplicationWindow {
                         Layout.preferredWidth: 100
                         Layout.fillWidth: true
                         onClicked: {
-                            imageWriter.refreshDriveList()
-                            drivePollTimer.start()
+                            imageWriter.startDriveListPolling()
                             dstpopup.open()
                             dstlist.forceActiveFocus()
                         }
@@ -546,6 +545,7 @@ ApplicationWindow {
         height: parent.height-50
         padding: 0
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        onClosed: imageWriter.stopDriveListPolling()
 
         // background of title
         Rectangle {
@@ -616,7 +616,6 @@ ApplicationWindow {
                         if (currentIndex == -1)
                             return
 
-                        drivePollTimer.stop()
                         dstpopup.close()
                         imageWriter.setDst(currentItem.device, currentItem.size)
                         dstbutton.text = currentItem.description
@@ -628,7 +627,6 @@ ApplicationWindow {
                         if (currentIndex == -1)
                             return
 
-                        drivePollTimer.stop()
                         dstpopup.close()
                         imageWriter.setDst(currentItem.device, currentItem.size)
                         dstbutton.text = currentItem.description
@@ -720,7 +718,6 @@ ApplicationWindow {
                 }
 
                 onClicked: {
-                    drivePollTimer.stop()
                     dstpopup.close()
                     imageWriter.setDst(device, size)
                     dstbutton.text = description
@@ -782,13 +779,6 @@ ApplicationWindow {
         category: "General"
         property alias x: window.x
         property alias y: window.y
-    }
-
-    /* Timer for polling drivelist changes */
-    Timer {
-        id: drivePollTimer
-        repeat: true
-        onTriggered: imageWriter.refreshDriveList()
     }
 
     /* Utility functions */

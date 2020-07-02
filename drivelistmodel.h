@@ -10,25 +10,30 @@
 #include <QMap>
 #include <QHash>
 #include "drivelistitem.h"
+#include "drivelistmodelpollthread.h"
 
 class DriveListModel : public QAbstractListModel
 {
+    Q_OBJECT
 public:
     DriveListModel(QObject *parent = nullptr);
     virtual int rowCount(const QModelIndex &) const;
     virtual QHash<int, QByteArray> roleNames() const;
     virtual QVariant data(const QModelIndex &index, int role) const;
+    void startPolling();
+    void stopPolling();
 
     enum driveListRoles {
         deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, mountpointsRole
     };
 
 public slots:
-    void refreshDriveList();
+    void processDriveList(std::vector<Drivelist::DeviceDescriptor> l);
 
 protected:
     QMap<QString,DriveListItem *> _drivelist;
     QHash<int, QByteArray> _rolenames;
+    DriveListModelPollThread _thread;
 };
 
 #endif // DRIVELISTMODEL_H

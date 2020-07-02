@@ -323,10 +323,16 @@ void ImageWriter::setCustomOsListUrl(const QUrl &url)
     _repo = url;
 }
 
-/* Refresh the list of available drives */
-void ImageWriter::refreshDriveList()
+/* Start polling the list of available drives */
+void ImageWriter::startDriveListPolling()
 {
-    _drivelist.refreshDriveList();
+    _drivelist.startPolling();
+}
+
+/* Stop polling the list of available drives */
+void ImageWriter::stopDriveListPolling()
+{
+    _drivelist.stopPolling();
 }
 
 DriveListModel *ImageWriter::getDriveList()
