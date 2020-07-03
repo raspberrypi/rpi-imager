@@ -585,6 +585,14 @@ void DownloadThread::_writeComplete()
 
     emit finalizing();
 
+#ifdef Q_OS_WIN
+        // Temporarily stop storage services to prevent \[System Volume Information]\WPSettings.dat being created
+        QProcess p1;
+        QStringList args = {"stop", "StorSvc"};
+        qDebug() << "Stopping storage services";
+        p1.execute("net", args);
+#endif
+
     if (_firstBlock)
     {
         qDebug() << "Writing first block (which we skipped at first)";
@@ -609,6 +617,13 @@ void DownloadThread::_writeComplete()
     _filename.replace("/dev/rdisk", "/dev/disk");
 #endif
     eject_disk(_filename.constData());
+
+#ifdef Q_OS_WIN
+    QStringList args = {"start", "StorSvc"};
+    QProcess *p2 = new QProcess(this);
+    qDebug() << "Restarting storage services";
+    p2->startDetached("net", args);
+#endif
 
     emit success();
 }
