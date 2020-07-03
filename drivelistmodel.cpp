@@ -18,6 +18,7 @@ DriveListModel::DriveListModel(QObject *parent)
         {sizeRole, "size"},
         {isUsbRole, "isUsb"},
         {isScsiRole, "isScsi"},
+        {isReadOnlyRole, "isReadOnly"},
         {mountpointsRole, "mountpoints"}
     };
 
@@ -65,7 +66,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
 
         if (filterSystemDrives)
         {
-            if (i.isSystem || i.isReadOnly)
+            if (i.isSystem)
                 continue;
 
             // Should already be caught by isSystem variable, but just in case...
@@ -73,17 +74,18 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
                 continue;
         }
 
-        // Skip zero-sized and virtual devices
-        if (i.size == 0 || i.isVirtual)
+        // Skip zero-sized devices
+        if (i.size == 0)
             continue;
 
 #ifdef Q_OS_DARWIN
-        // Skip time machine backup. FIXME: is this best way to detect them?
-        if (i.mountpointLabels.size() && i.mountpointLabels.front() == "Time Machine Backups")
+        if (i.isVirtual)
             continue;
 #endif
 
         QString deviceNamePlusSize = QString::fromStdString(i.device)+":"+QString::number(i.size);
+        if (i.isReadOnly)
+            deviceNamePlusSize += "ro";
         drivesInNewList.insert(deviceNamePlusSize);
 
         if (!_drivelist.contains(deviceNamePlusSize))
@@ -95,7 +97,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
                 changes = true;
             }
 
-            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, mountpoints, this);
+            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, i.isReadOnly, mountpoints, this);
         }
     }
 

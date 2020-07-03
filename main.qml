@@ -615,24 +615,12 @@ ApplicationWindow {
                     Keys.onSpacePressed: {
                         if (currentIndex == -1)
                             return
-
-                        dstpopup.close()
-                        imageWriter.setDst(currentItem.device, currentItem.size)
-                        dstbutton.text = currentItem.description
-                        if (imageWriter.readyToWrite()) {
-                            writebutton.enabled = true
-                        }
+                        selectDstItem(currentItem)
                     }
                     Accessible.onPressAction: {
                         if (currentIndex == -1)
                             return
-
-                        dstpopup.close()
-                        imageWriter.setDst(currentItem.device, currentItem.size)
-                        dstbutton.text = currentItem.description
-                        if (imageWriter.readyToWrite()) {
-                            writebutton.enabled = true
-                        }
+                        selectDstItem(currentItem)
                     }
                 }
             }
@@ -694,9 +682,20 @@ ApplicationWindow {
                         verticalAlignment: Text.AlignVCenter
                         font.family: roboto.name
                         text: {
-                            var txt = "<p><font size='4'>"+description+" - "+(size/1000000000).toFixed(1)+" GB"+"</font></p>"
-                            if (mountpoints.length > 0) {
-                                txt += "<font color='grey'>"+qsTr("Mounted as %1").arg(mountpoints.join(", "))+"</font>"
+                            var sizeStr = (size/1000000000).toFixed(1)+" GB";
+                            var txt;
+                            if (isReadOnly) {
+                                txt = "<p><font size='4' color='grey'>"+description+" - "+sizeStr+"</font></p>"
+                                txt += "<font color='grey'>"
+                                if (mountpoints.length > 0) {
+                                    txt += qsTr("Mounted as %1").arg(mountpoints.join(", "))+" "
+                                }
+                                txt += qsTr("[WRITE PROTECTED]")+"</font>"
+                            } else {
+                                txt = "<p><font size='4'>"+description+" - "+sizeStr+"</font></p>"
+                                if (mountpoints.length > 0) {
+                                    txt += "<font color='grey'>"+qsTr("Mounted as %1").arg(mountpoints.join(", "))+"</font>"
+                                }
                             }
                             return txt;
                         }
@@ -718,12 +717,7 @@ ApplicationWindow {
                 }
 
                 onClicked: {
-                    dstpopup.close()
-                    imageWriter.setDst(device, size)
-                    dstbutton.text = description
-                    if (imageWriter.readyToWrite()) {
-                        writebutton.enabled = true
-                    }
+                    selectDstItem(model)
                 }
             }
         }
@@ -986,6 +980,20 @@ ApplicationWindow {
             if (imageWriter.readyToWrite()) {
                 writebutton.enabled = true
             }
+        }
+    }
+
+    function selectDstItem(d) {
+        if (d.isReadOnly) {
+            onError(qsTr("SD card is write protected.<br>Push the lock switch on the left side of the card upwards, and try again."))
+            return
+        }
+
+        dstpopup.close()
+        imageWriter.setDst(d.device, d.size)
+        dstbutton.text = d.description
+        if (imageWriter.readyToWrite()) {
+            writebutton.enabled = true
         }
     }
 }
