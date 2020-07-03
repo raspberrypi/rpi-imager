@@ -530,34 +530,27 @@ void DownloadThread::_onDownloadError(const QString &msg)
     emit error(msg);
 }
 
+void DownloadThread::_closeFiles()
+{
+    _file.close();
+#ifdef Q_OS_WIN
+    _volumeFile.close();
+#endif
+    if (_cachefile.isOpen())
+        _cachefile.close();
+}
+
 void DownloadThread::_writeComplete()
 {
-    if (!_file.flush())
-    {
-        DownloadThread::_onDownloadError(tr("Error writing to storage (while flushing)"));
-        return;
-    }
-
-#ifndef Q_OS_WIN
-    if (::fsync(_file.handle()) != 0) {
-        DownloadThread::_onDownloadError(tr("Error writing to storage (while fsync)"));
-        return;
-    }
-#endif
-
-    qDebug() << "Write done in" << _timer.elapsed() / 1000 << "seconds";
     QByteArray computedHash = _writehash.result().toHex();
     qDebug() << "Hash of uncompressed image:" << computedHash;
     if (!_expectedHash.isEmpty() && _expectedHash != computedHash)
     {
         qDebug() << "Mismatch with expected hash:" << _expectedHash;
-        _file.close();
         if (_cachefile.isOpen())
             _cachefile.remove();
-#ifdef Q_OS_WIN
-        _volumeFile.close();
-#endif
         DownloadThread::_onDownloadError(tr("Download corrupt. Hash does not match"));
+        _closeFiles();
         return;
     }
     if (_cacheEnabled && _expectedHash == computedHash)
@@ -566,13 +559,27 @@ void DownloadThread::_writeComplete()
         emit cacheFileUpdated(computedHash);
     }
 
+    if (!_file.flush())
+    {
+        DownloadThread::_onDownloadError(tr("Error writing to storage (while flushing)"));
+        _closeFiles();
+        return;
+    }
+
+#ifndef Q_OS_WIN
+    if (::fsync(_file.handle()) != 0) {
+        DownloadThread::_onDownloadError(tr("Error writing to storage (while fsync)"));
+        _closeFiles();
+        return;
+    }
+#endif
+
+    qDebug() << "Write done in" << _timer.elapsed() / 1000 << "seconds";
+
     /* Verify */
     if (_verifyEnabled && !_verify())
     {
-        _file.close();
-#ifdef Q_OS_WIN
-        _volumeFile.close();
-#endif
+        _closeFiles();
         return;
     }
 
@@ -595,10 +602,7 @@ void DownloadThread::_writeComplete()
         _firstBlock = nullptr;
     }
 
-    _file.close();
-#ifdef Q_OS_WIN
-    _volumeFile.close();
-#endif
+    _closeFiles();
 
 #ifdef Q_OS_DARWIN
     QThread::sleep(1);

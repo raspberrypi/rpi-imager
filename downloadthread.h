@@ -139,6 +139,7 @@ protected:
     bool _openAndPrepareDevice();
     void _writeCache(const char *buf, size_t len);
     qint64 _sectorsWritten();
+    void _closeFiles();
 
     /*
      * libcurl callbacks

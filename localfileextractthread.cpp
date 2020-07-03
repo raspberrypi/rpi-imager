@@ -36,6 +36,7 @@ void LocalFileExtractThread::run()
     if (!_inputfile.open(_inputfile.ReadOnly))
     {
         _onDownloadError(tr("Error opening image file"));
+        _closeFiles();
         return;
     }
     _lastDlTotal = _inputfile.size();
@@ -45,6 +46,8 @@ void LocalFileExtractThread::run()
     else
         extractMultiFileRun();
 
+    if (_cancelled)
+        _closeFiles();
 }
 
 ssize_t LocalFileExtractThread::_on_read(struct archive *, const void **buff)
