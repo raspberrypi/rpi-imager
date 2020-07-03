@@ -11,7 +11,7 @@ import QtQuick.Controls.Material 2.2
 Popup {
     id: msgpopup
     x: 75
-    y: parent.height/2-100
+    y: (parent.height-height)/2
     width: parent.width-150
     height: msgpopupbody.implicitHeight+150
     padding: 0
