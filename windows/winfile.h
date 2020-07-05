@@ -24,6 +24,7 @@ public:
     qint64 read(char *data, qint64 maxSize);
     HANDLE handle();
     QString errorString() const;
+    int errorCode() const;
     bool flush();
     bool seek(qint64 pos);
     qint64 pos();
@@ -34,6 +35,7 @@ protected:
     bool _locked;
     QString _name, _lasterror;
     HANDLE _h;
+    int _lasterrorcode;
 };
 
 #endif // WINFILE_H

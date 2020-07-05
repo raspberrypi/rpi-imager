@@ -8,7 +8,7 @@
 #include <QThread>
 
 WinFile::WinFile(QObject *parent)
-    : QObject(parent), _locked(false), _h(INVALID_HANDLE_VALUE)
+    : QObject(parent), _locked(false), _h(INVALID_HANDLE_VALUE), _lasterrorcode(0)
 {
 
 }
@@ -44,6 +44,7 @@ bool WinFile::open(QIODevice::OpenMode)
 
     if (_h == INVALID_HANDLE_VALUE)
     {
+        _lasterrorcode = GetLastError();
         _lasterror = qt_error_string();
         qDebug() << "Error opening:" << _lasterror;
         return false;
@@ -80,6 +81,7 @@ qint64 WinFile::write(const char *data, qint64 maxSize)
 
     if (!WriteFile(_h, data, maxSize, &bytesWritten, NULL))
     {
+        _lasterrorcode = GetLastError();
         _lasterror = qt_error_string();
         return -1;
     }
@@ -93,6 +95,7 @@ qint64 WinFile::read(char *data, qint64 maxSize)
 
     if (!ReadFile(_h, data, maxSize, &bytesRead, NULL))
     {
+        _lasterrorcode = GetLastError();
         _lasterror = qt_error_string();
         return -1;
     }
@@ -107,6 +110,7 @@ bool WinFile::seek(qint64 pos)
     offset.QuadPart = pos;
     if (!SetFilePointerEx(_h, offset, &current, FILE_BEGIN))
     {
+        _lasterrorcode = GetLastError();
         _lasterror = qt_error_string();
         qDebug() << "Error seeking:" << _lasterror;
         return false;
@@ -122,6 +126,7 @@ qint64 WinFile::pos()
     offset.QuadPart = 0;
     if (!SetFilePointerEx(_h, offset, &current, FILE_CURRENT))
     {
+        _lasterrorcode = GetLastError();
         _lasterror = qt_error_string();
         return 0;
     }
@@ -137,6 +142,11 @@ HANDLE WinFile::handle()
 QString WinFile::errorString() const
 {
     return _lasterror;
+}
+
+int WinFile::errorCode() const
+{
+    return _lasterrorcode;
 }
 
 bool WinFile::flush()

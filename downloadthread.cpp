@@ -18,6 +18,7 @@
 #include <regex>
 #include <QDebug>
 #include <QProcess>
+#include <QSettings>
 #include <QtConcurrent/QtConcurrent>
 
 #ifdef Q_OS_LINUX
@@ -34,7 +35,7 @@ int DownloadThread::_curlCount = 0;
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
-    _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _inputBufferSize(0)
+    _inputBufferSize(0), _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM)
 {
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -333,7 +334,22 @@ void DownloadThread::run()
             break;
         case CURLE_WRITE_ERROR:
             deleteDownloadedFile();
-            _onDownloadError("Error writing file to disk");
+
+#ifdef Q_OS_WIN
+            if (_file.errorCode() == ERROR_ACCESS_DENIED)
+            {
+                QString msg = tr("Access denied error while writing file to disk.");
+                QSettings registry("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
+                                   QSettings::Registry64Format);
+                if (registry.value("EnableControlledFolderAccess").toInt() == 1)
+                {
+                    msg += "<br>"+tr("Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.");
+                }
+                _onDownloadError(msg);
+            }
+            else
+#endif
+                _onDownloadError(tr("Error writing file to disk"));
             break;
         case CURLE_ABORTED_BY_CALLBACK:
             deleteDownloadedFile();
@@ -619,10 +635,10 @@ void DownloadThread::_writeComplete()
     eject_disk(_filename.constData());
 
 #ifdef Q_OS_WIN
-    QStringList args = {"start", "StorSvc"};
+    QStringList args2 = {"start", "StorSvc"};
     QProcess *p2 = new QProcess(this);
     qDebug() << "Restarting storage services";
-    p2->startDetached("net", args);
+    p2->startDetached("net", args2);
 #endif
 
     emit success();
