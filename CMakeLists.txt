@@ -25,7 +25,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
 # Add dependencies
 if (APPLE)
     set_source_files_properties("icons/rpi-imager.icns" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-    set(DEPENDENCIES mac/macfile.cpp mac/macfile.h mac/Info.plist dependencies/mountutils/src/darwin/functions.cpp
+    set(DEPENDENCIES mac/macfile.cpp mac/macfile.h dependencies/mountutils/src/darwin/functions.cpp
         dependencies/drivelist/src/darwin/list.mm dependencies/drivelist/src/darwin/REDiskList.m icons/rpi-imager.icns)
     enable_language(OBJC C)
 elseif (UNIX)
@@ -208,7 +208,7 @@ elseif(APPLE)
     find_library(DiskArbitration DiskArbitration)
     find_library(Security Security)
     set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa})
-    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist)
+    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in)
 
     find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt5_DIR}/../../../bin")
     if (NOT MACDEPLOYQT)
