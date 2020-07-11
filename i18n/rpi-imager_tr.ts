@@ -164,7 +164,7 @@ En az %1 GB olması gerekiyor</translation>
         <location filename="../imagewriter.cpp" line="176"/>
         <source>Input file is not a valid disk image.
 File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation type="unfinished">Giriş dosyası geçerli bir disk görüntüsü değil. 
+        <translation>Giriş dosyası geçerli bir disk görüntüsü değil. 
 %1 bayt dosya boyutu 512 baytın katı değil.</translation>
     </message>
     <message>
