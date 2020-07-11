@@ -175,7 +175,7 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     <message>
         <location filename="../imagewriter.cpp" line="403"/>
         <source>Select image</source>
-        <translation type="unfinished"></translation>
+        <translation>Imaj seç</translation>
     </message>
 </context>
 <context>
@@ -183,7 +183,7 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     <message>
         <location filename="../localfileextractthread.cpp" line="38"/>
         <source>Error opening image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Imaj dosyası açılırken hata oluştu</translation>
     </message>
 </context>
 <context>
@@ -191,17 +191,17 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     <message>
         <location filename="../MsgPopup.qml" line="96"/>
         <source>NO</source>
-        <translation type="unfinished"></translation>
+        <translation>HAYIR</translation>
     </message>
     <message>
         <location filename="../MsgPopup.qml" line="108"/>
         <source>YES</source>
-        <translation type="unfinished"></translation>
+        <translation>EVET</translation>
     </message>
     <message>
         <location filename="../MsgPopup.qml" line="120"/>
         <source>CONTINUE</source>
-        <translation type="unfinished"></translation>
+        <translation>DEVAM ET</translation>
     </message>
 </context>
 <context>
@@ -209,7 +209,7 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     <message>
         <location filename="../linux/linuxdrivelist.cpp" line="111"/>
         <source>Internal SD card reader</source>
-        <translation type="unfinished"></translation>
+        <translation>Dahili SD kart okuyucu</translation>
     </message>
 </context>
 <context>
@@ -217,197 +217,198 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     <message>
         <location filename="../main.qml" line="24"/>
         <source>Raspberry Pi Imager v%1</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imaj Yöneticisi v%1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="91"/>
         <location filename="../main.qml" line="300"/>
         <source>Operating System</source>
-        <translation type="unfinished"></translation>
+        <translation>İşletim sistemi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="103"/>
         <source>CHOOSE OS</source>
-        <translation type="unfinished"></translation>
+        <translation>İŞLETİM SİSTEMİ SEÇİN</translation>
     </message>
     <message>
         <location filename="../main.qml" line="121"/>
         <source>Select this button to change the operating system</source>
-        <translation type="unfinished"></translation>
+        <translation>İşletim sistemini değiştirmek için bu düğmeyi seçin</translation>
     </message>
     <message>
         <location filename="../main.qml" line="133"/>
         <location filename="../main.qml" line="575"/>
         <source>SD Card</source>
-        <translation type="unfinished"></translation>
+        <translation>SD Kart</translation>
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
         <location filename="../main.qml" line="859"/>
         <source>CHOOSE SD CARD</source>
-        <translation type="unfinished"></translation>
+        <translation>SD KART SEÇİN</translation>
     </message>
     <message>
         <location filename="../main.qml" line="159"/>
         <source>Select this button to change the destination SD card</source>
-        <translation type="unfinished"></translation>
+        <translation>Hedef SD kartı değiştirmek için bu düğmeyi seçin</translation>
     </message>
     <message>
         <location filename="../main.qml" line="175"/>
         <source>WRITE</source>
-        <translation type="unfinished"></translation>
+        <translation>YAZ</translation>
     </message>
     <message>
         <location filename="../main.qml" line="180"/>
         <source>Select this button to start writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Görüntüyü yazmaya başlamak için bu düğmeyi seçin</translation>
     </message>
     <message>
         <location filename="../main.qml" line="219"/>
         <source>CANCEL WRITE</source>
-        <translation type="unfinished"></translation>
+        <translation>YAZMAYI İPTAL ET</translation>
     </message>
     <message>
         <location filename="../main.qml" line="222"/>
         <location filename="../main.qml" line="801"/>
         <source>Cancelling...</source>
-        <translation type="unfinished"></translation>
+        <translation>İptal ediliyor...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="233"/>
         <source>CANCEL VERIFY</source>
-        <translation type="unfinished"></translation>
+        <translation>DOĞRULAMA İPTALİ</translation>
     </message>
     <message>
         <location filename="../main.qml" line="236"/>
         <location filename="../main.qml" line="824"/>
         <location filename="../main.qml" line="877"/>
         <source>Finalizing...</source>
-        <translation type="unfinished"></translation>
+        <translation>Bitiriliyor...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="373"/>
         <location filename="../main.qml" line="853"/>
         <source>Erase</source>
-        <translation type="unfinished"></translation>
+        <translation>Sil</translation>
     </message>
     <message>
         <location filename="../main.qml" line="374"/>
         <source>Format card as FAT32</source>
-        <translation type="unfinished"></translation>
+        <translation>Kartı FAT32 olarak biçimlendir</translation>
     </message>
     <message>
         <location filename="../main.qml" line="381"/>
         <source>Use custom</source>
-        <translation type="unfinished"></translation>
+        <translation>Özel imaj kullan</translation>
     </message>
     <message>
         <location filename="../main.qml" line="382"/>
         <source>Select a custom .img from your computer</source>
-        <translation type="unfinished"></translation>
+        <translation>Bilgisayarınızdan özel bir .img seçin</translation>
     </message>
     <message>
         <location filename="../main.qml" line="405"/>
         <source>Back</source>
-        <translation type="unfinished"></translation>
+        <translation>Geri</translation>
     </message>
     <message>
         <location filename="../main.qml" line="406"/>
         <source>Go back to main menu</source>
-        <translation type="unfinished"></translation>
+        <translation>Ana menüye dön</translation>
     </message>
     <message>
         <location filename="../main.qml" line="463"/>
         <source>Released: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Yayın: %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="466"/>
         <source>Cached on your computer</source>
-        <translation type="unfinished"></translation>
+        <translation>Bilgisayarınızda önbelleğe alındı
+</translation>
     </message>
     <message>
         <location filename="../main.qml" line="468"/>
         <source>Local file</source>
-        <translation type="unfinished"></translation>
+        <translation>Yerel dosya</translation>
     </message>
     <message>
         <location filename="../main.qml" line="470"/>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished"></translation>
+        <translation>Çevrimiçi -%1 GB indir</translation>
     </message>
     <message>
         <location filename="../main.qml" line="628"/>
         <location filename="../main.qml" line="676"/>
         <source>Mounted as %1</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 olarak bağlandı.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="719"/>
         <source>Are you sure you want to quit?</source>
-        <translation type="unfinished"></translation>
+        <translation>Çıkmak istediğine emin misin?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="720"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imager hala meşgul.&lt;br&gt;Çıkmak istediğinizden emin misiniz?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="731"/>
         <source>Warning</source>
-        <translation type="unfinished"></translation>
+        <translation>Uyarı</translation>
     </message>
     <message>
         <location filename="../main.qml" line="737"/>
         <location filename="../main.qml" line="804"/>
         <source>Writing... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazılıyor... %1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="750"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation type="unfinished"></translation>
+        <translation>&apos;%1&apos; üzerindeki mevcut tüm veriler silinecek.&lt;br&gt;Devam etmek istediğinizden emin misiniz?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="783"/>
         <source>Error downloading OS list from Internet</source>
-        <translation type="unfinished"></translation>
+        <translation>İnternetten işletim sistemi listesi indirilirken hata oluştu</translation>
     </message>
     <message>
         <location filename="../main.qml" line="827"/>
         <source>Verifying... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>Doğrulanıyor... %1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="845"/>
         <source>Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Hata</translation>
     </message>
     <message>
         <location filename="../main.qml" line="852"/>
         <source>Write Successful</source>
-        <translation type="unfinished"></translation>
+        <translation>Başarılı Yazıldı</translation>
     </message>
     <message>
         <location filename="../main.qml" line="854"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; silindi &lt;br&gt;&lt;br&gt; Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
     </message>
     <message>
         <location filename="../main.qml" line="856"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt; üzerine yazıldı. Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
     </message>
     <message>
         <location filename="../main.qml" line="884"/>
         <location filename="../main.qml" line="926"/>
         <source>Error parsing os_list.json</source>
-        <translation type="unfinished"></translation>
+        <translation>os_list.json ayrıştırma hatası</translation>
     </message>
     <message>
         <location filename="../main.qml" line="964"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished"></translation>
+        <translation>Önce görüntüler içeren bir USB bellek bağlayın.&lt;br&gt; Görüntüler USB belleğin kök klasöründe bulunmalıdır.</translation>
     </message>
 </context>
 </TS>
