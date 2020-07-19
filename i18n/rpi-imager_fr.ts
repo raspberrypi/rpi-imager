@@ -256,7 +256,7 @@ La taille du fichier (d'%1 octets) n'est pas un multiple de 512 octets.</transla
     <message>
         <location filename="../main.qml" line="175"/>
         <source>WRITE</source>
-        <translation type="unfinished">ÉCRIRE</translation>
+        <translation>ÉCRIRE</translation>
     </message>
     <message>
         <location filename="../main.qml" line="180"/>
@@ -387,7 +387,7 @@ La taille du fichier (d'%1 octets) n'est pas un multiple de 512 octets.</transla
     <message>
         <location filename="../main.qml" line="852"/>
         <source>Write Successful</source>
-        <translation type="unfinished">Écriture réussie</translation>
+        <translation>Écriture réussie</translation>
     </message>
     <message>
         <location filename="../main.qml" line="854"/>
