@@ -155,10 +155,6 @@ bool DownloadThread::_openAndPrepareDevice()
         }
     }
 
-    qDebug() << "sleeping to let Windows discovers there are no partitions";
-    sleep(2);
-    qDebug() << "done sleeping";
-
     if (!driveLetter.isEmpty())
     {
         _volumeFile.setFileName("\\\\.\\"+driveLetter);
