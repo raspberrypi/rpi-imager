@@ -22,7 +22,7 @@ bool MacFile::isSequential() const
     return false;
 }
 
-bool MacFile::authOpen(const QByteArray &filename)
+MacFile::authOpenResult MacFile::authOpen(const QByteArray &filename)
 {
     int fd = -1;
 
@@ -34,13 +34,13 @@ bool MacFile::authOpen(const QByteArray &filename)
             kAuthorizationFlagPreAuthorize;
     AuthorizationRef authRef;
     if (AuthorizationCreate(&rights, nullptr, flags, &authRef) != 0)
-        return false;
+        return authOpenCancelled;
 
     AuthorizationExternalForm externalForm;
     if (AuthorizationMakeExternalForm(authRef, &externalForm) != 0)
     {
         AuthorizationFree(authRef, 0);
-        return false;
+        return authOpenError;
     }
 
     const char *cmd = "/usr/libexec/authopen";
@@ -110,17 +110,17 @@ bool MacFile::authOpen(const QByteArray &filename)
         if (wpid == -1)
         {
             qDebug() << "waitpid() failed executing authopen";
-            return false;
+            return authOpenError;
         }
         if (WEXITSTATUS(status))
         {
             qDebug() << "authopen returned failure code" << WEXITSTATUS(status);
-            return false;
+            return authOpenError;
         }
 
         qDebug() << "fd received:" << fd;
     }
     AuthorizationFree(authRef, 0);
 
-    return open(fd, QIODevice::ReadWrite | QIODevice::ExistingOnly | QIODevice::Unbuffered, QFileDevice::AutoCloseHandle);
+    return open(fd, QIODevice::ReadWrite | QIODevice::ExistingOnly | QIODevice::Unbuffered, QFileDevice::AutoCloseHandle) ? authOpenSuccess : authOpenError;
 }

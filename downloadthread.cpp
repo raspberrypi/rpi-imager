@@ -171,8 +171,17 @@ bool DownloadThread::_openAndPrepareDevice()
 #ifdef Q_OS_DARWIN
     _filename.replace("/dev/disk", "/dev/rdisk");
 
-    if (!_file.authOpen(_filename)) {
-        emit error(tr("Error running authopen to gain access to disk device '%1'").arg(QString(_filename)));
+    auto authopenresult = _file.authOpen(_filename);
+
+    if (authopenresult == _file.authOpenCancelled) {
+        /* User cancelled authentication */
+        emit error(tr("Authentication cancelled"));
+        return false;
+    } else if (authopenresult == _file.authOpenError) {
+        QString msg = tr("Error running authopen to gain access to disk device '%1'").arg(QString(_filename));
+        msg += "<br>"+tr("Please verify if 'Raspberry Pi Imager' is allowed access to 'removable volumes' in privacy settings (under 'files and folders' or alternatively give it 'full disk access').");
+        QProcess::execute("open x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles");
+        emit error(msg);
         return false;
     }
 #else

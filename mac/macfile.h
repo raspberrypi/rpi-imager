@@ -12,9 +12,11 @@ class MacFile : public QFile
 {
     Q_OBJECT
 public:
+    enum authOpenResult {authOpenCancelled, authOpenSuccess, authOpenError };
+
     MacFile(QObject *parent = nullptr);
     virtual bool isSequential() const;
-    bool authOpen(const QByteArray &filename);
+    authOpenResult authOpen(const QByteArray &filename);
 };
 
 #endif // MACFILE_H
