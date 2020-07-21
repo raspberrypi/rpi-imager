@@ -3,5 +3,7 @@
         <file>rpi-imager_en.qm</file>
         <file>rpi-imager_nl.qm</file>
         <file>rpi-imager_zh_cn.qm</file>
+        <file>rpi-imager_tr.qm</file>
+        <file>rpi-imager_fr.qm</file>
     </qresource>
 </RCC>
