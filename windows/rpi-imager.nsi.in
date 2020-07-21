@@ -1,8 +1,3 @@
-!define INSTALLER_NAME "setup.exe"
-!ifndef INNER
-!finalize '"c:\Program Files (x86)\Microsoft SDKs\ClickOnce\SignTool\signtool.exe" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "%1"'
-!endif
-
 ############################################################################################
 #      NSIS Installation Script created by NSIS Quick Setup Script Generator v1.09.18
 #               Entirely Edited with NullSoft Scriptable Installation System                
@@ -13,6 +8,7 @@
 !define COMP_NAME "Raspberry Pi"
 #!define WEB_SITE "https://www.raspberrypi.org/"
 !define VERSION "@IMAGER_VERSION_STR@"
+!define INSTALLER_NAME "imager-${VERSION}.exe"
 !define COPYRIGHT "Raspberry Pi"
 !define DESCRIPTION "Raspberry Pi Imager"
 !define MAIN_APP_EXE "rpi-imager.exe"
@@ -20,6 +16,12 @@
 !define REG_ROOT "HKCU"
 !define REG_APP_PATH "Software\Microsoft\Windows\CurrentVersion\App Paths\${MAIN_APP_EXE}"
 !define UNINSTALL_PATH "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+
+# Window to close if running
+!define EXE_TO_TERMINATE "rpi-imager.exe"
+
+LangString termMsg 1033 "Raspberry Pi Imager seems to be running and busy.$\nDo you want to terminate process?"
+LangString stopMsg 1033 "Stopping Raspberry Pi Imager"
 
 ######################################################################
 
@@ -59,7 +61,7 @@ InstallDir "$PROGRAMFILES\Raspberry Pi Imager"
   ; So now run that installer we just created as %TEMP%\tempinstaller.exe.  Since it
   ; calls quit the return value isn't zero.
  
-  !system "$%TEMP%\tempinstaller.exe" = 2
+  !system 'set __COMPAT_LAYER=RunAsInvoker &"$%TEMP%\tempinstaller.exe"' = 2
  
   ; That will have written an uninstaller binary for us.  Now we sign it with your
   ; favorite code signing tool.
@@ -68,8 +70,9 @@ InstallDir "$PROGRAMFILES\Raspberry Pi Imager"
  
   ; Good.  Now we can carry on writing the real installer.
  
-  OutFile "setup.exe"
+  OutFile "${INSTALLER_NAME}"
   SetCompressor /SOLID lzma
+  !finalize '"c:\Program Files (x86)\Microsoft SDKs\ClickOnce\SignTool\signtool.exe" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "%1"'
 !endif
 
 ###
@@ -111,8 +114,97 @@ InstallDir "$PROGRAMFILES\Raspberry Pi Imager"
 
 ######################################################################
 
+!include WinMessages.nsh
+!include Logiclib.nsh
+
+!macro FindWindowOfExe Exe
+    Push $1
+    Push $2
+    Push $3
+    Push $R0
+    Push $R1
+
+    SetPluginUnload alwaysoff
+    Push "0" ; Result code
+    System::Get "(i.r1, i) iss"
+    Pop $R0
+    System::Call "user32::EnumWindows(k R0, i) i.s"
+
+    loop:
+      Pop $0
+      StrCmp $0 "callback1" 0 doneloop
+      System::Call 'user32.dll::GetWindowThreadProcessId(i r1, *i .r3) i .r2'
+      System::Call 'kernel32.dll::OpenProcess(i 1040, i 0, i r3) i .r2'
+      ${IfNot} $2 = 0
+        System::Alloc 1024
+        Pop $R1
+        System::Call "Psapi::EnumProcessModules(i r2, i R1, i 1024, *i .r3) i .r0"
+        ${IfNot} $0 = 0
+          System::Call "*$R1(i .r0)"
+          System::Call "Psapi::GetModuleBaseName(i r2, i r0, t .r3, i ${NSIS_MAX_STRLEN}) i .r0"
+          ${IfNot} $0 = 0
+            ${If} $3 == "${Exe}"
+              # Only replace result value if it is first match
+              Pop $3
+              ${If} $3 == 0
+                Push $1
+              ${Else}
+                Push $3
+              ${EndIf}
+            ${EndIf}
+          ${EndIf}
+        ${EndIf}
+        System::Free $R1
+        System::Call "kernel32::CloseHandle(i r2)"
+      ${EndIf}
+
+      Push 1
+      System::Call "$R0"
+      Goto loop
+    doneloop:
+      SetPluginUnload manual
+
+    System::Free $R0
+    Pop $0
+
+    Pop $R1
+    Pop $R0
+    Pop $3
+    Pop $2
+    Pop $1
+!macroend
+
+!macro TerminateApp
+    Push $0 ; window handle
+    Push $1
+    Push $2 ; process handle
+    DetailPrint "$(stopMsg)"
+    #FindWindow $0 '' '${WND_TITLE}'
+    !insertmacro FindWindowOfExe '${EXE_TO_TERMINATE}'
+    IntCmp $0 0 done
+    System::Call 'user32.dll::GetWindowThreadProcessId(i r0, *i .r1) i .r2'
+    System::Call 'kernel32.dll::OpenProcess(i 0x00100001, i 0, i r1) i .r2'
+    SendMessage $0 ${WM_CLOSE} 0 0 /TIMEOUT=2000
+    System::Call 'kernel32.dll::WaitForSingleObject(i r2, i 2000) i .r1'
+    IntCmp $1 0 close
+    MessageBox MB_YESNOCANCEL|MB_ICONEXCLAMATION "$(termMsg)" /SD IDYES IDYES terminate IDNO close
+    System::Call 'kernel32.dll::CloseHandle(i r2) i .r1'
+    Quit
+  terminate:
+    System::Call 'kernel32.dll::TerminateProcess(i r2, i 0) i .r1'
+  close:
+    System::Call 'kernel32.dll::CloseHandle(i r2) i .r1'
+  done:
+    Pop $2
+    Pop $1
+    Pop $0
+!macroend
+
+######################################################################
+
 Section -MainProgram
 ${INSTALL_TYPE}
+!insertmacro TerminateApp
 SetOverwrite ifnewer
 SetOutPath "$INSTDIR"
 File "deploy\D3Dcompiler_47.dll"
