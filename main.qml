@@ -8,7 +8,6 @@ import QtQuick.Window 2.2
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
-import Qt.labs.settings 1.0
 
 ApplicationWindow {
     id: window
@@ -766,13 +765,6 @@ ApplicationWindow {
             text = qsTr("All existing data on '%1' will be erased.<br>Are you sure you want to continue?").arg(dstbutton.text)
             openPopup()
         }
-    }
-
-    /* Persistent settings */
-    Settings {
-        category: "General"
-        property alias x: window.x
-        property alias y: window.y
     }
 
     /* Utility functions */

@@ -18,6 +18,7 @@
 #include <QTranslator>
 #include <QLocale>
 #include <QScreen>
+#include <QSettings>
 #ifndef QT_NO_WIDGETS
 #include <QtWidgets/QApplication>
 #endif
@@ -164,7 +165,48 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(finalizing()), qmlwindow, SLOT(onFinalizing()));
     qmlwindow->connect(&imageWriter, SIGNAL(networkOnline()), qmlwindow, SLOT(fetchOSlist()));
 
+#ifndef QT_NO_WIDGETS
+    QSettings settings;
+
+    /* Set window position */
+    auto screensize = app.primaryScreen()->geometry();
+    int x = settings.value("General/x", -1).toInt();
+    int y = settings.value("General/y", -1).toInt();
+    int w = qmlwindow->property("width").toInt();
+    int h = qmlwindow->property("height").toInt();
+
+    if (x != -1 && y != -1)
+    {
+        if ( (screensize.width()-x) < w || (screensize.height()-y) < h)
+        {
+            qDebug() << "Not restoring saved window position as it falls outside of primary screen";
+            x = y = -1;
+        }
+    }
+
+    if (x == -1 || y == -1)
+    {
+        x = qMax(1, (screensize.width()-w)/2);
+        y = qMax(1, (screensize.height()-h)/2);
+    }
+
+    qmlwindow->setProperty("x", x);
+    qmlwindow->setProperty("y", y);
+#endif
+
     int rc = app.exec();
+
+#ifndef QT_NO_WIDGETS
+    int newX = qmlwindow->property("x").toInt();
+    int newY = qmlwindow->property("y").toInt();
+    if (x != newX || y != newY)
+    {
+        settings.setValue("General/x", newX);
+        settings.setValue("General/y", newY);
+        settings.sync();
+    }
+#endif
+
     return rc;
 }
 
