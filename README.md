@@ -113,3 +113,13 @@ On Windows start the application with the command-line option --debug to let it 
 
 If the application is started with "--repo [your own URL]" it will use a custom image repository.
 So can simply create another 'start menu shortcut' to the application with that parameter to use the application with your own images.
+
+### Unofficial AUR package
+
+There is an unofficial AUR package for ArchLinux and most of Arch-based Linux distributions available on https://aur.archlinux.org/packages/rpi-imager/.
+You can install the package using `yay -S rpi-imager` or by cloning and making the package using Arch specific commands as below.
+```
+git clone https://aur.archlinux.org/rpi-imager.git
+cd rpi-imager
+makepkg -si
+```
