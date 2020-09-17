@@ -33,91 +33,91 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <location filename="../downloadthread.cpp" line="131"/>
+        <location filename="../downloadthread.cpp" line="127"/>
         <source>Error running diskpart: %1</source>
         <translation>Erreur lors de l&apos;exécution de diskpart : %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="152"/>
+        <location filename="../downloadthread.cpp" line="148"/>
         <source>Error removing existing partitions</source>
         <translation>Erreur lors de la suppression des partitions existantes</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="178"/>
+        <location filename="../downloadthread.cpp" line="174"/>
         <source>Authentication cancelled</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="181"/>
+        <location filename="../downloadthread.cpp" line="177"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
         <translation>Erreur lors de l&apos;exécution d&apos;authopen pour accéder au périphérique du stockage &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="182"/>
+        <location filename="../downloadthread.cpp" line="178"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="203"/>
+        <location filename="../downloadthread.cpp" line="199"/>
         <source>Cannot open storage device &apos;%1&apos;.</source>
         <translation>Impossible d&apos;ouvrir le périphérique de stockage &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="217"/>
+        <location filename="../downloadthread.cpp" line="213"/>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>Erreur d&apos;écriture lors du formatage du MBR</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="229"/>
+        <location filename="../downloadthread.cpp" line="225"/>
         <source>Write error while trying to zero out last part of card.
 Card could be advertising wrong capacity (possible counterfeit)</source>
         <translation>Erreur d&apos;écriture lors de la tentative de formatage de la dernière partie de la carte.
 Le stockage pourrait annoncer une mauvaise capacité (contrefaçon possible)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="350"/>
+        <location filename="../downloadthread.cpp" line="346"/>
         <source>Access denied error while writing file to disk.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="355"/>
+        <location filename="../downloadthread.cpp" line="351"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="361"/>
+        <location filename="../downloadthread.cpp" line="357"/>
         <source>Error writing file to disk</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="589"/>
+        <location filename="../downloadthread.cpp" line="585"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>Erreur d&apos;écriture dans le stockage (lors du formatage)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="596"/>
+        <location filename="../downloadthread.cpp" line="592"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>Erreur d&apos;écriture dans le stockage (pendant l&apos;exécution de fsync)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="577"/>
+        <location filename="../downloadthread.cpp" line="573"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>Téléchargement corrompu. La signature ne correspond pas</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="630"/>
+        <location filename="../downloadthread.cpp" line="626"/>
         <source>Error writing first block (partition table)</source>
         <translation>Erreur lors de l&apos;écriture du premier bloc (table de partion)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="686"/>
+        <location filename="../downloadthread.cpp" line="682"/>
         <source>Error reading from storage.
 SD card may be broken.</source>
         <translation>Erreur de lecture du stockage.
 La carte SD pourrait être défectueuse.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="705"/>
+        <location filename="../downloadthread.cpp" line="701"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>La vérification de l&apos;écriture à échoué. Le contenu de la carte SD est différent de ce qui y a été écrit.</translation>
     </message>
@@ -241,208 +241,208 @@ La taille du fichier (d&apos;%1 octets) n&apos;est pas un multiple de 512 octets
 <context>
     <name>main</name>
     <message>
-        <location filename="../main.qml" line="24"/>
+        <location filename="../main.qml" line="23"/>
         <source>Raspberry Pi Imager v%1</source>
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="91"/>
-        <location filename="../main.qml" line="304"/>
+        <location filename="../main.qml" line="90"/>
+        <location filename="../main.qml" line="303"/>
         <source>Operating System</source>
         <translation>Système d&apos;exploitation</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="103"/>
+        <location filename="../main.qml" line="102"/>
         <source>CHOOSE OS</source>
         <translation>CHOISISSEZ L&apos;OS</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="121"/>
+        <location filename="../main.qml" line="120"/>
         <source>Select this button to change the operating system</source>
         <translation>Sélectionnez ce bouton pour changer le système d&apos;exploitation</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="134"/>
-        <location filename="../main.qml" line="588"/>
+        <location filename="../main.qml" line="133"/>
+        <location filename="../main.qml" line="587"/>
         <source>SD Card</source>
         <translation>Carte SD</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="146"/>
-        <location filename="../main.qml" line="868"/>
+        <location filename="../main.qml" line="145"/>
+        <location filename="../main.qml" line="860"/>
         <source>CHOOSE SD CARD</source>
         <translation>CHOISISSEZ LA CARTE SD</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="159"/>
+        <location filename="../main.qml" line="158"/>
         <source>Select this button to change the destination SD card</source>
         <translation>Sélectionnez ce bouton pour changer la carte SD de destination</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="176"/>
+        <location filename="../main.qml" line="175"/>
         <source>WRITE</source>
         <translation>ÉCRIRE</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="181"/>
+        <location filename="../main.qml" line="180"/>
         <source>Select this button to start writing the image</source>
         <translation>Sélectionnez ce bouton pour commencer l&apos;écriture de l&apos;image</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="221"/>
+        <location filename="../main.qml" line="220"/>
         <source>CANCEL WRITE</source>
         <translation>ANNULER L&apos;ÉCRITURE</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="224"/>
-        <location filename="../main.qml" line="810"/>
+        <location filename="../main.qml" line="223"/>
+        <location filename="../main.qml" line="802"/>
         <source>Cancelling...</source>
         <translation>Annulation...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="236"/>
+        <location filename="../main.qml" line="235"/>
         <source>CANCEL VERIFY</source>
         <translation>ANNULER LA VÉRIFICATION</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="239"/>
-        <location filename="../main.qml" line="833"/>
-        <location filename="../main.qml" line="886"/>
+        <location filename="../main.qml" line="238"/>
+        <location filename="../main.qml" line="825"/>
+        <location filename="../main.qml" line="878"/>
         <source>Finalizing...</source>
         <translation>Finalisation...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="385"/>
-        <location filename="../main.qml" line="862"/>
+        <location filename="../main.qml" line="384"/>
+        <location filename="../main.qml" line="854"/>
         <source>Erase</source>
         <translation>Formatter</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="386"/>
+        <location filename="../main.qml" line="385"/>
         <source>Format card as FAT32</source>
         <translation>Formater la carte SD en FAT32</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="393"/>
+        <location filename="../main.qml" line="392"/>
         <source>Use custom</source>
         <translation>Utiliser image personnalisée</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="394"/>
+        <location filename="../main.qml" line="393"/>
         <source>Select a custom .img from your computer</source>
         <translation>Sélectionnez une image disque personnalisée (.img) depuis votre ordinateur</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="417"/>
+        <location filename="../main.qml" line="416"/>
         <source>Back</source>
         <translation>Retour</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="418"/>
+        <location filename="../main.qml" line="417"/>
         <source>Go back to main menu</source>
         <translation>Retour au menu principal</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="475"/>
+        <location filename="../main.qml" line="474"/>
         <source>Released: %1</source>
         <translation>Sorti le : %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="478"/>
+        <location filename="../main.qml" line="477"/>
         <source>Cached on your computer</source>
         <translation>Mis en cache sur votre ordinateur</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="480"/>
+        <location filename="../main.qml" line="479"/>
         <source>Local file</source>
         <translation>Fichier local</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="482"/>
+        <location filename="../main.qml" line="481"/>
         <source>Online - %1 GB download</source>
         <translation>En ligne - %1 GO téléchargé</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="639"/>
-        <location filename="../main.qml" line="691"/>
-        <location filename="../main.qml" line="697"/>
+        <location filename="../main.qml" line="638"/>
+        <location filename="../main.qml" line="690"/>
+        <location filename="../main.qml" line="696"/>
         <source>Mounted as %1</source>
         <translation>Mounté à %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="693"/>
+        <location filename="../main.qml" line="692"/>
         <source>[WRITE PROTECTED]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="735"/>
+        <location filename="../main.qml" line="734"/>
         <source>Are you sure you want to quit?</source>
         <translation>Êtes-vous sûr de vouloir quitter ?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="736"/>
+        <location filename="../main.qml" line="735"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="988"/>
+        <location filename="../main.qml" line="980"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="747"/>
+        <location filename="../main.qml" line="746"/>
         <source>Warning</source>
         <translation>Attention</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="753"/>
-        <location filename="../main.qml" line="813"/>
+        <location filename="../main.qml" line="752"/>
+        <location filename="../main.qml" line="805"/>
         <source>Writing... %1%</source>
         <translation>Écriture... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="766"/>
+        <location filename="../main.qml" line="765"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
         <translation>Toutes les données sur le stockage &apos;%1&apos; vont être supprimées.&lt;br&gt;Êtes-vous sûr de vouloir continuer ?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="792"/>
+        <location filename="../main.qml" line="784"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Erreur lors du téléchargement de la liste des systèmes d&apos;exploitation à partir d&apos;Internet</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="836"/>
+        <location filename="../main.qml" line="828"/>
         <source>Verifying... %1%</source>
         <translation>Vérification... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="854"/>
+        <location filename="../main.qml" line="846"/>
         <source>Error</source>
         <translation>Erreur</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="861"/>
+        <location filename="../main.qml" line="853"/>
         <source>Write Successful</source>
         <translation>Écriture réussie</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="863"/>
+        <location filename="../main.qml" line="855"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; a bien été formaté&lt;br&gt;&lt;br&gt;Vous pouvez retirer la carte SD du lecteur.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="865"/>
+        <location filename="../main.qml" line="857"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; a bien été écrit sur &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;Vous pouvez retirer la carte SD du lecteur.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="893"/>
-        <location filename="../main.qml" line="935"/>
+        <location filename="../main.qml" line="885"/>
+        <location filename="../main.qml" line="927"/>
         <source>Error parsing os_list.json</source>
         <translation>Erreur de lecture du fichier os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="973"/>
+        <location filename="../main.qml" line="965"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Connectez en premier une clé USB contenant les images.&lt;br&gt;Les images doivent se trouver dans le dossier racine de la clé USB.</translation>
     </message>
