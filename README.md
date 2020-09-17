@@ -2,7 +2,7 @@
 
 Raspberry Pi Imaging Utility
 
-Downloaded prebuilt versions from https://www.raspberrypi.org/downloads/
+Download pre-built versions from the [Raspberry Pi downloads page](https://www.raspberrypi.org/downloads/).
 
 ## License
 
