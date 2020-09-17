@@ -2,6 +2,8 @@
 
 Raspberry Pi Imaging Utility
 
+Download pre-built versions from the [Raspberry Pi downloads page](https://www.raspberrypi.org/downloads/).
+
 ## License
 
 The main code of the Imaging Utility is made available under the terms of the Apache license.
