@@ -361,10 +361,19 @@ void DownloadThread::run()
             break;
         default:
             deleteDownloadedFile();
+            QString errorMsg;
+
             if (!errorBuf[0])
-                _onDownloadError("Unspecified libcurl error");
+                /* No detailed error message text provided, use standard text for libcurl result code */
+                errorMsg += curl_easy_strerror(ret);
             else
-                _onDownloadError(errorBuf);
+                errorMsg += errorBuf;
+
+            char *ipstr;
+            if (curl_easy_getinfo(_c, CURLINFO_PRIMARY_IP, &ipstr) == CURLE_OK && ipstr && ipstr[0])
+                errorMsg += QString(" - Server IP: ")+ipstr;
+
+            _onDownloadError(tr("Error downloading: %1").arg(errorMsg));
     }
 }
 
