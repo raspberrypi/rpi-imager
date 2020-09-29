@@ -33,89 +33,89 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <location filename="../downloadthread.cpp" line="131"/>
+        <location filename="../downloadthread.cpp" line="127"/>
         <source>Error running diskpart: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="152"/>
+        <location filename="../downloadthread.cpp" line="148"/>
         <source>Error removing existing partitions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="178"/>
+        <location filename="../downloadthread.cpp" line="174"/>
         <source>Authentication cancelled</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="181"/>
+        <location filename="../downloadthread.cpp" line="177"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="182"/>
+        <location filename="../downloadthread.cpp" line="178"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="203"/>
+        <location filename="../downloadthread.cpp" line="199"/>
         <source>Cannot open storage device &apos;%1&apos;.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="217"/>
+        <location filename="../downloadthread.cpp" line="213"/>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="229"/>
+        <location filename="../downloadthread.cpp" line="225"/>
         <source>Write error while trying to zero out last part of card.
 Card could be advertising wrong capacity (possible counterfeit)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="350"/>
+        <location filename="../downloadthread.cpp" line="346"/>
         <source>Access denied error while writing file to disk.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="355"/>
+        <location filename="../downloadthread.cpp" line="351"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="361"/>
+        <location filename="../downloadthread.cpp" line="357"/>
         <source>Error writing file to disk</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="589"/>
+        <location filename="../downloadthread.cpp" line="585"/>
         <source>Error writing to storage (while flushing)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="596"/>
+        <location filename="../downloadthread.cpp" line="592"/>
         <source>Error writing to storage (while fsync)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="577"/>
+        <location filename="../downloadthread.cpp" line="573"/>
         <source>Download corrupt. Hash does not match</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="630"/>
+        <location filename="../downloadthread.cpp" line="626"/>
         <source>Error writing first block (partition table)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="686"/>
+        <location filename="../downloadthread.cpp" line="682"/>
         <source>Error reading from storage.
 SD card may be broken.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="705"/>
+        <location filename="../downloadthread.cpp" line="701"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -237,208 +237,208 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
 <context>
     <name>main</name>
     <message>
-        <location filename="../main.qml" line="24"/>
+        <location filename="../main.qml" line="23"/>
         <source>Raspberry Pi Imager v%1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="91"/>
-        <location filename="../main.qml" line="304"/>
+        <location filename="../main.qml" line="90"/>
+        <location filename="../main.qml" line="303"/>
         <source>Operating System</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="103"/>
+        <location filename="../main.qml" line="102"/>
         <source>CHOOSE OS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="121"/>
+        <location filename="../main.qml" line="120"/>
         <source>Select this button to change the operating system</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="134"/>
-        <location filename="../main.qml" line="588"/>
+        <location filename="../main.qml" line="133"/>
+        <location filename="../main.qml" line="587"/>
         <source>SD Card</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="146"/>
-        <location filename="../main.qml" line="868"/>
+        <location filename="../main.qml" line="145"/>
+        <location filename="../main.qml" line="860"/>
         <source>CHOOSE SD CARD</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="159"/>
+        <location filename="../main.qml" line="158"/>
         <source>Select this button to change the destination SD card</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="176"/>
+        <location filename="../main.qml" line="175"/>
         <source>WRITE</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="181"/>
+        <location filename="../main.qml" line="180"/>
         <source>Select this button to start writing the image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="221"/>
+        <location filename="../main.qml" line="220"/>
         <source>CANCEL WRITE</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="224"/>
-        <location filename="../main.qml" line="810"/>
+        <location filename="../main.qml" line="223"/>
+        <location filename="../main.qml" line="802"/>
         <source>Cancelling...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="236"/>
+        <location filename="../main.qml" line="235"/>
         <source>CANCEL VERIFY</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="239"/>
-        <location filename="../main.qml" line="833"/>
-        <location filename="../main.qml" line="886"/>
+        <location filename="../main.qml" line="238"/>
+        <location filename="../main.qml" line="825"/>
+        <location filename="../main.qml" line="878"/>
         <source>Finalizing...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="385"/>
-        <location filename="../main.qml" line="862"/>
+        <location filename="../main.qml" line="384"/>
+        <location filename="../main.qml" line="854"/>
         <source>Erase</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="386"/>
+        <location filename="../main.qml" line="385"/>
         <source>Format card as FAT32</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="393"/>
+        <location filename="../main.qml" line="392"/>
         <source>Use custom</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="394"/>
+        <location filename="../main.qml" line="393"/>
         <source>Select a custom .img from your computer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="417"/>
+        <location filename="../main.qml" line="416"/>
         <source>Back</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="418"/>
+        <location filename="../main.qml" line="417"/>
         <source>Go back to main menu</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="475"/>
+        <location filename="../main.qml" line="474"/>
         <source>Released: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="478"/>
+        <location filename="../main.qml" line="477"/>
         <source>Cached on your computer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="480"/>
+        <location filename="../main.qml" line="479"/>
         <source>Local file</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="482"/>
+        <location filename="../main.qml" line="481"/>
         <source>Online - %1 GB download</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="639"/>
-        <location filename="../main.qml" line="691"/>
-        <location filename="../main.qml" line="697"/>
+        <location filename="../main.qml" line="638"/>
+        <location filename="../main.qml" line="690"/>
+        <location filename="../main.qml" line="696"/>
         <source>Mounted as %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="693"/>
+        <location filename="../main.qml" line="692"/>
         <source>[WRITE PROTECTED]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="735"/>
+        <location filename="../main.qml" line="734"/>
         <source>Are you sure you want to quit?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="736"/>
+        <location filename="../main.qml" line="735"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="747"/>
+        <location filename="../main.qml" line="746"/>
         <source>Warning</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="753"/>
-        <location filename="../main.qml" line="813"/>
+        <location filename="../main.qml" line="752"/>
+        <location filename="../main.qml" line="805"/>
         <source>Writing... %1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="766"/>
+        <location filename="../main.qml" line="765"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="792"/>
+        <location filename="../main.qml" line="784"/>
         <source>Error downloading OS list from Internet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="836"/>
+        <location filename="../main.qml" line="828"/>
         <source>Verifying... %1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="854"/>
+        <location filename="../main.qml" line="846"/>
         <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="861"/>
+        <location filename="../main.qml" line="853"/>
         <source>Write Successful</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="863"/>
+        <location filename="../main.qml" line="855"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="865"/>
+        <location filename="../main.qml" line="857"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="893"/>
-        <location filename="../main.qml" line="935"/>
+        <location filename="../main.qml" line="885"/>
+        <location filename="../main.qml" line="927"/>
         <source>Error parsing os_list.json</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="973"/>
+        <location filename="../main.qml" line="965"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="988"/>
+        <location filename="../main.qml" line="980"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation type="unfinished"></translation>
     </message>
