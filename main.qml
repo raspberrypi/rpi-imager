@@ -395,7 +395,11 @@ ApplicationWindow {
 
         Component.onCompleted: {
             if (imageWriter.isOnline()) {
-                fetchOSlist();
+                fetchOSlist(imageWriter.constantOsListUrl(), function(oslist) {
+                    for (var i in oslist) {
+                        osmodel.insert(osmodel.count-2, oslist[i])
+                    }
+                });
             }
         }
     }
@@ -898,18 +902,16 @@ ApplicationWindow {
         }
     }
 
-    function fetchOSlist() {
-        httpRequest(imageWriter.constantOsListUrl(), function (x) {
+    function fetchOSlist(oslistUrl, callback) {
+        httpRequest(oslistUrl, function (x) {
             var o = JSON.parse(x.responseText)
             if (!"os_list" in o) {
                 onError(qsTr("Error parsing os_list.json"))
                 return;
             }
             var oslist = o["os_list"]
-            processRelativeUrls(oslist, imageWriter.constantOsListUrl())
-            for (var i in oslist) {
-                osmodel.insert(osmodel.count-2, oslist[i])
-            }
+            processRelativeUrls(oslist, oslistUrl)
+            callback(oslist)
         })
     }
 
@@ -942,14 +944,7 @@ ApplicationWindow {
                     subosmodel.remove(1, subosmodel.count-1)
                 }
 
-                httpRequest(d.subitems_url, function (x) {
-                    var o = JSON.parse(x.responseText)
-                    if (!"os_list" in o) {
-                        onError(qsTr("Error parsing os_list.json"))
-                        return;
-                    }
-                    var oslist = o["os_list"]
-                    processRelativeUrls(oslist, d.subitems_url)
+                fetchOSlist(d.subitems_url, function(oslist) {
                     for (var i in oslist) {
                         subosmodel.append(oslist[i])
                     }
