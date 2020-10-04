@@ -60,6 +60,9 @@ public:
     /* Utility function to return filename part from URL */
     Q_INVOKABLE QString fileNameFromUrl(const QUrl &url);
 
+    /* Utility function to return an absolute URL from a relative one */
+    static Q_INVOKABLE QString makeUrlAbsolute(const QUrl &url, const QUrl &baseUrl);
+
     /* Function to return OS list URL */
     Q_INVOKABLE QUrl constantOsListUrl() const;
 

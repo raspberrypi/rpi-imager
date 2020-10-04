@@ -878,6 +878,26 @@ ApplicationWindow {
         progressText.text = qsTr("Finalizing...")
     }
 
+    function processRelativeUrl(obj, baseUrl, attr) {
+        var url = obj[attr]
+        if (!url)
+            return
+
+        obj[attr] = imageWriter.makeUrlAbsolute(url, baseUrl)
+    }
+
+    function processRelativeUrls(oslist, baseUrl) {
+        for (var i in oslist) {
+            var entry = oslist[i]
+            processRelativeUrl(entry, baseUrl, "icon")
+            processRelativeUrl(entry, baseUrl, "url")
+            processRelativeUrl(entry, baseUrl, "subitems_url")
+            if ("subitems" in entry) {
+                processRelativeUrls(entry.subitems, baseUrl)
+            }
+        }
+    }
+
     function fetchOSlist() {
         httpRequest(imageWriter.constantOsListUrl(), function (x) {
             var o = JSON.parse(x.responseText)
@@ -886,6 +906,7 @@ ApplicationWindow {
                 return;
             }
             var oslist = o["os_list"]
+            processRelativeUrls(oslist, imageWriter.constantOsListUrl())
             for (var i in oslist) {
                 osmodel.insert(osmodel.count-2, oslist[i])
             }
@@ -928,6 +949,7 @@ ApplicationWindow {
                         return;
                     }
                     var oslist = o["os_list"]
+                    processRelativeUrls(oslist, d.subitems_url)
                     for (var i in oslist) {
                         subosmodel.append(oslist[i])
                     }

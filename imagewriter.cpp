@@ -301,6 +301,16 @@ QString ImageWriter::fileNameFromUrl(const QUrl &url)
     return url.fileName();
 }
 
+/* Utility function to return an absolute URL from a relative one */
+QString ImageWriter::makeUrlAbsolute(const QUrl &url, const QUrl &baseUrl)
+{
+    if(url.isRelative())
+    {
+        return baseUrl.adjusted(QUrl::RemoveFilename).resolved(url).toString();
+    }
+    return url.toString();
+}
+
 QString ImageWriter::srcFileName()
 {
     return _src.isEmpty() ? "" : _src.fileName();
