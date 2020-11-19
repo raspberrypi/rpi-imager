@@ -201,6 +201,8 @@ void ImageWriter::startWrite()
 
     connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
+    connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
+    connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
 
@@ -252,6 +254,7 @@ void ImageWriter::startWrite()
         _thread->start();
     }
 
+    _dlnow = 0; _verifynow = 0;
     _polltimer.start(PROGRESS_UPDATE_INTERVAL);
 }
 
@@ -401,6 +404,11 @@ void ImageWriter::onFinalizing()
 {
     _polltimer.stop();
     emit finalizing();
+}
+
+void ImageWriter::onPreparationStatusUpdate(QString msg)
+{
+    emit preparationStatusUpdate(msg);
 }
 
 void ImageWriter::openFileDialog()

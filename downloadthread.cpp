@@ -91,8 +91,24 @@ size_t DownloadThread::_curl_header_callback( void *ptr, size_t size, size_t nme
     return len;
 }
 
+QByteArray DownloadThread::_fileGetContentsTrimmed(const QString &filename)
+{
+    QByteArray result;
+    QFile f(filename);
+
+    if (f.exists() && f.open(f.ReadOnly))
+    {
+        result = f.readAll().trimmed();
+        f.close();
+    }
+
+    return result;
+}
+
 bool DownloadThread::_openAndPrepareDevice()
 {
+    emit preparationStatusUpdate(tr("opening drive"));
+
     if (_filename.startsWith("/dev/"))
     {
         unmount_disk(_filename.constData());
@@ -203,10 +219,64 @@ bool DownloadThread::_openAndPrepareDevice()
     }
 #endif
 
+#ifdef Q_OS_LINUX
+    /* Optional optimizations for Linux */
+
+    if (_filename.startsWith("/dev/"))
+    {
+        QString devname = _filename.mid(5);
+
+        /* On some internal SD card readers CID/CSD is available, print it for debugging purposes */
+        QByteArray cid = _fileGetContentsTrimmed("/sys/block/"+devname+"/device/cid");
+        QByteArray csd = _fileGetContentsTrimmed("/sys/block/"+devname+"/device/csd");
+        if (!cid.isEmpty())
+            qDebug() << "SD card CID:" << cid;
+        if (!csd.isEmpty())
+            qDebug() << "SD card CSD:" << csd;
+
+        QByteArray discardmax = _fileGetContentsTrimmed("/sys/block/"+devname+"/queue/discard_max_bytes");
+
+        if (discardmax.isEmpty() || discardmax == "0")
+        {
+            qDebug() << "BLKDISCARD not supported";
+        }
+        else
+        {
+            /* DISCARD/TRIM the SD card */
+            uint64_t devsize, range[2];
+            int fd = _file.handle();
+
+            if (::ioctl(fd, BLKGETSIZE64, &devsize) == -1) {
+                qDebug() << "Error getting device/sector size with BLKGETSIZE64 ioctl():" << strerror(errno);
+            }
+            else
+            {
+                qDebug() << "Try to perform TRIM/DISCARD on device";
+                range[0] = 0;
+                range[1] = devsize;
+                emit preparationStatusUpdate(tr("discarding existing data on drive"));
+                _timer.start();
+                if (::ioctl(fd, BLKDISCARD, &range) == -1)
+                {
+                    qDebug() << "BLKDISCARD failed.";
+                }
+                else
+                {
+                    qDebug() << "BLKDISCARD successful. Discarding took" << _timer.elapsed() / 1000 << "seconds";
+                }
+            }
+        }
+    }
+#endif
+
 #ifndef Q_OS_WIN
     // Zero out MBR
     qint64 knownsize = _file.size();
     QByteArray emptyMB(1024*1024, 0);
+
+    emit preparationStatusUpdate(tr("zeroing out first and last MB of drive"));
+    qDebug() << "Zeroing out first and last MB of drive";
+    _timer.start();
 
     if (!_file.write(emptyMB.data(), emptyMB.size()) || !_file.flush())
     {
@@ -229,36 +299,10 @@ bool DownloadThread::_openAndPrepareDevice()
     }
     emptyMB.clear();
     _file.seek(0);
+    qDebug() << "Done zeroing out start and end of drive. Took" << _timer.elapsed() / 1000 << "seconds";
 #endif
 
 #ifdef Q_OS_LINUX
-    /* Optional optimizations for Linux */
-
-    /* See if we can DISCARD/TRIM the SD card */
-    uint64_t devsize, range[2];
-    int fd = _file.handle();
-
-    if (::ioctl(fd, BLKGETSIZE64, &devsize) == -1) {
-        qDebug() << "Error getting device/sector size with BLKGETSIZE64 ioctl():" << strerror(errno);
-    }
-    else
-    {
-        int secsize;
-        ::ioctl(fd, BLKSSZGET, &secsize);
-        qDebug() << "Sector size:" << secsize << "Device size:" << devsize;
-
-        qDebug() << "Try to perform TRIM/DISCARD on device";
-        range[0] = 0;
-        range[1] = devsize;
-        if (::ioctl(fd, BLKDISCARD, &range) == -1)
-        {
-            qDebug() << "BLKDISCARD not supported";
-        }
-        else
-        {
-            qDebug() << "BLKDISCARD successful";
-        }
-    }
     _sectorsStart = _sectorsWritten();
 #endif
 
@@ -303,6 +347,7 @@ void DownloadThread::run()
     if (!_proxy.isEmpty())
         curl_easy_setopt(_c, CURLOPT_PROXY, _proxy.constData());
 
+    emit preparationStatusUpdate(tr("starting download"));
     _timer.start();
     CURLcode ret = curl_easy_perform(_c);
 

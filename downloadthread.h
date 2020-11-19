@@ -126,6 +126,7 @@ signals:
     void error(QString msg);
     void cacheFileUpdated(QByteArray sha256);
     void finalizing();
+    void preparationStatusUpdate(QString msg);
 
 protected:
     virtual void run();
@@ -140,6 +141,7 @@ protected:
     void _writeCache(const char *buf, size_t len);
     qint64 _sectorsWritten();
     void _closeFiles();
+    QByteArray _fileGetContentsTrimmed(const QString &filename);
 
     /*
      * libcurl callbacks
