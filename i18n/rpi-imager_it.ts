@@ -35,7 +35,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="143"/>
         <source>Error running diskpart: %1</source>
-        <translation>Errore escuzione diskpart: %1</translation>
+        <translation>Errore esecuzione diskpart: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="164"/>
@@ -64,13 +64,13 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="257"/>
-        <source>discarding existing data on drive</source>
-        <translation type="unfinished"></translation>
+        <source>elimina i dati esistenti nell&apos;unità</source>
+        <translation></translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="277"/>
-        <source>zeroing out first and last MB of drive</source>
-        <translation type="unfinished"></translation>
+        <source>azzera il primo e l'ultimo MB dell&apos;unità</source>
+        <translation></translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="283"/>
@@ -101,7 +101,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../downloadthread.cpp" line="421"/>
         <source>Error downloading: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore download: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="639"/>
@@ -116,23 +116,22 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../downloadthread.cpp" line="627"/>
         <source>Download corrupt. Hash does not match</source>
-        <translation>Downlaod corrotto. 
-L&apos;hash non corrisponde</translation>
+        <translation>Downlaod corrotto.&lt;br&gt;L&apos;hash non corrisponde</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="110"/>
         <source>opening drive</source>
-        <translation type="unfinished"></translation>
+        <translation>apertura unità</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="295"/>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>Errore di scrittura durante il tentativo di azzerare l&apos;ultima parte della scheda.&lt;br&gt;La scheda potrebbe riportare una capacità maggiore di quella reale (possibile contraffazione)</translation>
+        <translation>Errore di scrittura durante il tentativo di azzerare l&apos;ultima parte della scheda.&lt;br&gt;La scheda potrebbe riportare una capacità maggiore di quella reale (possibile contraffazione).</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="350"/>
         <source>starting download</source>
-        <translation type="unfinished"></translation>
+        <translation>avvio download</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="680"/>
@@ -142,8 +141,7 @@ L&apos;hash non corrisponde</translation>
     <message>
         <location filename="../downloadthread.cpp" line="755"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>Verifica scrittura fallita. 
-Il contenuto della SD è differente da quello che vi è stato scritto.</translation>
+        <translation>Verifica scrittura fallita.&lt;br&gt;Il contenuto della SD è differente da quello che vi è stato scritto.</translation>
     </message>
 </context>
 <context>
@@ -193,12 +191,12 @@ Il contenuto della SD è differente da quello che vi è stato scritto.</translat
     <message>
         <location filename="../driveformatthread.cpp" line="206"/>
         <source>Error running mkfs.fat: %1</source>
-        <translation>Errore eseuzione mkfs.fat: %1</translation>
+        <translation>Errore esecuzione mkfs.fat: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="213"/>
         <source>Formatting not implemented for this platform</source>
-        <translation>Formatatzione non implementata per questa piattaforma</translation>
+        <translation>Formattazione non implementata per questa piattaforma</translation>
     </message>
 </context>
 <context>
@@ -229,7 +227,7 @@ Il contenuto della SD è differente da quello che vi è stato scritto.</translat
     <message>
         <location filename="../localfileextractthread.cpp" line="34"/>
         <source>opening image file</source>
-        <translation type="unfinished"></translation>
+        <translation>apertura file immagine</translation>
     </message>
     <message>
         <location filename="../localfileextractthread.cpp" line="39"/>
@@ -311,7 +309,7 @@ Il contenuto della SD è differente da quello che vi è stato scritto.</translat
     <message>
         <location filename="../main.qml" line="180"/>
         <source>Select this button to start writing the image</source>
-        <translation>Seelziona questo pulsante per avviare la scrittura del file immagine</translation>
+        <translation>Seleziona questo pulsante per avviare la scrittura del file immagine</translation>
     </message>
     <message>
         <location filename="../main.qml" line="220"/>
@@ -417,7 +415,7 @@ Il contenuto della SD è differente da quello che vi è stato scritto.</translat
     <message>
         <location filename="../main.qml" line="752"/>
         <source>Preparing to write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Preparazione scrittura...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="805"/>
@@ -427,7 +425,7 @@ Il contenuto della SD è differente da quello che vi è stato scritto.</translat
     <message>
         <location filename="../main.qml" line="765"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>Tutti i dati esistenti su &apos;%1&apos; verranno eliminati.&lt;br&gt;Sei sicuro di voler continuare?</translation>
+        <translation>Tutti i dati esistenti in &apos;%1&apos; verranno eliminati.&lt;br&gt;Sei sicuro di voler continuare?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="784"/>
@@ -442,7 +440,7 @@ Il contenuto della SD è differente da quello che vi è stato scritto.</translat
     <message>
         <location filename="../main.qml" line="835"/>
         <source>Preparing to write... (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Preparazione scrittura... (%1)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="850"/>
