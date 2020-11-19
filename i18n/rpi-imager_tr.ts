@@ -33,90 +33,112 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <location filename="../downloadthread.cpp" line="127"/>
+        <location filename="../downloadthread.cpp" line="143"/>
         <source>Error running diskpart: %1</source>
         <translation>Diskpart çalıştırılırken hata oluştu: %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="148"/>
+        <location filename="../downloadthread.cpp" line="164"/>
         <source>Error removing existing partitions</source>
         <translation>Mevcut bölümler kaldırılırken hata oluştu </translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="174"/>
+        <location filename="../downloadthread.cpp" line="190"/>
         <source>Authentication cancelled</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="177"/>
+        <location filename="../downloadthread.cpp" line="193"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
         <translation>&apos;%1&apos; disk aygıtına erişmek için authopen çalıştırılırken hata oluştu</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="178"/>
+        <location filename="../downloadthread.cpp" line="194"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="199"/>
+        <location filename="../downloadthread.cpp" line="215"/>
         <source>Cannot open storage device &apos;%1&apos;.</source>
         <translation>Depolama cihazı açılamıyor &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="213"/>
+        <location filename="../downloadthread.cpp" line="257"/>
+        <source>discarding existing data on drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="277"/>
+        <source>zeroing out first and last MB of drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="283"/>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>MBR sıfırlanırken yazma hatası</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="225"/>
-        <source>Write error while trying to zero out last part of card.
-Card could be advertising wrong capacity (possible counterfeit)</source>
-        <translation>Kartın son kısmını sıfırlamaya çalışırken yazma hatası. Kart yanlış kapasitenin tanımını yapıyor olabilir (olası sahte bölüm boyutu tanımı)</translation>
+        <location filename="../downloadthread.cpp" line="736"/>
+        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <translation>Depolamadan okuma hatası.&lt;br&gt;SD kart arızalı olabilir.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="346"/>
+        <location filename="../downloadthread.cpp" line="391"/>
         <source>Access denied error while writing file to disk.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="351"/>
+        <location filename="../downloadthread.cpp" line="396"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="357"/>
+        <location filename="../downloadthread.cpp" line="402"/>
         <source>Error writing file to disk</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="585"/>
+        <location filename="../downloadthread.cpp" line="421"/>
+        <source>Error downloading: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="639"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>Depolama alanına yazma hatası (flushing sırasında)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="592"/>
+        <location filename="../downloadthread.cpp" line="646"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>Depoya yazma hatası (fsync sırasında)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="573"/>
+        <location filename="../downloadthread.cpp" line="627"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>İndirme bozuk. Hash eşleşmiyor</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="626"/>
+        <location filename="../downloadthread.cpp" line="110"/>
+        <source>opening drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="295"/>
+        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
+        <translation>Kartın son kısmını sıfırlamaya çalışırken yazma hatası. Kart yanlış kapasitenin tanımını yapıyor olabilir (olası sahte bölüm boyutu tanımı)</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="350"/>
+        <source>starting download</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="680"/>
         <source>Error writing first block (partition table)</source>
         <translation>İlk bloğu yazma hatası (bölüm tablosu)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="682"/>
-        <source>Error reading from storage.
-SD card may be broken.</source>
-        <translation>Depolamadan okuma hatası.
-SD kart arızalı olabilir.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="701"/>
+        <location filename="../downloadthread.cpp" line="755"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Yazma doğrulanamadı. SD kartın içeriği, üzerine yazılandan farklı.</translation>
     </message>
@@ -180,17 +202,13 @@ SD kart arızalı olabilir.</translation>
     <name>ImageWriter</name>
     <message>
         <location filename="../imagewriter.cpp" line="170"/>
-        <source>Storage capacity is not large enough.
-Needs to be at least %1 GB</source>
-        <translation>Depolama kapasitesi yeterince büyük değil. 
-En az %1 GB olması gerekiyor</translation>
+        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
+        <translation>Depolama kapasitesi yeterince büyük değil.&lt;br&gt;En az %1 GB olması gerekiyor</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="176"/>
-        <source>Input file is not a valid disk image.
-File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation>Giriş dosyası geçerli bir disk görüntüsü değil. 
-%1 bayt dosya boyutu 512 baytın katı değil.</translation>
+        <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
+        <translation>Giriş dosyası geçerli bir disk görüntüsü değil.&lt;br&gt;%1 bayt dosya boyutu 512 baytın katı değil.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="200"/>
@@ -198,7 +216,7 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Görüntü indirme ve yazma</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="409"/>
+        <location filename="../imagewriter.cpp" line="417"/>
         <source>Select image</source>
         <translation>Imaj seç</translation>
     </message>
@@ -206,7 +224,12 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <location filename="../localfileextractthread.cpp" line="38"/>
+        <location filename="../localfileextractthread.cpp" line="34"/>
+        <source>opening image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../localfileextractthread.cpp" line="39"/>
         <source>Error opening image file</source>
         <translation>Imaj dosyası açılırken hata oluştu</translation>
     </message>
@@ -268,7 +291,7 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="860"/>
+        <location filename="../main.qml" line="864"/>
         <source>CHOOSE SD CARD</source>
         <translation>SD KART SEÇİN</translation>
     </message>
@@ -306,13 +329,13 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     <message>
         <location filename="../main.qml" line="238"/>
         <location filename="../main.qml" line="825"/>
-        <location filename="../main.qml" line="878"/>
+        <location filename="../main.qml" line="882"/>
         <source>Finalizing...</source>
         <translation>Bitiriliyor...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="384"/>
-        <location filename="../main.qml" line="854"/>
+        <location filename="../main.qml" line="858"/>
         <source>Erase</source>
         <translation>Sil</translation>
     </message>
@@ -391,6 +414,10 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
     </message>
     <message>
         <location filename="../main.qml" line="752"/>
+        <source>Preparing to write...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="805"/>
         <source>Writing... %1%</source>
         <translation>Yazılıyor... %1%</translation>
@@ -411,38 +438,43 @@ File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Doğrulanıyor... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="846"/>
+        <location filename="../main.qml" line="835"/>
+        <source>Preparing to write... (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="850"/>
         <source>Error</source>
         <translation>Hata</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="853"/>
+        <location filename="../main.qml" line="857"/>
         <source>Write Successful</source>
         <translation>Başarılı Yazıldı</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="855"/>
+        <location filename="../main.qml" line="859"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; silindi &lt;br&gt;&lt;br&gt; Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="857"/>
+        <location filename="../main.qml" line="861"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt; üzerine yazıldı. Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="885"/>
-        <location filename="../main.qml" line="927"/>
+        <location filename="../main.qml" line="889"/>
+        <location filename="../main.qml" line="931"/>
         <source>Error parsing os_list.json</source>
         <translation>os_list.json ayrıştırma hatası</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="965"/>
+        <location filename="../main.qml" line="969"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Önce görüntüler içeren bir USB bellek bağlayın.&lt;br&gt; Görüntüler USB belleğin kök klasöründe bulunmalıdır.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="980"/>
+        <location filename="../main.qml" line="984"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation type="unfinished"></translation>
     </message>

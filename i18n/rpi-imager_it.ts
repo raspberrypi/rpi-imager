@@ -33,93 +33,114 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <location filename="../downloadthread.cpp" line="127"/>
+        <location filename="../downloadthread.cpp" line="143"/>
         <source>Error running diskpart: %1</source>
         <translation>Errore escuzione diskpart: %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="148"/>
+        <location filename="../downloadthread.cpp" line="164"/>
         <source>Error removing existing partitions</source>
         <translation>Errore rimozione partizioni esistenti</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="174"/>
+        <location filename="../downloadthread.cpp" line="190"/>
         <source>Authentication cancelled</source>
         <translation>Autenticazione annullata</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="177"/>
+        <location filename="../downloadthread.cpp" line="193"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
         <translation>Errore esecuzione auhopen per ottenere accesso al dispositivo disco %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="178"/>
+        <location filename="../downloadthread.cpp" line="194"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Verifica se a &apos;Raspberry Pi Imager&apos; è consentito l&apos;accesso a &apos;volumi rimovibili&apos; nelle impostazioni privacy (in &apos;file e cartelle&apos; o in alternativa concedi &apos;accesso completo al disco&apos;).</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="199"/>
+        <location filename="../downloadthread.cpp" line="215"/>
         <source>Cannot open storage device &apos;%1&apos;.</source>
         <translation>Impossibile aprire dispositivo storage &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="213"/>
+        <location filename="../downloadthread.cpp" line="257"/>
+        <source>discarding existing data on drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="277"/>
+        <source>zeroing out first and last MB of drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="283"/>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>Errore scrittura durante azzeramento MBR</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="225"/>
-        <source>Write error while trying to zero out last part of card.
-Card could be advertising wrong capacity (possible counterfeit)</source>
-        <translation>Errore di scrittura durante il tentativo di azzerare l&apos;ultima parte della scheda.
-La scheda potrebbe riportare una capacità maggiore di quella reale (possibile contraffazione)</translation>
+        <location filename="../downloadthread.cpp" line="736"/>
+        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <translation>Errore lettura dallo storage.&lt;br&gt;La scheda SD potrebbe essere danneggiata.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="346"/>
+        <location filename="../downloadthread.cpp" line="391"/>
         <source>Access denied error while writing file to disk.</source>
         <translation>Errore accesso negato durante la scrittura del file su disco.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="351"/>
+        <location filename="../downloadthread.cpp" line="396"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation>Sembra sia abilitato l&apos;accesso controllato alle cartelle. 
 Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos;elenco delle app consentite e riprova.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="357"/>
+        <location filename="../downloadthread.cpp" line="402"/>
         <source>Error writing file to disk</source>
         <translation>Errore scrittura file su disco</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="585"/>
+        <location filename="../downloadthread.cpp" line="421"/>
+        <source>Error downloading: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="639"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>Errore scrittura nello storage (durante fluhisng)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="592"/>
+        <location filename="../downloadthread.cpp" line="646"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>Errore scrittura nello storage (durante fsync)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="573"/>
+        <location filename="../downloadthread.cpp" line="627"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>Downlaod corrotto. 
 L&apos;hash non corrisponde</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="626"/>
+        <location filename="../downloadthread.cpp" line="110"/>
+        <source>opening drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="295"/>
+        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
+        <translation>Errore di scrittura durante il tentativo di azzerare l&apos;ultima parte della scheda.&lt;br&gt;La scheda potrebbe riportare una capacità maggiore di quella reale (possibile contraffazione)</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="350"/>
+        <source>starting download</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="680"/>
         <source>Error writing first block (partition table)</source>
         <translation>Errore scrittura primo blocco (tabella partizione)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="682"/>
-        <source>Error reading from storage.
-SD card may be broken.</source>
-        <translation>Errore lettura dallo storage. 
-La scheda SD potrebbe essere danneggiata.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="701"/>
+        <location filename="../downloadthread.cpp" line="755"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Verifica scrittura fallita. 
 Il contenuto della SD è differente da quello che vi è stato scritto.</translation>
@@ -184,17 +205,13 @@ Il contenuto della SD è differente da quello che vi è stato scritto.</translat
     <name>ImageWriter</name>
     <message>
         <location filename="../imagewriter.cpp" line="170"/>
-        <source>Storage capacity is not large enough.
-Needs to be at least %1 GB</source>
-        <translation>La capacità dello storage non è sufficiente.
-Sono necessari almeno %1 GB</translation>
+        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
+        <translation>La capacità dello storage non è sufficiente.&lt;br&gt;Sono necessari almeno %1 GB.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="176"/>
-        <source>Input file is not a valid disk image.
-File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation>Il file sorgente non è un&apos;immagine disco valida.
-La dimensione file %1 non è un multiplo di 512 byte.</translation>
+        <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
+        <translation>Il file sorgente non è un&apos;immagine disco valida.&lt;br&gt;La dimensione file %1 non è un multiplo di 512 byte.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="200"/>
@@ -202,7 +219,7 @@ La dimensione file %1 non è un multiplo di 512 byte.</translation>
         <translation>Download e scrittura file immagine</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="409"/>
+        <location filename="../imagewriter.cpp" line="417"/>
         <source>Select image</source>
         <translation>Seleziona file immagine</translation>
     </message>
@@ -210,7 +227,12 @@ La dimensione file %1 non è un multiplo di 512 byte.</translation>
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <location filename="../localfileextractthread.cpp" line="38"/>
+        <location filename="../localfileextractthread.cpp" line="34"/>
+        <source>opening image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../localfileextractthread.cpp" line="39"/>
         <source>Error opening image file</source>
         <translation>Errore durante l&apos;apertura del file immagine</translation>
     </message>
@@ -272,7 +294,7 @@ La dimensione file %1 non è un multiplo di 512 byte.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="860"/>
+        <location filename="../main.qml" line="864"/>
         <source>CHOOSE SD CARD</source>
         <translation>SCEGLI SCHEDA SD</translation>
     </message>
@@ -310,13 +332,13 @@ La dimensione file %1 non è un multiplo di 512 byte.</translation>
     <message>
         <location filename="../main.qml" line="238"/>
         <location filename="../main.qml" line="825"/>
-        <location filename="../main.qml" line="878"/>
+        <location filename="../main.qml" line="882"/>
         <source>Finalizing...</source>
         <translation>Finalizzazione...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="384"/>
-        <location filename="../main.qml" line="854"/>
+        <location filename="../main.qml" line="858"/>
         <source>Erase</source>
         <translation>Cancella</translation>
     </message>
@@ -394,6 +416,10 @@ La dimensione file %1 non è un multiplo di 512 byte.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="752"/>
+        <source>Preparing to write...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="805"/>
         <source>Writing... %1%</source>
         <translation>Scrittura...%1</translation>
@@ -414,38 +440,43 @@ La dimensione file %1 non è un multiplo di 512 byte.</translation>
         <translation>Verifica...%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="846"/>
+        <location filename="../main.qml" line="835"/>
+        <source>Preparing to write... (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="850"/>
         <source>Error</source>
         <translation>Errore</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="853"/>
+        <location filename="../main.qml" line="857"/>
         <source>Write Successful</source>
         <translation>Scrittura completata senza errori</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="855"/>
+        <location filename="../main.qml" line="859"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>Azzeramento di &lt;b&gt;%1&lt;/b&gt; completato&lt;br&gt;&lt;br&gt;Ora puoi rimuovere la scheda SD dal lettore</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="857"/>
+        <location filename="../main.qml" line="861"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>Scrittura di &lt;b&gt;%1&lt;/b&gt; in &lt;b&gt;%2&lt;/b&gt;completata&lt;br&gt;&lt;br&gt;Ora puoi rimuovere la scheda SD dal lettore</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="885"/>
-        <location filename="../main.qml" line="927"/>
+        <location filename="../main.qml" line="889"/>
+        <location filename="../main.qml" line="931"/>
         <source>Error parsing os_list.json</source>
         <translation>Errore durante analisi file os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="965"/>
+        <location filename="../main.qml" line="969"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Prima collega una chiavetta USB contenente il file immagine.&lt;br&gt;Il file immagine deve essere presente nella cartella principale della chiavetta USB.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="980"/>
+        <location filename="../main.qml" line="984"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>La scheda SD è protetta da scrittura.&lt;br&gt;Sposta verso l&apos;alto l&apos;interruttore LOCK sul lato sinistro della scheda SD e riprova.</translation>
     </message>

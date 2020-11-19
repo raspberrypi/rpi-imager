@@ -292,8 +292,8 @@ bool DownloadThread::_openAndPrepareDevice()
                 || !_file.flush()
                 || !::fsync(_file.handle()))
         {
-            emit error(tr("Write error while trying to zero out last part of card.\n"
-                          "Card could be advertising wrong capacity (possible counterfeit)"));
+            emit error(tr("Write error while trying to zero out last part of card.<br>"
+                          "Card could be advertising wrong capacity (possible counterfeit)."));
             return false;
         }
     }
@@ -733,7 +733,7 @@ bool DownloadThread::_verify()
         qint64 lenRead = _file.read(verifyBuf, qMin((qint64) IMAGEWRITER_VERIFY_BLOCKSIZE, (qint64) (_verifyTotal-_lastVerifyNow) ));
         if (lenRead == -1)
         {
-            DownloadThread::_onDownloadError(tr("Error reading from storage.\n"
+            DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"
                                                 "SD card may be broken."));
             return false;
         }
