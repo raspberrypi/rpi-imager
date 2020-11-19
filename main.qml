@@ -749,7 +749,7 @@ ApplicationWindow {
             cancelwritebutton.enabled = true
             cancelwritebutton.visible = true
             cancelverifybutton.enabled = true
-            progressText.text = qsTr("Writing... %1%").arg("0")
+            progressText.text = qsTr("Preparing to write...");
             progressText.visible = true
             progressBar.visible = true
             progressBar.indeterminate = true
@@ -829,6 +829,10 @@ ApplicationWindow {
             progressBar.Material.accent = "#6cc04a"
             progressBar.value = newPos
         }
+    }
+
+    function onPreparationStatusUpdate(msg) {
+        progressText.text = qsTr("Preparing to write... (%1)").arg(msg)
     }
 
     function resetWriteButton() {

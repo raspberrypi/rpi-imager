@@ -99,6 +99,7 @@ signals:
     void cancelled();
     void finalizing();
     void networkOnline();
+    void preparationStatusUpdate(QVariant msg);
 
 protected slots:
 
@@ -112,6 +113,7 @@ protected slots:
     void onCacheFileUpdated(QByteArray sha256);
     void onFinalizing();
     void onTimeSyncReply(QNetworkReply *reply);
+    void onPreparationStatusUpdate(QString msg);
 
 protected:
     QUrl _src, _repo;
