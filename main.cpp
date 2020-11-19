@@ -60,8 +60,7 @@ int main(int argc, char *argv[])
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;
     QTranslator translator;
-    if (translator.load(QLocale(), "rpi-imager", "_", QLatin1String(":/i18n")))
-        QCoreApplication::installTranslator(&translator);
+    QString customQm;
 
     /* Parse commandline arguments (if any) */
     QString customRepo;
@@ -114,6 +113,22 @@ int main(int argc, char *argv[])
                 imageWriter.setCustomOsListUrl(QUrl::fromLocalFile(customRepo));
             }
         }
+        else if (args[i] == "--qm")
+        {
+            if (args.size()-i < 2 || args[i+1].startsWith("-"))
+            {
+                cerr << "Missing QM file after --qm" << endl;
+                return 1;
+            }
+            customQm = args[++i];
+
+            QFileInfo fi(customQm);
+            if (!fi.isFile())
+            {
+                cerr << "Custom QM file does not exist or is not a regular file: " << customQm << endl;
+                return 1;
+            }
+        }
         else if (args[i] == "--debug")
         {
 #ifdef Q_OS_WIN
@@ -129,7 +144,7 @@ int main(int argc, char *argv[])
         }
         else if (args[i] == "--help")
         {
-            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [<image file to write>]" << endl;
+            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [<image file to write>]" << endl;
             return 0;
         }
         else if (args[i] == "--version")
@@ -142,6 +157,17 @@ int main(int argc, char *argv[])
         {
             cerr << "Ignoring unknown argument: " << args[i] << endl;
         }
+    }
+
+    if (customQm.isEmpty())
+    {
+        if (translator.load(QLocale(), "rpi-imager", "_", QLatin1String(":/i18n")))
+            QCoreApplication::installTranslator(&translator);
+    }
+    else
+    {
+        if (translator.load(customQm))
+            QCoreApplication::installTranslator(&translator);
     }
 
     if (!url.isEmpty())
