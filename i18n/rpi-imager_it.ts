@@ -64,13 +64,13 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="257"/>
-        <source>elimina i dati esistenti nell&apos;unità</source>
-        <translation></translation>
+        <source>discarding existing data on drive</source>
+        <translation>elimina i dati esistenti nell&apos;unità</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="277"/>
-        <source>azzera il primo e l'ultimo MB dell&apos;unità</source>
-        <translation></translation>
+        <source>zeroing out first and last MB of drive</source>
+        <translation>azzera il primo e l'ultimo MB dell&apos;unità</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="283"/>
