@@ -395,7 +395,11 @@ ApplicationWindow {
 
         Component.onCompleted: {
             if (imageWriter.isOnline()) {
-                fetchOSlist();
+                fetchOSlist(imageWriter.constantOsListUrl(), function(oslist) {
+                    for (var i in oslist) {
+                        osmodel.insert(osmodel.count-2, oslist[i])
+                    }
+                });
             }
         }
     }
@@ -882,17 +886,36 @@ ApplicationWindow {
         progressText.text = qsTr("Finalizing...")
     }
 
-    function fetchOSlist() {
-        httpRequest(imageWriter.constantOsListUrl(), function (x) {
+    function processRelativeUrl(obj, baseUrl, attr) {
+        var url = obj[attr]
+        if (!url)
+            return
+
+        obj[attr] = imageWriter.makeUrlAbsolute(url, baseUrl)
+    }
+
+    function processRelativeUrls(oslist, baseUrl) {
+        for (var i in oslist) {
+            var entry = oslist[i]
+            processRelativeUrl(entry, baseUrl, "icon")
+            processRelativeUrl(entry, baseUrl, "url")
+            processRelativeUrl(entry, baseUrl, "subitems_url")
+            if ("subitems" in entry) {
+                processRelativeUrls(entry.subitems, baseUrl)
+            }
+        }
+    }
+
+    function fetchOSlist(oslistUrl, callback) {
+        httpRequest(oslistUrl, function (x) {
             var o = JSON.parse(x.responseText)
             if (!"os_list" in o) {
                 onError(qsTr("Error parsing os_list.json"))
                 return;
             }
             var oslist = o["os_list"]
-            for (var i in oslist) {
-                osmodel.insert(osmodel.count-2, oslist[i])
-            }
+            processRelativeUrls(oslist, oslistUrl)
+            callback(oslist)
         })
     }
 
@@ -925,13 +948,7 @@ ApplicationWindow {
                     subosmodel.remove(1, subosmodel.count-1)
                 }
 
-                httpRequest(d.subitems_url, function (x) {
-                    var o = JSON.parse(x.responseText)
-                    if (!"os_list" in o) {
-                        onError(qsTr("Error parsing os_list.json"))
-                        return;
-                    }
-                    var oslist = o["os_list"]
+                fetchOSlist(d.subitems_url, function(oslist) {
                     for (var i in oslist) {
                         subosmodel.append(oslist[i])
                     }
