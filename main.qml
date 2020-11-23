@@ -920,12 +920,13 @@ ApplicationWindow {
             }
             else
             {
+                var suburl = d.subitems_url
                 if (subosmodel.count>1)
                 {
                     subosmodel.remove(1, subosmodel.count-1)
                 }
 
-                httpRequest(d.subitems_url, function (x) {
+                httpRequest(suburl, function (x) {
                     var o = JSON.parse(x.responseText)
                     if (!"os_list" in o) {
                         onError(qsTr("Error parsing os_list.json"))
