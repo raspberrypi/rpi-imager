@@ -421,8 +421,15 @@ void ImageWriter::onPreparationStatusUpdate(QString msg)
 void ImageWriter::openFileDialog()
 {
 #ifndef QT_NO_WIDGETS
+    QSettings settings;
+    QString path = settings.value("General/lastpath").toString();
+    QFileInfo fi(path);
+
+    if (path.isEmpty() || !fi.exists() || !fi.isReadable() )
+        path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+
     QFileDialog *fd = new QFileDialog(nullptr, tr("Select image"),
-                                      QStandardPaths::writableLocation(QStandardPaths::DownloadLocation),
+                                      path,
                                       "Image files (*.img *.zip *.gz *.xz);;All files (*.*)");
     connect(fd, SIGNAL(fileSelected(QString)), SLOT(onFileSelected(QString)));
 
@@ -443,10 +450,19 @@ void ImageWriter::openFileDialog()
 
 void ImageWriter::onFileSelected(QString filename)
 {
+#ifndef QT_NO_WIDGETS
     QFileInfo fi(filename);
+    QSettings settings;
 
     if (fi.isFile())
     {
+        QString path = fi.path();
+        if (path != settings.value("General/lastpath"))
+        {
+            settings.setValue("General/lastpath", path);
+            settings.sync();
+        }
+
         emit fileSelected(QUrl::fromLocalFile(filename));
     }
     else
@@ -455,6 +471,7 @@ void ImageWriter::onFileSelected(QString filename)
     }
 
     sender()->deleteLater();
+#endif
 }
 
 void ImageWriter::_parseCompressedFile()
