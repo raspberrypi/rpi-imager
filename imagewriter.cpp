@@ -25,6 +25,7 @@
 #include <QNetworkReply>
 #include <QDateTime>
 #include <QDebug>
+#include <QVersionNumber>
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
 #endif
@@ -319,6 +320,12 @@ QUrl ImageWriter::constantOsListUrl() const
 QString ImageWriter::constantVersion() const
 {
     return IMAGER_VERSION_STR;
+}
+
+/* Returns true if version argument is newer than current program */
+bool ImageWriter::isVersionNewer(const QString &version)
+{
+    return QVersionNumber::fromString(version) > QVersionNumber::fromString(IMAGER_VERSION_STR);
 }
 
 void ImageWriter::setCustomOsListUrl(const QUrl &url)

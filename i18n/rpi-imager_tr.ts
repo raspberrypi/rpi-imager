@@ -78,42 +78,42 @@
         <translation>MBR sıfırlanırken yazma hatası</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="736"/>
+        <location filename="../downloadthread.cpp" line="741"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>Depolamadan okuma hatası.&lt;br&gt;SD kart arızalı olabilir.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="391"/>
+        <location filename="../downloadthread.cpp" line="395"/>
         <source>Access denied error while writing file to disk.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="396"/>
+        <location filename="../downloadthread.cpp" line="400"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="402"/>
+        <location filename="../downloadthread.cpp" line="406"/>
         <source>Error writing file to disk</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="421"/>
+        <location filename="../downloadthread.cpp" line="425"/>
         <source>Error downloading: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="639"/>
+        <location filename="../downloadthread.cpp" line="644"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>Depolama alanına yazma hatası (flushing sırasında)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="646"/>
+        <location filename="../downloadthread.cpp" line="651"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>Depoya yazma hatası (fsync sırasında)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="627"/>
+        <location filename="../downloadthread.cpp" line="632"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>İndirme bozuk. Hash eşleşmiyor</translation>
     </message>
@@ -128,17 +128,17 @@
         <translation>Kartın son kısmını sıfırlamaya çalışırken yazma hatası. Kart yanlış kapasitenin tanımını yapıyor olabilir (olası sahte bölüm boyutu tanımı)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="350"/>
+        <location filename="../downloadthread.cpp" line="353"/>
         <source>starting download</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="680"/>
+        <location filename="../downloadthread.cpp" line="685"/>
         <source>Error writing first block (partition table)</source>
         <translation>İlk bloğu yazma hatası (bölüm tablosu)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="755"/>
+        <location filename="../downloadthread.cpp" line="760"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Yazma doğrulanamadı. SD kartın içeriği, üzerine yazılandan farklı.</translation>
     </message>
@@ -201,22 +201,22 @@
 <context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="170"/>
+        <location filename="../imagewriter.cpp" line="171"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>Depolama kapasitesi yeterince büyük değil.&lt;br&gt;En az %1 GB olması gerekiyor</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="176"/>
+        <location filename="../imagewriter.cpp" line="177"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Giriş dosyası geçerli bir disk görüntüsü değil.&lt;br&gt;%1 bayt dosya boyutu 512 baytın katı değil.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="200"/>
+        <location filename="../imagewriter.cpp" line="201"/>
         <source>Downloading and writing image</source>
         <translation>Görüntü indirme ve yazma</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="417"/>
+        <location filename="../imagewriter.cpp" line="424"/>
         <source>Select image</source>
         <translation>Imaj seç</translation>
     </message>
@@ -291,7 +291,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="864"/>
+        <location filename="../main.qml" line="877"/>
         <source>CHOOSE SD CARD</source>
         <translation>SD KART SEÇİN</translation>
     </message>
@@ -317,7 +317,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="223"/>
-        <location filename="../main.qml" line="802"/>
+        <location filename="../main.qml" line="815"/>
         <source>Cancelling...</source>
         <translation>İptal ediliyor...</translation>
     </message>
@@ -328,14 +328,14 @@
     </message>
     <message>
         <location filename="../main.qml" line="238"/>
-        <location filename="../main.qml" line="825"/>
-        <location filename="../main.qml" line="882"/>
+        <location filename="../main.qml" line="838"/>
+        <location filename="../main.qml" line="895"/>
         <source>Finalizing...</source>
         <translation>Bitiriliyor...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="384"/>
-        <location filename="../main.qml" line="858"/>
+        <location filename="../main.qml" line="871"/>
         <source>Erase</source>
         <translation>Sil</translation>
     </message>
@@ -418,7 +418,17 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="805"/>
+        <location filename="../main.qml" line="776"/>
+        <source>Update available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="777"/>
+        <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="818"/>
         <source>Writing... %1%</source>
         <translation>Yazılıyor... %1%</translation>
     </message>
@@ -428,53 +438,53 @@
         <translation>&apos;%1&apos; üzerindeki mevcut tüm veriler silinecek.&lt;br&gt;Devam etmek istediğinizden emin misiniz?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="784"/>
+        <location filename="../main.qml" line="797"/>
         <source>Error downloading OS list from Internet</source>
         <translation>İnternetten işletim sistemi listesi indirilirken hata oluştu</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="828"/>
+        <location filename="../main.qml" line="841"/>
         <source>Verifying... %1%</source>
         <translation>Doğrulanıyor... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="835"/>
+        <location filename="../main.qml" line="848"/>
         <source>Preparing to write... (%1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="850"/>
+        <location filename="../main.qml" line="863"/>
         <source>Error</source>
         <translation>Hata</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="857"/>
+        <location filename="../main.qml" line="870"/>
         <source>Write Successful</source>
         <translation>Başarılı Yazıldı</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="859"/>
+        <location filename="../main.qml" line="872"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; silindi &lt;br&gt;&lt;br&gt; Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="861"/>
+        <location filename="../main.qml" line="874"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt; üzerine yazıldı. Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="889"/>
-        <location filename="../main.qml" line="931"/>
+        <location filename="../main.qml" line="902"/>
+        <location filename="../main.qml" line="955"/>
         <source>Error parsing os_list.json</source>
         <translation>os_list.json ayrıştırma hatası</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="969"/>
+        <location filename="../main.qml" line="993"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Önce görüntüler içeren bir USB bellek bağlayın.&lt;br&gt; Görüntüler USB belleğin kök klasöründe bulunmalıdır.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="984"/>
+        <location filename="../main.qml" line="1008"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation type="unfinished"></translation>
     </message>

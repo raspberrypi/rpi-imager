@@ -91,22 +91,22 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
         <translation>Fehler beim Löschen des letzten Teiles der Speicherkarte.&lt;br&gt;Die Speicherkarte könnte mit einer falschen Größe beworben sein (möglicherweise Betrug).</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="350"/>
+        <location filename="../downloadthread.cpp" line="353"/>
         <source>starting download</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="736"/>
+        <location filename="../downloadthread.cpp" line="741"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>Fehler beim Lesen vom Speicher.&lt;br&gt;Die SD-Karte könnte kaputt sein.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="391"/>
+        <location filename="../downloadthread.cpp" line="395"/>
         <source>Access denied error while writing file to disk.</source>
         <translation>Zugriff verweigert-Fehler beim Schreiben auf den Datenträger.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="396"/>
+        <location filename="../downloadthread.cpp" line="400"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translatorcomment>I don&apos;t use Windows either. What is &quot;Controlled Folder Access&quot; in the German version?
 
@@ -114,37 +114,37 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="402"/>
+        <location filename="../downloadthread.cpp" line="406"/>
         <source>Error writing file to disk</source>
         <translation>Fehler beim Schreiben der Datei auf den Speicher</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="421"/>
+        <location filename="../downloadthread.cpp" line="425"/>
         <source>Error downloading: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="627"/>
+        <location filename="../downloadthread.cpp" line="632"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>Download beschädigt. Prüfsumme stimmt nicht überein</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="639"/>
+        <location filename="../downloadthread.cpp" line="644"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>Fehler beim Schreiben auf den Speicher (während flushing)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="646"/>
+        <location filename="../downloadthread.cpp" line="651"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>Fehler beim Schreiben auf den Speicher (während fsync)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="680"/>
+        <location filename="../downloadthread.cpp" line="685"/>
         <source>Error writing first block (partition table)</source>
         <translation>Fehler beim Schreiben auf des ersten Blocks (Partitionstabelle)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="755"/>
+        <location filename="../downloadthread.cpp" line="760"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Verifizierung fehlgeschlagen. Der Inhalt der SD-Karte weicht von dem Inhalt ab, der geschrieben werden sollte.</translation>
     </message>
@@ -207,22 +207,22 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
 <context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="170"/>
+        <location filename="../imagewriter.cpp" line="171"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>Die Speicherkapazität ist nicht groß genug.&lt;br&gt;Sie muss mindestens %1 GB betragen.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="176"/>
+        <location filename="../imagewriter.cpp" line="177"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Die Eingabedatei ist kein gültiges Disk-Image.&lt;br&gt;Die Dateigröße%1 Bytes ist kein Vielfaches von 512 Bytes.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="200"/>
+        <location filename="../imagewriter.cpp" line="201"/>
         <source>Downloading and writing image</source>
         <translation>Image herunterladen und schreiben</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="417"/>
+        <location filename="../imagewriter.cpp" line="424"/>
         <source>Select image</source>
         <translation>Image wählen</translation>
     </message>
@@ -297,7 +297,7 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="864"/>
+        <location filename="../main.qml" line="877"/>
         <source>CHOOSE SD CARD</source>
         <translation>SD-KARTE WÄHLEN</translation>
     </message>
@@ -323,7 +323,7 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     </message>
     <message>
         <location filename="../main.qml" line="223"/>
-        <location filename="../main.qml" line="802"/>
+        <location filename="../main.qml" line="815"/>
         <source>Cancelling...</source>
         <translation>Abbrechen...</translation>
     </message>
@@ -334,14 +334,14 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     </message>
     <message>
         <location filename="../main.qml" line="238"/>
-        <location filename="../main.qml" line="825"/>
-        <location filename="../main.qml" line="882"/>
+        <location filename="../main.qml" line="838"/>
+        <location filename="../main.qml" line="895"/>
         <source>Finalizing...</source>
         <translation>Finalisieren...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="384"/>
-        <location filename="../main.qml" line="858"/>
+        <location filename="../main.qml" line="871"/>
         <source>Erase</source>
         <translation>Löschen</translation>
     </message>
@@ -423,7 +423,17 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="805"/>
+        <location filename="../main.qml" line="776"/>
+        <source>Update available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="777"/>
+        <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="818"/>
         <source>Writing... %1%</source>
         <translation>Schreiben... %1%</translation>
     </message>
@@ -433,53 +443,53 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
         <translation>Alle vorhandenen Daten auf &apos;%1&apos; werden gelöscht.&lt;br&gt;Möchten sie wirklich fortfahren?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="784"/>
+        <location filename="../main.qml" line="797"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Fehler beim Herunterladen der Betriebssystemsliste aus dem Internet</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="828"/>
+        <location filename="../main.qml" line="841"/>
         <source>Verifying... %1%</source>
         <translation>Verifizierung... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="835"/>
+        <location filename="../main.qml" line="848"/>
         <source>Preparing to write... (%1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="850"/>
+        <location filename="../main.qml" line="863"/>
         <source>Error</source>
         <translation>Fehler</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="857"/>
+        <location filename="../main.qml" line="870"/>
         <source>Write Successful</source>
         <translation>Schreiben erfolgreich</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="859"/>
+        <location filename="../main.qml" line="872"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; wurde geleert&lt;br&gt;&lt;br&gt;Sie können die SD-Karte nun aus dem Lesegerät entfernen</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="861"/>
+        <location filename="../main.qml" line="874"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; wurde auf&lt;b&gt;%2&lt;/b&gt; geschrieben&lt;br&gt;&lt;br&gt;Sie können die SD-Karte nun aus dem Lesegerät entfernen</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="889"/>
-        <location filename="../main.qml" line="931"/>
+        <location filename="../main.qml" line="902"/>
+        <location filename="../main.qml" line="955"/>
         <source>Error parsing os_list.json</source>
         <translation>Fehler beim Parsen von os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="969"/>
+        <location filename="../main.qml" line="993"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Verbinden Sie zuerst einen USB-Stick mit Images.&lt;br&gt;Die Images müssen sich im Wurzelverzeichnes des USB-Sticks befinden.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="984"/>
+        <location filename="../main.qml" line="1008"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>Die Speicherkarte ist schreibgeschützt.&lt;br&gt;Drücken Sie den Schutzschalter auf der linken Seite nach oben, und versuchen Sie es erneut.</translation>
     </message>

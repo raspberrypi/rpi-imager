@@ -78,42 +78,42 @@
         <translation>将MBR清零时写入错误</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="736"/>
+        <location filename="../downloadthread.cpp" line="741"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>从存储读取数据时错误。&lt;br&gt;SD卡可能已损坏。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="391"/>
+        <location filename="../downloadthread.cpp" line="395"/>
         <source>Access denied error while writing file to disk.</source>
         <translation>将文件写入磁盘时访问被拒绝错误。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="396"/>
+        <location filename="../downloadthread.cpp" line="400"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation>受控文件夹访问似乎已启用。 请将rpi-imager.exe和fat32format.exe都添加到允许的应用程序列表中，然后重试。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="402"/>
+        <location filename="../downloadthread.cpp" line="406"/>
         <source>Error writing file to disk</source>
         <translation>将文件写入磁盘时出错</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="421"/>
+        <location filename="../downloadthread.cpp" line="425"/>
         <source>Error downloading: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="639"/>
+        <location filename="../downloadthread.cpp" line="644"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>刷新时写入存储时出错</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="646"/>
+        <location filename="../downloadthread.cpp" line="651"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>在fsync时写入存储时出错</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="627"/>
+        <location filename="../downloadthread.cpp" line="632"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>下载的文件损坏。 哈希值不匹配</translation>
     </message>
@@ -128,17 +128,17 @@
         <translation>尝试将卡的最后一部分清零时写入错误。&lt;br&gt;卡的容量可能不正确（可能是扩容假卡）</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="350"/>
+        <location filename="../downloadthread.cpp" line="353"/>
         <source>starting download</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="680"/>
+        <location filename="../downloadthread.cpp" line="685"/>
         <source>Error writing first block (partition table)</source>
         <translation>写入第一个块（分区表）时出错</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="755"/>
+        <location filename="../downloadthread.cpp" line="760"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>验证写入失败。 SD卡的内容与写入的内容不同。</translation>
     </message>
@@ -201,22 +201,22 @@
 <context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="170"/>
+        <location filename="../imagewriter.cpp" line="171"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>存储容量不足。&lt;br&gt;至少需要%1 GB的空白空间</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="176"/>
+        <location filename="../imagewriter.cpp" line="177"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>输入文件不是有效的磁盘映像。&lt;br&gt;文件大小%1字节不是512字节的倍数。</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="200"/>
+        <location filename="../imagewriter.cpp" line="201"/>
         <source>Downloading and writing image</source>
         <translation>下载和写入镜像</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="417"/>
+        <location filename="../imagewriter.cpp" line="424"/>
         <source>Select image</source>
         <translation>选择镜像</translation>
     </message>
@@ -296,7 +296,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="864"/>
+        <location filename="../main.qml" line="877"/>
         <source>CHOOSE SD CARD</source>
         <translation>选择SD卡</translation>
     </message>
@@ -306,7 +306,7 @@
         <translation>烧录</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="805"/>
+        <location filename="../main.qml" line="818"/>
         <source>Writing... %1%</source>
         <translation>写入中...%1%</translation>
     </message>
@@ -332,7 +332,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="223"/>
-        <location filename="../main.qml" line="802"/>
+        <location filename="../main.qml" line="815"/>
         <source>Cancelling...</source>
         <translation>取消中...</translation>
     </message>
@@ -343,14 +343,14 @@
     </message>
     <message>
         <location filename="../main.qml" line="238"/>
-        <location filename="../main.qml" line="825"/>
-        <location filename="../main.qml" line="882"/>
+        <location filename="../main.qml" line="838"/>
+        <location filename="../main.qml" line="895"/>
         <source>Finalizing...</source>
         <translation>完成中...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="384"/>
-        <location filename="../main.qml" line="858"/>
+        <location filename="../main.qml" line="871"/>
         <source>Erase</source>
         <translation>擦除</translation>
     </message>
@@ -395,28 +395,38 @@
         <translation>&apos;%1&apos;上的所有现有数据将被删除。&lt;br&gt;确定要继续吗？</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="835"/>
+        <location filename="../main.qml" line="776"/>
+        <source>Update available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="777"/>
+        <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="848"/>
         <source>Preparing to write... (%1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="859"/>
+        <location filename="../main.qml" line="872"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1 &lt;/ b&gt;已被删除&lt;br&gt; &lt;br&gt;您现在可以从读取器中取出SD卡</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="889"/>
-        <location filename="../main.qml" line="931"/>
+        <location filename="../main.qml" line="902"/>
+        <location filename="../main.qml" line="955"/>
         <source>Error parsing os_list.json</source>
         <translation>解析 os_list.json 错误</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="969"/>
+        <location filename="../main.qml" line="993"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>连接包含镜像的U盘。&lt;br&gt;镜像必须位于U盘的根文件夹中。</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="984"/>
+        <location filename="../main.qml" line="1008"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>SD卡具有写保护。&lt;br&gt;尝试向上推SD卡的左侧的锁定开关，然后重试。</translation>
     </message>
@@ -461,27 +471,27 @@
         <translation type="vanished">继续</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="784"/>
+        <location filename="../main.qml" line="797"/>
         <source>Error downloading OS list from Internet</source>
         <translation>下载镜像列表错误</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="828"/>
+        <location filename="../main.qml" line="841"/>
         <source>Verifying... %1%</source>
         <translation>验证文件中...%1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="850"/>
+        <location filename="../main.qml" line="863"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="857"/>
+        <location filename="../main.qml" line="870"/>
         <source>Write Successful</source>
         <translation>烧录成功</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="861"/>
+        <location filename="../main.qml" line="874"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; 已经成功烧录到 &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;上了，你可以卸载SD卡了</translation>
     </message>

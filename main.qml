@@ -767,6 +767,19 @@ ApplicationWindow {
         }
     }
 
+    MsgPopup {
+        id: updatepopup
+        continueButton: false
+        yesButton: true
+        noButton: true
+        property url url
+        title: qsTr("Update available")
+        text: qsTr("There is a newer version of Imager available.<br>Would you like to visit the website to download it?")
+        onYes: {
+            Qt.openUrlExternally(url)
+        }
+    }
+
     /* Utility functions */
     function httpRequest(url, callback) {
         var xhr = new XMLHttpRequest();
@@ -892,6 +905,16 @@ ApplicationWindow {
             var oslist = o["os_list"]
             for (var i in oslist) {
                 osmodel.insert(osmodel.count-2, oslist[i])
+            }
+
+            if ("imager" in o) {
+                var imager = o["imager"]
+                if ("latest_version" in imager && "url" in imager) {
+                    if (imageWriter.isVersionNewer(imager["latest_version"])) {
+                        updatepopup.url = imager["url"]
+                        updatepopup.openPopup()
+                    }
+                }
             }
         })
     }

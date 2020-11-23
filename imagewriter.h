@@ -66,6 +66,9 @@ public:
     /* Function to return version */
     Q_INVOKABLE QString constantVersion() const;
 
+    /* Returns true if version argument is newer than current program */
+    Q_INVOKABLE bool isVersionNewer(const QString &version);
+
     /* Set custom repository */
     Q_INVOKABLE void setCustomOsListUrl(const QUrl &url);
 

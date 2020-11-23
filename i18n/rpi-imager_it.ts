@@ -70,7 +70,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="277"/>
         <source>zeroing out first and last MB of drive</source>
-        <translation>azzera il primo e l'ultimo MB dell&apos;unità</translation>
+        <translation>azzera il primo e l&apos;ultimo MB dell&apos;unità</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="283"/>
@@ -78,43 +78,43 @@
         <translation>Errore scrittura durante azzeramento MBR</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="736"/>
+        <location filename="../downloadthread.cpp" line="741"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>Errore lettura dallo storage.&lt;br&gt;La scheda SD potrebbe essere danneggiata.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="391"/>
+        <location filename="../downloadthread.cpp" line="395"/>
         <source>Access denied error while writing file to disk.</source>
         <translation>Errore accesso negato durante la scrittura del file su disco.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="396"/>
+        <location filename="../downloadthread.cpp" line="400"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation>Sembra sia abilitato l&apos;accesso controllato alle cartelle. 
 Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos;elenco delle app consentite e riprova.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="402"/>
+        <location filename="../downloadthread.cpp" line="406"/>
         <source>Error writing file to disk</source>
         <translation>Errore scrittura file su disco</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="421"/>
+        <location filename="../downloadthread.cpp" line="425"/>
         <source>Error downloading: %1</source>
         <translation>Errore download: %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="639"/>
+        <location filename="../downloadthread.cpp" line="644"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>Errore scrittura nello storage (durante fluhisng)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="646"/>
+        <location filename="../downloadthread.cpp" line="651"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>Errore scrittura nello storage (durante fsync)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="627"/>
+        <location filename="../downloadthread.cpp" line="632"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>Downlaod corrotto.&lt;br&gt;L&apos;hash non corrisponde</translation>
     </message>
@@ -129,17 +129,17 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Errore di scrittura durante il tentativo di azzerare l&apos;ultima parte della scheda.&lt;br&gt;La scheda potrebbe riportare una capacità maggiore di quella reale (possibile contraffazione).</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="350"/>
+        <location filename="../downloadthread.cpp" line="353"/>
         <source>starting download</source>
         <translation>avvio download</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="680"/>
+        <location filename="../downloadthread.cpp" line="685"/>
         <source>Error writing first block (partition table)</source>
         <translation>Errore scrittura primo blocco (tabella partizione)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="755"/>
+        <location filename="../downloadthread.cpp" line="760"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Verifica scrittura fallita.&lt;br&gt;Il contenuto della SD è differente da quello che vi è stato scritto.</translation>
     </message>
@@ -202,22 +202,22 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
 <context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="170"/>
+        <location filename="../imagewriter.cpp" line="171"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>La capacità dello storage non è sufficiente.&lt;br&gt;Sono necessari almeno %1 GB.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="176"/>
+        <location filename="../imagewriter.cpp" line="177"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Il file sorgente non è un&apos;immagine disco valida.&lt;br&gt;La dimensione file %1 non è un multiplo di 512 byte.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="200"/>
+        <location filename="../imagewriter.cpp" line="201"/>
         <source>Downloading and writing image</source>
         <translation>Download e scrittura file immagine</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="417"/>
+        <location filename="../imagewriter.cpp" line="424"/>
         <source>Select image</source>
         <translation>Seleziona file immagine</translation>
     </message>
@@ -292,7 +292,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="864"/>
+        <location filename="../main.qml" line="877"/>
         <source>CHOOSE SD CARD</source>
         <translation>SCEGLI SCHEDA SD</translation>
     </message>
@@ -318,7 +318,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <location filename="../main.qml" line="223"/>
-        <location filename="../main.qml" line="802"/>
+        <location filename="../main.qml" line="815"/>
         <source>Cancelling...</source>
         <translation>Annullamento...</translation>
     </message>
@@ -329,14 +329,14 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <location filename="../main.qml" line="238"/>
-        <location filename="../main.qml" line="825"/>
-        <location filename="../main.qml" line="882"/>
+        <location filename="../main.qml" line="838"/>
+        <location filename="../main.qml" line="895"/>
         <source>Finalizing...</source>
         <translation>Finalizzazione...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="384"/>
-        <location filename="../main.qml" line="858"/>
+        <location filename="../main.qml" line="871"/>
         <source>Erase</source>
         <translation>Cancella</translation>
     </message>
@@ -418,7 +418,17 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Preparazione scrittura...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="805"/>
+        <location filename="../main.qml" line="776"/>
+        <source>Update available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="777"/>
+        <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="818"/>
         <source>Writing... %1%</source>
         <translation>Scrittura...%1</translation>
     </message>
@@ -428,53 +438,53 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Tutti i dati esistenti in &apos;%1&apos; verranno eliminati.&lt;br&gt;Sei sicuro di voler continuare?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="784"/>
+        <location filename="../main.qml" line="797"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Errore durante download elenco SO da internet</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="828"/>
+        <location filename="../main.qml" line="841"/>
         <source>Verifying... %1%</source>
         <translation>Verifica...%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="835"/>
+        <location filename="../main.qml" line="848"/>
         <source>Preparing to write... (%1)</source>
         <translation>Preparazione scrittura... (%1)</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="850"/>
+        <location filename="../main.qml" line="863"/>
         <source>Error</source>
         <translation>Errore</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="857"/>
+        <location filename="../main.qml" line="870"/>
         <source>Write Successful</source>
         <translation>Scrittura completata senza errori</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="859"/>
+        <location filename="../main.qml" line="872"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>Azzeramento di &lt;b&gt;%1&lt;/b&gt; completato&lt;br&gt;&lt;br&gt;Ora puoi rimuovere la scheda SD dal lettore</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="861"/>
+        <location filename="../main.qml" line="874"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>Scrittura di &lt;b&gt;%1&lt;/b&gt; in &lt;b&gt;%2&lt;/b&gt;completata&lt;br&gt;&lt;br&gt;Ora puoi rimuovere la scheda SD dal lettore</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="889"/>
-        <location filename="../main.qml" line="931"/>
+        <location filename="../main.qml" line="902"/>
+        <location filename="../main.qml" line="955"/>
         <source>Error parsing os_list.json</source>
         <translation>Errore durante analisi file os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="969"/>
+        <location filename="../main.qml" line="993"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Prima collega una chiavetta USB contenente il file immagine.&lt;br&gt;Il file immagine deve essere presente nella cartella principale della chiavetta USB.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="984"/>
+        <location filename="../main.qml" line="1008"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>La scheda SD è protetta da scrittura.&lt;br&gt;Sposta verso l&apos;alto l&apos;interruttore LOCK sul lato sinistro della scheda SD e riprova.</translation>
     </message>
