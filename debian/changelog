@@ -1,3 +1,16 @@
+rpi-imager (1.5) unstable; urgency=medium
+
+  * More verbose progress/error reporting
+  * Reconnect if download stalls for more than one minute
+  * Remember last selected custom image path
+  * Add German/French/Italian/Slovak/Turkish translations
+  * Fix multi-level subitems_url
+  * Add update notification support
+  * Allow translators to specify external .qm file for testing
+  * Remove dependency on qml-module-qt-labs-settings
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Tue, 24 Nov 2020 10:38:21 +0100
+
 rpi-imager (1.4) unstable; urgency=medium
 
   * Add basic accessibility support
