@@ -122,7 +122,7 @@ LangString termMsg ${LANG_DUTCH} "Raspberry Pi Imager is momenteel actief.$\nWil
 LangString stopMsg ${LANG_DUTCH} "Bezig met afsluiten Raspberry Pi Imager"
 LangString win7Msg ${LANG_DUTCH} "Minimaal Windows 7 is vereist"
 LangString termMsg ${LANG_ITALIAN} "Raspberry Pi Imager sembra essere in esecuzione e occupato.$\nVuoi terminare il processo Raspberry Pi Imager?"
-LangString stopMsg ${LANG_ITALIAN} "Terminare il processo Raspberry Pi Imager"
+LangString stopMsg ${LANG_ITALIAN} "Chiusura processo Raspberry Pi Imager"
 LangString win7Msg ${LANG_ITALIAN} "Per l'esecuzione del programma è richiesto Windows 7 o versioni successive"
 
 ######################################################################
