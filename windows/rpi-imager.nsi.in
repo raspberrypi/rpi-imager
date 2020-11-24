@@ -20,9 +20,6 @@
 # Window to close if running
 !define EXE_TO_TERMINATE "rpi-imager.exe"
 
-LangString termMsg 1033 "Raspberry Pi Imager seems to be running and busy.$\nDo you want to terminate process?"
-LangString stopMsg 1033 "Stopping Raspberry Pi Imager"
-
 ######################################################################
 
 VIProductVersion "@IMAGER_VERSION_MAJOR@.@IMAGER_VERSION_MINOR@.0.0"
@@ -110,7 +107,23 @@ InstallDir "$PROGRAMFILES\Raspberry Pi Imager"
 
 !insertmacro MUI_UNPAGE_FINISH
 
+######################################################################
+# TRANSLATIONS
+######################################################################
+
 !insertmacro MUI_LANGUAGE "English"
+!insertmacro MUI_LANGUAGE "Dutch"
+!insertmacro MUI_LANGUAGE "Italian"
+
+LangString termMsg ${LANG_ENGLISH} "Raspberry Pi Imager seems to be running and busy.$\nDo you want to terminate process?"
+LangString stopMsg ${LANG_ENGLISH} "Stopping Raspberry Pi Imager"
+LangString win7Msg ${LANG_ENGLISH} "Windows 7 or above required"
+LangString termMsg ${LANG_DUTCH} "Raspberry Pi Imager is momenteel actief.$\nWilt u het programma afsluiten?"
+LangString stopMsg ${LANG_DUTCH} "Bezig met afsluiten Raspberry Pi Imager"
+LangString win7Msg ${LANG_DUTCH} "Minimaal Windows 7 is vereist"
+LangString termMsg ${LANG_ITALIAN} "Raspberry Pi Imager sembra essere in esecuzione e occupato.$\nVuoi terminare il processo Raspberry Pi Imager?"
+LangString stopMsg ${LANG_ITALIAN} "Terminare il processo Raspberry Pi Imager"
+LangString win7Msg ${LANG_ITALIAN} "Per l'esecuzione del programma è richiesto Windows 7 o versioni successive"
 
 ######################################################################
 
@@ -1121,7 +1134,7 @@ Function .onInit
   Quit  ; just bail out quickly when running the "inner" installer
 !else
   ${IfNot} ${AtLeastWin7}
-    MessageBox MB_OK "Windows 7 or above required"
+    MessageBox MB_OK "$(win7Msg)"
     Quit
   ${EndIf}
 !endif
