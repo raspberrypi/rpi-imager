@@ -8,6 +8,8 @@ rpi-imager (1.5) unstable; urgency=medium
   * Add update notification support
   * Allow translators to specify external .qm file for testing
   * Remove dependency on qml-module-qt-labs-settings
+  * Enables telemetry collecting information about which images from
+    repository are most popular
 
  -- Floris Bos <bos@je-eigen-domein.nl>  Tue, 24 Nov 2020 10:38:21 +0100
 

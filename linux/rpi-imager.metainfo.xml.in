@@ -57,5 +57,7 @@
   <releases>
     <release version="@IMAGER_VERSION_STR@" />
   </releases>
-  <content_rating type="oars-1.1" />
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-info">moderate</content_attribute>
+  </content_rating>
 </component>

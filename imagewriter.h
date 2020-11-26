@@ -28,7 +28,7 @@ public:
     void setEngine(QQmlApplicationEngine *engine);
 
     /* Set URL to download from, and if known download length and uncompressed length */
-    Q_INVOKABLE void setSrc(const QUrl &url, quint64 downloadLen = 0, quint64 extrLen = 0, QByteArray expectedHash = "", bool multifilesinzip = false);
+    Q_INVOKABLE void setSrc(const QUrl &url, quint64 downloadLen = 0, quint64 extrLen = 0, QByteArray expectedHash = "", bool multifilesinzip = false, QString parentcategory = "", QString osname = "");
 
     /* Set device to write to */
     Q_INVOKABLE void setDst(const QString &device, quint64 deviceSize = 0);
@@ -120,7 +120,7 @@ protected slots:
 
 protected:
     QUrl _src, _repo;
-    QString _dst, _cacheFileName;
+    QString _dst, _cacheFileName, _parentCategory, _osName;
     QByteArray _expectedHash, _cachedFileHash;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;

@@ -9,6 +9,7 @@
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "driveformatthread.h"
 #include "localfileextractthread.h"
+#include "downloadstatstelemetry.h"
 #include <archive.h>
 #include <archive_entry.h>
 #include <QFileInfo>
@@ -112,13 +113,15 @@ void ImageWriter::setEngine(QQmlApplicationEngine *engine)
 }
 
 /* Set URL to download from */
-void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip)
+void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname)
 {
     _src = url;
     _downloadLen = downloadLen;
     _extrLen = extrLen;
     _expectedHash = expectedHash;
     _multipleFilesInZip = multifilesinzip;
+    _parentCategory = parentcategory;
+    _osName = osname;
 
     if (!_downloadLen && url.isLocalFile())
     {
@@ -191,6 +194,9 @@ void ImageWriter::startWrite()
     else if (compressed)
     {
         _thread = new DownloadExtractThread(urlstr, _dst.toLatin1(), _expectedHash, this);
+        DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), this);
+        connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
+        tele->start();
     }
     else
     {
