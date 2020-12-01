@@ -109,10 +109,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         onClicked: {
                             ospopup.open()
-                            if (osswipeview.currentIndex == 0)
-                                oslist.forceActiveFocus()
-                            else
-                                suboslist.forceActiveFocus()
+                            osswipeview.currentItem.forceActiveFocus()
                         }
                         Material.background: "#ffffff"
                         Material.foreground: "#c51a4a"
@@ -341,30 +338,49 @@ ApplicationWindow {
                                 selectOSitem(model.get(currentIndex), true)
                         }
                     }
-
-                    ListView {
-                        id: suboslist
-                        model: subosmodel
-                        currentIndex: -1
-                        delegate: osdelegate
-                        width: window.width-100
-                        height: window.height-100
-                        boundsBehavior: Flickable.StopAtBounds
-                        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
-                        ScrollBar.vertical: ScrollBar {
-                            width: 10
-                            policy: suboslist.contentHeight > suboslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-                        }
-                        Keys.onSpacePressed: {
-                            if (currentIndex != -1)
-                                selectOSitem(model.get(currentIndex))
-                        }
-                        Accessible.onPressAction: {
-                            if (currentIndex != -1)
-                                selectOSitem(model.get(currentIndex))
-                        }
-                    }
                 }
+            }
+        }
+    }
+
+    Component {
+        id: suboslist
+
+        ListView {
+            model: ListModel {
+                ListElement {
+                    url: ""
+                    icon: "icons/ic_chevron_left_40px.svg"
+                    extract_size: 0
+                    image_download_size: 0
+                    extract_sha256: ""
+                    contains_multiple_files: false
+                    release_date: ""
+                    subitems_url: "internal://back"
+                    subitems: []
+                    name: qsTr("Back")
+                    description: qsTr("Go back to main menu")
+                    tooltip: ""
+                }
+            }
+
+            currentIndex: -1
+            delegate: osdelegate
+            width: window.width-100
+            height: window.height-100
+            boundsBehavior: Flickable.StopAtBounds
+            highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+            ScrollBar.vertical: ScrollBar {
+                width: 10
+                policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+            }
+            Keys.onSpacePressed: {
+                if (currentIndex != -1)
+                    selectOSitem(model.get(currentIndex))
+            }
+            Accessible.onPressAction: {
+                if (currentIndex != -1)
+                    selectOSitem(model.get(currentIndex))
             }
         }
     }
@@ -398,25 +414,6 @@ ApplicationWindow {
             if (imageWriter.isOnline()) {
                 fetchOSlist();
             }
-        }
-    }
-
-    ListModel {
-        id: subosmodel
-
-        ListElement {
-            url: ""
-            icon: "icons/ic_chevron_left_40px.svg"
-            extract_size: 0
-            image_download_size: 0
-            extract_sha256: ""
-            contains_multiple_files: false
-            release_date: ""
-            subitems_url: "internal://back"
-            subitems: []
-            name: qsTr("Back")
-            description: qsTr("Go back to main menu")
-            tooltip: ""
         }
     }
 
@@ -896,14 +893,32 @@ ApplicationWindow {
         progressText.text = qsTr("Finalizing...")
     }
 
+    function oslistFromJson(o) {
+        var lang_country = Qt.locale().name
+        if ("os_list_"+lang_country in o) {
+            return o["os_list_"+lang_country]
+        }
+        if (lang_country.includes("_")) {
+            var lang = lang_country.substr(0, lang_country.indexOf("_"))
+            if ("os_list_"+lang in o) {
+                return o["os_list_"+lang]
+            }
+        }
+
+        if (!"os_list" in o) {
+            onError(qsTr("Error parsing os_list.json"))
+            return false
+        }
+
+        return o["os_list"]
+    }
+
     function fetchOSlist() {
         httpRequest(imageWriter.constantOsListUrl(), function (x) {
             var o = JSON.parse(x.responseText)
-            if (!"os_list" in o) {
-                onError(qsTr("Error parsing os_list.json"))
-                return;
-            }
-            var oslist = o["os_list"]
+            var oslist = oslistFromJson(o)
+            if (oslist === false)
+                return
             for (var i in oslist) {
                 osmodel.insert(osmodel.count-2, oslist[i])
             }
@@ -920,56 +935,60 @@ ApplicationWindow {
         })
     }
 
+    function newSublist() {
+        if (osswipeview.currentIndex == (osswipeview.count-1))
+        {
+            var newlist = suboslist.createObject(osswipeview)
+            osswipeview.addItem(newlist)
+        }
+
+        var m = osswipeview.itemAt(osswipeview.currentIndex+1).model
+
+        if (m.count>1)
+        {
+            m.remove(1, m.count-1)
+        }
+
+        return m
+    }
+
     function selectOSitem(d, selectFirstSubitem)
     {
         if (typeof(d.subitems) == "object" && d.subitems.count) {
-            if (subosmodel.count>1)
-            {
-                subosmodel.remove(1, subosmodel.count-1)
-            }
+            var m = newSublist()
+
             for (var i=0; i<d.subitems.count; i++)
             {
-                subosmodel.append(d.subitems.get(i))
+                m.append(d.subitems.get(i))
             }
 
-            if (selectFirstSubitem === true)
-                suboslist.currentIndex = 0
-            else
-                suboslist.currentIndex = -1
-            osswipeview.setCurrentIndex(1)
+            osswipeview.itemAt(osswipeview.currentIndex+1).currentIndex = (selectFirstSubitem === true) ? 0 : -1
+            osswipeview.incrementCurrentIndex()
             ospopup.categorySelected = d.name
         } else if (typeof(d.subitems_url) == "string" && d.subitems_url !== "") {
             if (d.subitems_url === "internal://back")
             {
-                osswipeview.setCurrentIndex(0)
+                osswipeview.decrementCurrentIndex()
                 ospopup.categorySelected = ""
             }
             else
             {
                 ospopup.categorySelected = d.name
                 var suburl = d.subitems_url
-                if (subosmodel.count>1)
-                {
-                    subosmodel.remove(1, subosmodel.count-1)
-                }
+                var m = newSublist()
 
                 httpRequest(suburl, function (x) {
                     var o = JSON.parse(x.responseText)
-                    if (!"os_list" in o) {
-                        onError(qsTr("Error parsing os_list.json"))
-                        return;
-                    }
-                    var oslist = o["os_list"]
+                    var oslist = oslistFromJson(o)
+                    if (oslist === false)
+                        return
                     for (var i in oslist) {
-                        subosmodel.append(oslist[i])
+                        m.append(oslist[i])
                     }
                 })
 
-                if (selectFirstSubitem === true)
-                    suboslist.currentIndex = 0
-                else
-                    suboslist.currentIndex = -1
-                osswipeview.setCurrentIndex(1)
+                osswipeview.itemAt(osswipeview.currentIndex+1).currentIndex = (selectFirstSubitem === true) ? 0 : -1
+                osswipeview.incrementCurrentIndex()
             }
         } else if (d.url === "") {
             if (!imageWriter.isEmbeddedMode()) {
@@ -977,20 +996,14 @@ ApplicationWindow {
             }
             else {
                 if (imageWriter.mountUsbSourceMedia()) {
-                    if (subosmodel.count>1)
-                    {
-                        subosmodel.remove(1, subosmodel.count-1)
-                    }
+                    var m = newSublist()
 
                     var oslist = JSON.parse(imageWriter.getUsbSourceOSlist())
                     for (var i in oslist) {
-                        subosmodel.append(oslist[i])
+                        m.append(oslist[i])
                     }
-                    if (selectFirstSubitem === true)
-                        suboslist.currentIndex = 0
-                    else
-                        suboslist.currentIndex = -1
-                    osswipeview.setCurrentIndex(1)
+                    osswipeview.itemAt(osswipeview.currentIndex+1).currentIndex = (selectFirstSubitem === true) ? 0 : -1
+                    osswipeview.incrementCurrentIndex()
                 }
                 else
                 {
