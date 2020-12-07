@@ -194,9 +194,12 @@ void ImageWriter::startWrite()
     else if (compressed)
     {
         _thread = new DownloadExtractThread(urlstr, _dst.toLatin1(), _expectedHash, this);
-        DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), this);
-        connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
-        tele->start();
+        if (_repo.toString() == OSLIST_URL)
+        {
+            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), this);
+            connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
+            tele->start();
+        }
     }
     else
     {
