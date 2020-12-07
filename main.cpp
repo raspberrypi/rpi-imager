@@ -61,6 +61,7 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     QTranslator translator;
     QString customQm;
+    QSettings settings;
 
     /* Parse commandline arguments (if any) */
     QString customRepo;
@@ -144,7 +145,7 @@ int main(int argc, char *argv[])
         }
         else if (args[i] == "--help")
         {
-            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [<image file to write>]" << endl;
+            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--disable-telemetry] [<image file to write>]" << endl;
             return 0;
         }
         else if (args[i] == "--version")
@@ -152,6 +153,18 @@ int main(int argc, char *argv[])
             cerr << args[0] << " version " << imageWriter.constantVersion() << endl;
             cerr << "Repository: " << imageWriter.constantOsListUrl().toString() << endl;
             return 0;
+        }
+        else if (args[i] == "--disable-telemetry")
+        {
+            cerr << "Disabled telemetry" << endl;
+            settings.setValue("telemetry", false);
+            settings.sync();
+        }
+        else if (args[i] == "--enable-telemetry")
+        {
+            cerr << "Using default telemetry setting" << endl;
+            settings.remove("telemetry");
+            settings.sync();
         }
         else
         {
@@ -193,12 +206,10 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(networkOnline()), qmlwindow, SLOT(fetchOSlist()));
 
 #ifndef QT_NO_WIDGETS
-    QSettings settings;
-
     /* Set window position */
     auto screensize = app.primaryScreen()->geometry();
-    int x = settings.value("General/x", -1).toInt();
-    int y = settings.value("General/y", -1).toInt();
+    int x = settings.value("x", -1).toInt();
+    int y = settings.value("y", -1).toInt();
     int w = qmlwindow->property("width").toInt();
     int h = qmlwindow->property("height").toInt();
 
@@ -228,8 +239,8 @@ int main(int argc, char *argv[])
     int newY = qmlwindow->property("y").toInt();
     if (x != newX || y != newY)
     {
-        settings.setValue("General/x", newX);
-        settings.setValue("General/y", newY);
+        settings.setValue("x", newX);
+        settings.setValue("y", newY);
         settings.sync();
     }
 #endif

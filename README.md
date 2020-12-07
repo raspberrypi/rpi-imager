@@ -128,18 +128,18 @@ The download counts are retained for 90 days and the last 1,500 requests to the 
 On Windows, you can opt out of telemetry by disabling it in the Registry:
 
 ```
-reg add "HKCU\Software\Raspberry Pi\Imager\General" /v telemetry /t REG_DWORD /d 0
+reg add "HKCU\Software\Raspberry Pi\Imager" /v telemetry /t REG_DWORD /d 0
 ```
 
-On Linux, add the following to `~/.config/Raspberry Pi/Imager.conf`:
+On Linux, run `rpi-imager --disable-telemetry` or add the following to `~/.config/Raspberry Pi/Imager.conf`:
 
 ```ini
-[%General]
-telemetry=0
+[General]
+telemetry=false
 ```
 
 On macOS, disable it by editing the property list for the application:
 
 ```
-defaults write org.raspberrypi.Imager.plist General.telemetry -bool NO
+defaults write org.raspberrypi.Imager.plist telemetry -bool NO
 ```
