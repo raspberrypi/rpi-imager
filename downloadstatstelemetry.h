@@ -18,7 +18,7 @@ public:
 
 protected:
     CURL *_c;
-    QByteArray _url, _useragent;
+    QByteArray _url, _useragent, _postfields;
     virtual void run();
     static size_t _curl_write_callback(char *ptr, size_t size, size_t nmemb, void *userdata);
     static size_t _curl_header_callback( void *ptr, size_t size, size_t nmemb, void *userdata);

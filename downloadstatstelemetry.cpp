@@ -10,9 +10,11 @@
  */
 
 DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByteArray &parentcategory, const QByteArray &osname, QObject *parent)
-    : QThread(parent)
+    : QThread(parent), _url(TELEMETRY_URL)
 {
-    _url = QByteArray(TELEMETRY_URL).replace("$imageurl", QUrl::toPercentEncoding(url)).replace("$parentcategory", QUrl::toPercentEncoding(parentcategory)).replace("$osname", QUrl::toPercentEncoding(osname));
+    _postfields = "url="+QUrl::toPercentEncoding(url)
+            +"&os="+QUrl::toPercentEncoding(parentcategory)
+            +"&image="+QUrl::toPercentEncoding(osname);
     _useragent = "Mozilla/5.0 rpi-imager/" IMAGER_VERSION_STR;
 }
 
@@ -27,6 +29,8 @@ void DownloadStatsTelemetry::run()
     curl_easy_setopt(_c, CURLOPT_WRITEFUNCTION, &DownloadStatsTelemetry::_curl_write_callback);
     curl_easy_setopt(_c, CURLOPT_HEADERFUNCTION, &DownloadStatsTelemetry::_curl_header_callback);
     curl_easy_setopt(_c, CURLOPT_URL, _url.constData());
+    curl_easy_setopt(_c, CURLOPT_POSTFIELDSIZE, _postfields.length());
+    curl_easy_setopt(_c, CURLOPT_POSTFIELDS, _postfields.constData());
     curl_easy_setopt(_c, CURLOPT_USERAGENT, _useragent.constData());
     curl_easy_setopt(_c, CURLOPT_CONNECTTIMEOUT, 10);
     curl_easy_setopt(_c, CURLOPT_LOW_SPEED_TIME, 10);
