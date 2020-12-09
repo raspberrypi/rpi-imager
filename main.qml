@@ -390,7 +390,7 @@ ApplicationWindow {
 
         ListElement {
             url: "internal://format"
-            icon: "icons/ic_delete_40px.svg"
+            icon: "icons/erase.png"
             extract_size: 0
             image_download_size: 0
             extract_sha256: ""
@@ -405,7 +405,7 @@ ApplicationWindow {
 
         ListElement {
             url: ""
-            icon: "icons/ic_computer_40px.svg"
+            icon: "icons/use_custom.png"
             name: qsTr("Use custom")
             description: qsTr("Select a custom .img from your computer")
         }
@@ -447,7 +447,7 @@ ApplicationWindow {
                     width: 64
 
                     Image {
-                        source: icon == "icons/ic_build_48px.svg" ? "icons/ic_build_40px.svg": icon
+                        source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
                         verticalAlignment: Image.AlignVCenter
                         height: parent.parent.parent.height
                         fillMode: Image.Pad
