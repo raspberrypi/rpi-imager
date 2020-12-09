@@ -42,7 +42,8 @@ elseif (WIN32)
     set(DEPENDENCIES acceleratedcryptographichash.cpp dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
         windows/winfile.cpp windows/winfile.h
         windows/rpi-imager.rc)
-    set(EXTRALIBS setupapi)
+    find_package(Qt5WinExtras REQUIRED)
+    set(EXTRALIBS setupapi Qt5::WinExtras)
 endif()
 
 include_directories(BEFORE .)

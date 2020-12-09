@@ -18,6 +18,7 @@
 class QQmlApplicationEngine;
 class DownloadThread;
 class QNetworkReply;
+class QWinTaskbarButton;
 
 class ImageWriter : public QObject
 {
@@ -106,6 +107,8 @@ signals:
 
 protected slots:
 
+    void startProgressPolling();
+    void stopProgressPolling();
     void pollProgress();
     void pollNetwork();
     void syncTime();
@@ -130,6 +133,9 @@ protected:
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _cachingEnabled, _embeddedMode, _online;
     QSettings _settings;
+#ifdef Q_OS_WIN
+    QWinTaskbarButton *_taskbarButton;
+#endif
 
     void _parseCompressedFile();
 };

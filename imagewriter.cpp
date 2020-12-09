@@ -34,6 +34,8 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <winioctl.h>
+#include <QWinTaskbarButton>
+#include <QWinTaskbarProgress>
 #endif
 
 ImageWriter::ImageWriter(QObject *parent)
@@ -52,6 +54,7 @@ ImageWriter::ImageWriter(QObject *parent)
     }
 
 #ifdef Q_OS_WIN
+    _taskbarButton = nullptr;
     QProcess *p = new QProcess(this);
     p->start("net stop ShellHWDetection");
 #endif
@@ -207,8 +210,6 @@ void ImageWriter::startWrite()
         _thread->setInputBufferSize(IMAGEWRITER_UNCOMPRESSED_BLOCKSIZE);
     }
 
-    _powersave.applyBlock(tr("Downloading and writing image"));
-
     connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
@@ -264,8 +265,7 @@ void ImageWriter::startWrite()
         _thread->start();
     }
 
-    _dlnow = 0; _verifynow = 0;
-    _polltimer.start(PROGRESS_UPDATE_INTERVAL);
+    startProgressPolling();
 }
 
 void ImageWriter::onCacheFileUpdated(QByteArray sha256)
@@ -359,6 +359,41 @@ DriveListModel *ImageWriter::getDriveList()
     return &_drivelist;
 }
 
+void ImageWriter::startProgressPolling()
+{
+    _powersave.applyBlock(tr("Downloading and writing image"));
+#ifdef Q_OS_WIN
+    if (!_taskbarButton && _engine)
+    {
+        QWindow* window = qobject_cast<QWindow*>( _engine->rootObjects().at(0) );
+        if (window)
+        {
+            _taskbarButton = new QWinTaskbarButton(this);
+            _taskbarButton->setWindow(window);
+            _taskbarButton->progress()->setMaximum(0);
+            _taskbarButton->progress()->setVisible(true);
+        }
+    }
+#endif
+    _dlnow = 0; _verifynow = 0;
+    _polltimer.start(PROGRESS_UPDATE_INTERVAL);
+}
+
+void ImageWriter::stopProgressPolling()
+{
+    _polltimer.stop();
+    pollProgress();
+#ifdef Q_OS_WIN
+    if (_taskbarButton)
+    {
+        _taskbarButton->progress()->setVisible(false);
+        _taskbarButton->deleteLater();
+        _taskbarButton = nullptr;
+    }
+#endif
+    _powersave.removeBlock();
+}
+
 void ImageWriter::pollProgress()
 {
     if (!_thread)
@@ -379,6 +414,13 @@ void ImageWriter::pollProgress()
     if (newDlNow != _dlnow)
     {
         _dlnow = newDlNow;
+#ifdef Q_OS_WIN
+        if (_taskbarButton)
+        {
+            _taskbarButton->progress()->setMaximum(dlTotal);
+            _taskbarButton->progress()->setValue(newDlNow);
+        }
+#endif
         emit downloadProgress(newDlNow, dlTotal);
     }
 
@@ -388,6 +430,13 @@ void ImageWriter::pollProgress()
     {
         _verifynow = newVerifyNow;
         quint64 verifyTotal = _thread->verifyTotal();
+#ifdef Q_OS_WIN
+        if (_taskbarButton)
+        {
+            _taskbarButton->progress()->setMaximum(verifyTotal);
+            _taskbarButton->progress()->setValue(newVerifyNow);
+        }
+#endif
         emit verifyProgress(newVerifyNow, verifyTotal);
     }
 }
@@ -402,17 +451,13 @@ void ImageWriter::setVerifyEnabled(bool verify)
 /* Relay events from download thread to QML */
 void ImageWriter::onSuccess()
 {
-    _polltimer.stop();
-    pollProgress();
-    _powersave.removeBlock();
+    stopProgressPolling();
     emit success();
 }
 
 void ImageWriter::onError(QString msg)
 {
-    _polltimer.stop();
-    pollProgress();
-    _powersave.removeBlock();
+    stopProgressPolling();
     emit error(msg);
 }
 
