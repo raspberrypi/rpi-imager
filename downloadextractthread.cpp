@@ -124,7 +124,7 @@ static inline void _checkResult(int r, struct archive *a)
 {
     if (r < ARCHIVE_OK)
         // Warning
-        cerr << archive_error_string(a) << endl;
+        cerr << archive_error_string(a) <<Qt::endl;
     if (r < ARCHIVE_WARN)
         // Fatal
         throw runtime_error(archive_error_string(a));

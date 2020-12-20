@@ -27,7 +27,7 @@ static QTextStream cerr(stderr);
 
 #ifdef Q_OS_WIN
 static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QString &str) {
-    cerr << str << endl;
+    cerr << str <<Qt::endl;
 }
 #endif
 
@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    cerr << "Argument ignored because it is not a regular file: " << args[i] << endl;;
+                    cerr << "Argument ignored because it is not a regular file: " << args[i] <<Qt::endl;;
                 }
             }
         }
@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
         {
             if (args.size()-i < 2 || args[i+1].startsWith("-"))
             {
-                cerr << "Missing URL after --repo" << endl;
+                cerr << "Missing URL after --repo" <<Qt::endl;
                 return 1;
             }
 
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
                 QFileInfo fi(customRepo);
                 if (!fi.isFile())
                 {
-                    cerr << "Custom repository file does not exist or is not a regular file: " << customRepo << endl;
+                    cerr << "Custom repository file does not exist or is not a regular file: " << customRepo <<Qt::endl;
                     return 1;
                 }
 
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
         {
             if (args.size()-i < 2 || args[i+1].startsWith("-"))
             {
-                cerr << "Missing QM file after --qm" << endl;
+                cerr << "Missing QM file after --qm" <<Qt::endl;
                 return 1;
             }
             customQm = args[++i];
@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
             QFileInfo fi(customQm);
             if (!fi.isFile())
             {
-                cerr << "Custom QM file does not exist or is not a regular file: " << customQm << endl;
+                cerr << "Custom QM file does not exist or is not a regular file: " << customQm <<Qt::endl;
                 return 1;
             }
         }
@@ -145,30 +145,30 @@ int main(int argc, char *argv[])
         }
         else if (args[i] == "--help")
         {
-            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--disable-telemetry] [<image file to write>]" << endl;
+            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--disable-telemetry] [<image file to write>]" <<Qt::endl;
             return 0;
         }
         else if (args[i] == "--version")
         {
-            cerr << args[0] << " version " << imageWriter.constantVersion() << endl;
-            cerr << "Repository: " << imageWriter.constantOsListUrl().toString() << endl;
+            cerr << args[0] << " version " << imageWriter.constantVersion() <<Qt::endl;
+            cerr << "Repository: " << imageWriter.constantOsListUrl().toString() <<Qt::endl;
             return 0;
         }
         else if (args[i] == "--disable-telemetry")
         {
-            cerr << "Disabled telemetry" << endl;
+            cerr << "Disabled telemetry" <<Qt::endl;
             settings.setValue("telemetry", false);
             settings.sync();
         }
         else if (args[i] == "--enable-telemetry")
         {
-            cerr << "Using default telemetry setting" << endl;
+            cerr << "Using default telemetry setting" <<Qt::endl;
             settings.remove("telemetry");
             settings.sync();
         }
         else
         {
-            cerr << "Ignoring unknown argument: " << args[i] << endl;
+            cerr << "Ignoring unknown argument: " << args[i] <<Qt::endl;
         }
     }
 
