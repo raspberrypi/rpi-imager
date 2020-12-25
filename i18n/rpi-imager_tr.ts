@@ -45,7 +45,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="190"/>
         <source>Authentication cancelled</source>
-        <translation type="unfinished"></translation>
+        <translation>Kimlik doğrulama iptal edildi</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="193"/>
@@ -55,7 +55,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="194"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation type="unfinished"></translation>
+        <translation>Lütfen &apos;Raspberry Pi Imager&apos;ın gizlilik ayarlarında (&apos;dosyalar ve klasörler&apos; altında veya alternatif olarak &apos;tam disk erişimi&apos;) &apos;çıkarılabilir birimlere erişim&apos; izin verilip verilmediğini doğrulayın.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="215"/>
@@ -65,12 +65,12 @@
     <message>
         <location filename="../downloadthread.cpp" line="257"/>
         <source>discarding existing data on drive</source>
-        <translation type="unfinished"></translation>
+        <translation>sürücüdeki mevcut verileri sil</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="277"/>
         <source>zeroing out first and last MB of drive</source>
-        <translation type="unfinished"></translation>
+        <translation>sürücünün ilk ve son MB'sini sıfırlama</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="283"/>
@@ -85,22 +85,22 @@
     <message>
         <location filename="../downloadthread.cpp" line="395"/>
         <source>Access denied error while writing file to disk.</source>
-        <translation type="unfinished"></translation>
+        <translation>Dosyayı diske yazarken erişim reddedildi hatası</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="400"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Kontrollü Klasör Erişimi etkin görünüyor. Lütfen izin verilen uygulamalar listesine hem rpi-imager.exe'yi hem de fat32format.exe'yi ekleyin ve tekrar deneyin.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="406"/>
         <source>Error writing file to disk</source>
-        <translation type="unfinished"></translation>
+        <translation>Dosyayı diske yazma hatası</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="425"/>
         <source>Error downloading: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>İndirilirken hata oluştu: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="644"/>
@@ -120,7 +120,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="110"/>
         <source>opening drive</source>
-        <translation type="unfinished"></translation>
+        <translation>sürücü açılıyor</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="295"/>
@@ -130,7 +130,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="353"/>
         <source>starting download</source>
-        <translation type="unfinished"></translation>
+        <translation>indirmeye başlanıyor</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="685"/>
@@ -226,7 +226,7 @@
     <message>
         <location filename="../localfileextractthread.cpp" line="34"/>
         <source>opening image file</source>
-        <translation type="unfinished"></translation>
+        <translation>imaj dosyası açılıyor</translation>
     </message>
     <message>
         <location filename="../localfileextractthread.cpp" line="39"/>
@@ -395,7 +395,7 @@
     <message>
         <location filename="../main.qml" line="692"/>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished"></translation>
+        <translation>[YAZMA KORUMALI]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="734"/>
@@ -415,17 +415,17 @@
     <message>
         <location filename="../main.qml" line="752"/>
         <source>Preparing to write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazdırmaya hazırlanıyor...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="776"/>
         <source>Update available</source>
-        <translation type="unfinished"></translation>
+        <translation>Güncelleme bulunuyor</translation>
     </message>
     <message>
         <location filename="../main.qml" line="777"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Görüntüleyicinin daha yeni bir sürümü var. &lt;br&gt; İndirmek için web sitesini ziyaret etmek ister misiniz?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="818"/>
@@ -450,7 +450,7 @@
     <message>
         <location filename="../main.qml" line="848"/>
         <source>Preparing to write... (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Yazdırmaya hazırlanıyor... (%1)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="863"/>
@@ -486,7 +486,7 @@
     <message>
         <location filename="../main.qml" line="1008"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>SD kart yazma korumalı. &lt;br&gt; Kartın sol tarafındaki kilit anahtarını yukarı itin ve tekrar deneyin.</translation>
     </message>
 </context>
 </TS>
