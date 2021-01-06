@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <nan.h>
+#include <wchar.h>
 #include <string>
 #include <vector>
 #include <set>
@@ -46,27 +47,26 @@ DEFINE_DEVPROPKEY(DEVPKEY_Device_EnumeratorName, 0xa45c254e,0xdf1c,0x4efd,0x80,0
 
 namespace Drivelist {
 
-char* WCharToUtf8(const wchar_t* wstr) {
-  char *str = NULL;
-  size_t size = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
-
-  if (size <= 1) {
-    return NULL;
+std::string WCharToUtf8String(const wchar_t* wstr) {
+  if (!wstr) {
+    return std::string();
   }
 
-  if ((str = reinterpret_cast<char*>(calloc(size, 1))) == NULL) {
-    return NULL;
+  int wstrSize = (int) wcslen(wstr);
+  int size = WideCharToMultiByte(
+    CP_UTF8, 0, wstr, wstrSize, NULL, 0, NULL, NULL);
+  if (!size) {
+    return std::string();
   }
 
-  size_t utf8Size = WideCharToMultiByte(
-    CP_UTF8, 0, wstr, -1, str, size, NULL, NULL);
-
+  std::string result(size, 0);
+  int utf8Size = WideCharToMultiByte(
+    CP_UTF8, 0, wstr, wstrSize, &result[0], size, NULL, NULL);
   if (utf8Size != size) {
-    free(str);
-    return NULL;
+    return std::string();
   }
 
-  return str;
+  return result;
 }
 
 char* GetEnumeratorName(HDEVINFO hDeviceInfo, SP_DEVINFO_DATA deviceInfoData) {
@@ -96,7 +96,7 @@ std::string GetFriendlyName(HDEVINFO hDeviceInfo,
     hDeviceInfo, &deviceInfoData, SPDRP_FRIENDLYNAME,
     NULL, (PBYTE) wbuffer, sizeof(wbuffer), NULL);
 
-  return hasFriendlyName ? WCharToUtf8(wbuffer) : std::string("");
+  return hasFriendlyName ? WCharToUtf8String(wbuffer) : std::string("");
 }
 
 bool IsSCSIDevice(std::string enumeratorName) {
@@ -172,7 +172,7 @@ bool IsSystemDevice(HDEVINFO hDeviceInfo, DeviceDescriptor *device) {
       folderId, 0, NULL, &folderPath);
 
     if (result == S_OK) {
-      std::string systemPath = WCharToUtf8(folderPath);
+      std::string systemPath = WCharToUtf8String(folderPath);
       // printf("systemPath %s\n", systemPath.c_str());
       for (std::string mountpoint : device->mountpoints) {
         // printf("%s find %s\n", systemPath.c_str(), mountpoint.c_str());
