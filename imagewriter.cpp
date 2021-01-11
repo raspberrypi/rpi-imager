@@ -46,7 +46,7 @@ ImageWriter::ImageWriter(QObject *parent)
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
     QString platform = QGuiApplication::platformName();
-    if (platform == "eglfs" || platform == "wayland" || platform == "linuxfb")
+    if (platform == "eglfs" || platform == "linuxfb")
     {
         _embeddedMode = true;
         connect(&_networkchecktimer, SIGNAL(timeout()), SLOT(pollNetwork()));
