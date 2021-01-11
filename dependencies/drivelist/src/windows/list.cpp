@@ -69,7 +69,7 @@ std::string WCharToUtf8String(const wchar_t* wstr) {
   return result;
 }
 
-char* GetEnumeratorName(HDEVINFO hDeviceInfo, SP_DEVINFO_DATA deviceInfoData) {
+std::string GetEnumeratorName(HDEVINFO hDeviceInfo, SP_DEVINFO_DATA deviceInfoData) {
   char buffer[MAX_PATH];
 
   ZeroMemory(&buffer, sizeof(buffer));
@@ -83,7 +83,7 @@ char* GetEnumeratorName(HDEVINFO hDeviceInfo, SP_DEVINFO_DATA deviceInfoData) {
       hasEnumeratorName = SetupDiGetDevicePropertyW(hDeviceInfo, &deviceInfoData, &DEVPKEY_Device_EnumeratorName, NULL, (LPBYTE) buffer, sizeof(buffer), NULL, 0);
   }*/
 
-  return hasEnumeratorName ? buffer : NULL;
+  return hasEnumeratorName ? std::string(buffer) : std::string();
 }
 
 std::string GetFriendlyName(HDEVINFO hDeviceInfo,
@@ -619,7 +619,7 @@ std::vector<DeviceDescriptor> ListStorageDevices() {
   std::vector<DeviceDescriptor> deviceList;
 
   DWORD i;
-  char *enumeratorName;
+  std::string enumeratorName;
   DeviceDescriptor device;
 
   hDeviceInfo = SetupDiGetClassDevsA(
@@ -636,21 +636,21 @@ std::vector<DeviceDescriptor> ListStorageDevices() {
   for (i = 0; SetupDiEnumDeviceInfo(hDeviceInfo, i, &deviceInfoData); i++) {
     enumeratorName = GetEnumeratorName(hDeviceInfo, deviceInfoData);
 
-    printf("[INFO] Enumerating %s\n", enumeratorName);
+    printf("[INFO] Enumerating %s\n", enumeratorName.c_str());
 
     // If it failed to get the SPDRP_ENUMERATOR_NAME, skip it
-    //if (enumeratorName == NULL) {
+    //if (enumeratorName.empty()) {
     //  continue;
     //}
 
     device = DeviceDescriptor();
 
-    device.enumerator = enumeratorName ? std::string(enumeratorName) : "";
+    device.enumerator = enumeratorName;
     device.description = GetFriendlyName(hDeviceInfo, deviceInfoData);
     device.isRemovable = IsRemovableDevice(hDeviceInfo, deviceInfoData);
     device.isVirtual = IsVirtualHardDrive(hDeviceInfo, deviceInfoData);
-    device.isSCSI = enumeratorName ? IsSCSIDevice(enumeratorName) : false;
-    device.isUSB = enumeratorName ? IsUSBDevice(enumeratorName) : false;
+    device.isSCSI = IsSCSIDevice(enumeratorName);
+    device.isUSB = IsUSBDevice(enumeratorName);
     device.isCard = device.enumerator == "SD";
     device.isSystem = !device.isRemovable &&
       (device.enumerator == "SCSI" || device.enumerator == "IDE");
