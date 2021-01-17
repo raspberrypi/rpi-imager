@@ -40,6 +40,9 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
     _curlCount++;
+
+    QSettings settings;
+    _ejectEnabled = settings.value("eject", true).toBool();
 }
 
 DownloadThread::~DownloadThread()
@@ -124,15 +127,15 @@ bool DownloadThread::_openAndPrepareDevice()
 
     if (std::regex_match(_filename.constData(), m, windriveregex))
     {
-        QByteArray nr = QByteArray::fromStdString(m[1]);
+        QByteArray _nr = QByteArray::fromStdString(m[1]);
 
-        if (!nr.isEmpty()) {
-            qDebug() << "Removing partition table from Windows drive #" << nr << "(" << _filename << ")";
+        if (!_nr.isEmpty()) {
+            qDebug() << "Removing partition table from Windows drive #" << _nr << "(" << _filename << ")";
 
             QProcess proc;
             proc.start("diskpart");
             proc.waitForStarted();
-            proc.write("select disk "+nr+"\r\n"
+            proc.write("select disk "+_nr+"\r\n"
                             "clean\r\n"
                             "rescan\r\n");
             proc.closeWriteChannel();
@@ -665,14 +668,6 @@ void DownloadThread::_writeComplete()
 
     emit finalizing();
 
-#ifdef Q_OS_WIN
-        // Temporarily stop storage services to prevent \[System Volume Information]\WPSettings.dat being created
-        QProcess p1;
-        QStringList args = {"stop", "StorSvc"};
-        qDebug() << "Stopping storage services";
-        p1.execute("net", args);
-#endif
-
     if (_firstBlock)
     {
         qDebug() << "Writing first block (which we skipped at first)";
@@ -696,14 +691,18 @@ void DownloadThread::_writeComplete()
     QThread::sleep(1);
     _filename.replace("/dev/rdisk", "/dev/disk");
 #endif
-    eject_disk(_filename.constData());
 
-#ifdef Q_OS_WIN
-    QStringList args2 = {"start", "StorSvc"};
-    QProcess *p2 = new QProcess(this);
-    qDebug() << "Restarting storage services";
-    p2->startDetached("net", args2);
-#endif
+    if (_ejectEnabled && _config.isEmpty() && _cmdline.isEmpty())
+        eject_disk(_filename.constData());
+
+    if (!_config.isEmpty() || !_cmdline.isEmpty())
+    {
+        if (!_customizeImage())
+            return;
+
+        if (_ejectEnabled)
+            eject_disk(_filename.constData());
+    }
 
     emit success();
 }
@@ -796,4 +795,202 @@ qint64 DownloadThread::_sectorsWritten()
         return stats.at(6).toLongLong(); /* write sectors */
 #endif
     return -1;
+}
+
+void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun)
+{
+    _config = config;
+    _cmdline = cmdline;
+    _firstrun = firstrun;
+}
+
+bool DownloadThread::_customizeImage()
+{
+    QString folder;
+    QByteArray devlower = _filename.toLower();
+
+    emit preparationStatusUpdate(tr("Waiting for FAT partition to be mounted"));
+
+    /* See if OS auto-mounted the device */
+    for (int tries = 0; tries < 3; tries++)
+    {
+        QThread::sleep(1);
+        auto l = Drivelist::ListStorageDevices();
+        for (auto i : l)
+        {
+            if (QByteArray::fromStdString(i.device).toLower() == devlower && i.mountpoints.size())
+            {
+                folder = QByteArray::fromStdString(i.mountpoints.front());
+                break;
+            }
+        }
+    }
+
+#ifdef Q_OS_LINUX
+    bool manualmount = false;
+
+    if (folder.isEmpty())
+    {
+        /* Manually mount folder */
+        manualmount = true;
+        QByteArray fatpartition = _filename;
+        if (isdigit(fatpartition.at(fatpartition.length()-1)))
+            fatpartition += "p1";
+        else
+            fatpartition += "1";
+
+        if (::access(devlower.constData(), W_OK) != 0)
+        {
+            /* Not running as root, try to outsource mounting to udisks2 */
+    #ifndef QT_NO_DBUS
+            UDisks2Api udisks2;
+            folder = udisks2.mountDevice(fatpartition);
+    #endif
+        }
+        else
+        {
+            /* Running as root, attempt running mount directly */
+            QTemporaryDir td;
+            QStringList args;
+            folder = td.path();
+            args << fatpartition << folder;
+
+            if (QProcess::execute("mount", args) != 0)
+            {
+                emit error(tr("Error mounting FAT32 partition"));
+                return false;
+            }
+            td.setAutoRemove(false);
+        }
+    }
+#endif
+
+    if (folder.isEmpty())
+    {
+        //
+        qDebug() << "drive info. searching for:" << devlower;
+        auto l = Drivelist::ListStorageDevices();
+        for (auto i : l)
+        {
+            qDebug() << "drive" << QByteArray::fromStdString(i.device).toLower();
+            for (auto mp : i.mountpoints) {
+                qDebug() << "mountpoint:" << QByteArray::fromStdString(mp);
+            }
+        }
+        //
+
+        emit error(tr("Operating system did not mount FAT32 partition"));
+        return false;
+    }
+
+    emit preparationStatusUpdate(tr("Customizing image"));
+
+    if (!_firstrun.isEmpty())
+    {
+        QFile f(folder+"/firstrun.sh");
+        if (f.open(f.WriteOnly))
+        {
+            f.write(_firstrun);
+            f.close();
+        }
+        else
+        {
+            emit error(tr("Error creating firstrun.sh on FAT partition"));
+            return false;
+        }
+    }
+
+    if (!_config.isEmpty())
+    {
+        auto configItems = _config.split('\n');
+        configItems.removeAll("");
+        QByteArray config;
+
+        QFile f(folder+"/config.txt");
+        if (f.exists() && f.open(f.ReadOnly))
+        {
+            config = f.readAll();
+            f.close();
+        }
+
+        for (QByteArray item : configItems)
+        {
+            if (config.contains("#"+item)) {
+                /* Uncomment existing line */
+                config.replace("#"+item, item);
+            } else if (config.contains("\n"+item)) {
+                /* config.txt already contains the line */
+            } else {
+                /* Append new line to config.txt */
+                if (config.right(1) != "\n")
+                    config += "\n"+item+"\n";
+                else
+                    config += item+"\n";
+            }
+        }
+
+        if (f.open(f.WriteOnly))
+        {
+            f.write(config);
+            f.close();
+        }
+        else
+        {
+            emit error(tr("Error writing to config.txt on FAT partition"));
+            return false;
+        }
+    }
+
+    if (!_cmdline.isEmpty())
+    {
+        QByteArray cmdline;
+
+        QFile f(folder+"/cmdline.txt");
+        if (f.exists() && f.open(f.ReadOnly))
+        {
+            cmdline = f.readAll().trimmed();
+            f.close();
+        }
+
+        cmdline += _cmdline;
+        if (f.open(f.WriteOnly))
+        {
+            f.write(cmdline);
+            f.close();
+        }
+        else
+        {
+            emit error(tr("Error writing to cmdline.txt on FAT partition"));
+            return false;
+        }
+    }
+
+    emit finalizing();
+
+#ifdef Q_OS_LINUX
+    if (manualmount)
+    {
+        if (::access(devlower.constData(), W_OK) != 0)
+        {
+    #ifndef QT_NO_DBUS
+            UDisks2Api udisks2;
+            udisks2.unmountDrive(devlower);
+    #endif
+        }
+        else
+        {
+            QStringList args;
+            args << folder;
+            QProcess::execute("umount", args);
+            QDir d;
+            d.rmdir(folder);
+        }
+    }
+#endif
+
+#ifndef Q_OS_WIN
+    ::sync();
+#endif
+
+    return true;
 }

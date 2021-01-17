@@ -7,17 +7,21 @@
 #include "drivelistitem.h"
 #include "downloadextractthread.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
+#include "dependencies/sha256crypt/sha256crypt.h"
 #include "driveformatthread.h"
 #include "localfileextractthread.h"
 #include "downloadstatstelemetry.h"
 #include <archive.h>
 #include <archive_entry.h>
+#include <random>
 #include <QFileInfo>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QProcess>
+#include <QRegExp>
 #include <QStandardPaths>
 #include <QStorageInfo>
+#include <QTimeZone>
 #include <QWindow>
 #include <QGuiApplication>
 #include <QNetworkInterface>
@@ -29,11 +33,17 @@
 #include <QVersionNumber>
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
+#include <QApplication>
 #endif
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <winioctl.h>
+#include <wlanapi.h>
+#ifndef WLAN_PROFILE_GET_PLAINTEXT_KEY
+#define WLAN_PROFILE_GET_PLAINTEXT_KEY 4
+#endif
+
 #include <QWinTaskbarButton>
 #include <QWinTaskbarProgress>
 #endif
@@ -55,8 +65,6 @@ ImageWriter::ImageWriter(QObject *parent)
 
 #ifdef Q_OS_WIN
     _taskbarButton = nullptr;
-    QProcess *p = new QProcess(this);
-    p->start("net stop ShellHWDetection");
 #endif
 
     if (!_settings.isWritable() && !_settings.fileName().isEmpty())
@@ -104,10 +112,7 @@ ImageWriter::ImageWriter(QObject *parent)
 
 ImageWriter::~ImageWriter()
 {
-#ifdef Q_OS_WIN
-    QProcess *p = new QProcess(this);
-    p->startDetached("net start ShellHWDetection");
-#endif
+
 }
 
 void ImageWriter::setEngine(QQmlApplicationEngine *engine)
@@ -216,6 +221,7 @@ void ImageWriter::startWrite()
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
+    _thread->setImageCustomization(_config, _cmdline, _firstrun);
 
     if (!_expectedHash.isEmpty() && _cachedFileHash != _expectedHash && _cachingEnabled)
     {
@@ -453,12 +459,24 @@ void ImageWriter::onSuccess()
 {
     stopProgressPolling();
     emit success();
+
+#ifndef QT_NO_WIDGETS
+    if (_settings.value("beep").toBool())
+    {
+        QApplication::beep();
+    }
+#endif
 }
 
 void ImageWriter::onError(QString msg)
 {
     stopProgressPolling();
     emit error(msg);
+
+#ifndef QT_NO_WIDGETS
+    if (_settings.value("beep").toBool())
+        QApplication::beep();
+#endif
 }
 
 void ImageWriter::onFinalizing()
@@ -620,6 +638,8 @@ void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
     }
 
     reply->deleteLater();
+#else
+    Q_UNUSED(reply)
 #endif
 }
 
@@ -696,6 +716,214 @@ QByteArray ImageWriter::getUsbSourceOSlist()
 #else
     return QByteArray();
 #endif
+}
+
+QString ImageWriter::getDefaultPubKey()
+{
+    QByteArray pubkey;
+    QFile pubfile(QDir::homePath()+"/.ssh/id_rsa.pub");
+
+    if (pubfile.exists() && pubfile.open(QFile::ReadOnly))
+    {
+        pubkey = pubfile.readAll().trimmed();
+        pubfile.close();
+    }
+
+    return pubkey;
+}
+
+QString ImageWriter::getTimezone()
+{
+    return QTimeZone::systemTimeZoneId();
+}
+
+QStringList ImageWriter::getTimezoneList()
+{
+    QStringList timezones;
+    QFile f(":/timezones.txt");
+    if ( f.open(f.ReadOnly) )
+    {
+        timezones = QString(f.readAll()).split('\n');
+        f.close();
+    }
+
+    return timezones;
+}
+
+QStringList ImageWriter::getCountryList()
+{
+    QStringList countries;
+    QFile f(":/countries.txt");
+    if ( f.open(f.ReadOnly) )
+    {
+        countries = QString(f.readAll()).split('\n');
+        f.close();
+    }
+
+    return countries;
+}
+
+QString ImageWriter::getSSID()
+{
+    /* Qt used to have proper bearer management that was able to provide a list of
+       SSIDs, but since they retired it, resort to calling platform specific tools for now.
+       Minimal implementation that only gets the currently connected SSID */
+
+    QString program, regexpstr, ssid;
+    QStringList args;
+    QProcess proc;
+
+#ifdef Q_OS_WIN
+    program = "netsh";
+    args << "wlan" << "show" << "interfaces";
+    regexpstr = "[ \t]+SSID[ \t]*: (.+)";
+#else
+#ifdef Q_OS_DARWIN
+    program = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport";
+    args << "-I";
+    regexpstr = "[ \t]+SSID: (.+)";
+#else
+    program = "iwgetid";
+    args << "-r";
+#endif
+#endif
+
+    proc.start(program, args);
+    if (proc.waitForStarted(2000) && proc.waitForFinished(2000))
+    {
+        if (regexpstr.isEmpty())
+        {
+            ssid = proc.readAll().trimmed();
+        }
+        else
+        {
+            QRegExp rx(regexpstr);
+            QList<QByteArray> outputlines = proc.readAll().replace('\r', "").split('\n');
+
+            for (QByteArray line : outputlines) {
+                if (rx.indexIn(line) != -1)
+                {
+                    ssid = rx.cap(1);
+                    break;
+                }
+            }
+        }
+    }
+
+    return ssid;
+}
+
+QString ImageWriter::getPSK(const QString &ssid)
+{
+#ifdef Q_OS_WIN
+    /* Windows allows retrieving wifi PSK */
+    HANDLE h;
+    DWORD ret = 0;
+    DWORD supportedVersion = 0;
+    DWORD clientVersion = 2;
+    QString psk;
+
+    if (WlanOpenHandle(clientVersion, NULL, &supportedVersion, &h) != ERROR_SUCCESS)
+        return QString();
+
+    PWLAN_INTERFACE_INFO_LIST ifList = NULL;
+
+    if (WlanEnumInterfaces(h, NULL, &ifList) == ERROR_SUCCESS)
+    {
+        for (int i=0; i < ifList->dwNumberOfItems; i++)
+        {
+            PWLAN_PROFILE_INFO_LIST profileList = NULL;
+
+            if (WlanGetProfileList(h, &ifList->InterfaceInfo[i].InterfaceGuid,
+                                   NULL, &profileList) == ERROR_SUCCESS)
+            {
+                for (int j=0; j < profileList->dwNumberOfItems; j++)
+                {
+                    QString s = QString::fromWCharArray(profileList->ProfileInfo[j].strProfileName);
+                    qDebug() << "Enumerating wifi profiles, SSID found:" << s << " looking for:" << ssid;
+
+                    if (s == ssid) {
+                        DWORD flags = WLAN_PROFILE_GET_PLAINTEXT_KEY;
+                        DWORD access = 0;
+                        DWORD ret = 0;
+                        LPWSTR xmlstr = NULL;
+
+                        if ( (ret = WlanGetProfile(h, &ifList->InterfaceInfo[i].InterfaceGuid, profileList->ProfileInfo[j].strProfileName,
+                                          NULL, &xmlstr, &flags, &access)) == ERROR_SUCCESS && xmlstr)
+                        {
+                            QString xml = QString::fromWCharArray(xmlstr);
+                            qDebug() << "XML wifi profile:" << xml;
+                            QRegExp rx("<keyMaterial>(.+)</keyMaterial>");
+                            if (rx.indexIn(xml) != -1) {
+                                psk = rx.cap(1);
+                            }
+
+                            WlanFreeMemory(xmlstr);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (profileList) {
+                WlanFreeMemory(profileList);
+            }
+        }
+    }
+
+    if (ifList)
+        WlanFreeMemory(ifList);
+    WlanCloseHandle(h, NULL);
+
+    return psk;
+
+#else
+    Q_UNUSED(ssid)
+    return QString();
+#endif
+}
+
+bool ImageWriter::getBoolSetting(const QString &key)
+{
+    /* Some keys have defaults */
+    if (key == "telemetry")
+        return _settings.value(key, TELEMETRY_ENABLED_DEFAULT).toBool();
+    else if (key == "eject")
+        return _settings.value(key, true).toBool();
+    else
+        return _settings.value(key).toBool();
+}
+
+void ImageWriter::setSetting(const QString &key, const QVariant &value)
+{
+    _settings.setValue(key, value);
+    _settings.sync();
+}
+
+void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun)
+{
+    _config = config;
+    _cmdline = cmdline;
+    _firstrun = firstrun;
+
+    qDebug() << "Custom config.txt entries:" << config;
+    qDebug() << "Custom cmdline.txt entries:" << cmdline;
+    qDebug() << "Custom firstuse.sh:" << firstrun;
+}
+
+QString ImageWriter::crypt(const QByteArray &password)
+{
+    QByteArray salt = "$5$";
+    QByteArray saltchars =
+      "./0123456789ABCDEFGHIJKLMNOPQRST"
+      "UVWXYZabcdefghijklmnopqrstuvwxyz";
+    std::mt19937 gen(static_cast<unsigned>(QDateTime::currentMSecsSinceEpoch()));
+    std::uniform_int_distribution<> uid(0, saltchars.length()-1);
+
+    for (int i=0; i<10; i++)
+        salt += saltchars[uid(gen)];
+
+    return sha256_crypt(password.constData(), salt.constData());
 }
 
 void MountUtilsLog(std::string msg) {

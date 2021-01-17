@@ -170,3 +170,40 @@ bool UDisks2Api::formatDrive(const QString &device, bool mountAfterwards)
 
     return true;
 }
+
+QString UDisks2Api::mountDevice(const QString &device)
+{
+    QString devpath = _resolveDevice(device);
+    if (devpath.isEmpty())
+        return QString();
+
+    QDBusInterface filesystem("org.freedesktop.UDisks2", devpath,
+                              "org.freedesktop.UDisks2.Filesystem", QDBusConnection::systemBus());
+    QVariantMap mountOptions;
+
+    for (int attempt = 0; attempt < 10; attempt++)
+    {
+        qDebug() << "Mounting partition";
+        QDBusReply<QString> mp = filesystem.call("Mount", mountOptions);
+
+        if (mp.isValid())
+        {
+            qDebug() << "Mounted file system at:" << mp;
+            return mp;
+        }
+
+        QThread::sleep(1);
+    }
+
+    qDebug() << "Failed to mount file system.";
+    return QString();
+}
+
+void UDisks2Api::unmountDrive(const QString &device)
+{
+    QString devpath = _resolveDevice(device);
+    if (devpath.isEmpty())
+        return;
+
+    _unmountDrive(devpath);
+}

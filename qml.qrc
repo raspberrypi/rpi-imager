@@ -22,5 +22,8 @@
         <file>icons/cat_misc_utility_images.png</file>
         <file>icons/cat_media_players.png</file>
         <file>icons/cat_emulation_and_games.png</file>
+        <file>OptionsPopup.qml</file>
+        <file>countries.txt</file>
+        <file>timezones.txt</file>
     </qresource>
 </RCC>

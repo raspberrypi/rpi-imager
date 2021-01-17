@@ -92,6 +92,20 @@ public:
     /* Returns a json formatted list of the OS images found on USB stick */
     Q_INVOKABLE QByteArray getUsbSourceOSlist();
 
+    /* Functions to collect information from computer running imager to make image customization easier */
+    Q_INVOKABLE QString getDefaultPubKey();
+    Q_INVOKABLE QString getTimezone();
+    Q_INVOKABLE QStringList getTimezoneList();
+    Q_INVOKABLE QStringList getCountryList();
+    Q_INVOKABLE QString getSSID();
+    Q_INVOKABLE QString getPSK(const QString &ssid);
+
+    Q_INVOKABLE bool getBoolSetting(const QString &key);
+    Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun);
+
+    Q_INVOKABLE QString crypt(const QByteArray &password);
+
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
 
@@ -124,7 +138,7 @@ protected slots:
 protected:
     QUrl _src, _repo;
     QString _dst, _cacheFileName, _parentCategory, _osName;
-    QByteArray _expectedHash, _cachedFileHash;
+    QByteArray _expectedHash, _cachedFileHash, _cmdline, _config, _firstrun;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
     QQmlApplicationEngine *_engine;

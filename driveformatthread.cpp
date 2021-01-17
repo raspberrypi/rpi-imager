@@ -130,7 +130,7 @@ void DriveFormatThread::run()
 
 #elif defined(Q_OS_LINUX)
 
-    if (::access(_device, W_OK) != 0)
+    if (::access(_device.constData(), W_OK) != 0)
     {
         /* Not running as root, try to outsource formatting to udisks2 */
 

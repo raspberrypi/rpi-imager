@@ -1,3 +1,10 @@
+rpi-imager (1.6) unstable; urgency=medium
+
+  * Wayland: fix "Client tried to set invalid geometry" error
+  * Add advanced users option screen available under SHIFT-CTRL-X
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Fri, 15 Jan 2021 22:00:21 +0100
+
 rpi-imager (1.5) unstable; urgency=medium
 
   * More verbose progress/error reporting

@@ -30,6 +30,7 @@ This software depends on the following third-party components covered by open so
 - Balena.io mountutils (Apache license)
 - libarchive (new BSD license)
 - liblzma (public domain)
+- cryptsha256 (public domain)
 - zlib (zlib license)
 - libcurl (libcurl license)
 - fat32format.exe (GPL license)
@@ -1009,6 +1010,13 @@ liblzma license
 ==
 
 - liblzma is in the public domain.
+
+==
+cryptsha256 license
+==
+
+SHA256-based Unix crypt implementation.
+Released into the Public Domain by Ulrich Drepper
 
 ==
 zlib license

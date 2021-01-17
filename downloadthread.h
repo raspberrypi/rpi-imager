@@ -110,6 +110,11 @@ public:
     void setInputBufferSize(int len);
 
     /*
+     * Enable image customization
+     */
+    void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun);
+
+    /*
      * Thread safe download progress query functions
      */
     uint64_t dlNow();
@@ -142,6 +147,7 @@ protected:
     qint64 _sectorsWritten();
     void _closeFiles();
     QByteArray _fileGetContentsTrimmed(const QString &filename);
+    bool _customizeImage();
 
     /*
      * libcurl callbacks
@@ -158,12 +164,12 @@ protected:
     curl_off_t _startOffset;
     std::atomic<std::uint64_t> _lastDlTotal, _lastDlNow, _verifyTotal, _lastVerifyNow, _bytesWritten;
     qint64 _sectorsStart;
-    QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash;
+    QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash, _config, _cmdline, _firstrun;
     char *_firstBlock;
     size_t _firstBlockSize;
     static QByteArray _proxy;
     static int _curlCount;
-    bool _cancelled, _successful, _verifyEnabled, _cacheEnabled;
+    bool _cancelled, _successful, _verifyEnabled, _cacheEnabled, _ejectEnabled;
     time_t _lastModified, _serverTime, _lastFailureTime;
     QElapsedTimer _timer;
     int _inputBufferSize;

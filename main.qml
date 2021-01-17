@@ -43,6 +43,14 @@ ApplicationWindow {
         }
     }
 
+    Shortcut {
+        sequences: ["Shift+Ctrl+X", "Shift+Meta+X"]
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            optionspopup.openPopup()
+        }
+    }
+
     ColumnLayout {
         id: bg
         spacing: 0
@@ -776,6 +784,10 @@ ApplicationWindow {
         onYes: {
             Qt.openUrlExternally(url)
         }
+    }
+
+    OptionsPopup {
+        id: optionspopup
     }
 
     /* Utility functions */
