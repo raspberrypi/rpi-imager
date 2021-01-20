@@ -49,6 +49,31 @@ It should create an icon in the start menu under "Utilities" or "Accessories".
 The imaging utility will normally be run as regular user, and will call udisks2 over DBus to perform privileged operations like opening the disk device for writing.
 If udisks2 is not functional on your Linux distribution, you can alternatively start it as "root" with sudo and similar tools.
 
+### Fedora/RHEL/CentOS Linux
+
+#### Get dependencies
+
+Install the build dependencies:
+
+```
+sudo yum install git gcc gcc-c++ make cmake libarchive-devel libcurl-devel openssl-devel qt5-qtbase-devel qt5-qtquickcontrols2-devel qt5-qtsvg-devel qt5-linguist
+```
+
+#### Get the source
+
+```
+git clone --depth 1 https://github.com/raspberrypi/rpi-imager
+```
+
+#### Build and install the software
+
+```
+cd rpi-imager
+cmake .
+make
+sudo make install
+```
+
 ### Windows
 
 #### Get dependencies
