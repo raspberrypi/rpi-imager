@@ -188,10 +188,15 @@ ApplicationWindow {
                         Material.background: "#ffffff"
                         Material.foreground: "#c51a4a"
                         onClicked: {
-                            if (!imageWriter.readyToWrite())
-                                return;
+                            if (!imageWriter.readyToWrite()) {
+                                return
+                            }
 
-                            confirmwritepopup.askForConfirmation()
+                            if (!optionspopup.initialized && imageWriter.hasSavedCustomizationSettings()) {
+                                usesavedsettingspopup.openPopup()
+                            } else {
+                                confirmwritepopup.askForConfirmation()
+                            }
                         }
                         Accessible.onPressAction: clicked()
                     }
@@ -788,6 +793,22 @@ ApplicationWindow {
 
     OptionsPopup {
         id: optionspopup
+    }
+
+    UseSavedSettingsPopup {
+        id: usesavedsettingspopup
+        onYes: {
+            optionspopup.initialize()
+            optionspopup.applySettings()
+            confirmwritepopup.askForConfirmation()
+        }
+        onNo: {
+            imageWriter.clearSavedCustomizationSettings()
+            confirmwritepopup.askForConfirmation()
+        }
+        onEditSettings: {
+            optionspopup.openPopup()
+        }
     }
 
     /* Utility functions */

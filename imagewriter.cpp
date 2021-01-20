@@ -926,6 +926,45 @@ QString ImageWriter::crypt(const QByteArray &password)
     return sha256_crypt(password.constData(), salt.constData());
 }
 
+void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)
+{
+    _settings.beginGroup("imagecustomization");
+    _settings.remove("");
+    for (QString key : map.keys()) {
+        _settings.setValue(key, map.value(key));
+    }
+    _settings.endGroup();
+}
+
+QVariantMap ImageWriter::getSavedCustomizationSettings()
+{
+    QVariantMap result;
+
+    _settings.beginGroup("imagecustomization");
+    for (QString key : _settings.childKeys()) {
+        result.insert(key, _settings.value(key));
+    }
+    _settings.endGroup();
+
+    return result;
+}
+
+void ImageWriter::clearSavedCustomizationSettings()
+{
+    _settings.beginGroup("imagecustomization");
+    _settings.remove("");
+    _settings.endGroup();
+}
+
+bool ImageWriter::hasSavedCustomizationSettings()
+{
+    _settings.beginGroup("imagecustomization");
+    bool result = !_settings.childKeys().isEmpty();
+    _settings.endGroup();
+
+    return result;
+}
+
 void MountUtilsLog(std::string msg) {
     qDebug() << "mountutils:" << msg.c_str();
 }

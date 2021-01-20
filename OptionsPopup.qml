@@ -19,6 +19,7 @@ Popup {
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     property bool initialized: false
+    property bool hasSavedSettings: false
     property string config
     property string cmdline
     property string firstrun
@@ -87,8 +88,21 @@ Popup {
           ColumnLayout {
 
             GroupBox {
-                title: qsTr("Image customization options (for this session only)")
-                Layout.fillWidth: true
+                title: qsTr("Image customization options")
+                label: RowLayout {
+                    Label {
+                        text: parent.parent.title
+                    }
+                    ComboBox {
+                        id: comboSaveSettings
+                        model: {
+                            [qsTr("for this session only"),
+                             qsTr("to always use")]
+                        }
+                        Layout.minimumWidth: 250
+                        Layout.maximumHeight: 40
+                    }
+                }
 
                 ColumnLayout {
                     spacing: -10
@@ -97,26 +111,24 @@ Popup {
                         id: chkOverscan
                         text: qsTr("Disable overscan")
                     }
-                    CheckBox {
-                        id: chkHostname
-                        text: qsTr("Set hostname")
-                        onCheckedChanged: {
-                            if (checked) {
-                                fieldHostname.forceActiveFocus()
+                    RowLayout {
+                        CheckBox {
+                            id: chkHostname
+                            text: qsTr("Set hostname:")
+                            onCheckedChanged: {
+                                if (checked) {
+                                    fieldHostname.forceActiveFocus()
+                                }
                             }
                         }
-                    }
-                    RowLayout {
-                        enabled: chkHostname.checked
-                        Layout.leftMargin: 40
-
                         TextField {
                             id: fieldHostname
+                            enabled: chkHostname.checked
                             text: "raspberrypi"
                         }
                         Text {
                             text : ".local"
-                            color: parent.enabled ? "black" : "grey"
+                            color: chkHostname.checked ? "black" : "grey"
                         }
                     }
                     CheckBox {
@@ -163,6 +175,16 @@ Popup {
                                 id: fieldUserPassword
                                 echoMode: TextInput.Password
                                 Layout.minimumWidth: 200
+                                property bool alreadyCrypted: false
+
+                                onTextEdited: {
+                                    if (alreadyCrypted) {
+                                        /* User is trying to edit saved
+                                           (crypted) password, clear field */
+                                        alreadyCrypted = false
+                                        clear()
+                                    }
+                                }
                             }
                         }
 
@@ -326,6 +348,7 @@ Popup {
                     }
 
                     applySettings()
+                    saveSettings()
                     popup.close()
                 }
                 Material.foreground: "#ffffff"
@@ -338,14 +361,47 @@ Popup {
         }
     }
 
-    function openPopup() {
-        if (!initialized) {
-            chkBeep.checked = imageWriter.getBoolSetting("beep")
-            chkTelemtry.checked = imageWriter.getBoolSetting("telemetry")
-            chkEject.checked = imageWriter.getBoolSetting("eject")
-            fieldTimezone.model = imageWriter.getTimezoneList()
-            fieldPublicKey.text = imageWriter.getDefaultPubKey()
-            fieldWifiCountry.model = imageWriter.getCountryList()
+    function initialize() {
+        chkBeep.checked = imageWriter.getBoolSetting("beep")
+        chkTelemtry.checked = imageWriter.getBoolSetting("telemetry")
+        chkEject.checked = imageWriter.getBoolSetting("eject")
+        var settings = imageWriter.getSavedCustomizationSettings()
+        fieldTimezone.model = imageWriter.getTimezoneList()
+        fieldPublicKey.text = imageWriter.getDefaultPubKey()
+        fieldWifiCountry.model = imageWriter.getCountryList()
+
+        if (Object.keys(settings).length) {
+            comboSaveSettings.currentIndex = 1
+            hasSavedSettings = true
+        }
+        if ('disableOverscan' in settings) {
+            chkOverscan.checked = true
+        }
+        if ('hostname' in settings) {
+            fieldHostname.text = settings.hostname
+            chkHostname.checked = true
+        }
+        if ('sshUserPassword' in settings) {
+            fieldUserPassword.text = settings.sshUserPassword
+            fieldUserPassword.alreadyCrypted = true
+            chkSSH.checked = true
+            radioPasswordAuthentication.checked = true
+        }
+        if ('sshAuthorizedKeys' in settings) {
+            fieldPublicKey.text = settings.sshAuthorizedKeys
+            chkSSH.checked = true
+            radioPubKeyAuthentication.checked = true
+        }
+        if ('wifiSSID' in settings) {
+            fieldWifiSSID.text = settings.wifiSSID
+            chkShowPassword.checked = false
+            fieldWifiPassword.text = settings.wifiPassword
+            fieldWifiCountry.currentIndex = fieldWifiCountry.find(settings.wifiCountry)
+            if (fieldWifiCountry.currentIndex == -1) {
+                fieldWifiCountry.editText = settings.wifiCountry
+            }
+            chkWifi.checked = true
+        } else {
             fieldWifiCountry.currentIndex = fieldWifiCountry.find("GB")
             fieldWifiSSID.text = imageWriter.getSSID()
             if (fieldWifiSSID.text.length) {
@@ -354,21 +410,41 @@ Popup {
                     chkShowPassword.checked = false
                 }
             }
-            var tz = imageWriter.getTimezone()
-            var tzidx = fieldTimezone.find(tz)
-            if (tzidx === -1) {
-                fieldTimezone.editText = tz
-            } else {
-                fieldTimezone.currentIndex = tzidx
-            }
+        }
+
+        var tz;
+        if ('timezone' in settings) {
+            chkLocale.checked = true
+            tz = settings.timezone
+        } else {
+            tz = imageWriter.getTimezone()
+        }
+        var tzidx = fieldTimezone.find(tz)
+        if (tzidx === -1) {
+            fieldTimezone.editText = tz
+        } else {
+            fieldTimezone.currentIndex = tzidx
+        }
+        if ('keyboardLayout' in settings) {
+            fieldKeyboardLayout.text = settings.keyboardLayout
+        } else {
             /* Lacking an easy cross-platform to fetch keyboard layout
                from host system, just default to "gb" for people in
                UK time zone for now, and "us" for everyone else */
             if (tz == "Europe/London") {
                 fieldKeyboardLayout.text = "gb"
             }
+        }
+        if ('skipFirstUse' in settings) {
+            chkSkipFirstUse.checked = true
+        }
 
-            initialized = true
+        initialized = true
+    }
+
+    function openPopup() {
+        if (!initialized) {
+            initialize()
         }
 
         open()
@@ -407,7 +483,8 @@ Popup {
             addFirstRun("FIRSTUSERHOME=`getent passwd 1000 | cut -d: -f6`")
 
             if (radioPasswordAuthentication.checked) {
-                addFirstRun("echo \"$FIRSTUSER:\""+escapeshellarg(imageWriter.crypt(fieldUserPassword.text))+" | chpasswd -e")
+                var cryptedPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
+                addFirstRun("echo \"$FIRSTUSER:\""+escapeshellarg(cryptedPassword)+" | chpasswd -e")
             }
             if (radioPubKeyAuthentication.checked) {
                 var pubkey = fieldPublicKey.text.replace(/\n/g, "")
@@ -466,6 +543,47 @@ Popup {
         }
 
         imageWriter.setImageCustomization(config, cmdline, firstrun)
+    }
+
+    function saveSettings()
+    {
+        if (comboSaveSettings.currentIndex == 1) {
+            hasSavedSettings = true
+            var settings = { };
+            if (chkOverscan.checked) {
+                settings.disableOverscan = true
+            }
+            if (chkHostname.checked && fieldHostname.length) {
+                settings.hostname = fieldHostname.text
+            }
+            if (chkSSH.checked) {
+                if (radioPasswordAuthentication.checked) {
+                    settings.sshUserPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
+                }
+                if (radioPubKeyAuthentication.checked) {
+                    settings.sshAuthorizedKeys = fieldPublicKey.text
+                }
+            }
+            if (chkWifi.checked) {
+                settings.wifiSSID = fieldWifiSSID.text
+                settings.wifiPassword = fieldWifiPassword.text
+                settings.wifiCountry = fieldWifiCountry.editText
+            }
+            if (chkLocale.checked) {
+                settings.timezone = fieldTimezone.editText
+                settings.keyboardLayout = fieldKeyboardLayout.text
+                if (chkSkipFirstUse.checked) {
+                    settings.skipFirstUse = true
+                }
+            }
+
+            imageWriter.setSavedCustomizationSettings(settings)
+
+        } else if (hasSavedSettings) {
+            imageWriter.clearSavedCustomizationSettings()
+            hasSavedSettings = false
+        }
+
         imageWriter.setSetting("beep", chkBeep.checked)
         imageWriter.setSetting("eject", chkEject.checked)
         imageWriter.setSetting("telemetry", chkTelemtry.checked)

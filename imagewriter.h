@@ -103,6 +103,10 @@ public:
     Q_INVOKABLE bool getBoolSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
     Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun);
+    Q_INVOKABLE void setSavedCustomizationSettings(const QVariantMap &map);
+    Q_INVOKABLE QVariantMap getSavedCustomizationSettings();
+    Q_INVOKABLE void clearSavedCustomizationSettings();
+    Q_INVOKABLE bool hasSavedCustomizationSettings();
 
     Q_INVOKABLE QString crypt(const QByteArray &password);
 
