@@ -93,6 +93,19 @@ Popup {
             spacing: 20
 
             Button {
+                text: qsTr("YES")
+                onClicked: {
+                    msgpopup.close()
+                    msgpopup.yes()
+                }
+                Material.foreground: "#ffffff"
+                Material.background: "#c51a4a"
+                font.family: roboto.name
+                visible: msgpopup.yesButton
+                Accessible.onPressAction: clicked()
+            }
+
+            Button {
                 text: qsTr("NO")
                 onClicked: {
                     msgpopup.close()
@@ -105,18 +118,6 @@ Popup {
                 Accessible.onPressAction: clicked()
             }
 
-            Button {
-                text: qsTr("YES")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.yes()
-                }
-                Material.foreground: "#ffffff"
-                Material.background: "#c51a4a"
-                font.family: roboto.name
-                visible: msgpopup.yesButton
-                Accessible.onPressAction: clicked()
-            }
 
             Button {
                 text: qsTr("CONTINUE")
