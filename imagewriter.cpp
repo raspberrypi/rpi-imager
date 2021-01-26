@@ -502,7 +502,7 @@ void ImageWriter::openFileDialog()
 
     QFileDialog *fd = new QFileDialog(nullptr, tr("Select image"),
                                       path,
-                                      "Image files (*.img *.zip *.gz *.xz);;All files (*.*)");
+                                      "Image files (*.img *.zip *.iso *.gz *.xz);;All files (*.*)");
     connect(fd, SIGNAL(fileSelected(QString)), SLOT(onFileSelected(QString)));
 
     if (_engine)
