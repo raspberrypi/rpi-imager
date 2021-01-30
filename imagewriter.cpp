@@ -423,8 +423,8 @@ void ImageWriter::pollProgress()
 #ifdef Q_OS_WIN
         if (_taskbarButton)
         {
-            _taskbarButton->progress()->setMaximum(dlTotal);
-            _taskbarButton->progress()->setValue(newDlNow);
+            _taskbarButton->progress()->setMaximum(dlTotal/1048576);
+            _taskbarButton->progress()->setValue(newDlNow/1048576);
         }
 #endif
         emit downloadProgress(newDlNow, dlTotal);
@@ -439,8 +439,8 @@ void ImageWriter::pollProgress()
 #ifdef Q_OS_WIN
         if (_taskbarButton)
         {
-            _taskbarButton->progress()->setMaximum(verifyTotal);
-            _taskbarButton->progress()->setValue(newVerifyNow);
+            _taskbarButton->progress()->setMaximum(verifyTotal/1048576);
+            _taskbarButton->progress()->setValue(newVerifyNow/1048576);
         }
 #endif
         emit verifyProgress(newVerifyNow, verifyTotal);
