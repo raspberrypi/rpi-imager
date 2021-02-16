@@ -31,6 +31,35 @@ static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QStri
 }
 #endif
 
+/* Workarounds for systems on which correct EDID info is not available */
+static inline void _handleDpi(int argc, char *argv[])
+{
+    QGuiApplication tmp(argc, argv);
+    QScreen *primaryScreen = QGuiApplication::primaryScreen();
+    int w = primaryScreen->geometry().width();
+    int h = primaryScreen->geometry().height();
+    int w_mm  = primaryScreen->physicalSize().width();
+    int h_mm = primaryScreen->physicalSize().height();
+
+#ifdef QT_NO_WIDGETS
+    if (h > 720)
+    {
+        qputenv("QT_SCALE_FACTOR", QByteArray::number(h / 720.0, 'f', 2));
+    }
+#else
+    qDebug() << "Displaying on:"
+             << primaryScreen->manufacturer()
+             << primaryScreen->model()
+             << QString::number(w)+"x"+QString::number(h)
+             << QString::number(w_mm)+" mm x "+QString::number(h_mm)+" mm";
+    if (w_mm < 100)
+    {
+        qDebug() << "Physical display dimensions seem unrealistically low. Disabling high DPI scaling";
+        QCoreApplication::setAttribute(Qt::AA_DisableHighDpiScaling);
+    }
+#endif
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
@@ -38,16 +67,10 @@ int main(int argc, char *argv[])
     // prefer ANGLE (DirectX) over desktop OpenGL
     QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
 #endif
+#ifdef Q_OS_LINUX
+    _handleDpi(argc, argv);
+#endif
 #ifdef QT_NO_WIDGETS
-    {
-        QGuiApplication tmp(argc, argv);
-        int h = QGuiApplication::primaryScreen()->geometry().height();
-        if (h > 720)
-        {
-            qputenv("QT_SCALE_FACTOR", QByteArray::number(h / 720.0, 'f', 2));
-        }
-    }
-
     QGuiApplication app(argc, argv);
 #else
     QApplication app(argc, argv);
