@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="en_US">
+<TS version="2.1" language="it_IT">
 <context>
     <name>DownloadExtractThread</name>
     <message>
@@ -106,7 +106,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../downloadthread.cpp" line="644"/>
         <source>Error writing to storage (while flushing)</source>
-        <translation>Errore scrittura nello storage (durante fluhisng)</translation>
+        <translation>Errore scrittura nello storage (durante flushing)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="651"/>
@@ -116,7 +116,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../downloadthread.cpp" line="632"/>
         <source>Download corrupt. Hash does not match</source>
-        <translation>Downlaod corrotto.&lt;br&gt;L&apos;hash non corrisponde</translation>
+        <translation>Download corrotto.&lt;br&gt;L&apos;hash non corrisponde</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="110"/>
@@ -373,7 +373,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../main.qml" line="477"/>
         <source>Cached on your computer</source>
-        <translation>Cachato nel computer</translation>
+        <translation>Memorizzato temporaneamente nel computer</translation>
     </message>
     <message>
         <location filename="../main.qml" line="479"/>
