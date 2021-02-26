@@ -4,28 +4,28 @@
 <context>
     <name>DownloadExtractThread</name>
     <message>
-        <location filename="../downloadextractthread.cpp" line="166"/>
+        <location filename="../downloadextractthread.cpp" line="167"/>
         <source>Error writing to storage</source>
         <translation>Chyba pri zápise na úložisko</translation>
     </message>
     <message>
-        <location filename="../downloadextractthread.cpp" line="188"/>
-        <location filename="../downloadextractthread.cpp" line="348"/>
+        <location filename="../downloadextractthread.cpp" line="189"/>
+        <location filename="../downloadextractthread.cpp" line="349"/>
         <source>Error extracting archive: %1</source>
         <translation>Chyba pri rozbaľovaní archívu: %1</translation>
     </message>
     <message>
-        <location filename="../downloadextractthread.cpp" line="234"/>
+        <location filename="../downloadextractthread.cpp" line="235"/>
         <source>Error mounting FAT32 partition</source>
         <translation>Chyba pri pripájaní partície FAT32</translation>
     </message>
     <message>
-        <location filename="../downloadextractthread.cpp" line="244"/>
+        <location filename="../downloadextractthread.cpp" line="245"/>
         <source>Operating system did not mount FAT32 partition</source>
         <translation>Operačný systém nepripojil partíciu FAT32</translation>
     </message>
     <message>
-        <location filename="../downloadextractthread.cpp" line="267"/>
+        <location filename="../downloadextractthread.cpp" line="268"/>
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Chyba pri vstupe do adresára &apos;%1&apos;</translation>
     </message>
@@ -33,112 +33,147 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <location filename="../downloadthread.cpp" line="143"/>
+        <location filename="../downloadthread.cpp" line="146"/>
         <source>Error running diskpart: %1</source>
         <translation>Chyba počas behu diskpart: %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="164"/>
+        <location filename="../downloadthread.cpp" line="167"/>
         <source>Error removing existing partitions</source>
         <translation>Chyba pri odstraňovaní existujúcich partiícií</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="190"/>
+        <location filename="../downloadthread.cpp" line="193"/>
         <source>Authentication cancelled</source>
         <translation>Zrušená autentifikácia</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="193"/>
+        <location filename="../downloadthread.cpp" line="196"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
         <translation>Chyba pri spúšťaní authopen v snahe o získanie prístupu na diskové zariadenie &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="194"/>
+        <location filename="../downloadthread.cpp" line="197"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Preverte, prosím, či má &apos;Raspberry Pi Imager&apos; prístup k &apos;vymeniteľným nosičom&apos; v nastaveniach súkromia (pod &apos;súbormi a priečinkami&apos;, prípadne mu udeľte &apos;plný prístup k diskom&apos;).</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="215"/>
+        <location filename="../downloadthread.cpp" line="218"/>
         <source>Cannot open storage device &apos;%1&apos;.</source>
         <translation>Nepodarilo sa otvoriť zariadenie úložiska &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="257"/>
+        <location filename="../downloadthread.cpp" line="260"/>
         <source>discarding existing data on drive</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="277"/>
+        <location filename="../downloadthread.cpp" line="280"/>
         <source>zeroing out first and last MB of drive</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="283"/>
+        <location filename="../downloadthread.cpp" line="286"/>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>Chyba zápisu pri prepisovaní MBR nulami</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="741"/>
+        <location filename="../downloadthread.cpp" line="740"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>Chyba pri čítaní z úložiska.&lt;br&gt;Karta SD môže byť poškodená.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="395"/>
+        <location filename="../downloadthread.cpp" line="812"/>
+        <source>Waiting for FAT partition to be mounted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="860"/>
+        <source>Error mounting FAT32 partition</source>
+        <translation type="unfinished">Chyba pri pripájaní partície FAT32</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="882"/>
+        <source>Operating system did not mount FAT32 partition</source>
+        <translation type="unfinished">Operačný systém nepripojil partíciu FAT32</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="886"/>
+        <source>Customizing image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="898"/>
+        <source>Error creating firstrun.sh on FAT partition</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="939"/>
+        <source>Error writing to config.txt on FAT partition</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="963"/>
+        <source>Error writing to cmdline.txt on FAT partition</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="398"/>
         <source>Access denied error while writing file to disk.</source>
         <translation>Odopretý prístup pri zápise súboru na disk.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="400"/>
+        <location filename="../downloadthread.cpp" line="403"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation>Vyzerá, že máte zapnutý Controlled Folder Access. Pridajte, prosím, rpi-imager.exe a fat32format.exe do zoznamu povolených aplikácií a skúste to znovu.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="406"/>
+        <location filename="../downloadthread.cpp" line="409"/>
         <source>Error writing file to disk</source>
         <translation>Chyba pri zápise na disk</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="425"/>
+        <location filename="../downloadthread.cpp" line="428"/>
         <source>Error downloading: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="644"/>
+        <location filename="../downloadthread.cpp" line="647"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>Chyba pri zápise na úložisko (počas volania flush)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="651"/>
+        <location filename="../downloadthread.cpp" line="654"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>Chyba pri zápise na úložisko (počas volania fsync)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="632"/>
+        <location filename="../downloadthread.cpp" line="635"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>Stiahnutý súbor je poškodený. Kontrolný súčet nesedí</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="110"/>
+        <location filename="../downloadthread.cpp" line="113"/>
         <source>opening drive</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="295"/>
+        <location filename="../downloadthread.cpp" line="298"/>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>Chyba zápisu pri prepisovaní poslednej časti karty nulami.&lt;br&gt;Karta pravdepodobne udáva nesprávnu kapacitu (a môže byť falošná).</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="353"/>
+        <location filename="../downloadthread.cpp" line="356"/>
         <source>starting download</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="685"/>
+        <location filename="../downloadthread.cpp" line="680"/>
         <source>Error writing first block (partition table)</source>
         <translation>Chyba pri zápise prvého bloku (tabuľky partícií)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="760"/>
+        <location filename="../downloadthread.cpp" line="759"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Overovanie zápisu skončilo s chybou. Obsah karty SD sa nezhoduje s tým, čo na ňu bolo zapísané.</translation>
     </message>
@@ -201,22 +236,22 @@
 <context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="171"/>
+        <location filename="../imagewriter.cpp" line="182"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>Kapacita úložiska je nedostatočná&lt;br&gt;Musí byť aspoň %1 GB.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="177"/>
+        <location filename="../imagewriter.cpp" line="188"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Vstupný súbor nie je platným obrazom disku.&lt;br&gt;Veľkosť súboru %1 bajtov nie je násobkom 512 bajtov.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="201"/>
+        <location filename="../imagewriter.cpp" line="370"/>
         <source>Downloading and writing image</source>
         <translation>Sťahujem a zapisujem obraz</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="424"/>
+        <location filename="../imagewriter.cpp" line="503"/>
         <source>Select image</source>
         <translation>Vyberte obraz</translation>
     </message>
@@ -253,11 +288,167 @@
     </message>
 </context>
 <context>
+    <name>OptionsPopup</name>
+    <message>
+        <location filename="../OptionsPopup.qml" line="74"/>
+        <source>Advanced options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="91"/>
+        <source>Image customization options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="99"/>
+        <source>for this session only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="100"/>
+        <source>to always use</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="112"/>
+        <source>Disable overscan</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="117"/>
+        <source>Set hostname:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="136"/>
+        <source>Enable SSH</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="155"/>
+        <source>Use password authentication</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="171"/>
+        <source>Set password for &apos;pi&apos; user:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="193"/>
+        <source>Allow public-key authentication only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="208"/>
+        <source>Set authorized_keys for &apos;pi&apos;:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="220"/>
+        <source>Configure wifi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="239"/>
+        <source>SSID:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="248"/>
+        <source>Password:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="260"/>
+        <source>Show password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="265"/>
+        <source>Wifi country:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="276"/>
+        <source>Set locale settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="286"/>
+        <source>Time zone:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="296"/>
+        <source>Keyboard layout:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="306"/>
+        <source>Skip first-run wizard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="313"/>
+        <source>Persistent settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="321"/>
+        <source>Play sound when finished</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="325"/>
+        <source>Eject media when finished</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="329"/>
+        <source>Enable telemetry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="342"/>
+        <source>SAVE</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
         <location filename="../linux/linuxdrivelist.cpp" line="111"/>
         <source>Internal SD card reader</source>
         <translation>Interná čítačka SD kariet</translation>
+    </message>
+</context>
+<context>
+    <name>UseSavedSettingsPopup</name>
+    <message>
+        <location filename="../UseSavedSettingsPopup.qml" line="71"/>
+        <source>Warning: advanced settings set</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../UseSavedSettingsPopup.qml" line="85"/>
+        <source>Would you like to apply the image customization settings saved earlier?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../UseSavedSettingsPopup.qml" line="94"/>
+        <source>NO, CLEAR SETTINGS</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../UseSavedSettingsPopup.qml" line="106"/>
+        <source>YES</source>
+        <translation type="unfinished">ÁNO</translation>
+    </message>
+    <message>
+        <location filename="../UseSavedSettingsPopup.qml" line="118"/>
+        <source>EDIT SETTINGS</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -268,222 +459,225 @@
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="734"/>
+        <location filename="../main.qml" line="745"/>
         <source>Are you sure you want to quit?</source>
         <translation>Skutočne chcete skončiť?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="735"/>
+        <location filename="../main.qml" line="746"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
         <translation>Raspberry Pi Imager ešte neskončil.&lt;br&gt;Ste si istý, že chcete skončiť?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="90"/>
-        <location filename="../main.qml" line="303"/>
+        <location filename="../main.qml" line="98"/>
+        <location filename="../main.qml" line="314"/>
         <source>Operating System</source>
         <translation>Operačný systém</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="102"/>
+        <location filename="../main.qml" line="110"/>
         <source>CHOOSE OS</source>
         <translation>VÝBER OS</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="133"/>
-        <location filename="../main.qml" line="587"/>
+        <location filename="../main.qml" line="138"/>
+        <location filename="../main.qml" line="598"/>
         <source>Storage</source>
         <translation>SD karta</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="877"/>
+        <location filename="../main.qml" line="150"/>
+        <location filename="../main.qml" line="908"/>
         <source>CHOOSE STORAGE</source>
         <translation>VYBERTE SD KARTU</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
+        <location filename="../main.qml" line="180"/>
         <source>WRITE</source>
         <translation>ZÁPIS</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="818"/>
+        <location filename="../main.qml" line="849"/>
         <source>Writing... %1%</source>
         <translation>Zapisujem... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="220"/>
+        <location filename="../main.qml" line="230"/>
         <source>CANCEL WRITE</source>
         <translation>ZRUŠIŤ ZÁPIS</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="120"/>
+        <location filename="../main.qml" line="125"/>
         <source>Select this button to change the operating system</source>
         <translation>Pre zmenu operačného systému kliknite na toto tlačidlo</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="158"/>
         <source>Select this button to change the destination SD card</source>
-        <translation>Pre zmenu cieľovej SD karty kliknite na toto tlačidlo</translation>
+        <translation type="vanished">Pre zmenu cieľovej SD karty kliknite na toto tlačidlo</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="180"/>
+        <location filename="../main.qml" line="185"/>
         <source>Select this button to start writing the image</source>
         <translation>Kliknutím na toto tlačidlo spustíte zápis</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="223"/>
-        <location filename="../main.qml" line="815"/>
+        <location filename="../main.qml" line="233"/>
+        <location filename="../main.qml" line="846"/>
         <source>Cancelling...</source>
         <translation>Ruším operáciu...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="235"/>
+        <location filename="../main.qml" line="245"/>
         <source>CANCEL VERIFY</source>
         <translation>ZRUŠIŤ OVEROVANIE</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="238"/>
-        <location filename="../main.qml" line="838"/>
-        <location filename="../main.qml" line="895"/>
+        <location filename="../main.qml" line="248"/>
+        <location filename="../main.qml" line="869"/>
+        <location filename="../main.qml" line="926"/>
         <source>Finalizing...</source>
         <translation>Ukončujem...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="384"/>
-        <location filename="../main.qml" line="871"/>
+        <location filename="../main.qml" line="414"/>
+        <location filename="../main.qml" line="902"/>
         <source>Erase</source>
         <translation>Vymazať</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="385"/>
+        <location filename="../main.qml" line="415"/>
         <source>Format card as FAT32</source>
         <translation>Formátovať kartu ako FAT32</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="392"/>
+        <location filename="../main.qml" line="422"/>
         <source>Use custom</source>
         <translation>Použiť vlastný</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="393"/>
+        <location filename="../main.qml" line="423"/>
         <source>Select a custom .img from your computer</source>
         <translation>Použiť vlastný súbor img. na Vašom počítači</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="479"/>
+        <location filename="../main.qml" line="490"/>
         <source>Local file</source>
         <translation>Miestny súbor</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="692"/>
+        <location filename="../main.qml" line="703"/>
         <source>[WRITE PROTECTED]</source>
         <translation>[OCHRANA PROTI ZÁPISU]</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="746"/>
+        <location filename="../main.qml" line="757"/>
         <source>Warning</source>
         <translation>Varovanie</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="752"/>
+        <location filename="../main.qml" line="763"/>
         <source>Preparing to write...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="765"/>
+        <location filename="../main.qml" line="776"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
         <translation>Všetky existujúce dáta na &apos;%1&apos; budú odstránené.&lt;br&gt;Naozaj chcete pokračovať?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="776"/>
+        <location filename="../main.qml" line="787"/>
         <source>Update available</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="777"/>
+        <location filename="../main.qml" line="788"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="848"/>
+        <location filename="../main.qml" line="879"/>
         <source>Preparing to write... (%1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="872"/>
+        <location filename="../main.qml" line="903"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; bola vymazaná&lt;br&gt;&lt;br&gt;Teraz môžete odstrániť SD kartu z čítačky</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="902"/>
-        <location filename="../main.qml" line="955"/>
+        <location filename="../main.qml" line="942"/>
         <source>Error parsing os_list.json</source>
         <translation>Chyba pri spracovaní os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="993"/>
+        <location filename="../main.qml" line="1043"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Najprv pripojte USB kľúč, ktorý obsahuje diskové obrazy.&lt;br&gt;Obrazy sa musia nachádzať v koreňovom priečinku USB kľúča.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1008"/>
+        <location filename="../main.qml" line="1058"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>SD karta je chránená proti zápisu.&lt;br&gt;Presuňte prepínač zámku na ľavej strane karty smerom hore a skúste to znova.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="416"/>
+        <location filename="../main.qml" line="374"/>
         <source>Back</source>
         <translation>Späť</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="417"/>
+        <location filename="../main.qml" line="163"/>
+        <source>Select this button to change the destination storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="375"/>
         <source>Go back to main menu</source>
         <translation>Prejsť do hlavnej ponuky</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="474"/>
+        <location filename="../main.qml" line="485"/>
         <source>Released: %1</source>
         <translation>Vydané: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="477"/>
+        <location filename="../main.qml" line="488"/>
         <source>Cached on your computer</source>
         <translation>Uložené na počítači</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="481"/>
+        <location filename="../main.qml" line="492"/>
         <source>Online - %1 GB download</source>
         <translation>Online %1 GB na stiahnutie</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="638"/>
-        <location filename="../main.qml" line="690"/>
-        <location filename="../main.qml" line="696"/>
+        <location filename="../main.qml" line="649"/>
+        <location filename="../main.qml" line="701"/>
+        <location filename="../main.qml" line="707"/>
         <source>Mounted as %1</source>
         <translation>Pripojená ako %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="797"/>
+        <location filename="../main.qml" line="828"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Chyba pri sťahovaní zoznamu OS z Internetu</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="841"/>
+        <location filename="../main.qml" line="872"/>
         <source>Verifying... %1%</source>
         <translation>Overujem... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="863"/>
+        <location filename="../main.qml" line="894"/>
         <source>Error</source>
         <translation>Chyba</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="870"/>
+        <location filename="../main.qml" line="901"/>
         <source>Write Successful</source>
         <translation>Zápis úspešne skončil</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="874"/>
+        <location filename="../main.qml" line="905"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; bol zapísaný na &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;Teraz môžete odstrániť SD kartu z čítačky</translation>
     </message>
