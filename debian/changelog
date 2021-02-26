@@ -2,8 +2,13 @@ rpi-imager (1.6) unstable; urgency=medium
 
   * Wayland: fix "Client tried to set invalid geometry" error
   * Add advanced users option screen available under SHIFT-CTRL-X
+  * Disable high DPI scaling on incorrect EDID
+  * Fix handling of .iso files
+  * Update translations
+  * GUI: change "SD card" -> "Storage"
+  * Allow NVMe drives as destination drive (Linux only)
 
- -- Floris Bos <bos@je-eigen-domein.nl>  Fri, 15 Jan 2021 22:00:21 +0100
+ -- Floris Bos <bos@je-eigen-domein.nl>  Fri, 26 Feb 2021 14:32:21 +0100
 
 rpi-imager (1.5) unstable; urgency=medium
 

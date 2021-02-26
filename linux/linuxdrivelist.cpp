@@ -126,6 +126,25 @@ namespace Drivelist
             }
             dp.removeAll("");
             d.description = dp.join(" ").toStdString();
+
+            /* Mark internal NVMe drives as non-system if not mounted
+               anywhere else than under /media */
+            if (d.isSystem && subsystems.contains("nvme"))
+            {
+                bool isMounted = false;
+                for (std::string mp : d.mountpoints)
+                {
+                    if (!QByteArray::fromStdString(mp).startsWith("/media/")) {
+                        isMounted = true;
+                        break;
+                    }
+                }
+                if (!isMounted)
+                {
+                    d.isSystem = false;
+                }
+            }
+
             deviceList.push_back(d);
         }
 
