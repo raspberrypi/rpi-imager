@@ -135,7 +135,7 @@ ApplicationWindow {
                     Text {
                         id: text2
                         color: "#ffffff"
-                        text: qsTr("SD Card")
+                        text: qsTr("Storage")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
                         Layout.preferredWidth: 100
@@ -147,7 +147,7 @@ ApplicationWindow {
 
                     Button {
                         id: dstbutton
-                        text: qsTr("CHOOSE SD CARD")
+                        text: qsTr("CHOOSE STORAGE")
                         font.family: roboto.name
                         Layout.minimumHeight: 40
                         Layout.preferredWidth: 100

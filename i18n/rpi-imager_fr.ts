@@ -286,14 +286,14 @@
     <message>
         <location filename="../main.qml" line="133"/>
         <location filename="../main.qml" line="587"/>
-        <source>SD Card</source>
-        <translation>Carte SD</translation>
+        <source>Storage</source>
+        <translation>Stockage</translation>
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
         <location filename="../main.qml" line="877"/>
-        <source>CHOOSE SD CARD</source>
-        <translation>CHOISISSEZ LA CARTE SD</translation>
+        <source>CHOOSE STORAGE</source>
+        <translation>CHOISISSEZ LE STOCKAGE</translation>
     </message>
     <message>
         <location filename="../main.qml" line="158"/>

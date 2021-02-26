@@ -287,13 +287,13 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../main.qml" line="133"/>
         <location filename="../main.qml" line="587"/>
-        <source>SD Card</source>
+        <source>Storage</source>
         <translation>Scheda SD</translation>
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
         <location filename="../main.qml" line="877"/>
-        <source>CHOOSE SD CARD</source>
+        <source>CHOOSE STORAGE</source>
         <translation>SCEGLI SCHEDA SD</translation>
     </message>
     <message>
