@@ -68,11 +68,10 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         {
             if (i.isSystem)
                 continue;
-
-            // Should already be caught by isSystem variable, but just in case...
-            if (mountpoints.contains("/") || mountpoints.contains("C://"))
-                continue;
         }
+        // Should already be caught by isSystem variable, but just in case...
+        if (mountpoints.contains("/") || mountpoints.contains("C://"))
+            continue;
 
         // Skip zero-sized devices
         if (i.size == 0)
