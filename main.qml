@@ -903,6 +903,11 @@ ApplicationWindow {
             msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
         else
             msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
+        if (imageWriter.isEmbeddedMode()) {
+            msgpopup.continueButton = false
+            msgpopup.quitButton = true
+        }
+
         msgpopup.openPopup()
         imageWriter.setDst("")
         dstbutton.text = qsTr("CHOOSE STORAGE")
@@ -959,7 +964,7 @@ ApplicationWindow {
             if ("imager" in o) {
                 var imager = o["imager"]
                 if ("latest_version" in imager && "url" in imager) {
-                    if (imageWriter.isVersionNewer(imager["latest_version"])) {
+                    if (!imageWriter.isEmbeddedMode() && imageWriter.isVersionNewer(imager["latest_version"])) {
                         updatepopup.url = imager["url"]
                         updatepopup.openPopup()
                     }

@@ -20,6 +20,7 @@ Popup {
     property alias title: msgpopupheader.text
     property alias text: msgpopupbody.text
     property bool continueButton: true
+    property bool quitButton: false
     property bool yesButton: false
     property bool noButton: false
     signal yes()
@@ -127,6 +128,18 @@ Popup {
                 Material.background: "#c51a4a"
                 font.family: roboto.name
                 visible: msgpopup.continueButton
+                Accessible.onPressAction: clicked()
+            }
+
+            Button {
+                text: qsTr("QUIT")
+                onClicked: {
+                    Qt.quit()
+                }
+                Material.foreground: "#ffffff"
+                Material.background: "#c51a4a"
+                font.family: roboto.name
+                visible: msgpopup.quitButton
                 Accessible.onPressAction: clicked()
             }
 
