@@ -65,12 +65,12 @@
     <message>
         <location filename="../downloadthread.cpp" line="260"/>
         <source>discarding existing data on drive</source>
-        <translation type="unfinished"></translation>
+        <translation>odstraňujem existujúce údaje z disku</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="280"/>
         <source>zeroing out first and last MB of drive</source>
-        <translation type="unfinished"></translation>
+        <translation>prepisujem prvý a posledny megabajt disku</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="286"/>
@@ -85,37 +85,37 @@
     <message>
         <location filename="../downloadthread.cpp" line="812"/>
         <source>Waiting for FAT partition to be mounted</source>
-        <translation type="unfinished"></translation>
+        <translation>Čakám a pripojenie FAT partície</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="860"/>
         <source>Error mounting FAT32 partition</source>
-        <translation type="unfinished">Chyba pri pripájaní partície FAT32</translation>
+        <translation>Chyba pri pripájaní partície FAT32</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="882"/>
         <source>Operating system did not mount FAT32 partition</source>
-        <translation type="unfinished">Operačný systém nepripojil partíciu FAT32</translation>
+        <translation>Operačný systém nepripojil partíciu FAT32</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="886"/>
         <source>Customizing image</source>
-        <translation type="unfinished"></translation>
+        <translation>Upravujem obraz</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="898"/>
         <source>Error creating firstrun.sh on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Pri vytváraní firstrun.sh na partícii FAT nastala chyba</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="939"/>
         <source>Error writing to config.txt on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Chyba pri zápise config.txt na FAT partícii</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="963"/>
         <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Chyba pri zápise cmdline.txt na FAT partícii</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="398"/>
@@ -135,7 +135,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="428"/>
         <source>Error downloading: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Chyba pri sťahovaní: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="647"/>
@@ -155,7 +155,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="113"/>
         <source>opening drive</source>
-        <translation type="unfinished"></translation>
+        <translation>otváram disk</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="298"/>
@@ -165,7 +165,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="356"/>
         <source>starting download</source>
-        <translation type="unfinished"></translation>
+        <translation>začína sťahovanie</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="680"/>
@@ -261,7 +261,7 @@
     <message>
         <location filename="../localfileextractthread.cpp" line="34"/>
         <source>opening image file</source>
-        <translation type="unfinished"></translation>
+        <translation>otváram súbor s obrazom</translation>
     </message>
     <message>
         <location filename="../localfileextractthread.cpp" line="39"/>
@@ -292,127 +292,127 @@
     <message>
         <location filename="../OptionsPopup.qml" line="74"/>
         <source>Advanced options</source>
-        <translation type="unfinished"></translation>
+        <translation>Pokročilé možnosti</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="91"/>
         <source>Image customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>Možnosti úprav obrazu</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="99"/>
         <source>for this session only</source>
-        <translation type="unfinished"></translation>
+        <translation>iba pre toto sedenie</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="100"/>
         <source>to always use</source>
-        <translation type="unfinished"></translation>
+        <translation>použiť vždy</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="112"/>
         <source>Disable overscan</source>
-        <translation type="unfinished"></translation>
+        <translation>Vypnúť presnímanie (overscan)</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="117"/>
         <source>Set hostname:</source>
-        <translation type="unfinished"></translation>
+        <translation>Nastaviť meno počítača (hostname):</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="136"/>
         <source>Enable SSH</source>
-        <translation type="unfinished"></translation>
+        <translation>Povoliť SSH</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="155"/>
         <source>Use password authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Použiť heslo na prihlásenie</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="171"/>
         <source>Set password for &apos;pi&apos; user:</source>
-        <translation type="unfinished"></translation>
+        <translation>Nastaviť heslo pre používateľa &apos;pi&apos;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="193"/>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished"></translation>
+        <translation>Povoliť iba prihlásenie pomocou verejného kľúča</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="208"/>
         <source>Set authorized_keys for &apos;pi&apos;:</source>
-        <translation type="unfinished"></translation>
+        <translation>Nastaviť authorized_keys pre &apos;pi&apos;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="220"/>
         <source>Configure wifi</source>
-        <translation type="unfinished"></translation>
+        <translation>Nastaviť wifi</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="239"/>
         <source>SSID:</source>
-        <translation type="unfinished"></translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="248"/>
         <source>Password:</source>
-        <translation type="unfinished"></translation>
+        <translation>Heslo:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="260"/>
         <source>Show password</source>
-        <translation type="unfinished"></translation>
+        <translation>Zobraziť heslo</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="265"/>
         <source>Wifi country:</source>
-        <translation type="unfinished"></translation>
+        <translation>Wifi krajina:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="276"/>
         <source>Set locale settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Nastavenia miestnych zvyklostí</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="286"/>
         <source>Time zone:</source>
-        <translation type="unfinished"></translation>
+        <translation>Časové pásmo:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="296"/>
         <source>Keyboard layout:</source>
-        <translation type="unfinished"></translation>
+        <translation>Rozloženie klávesnice:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="306"/>
         <source>Skip first-run wizard</source>
-        <translation type="unfinished"></translation>
+        <translation>Vypnúť sprievodcu prvým spustením</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="313"/>
         <source>Persistent settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Trvalé nastavenia</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="321"/>
         <source>Play sound when finished</source>
-        <translation type="unfinished"></translation>
+        <translation>Po skončení prehrať zvuk</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="325"/>
         <source>Eject media when finished</source>
-        <translation type="unfinished"></translation>
+        <translation>Po skončení vysunúť médium</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="329"/>
         <source>Enable telemetry</source>
-        <translation type="unfinished"></translation>
+        <translation>Povoliť telemetriu</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="342"/>
         <source>SAVE</source>
-        <translation type="unfinished"></translation>
+        <translation>ULOŽIŤ</translation>
     </message>
 </context>
 <context>
@@ -428,27 +428,27 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="71"/>
         <source>Warning: advanced settings set</source>
-        <translation type="unfinished"></translation>
+        <translation>Varovanie: používajú sa pokročilé možnosti</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="85"/>
         <source>Would you like to apply the image customization settings saved earlier?</source>
-        <translation type="unfinished"></translation>
+        <translation>Chcete použiť uložené nastavenia úprav obrazu?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="94"/>
         <source>NO, CLEAR SETTINGS</source>
-        <translation type="unfinished"></translation>
+        <translation>NIE, VYČISTIŤ NASTAVENIA</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="106"/>
         <source>YES</source>
-        <translation type="unfinished">ÁNO</translation>
+        <translation>ÁNO</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="118"/>
         <source>EDIT SETTINGS</source>
-        <translation type="unfinished"></translation>
+        <translation>UPRAVIŤ NASTAVENIA</translation>
     </message>
 </context>
 <context>
@@ -577,7 +577,7 @@
     <message>
         <location filename="../main.qml" line="763"/>
         <source>Preparing to write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Príprava zápisu...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="776"/>
@@ -587,17 +587,17 @@
     <message>
         <location filename="../main.qml" line="787"/>
         <source>Update available</source>
-        <translation type="unfinished"></translation>
+        <translation>Je dostupná aktualizácia</translation>
     </message>
     <message>
         <location filename="../main.qml" line="788"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Je dostupná nová verzia Imagera.&lt;br&gt;Chcete prejsť na webovú stránku s programom a stiahnuť ho?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="879"/>
         <source>Preparing to write... (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Príprava zápisu... (%1)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
@@ -627,7 +627,7 @@
     <message>
         <location filename="../main.qml" line="163"/>
         <source>Select this button to change the destination storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Pre zmenu cieľového zariadenia úložiska kliknite na toto tlačidlo</translation>
     </message>
     <message>
         <location filename="../main.qml" line="375"/>
