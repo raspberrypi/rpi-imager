@@ -176,6 +176,7 @@ protected:
 
 #ifdef Q_OS_WIN
     WinFile _file, _volumeFile;
+    QByteArray _nr;
 #elif defined(Q_OS_DARWIN)
     MacFile _file;
 #else

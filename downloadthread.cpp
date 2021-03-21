@@ -127,7 +127,7 @@ bool DownloadThread::_openAndPrepareDevice()
 
     if (std::regex_match(_filename.constData(), m, windriveregex))
     {
-        QByteArray _nr = QByteArray::fromStdString(m[1]);
+        _nr = QByteArray::fromStdString(m[1]);
 
         if (!_nr.isEmpty()) {
             qDebug() << "Removing partition table from Windows drive #" << _nr << "(" << _filename << ")";
@@ -811,6 +811,18 @@ bool DownloadThread::_customizeImage()
 
     emit preparationStatusUpdate(tr("Waiting for FAT partition to be mounted"));
 
+#ifdef Q_OS_WIN
+    qDebug() << "Running diskpart rescan";
+    QProcess proc;
+    proc.setProcessChannelMode(proc.MergedChannels);
+    proc.start("diskpart");
+    proc.waitForStarted();
+    proc.write("rescan\r\n");
+    proc.closeWriteChannel();
+    proc.waitForFinished();
+    qDebug() << proc.readAll();
+#endif
+
     /* See if OS auto-mounted the device */
     for (int tries = 0; tries < 3; tries++)
     {
@@ -825,6 +837,30 @@ bool DownloadThread::_customizeImage()
             }
         }
     }
+
+#ifdef Q_OS_WIN
+    if (folder.isEmpty() && !_nr.isEmpty()) {
+        qDebug() << "Windows did not assign drive letter automatically. Ask diskpart to do so manually.";
+        proc.start("diskpart");
+        proc.waitForStarted();
+        proc.write("select disk "+_nr+"\r\n"
+                        "select partition 1\r\n"
+                        "assign\r\n");
+        proc.closeWriteChannel();
+        proc.waitForFinished();
+        qDebug() << proc.readAll();
+
+        auto l = Drivelist::ListStorageDevices();
+        for (auto i : l)
+        {
+            if (QByteArray::fromStdString(i.device).toLower() == devlower && i.mountpoints.size())
+            {
+                folder = QByteArray::fromStdString(i.mountpoints.front());
+                break;
+            }
+        }
+    }
+#endif
 
 #ifdef Q_OS_LINUX
     bool manualmount = false;
@@ -853,7 +889,7 @@ bool DownloadThread::_customizeImage()
             QTemporaryDir td;
             QStringList args;
             folder = td.path();
-            args << fatpartition << folder;
+            args << "-t" << "vfat" << fatpartition << folder;
 
             if (QProcess::execute("mount", args) != 0)
             {
@@ -883,14 +919,29 @@ bool DownloadThread::_customizeImage()
         return false;
     }
 
+    /* Some operating system take longer to complete mounting FAT32
+       wait up to 3 seconds for config.txt file to appear */
+    QString configFilename = folder+"/config.txt";
+    for (int tries = 0; tries < 3; tries++)
+    {
+        if (QFile::exists(configFilename))
+            break;
+        QThread::sleep(1);
+    }
+
+    if (!QFile::exists(configFilename))
+    {
+        emit error(tr("Unable to customize. File '%1' does not exist.").arg(configFilename));
+        return false;
+    }
+
     emit preparationStatusUpdate(tr("Customizing image"));
 
     if (!_firstrun.isEmpty())
     {
         QFile f(folder+"/firstrun.sh");
-        if (f.open(f.WriteOnly))
+        if (f.open(f.WriteOnly) && f.write(_firstrun) == _firstrun.length())
         {
-            f.write(_firstrun);
             f.close();
         }
         else
@@ -906,8 +957,8 @@ bool DownloadThread::_customizeImage()
         configItems.removeAll("");
         QByteArray config;
 
-        QFile f(folder+"/config.txt");
-        if (f.exists() && f.open(f.ReadOnly))
+        QFile f(configFilename);
+        if (f.open(f.ReadOnly))
         {
             config = f.readAll();
             f.close();
@@ -929,9 +980,8 @@ bool DownloadThread::_customizeImage()
             }
         }
 
-        if (f.open(f.WriteOnly))
+        if (f.open(f.WriteOnly) && f.write(config) == config.length())
         {
-            f.write(config);
             f.close();
         }
         else
@@ -953,9 +1003,8 @@ bool DownloadThread::_customizeImage()
         }
 
         cmdline += _cmdline;
-        if (f.open(f.WriteOnly))
+        if (f.open(f.WriteOnly) && f.write(cmdline) == cmdline.length())
         {
-            f.write(cmdline);
             f.close();
         }
         else
