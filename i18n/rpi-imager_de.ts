@@ -35,7 +35,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="113"/>
         <source>opening drive</source>
-        <translation type="unfinished"></translation>
+        <translation>Gerät wird geöffnet</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="146"/>
@@ -73,12 +73,12 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="260"/>
         <source>discarding existing data on drive</source>
-        <translation type="unfinished"></translation>
+        <translation>Vorhandene Daten auf dem Medium werden gelöscht</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="280"/>
         <source>zeroing out first and last MB of drive</source>
-        <translation type="unfinished"></translation>
+        <translation>Erstes und letztes Megabyte des Mediums werden überschrieben</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="286"/>
@@ -93,7 +93,7 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="356"/>
         <source>starting download</source>
-        <translation type="unfinished"></translation>
+        <translation>Download wird gestartet</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
@@ -103,37 +103,37 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="812"/>
         <source>Waiting for FAT partition to be mounted</source>
-        <translation type="unfinished"></translation>
+        <translation>Warten auf das Mounten der FAT-Partition</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="860"/>
         <source>Error mounting FAT32 partition</source>
-        <translation type="unfinished">Fehler beim Einbinden der FAT32-Partition</translation>
+        <translation>Fehler beim Einbinden der FAT32-Partition</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="882"/>
         <source>Operating system did not mount FAT32 partition</source>
-        <translation type="unfinished">Das Betriebssystem band die FAT32-Partition nicht ein</translation>
+        <translation>Das Betriebssystem band die FAT32-Partition nicht ein</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="886"/>
         <source>Customizing image</source>
-        <translation type="unfinished"></translation>
+        <translation>Image modifizieren</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="898"/>
         <source>Error creating firstrun.sh on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Erstellen von firstrun.sh auf der FAT-Partition</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="939"/>
         <source>Error writing to config.txt on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Schreiben in config.txt auf der FAT-Partition</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="963"/>
         <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Schreiben in cmdline.txt auf der FAT-Partition</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="398"/>
@@ -145,7 +145,7 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translatorcomment>I don&apos;t use Windows either. What is &quot;Controlled Folder Access&quot; in the German version?
 
-Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-imager.exe als auch fat32format.exe zur Liste der erlaubten Apps hinzu und versuchen sie es erneut.</translatorcomment>
+Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-imager.exe als auch fat32format.exe zur Liste der erlaubten Apps hinzu und versuchen sie es erneut.</translatorcomment>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -156,7 +156,7 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     <message>
         <location filename="../downloadthread.cpp" line="428"/>
         <source>Error downloading: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Herunterladen: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="635"/>
@@ -267,7 +267,7 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     <message>
         <location filename="../localfileextractthread.cpp" line="34"/>
         <source>opening image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Abbilddatei wird geöffnet</translation>
     </message>
     <message>
         <location filename="../localfileextractthread.cpp" line="39"/>
@@ -298,127 +298,127 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     <message>
         <location filename="../OptionsPopup.qml" line="74"/>
         <source>Advanced options</source>
-        <translation type="unfinished"></translation>
+        <translation>Erweiterte Optionen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="91"/>
         <source>Image customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>OS-Modifizierungen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="99"/>
         <source>for this session only</source>
-        <translation type="unfinished"></translation>
+        <translation>Nur für diese Sitzung</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="100"/>
         <source>to always use</source>
-        <translation type="unfinished"></translation>
+        <translation>Immer verwenden</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="112"/>
         <source>Disable overscan</source>
-        <translation type="unfinished"></translation>
+        <translation>Overscan deaktivieren</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="117"/>
         <source>Set hostname:</source>
-        <translation type="unfinished"></translation>
+        <translation>Hostname:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="136"/>
         <source>Enable SSH</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH aktivieren</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="155"/>
         <source>Use password authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Password zur Authentifizierung verwenden</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="171"/>
         <source>Set password for &apos;pi&apos; user:</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort für &apos;pi&apos;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="193"/>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished"></translation>
+        <translation>Authethifizierung via Public-Key</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="208"/>
         <source>Set authorized_keys for &apos;pi&apos;:</source>
-        <translation type="unfinished"></translation>
+        <translation>authorized_keys für &apos;pi&apos;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="220"/>
         <source>Configure wifi</source>
-        <translation type="unfinished"></translation>
+        <translation>Wifi enrichten</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="239"/>
         <source>SSID:</source>
-        <translation type="unfinished"></translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="248"/>
         <source>Password:</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="260"/>
         <source>Show password</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort anzeigen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="265"/>
         <source>Wifi country:</source>
-        <translation type="unfinished"></translation>
+        <translation>Wifi-Land:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="276"/>
         <source>Set locale settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Spracheinstellungen festlegen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="286"/>
         <source>Time zone:</source>
-        <translation type="unfinished"></translation>
+        <translation>Zeitzone:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="296"/>
         <source>Keyboard layout:</source>
-        <translation type="unfinished"></translation>
+        <translation>Tastaturlayout:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="306"/>
         <source>Skip first-run wizard</source>
-        <translation type="unfinished"></translation>
+        <translation>Einrichtungsassistent überspringen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="313"/>
         <source>Persistent settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Dauerhafte Einstellugen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="321"/>
         <source>Play sound when finished</source>
-        <translation type="unfinished"></translation>
+        <translation>Tonsignal nach Beenden abspielen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="325"/>
         <source>Eject media when finished</source>
-        <translation type="unfinished"></translation>
+        <translation>Medien nach Beenden auswerfen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="329"/>
         <source>Enable telemetry</source>
-        <translation type="unfinished"></translation>
+        <translation>Telemetry aktivieren</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="342"/>
         <source>SAVE</source>
-        <translation type="unfinished"></translation>
+        <translation>SPEICHERN</translation>
     </message>
 </context>
 <context>
@@ -434,27 +434,27 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="71"/>
         <source>Warning: advanced settings set</source>
-        <translation type="unfinished"></translation>
+        <translation>Warnung: Erweiterte Optionen festgelegt</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="85"/>
         <source>Would you like to apply the image customization settings saved earlier?</source>
-        <translation type="unfinished"></translation>
+        <translation>Möchten Sie die vorher festgelegten OS-Modifizierungen anwenden?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="94"/>
         <source>NO, CLEAR SETTINGS</source>
-        <translation type="unfinished"></translation>
+        <translation>NEIN, EINSTELLUNGEN LÖSCHEN</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="106"/>
         <source>YES</source>
-        <translation type="unfinished">JA</translation>
+        <translation>JA</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="118"/>
         <source>EDIT SETTINGS</source>
-        <translation type="unfinished"></translation>
+        <translation>EINSTELLUNGEN BEARBEITEN</translation>
     </message>
 </context>
 <context>
@@ -558,7 +558,7 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     <message>
         <location filename="../main.qml" line="163"/>
         <source>Select this button to change the destination storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Klicke auf diesen Knopf, um das Zeil-Speichermedium zu ändern</translation>
     </message>
     <message>
         <location filename="../main.qml" line="375"/>
@@ -615,17 +615,17 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     <message>
         <location filename="../main.qml" line="763"/>
         <source>Preparing to write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreiben wird vorbereitet...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="787"/>
         <source>Update available</source>
-        <translation type="unfinished"></translation>
+        <translation>Update verfügbar</translation>
     </message>
     <message>
         <location filename="../main.qml" line="788"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Eine neuere Version von Imager ist verfügbar. &lt;br&gt;Möchten Sie die Webseite besuchen, um das Update herunterzuladen?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="849"/>
@@ -650,7 +650,7 @@ Controlled Folder Access sheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-i
     <message>
         <location filename="../main.qml" line="879"/>
         <source>Preparing to write... (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreiben wird vorbereitet... (%1)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="894"/>
