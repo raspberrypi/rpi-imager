@@ -79,7 +79,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
-        <source>Error reading from storage.&lt;br&gt;This may be caused by a hardware fault.</source>
+        <source>Error reading from storage.&lt;br&gt;This may be caused by faulty hardware.</source>
         <translation>Chyba pri čítaní z úložiska.&lt;br&gt;Karta SD môže byť poškodená.</translation>
     </message>
     <message>
