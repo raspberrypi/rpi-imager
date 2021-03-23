@@ -654,12 +654,12 @@
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the storage device.</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../main.qml" line="905"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the storage device.</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
