@@ -79,7 +79,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
-        <source>Error reading from storage.&lt;br&gt;SThis may be caused by a hardware fault.</source>
+        <source>Error reading from storage.&lt;br&gt;SThis may be caused by faulty hardware.</source>
         <translation>Depolamadan okuma hatası.&lt;br&gt;SD kart arızalı olabilir.</translation>
     </message>
     <message>
