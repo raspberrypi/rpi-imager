@@ -79,7 +79,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <source>Error reading from storage.&lt;br&gt;This may be caused by a hardware fault.</source>
         <translation>从存储读取数据时错误。&lt;br&gt;SD卡可能已损坏。</translation>
     </message>
     <message>
@@ -174,7 +174,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="759"/>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <source>Verifying write failed. Contents of storage device is different from what was written to it.</source>
         <translation>验证写入失败。 SD卡的内容与写入的内容不同。</translation>
     </message>
 </context>
@@ -517,7 +517,7 @@
         <translation>更改操作系统</translation>
     </message>
     <message>
-        <source>Select this button to change the destination SD card</source>
+        <source>Select this button to change the destination storage device</source>
         <translation type="vanished">更改目标SD卡</translation>
     </message>
     <message>
@@ -606,7 +606,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation>&lt;b&gt;%1 &lt;/ b&gt;已被删除&lt;br&gt; &lt;br&gt;您现在可以从读取器中取出SD卡</translation>
     </message>
     <message>
@@ -621,7 +621,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="1058"/>
-        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
+        <source>Storage device card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>SD卡具有写保护。&lt;br&gt;尝试向上推SD卡的左侧的锁定开关，然后重试。</translation>
     </message>
     <message>
@@ -686,7 +686,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="905"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; 已经成功烧录到 &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;上了，你可以卸载SD卡了</translation>
     </message>
 </context>
