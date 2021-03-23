@@ -900,9 +900,9 @@ ApplicationWindow {
     function onSuccess() {
         msgpopup.title = qsTr("Write Successful")
         if (osbutton.text === qsTr("Erase"))
-            msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
+            msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the storage device").arg(dstbutton.text)
         else
-            msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
+            msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the storage device").arg(osbutton.text).arg(dstbutton.text)
         if (imageWriter.isEmbeddedMode()) {
             msgpopup.continueButton = false
             msgpopup.quitButton = true
@@ -1060,7 +1060,7 @@ ApplicationWindow {
 
     function selectDstItem(d) {
         if (d.isReadOnly) {
-            onError(qsTr("SD card is write protected.<br>Push the lock switch on the left side of the card upwards, and try again."))
+            onError(qsTr("Storage device is write protected.<br>If the device is an SD card, push the lock switch on the left side of the card upwards, and try again."))
             return
         }
 
