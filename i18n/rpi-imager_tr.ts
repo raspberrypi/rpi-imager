@@ -79,7 +79,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <source>Error reading from storage.&lt;br&gt;SThis may be caused by a hardware fault.</source>
         <translation>Depolamadan okuma hatası.&lt;br&gt;SD kart arızalı olabilir.</translation>
     </message>
     <message>
@@ -174,7 +174,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="759"/>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <source>Verifying write failed. Contents of storage device is different from what was written to it.</source>
         <translation>Yazma doğrulanamadı. SD kartın içeriği, üzerine yazılandan farklı.</translation>
     </message>
 </context>
@@ -487,7 +487,7 @@
         <translation>SD KART SEÇİN</translation>
     </message>
     <message>
-        <source>Select this button to change the destination SD card</source>
+        <source>Select this button to change the destination storage device</source>
         <translation type="vanished">Hedef SD kartı değiştirmek için bu düğmeyi seçin</translation>
     </message>
     <message>
@@ -659,12 +659,12 @@
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; silindi &lt;br&gt;&lt;br&gt; Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
     </message>
     <message>
         <location filename="../main.qml" line="905"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt; üzerine yazıldı. Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
     </message>
     <message>
