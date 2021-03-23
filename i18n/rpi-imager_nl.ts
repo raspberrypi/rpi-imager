@@ -79,7 +79,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <source>Error reading from storage.&lt;br&gt;This may be caused by faulty hardware.</source>
         <translation>Fout bij lezen van SD kaart.&lt;br&gt;Kaart is mogelijk defect.</translation>
     </message>
     <message>
@@ -174,7 +174,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="759"/>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <source>Verifying write failed. Contents of storage device is different from what was written to it.</source>
         <translation>Verificatie mislukt. De gegevens die op de SD kaart staan wijken af van wat er naar geschreven is.</translation>
     </message>
 </context>
@@ -512,7 +512,7 @@
         <translation>Kies deze knop om een besturingssysteem te kiezen</translation>
     </message>
     <message>
-        <source>Select this button to change the destination SD card</source>
+        <source>Select this button to change the destination storage device</source>
         <translation type="vanished">Kies deze knop om de SD kaart te kiezen</translation>
     </message>
     <message>
@@ -601,7 +601,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; is gewist&lt;br&gt;&lt;br&gt;U kunt nu de SD kaart uit de lezer halen</translation>
     </message>
     <message>
@@ -616,7 +616,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="1058"/>
-        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
+        <source>Storage device is write protected.&lt;br&gt;If the device is an SD card, push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>SD kaart is tegen schrijven beveiligd.&lt;br&gt;Druk het schuifje aan de linkerkant van de SD kaart omhoog, en probeer nogmaals.</translation>
     </message>
     <message>
@@ -678,7 +678,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="905"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; is geschreven naar &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;U kunt nu de SD kaart uit de lezer halen</translation>
     </message>
 </context>
