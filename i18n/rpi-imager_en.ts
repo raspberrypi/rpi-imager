@@ -79,7 +79,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <source>Error reading from storage.&lt;br&gt;This may be caused by faulty hardware.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -174,7 +174,7 @@
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="759"/>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <source>Verifying write failed. Contents of storage device is different from what was written to it.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -654,12 +654,12 @@
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the storage device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../main.qml" line="905"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the storage device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -674,7 +674,7 @@
     </message>
     <message>
         <location filename="../main.qml" line="1058"/>
-        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
+        <source>Storage device is write protected.&lt;br&gt;If the device is an SD card, push the lock switch on the left side of the card upwards, and try again.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
