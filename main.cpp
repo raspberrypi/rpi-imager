@@ -22,6 +22,9 @@
 #ifndef QT_NO_WIDGETS
 #include <QtWidgets/QApplication>
 #endif
+#ifdef Q_OS_DARWIN
+#include <CoreFoundation/CoreFoundation.h>
+#endif
 
 static QTextStream cerr(stderr);
 
@@ -174,6 +177,24 @@ int main(int argc, char *argv[])
 
     if (customQm.isEmpty())
     {
+#ifdef Q_OS_DARWIN
+        QString langcode = "en_GB";
+        CFArrayRef prefLangs = CFLocaleCopyPreferredLanguages();
+        if (CFArrayGetCount(prefLangs))
+        {
+            char buf[32] = {0};
+            CFStringRef strRef = (CFStringRef) CFArrayGetValueAtIndex(prefLangs, 0);
+            CFStringGetCString(strRef, buf, sizeof(buf), kCFStringEncodingUTF8);
+            CFRelease(strRef);
+            langcode = buf;
+            langcode.replace('-', '_');
+            qDebug() << "OSX most preferred language:" << langcode;
+        }
+
+        CFRelease(prefLangs);
+        QLocale::setDefault(QLocale(langcode));
+#endif
+
         if (translator.load(QLocale(), "rpi-imager", "_", QLatin1String(":/i18n")))
             QCoreApplication::installTranslator(&translator);
     }
