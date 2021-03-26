@@ -16,9 +16,9 @@ ApplicationWindow {
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 420
     minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
-    maximumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
+    //maximumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
-    maximumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
+    //maximumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
 
@@ -63,7 +63,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
                 fillMode: Image.PreserveAspectFit
-                source: imageWriter.isEmbeddedMode() ? "icons/rpi2-hires.png" : "icons/rpi2.png"
+                source: window.height > 700 ? "icons/rpi2-hires.png" : "icons/rpi2.png"
                 width: window.width
                 height: window.height/2
             }
@@ -322,8 +322,8 @@ ApplicationWindow {
 
             Item {
                 clip: true
-                width: oslist.width
-                height: oslist.height
+                Layout.preferredWidth: oslist.width
+                Layout.preferredHeight: oslist.height
 
                 SwipeView {
                     id: osswipeview
@@ -606,8 +606,8 @@ ApplicationWindow {
 
             Item {
                 clip: true
-                width: dstlist.width
-                height: dstlist.height
+                Layout.preferredWidth: dstlist.width
+                Layout.preferredHeight: dstlist.height
 
                 ListView {
                     id: dstlist
