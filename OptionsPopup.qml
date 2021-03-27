@@ -169,13 +169,14 @@ Popup {
 
                             Text {
                                 text: qsTr("Set password for 'pi' user:")
-                                color: parent.enabled ? "black" : "grey"
+                                color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
                             }
                             TextField {
                                 id: fieldUserPassword
                                 echoMode: TextInput.Password
                                 Layout.minimumWidth: 200
                                 property bool alreadyCrypted: false
+                                property bool indicateError: false
 
                                 onTextEdited: {
                                     if (alreadyCrypted) {
@@ -183,6 +184,9 @@ Popup {
                                            (crypted) password, clear field */
                                         alreadyCrypted = false
                                         clear()
+                                    }
+                                    if (indicateError) {
+                                        indicateError = false
                                     }
                                 }
                             }
@@ -341,8 +345,9 @@ Popup {
             Button {
                 text: qsTr("SAVE")
                 onClicked: {
-                    if (radioPasswordAuthentication.checked && fieldUserPassword.text.length == 0)
+                    if (chkSSH.checked && radioPasswordAuthentication.checked && fieldUserPassword.text.length == 0)
                     {
+                        fieldUserPassword.indicateError = true
                         fieldUserPassword.forceActiveFocus()
                         return
                     }
