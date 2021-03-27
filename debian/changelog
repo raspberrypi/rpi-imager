@@ -1,3 +1,14 @@
+rpi-imager (1.6.1) unstable; urgency=medium
+
+  * When saving advanced options delay modifying files
+    on FAT partition until config.txt is visible.
+  * Update translations
+  * Linux: revert disable high dpi scaling on incorrect EDID"
+    due to it causing the custom file selection dialog not to
+    function properly on Fedora
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Sat, 27 Mar 2021 11:06:56 +0100
+
 rpi-imager (1.6) unstable; urgency=medium
 
   * Wayland: fix "Client tried to set invalid geometry" error
