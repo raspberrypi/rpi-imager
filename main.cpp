@@ -11,6 +11,7 @@
 #include <QDebug>
 #include <QTextStream>
 #include "imagewriter.h"
+#include "scriptrun.h"
 #include "drivelistmodel.h"
 #include "networkaccessmanagerfactory.h"
 #include <QMessageLogContext>
@@ -60,6 +61,7 @@ int main(int argc, char *argv[])
     app.setApplicationName("Imager");
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
     ImageWriter imageWriter;
+    ScriptRun scriptRun;
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;
     QTranslator translator;
@@ -210,6 +212,7 @@ int main(int argc, char *argv[])
     engine.setNetworkAccessManagerFactory(&namf);
     engine.rootContext()->setContextProperty("imageWriter", &imageWriter);
     engine.rootContext()->setContextProperty("driveListModel", imageWriter.getDriveList());
+    engine.rootContext()->setContextProperty("scriptRun", &scriptRun);
     engine.load(QUrl(QStringLiteral("qrc:/main.qml")));
 
     if (engine.rootObjects().isEmpty())

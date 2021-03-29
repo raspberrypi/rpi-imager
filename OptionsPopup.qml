@@ -310,6 +310,33 @@ Popup {
                             text: qsTr("Skip first-run wizard")
                         }
                     }
+
+                    CheckBox {
+                        id: chkRunScript
+                        text: qsTr("Run script after image")
+                    }
+                    Button {
+                        visible: chkRunScript.checked
+                        id: runScriptButton
+                        text: "Load script file"
+                        // text: imageWriter.srcFileName() === "" ? "Load script file" : imageWriter.srcFileName()
+                        font.family: roboto.name
+                        spacing: 0
+                        padding: 0
+                        bottomPadding: 0
+                        topPadding: 0
+                        Layout.minimumHeight: 40
+                        Layout.fillWidth: true
+                        onClicked: {
+                            console.log("button clicked")
+                            scriptRun.setSrc("hello")
+                        }
+                        Material.background: "#ffffff"
+                        Material.foreground: "#c51a4a"
+                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.description: qsTr("Select this button to change the operating system")
+                        Accessible.onPressAction: clicked()
+                    }
                 }
             }
 
