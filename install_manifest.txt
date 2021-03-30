@@ -1,0 +1,4 @@
+/usr/local/bin/rpi-imager
+/usr/local/share/icons/hicolor/128x128/apps/rpi-imager.png
+/usr/local/share/applications/rpi-imager.desktop
+/usr/local/share/metainfo/rpi-imager.metainfo.xml

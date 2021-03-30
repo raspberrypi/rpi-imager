@@ -20,7 +20,7 @@ ApplicationWindow {
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
     //maximumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
-    title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
+    title: qsTr("ADI Kuiper Imager v%1").arg(imageWriter.constantVersion())
 
     FontLoader {id: roboto;      source: "fonts/Roboto-Regular.ttf"}
     FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}
@@ -63,14 +63,14 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
                 fillMode: Image.PreserveAspectFit
-                source: window.height > 700 ? "icons/rpi2-hires.png" : "icons/rpi2.png"
+                source: "icons/Kuiper.svg"
                 width: window.width
                 height: window.height/2
             }
         }
 
         Rectangle {
-            color: "#c31c4a"
+            color: "#b8b8f2"
             implicitWidth: window.width
             implicitHeight: window.height/2
 

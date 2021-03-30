@@ -26,5 +26,10 @@
         <file>countries.txt</file>
         <file>timezones.txt</file>
         <file>UseSavedSettingsPopup.qml</file>
+        <file>icons/Kuiper_ico.png</file>
+        <file>icons/Kuiper.svg</file>
+        <file>icons/Kuiper_300.png</file>
+        <file>icons/Kuiper_w.svg</file>
+        <file>icons/Kuiper_w_300.png</file>
     </qresource>
 </RCC>

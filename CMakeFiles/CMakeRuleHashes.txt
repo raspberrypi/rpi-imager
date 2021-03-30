@@ -1,0 +1,12 @@
+# Hashes of file build rules.
+986ea21924e35ee41b6394116c0ebc30 CMakeFiles/rpi-imager_autogen
+f46f3651a4f2c6c84f1221f3160e5de1 rpi-imager_autogen/EWIEGA46WW/qrc_qml.cpp
+b150e4eb6950003c48cb05cc9e492a72 rpi-imager_autogen/EWIEGA46WW/qrc_translations.cpp
+de98c5b599eb378ec68f6bad1f1dc300 rpi-imager_de.qm
+ad30f376b592f9d457c455d3147d2105 rpi-imager_en.qm
+e4d76a2e241ff1c42488a3b7707dc525 rpi-imager_fr.qm
+e6848b2f8184bd6de1f8f4100e88caff rpi-imager_it.qm
+0b2e8e4de9a960f700ef81777d4623bd rpi-imager_nl.qm
+a0af8cdaa4498bf8cabefdcbfe281b07 rpi-imager_sk.qm
+79a3102fe853fead3d8ebc0e2fcaf3f4 rpi-imager_tr.qm
+79b2dfa5636ece178a35c20c94c8ba2d rpi-imager_zh_cn.qm

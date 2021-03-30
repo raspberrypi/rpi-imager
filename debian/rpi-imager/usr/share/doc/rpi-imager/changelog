@@ -1,0 +1,85 @@
+rpi-imager (1.6.1) unstable; urgency=medium
+
+  * When saving advanced options delay modifying files
+    on FAT partition until config.txt is visible.
+  * Update translations
+  * Linux: revert disable high dpi scaling on incorrect EDID"
+    due to it causing the custom file selection dialog not to
+    function properly on Fedora
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Sat, 27 Mar 2021 11:06:56 +0100
+
+rpi-imager (1.6) unstable; urgency=medium
+
+  * Wayland: fix "Client tried to set invalid geometry" error
+  * Add advanced users option screen available under SHIFT-CTRL-X
+  * Disable high DPI scaling on incorrect EDID
+  * Fix handling of .iso files
+  * Update translations
+  * GUI: change "SD card" -> "Storage"
+  * Allow NVMe drives as destination drive (Linux only)
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Fri, 26 Feb 2021 14:32:21 +0100
+
+rpi-imager (1.5) unstable; urgency=medium
+
+  * More verbose progress/error reporting
+  * Reconnect if download stalls for more than one minute
+  * Remember last selected custom image path
+  * Add German/French/Italian/Slovak/Turkish translations
+  * Fix multi-level subitems_url
+  * Add update notification support
+  * Allow translators to specify external .qm file for testing
+  * Remove dependency on qml-module-qt-labs-settings
+  * Enables telemetry collecting information about which images from
+    repository are most popular
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Tue, 24 Nov 2020 10:38:21 +0100
+
+rpi-imager (1.4) unstable; urgency=medium
+
+  * Add basic accessibility support
+  * Add keyboard navigation support
+  * Linux: do not let progress exceed 100% if
+    device reports incorrect write counters
+  * Show new SD card size if SD card is replaced
+  * Linux: do not use direct IO on verifying but purge cache with
+    posix_fadvise()
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Tue, 30 Jun 2020 00:29:37 +0200
+
+rpi-imager (1.3) unstable; urgency=medium
+
+  * Remove zero sized drives from list
+  * Fix height of drive list
+  * Show scrollbars permanently
+  * Add localisation support
+  * Use accelerated sha256 code provided by OpenSSL
+  * Custom user agent
+  * Ask for confirmation on quit
+  * Use direct IO on verifying
+  * Improve progress indication
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Mon, 25 May 2020 00:45:50 +0200
+
+rpi-imager (1.2) unstable; urgency=medium
+
+  * Mention version number in title bar.
+  * Performance improvements
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Tue, 10 Mar 2020 17:08:11 +0100
+
+rpi-imager (1.1) unstable; urgency=medium
+
+  * Fix verification on images that are uncompressed or have
+    a size that is not dividable by 128 KB.
+  * Round instead of floor size of SD card up and show 1 decimal
+  * Executable name changed from imagingutility to rpi-imager
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Mon, 09 Mar 2020 12:25:24 +0100
+
+rpi-imager (1.0) unstable; urgency=medium
+
+  * Initial Release.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 20 Feb 2020 11:54:04 +0100

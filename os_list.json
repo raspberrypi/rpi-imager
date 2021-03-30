@@ -1,0 +1,31 @@
+{
+    "imager": {
+        "latest_version": "1.6",
+        "url": "https://www.analog.com"
+    },
+    "os_list": [
+        {
+            "name": "ADI Kuiper Linux (32-bit)",
+            "description": "ADI flavoured Linux operating system based on RPI OS (Recommended)",
+            "icon": "https://github.com/analogdevicesinc/adi-kuiper-gen/blob/master/stage6/06-cosmetic/files/launch.png",
+            "url": "https://swdownloads.analog.com/cse/kuiper/2021-02-23-ADI-Kuiper.img.xz",
+            "extract_size": 10104078336,
+            "extract_sha256": "f5dcc9a192ef4597d73d532046320306",
+            "image_download_size": 2637950856,
+            "release_date": "2021-02-23"
+        },
+        {
+            "name": "Misc utility images",
+            "description": "Bootloader EEPROM configuration, etc.",
+            "icon": "icons/cat_misc_utility_images.png",
+            "subitems": [
+                {
+                    "name": "Bootloader",
+                    "description": "Restore the factory default settings and change boot priority",
+                    "icon": "https://downloads.raspberrypi.org/raspios_armhf/Raspberry_Pi_OS_(32-bit).png",
+                    "subitems_url": "https://downloads.raspberrypi.org/eeprom_recovery.json"
+                }
+            ]
+        }
+    ]
+}

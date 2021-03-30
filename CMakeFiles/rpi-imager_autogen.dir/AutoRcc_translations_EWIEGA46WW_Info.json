@@ -1,0 +1,29 @@
+{
+	"BUILD_DIR" : "/home/mircea/work/rpi-imager/rpi-imager_autogen",
+	"CMAKE_BINARY_DIR" : "/home/mircea/work/rpi-imager",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/mircea/work/rpi-imager",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/mircea/work/rpi-imager",
+	"CMAKE_SOURCE_DIR" : "/home/mircea/work/rpi-imager",
+	"INCLUDE_DIR" : "/home/mircea/work/rpi-imager/rpi-imager_autogen/include",
+	"INPUTS" : 
+	[
+		"/home/mircea/work/rpi-imager/rpi-imager_sk.qm",
+		"/home/mircea/work/rpi-imager/rpi-imager_de.qm",
+		"/home/mircea/work/rpi-imager/rpi-imager_it.qm",
+		"/home/mircea/work/rpi-imager/rpi-imager_zh_cn.qm",
+		"/home/mircea/work/rpi-imager/rpi-imager_en.qm",
+		"/home/mircea/work/rpi-imager/rpi-imager_nl.qm",
+		"/home/mircea/work/rpi-imager/rpi-imager_tr.qm",
+		"/home/mircea/work/rpi-imager/rpi-imager_fr.qm"
+	],
+	"LOCK_FILE" : "/home/mircea/work/rpi-imager/CMakeFiles/rpi-imager_autogen.dir/AutoRcc_translations_EWIEGA46WW_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "translations" ],
+	"OUTPUT_CHECKSUM" : "EWIEGA46WW",
+	"OUTPUT_NAME" : "qrc_translations.cpp",
+	"RCC_EXECUTABLE" : "/usr/lib/qt5/bin/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/home/mircea/work/rpi-imager/CMakeFiles/rpi-imager_autogen.dir/AutoRcc_translations_EWIEGA46WW_Used.txt",
+	"SOURCE" : "/home/mircea/work/rpi-imager/translations.qrc",
+	"VERBOSITY" : 0
+}

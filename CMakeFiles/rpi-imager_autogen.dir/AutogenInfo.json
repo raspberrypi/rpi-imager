@@ -1,0 +1,185 @@
+{
+	"BUILD_DIR" : "/home/mircea/work/rpi-imager/rpi-imager_autogen",
+	"CMAKE_BINARY_DIR" : "/home/mircea/work/rpi-imager",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/mircea/work/rpi-imager",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/mircea/work/rpi-imager",
+	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
+	"CMAKE_SOURCE_DIR" : "/home/mircea/work/rpi-imager",
+	"HEADERS" : 
+	[
+		[
+			"/home/mircea/work/rpi-imager/acceleratedcryptographichash.h",
+			"Mu",
+			"EWIEGA46WW/moc_acceleratedcryptographichash.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/config.h",
+			"Mu",
+			"EWIEGA46WW/moc_config.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/dependencies/mountutils/src/mountutils.hpp",
+			"Mu",
+			"S5WMHZHR6A/moc_mountutils.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/dependencies/sha256crypt/sha256crypt.h",
+			"Mu",
+			"66X2P6YMEH/moc_sha256crypt.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/downloadextractthread.h",
+			"Mu",
+			"EWIEGA46WW/moc_downloadextractthread.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/downloadstatstelemetry.h",
+			"Mu",
+			"EWIEGA46WW/moc_downloadstatstelemetry.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/downloadthread.h",
+			"Mu",
+			"EWIEGA46WW/moc_downloadthread.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/driveformatthread.h",
+			"Mu",
+			"EWIEGA46WW/moc_driveformatthread.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/drivelistitem.h",
+			"Mu",
+			"EWIEGA46WW/moc_drivelistitem.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/drivelistmodel.h",
+			"Mu",
+			"EWIEGA46WW/moc_drivelistmodel.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/drivelistmodelpollthread.h",
+			"Mu",
+			"EWIEGA46WW/moc_drivelistmodelpollthread.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/imagewriter.h",
+			"Mu",
+			"EWIEGA46WW/moc_imagewriter.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/linux/udisks2api.h",
+			"Mu",
+			"YCY4FPCVH5/moc_udisks2api.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/localfileextractthread.h",
+			"Mu",
+			"EWIEGA46WW/moc_localfileextractthread.cpp"
+		],
+		[ "/home/mircea/work/rpi-imager/nan.h", "Mu", "EWIEGA46WW/moc_nan.cpp" ],
+		[
+			"/home/mircea/work/rpi-imager/networkaccessmanagerfactory.h",
+			"Mu",
+			"EWIEGA46WW/moc_networkaccessmanagerfactory.cpp"
+		],
+		[
+			"/home/mircea/work/rpi-imager/powersaveblocker.h",
+			"Mu",
+			"EWIEGA46WW/moc_powersaveblocker.cpp"
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "/home/mircea/work/rpi-imager/rpi-imager_autogen/include",
+	"MOC_COMPILATION_FILE" : "/home/mircea/work/rpi-imager/rpi-imager_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"IMAGER_VERSION_CSV=1,6,1,0",
+		"IMAGER_VERSION_STR=\"1.6.1\"",
+		"QT_CORE_LIB",
+		"QT_DBUS_LIB",
+		"QT_GUI_LIB",
+		"QT_NETWORK_LIB",
+		"QT_QML_LIB",
+		"QT_QUICK_LIB",
+		"QT_SVG_LIB",
+		"QT_WIDGETS_LIB"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"/home/mircea/work/rpi-imager",
+		"/home/mircea/work/rpi-imager",
+		"/usr/include/x86_64-linux-gnu/qt5",
+		"/usr/include/x86_64-linux-gnu/qt5/QtCore",
+		"/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++",
+		"/usr/include/x86_64-linux-gnu/qt5/QtQuick",
+		"/usr/include/x86_64-linux-gnu/qt5/QtQml",
+		"/usr/include/x86_64-linux-gnu/qt5/QtNetwork",
+		"/usr/include/x86_64-linux-gnu/qt5/QtGui",
+		"/usr/include/x86_64-linux-gnu/qt5/QtSvg",
+		"/usr/include/x86_64-linux-gnu/qt5/QtWidgets",
+		"/usr/include/x86_64-linux-gnu/qt5/QtDBus",
+		"/usr/include/x86_64-linux-gnu",
+		"/usr/include",
+		"/usr/include/c++/9",
+		"/usr/include/x86_64-linux-gnu/c++/9",
+		"/usr/include/c++/9/backward",
+		"/usr/lib/gcc/x86_64-linux-gnu/9/include",
+		"/usr/local/include"
+	],
+	"MOC_MACRO_NAMES" : [ "Q_OBJECT", "Q_GADGET", "Q_NAMESPACE" ],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : true,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"/usr/bin/g++",
+		"-dM",
+		"-E",
+		"-c",
+		"/usr/share/cmake-3.16/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "/home/mircea/work/rpi-imager/rpi-imager_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 4,
+	"PARSE_CACHE_FILE" : "/home/mircea/work/rpi-imager/CMakeFiles/rpi-imager_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "/usr/lib/qt5/bin/moc",
+	"QT_UIC_EXECUTABLE" : "",
+	"QT_VERSION_MAJOR" : 5,
+	"SETTINGS_FILE" : "/home/mircea/work/rpi-imager/CMakeFiles/rpi-imager_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[ "/home/mircea/work/rpi-imager/acceleratedcryptographichash.cpp", "Mu" ],
+		[
+			"/home/mircea/work/rpi-imager/dependencies/mountutils/src/linux/functions.cpp",
+			"Mu"
+		],
+		[
+			"/home/mircea/work/rpi-imager/dependencies/sha256crypt/sha256crypt.c",
+			"Mu"
+		],
+		[ "/home/mircea/work/rpi-imager/downloadextractthread.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/downloadstatstelemetry.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/downloadthread.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/driveformatthread.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/drivelistitem.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/drivelistmodel.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/drivelistmodelpollthread.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/imagewriter.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/linux/linuxdrivelist.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/linux/udisks2api.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/localfileextractthread.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/main.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/networkaccessmanagerfactory.cpp", "Mu" ],
+		[ "/home/mircea/work/rpi-imager/powersaveblocker.cpp", "Mu" ]
+	],
+	"VERBOSITY" : 0
+}

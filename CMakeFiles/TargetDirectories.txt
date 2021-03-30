@@ -1,0 +1,8 @@
+/home/mircea/work/rpi-imager/CMakeFiles/install/strip.dir
+/home/mircea/work/rpi-imager/CMakeFiles/install/local.dir
+/home/mircea/work/rpi-imager/CMakeFiles/install.dir
+/home/mircea/work/rpi-imager/CMakeFiles/list_install_components.dir
+/home/mircea/work/rpi-imager/CMakeFiles/rebuild_cache.dir
+/home/mircea/work/rpi-imager/CMakeFiles/edit_cache.dir
+/home/mircea/work/rpi-imager/CMakeFiles/rpi-imager.dir
+/home/mircea/work/rpi-imager/CMakeFiles/rpi-imager_autogen.dir
