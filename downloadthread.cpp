@@ -932,7 +932,7 @@ bool DownloadThread::_customizeImage()
         for (auto mp : mountpoints)
         {
             folder = QString::fromStdString(mp);
-            if (!folder.isEmpty() && folder.back() == '\\')
+            if (folder.right(1) == '\\')
                 folder.chop(1);
             configFilename = folder+"/config.txt";
 
