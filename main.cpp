@@ -185,7 +185,6 @@ int main(int argc, char *argv[])
             char buf[32] = {0};
             CFStringRef strRef = (CFStringRef) CFArrayGetValueAtIndex(prefLangs, 0);
             CFStringGetCString(strRef, buf, sizeof(buf), kCFStringEncodingUTF8);
-            CFRelease(strRef);
             langcode = buf;
             langcode.replace('-', '_');
             qDebug() << "OSX most preferred language:" << langcode;
