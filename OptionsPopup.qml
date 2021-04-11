@@ -241,21 +241,29 @@ Popup {
 
                         Text {
                             text: qsTr("SSID:")
-                            color: parent.enabled ? "black" : "grey"
+                            color: parent.enabled ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
                         }
                         TextField {
                             id: fieldWifiSSID
                             Layout.minimumWidth: 200
+                            property bool indicateError: false
+                            onTextEdited: {
+                                indicateError = false
+                            }
                         }
 
                         Text {
                             text: qsTr("Password:")
-                            color: parent.enabled ? "black" : "grey"
+                            color: parent.enabled ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
                         }
                         TextField {
                             id: fieldWifiPassword
                             Layout.minimumWidth: 200
                             echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
+                            property bool indicateError: false
+                            onTextEdited: {
+                                indicateError = false
+                            }
                         }
 
                         CheckBox {
@@ -350,6 +358,23 @@ Popup {
                         fieldUserPassword.indicateError = true
                         fieldUserPassword.forceActiveFocus()
                         return
+                    }
+                    if (chkWifi.checked)
+                    {
+                        if (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64)
+                        {
+                            fieldWifiPassword.indicateError = true
+                            fieldWifiPassword.forceActiveFocus()
+                        }
+                        if (fieldWifiSSID.text.length == 0)
+                        {
+                            fieldWifiSSID.indicateError = true
+                            fieldWifiSSID.forceActiveFocus()
+                        }
+                        if (fieldWifiSSID.indicateError || fieldWifiPassword.indicateError)
+                        {
+                            return
+                        }
                     }
 
                     applySettings()
@@ -508,10 +533,11 @@ Popup {
             wpaconfig += "update_config=1\n"
             wpaconfig += "network={\n"
             wpaconfig += "\tssid=\""+fieldWifiSSID.text+"\"\n"
-            wpaconfig += "\tpsk=\""+fieldWifiPassword.text+"\"\n"
+            var cryptedPsk = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
+            wpaconfig += "\tpsk="+cryptedPsk+"\n"
             wpaconfig += "}\n"
 
-            addFirstRun("cat >/etc/wpa_supplicant/wpa_supplicant.conf <<WPAEOF")
+            addFirstRun("cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'WPAEOF'")
             addFirstRun(wpaconfig)
             addFirstRun("WPAEOF")
             addFirstRun("chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf")
@@ -528,7 +554,7 @@ Popup {
             addFirstRun("rm -f /etc/localtime")
             addFirstRun("echo \""+fieldTimezone.editText+"\" >/etc/timezone")
             addFirstRun("dpkg-reconfigure -f noninteractive tzdata")
-            addFirstRun("cat >/etc/default/keyboard <<KBEOF")
+            addFirstRun("cat >/etc/default/keyboard <<'KBEOF'")
             addFirstRun("XKBMODEL=\"pc105\"")
             addFirstRun("XKBLAYOUT=\""+fieldKeyboardLayout.text+"\"")
             addFirstRun("XKBVARIANT=\"\"")

@@ -109,6 +109,7 @@ public:
     Q_INVOKABLE bool hasSavedCustomizationSettings();
 
     Q_INVOKABLE QString crypt(const QByteArray &password);
+    Q_INVOKABLE QString pbkdf2(const QByteArray &psk, const QByteArray &ssid);
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
