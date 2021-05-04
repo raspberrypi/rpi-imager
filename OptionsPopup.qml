@@ -438,6 +438,10 @@ Popup {
                 fieldWifiPassword.text = imageWriter.getPSK(fieldWifiSSID.text)
                 if (fieldWifiPassword.text.length) {
                     chkShowPassword.checked = false
+                    if (Qt.platform.os == "osx") {
+                        /* User indicated wifi must be prefilled */
+                        chkWifi.checked = true
+                    }
                 }
             }
         }

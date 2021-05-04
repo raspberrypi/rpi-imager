@@ -37,6 +37,8 @@
 #endif
 #ifdef Q_OS_DARWIN
 #include <QtNetwork>
+#include <QMessageBox>
+#include <security/security.h>
 #else
 #include "openssl/evp.h"
 #include "openssl/sha.h"
@@ -884,8 +886,32 @@ QString ImageWriter::getPSK(const QString &ssid)
     return psk;
 
 #else
+#ifdef Q_OS_DARWIN
+    SecKeychainRef keychainRef;
+    QString psk;
+    QByteArray ssidAscii = ssid.toLatin1();
+
+    if (QMessageBox::question(nullptr, "",
+                          tr("Would you like to prefill the wifi password from the system keychain?")) == QMessageBox::Yes)
+    {
+        if (SecKeychainOpen("/Library/Keychains/System.keychain", &keychainRef) == errSecSuccess)
+        {
+            UInt32 resultLen;
+            void *result;
+            if (SecKeychainFindGenericPassword(keychainRef, 0, NULL, ssidAscii.length(), ssidAscii.constData(), &resultLen, &result, NULL) == errSecSuccess)
+            {
+                psk = QByteArray((char *) result, resultLen);
+                SecKeychainItemFreeContent(NULL, result);
+            }
+            CFRelease(keychainRef);
+        }
+    }
+
+    return psk;
+#else
     Q_UNUSED(ssid)
     return QString();
+#endif
 #endif
 }
 
