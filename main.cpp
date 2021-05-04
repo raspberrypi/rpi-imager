@@ -235,9 +235,9 @@ int main(int argc, char *argv[])
 
     if (x != -1 && y != -1)
     {
-        if ( (screensize.width()-x) < w || (screensize.height()-y) < h)
+        if ( !app.screenAt(QPoint(x,y)) || !app.screenAt(QPoint(x+w,y+h)) )
         {
-            qDebug() << "Not restoring saved window position as it falls outside of primary screen";
+            qDebug() << "Not restoring saved window position as it falls outside any currently attached screen";
             x = y = -1;
         }
     }
