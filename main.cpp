@@ -13,6 +13,7 @@
 #include "imagewriter.h"
 #include "drivelistmodel.h"
 #include "networkaccessmanagerfactory.h"
+#include "cli.h"
 #include <QMessageLogContext>
 #include <QQuickWindow>
 #include <QTranslator>
@@ -36,6 +37,16 @@ static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QStri
 
 int main(int argc, char *argv[])
 {
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--cli") == 0)
+        {
+            /* CLI mode */
+            Cli cli(argc, argv);
+            return cli.main();
+        }
+    }
+
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #ifdef Q_OS_WIN
     // prefer ANGLE (DirectX) over desktop OpenGL
@@ -149,6 +160,7 @@ int main(int argc, char *argv[])
         else if (args[i] == "--help")
         {
             cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--disable-telemetry] [<image file to write>]" << endl;
+            cerr << "-OR- " << args[0] << " --cli [--disable-verify] [--sha256 <expected hash>] [--debug] [--quiet] <image file to write> <destination drive device>" << endl;
             return 0;
         }
         else if (args[i] == "--version")

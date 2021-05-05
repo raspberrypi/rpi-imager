@@ -61,7 +61,7 @@ QString UDisks2Api::_resolveDevice(const QString &device)
 
 void UDisks2Api::_unmountDrive(const QString &driveDbusPath)
 {
-    qDebug() << "Drive:" << driveDbusPath;
+    //qDebug() << "Drive:" << driveDbusPath;
 
     QDBusInterface manager("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2/Manager",
                            "org.freedesktop.UDisks2.Manager", QDBusConnection::systemBus());
@@ -81,7 +81,7 @@ void UDisks2Api::_unmountDrive(const QString &driveDbusPath)
         if (driveOfDev != driveDbusPath)
             continue;
 
-        qDebug() << "Device:" << devpathStr << "belongs to same drive";
+        //qDebug() << "Device:" << devpathStr << "belongs to same drive";
         QDBusInterface filesystem("org.freedesktop.UDisks2", devpathStr,
                                   "org.freedesktop.UDisks2.Filesystem", QDBusConnection::systemBus());
 

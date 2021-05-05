@@ -63,7 +63,16 @@ ImageWriter::ImageWriter(QObject *parent)
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
-    QString platform = QGuiApplication::platformName();
+    QString platform;
+    if (qobject_cast<QGuiApplication*>(QCoreApplication::instance()) )
+    {
+        platform = QGuiApplication::platformName();
+    }
+    else
+    {
+        platform = "cli";
+    }
+
     if (platform == "eglfs" || platform == "linuxfb")
     {
         _embeddedMode = true;
@@ -469,7 +478,7 @@ void ImageWriter::onSuccess()
     emit success();
 
 #ifndef QT_NO_WIDGETS
-    if (_settings.value("beep").toBool())
+    if (_settings.value("beep").toBool() && qobject_cast<QApplication*>(QCoreApplication::instance()) )
     {
         QApplication::beep();
     }
@@ -482,7 +491,7 @@ void ImageWriter::onError(QString msg)
     emit error(msg);
 
 #ifndef QT_NO_WIDGETS
-    if (_settings.value("beep").toBool())
+    if (_settings.value("beep").toBool() && qobject_cast<QApplication*>(QCoreApplication::instance()) )
         QApplication::beep();
 #endif
 }
@@ -1014,5 +1023,6 @@ bool ImageWriter::hasSavedCustomizationSettings()
 }
 
 void MountUtilsLog(std::string msg) {
-    qDebug() << "mountutils:" << msg.c_str();
+    Q_UNUSED(msg)
+    //qDebug() << "mountutils:" << msg.c_str();
 }
