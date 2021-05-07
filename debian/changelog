@@ -1,3 +1,10 @@
+rpi-imager (1.6.2) unstable; urgency=medium
+
+  * Add website link support
+  * Add CLI support 
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Fri, 07 May 2021 13:19:19 +0200
+
 rpi-imager (1.6.1) unstable; urgency=medium
 
   * When saving advanced options delay modifying files

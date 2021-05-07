@@ -26,5 +26,7 @@
         <file>countries.txt</file>
         <file>timezones.txt</file>
         <file>UseSavedSettingsPopup.qml</file>
+        <file>icons/ic_info_16px.png</file>
+        <file>icons/ic_info_12px.png</file>
     </qresource>
 </RCC>

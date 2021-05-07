@@ -374,6 +374,7 @@ ApplicationWindow {
                     name: qsTr("Back")
                     description: qsTr("Go back to main menu")
                     tooltip: ""
+                    website: ""
                 }
             }
 
@@ -414,6 +415,7 @@ ApplicationWindow {
             name: qsTr("Erase")
             description: qsTr("Format card as FAT32")
             tooltip: ""
+            website: ""
         }
 
         ListElement {
@@ -479,8 +481,11 @@ ApplicationWindow {
                         font.family: roboto.name
                         textFormat: Text.RichText
                         text: {
-                            var txt = "<p style='margin-bottom: 5px;'><b>"+name+"</b></p>"
-                            txt += "<font color='#1a1a1a'>"+description+"</font><font style='font-weight: 200' color='#646464'>"
+                            var txt = "<p style='margin-bottom: 5px; font-weight: bold;'>"+name
+                            if (typeof(website) == "string" && website) {
+                                txt += " &nbsp; <a href='"+website+"'> <img src='icons/ic_info_16px.png' align='top'></a>"
+                            }
+                            txt += "</p><font color='#1a1a1a'>"+description+"</font><font style='font-weight: 200' color='#646464'>"
                             if (typeof(release_date) == "string" && release_date)
                                 txt += "<br>"+qsTr("Released: %1").arg(release_date)
                             if (typeof(url) == "string" && url != "" && url != "internal://format") {
@@ -496,6 +501,7 @@ ApplicationWindow {
 
                             return txt;
                         }
+                        id: osText
 
                         /*
                         Accessible.role: Accessible.ListItem
@@ -538,7 +544,11 @@ ApplicationWindow {
                 }
 
                 onClicked: {
-                    selectOSitem(model)
+                    if (osText.hoveredLink) {
+                        Qt.openUrlExternally(osText.hoveredLink)
+                    } else {
+                        selectOSitem(model)
+                    }
                 }
             }
         }
