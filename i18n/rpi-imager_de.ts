@@ -97,7 +97,7 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <source>Error reading from storage.&lt;br&gt;This may be caused by faulty hardware.</source>
         <translation>Fehler beim Lesen vom Speicher.&lt;br&gt;Die SD-Karte könnte kaputt sein.</translation>
     </message>
     <message>
@@ -180,7 +180,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="759"/>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <source>Verifying write failed. Contents of storage device is different from what was written to it.</source>
         <translation>Verifizierung fehlgeschlagen. Der Inhalt der SD-Karte weicht von dem Inhalt ab, der geschrieben werden sollte.</translation>
     </message>
 </context>
@@ -493,7 +493,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>SD-KARTE WÄHLEN</translation>
     </message>
     <message>
-        <source>Select this button to change the destination SD card</source>
+        <source>Select this button to change the destination storage device</source>
         <translation type="vanished">Klicke auf diesen Knopf, um die Zeil-SD-Karte zu ändern</translation>
     </message>
     <message>
@@ -664,7 +664,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the storage device</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; wurde geleert&lt;br&gt;&lt;br&gt;Sie können die SD-Karte nun aus dem Lesegerät entfernen</translation>
     </message>
     <message>
@@ -684,7 +684,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     </message>
     <message>
         <location filename="../main.qml" line="1058"/>
-        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
+        <source>Storage device is write protected.&lt;br&gt;If the device is an SD card, push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>Die Speicherkarte ist schreibgeschützt.&lt;br&gt;Drücken Sie den Schutzschalter auf der linken Seite nach oben, und versuchen Sie es erneut.</translation>
     </message>
 </context>

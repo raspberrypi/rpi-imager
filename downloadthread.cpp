@@ -738,7 +738,7 @@ bool DownloadThread::_verify()
         if (lenRead == -1)
         {
             DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"
-                                                "SD card may be broken."));
+                                                "This may be caused by faulty hardware."));
             return false;
         }
 
@@ -756,7 +756,7 @@ bool DownloadThread::_verify()
     }
     else
     {
-        DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of SD card is different from what was written to it."));
+        DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of storage device is different from what was written to it."));
     }
 
     return false;
