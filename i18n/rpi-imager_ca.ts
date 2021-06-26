@@ -297,22 +297,22 @@
     <message>
         <location filename="../OptionsPopup.qml" line="91"/>
         <source>Image customization options</source>
-        <translation>Opcions de personalitzaci&ograve; de la imatge</translation>
+        <translation>Opcions de personalitzaci&ograve; de les imatges</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="99"/>
         <source>for this session only</source>
-        <translation>nom&egreave;s per a aquesta sessi&ograve;</translation>
+        <translation>per a aquesta sessi&ograve; nom&eacute;s</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="100"/>
         <source>to always use</source>
-        <translation type="unfinished"></translation>
+        <translation>per a utilitzar sempre</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="112"/>
         <source>Disable overscan</source>
-        <translation type="unfinished"></translation>
+        <translation>Desactiva el sobreescaneig (overscan)</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="117"/>
@@ -337,7 +337,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="193"/>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished"></translation>
+        <translation>Permet nom&eacute; l&apos;autenticació amb claus p&uacute;bliques</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="208"/>
@@ -372,7 +372,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="276"/>
         <source>Set locale settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Estableix la configuraci&oacute; regional</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="286"/>
@@ -382,17 +382,17 @@
     <message>
         <location filename="../OptionsPopup.qml" line="296"/>
         <source>Keyboard layout:</source>
-        <translation type="unfinished"></translation>
+        <translation>Disposi&oacute; del teclat</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="306"/>
         <source>Skip first-run wizard</source>
-        <translation type="unfinished"></translation>
+        <translation>Omet l&apos;assistent de la primera arrencada</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="313"/>
         <source>Persistent settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Configuraci&oacute; persistent</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="321"/>
@@ -402,7 +402,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="325"/>
         <source>Eject media when finished</source>
-        <translation>Expulsa el mitjà quan acabi</translation>
+        <translation>Expulsa el mitj&agrave; quan acabi</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="329"/>
@@ -420,7 +420,7 @@
     <message>
         <location filename="../linux/linuxdrivelist.cpp" line="111"/>
         <source>Internal SD card reader</source>
-        <translation type="unfinished"></translation>
+        <translation>Lector de targes SD intern</translation>
     </message>
 </context>
 <context>
@@ -428,27 +428,27 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="71"/>
         <source>Warning: advanced settings set</source>
-        <translation type="unfinished"></translation>
+        <translation>Av&iacute;s: hi ha opcions avan&ccedil; establertes</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="85"/>
         <source>Would you like to apply the image customization settings saved earlier?</source>
-        <translation type="unfinished"></translation>
+        <translation>Voleu aplicar la configuraci&oacute; personalitzada de la imatges desada anteriorment?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="94"/>
         <source>NO, CLEAR SETTINGS</source>
-        <translation type="unfinished"></translation>
+        <translation>NO, ESBORRA LA CONFIGURACI&Oacute;</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="106"/>
         <source>YES</source>
-        <translation type="unfinished"></translation>
+        <translation>S&Iacute;</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="118"/>
         <source>EDIT SETTINGS</source>
-        <translation type="unfinished"></translation>
+        <translation>EDITA LA CONFIGURACI&Oacute;</translation>
     </message>
 </context>
 <context>
@@ -456,104 +456,104 @@
     <message>
         <location filename="../main.qml" line="23"/>
         <source>Raspberry Pi Imager v%1</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="98"/>
         <location filename="../main.qml" line="314"/>
         <source>Operating System</source>
-        <translation type="unfinished"></translation>
+        <translation>Sistema operatiu</translation>
     </message>
     <message>
         <location filename="../main.qml" line="110"/>
         <source>CHOOSE OS</source>
-        <translation type="unfinished"></translation>
+        <translation>ESCULL SO</translation>
     </message>
     <message>
         <location filename="../main.qml" line="125"/>
         <source>Select this button to change the operating system</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleccioneu aquest bot&oacute; si voleu canviar el sistema operatiu</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
         <location filename="../main.qml" line="598"/>
         <source>Storage</source>
-        <translation type="unfinished"></translation>
+        <translation>Emmagatzematge</translation>
     </message>
     <message>
         <location filename="../main.qml" line="150"/>
         <location filename="../main.qml" line="908"/>
         <source>CHOOSE STORAGE</source>
-        <translation type="unfinished"></translation>
+        <translation>ESCULL L&apos;EMMAGATZEMATGE</translation>
     </message>
     <message>
         <location filename="../main.qml" line="180"/>
         <source>WRITE</source>
-        <translation type="unfinished"></translation>
+        <translation >ESCRIU</translation>
     </message>
     <message>
         <location filename="../main.qml" line="185"/>
         <source>Select this button to start writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleccioneu aquest bot&oacute; per a comen&ccedil;ar l&apos;escriptura de la imatge</translation>
     </message>
     <message>
         <location filename="../main.qml" line="230"/>
         <source>CANCEL WRITE</source>
-        <translation type="unfinished"></translation>
+        <translation>CANCEL&middot;LA L&apos;ESCRIPTURA</translation>
     </message>
     <message>
         <location filename="../main.qml" line="233"/>
         <location filename="../main.qml" line="846"/>
         <source>Cancelling...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; cancel&middot;lant...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
         <source>CANCEL VERIFY</source>
-        <translation type="unfinished"></translation>
+        <translation>CANCEL&middot;LA LA VERIFICACI&Oacute;</translation>
     </message>
     <message>
         <location filename="../main.qml" line="248"/>
         <location filename="../main.qml" line="869"/>
         <location filename="../main.qml" line="926"/>
         <source>Finalizing...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; finalitzant...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="414"/>
         <location filename="../main.qml" line="902"/>
         <source>Erase</source>
-        <translation type="unfinished"></translation>
+        <translation>Esborra</translation>
     </message>
     <message>
         <location filename="../main.qml" line="415"/>
         <source>Format card as FAT32</source>
-        <translation type="unfinished"></translation>
+        <translation>Formata la tarja com a FAT32</translation>
     </message>
     <message>
         <location filename="../main.qml" line="422"/>
         <source>Use custom</source>
-        <translation type="unfinished"></translation>
+        <translation>Utilitza una personalitzada</translation>
     </message>
     <message>
         <location filename="../main.qml" line="423"/>
         <source>Select a custom .img from your computer</source>
-        <translation type="unfinished"></translation>
+        <translation>Selecciona una imatge .img personalitzada de l&apos;ordinador</translation>
     </message>
     <message>
         <location filename="../main.qml" line="374"/>
         <source>Back</source>
-        <translation type="unfinished"></translation>
+        <translation>Enrere</translation>
     </message>
     <message>
         <location filename="../main.qml" line="163"/>
         <source>Select this button to change the destination storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleccioneu aquest bot&oacute; per a canviar la destinaci&oacute; del dispositiu d&apos;emmagatzematge</translation>
     </message>
     <message>
         <location filename="../main.qml" line="375"/>
         <source>Go back to main menu</source>
-        <translation type="unfinished"></translation>
+        <translation>Torna al men&uacute; principal</translation>
     </message>
     <message>
         <location filename="../main.qml" line="485"/>
