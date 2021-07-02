@@ -22,7 +22,7 @@
     <message>
         <location filename="../downloadextractthread.cpp" line="245"/>
         <source>Operating system did not mount FAT32 partition</source>
-        <translation type="unfinished">El sistema operatiu no ha muntat la partici&oacute; FAT32</translation>
+        <translation>El sistema operatiu no ha muntat la partici&oacute; FAT32</translation>
     </message>
     <message>
         <location filename="../downloadextractthread.cpp" line="268"/>
@@ -35,7 +35,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="146"/>
         <source>Error running diskpart: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en executar diskpart: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="167"/>
@@ -45,17 +45,17 @@
     <message>
         <location filename="../downloadthread.cpp" line="193"/>
         <source>Authentication cancelled</source>
-        <translation>S&apos;ha cancel&middot;lat l'autenticaci&ograve;</translation>
+        <translation>S&apos;ha cancel&middot;lat l&apos;autenticaci&ograve;</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="196"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en executar authopen per a obtenir l&apos;acc&eacute;s al dispositiu de disc &laquo;%1&raquo;</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="197"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>Verifiqueu si el &laquo;Raspberry Pi Imager&raquo; t&egrave; acc&egrave;s als &laquo;volums extra&iuml;bles&raquo; des de la configuraci&ograve; de privacitat (sota els &laquo;fitxers i carpetes&raquo; o doneu-li &laquo;accés a tot el disc&raquo;)</translation>
+        <translation>Verifiqueu si el &laquo;Raspberry Pi Imager&raquo; t&egrave; acc&egrave;s als &laquo;volums extra&iuml;bles&raquo; des de la configuraci&ograve; de privacitat (sota els &laquo;fitxers i carpetes&raquo; o doneu-li &laquo;accés complet al disc&raquo;)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="218"/>
@@ -65,62 +65,62 @@
     <message>
         <location filename="../downloadthread.cpp" line="260"/>
         <source>discarding existing data on drive</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;estan descartant les dades existent a la unitat</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="280"/>
         <source>zeroing out first and last MB of drive</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; esborrant amb zeros el primer i l&apos;&uacute;ltim MB de la unitat</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="286"/>
         <source>Write error while zero&apos;ing out MBR</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en esborrar amb zeros MBR.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en llegir de l&apos;emmagatzematge.&lt;br&gt;&Eacute;s possible que la tarja SD estigui malmesa.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="812"/>
         <source>Waiting for FAT partition to be mounted</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; esperant que la partici&oacute; FAT s&apos;hagi muntat</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="860"/>
         <source>Error mounting FAT32 partition</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en muntar la partici&oacute; FAT32</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="882"/>
         <source>Operating system did not mount FAT32 partition</source>
-        <translation type="unfinished"></translation>
+        <translation>El sistema operatiu no ha muntat la partici&oacute; FAT32</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="886"/>
         <source>Customizing image</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; personalitzant la imatge</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="898"/>
         <source>Error creating firstrun.sh on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en crear el fitxer firstrun.sh a la partici&oacute; FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="939"/>
         <source>Error writing to config.txt on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure al fitxer config.txt a la partici&oacute; FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="963"/>
         <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure al fitxer cmdline.txt a la partici&oacute; FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="398"/>
         <source>Access denied error while writing file to disk.</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error d&apos;acc&eacute;s denegat en escriure el fitxer al disc.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="403"/>
@@ -130,52 +130,52 @@
     <message>
         <location filename="../downloadthread.cpp" line="409"/>
         <source>Error writing file to disk</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure el fitxer al disc</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="428"/>
         <source>Error downloading: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en la baixada: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="647"/>
         <source>Error writing to storage (while flushing)</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure a l&apos;emmagatzematge (proc&eacute;s: flushing)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="654"/>
         <source>Error writing to storage (while fsync)</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure a l&apos;emmagatzematge (proc&eacute;s: fsync))</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="635"/>
         <source>Download corrupt. Hash does not match</source>
-        <translation type="unfinished"></translation>
+        <translation>La baixada est&agrave; corrompuda. El &laquo;hash&raquo; no coincideix</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="113"/>
         <source>opening drive</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; obrint la unitat</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="298"/>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error d&apos;escriptura en esborrar amb zeros l&apos;&uacute;ltima part de la tarja.&lt;br&gt;La tarja podria estar indicant una capacitat err&ograve;nia (possible falsificaci&oacute;)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="356"/>
         <source>starting download</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; iniciant la baixada</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="680"/>
         <source>Error writing first block (partition table)</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure el primer bloc (taula de particions)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="759"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ha fallat la verificaci&oacute; de l&apos;escriptura. El contingut de la tarja SD &eacute;s diferent del que s&apos;hi ha escrit.</translation>
     </message>
 </context>
 <context>
@@ -185,52 +185,52 @@
         <location filename="../driveformatthread.cpp" line="124"/>
         <location filename="../driveformatthread.cpp" line="185"/>
         <source>Error partitioning: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error durant la partici&oacute;: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="84"/>
         <source>Error starting fat32format</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en iniciar &laquo;fat32format&raquo;</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="94"/>
         <source>Error running fat32format: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en executar &laquo;fat32format&raquo;: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="104"/>
         <source>Error determining new drive letter</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en determinar la lletra de la nova unitat</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="109"/>
         <source>Invalid device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>El dispositiu no &eacute;s v&agrave;lid: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="146"/>
         <source>Error formatting (through udisks2)</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en formatar (a trav&eacute;s d&apos;&laquo;udisks2&raquo;)</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="174"/>
         <source>Error starting sfdisk</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en iniciar &laquo;sfdisk&raquo;</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="196"/>
         <source>Error starting mkfs.fat</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en iniciar &laquo;mkfs.fat&raquo;</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="206"/>
         <source>Error running mkfs.fat: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en executar &laquo;mkfs.fat&raquo;: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="213"/>
         <source>Formatting not implemented for this platform</source>
-        <translation type="unfinished"></translation>
+        <translation>Aquesta plataforma no te implementada la formataci&oacute;</translation>
     </message>
 </context>
 <context>
@@ -238,22 +238,22 @@
     <message>
         <location filename="../imagewriter.cpp" line="182"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
-        <translation type="unfinished"></translation>
+        <translation>La capacitat de l&apos;emmagatzematge no &eacute;s suficient.&lt;br&gt;Ha de ser de %1 GB com a m&iacute;nim.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="188"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation type="unfinished"></translation>
+        <translation>El fixer d&apos;entrada no &eacute;s una imatge de disc v&agrave;lida.&lt;br&gt;La mida del fitxer &eacute;s de %1 bytes, que no &eacute;s m&uacute;ltiple de 512 bytes.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="370"/>
         <source>Downloading and writing image</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; baixant i escrivint la imatge</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="503"/>
         <source>Select image</source>
-        <translation type="unfinished"></translation>
+        <translation>Selecciona una imatge</translation>
     </message>
 </context>
 <context>
@@ -261,12 +261,12 @@
     <message>
         <location filename="../localfileextractthread.cpp" line="34"/>
         <source>opening image file</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; obrint el fitxer de la imatge</translation>
     </message>
     <message>
         <location filename="../localfileextractthread.cpp" line="39"/>
         <source>Error opening image file</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en obrir el fitxer de la imatge</translation>
     </message>
 </context>
 <context>
@@ -317,7 +317,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="117"/>
         <source>Set hostname:</source>
-        <translation type="unfinished"></translation>
+        <translation>Defineix un nom de la m&agrave;quina (hostname):</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="136"/>
@@ -342,12 +342,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="208"/>
         <source>Set authorized_keys for &apos;pi&apos;:</source>
-        <translation type="unfinished"></translation>
+        <translation>Defineix &laquo;authorized_keys&raquo; per l&apos;usuari &laquo;pi&raquo;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="220"/>
         <source>Configure wifi</source>
-        <translation type="unfinished"></translation>
+        <translation>Configura la wifi</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="239"/>
@@ -489,7 +489,7 @@
     <message>
         <location filename="../main.qml" line="180"/>
         <source>WRITE</source>
-        <translation >ESCRIU</translation>
+        <translation>ESCRIU</translation>
     </message>
     <message>
         <location filename="../main.qml" line="185"/>
@@ -558,74 +558,74 @@
     <message>
         <location filename="../main.qml" line="485"/>
         <source>Released: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Llan&ccedil;at el: %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="488"/>
         <source>Cached on your computer</source>
-        <translation type="unfinished"></translation>
+        <translation>A la mem&ograve;ria cau de l&apos;ordinador</translation>
     </message>
     <message>
         <location filename="../main.qml" line="490"/>
         <source>Local file</source>
-        <translation type="unfinished"></translation>
+        <translation>Fitxer local</translation>
     </message>
     <message>
         <location filename="../main.qml" line="492"/>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished"></translation>
+        <translation>Amb connexi&oacute; - baixada de %1 GB</translation>
     </message>
     <message>
         <location filename="../main.qml" line="649"/>
         <location filename="../main.qml" line="701"/>
         <location filename="../main.qml" line="707"/>
         <source>Mounted as %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Muntat com a %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="703"/>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished"></translation>
+        <translation>[PROTEGIT CONTRA ESCRIPTURA]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="745"/>
         <source>Are you sure you want to quit?</source>
-        <translation type="unfinished"></translation>
+        <translation>Esteu segur que voleu sortir?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="746"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation type="unfinished"></translation>
+        <translation>El Raspberry Pi Imager est&agrave; ocupat.&lt;br&gt;Esteu segur que voleu sortir?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="757"/>
         <source>Warning</source>
-        <translation type="unfinished"></translation>
+        <translation>Av&iacute;s</translation>
     </message>
     <message>
         <location filename="../main.qml" line="763"/>
         <source>Preparing to write...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; preparant per a escriure...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="787"/>
         <source>Update available</source>
-        <translation type="unfinished"></translation>
+        <translation>Actualitzaci&oacute; disponible</translation>
     </message>
     <message>
         <location filename="../main.qml" line="788"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Hi ha una nova versi&oacute; de l&apos;Imager disponible.&lt;br&gt;Voleu visitar el lloc web per baixar-la?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="849"/>
         <source>Writing... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; escrivint... %1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="776"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation type="unfinished"></translation>
+        <translation>Totes les dades existents a &laquo;%1&raquo; s&apos;esborrar&agrave;n.&lt;br&gt;Esteu segur que voleu continuar?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="828"/>
