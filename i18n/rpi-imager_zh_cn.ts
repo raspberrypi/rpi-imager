@@ -6,7 +6,7 @@
     <message>
         <location filename="../downloadextractthread.cpp" line="167"/>
         <source>Error writing to storage</source>
-        <translation>写入存储时出错</translation>
+        <translation>写入时出错</translation>
     </message>
     <message>
         <location filename="../downloadextractthread.cpp" line="189"/>
@@ -22,7 +22,7 @@
     <message>
         <location filename="../downloadextractthread.cpp" line="245"/>
         <source>Operating system did not mount FAT32 partition</source>
-        <translation>操作系统未挂载FAT32分区</translation>
+        <translation>操作系统未能挂载FAT32分区</translation>
     </message>
     <message>
         <location filename="../downloadextractthread.cpp" line="268"/>
@@ -100,7 +100,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="886"/>
         <source>Customizing image</source>
-        <translation>自定义镜像</translation>
+        <translation>使用自定义镜像</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="898"/>
@@ -120,7 +120,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="398"/>
         <source>Access denied error while writing file to disk.</source>
-        <translation>将文件写入磁盘时访问被拒绝错误。</translation>
+        <translation>将文件写入磁盘时访问被拒绝。</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="403"/>
@@ -140,7 +140,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="647"/>
         <source>Error writing to storage (while flushing)</source>
-        <translation>刷新时写入存储时出错</translation>
+        <translation>刷写存储时出错</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="654"/>
@@ -160,7 +160,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="298"/>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>尝试将卡的最后一部分清零时写入错误。&lt;br&gt;卡的容量可能不正确（可能是扩容假卡）</translation>
+        <translation>写入镜像失败&lt;br&gt;SD卡可能损坏。</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="356"/>
@@ -238,7 +238,7 @@
     <message>
         <location filename="../imagewriter.cpp" line="182"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
-        <translation>存储容量不足。&lt;br&gt;至少需要%1 GB的空白空间</translation>
+        <translation>存储容量不足。&lt;br&gt;至少需要%1 GB的空白空间.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="188"/>
@@ -367,7 +367,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="265"/>
         <source>Wifi country:</source>
-        <translation>WIFI国家</translation>
+        <translation>WIFI国家：</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="276"/>
@@ -456,7 +456,7 @@
     <message>
         <location filename="../main.qml" line="23"/>
         <source>Raspberry Pi Imager v%1</source>
-        <translation>树莓派镜像烧录 v%1</translation>
+        <translation>树莓派镜像烧录器 v%1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="745"/>
@@ -472,7 +472,7 @@
         <location filename="../main.qml" line="98"/>
         <location filename="../main.qml" line="314"/>
         <source>Operating System</source>
-        <translation>操作系统</translation>
+        <translation>请选择需要写入的操作系统</translation>
     </message>
     <message>
         <location filename="../main.qml" line="110"/>
@@ -483,7 +483,7 @@
         <location filename="../main.qml" line="138"/>
         <location filename="../main.qml" line="598"/>
         <source>Storage</source>
-        <translation>SD卡</translation>
+        <translation>储存卡</translation>
     </message>
     <message>
         <location filename="../main.qml" line="150"/>
@@ -523,13 +523,13 @@
     <message>
         <location filename="../main.qml" line="185"/>
         <source>Select this button to start writing the image</source>
-        <translation>开始刷写</translation>
+        <translation>开始写入</translation>
     </message>
     <message>
         <location filename="../main.qml" line="233"/>
         <location filename="../main.qml" line="846"/>
         <source>Cancelling...</source>
-        <translation>取消中...</translation>
+        <translation>取消...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
@@ -541,7 +541,7 @@
         <location filename="../main.qml" line="869"/>
         <location filename="../main.qml" line="926"/>
         <source>Finalizing...</source>
-        <translation>完成中...</translation>
+        <translation>正在完成...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="414"/>
@@ -552,7 +552,7 @@
     <message>
         <location filename="../main.qml" line="415"/>
         <source>Format card as FAT32</source>
-        <translation>格式化SD卡为FAT32格式</translation>
+        <translation>将SD卡格式化为FAT32格式</translation>
     </message>
     <message>
         <location filename="../main.qml" line="422"/>
@@ -602,7 +602,7 @@
     <message>
         <location filename="../main.qml" line="879"/>
         <source>Preparing to write... (%1)</source>
-        <translation>写入中 (%i)</translation>
+        <translation>写入中 (%1)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
@@ -637,24 +637,24 @@
     <message>
         <location filename="../main.qml" line="485"/>
         <source>Released: %1</source>
-        <translation>解压中...%1</translation>
+        <translation>发布时间：%1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="488"/>
         <source>Cached on your computer</source>
-        <translation>在你的电脑上缓存</translation>
+        <translation>缓存在本地磁盘里</translation>
     </message>
     <message>
         <location filename="../main.qml" line="492"/>
         <source>Online - %1 GB download</source>
-        <translation>已下载：%1 GB</translation>
+        <translation>需要下载：%1 GB</translation>
     </message>
     <message>
         <location filename="../main.qml" line="649"/>
         <location filename="../main.qml" line="701"/>
         <location filename="../main.qml" line="707"/>
         <source>Mounted as %1</source>
-        <translation>挂载在：%1 上</translation>
+        <translation>挂载到：%1 上</translation>
     </message>
     <message>
         <source>QUIT APP</source>
