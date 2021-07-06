@@ -80,7 +80,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>S&apos;ha produ&iuml;t un error en llegir de l&apos;emmagatzematge.&lt;br&gt;&Eacute;s possible que la tarja SD estigui malmesa.</translation>
+        <translation>S&apos;ha produ&iuml;t un error en llegir de l&apos;emmagatzematge.&lt;br&gt;&Eacute;s possible que la targeta SD estigui malmesa.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="812"/>
@@ -125,7 +125,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="403"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;opci&ograve; &laquo;Controla l&apos;acc&eacute;s de la carpeta&raquo; de la Seguretat del Windows sembla que est&agrave; activada. Afegiu els executables &laquo;rpi-imager.exe&raquo; i &laquo;fat32format.exe&raquo; a la llista d&apos;aplicacions permese i torneu-ho a provar.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="409"/>
@@ -160,7 +160,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="298"/>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>S&apos;ha produ&iuml;t un error d&apos;escriptura en esborrar amb zeros l&apos;&uacute;ltima part de la tarja.&lt;br&gt;La tarja podria estar indicant una capacitat err&ograve;nia (possible falsificaci&oacute;)</translation>
+        <translation>S&apos;ha produ&iuml;t un error d&apos;escriptura en esborrar amb zeros l&apos;&uacute;ltima part de la targeta.&lt;br&gt;La targeta podria estar indicant una capacitat err&ograve;nia (possible falsificaci&oacute;)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="356"/>
@@ -175,7 +175,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="759"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>Ha fallat la verificaci&oacute; de l&apos;escriptura. El contingut de la tarja SD &eacute;s diferent del que s&apos;hi ha escrit.</translation>
+        <translation>Ha fallat la verificaci&oacute; de l&apos;escriptura. El contingut de la targeta SD &eacute;s diferent del que s&apos;hi ha escrit.</translation>
     </message>
 </context>
 <context>
@@ -528,7 +528,7 @@
     <message>
         <location filename="../main.qml" line="415"/>
         <source>Format card as FAT32</source>
-        <translation>Formata la tarja com a FAT32</translation>
+        <translation>Formata la targeta com a FAT32</translation>
     </message>
     <message>
         <location filename="../main.qml" line="422"/>
@@ -630,52 +630,52 @@
     <message>
         <location filename="../main.qml" line="828"/>
         <source>Error downloading OS list from Internet</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml; un error en baixar la llista dels SO d&apos;internet</translation>
     </message>
     <message>
         <location filename="../main.qml" line="872"/>
         <source>Verifying... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; verificant... %1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="879"/>
         <source>Preparing to write... (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;est&agrave; preparant per escriure... (%1)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="894"/>
         <source>Error</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error</translation>
     </message>
     <message>
         <location filename="../main.qml" line="901"/>
         <source>Write Successful</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha escrit amb &egrave;xit</translation>
     </message>
     <message>
         <location filename="../main.qml" line="903"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha esborrat &lt;b&gt;%1&lt;/b&gt;&lt;br&gt;&lt;br&gt;Ja podeu retirar la targeta SD del lector</translation>
     </message>
     <message>
         <location filename="../main.qml" line="905"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha escrit el &laquo;&lt;b&gt;%1&lt;/b&gt;&raquo; a &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;Ja podeu retirar la targeta SD del lector</translation>
     </message>
     <message>
         <location filename="../main.qml" line="942"/>
         <source>Error parsing os_list.json</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produ&iuml;t un error en analitzar os_lists.json</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1043"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished"></translation>
+        <translation>Connecteu una mem&ograve;ria USB que contingui primer imatges.&lt;br&gt;Les imatges s&apos;han de trobar-se a la carpeta arrel de la mem&ograve;ria.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1058"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>La targeta SD est&agrave; protegida contra escriptura.&lt;br&gt;Accioneu l&apos;interruptor del costat esquerre de la targeta SD per tal que quedi posicionat a la part superior i torneu-ho a provar.</translation>
     </message>
 </context>
 </TS>
