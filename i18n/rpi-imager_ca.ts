@@ -35,7 +35,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="146"/>
         <source>Error running diskpart: %1</source>
-        <translation>S&apos;ha produ&iuml;t un error en executar diskpart: %1</translation>
+        <translation>S&apos;ha produ&iuml;t un error en executar &laquo;diskpart&raquo;: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="167"/>
@@ -45,27 +45,27 @@
     <message>
         <location filename="../downloadthread.cpp" line="193"/>
         <source>Authentication cancelled</source>
-        <translation>S&apos;ha cancel&middot;lat l&apos;autenticaci&ograve;</translation>
+        <translation>S&apos;ha cancel&middot;lat l&apos;autenticaci&oacute;</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="196"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
-        <translation>S&apos;ha produ&iuml;t un error en executar authopen per a obtenir l&apos;acc&eacute;s al dispositiu de disc &laquo;%1&raquo;</translation>
+        <translation>S&apos;ha produ&iuml;t un error en executar &laquo;authopen&raquo; per a obtenir l&apos;acc&eacute;s al dispositiu de disc &laquo;%1&raquo;</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="197"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>Verifiqueu si el &laquo;Raspberry Pi Imager&raquo; t&egrave; acc&egrave;s als &laquo;volums extra&iuml;bles&raquo; des de la configuraci&ograve; de privacitat (sota els &laquo;fitxers i carpetes&raquo; o doneu-li &laquo;accés complet al disc&raquo;)</translation>
+        <translation>Verifiqueu si el &laquo;Raspberry Pi Imager&raquo; t&eacute; acc&eacute;s als &laquo;volums extra&iuml;bles&raquo; des de la configuraci&oacute; de privacitat (sota &laquo;fitxers i carpetes&raquo; o doneu-li &laquo;accés complet al disc&raquo;)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="218"/>
         <source>Cannot open storage device &apos;%1&apos;.</source>
-        <translation>No s&apos;ha pogut obrir el dispositiu d'emmagatzematge &apos;%1&apos;</translation>
+        <translation>No s&apos;ha pogut obrir el dispositiu d'emmagatzematge &laquo;%1&raquo;</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="260"/>
         <source>discarding existing data on drive</source>
-        <translation>S&apos;estan descartant les dades existent a la unitat</translation>
+        <translation>S&apos;estan descartant les dades existents a la unitat</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="280"/>
@@ -75,12 +75,12 @@
     <message>
         <location filename="../downloadthread.cpp" line="286"/>
         <source>Write error while zero&apos;ing out MBR</source>
-        <translation>S&apos;ha produ&iuml;t un error en esborrar amb zeros MBR.</translation>
+        <translation>S&apos;ha produ&iuml;t un error en esborrar amb zeros l&apos;&laquo;MBR&raquo;.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>S&apos;ha produ&iuml;t un error en llegir de l&apos;emmagatzematge.&lt;br&gt;&Eacute;s possible que la targeta SD estigui malmesa.</translation>
+        <translation>S&apos;ha produ&iuml;t un error en llegir l&apos;emmagatzematge.&lt;br&gt;&Eacute;s possible que la targeta SD estigui malmesa.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="812"/>
@@ -105,17 +105,17 @@
     <message>
         <location filename="../downloadthread.cpp" line="898"/>
         <source>Error creating firstrun.sh on FAT partition</source>
-        <translation>S&apos;ha produ&iuml;t un error en crear el fitxer firstrun.sh a la partici&oacute; FAT</translation>
+        <translation>S&apos;ha produ&iuml;t un error en crear el fitxer &laquo;firstrun.sh&raquo; a la partici&oacute; FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="939"/>
         <source>Error writing to config.txt on FAT partition</source>
-        <translation>S&apos;ha produ&iuml;t un error en escriure al fitxer config.txt a la partici&oacute; FAT</translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure al fitxer &laquo;config.txt&raquo; a la partici&oacute; FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="963"/>
         <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation>S&apos;ha produ&iuml;t un error en escriure al fitxer cmdline.txt a la partici&oacute; FAT</translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure al fitxer &laquo;cmdline.txt&raquo; a la partici&oacute; FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="398"/>
@@ -125,7 +125,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="403"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation>L&apos;opci&ograve; &laquo;Controla l&apos;acc&eacute;s de la carpeta&raquo; de la Seguretat del Windows sembla que est&agrave; activada. Afegiu els executables &laquo;rpi-imager.exe&raquo; i &laquo;fat32format.exe&raquo; a la llista d&apos;aplicacions permese i torneu-ho a provar.</translation>
+        <translation>L&apos;opci&oacute; &laquo;Controla l&apos;acc&eacute;s de la carpeta&raquo; de la Seguretat del Windows sembla que est&agrave; activada. Afegiu els executables &laquo;rpi-imager.exe&raquo; i &laquo;fat32format.exe&raquo; a la llista d&apos;aplicacions permeses i torneu-ho a provar.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="409"/>
@@ -140,12 +140,12 @@
     <message>
         <location filename="../downloadthread.cpp" line="647"/>
         <source>Error writing to storage (while flushing)</source>
-        <translation>S&apos;ha produ&iuml;t un error en escriure a l&apos;emmagatzematge (proc&eacute;s: flushing)</translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure a l&apos;emmagatzematge (proc&eacute;s: Flushing)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="654"/>
         <source>Error writing to storage (while fsync)</source>
-        <translation>S&apos;ha produ&iuml;t un error en escriure a l&apos;emmagatzematge (proc&eacute;s: fsync))</translation>
+        <translation>S&apos;ha produ&iuml;t un error en escriure a l&apos;emmagatzematge (proc&eacute;s: fsync)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="635"/>
@@ -230,7 +230,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="213"/>
         <source>Formatting not implemented for this platform</source>
-        <translation>Aquesta plataforma no te implementada la formataci&oacute;</translation>
+        <translation>Aquesta plataforma no t&eacute; implementada la formataci&oacute;</translation>
     </message>
 </context>
 <context>
@@ -243,7 +243,7 @@
     <message>
         <location filename="../imagewriter.cpp" line="188"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation>El fixer d&apos;entrada no &eacute;s una imatge de disc v&agrave;lida.&lt;br&gt;La mida del fitxer &eacute;s de %1 bytes, que no &eacute;s m&uacute;ltiple de 512 bytes.</translation>
+        <translation>El fitxer d&apos;entrada no &eacute;s una imatge de disc v&agrave;lida.&lt;br&gt;La mida del fitxer &eacute;s de %1 bytes, que no &eacute;s m&uacute;ltiple de 512 bytes.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="370"/>
@@ -279,7 +279,7 @@
     <message>
         <location filename="../MsgPopup.qml" line="109"/>
         <source>YES</source>
-        <translation>S&Igrave;</translation>
+        <translation>S&Iacute;</translation>
     </message>
     <message>
         <location filename="../MsgPopup.qml" line="122"/>
@@ -297,12 +297,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="91"/>
         <source>Image customization options</source>
-        <translation>Opcions de personalitzaci&ograve; de les imatges</translation>
+        <translation>Opcions de personalitzaci&oacute; de les imatges</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="99"/>
         <source>for this session only</source>
-        <translation>per a aquesta sessi&ograve; nom&eacute;s</translation>
+        <translation>per a aquesta sessi&oacute; nom&eacute;s</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="100"/>
@@ -327,22 +327,22 @@
     <message>
         <location filename="../OptionsPopup.qml" line="155"/>
         <source>Use password authentication</source>
-        <translation>Utilitza autenticaci&ograve; amb contrasenya</translation>
+        <translation>Utilitza autenticaci&oacute; amb contrasenya</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="171"/>
         <source>Set password for &apos;pi&apos; user:</source>
-        <translation>Estableix la contrasenya per a l&apos;usuari &laquo;pi&raquo;:</translation>
+        <translation>Establiu la contrasenya per a l&apos;usuari &laquo;pi&raquo;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="193"/>
         <source>Allow public-key authentication only</source>
-        <translation>Permet nom&eacute; l&apos;autenticació amb claus p&uacute;bliques</translation>
+        <translation>Permet nom&eacute;s l&apos;autenticació amb claus p&uacute;bliques</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="208"/>
         <source>Set authorized_keys for &apos;pi&apos;:</source>
-        <translation>Defineix &laquo;authorized_keys&raquo; per l&apos;usuari &laquo;pi&raquo;:</translation>
+        <translation>Defineix &laquo;authorized_keys&raquo; per a l&apos;usuari &laquo;pi&raquo;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="220"/>
@@ -367,7 +367,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="265"/>
         <source>Wifi country:</source>
-        <translation>Pa&igrave;s de la wifi:</translation>
+        <translation>Pa&iacute;s de la wifi:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="276"/>
@@ -382,7 +382,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="296"/>
         <source>Keyboard layout:</source>
-        <translation>Disposi&oacute; del teclat</translation>
+        <translation>Disposici&oacute; del teclat</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="306"/>
@@ -420,7 +420,7 @@
     <message>
         <location filename="../linux/linuxdrivelist.cpp" line="111"/>
         <source>Internal SD card reader</source>
-        <translation>Lector de targes SD intern</translation>
+        <translation>Lector de targetes SD intern</translation>
     </message>
 </context>
 <context>
@@ -428,12 +428,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="71"/>
         <source>Warning: advanced settings set</source>
-        <translation>Av&iacute;s: hi ha opcions avan&ccedil; establertes</translation>
+        <translation>Av&iacute;s: hi ha opcions avan&ccedil;ades establertes</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="85"/>
         <source>Would you like to apply the image customization settings saved earlier?</source>
-        <translation>Voleu aplicar la configuraci&oacute; personalitzada de la imatges desada anteriorment?</translation>
+        <translation>Voleu aplicar la configuraci&oacute; personalitzada de la imatge desada anteriorment?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="94"/>
@@ -590,12 +590,12 @@
     <message>
         <location filename="../main.qml" line="745"/>
         <source>Are you sure you want to quit?</source>
-        <translation>Esteu segur que voleu sortir?</translation>
+        <translation>N&apos;esteu segur que voleu sortir?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="746"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>El Raspberry Pi Imager est&agrave; ocupat.&lt;br&gt;Esteu segur que voleu sortir?</translation>
+        <translation>El Raspberry Pi Imager est&agrave; ocupat.&lt;br&gt;N&apos;esteu segur que voleu sortir?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="757"/>
@@ -610,7 +610,7 @@
     <message>
         <location filename="../main.qml" line="787"/>
         <source>Update available</source>
-        <translation>Actualitzaci&oacute; disponible</translation>
+        <translation>Hi ha una actualitzaci&oacute; disponible</translation>
     </message>
     <message>
         <location filename="../main.qml" line="788"/>
@@ -630,7 +630,7 @@
     <message>
         <location filename="../main.qml" line="828"/>
         <source>Error downloading OS list from Internet</source>
-        <translation>S&apos;ha produ&iuml; un error en baixar la llista dels SO d&apos;internet</translation>
+        <translation>S&apos;ha produ&iuml;t un error en baixar la llista dels SO d&apos;internet</translation>
     </message>
     <message>
         <location filename="../main.qml" line="872"/>
@@ -670,7 +670,7 @@
     <message>
         <location filename="../main.qml" line="1043"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation>Connecteu una mem&ograve;ria USB que contingui primer imatges.&lt;br&gt;Les imatges s&apos;han de trobar-se a la carpeta arrel de la mem&ograve;ria.</translation>
+        <translation>Connecteu una mem&ograve;ria USB que contingui primer imatges.&lt;br&gt;Les imatges s&apos;han de trobar a la carpeta arrel de la mem&ograve;ria.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1058"/>
