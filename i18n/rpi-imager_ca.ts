@@ -307,7 +307,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="100"/>
         <source>to always use</source>
-        <translation>per a utilitzar sempre</translation>
+        <translation>per utilitzar sempre</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="112"/>
