@@ -337,7 +337,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="193"/>
         <source>Allow public-key authentication only</source>
-        <translation>Permet només l&apos;autenticació amb claus públiques</translation>
+        <translation>Permet només l&apos;autenticació de claus públiques</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="208"/>
