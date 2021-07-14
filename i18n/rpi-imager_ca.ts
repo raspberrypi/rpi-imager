@@ -327,7 +327,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="155"/>
         <source>Use password authentication</source>
-        <translation>Utilitza autenticació amb contrasenya</translation>
+        <translation>Utilitza l&apos;autenticació de contrasenya</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="171"/>
@@ -342,7 +342,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="208"/>
         <source>Set authorized_keys for &apos;pi&apos;:</source>
-        <translation>Defineix «authorized_keys» per a l&apos;usuari «pi»:</translation>
+        <translation>Establiu «authorized_keys» per a l&apos;usuari «pi»:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="220"/>
@@ -573,7 +573,7 @@
     <message>
         <location filename="../main.qml" line="492"/>
         <source>Online - %1 GB download</source>
-        <translation>Amb connexió - baixada de %1 GB</translation>
+        <translation>Baixada en línia de: %1 GB</translation>
     </message>
     <message>
         <location filename="../main.qml" line="649"/>
