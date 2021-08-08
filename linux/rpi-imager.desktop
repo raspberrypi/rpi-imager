@@ -5,5 +5,6 @@ Name=Imager
 Comment=Raspberry Pi Imager
 Icon=rpi-imager
 Exec=rpi-imager
-Categories=Utility
+Categories=System;Utility;Archiving;
+GenericName=Write Raspberry PI OS images to SD card
 StartupNotify=false
