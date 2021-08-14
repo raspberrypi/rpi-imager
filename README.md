@@ -1,16 +1,15 @@
 # rpi-imager
 
-Raspberry Pi Imaging Utility
+Raspberry Pi Imager
 
 - Download the latest version for Windows, macOS and Ubuntu from the [Raspberry Pi downloads page](https://www.raspberrypi.org/downloads/).
 - To install on Raspberry Pi OS, use `sudo apt update && sudo apt install rpi-imager`.
 
 ## License
 
-The main code of the Imaging Utility is made available under the terms of the Apache license.
-See license.txt and files in "dependencies" folder for more information about the various open source licenses that apply to the third-party dependencies used such as Qt, libarchive, drivelist, mountutils and libcurl.
+Code is made available under the terms of the Apache license. See license.txt and files in `dependencies` folder for more information about the various open-source licenses that apply to the third-party dependencies used such as Qt, libarchive, drivelist, mountutils and libcurl.
 
-## How to rebuild
+## Build instructions
 
 ### Debian/Ubuntu Linux
 
@@ -45,9 +44,9 @@ cd ..
 sudo apt install ./rpi-imager*.deb
 ```
 
-It should create an icon in the start menu under "Utilities" or "Accessories".
-The imaging utility will normally be run as regular user, and will call udisks2 over DBus to perform privileged operations like opening the disk device for writing.
-If udisks2 is not functional on your Linux distribution, you can alternatively start it as "root" with sudo and similar tools.
+It should create an icon in the start menu under `Utilities` or `Accessories`.
+The imaging utility will normally be run as a regular user, and will call udisks2 over DBus to perform privileged operations like opening the disk device for writing.
+If udisks2 is not functional on your Linux distribution, you can alternatively start it as `root` using sudo and similar tools.
 
 ### Fedora/RHEL/CentOS Linux
 
@@ -78,7 +77,7 @@ sudo make install
 
 #### Get dependencies
 
-- Get the Qt online installer from: https://www.qt.io/download-open-source
+- Get the Qt online installer from https://www.qt.io/download-open-source.
 During installation, choose a Qt 5.x with Mingw32 32-bit toolchain and CMake.
 
 - If using the official Qt distribution that does NOT have schannel (Windows native SSL library) support, compile OpenSSL libraries ( https://wiki.qt.io/Compiling_OpenSSL_with_MinGW ) and copy the libssl/crypto DLLs to C:\qt\5.x\mingw73_32\bin
@@ -90,7 +89,7 @@ If NOT and are you only compiling for your own personal use, comment out all lin
 
 #### Building
 
-Building can be done manually using the command-line, using "cmake", "make", etc., but if you are not that familar with setting up a proper Windows build environment (setting paths, etc.), it is easiest to use the Qt creator GUI instead.
+Building can be done manually using the command line, using "cmake", "make", etc., but if you are not that familar with setting up a proper Windows build environment (setting paths, etc.), it is easiest to use the Qt creator GUI instead.
 
 - Download source .zip from github and extract it to a folder on disk
 - Open CMakeLists.txt in Qt creator.
@@ -134,17 +133,15 @@ xcrun stapler staple imager.dmg
 
 ### Debugging
 
-On Linux and Mac the application will print debug messages to console by default if started from console.
-On Windows start the application with the command-line option --debug to let it open a console window.
+On Linux and Mac the application will print debug messages to console by default if started from console. On Windows start the application with the command-line option --debug to let it open a console window.
 
 ### Custom repository
 
-If the application is started with "--repo [your own URL]" it will use a custom image repository.
-So can simply create another 'start menu shortcut' to the application with that parameter to use the application with your own images.
+If the application is started with "--repo [your own URL]" it will use a custom image repository. This allows you to create another start menu shortcut to the application with that parameter to use the application with your own images.
 
 ### Telemetry
 
-In order to understand which images and operating systems are most popular and re-organise the application accordingly, when using the default image repository, the URL, operating system name and category (if present) of a selected image are sent to https://rpi-imager-stats.raspberrypi.org by [`downloadstatstelemetry.cpp`](https://github.com/raspberrypi/rpi-imager/blob/qml/downloadstatstelemetry.cpp).
+In order to understand which images and operating systems are most popular and reorganise the application accordingly, when using the default image repository, the URL, operating system name and category (if present) of a selected image are sent to https://rpi-imager-stats.raspberrypi.org by [`downloadstatstelemetry.cpp`](https://github.com/raspberrypi/rpi-imager/blob/qml/downloadstatstelemetry.cpp).
 
 This web service is hosted by [Heroku](https://www.heroku.com) and only stores an incrementing counter using a [Redis Sorted Set](https://redis.io/topics/data-types#sorted-sets) for each URL, operating system name and category per day in the `eu-west-1` region and does not associate any personal data with those counts. This allows us to query the number of downloads over time and nothing else.
 
@@ -174,3 +171,5 @@ defaults write org.raspberrypi.Imager.plist telemetry -bool NO
 When using the app, press <kbd>CTRL</kbd> + <kbd>ALT</kbd> + <kbd>X</kbd> to reveal the **Advanced options** dialog.
 
 In here, you can specify several things you would otherwise set in the boot configuration files. For example, you can enable SSH, set the Wi-Fi login, and specify your locale settings for the system image.
+
+**Note:** The advanced options only affect Raspberry Pi OS; support for other operating systems may be added in the future.
