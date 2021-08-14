@@ -46,7 +46,7 @@ sudo apt install ./rpi-imager*.deb
 
 It should create an icon in the start menu under `Utilities` or `Accessories`.
 The imaging utility will normally be run as a regular user, and will call udisks2 over DBus to perform privileged operations like opening the disk device for writing.
-If udisks2 is not functional on your Linux distribution, you can alternatively start it as `root` using sudo and similar tools.
+If udisks2 is not functional on your Linux distribution, you can alternatively start it as `root` using sudo or a similar tool.
 
 ### Fedora/RHEL/CentOS Linux
 
