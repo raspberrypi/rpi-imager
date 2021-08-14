@@ -77,15 +77,13 @@ sudo make install
 
 #### Get dependencies
 
-- Get the Qt online installer from https://www.qt.io/download-open-source.
-During installation, choose a Qt 5.x with Mingw32 32-bit toolchain and CMake.
+- Get the Qt online installer from https://www.qt.io/download-open-source. During installation, choose a Qt 5.x with Mingw32 32-bit toolchain and CMake.
 
 - If using the official Qt distribution that does NOT have schannel (Windows native SSL library) support, compile OpenSSL libraries ( https://wiki.qt.io/Compiling_OpenSSL_with_MinGW ) and copy the libssl/crypto DLLs to C:\qt\5.x\mingw73_32\bin
 
 - For building installer get Nullsoft scriptable install system: https://nsis.sourceforge.io/Download
 
-- It is assumed you already have a proper code signing certificate, and signtool.exe from the Windows SDK installed.
-If NOT and are you only compiling for your own personal use, comment out all lines mentioning signtool from CMakelists.txt and the .nsi installer script.
+- It is assumed you already have a proper code signing certificate, and signtool.exe from the Windows SDK installed. If NOT and are you only compiling for your own personal use, comment out all lines mentioning signtool from CMakelists.txt and the .nsi installer script.
 
 #### Building
 
