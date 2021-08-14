@@ -170,4 +170,4 @@ When using the app, press <kbd>CTRL</kbd> + <kbd>ALT</kbd> + <kbd>X</kbd> to rev
 
 In here, you can specify several things you would otherwise set in the boot configuration files. For example, you can enable SSH, set the Wi-Fi login, and specify your locale settings for the system image.
 
-**Note:** The advanced options only affect Raspberry Pi OS; support for other operating systems may be added in the future.
+**Note:** The advanced options only affect Raspberry Pi OS images; support for other operating system images may be added in the future.
