@@ -102,20 +102,19 @@ Note: the CMake integration in Qt Creator is a bit flaky at times. If you made a
 
 #### Get dependencies
 
-- Get the Qt online installer from: https://www.qt.io/download-open-source
-During installation, choose a Qt 5.x edition and CMake.
+- Get the Qt online installer from: https://www.qt.io/download-open-source. During installation, choose a Qt 5.x edition and CMake.
 - For creating a .DMG for distribution you can use an utility like: https://github.com/sindresorhus/create-dmg
-- It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store. (Privileged apps are not allowed in the Mac store)
+- It is assumed you have an Apple developer subscription, and already have a `Developer ID` code signing certificate for distribution outside the Mac Store. (Privileged apps are not allowed in the Mac store).
 
 #### Building
 
 - Download source .zip from github and extract it to a folder on disk
-- Start Qt Creator (may need to start "finder" navigate to home folder using the "Go" menu, and find Qt folder to start it manually as it may not have created icon in Applications), and open CMakeLists.txt
-- Menu "Build" -> "Build all"
-- Result will be in ../build_rpi-imager_someversion
+- Start Qt Creator. (May need to start `finder`, navigate to home folder using the `Go` menu, and find Qt folder to start it manually, since it may not have created icon in Applications), and open CMakeLists.txt.
+- Menu `Build` -> `Build all`
+- Result will be in `../build_rpi-imager_someversion`
 - For distribution to others: code sign the .app, create a DMG, code sign the DMG, submit it for notarization to Apple and staple the notarization ticket to the DMG.
 
-E.g.:
+For example:
 
 ```
 cd build-rpi-imager-Desktop_Qt_5_14_1_clang_64bit-Release/
