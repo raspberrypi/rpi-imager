@@ -165,7 +165,7 @@ defaults write org.raspberrypi.Imager.plist telemetry -bool NO
 
 ### Advanced options
 
-When using the app, press <kbd>CTRL</kbd> + <kbd>ALT</kbd> + <kbd>X</kbd> to reveal the **Advanced options** dialog.
+When using the app, press <kbd>CTRL</kbd> + <kbd>SHIFT</kbd> + <kbd>X</kbd> to reveal the **Advanced options** dialog.
 
 In here, you can specify several things you would otherwise set in the boot configuration files. For example, you can enable SSH, set the Wi-Fi login, and specify your locale settings for the system image.
 
