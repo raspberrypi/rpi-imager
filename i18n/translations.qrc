@@ -7,6 +7,6 @@
         <file>rpi-imager_nl.qm</file>
         <file>rpi-imager_sk.qm</file>
         <file>rpi-imager_tr.qm</file>        
-        <file>rpi-imager_zh_cn.qm</file>        
+        <file>rpi-imager_zh.qm</file>        
     </qresource>
 </RCC>
