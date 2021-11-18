@@ -187,6 +187,18 @@ void DriveFormatThread::run()
     }
 
     proc.execute("partprobe", QStringList() );
+    for (int tries = 0; tries < 30; tries++)
+    {
+        if (QFile::exists(fatpartition))
+            break;
+
+        QThread::msleep(100);
+    }
+    if (!QFile::exists(fatpartition))
+    {
+        emit error(tr("Partitioning did not create expected FAT partition %1").arg(QString(fatpartition)));
+        return;
+    }
 
     args.clear();
     args << fatpartition;
