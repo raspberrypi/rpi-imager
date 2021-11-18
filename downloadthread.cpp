@@ -20,6 +20,7 @@
 #include <QProcess>
 #include <QSettings>
 #include <QtConcurrent/QtConcurrent>
+#include <QtNetwork/QNetworkProxy>
 
 #ifdef Q_OS_LINUX
 #include <sys/ioctl.h>
@@ -350,6 +351,37 @@ void DownloadThread::run()
 
     if (!_useragent.isEmpty())
         curl_easy_setopt(_c, CURLOPT_USERAGENT, _useragent.constData());
+
+    if (_proxy.isEmpty())
+    {
+#ifndef QT_NO_NETWORKPROXY
+        /* Ask OS for proxy information. */
+        QNetworkProxyQuery npq{QUrl{_url}};
+        QList<QNetworkProxy> proxyList = QNetworkProxyFactory::systemProxyForQuery(npq);
+        if (!proxyList.isEmpty())
+        {
+            QNetworkProxy proxy = proxyList.first();
+            if (proxy.type() != proxy.NoProxy)
+            {
+                QUrl proxyUrl;
+
+                proxyUrl.setScheme(proxy.type() == proxy.Socks5Proxy ? "socks5h" : "http");
+                proxyUrl.setHost(proxy.hostName());
+                proxyUrl.setPort(proxy.port());
+                qDebug() << "Using proxy server:" << proxyUrl;
+
+                if (!proxy.user().isEmpty())
+                {
+                    proxyUrl.setUserName(proxy.user());
+                    proxyUrl.setPassword(proxy.password());
+                }
+
+                _proxy = proxyUrl.toEncoded();
+            }
+        }
+#endif
+    }
+
     if (!_proxy.isEmpty())
         curl_easy_setopt(_c, CURLOPT_PROXY, _proxy.constData());
 
