@@ -138,7 +138,7 @@ void ImageWriter::setEngine(QQmlApplicationEngine *engine)
 }
 
 /* Set URL to download from */
-void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname)
+void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, QByteArray initFormat)
 {
     _src = url;
     _downloadLen = downloadLen;
@@ -147,11 +147,13 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _multipleFilesInZip = multifilesinzip;
     _parentCategory = parentcategory;
     _osName = osname;
+    _initFormat = (initFormat == "none") ? "" : initFormat;
 
     if (!_downloadLen && url.isLocalFile())
     {
         QFileInfo fi(url.toLocalFile());
         _downloadLen = fi.size();
+        _initFormat = "auto";
     }
 }
 
@@ -238,7 +240,7 @@ void ImageWriter::startWrite()
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun);
+    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
 
     if (!_expectedHash.isEmpty() && _cachedFileHash != _expectedHash && _cachingEnabled)
     {
@@ -941,15 +943,18 @@ void ImageWriter::setSetting(const QString &key, const QVariant &value)
     _settings.sync();
 }
 
-void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun)
+void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork)
 {
     _config = config;
     _cmdline = cmdline;
     _firstrun = firstrun;
+    _cloudinit = cloudinit;
+    _cloudinitNetwork = cloudinitNetwork;
 
     qDebug() << "Custom config.txt entries:" << config;
     qDebug() << "Custom cmdline.txt entries:" << cmdline;
     qDebug() << "Custom firstuse.sh:" << firstrun;
+    qDebug() << "Cloudinit:" << cloudinit;
 }
 
 QString ImageWriter::crypt(const QByteArray &password)
@@ -1020,6 +1025,11 @@ bool ImageWriter::hasSavedCustomizationSettings()
     _settings.endGroup();
 
     return result;
+}
+
+bool ImageWriter::imageSupportsCustomization()
+{
+    return !_initFormat.isEmpty();
 }
 
 void MountUtilsLog(std::string msg) {

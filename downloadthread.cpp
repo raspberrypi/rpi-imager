@@ -829,11 +829,14 @@ qint64 DownloadThread::_sectorsWritten()
     return -1;
 }
 
-void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun)
+void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudInitNetwork, const QByteArray &initFormat)
 {
     _config = config;
     _cmdline = cmdline;
     _firstrun = firstrun;
+    _cloudinit = cloudinit;
+    _cloudinitNetwork = cloudInitNetwork;
+    _initFormat = initFormat;
 }
 
 bool DownloadThread::_customizeImage()
@@ -987,20 +990,6 @@ bool DownloadThread::_customizeImage()
 
     emit preparationStatusUpdate(tr("Customizing image"));
 
-    if (!_firstrun.isEmpty())
-    {
-        QFile f(folder+"/firstrun.sh");
-        if (f.open(f.WriteOnly) && f.write(_firstrun) == _firstrun.length())
-        {
-            f.close();
-        }
-        else
-        {
-            emit error(tr("Error creating firstrun.sh on FAT partition"));
-            return false;
-        }
-    }
-
     if (!_config.isEmpty())
     {
         auto configItems = _config.split('\n');
@@ -1037,6 +1026,85 @@ bool DownloadThread::_customizeImage()
         else
         {
             emit error(tr("Error writing to config.txt on FAT partition"));
+            return false;
+        }
+    }
+
+    if (_initFormat == "auto")
+    {
+        /* Do an attempt at auto-detecting what customization format a custom
+           image provided by the user supports */
+        QByteArray issue;
+        QFile fi(folder+"/issue.txt");
+        if (fi.exists() && fi.open(fi.ReadOnly))
+        {
+            issue = fi.readAll();
+            fi.close();
+        }
+
+        if (QFile::exists(folder+"/user-data"))
+        {
+            /* If we have user-data file on FAT partition, then it must be cloudinit */
+            _initFormat = "cloudinit";
+            qDebug() << "user-data found on FAT partition. Assuming cloudinit support";
+        }
+        else if (issue.contains("pi-gen"))
+        {
+            /* If issue.txt mentions pi-gen, and there is no user-data file assume
+             * it is a RPI OS flavor, and use the old systemd unit firstrun script stuff */
+            _initFormat = "systemd";
+            qDebug() << "using firstrun script invoked by systemd customization method";
+        }
+        else
+        {
+            /* Fallback to writing cloudinit file, as it does not hurt having one
+             * Will just have no customization if OS does not support it */
+            _initFormat = "cloudinit";
+            qDebug() << "Unknown what customization method image supports. Falling back to cloudinit";
+        }
+    }
+
+    if (!_firstrun.isEmpty() && _initFormat == "systemd")
+    {
+        QFile f(folder+"/firstrun.sh");
+        if (f.open(f.WriteOnly) && f.write(_firstrun) == _firstrun.length())
+        {
+            f.close();
+        }
+        else
+        {
+            emit error(tr("Error creating firstrun.sh on FAT partition"));
+            return false;
+        }
+
+        _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";
+    }
+
+    if (!_cloudinit.isEmpty() && _initFormat == "cloudinit")
+    {
+        _cloudinit = "#cloud-config\n"+_cloudinit;
+        QFile f(folder+"/user-data");
+        if (f.open(f.WriteOnly) && f.write(_cloudinit) == _cloudinit.length())
+        {
+            f.close();
+        }
+        else
+        {
+            emit error(tr("Error creating user-data cloudinit file on FAT partition"));
+            return false;
+        }
+    }
+
+    if (!_cloudinitNetwork.isEmpty() && _initFormat == "cloudinit")
+    {
+        QFile f(folder+"/network-config");
+        if (f.open(f.WriteOnly) && f.write(_cloudinitNetwork) == _cloudinitNetwork.length())
+        {
+            f.close();
+        }
+        else
+        {
+            emit error(tr("Error creating network-config cloudinit file on FAT partition"));
             return false;
         }
     }

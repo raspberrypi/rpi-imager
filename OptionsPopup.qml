@@ -23,6 +23,10 @@ Popup {
     property string config
     property string cmdline
     property string firstrun
+    property string cloudinit
+    property string cloudinitrun
+    property string cloudinitwrite
+    property string cloudinitnetwork
 
     // background of title
     Rectangle {
@@ -496,12 +500,29 @@ Popup {
     function escapeshellarg(arg) {
         return "'"+arg.replace(/'/g, "\\'")+"'"
     }
+    function addCloudInit(s) {
+        cloudinit += s+"\n"
+    }
+    function addCloudInitWriteFile(name, content, perms) {
+        cloudinitwrite += "- encoding: b64\n"
+        cloudinitwrite += "  content: "+Qt.btoa(content)+"\n"
+        cloudinitwrite += "  owner: root:root\n"
+        cloudinitwrite += "  path: "+name+"\n"
+        cloudinitwrite += "  permissions: '"+perms+"'\n"
+    }
+    function addCloudInitRun(cmd) {
+        cloudinitrun += "- "+cmd+"\n"
+    }
 
     function applySettings()
     {
         cmdline = ""
         config = ""
         firstrun = ""
+        cloudinit = ""
+        cloudinitrun = ""
+        cloudinitwrite = ""
+        cloudinitnetwork = ""
 
         if (chkOverscan.checked) {
             addConfig("disable_overscan=1")
@@ -510,15 +531,31 @@ Popup {
             addFirstRun("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\t\\n\\r\"`")
             addFirstRun("echo "+fieldHostname.text+" >/etc/hostname")
             addFirstRun("sed -i \"s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\\t"+fieldHostname.text+"/g\" /etc/hosts")
+
+            addCloudInit("hostname: "+fieldHostname.text)
+            addCloudInit("manage_etc_hosts: true")
+            addCloudInit("packages:")
+            addCloudInit("- avahi-daemon")
+            addCloudInit("")
         }
         if (chkSSH.checked) {
             // First user may not be called 'pi' on all distributions, so look username up
             addFirstRun("FIRSTUSER=`getent passwd 1000 | cut -d: -f1`");
             addFirstRun("FIRSTUSERHOME=`getent passwd 1000 | cut -d: -f6`")
 
+            addCloudInit("users:")
+            addCloudInit("- name: pi")
+            addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,sudo")
+            addCloudInit("  shell: /bin/bash")
+
             if (radioPasswordAuthentication.checked) {
                 var cryptedPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
                 addFirstRun("echo \"$FIRSTUSER:\""+escapeshellarg(cryptedPassword)+" | chpasswd -e")
+
+                addCloudInit("  lock_passwd: false")
+                addCloudInit("  passwd: "+cryptedPassword)
+                addCloudInit("")
+                addCloudInit("ssh_pwauth: true")
             }
             if (radioPubKeyAuthentication.checked) {
                 var pubkey = fieldPublicKey.text.replace(/\n/g, "")
@@ -527,8 +564,14 @@ Popup {
                     addFirstRun("install -o \"$FIRSTUSER\" -m 600 <(echo \""+pubkey+"\") \"$FIRSTUSERHOME/.ssh/authorized_keys\"")
                 }
                 addFirstRun("echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config")
+
+                addCloudInit("  lock_passwd: true")
+                addCloudInit("  ssh_authorized_keys:")
+                addCloudInit("    - "+pubkey)
+                addCloudInit("  sudo: ALL=(ALL) NOPASSWD:ALL")
             }
             addFirstRun("systemctl enable ssh")
+            addCloudInit("")
         }
         if (chkWifi.checked) {
             var wpaconfig = "country="+fieldWifiCountry.editText+"\n"
@@ -549,22 +592,39 @@ Popup {
             addFirstRun("for filename in /var/lib/systemd/rfkill/*:wlan ; do")
             addFirstRun("  echo 0 > $filename")
             addFirstRun("done")
+
+            cloudinitnetwork  = "version: 2\n"
+            cloudinitnetwork += "wifis:\n"
+            cloudinitnetwork += "  renderer: networkd\n"
+            cloudinitnetwork += "  wlan0:\n"
+            cloudinitnetwork += "    dhcp4: true\n"
+            cloudinitnetwork += "    optional: true\n"
+            cloudinitnetwork += "    access-points:\n"
+            cloudinitnetwork += "      "+fieldWifiSSID.text+":\n"
+            cloudinitnetwork += "        password: \""+cryptedPsk+"\"\n"
         }
         if (chkLocale.checked) {
             if (chkSkipFirstUse) {
                 addFirstRun("rm -f /etc/xdg/autostart/piwiz.desktop")
+                addCloudInitRun("rm -f /etc/xdg/autostart/piwiz.desktop")
             }
+
+            var kbdconfig = "XKBMODEL=\"pc105\"\n"
+            kbdconfig += "XKBLAYOUT=\""+fieldKeyboardLayout.text+"\"\n"
+            kbdconfig += "XKBVARIANT=\"\"\n"
+            kbdconfig += "XKBOPTIONS=\"\"\n"
 
             addFirstRun("rm -f /etc/localtime")
             addFirstRun("echo \""+fieldTimezone.editText+"\" >/etc/timezone")
             addFirstRun("dpkg-reconfigure -f noninteractive tzdata")
             addFirstRun("cat >/etc/default/keyboard <<'KBEOF'")
-            addFirstRun("XKBMODEL=\"pc105\"")
-            addFirstRun("XKBLAYOUT=\""+fieldKeyboardLayout.text+"\"")
-            addFirstRun("XKBVARIANT=\"\"")
-            addFirstRun("XKBOPTIONS=\"\"")
+            addFirstRun(kbdconfig)
             addFirstRun("KBEOF")
             addFirstRun("dpkg-reconfigure -f noninteractive keyboard-configuration")
+
+            addCloudInit("timezone: "+fieldTimezone.editText)
+            addCloudInitWriteFile("/etc/default/keyboard", kbdconfig, '0644')
+            addCloudInitRun("dpkg-reconfigure -f noninteractive keyboard-configuration || true")
         }
 
         if (firstrun.length) {
@@ -574,10 +634,19 @@ Popup {
             addFirstRun("exit 0")
             /* using systemd.run_success_action=none does not seem to have desired effect
                systemd then stays at "reached target kernel command line", so use reboot instead */
-            addCmdline("systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target")
+            //addCmdline("systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target")
+            // cmdline changing moved to DownloadThread::_customizeImage()
         }
 
-        imageWriter.setImageCustomization(config, cmdline, firstrun)
+        if (cloudinitwrite !== "") {
+            addCloudInit("write_files:\n"+cloudinitwrite+"\n")
+        }
+
+        if (cloudinitrun !== "") {
+            addCloudInit("runcmd:\n"+cloudinitrun+"\n")
+        }
+
+        imageWriter.setImageCustomization(config, cmdline, firstrun, cloudinit, cloudinitnetwork)
     }
 
     function saveSettings()

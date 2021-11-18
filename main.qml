@@ -192,7 +192,7 @@ ApplicationWindow {
                                 return
                             }
 
-                            if (!optionspopup.initialized && imageWriter.hasSavedCustomizationSettings()) {
+                            if (!optionspopup.initialized && imageWriter.imageSupportsCustomization() && imageWriter.hasSavedCustomizationSettings()) {
                                 usesavedsettingspopup.openPopup()
                             } else {
                                 confirmwritepopup.askForConfirmation()
@@ -205,7 +205,7 @@ ApplicationWindow {
                 ColumnLayout {
                     id: columnLayout3
                     Layout.columnSpan: 3
-                    Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
                     Text {
                         id: progressText
@@ -254,6 +254,17 @@ ApplicationWindow {
                         visible: false
                         font.family: roboto.name
                         Accessible.onPressAction: clicked()
+                    }
+                    Image {
+                        id: customizebutton
+                        source: "icons/ic_cog_40px.svg"
+                        visible: false
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                optionspopup.openPopup()
+                            }
+                        }
                     }
                 }
             }
@@ -375,6 +386,7 @@ ApplicationWindow {
                     description: qsTr("Go back to main menu")
                     tooltip: ""
                     website: ""
+                    init_format: ""
                 }
             }
 
@@ -416,6 +428,7 @@ ApplicationWindow {
             description: qsTr("Format card as FAT32")
             tooltip: ""
             website: ""
+            init_format: ""
         }
 
         ListElement {
@@ -767,6 +780,7 @@ ApplicationWindow {
         title: qsTr("Warning")
         onYes: {
             writebutton.enabled = false
+            customizebutton.visible = false
             cancelwritebutton.enabled = true
             cancelwritebutton.visible = true
             cancelverifybutton.enabled = true
@@ -892,6 +906,7 @@ ApplicationWindow {
     function resetWriteButton() {
         progressText.visible = false
         progressBar.visible = false
+        customizebutton.visible = imageWriter.imageSupportsCustomization()
         osbutton.enabled = true
         dstbutton.enabled = true
         writebutton.visible = true
@@ -931,6 +946,7 @@ ApplicationWindow {
         if (imageWriter.readyToWrite()) {
             writebutton.enabled = true
         }
+        customizebutton.visible = imageWriter.imageSupportsCustomization()
     }
 
     function onCancelled() {
@@ -1059,12 +1075,13 @@ ApplicationWindow {
                 }
             }
         } else {
-            imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name)
+            imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
             osbutton.text = d.name
             ospopup.close()
             if (imageWriter.readyToWrite()) {
                 writebutton.enabled = true
             }
+            customizebutton.visible = imageWriter.imageSupportsCustomization()
         }
     }
 
