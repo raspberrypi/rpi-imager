@@ -38,6 +38,10 @@ elseif (UNIX)
     else()
         message("DBUS not found. Disabling udisks2 support")
     endif()
+    find_package(ZLIB)
+    if(ZLIB_FOUND)
+        set(EXTRALIBS ${EXTRALIBS} ZLIB::ZLIB)
+    endif()
 elseif (WIN32)
     set(DEPENDENCIES acceleratedcryptographichash.cpp dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
         windows/winfile.cpp windows/winfile.h
