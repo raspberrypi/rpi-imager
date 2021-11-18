@@ -343,7 +343,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="193"/>
         <source>Allow public-key authentication only</source>
-        <translation>Authethifizierung via Public-Key</translation>
+        <translation>Authentifizierung via Public-Key</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="208"/>
