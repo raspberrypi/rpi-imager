@@ -468,7 +468,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../main.qml" line="110"/>
         <source>CHOOSE OS</source>
-        <translation>SCEGLI SO</translation>
+        <translation>SCEGLI S.O.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="125"/>
