@@ -98,7 +98,7 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="740"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>Fehler beim Lesen vom Speicher.&lt;br&gt;Die SD-Karte könnte kaputt sein.</translation>
+        <translation>Fehler beim Lesen vom Speicher.&lt;br&gt;Die SD-Karte könnte defekt sein.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="812"/>
@@ -236,7 +236,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../driveformatthread.cpp" line="213"/>
         <source>Formatting not implemented for this platform</source>
-        <translation>Formatieren ist auf dieser Platform nicht implementiert</translation>
+        <translation>Formatieren wird auf dieser Platform nicht unterstützt</translation>
     </message>
 </context>
 <context>
@@ -494,7 +494,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     </message>
     <message>
         <source>Select this button to change the destination SD card</source>
-        <translation type="vanished">Klicke auf diesen Knopf, um die Zeil-SD-Karte zu ändern</translation>
+        <translation type="vanished">Klicke auf diesen Knopf, um die Ziel-SD-Karte zu ändern</translation>
     </message>
     <message>
         <location filename="../main.qml" line="180"/>
@@ -558,7 +558,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="163"/>
         <source>Select this button to change the destination storage device</source>
-        <translation>Klicke auf diesen Knopf, um das Zeil-Speichermedium zu ändern</translation>
+        <translation>Klicken Sie auf diesen Knopf, um das Zeil-Speichermedium zu ändern</translation>
     </message>
     <message>
         <location filename="../main.qml" line="375"/>
@@ -635,7 +635,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="776"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>Alle vorhandenen Daten auf &apos;%1&apos; werden gelöscht.&lt;br&gt;Möchten sie wirklich fortfahren?</translation>
+        <translation>Alle vorhandenen Daten auf &apos;%1&apos; werden gelöscht.&lt;br&gt;Möchten Sie wirklich fortfahren?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="828"/>
@@ -685,7 +685,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="1058"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation>Die Speicherkarte ist schreibgeschützt.&lt;br&gt;Drücken Sie den Schutzschalter auf der linken Seite nach oben, und versuchen Sie es erneut.</translation>
+        <translation>Die Speicherkarte ist schreibgeschützt.&lt;br&gt;Schieben Sie den Schutzschalter auf der linken Seite nach oben, und versuchen Sie es erneut.</translation>
     </message>
 </context>
 </TS>
