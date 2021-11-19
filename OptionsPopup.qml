@@ -545,7 +545,7 @@ Popup {
 
             addCloudInit("users:")
             addCloudInit("- name: pi")
-            addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,sudo")
+            addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo")
             addCloudInit("  shell: /bin/bash")
 
             if (radioPasswordAuthentication.checked) {
@@ -600,8 +600,13 @@ Popup {
             cloudinitnetwork += "    dhcp4: true\n"
             cloudinitnetwork += "    optional: true\n"
             cloudinitnetwork += "    access-points:\n"
-            cloudinitnetwork += "      "+fieldWifiSSID.text+":\n"
+            cloudinitnetwork += "      \""+fieldWifiSSID.text+"\":\n"
             cloudinitnetwork += "        password: \""+cryptedPsk+"\"\n"
+
+            /* FIXME: setting wifi country code broken on Ubuntu
+               For unknown reasons udev does not trigger setregdomain automatically and as a result
+               our setting in /etc/default/crda is being ignored by Ubuntu. */
+            addCloudInitRun("sed -i 's/^\s*REGDOMAIN=\S*/REGDOMAIN="+fieldWifiCountry.editText+"/' /etc/default/crda || true")
         }
         if (chkLocale.checked) {
             if (chkSkipFirstUse) {
@@ -625,6 +630,7 @@ Popup {
             addCloudInit("timezone: "+fieldTimezone.editText)
             addCloudInitWriteFile("/etc/default/keyboard", kbdconfig, '0644')
             addCloudInitRun("dpkg-reconfigure -f noninteractive keyboard-configuration || true")
+            addCloudInitRun("setupcon -k -v --force || true")
         }
 
         if (firstrun.length) {
