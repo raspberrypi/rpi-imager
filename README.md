@@ -174,3 +174,7 @@ defaults write org.raspberrypi.Imager.plist telemetry -bool NO
 When using the app, press <kbd>CTRL</kbd> + <kbd>SHIFT</kbd> + <kbd>X</kbd> to reveal the **Advanced options** dialog.
 
 In here, you can specify several things you would otherwise set in the boot configuration files. For example, you can enable SSH, set the Wi-Fi login, and specify your locale settings for the system image.
+
+### Adding your OS to the official distribution list
+
+We are happy to add distributions of OSes if we think they will be used and they are suitably supported / updated. Please file an issue describing your OS and a link to your custom repository file if you would like to get included. Note that this is not necessarily needed, as you can always run the `rpi-imager` directly with your custom repository!
