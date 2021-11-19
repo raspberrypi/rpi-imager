@@ -154,6 +154,27 @@ Popup {
                         Layout.leftMargin: 40
                         spacing: -5
 
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 10
+                            rowSpacing: -5
+
+                            Text {
+                                text: qsTr("Set username:")
+                                color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                            }
+                            TextField {
+                                id: fieldUserName
+                                text: "pi"
+                                Layout.minimumWidth: 200
+                                property bool indicateError: false
+
+                                onTextEdited: {
+                                    indicateError = false
+                                }
+                            }
+                        }
+
                         RadioButton {
                             id: radioPasswordAuthentication
                             text: qsTr("Use password authentication")
@@ -172,7 +193,7 @@ Popup {
                             enabled: radioPasswordAuthentication.checked
 
                             Text {
-                                text: qsTr("Set password for 'pi' user:")
+                                text: qsTr("Set password for '%1' user:").arg(fieldUserName.text)
                                 color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
                             }
                             TextField {
@@ -213,7 +234,7 @@ Popup {
                             enabled: radioPubKeyAuthentication.checked
 
                             Text {
-                                text: qsTr("Set authorized_keys for 'pi':")
+                                text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
                                 color: parent.enabled ? "black" : "grey"
                             }
                             TextField {
@@ -363,6 +384,13 @@ Popup {
                         fieldUserPassword.forceActiveFocus()
                         return
                     }
+                    if (chkSSH.checked && fieldUserName.text.length == 0)
+                    {
+                        fieldUserName.indicateError = true
+                        fieldUserName.forceActiveFocus()
+                        return
+                    }
+
                     if (chkWifi.checked)
                     {
                         if (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64)
@@ -420,6 +448,9 @@ Popup {
             fieldUserPassword.alreadyCrypted = true
             chkSSH.checked = true
             radioPasswordAuthentication.checked = true
+        }
+        if ('sshUserName' in settings) {
+            fieldUserName.text = settings.sshUserName
         }
         if ('sshAuthorizedKeys' in settings) {
             fieldPublicKey.text = settings.sshAuthorizedKeys
@@ -544,7 +575,7 @@ Popup {
             addFirstRun("FIRSTUSERHOME=`getent passwd 1000 | cut -d: -f6`")
 
             addCloudInit("users:")
-            addCloudInit("- name: pi")
+            addCloudInit("- name: "+fieldUserName.text)
             addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo")
             addCloudInit("  shell: /bin/bash")
 
@@ -570,6 +601,19 @@ Popup {
                 addCloudInit("    - "+pubkey)
                 addCloudInit("  sudo: ALL=(ALL) NOPASSWD:ALL")
             }
+
+            /* Rename first ("pi") user if a different desired username was specified */
+            addFirstRun("if [ \"$FIRSTUSER\" != \""+fieldUserName.text+"\" ]; then")
+            addFirstRun("   usermod -l \""+fieldUserName.text+"\" \"$FIRSTUSER\"")
+            addFirstRun("   usermod -m -d \"/home/"+fieldUserName.text+"\" \""+fieldUserName.text+"\"")
+            addFirstRun("   if grep -q \"^autologin-user=\" /etc/lightdm/lightdm.conf ; then")
+            addFirstRun("      sed /etc/lightdm/lightdm.conf -i -e \"s/^autologin-user=.*/autologin-user="+fieldUserName.text+"/\"")
+            addFirstRun("   fi")
+            addFirstRun("   if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then")
+            addFirstRun("      sed /etc/systemd/system/getty@tty1.service.d/autologin.conf -i -e \"s/$FIRSTUSER/"+fieldUserName.text+"/\"")
+            addFirstRun("   fi")
+            addFirstRun("fi")
+
             addFirstRun("systemctl enable ssh")
             addCloudInit("")
         }
@@ -667,6 +711,7 @@ Popup {
                 settings.hostname = fieldHostname.text
             }
             if (chkSSH.checked) {
+                settings.sshUserName = fieldUserName.text
                 if (radioPasswordAuthentication.checked) {
                     settings.sshUserPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
                 }
