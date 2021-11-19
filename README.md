@@ -139,8 +139,29 @@ On Windows start the application with the command-line option --debug to let it 
 
 ### Custom repository
 
-If the application is started with "--repo [your own URL]" it will use a custom image repository.
-So can simply create another 'start menu shortcut' to the application with that parameter to use the application with your own images.
+If the application is started with "--repo [your own URL|local file]" it will use a custom image repository.
+So you can simply create another 'start menu shortcut' to the application with that parameter to use the application with your own images.
+
+Example repository file `custom_repo.json`:
+
+```
+{
+  "os_list": [
+    {
+        "name": "Raspberry Pi OS (32-bit)",
+        "description": "A port of Debian with the Raspberry Pi Desktop (Recommended)",
+        "icon": "https://downloads.raspberrypi.org/raspios_armhf/Raspberry_Pi_OS_(32-bit).png",
+        "url": "https://downloads.raspberrypi.org/raspios_armhf/images/raspios_armhf-2021-11-08/2021-10-30-raspios-bullseye-armhf.zip",
+        "extract_size": 3972005888,
+        "extract_sha256": "34bd93c1dd2b91c548963470189c4c0fc8d65cba755d7e34ba77a7710233e2e3",
+        "image_download_size": 1203372157,
+        "release_date": "2021-10-30"
+    }
+  ]
+}
+```
+Note:
+If the provided image is compressed, the `url` must end with a suffix indicating this, e.g. `.zip` or similar filename extensions. This will ensure that the image is extracted before flashing.
 
 ### Telemetry
 
