@@ -612,6 +612,9 @@ Popup {
             addFirstRun("   if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then")
             addFirstRun("      sed /etc/systemd/system/getty@tty1.service.d/autologin.conf -i -e \"s/$FIRSTUSER/"+fieldUserName.text+"/\"")
             addFirstRun("   fi")
+            addFirstRun("   if [ -f /etc/sudoers.d/010_pi-nopasswd ]; then")
+            addFirstRun("      sed -i \"s/^$FIRSTUSER /"+fieldUserName.text+" /\" /etc/sudoers.d/010_pi-nopasswd")
+            addFirstRun("   fi")
             addFirstRun("fi")
 
             addFirstRun("systemctl enable ssh")
