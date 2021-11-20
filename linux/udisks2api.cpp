@@ -160,6 +160,16 @@ bool UDisks2Api::formatDrive(const QString &device, bool mountAfterwards)
                 qDebug() << "Mounted new file system at:" << mp;
                 return true;
             }
+            else
+            {
+                /* Check if already auto-mounted */
+                auto mps = mountPoints(filesystem);
+                if (!mps.isEmpty())
+                {
+                    qDebug() << "Was already auto-mounted at:" << mps;
+                    return true;
+                }
+            }
 
             QThread::sleep(1);
         }
@@ -206,4 +216,37 @@ void UDisks2Api::unmountDrive(const QString &device)
         return;
 
     _unmountDrive(devpath);
+}
+
+QByteArrayList UDisks2Api::mountPoints(const QString &partitionDevice)
+{
+    QString devpath = _resolveDevice(partitionDevice);
+    if (devpath.isEmpty())
+        return QByteArrayList();
+
+    QDBusInterface filesystem("org.freedesktop.UDisks2", devpath,
+                              "org.freedesktop.UDisks2.Filesystem", QDBusConnection::systemBus());
+    return mountPoints(filesystem);
+}
+
+QByteArrayList UDisks2Api::mountPoints(const QDBusInterface &filesystem)
+{
+    QByteArrayList mps;
+
+    QDBusMessage msg = QDBusMessage::createMethodCall("org.freedesktop.UDisks2", filesystem.path(),
+                                                      "org.freedesktop.DBus.Properties", "Get");
+    QVariantList args = {"org.freedesktop.UDisks2.Filesystem", "MountPoints"};
+    msg.setArguments(args);
+    QDBusMessage reply = QDBusConnection::systemBus().call(msg);
+    for (auto arg : reply.arguments())
+    {
+        arg.value<QDBusVariant>().variant().value<QDBusArgument>() >> mps;
+    }
+    for (auto &str : mps)
+    {
+        if (!str.isEmpty() && str.back() == '\0')
+            str.chop(1);
+    }
+
+    return mps;
 }

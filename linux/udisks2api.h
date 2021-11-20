@@ -8,6 +8,7 @@
 
 #include <QObject>
 #include <QFile>
+#include <QDBusInterface>
 
 class UDisks2Api : public QObject
 {
@@ -18,6 +19,8 @@ public:
     bool formatDrive(const QString &device, bool mountAfterwards = true);
     QString mountDevice(const QString &device);
     void unmountDrive(const QString &device);
+    QByteArrayList mountPoints(const QString &partitionDevice);
+    QByteArrayList mountPoints(const QDBusInterface &filesystem);
 
 protected:
     QString _resolveDevice(const QString &device);
