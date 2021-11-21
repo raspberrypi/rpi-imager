@@ -29,5 +29,6 @@
         <file>icons/ic_info_16px.png</file>
         <file>icons/ic_info_12px.png</file>
         <file>icons/ic_cog_40px.svg</file>
+        <file>keymap-layouts.txt</file>
     </qresource>
 </RCC>

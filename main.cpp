@@ -20,6 +20,8 @@
 #include <QLocale>
 #include <QScreen>
 #include <QSettings>
+#include <QFont>
+#include <QFontDatabase>
 #ifndef QT_NO_WIDGETS
 #include <QtWidgets/QApplication>
 #endif
@@ -63,6 +65,14 @@ int main(int argc, char *argv[])
     }
 
     QGuiApplication app(argc, argv);
+
+    /* Set default font */
+    QStringList fontList = QFontDatabase::applicationFontFamilies(QFontDatabase::addApplicationFont(":/fonts/Roboto-Regular.ttf"));
+    QGuiApplication::setFont(QFont(fontList.first(), 10));
+
+    QLocale::Language l = QLocale::system().language();
+    if (l == QLocale::AnyLanguage || l == QLocale::C)
+        QLocale::setDefault(QLocale("en"));
 #else
     QApplication app(argc, argv);
 #endif
@@ -73,7 +83,7 @@ int main(int argc, char *argv[])
     ImageWriter imageWriter;
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;
-    QTranslator translator;
+    QTranslator *translator = new QTranslator;
     QString customQm;
     QSettings settings;
 
@@ -206,13 +216,17 @@ int main(int argc, char *argv[])
         QLocale::setDefault(QLocale(langcode));
 #endif
 
-        if (translator.load(QLocale(), "rpi-imager", "_", QLatin1String(":/i18n")))
-            QCoreApplication::installTranslator(&translator);
+        if (translator->load(QLocale(), "rpi-imager", "_", QLatin1String(":/i18n")))
+            imageWriter.replaceTranslator(translator);
+        else
+            delete translator;
     }
     else
     {
-        if (translator.load(customQm))
-            QCoreApplication::installTranslator(&translator);
+        if (translator->load(customQm))
+            imageWriter.replaceTranslator(translator);
+        else
+            delete translator;
     }
 
     if (!url.isEmpty())

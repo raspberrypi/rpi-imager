@@ -19,6 +19,7 @@ class QQmlApplicationEngine;
 class DownloadThread;
 class QNetworkReply;
 class QWinTaskbarButton;
+class QTranslator;
 
 class ImageWriter : public QObject
 {
@@ -97,6 +98,7 @@ public:
     Q_INVOKABLE QString getTimezone();
     Q_INVOKABLE QStringList getTimezoneList();
     Q_INVOKABLE QStringList getCountryList();
+    Q_INVOKABLE QStringList getKeymapLayoutList();
     Q_INVOKABLE QString getSSID();
     Q_INVOKABLE QString getPSK(const QString &ssid);
 
@@ -111,6 +113,15 @@ public:
 
     Q_INVOKABLE QString crypt(const QByteArray &password);
     Q_INVOKABLE QString pbkdf2(const QByteArray &psk, const QByteArray &ssid);
+
+    Q_INVOKABLE QStringList getTranslations();
+    Q_INVOKABLE QString getCurrentLanguage();
+    Q_INVOKABLE QString getCurrentKeyboard();
+    Q_INVOKABLE void changeLanguage(const QString &newLanguageName);
+    Q_INVOKABLE void changeKeyboard(const QString &newKeymapLayout);
+
+    void replaceTranslator(QTranslator *trans);
+    QString detectPiKeyboard();
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
@@ -143,7 +154,7 @@ protected slots:
 
 protected:
     QUrl _src, _repo;
-    QString _dst, _cacheFileName, _parentCategory, _osName;
+    QString _dst, _cacheFileName, _parentCategory, _osName, _currentLang, _currentKeyboard;
     QByteArray _expectedHash, _cachedFileHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
@@ -153,6 +164,8 @@ protected:
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _cachingEnabled, _embeddedMode, _online;
     QSettings _settings;
+    QMap<QString,QString> _translations;
+    QTranslator *_trans;
 #ifdef Q_OS_WIN
     QWinTaskbarButton *_taskbarButton;
 #endif

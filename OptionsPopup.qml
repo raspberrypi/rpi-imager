@@ -105,6 +105,7 @@ Popup {
                         }
                         Layout.minimumWidth: 250
                         Layout.maximumHeight: 40
+                        enabled: !imageWriter.isEmbeddedMode()
                     }
                 }
 
@@ -333,10 +334,10 @@ Popup {
                             text: qsTr("Keyboard layout:")
                             color: parent.enabled ? "black" : "grey"
                         }
-                        TextField {
+                        ComboBox {
                             id: fieldKeyboardLayout
+                            editable: true
                             Layout.minimumWidth: 200
-                            text: "us"
                         }
                         CheckBox {
                             id: chkSkipFirstUse
@@ -431,6 +432,7 @@ Popup {
         fieldTimezone.model = imageWriter.getTimezoneList()
         fieldPublicKey.text = imageWriter.getDefaultPubKey()
         fieldWifiCountry.model = imageWriter.getCountryList()
+        fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
 
         if (Object.keys(settings).length) {
             comboSaveSettings.currentIndex = 1
@@ -495,13 +497,25 @@ Popup {
             fieldTimezone.currentIndex = tzidx
         }
         if ('keyboardLayout' in settings) {
-            fieldKeyboardLayout.text = settings.keyboardLayout
+            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find(settings.keyboardLayout)
+            if (fieldKeyboardLayout.currentIndex == -1) {
+                fieldKeyboardLayout.editText = settings.keyboardLayout
+            }
         } else {
-            /* Lacking an easy cross-platform to fetch keyboard layout
-               from host system, just default to "gb" for people in
-               UK time zone for now, and "us" for everyone else */
-            if (tz == "Europe/London") {
-                fieldKeyboardLayout.text = "gb"
+            if (imageWriter.isEmbeddedMode())
+            {
+                fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find(imageWriter.getCurrentKeyboard())
+            }
+            else
+            {
+                /* Lacking an easy cross-platform to fetch keyboard layout
+                   from host system, just default to "gb" for people in
+                   UK time zone for now, and "us" for everyone else */
+                if (tz == "Europe/London") {
+                    fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("gb")
+                } else {
+                    fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")
+                }
             }
         }
         if ('skipFirstUse' in settings) {
@@ -662,7 +676,7 @@ Popup {
             }
 
             var kbdconfig = "XKBMODEL=\"pc105\"\n"
-            kbdconfig += "XKBLAYOUT=\""+fieldKeyboardLayout.text+"\"\n"
+            kbdconfig += "XKBLAYOUT=\""+fieldKeyboardLayout.editText+"\"\n"
             kbdconfig += "XKBVARIANT=\"\"\n"
             kbdconfig += "XKBOPTIONS=\"\"\n"
 
@@ -729,7 +743,7 @@ Popup {
             }
             if (chkLocale.checked) {
                 settings.timezone = fieldTimezone.editText
-                settings.keyboardLayout = fieldKeyboardLayout.text
+                settings.keyboardLayout = fieldKeyboardLayout.editText
                 if (chkSkipFirstUse.checked) {
                     settings.skipFirstUse = true
                 }

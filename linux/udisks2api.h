@@ -8,7 +8,8 @@
 
 #include <QObject>
 #include <QFile>
-#include <QDBusInterface>
+
+class QDBusInterface;
 
 class UDisks2Api : public QObject
 {

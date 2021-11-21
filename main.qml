@@ -83,7 +83,7 @@ ApplicationWindow {
                 anchors.rightMargin: 50
                 anchors.leftMargin: 50
 
-                rows: 3
+                rows: 4
                 columns: 3
                 columnSpacing: 25
 
@@ -259,12 +259,89 @@ ApplicationWindow {
                         id: customizebutton
                         source: "icons/ic_cog_40px.svg"
                         visible: false
+
                         MouseArea {
                             anchors.fill: parent
                             onClicked: {
                                 optionspopup.openPopup()
                             }
                         }
+                    }
+                }
+
+                RowLayout {
+                    id: langbar
+                    Layout.columnSpan: 3
+                    Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
+                    /* FIXME: shouldn't use anchors here. But Layout bottom alignment does not
+                       seem to be respected */
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 5
+                    spacing: 10
+
+                    visible: imageWriter.isEmbeddedMode()
+
+                    Rectangle {
+                        anchors.fill: langbar
+                        color: "#ffffe3"
+                        radius: 5
+                    }
+
+                    Text {
+                        font.pixelSize: 12
+                        font.family: roboto.name
+                        text: qsTr("Language: ")
+                        Layout.leftMargin: 30
+                        Layout.topMargin: 10
+                        Layout.bottomMargin: 10
+                    }
+                    ComboBox {
+                        font.pixelSize: 12
+                        font.family: roboto.name
+                        model: imageWriter.getTranslations()
+                        Layout.preferredWidth: 200
+                        currentIndex: -1
+                        Component.onCompleted: {
+                            currentIndex = find(imageWriter.getCurrentLanguage())
+                        }
+                        onActivated: {
+                            imageWriter.changeLanguage(editText)
+                        }
+                        Layout.topMargin: 10
+                        Layout.bottomMargin: 10
+                    }
+                    Text {
+                        font.pixelSize: 12
+                        font.family: roboto.name
+                        text: qsTr("Keyboard: ")
+                        Layout.topMargin: 10
+                        Layout.bottomMargin: 10
+                    }
+                    ComboBox {
+                        enabled: imageWriter.isEmbeddedMode()
+                        font.pixelSize: 12
+                        font.family: roboto.name
+                        model: imageWriter.getKeymapLayoutList()
+                        currentIndex: -1
+                        Component.onCompleted: {
+                            currentIndex = find(imageWriter.getCurrentKeyboard())
+                        }
+                        onActivated: {
+                            imageWriter.changeKeyboard(editText)
+                        }
+                        Layout.topMargin: 10
+                        Layout.bottomMargin: 10
+                        Layout.rightMargin: 30
+                    }
+                }
+
+                /* Language/keyboard bar is normally only visible in embedded mode.
+                   To test translations also show it when shift+ctrl+L is pressed. */
+                Shortcut {
+                    sequences: ["Shift+Ctrl+L", "Shift+Meta+L"]
+                    context: Qt.ApplicationShortcut
+                    onActivated: {
+                        langbar.visible = true
                     }
                 }
             }
@@ -779,6 +856,7 @@ ApplicationWindow {
         noButton: true
         title: qsTr("Warning")
         onYes: {
+            langbar.visible = false
             writebutton.enabled = false
             customizebutton.visible = false
             cancelwritebutton.enabled = true

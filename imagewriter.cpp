@@ -56,10 +56,14 @@
 #include <QWinTaskbarProgress>
 #endif
 
+#ifdef QT_NO_WIDGETS
+#include <QtPlatformHeaders/QEglFSFunctions>
+#endif
+
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
       _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
-      _embeddedMode(false), _online(false)
+      _embeddedMode(false), _online(false), _trans(nullptr)
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
@@ -78,6 +82,9 @@ ImageWriter::ImageWriter(QObject *parent)
         _embeddedMode = true;
         connect(&_networkchecktimer, SIGNAL(timeout()), SLOT(pollNetwork()));
         _networkchecktimer.start(100);
+        changeKeyboard(detectPiKeyboard());
+        if (_currentKeyboard.isEmpty())
+            _currentKeyboard = "us";
     }
 
 #ifdef Q_OS_WIN
@@ -125,11 +132,41 @@ ImageWriter::ImageWriter(QObject *parent)
         }
     }
     _settings.endGroup();
+
+    QDir dir(":/i18n", "rpi-imager_*.qm");
+    QStringList transFiles = dir.entryList();
+    QLocale currentLocale;
+    QStringList localeComponents = currentLocale.name().split('_');
+    QString currentlangcode;
+    if (!localeComponents.isEmpty())
+        currentlangcode = localeComponents.first();
+
+    for (QString tf : transFiles)
+    {
+        QString langcode = tf.mid(11, tf.length()-14);
+        /* FIXME: we currently lack a font with support for Chinese characters in embedded mode */
+        if (isEmbeddedMode() && langcode == "zh")
+            continue;
+
+        QLocale loc(langcode);
+        /* Use "English" for "en" and not "American English" */
+        QString langname = (langcode == "en" ? "English" : loc.nativeLanguageName() );
+        _translations.insert(langname, langcode);
+        if (langcode == currentlangcode)
+        {
+            _currentLang = langname;
+        }
+    }
+    //_currentKeyboard = "us";
 }
 
 ImageWriter::~ImageWriter()
 {
-
+    if (_trans)
+    {
+        QCoreApplication::removeTranslator(_trans);
+        delete _trans;
+    }
 }
 
 void ImageWriter::setEngine(QQmlApplicationEngine *engine)
@@ -153,6 +190,9 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     {
         QFileInfo fi(url.toLocalFile());
         _downloadLen = fi.size();
+    }
+    if (url.isLocalFile())
+    {
         _initFormat = "auto";
     }
 }
@@ -775,12 +815,26 @@ QStringList ImageWriter::getCountryList()
     QFile f(":/countries.txt");
     if ( f.open(f.ReadOnly) )
     {
-        countries = QString(f.readAll()).split('\n');
+        countries = QString(f.readAll()).trimmed().split('\n');
         f.close();
     }
 
     return countries;
 }
+
+QStringList ImageWriter::getKeymapLayoutList()
+{
+    QStringList keymaps;
+    QFile f(":/keymap-layouts.txt");
+    if ( f.open(f.ReadOnly) )
+    {
+        keymaps = QString(f.readAll()).trimmed().split('\n');
+        f.close();
+    }
+
+    return keymaps;
+}
+
 
 QString ImageWriter::getSSID()
 {
@@ -1030,6 +1084,133 @@ bool ImageWriter::hasSavedCustomizationSettings()
 bool ImageWriter::imageSupportsCustomization()
 {
     return !_initFormat.isEmpty();
+}
+
+QStringList ImageWriter::getTranslations()
+{
+    QStringList t = _translations.keys();
+    t.sort(Qt::CaseInsensitive);
+    return t;
+}
+
+QString ImageWriter::getCurrentLanguage()
+{
+    return _currentLang;
+}
+
+QString ImageWriter::getCurrentKeyboard()
+{
+    return _currentKeyboard;
+}
+
+void ImageWriter::changeLanguage(const QString &newLanguageName)
+{
+    if (newLanguageName.isEmpty() || newLanguageName == _currentLang || !_translations.contains(newLanguageName))
+        return;
+
+    QString langcode = _translations[newLanguageName];
+    qDebug() << "Changing language to" << langcode;
+
+    QTranslator *trans = new QTranslator();
+    if (trans->load(":/i18n/rpi-imager_"+langcode+".qm"))
+    {
+        replaceTranslator(trans);
+    }
+    else
+    {
+        qDebug() << "Failed to load translation file";
+        delete trans;
+    }
+}
+
+void ImageWriter::changeKeyboard(const QString &newKeymapLayout)
+{
+    if (newKeymapLayout.isEmpty() || newKeymapLayout == _currentKeyboard)
+        return;
+
+#ifdef QT_NO_WIDGETS
+    QString kmapfile = "/usr/share/qmaps/"+newKeymapLayout+".qmap";
+
+    if (QFile::exists(kmapfile))
+        QEglFSFunctions::loadKeymap(kmapfile);
+#endif
+
+    _currentKeyboard = newKeymapLayout;
+}
+
+void ImageWriter::replaceTranslator(QTranslator *trans)
+{
+    if (_trans)
+    {
+        QCoreApplication::removeTranslator(_trans);
+        delete _trans;
+    }
+
+    _trans = trans;
+    QCoreApplication::installTranslator(_trans);
+
+    if (_engine)
+    {
+        _engine->retranslate();
+    }
+}
+
+QString ImageWriter::detectPiKeyboard()
+{
+    unsigned int typenr = 0;
+    QFile f("/proc/device-tree/chosen/rpi-country-code");
+    if (f.exists() && f.open(f.ReadOnly))
+    {
+        QByteArray d = f.readAll();
+        f.close();
+
+        if (d.length() == 4)
+        {
+            typenr = d.at(2);
+        }
+    }
+
+    if (!typenr)
+    {
+        QDir dir("/dev/input/by-id");
+        QRegExp rx("RPI_Wired_Keyboard_([0-9]+)");
+
+        for (QString fn : dir.entryList(QDir::Files))
+        {
+            if (rx.indexIn(fn) != -1)
+            {
+                typenr = rx.cap(1).toUInt();
+            }
+        }
+    }
+
+    if (typenr)
+    {
+        QStringList kbcountries = {
+            "",
+            "gb",
+            "fr",
+            "es",
+            "us",
+            "de",
+            "it",
+            "jp",
+            "pt",
+            "no",
+            "se",
+            "dk",
+            "ru",
+            "tr",
+            "il"
+        };
+
+        if (typenr < kbcountries.count())
+        {
+            return kbcountries.at(typenr);
+        }
+    }
+
+    return QString();
 }
 
 void MountUtilsLog(std::string msg) {
