@@ -724,10 +724,10 @@ void DownloadThread::_writeComplete()
     _filename.replace("/dev/rdisk", "/dev/disk");
 #endif
 
-    if (_ejectEnabled && _config.isEmpty() && _cmdline.isEmpty())
+    if (_ejectEnabled && _config.isEmpty() && _cmdline.isEmpty() && _firstrun.isEmpty())
         eject_disk(_filename.constData());
 
-    if (!_config.isEmpty() || !_cmdline.isEmpty())
+    if (!_config.isEmpty() || !_cmdline.isEmpty() || !_firstrun.isEmpty())
     {
         if (!_customizeImage())
             return;
