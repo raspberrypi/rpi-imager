@@ -130,18 +130,21 @@ bool UDisks2Api::formatDrive(const QString &device, bool mountAfterwards)
     }
     qDebug() << "New partition:" << newpartition.value().path();
     QThread::sleep(1);
+    if (!drive.isEmpty() && drive != "/")
+    {
+        /* Unmount one more time, as auto-mount may have tried to mount an old FAT filesystem again if it
+         * lives at the same sector in the new partition table as before */
+        _unmountDrive(drive);
+    }
     qDebug() << "Formatting drive as FAT32";
     QDBusInterface newblockdevice("org.freedesktop.UDisks2", newpartition.value().path(),
                                   "org.freedesktop.UDisks2.Block", QDBusConnection::systemBus());
-    newblockdevice.setTimeout(120 * 1000);
+    newblockdevice.setTimeout(300 * 1000);
     QDBusReply<void> fatformatreply = newblockdevice.call("Format", "vfat", formatOptions);
     if (!fatformatreply.isValid())
     {
-        qDebug() << "Error from udisks2 while performing FAT32 format:" << fatformatreply.error().message()
-                 << "(going to try to mount anyway, as errors are sometimes false positive)";
-        /* udisks2 sometimes report
-           "Error synchronizing after formatting with type `vfat': Timed out waiting for object"
-           when there is nothing actually wrong with the format */
+        qDebug() << "Error from udisks2 while performing FAT32 format:" << fatformatreply.error().message();
+        return false;
     }
 
     if (mountAfterwards)
