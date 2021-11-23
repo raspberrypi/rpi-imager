@@ -42,6 +42,10 @@ elseif (UNIX)
     if(ZLIB_FOUND)
         set(EXTRALIBS ${EXTRALIBS} ZLIB::ZLIB)
     endif()
+    find_package(LibLZMA)
+    if(LIBLZMA_FOUND)
+        set(EXTRALIBS ${EXTRALIBS} LibLZMA::LibLZMA)
+    endif()
 elseif (WIN32)
     set(DEPENDENCIES acceleratedcryptographichash.cpp dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
         windows/winfile.cpp windows/winfile.h
