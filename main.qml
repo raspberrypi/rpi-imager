@@ -1055,6 +1055,21 @@ ApplicationWindow {
         return o["os_list"]
     }
 
+    function selectNamedOS(name, collection)
+    {
+        for (var i = 0; i < collection.count; i++) {
+            var os = collection.get(i)
+
+            if (typeof(os.subitems) !== "undefined") {
+                selectNamedOS(name, os.subitems)
+            }
+            else if (typeof(os.url) !== "undefined" && name === os.name) {
+                selectOSitem(os, false)
+                break
+            }
+        }
+    }
+
     function fetchOSlist() {
         httpRequest(imageWriter.constantOsListUrl(), function (x) {
             var o = JSON.parse(x.responseText)
@@ -1073,8 +1088,44 @@ ApplicationWindow {
                         updatepopup.openPopup()
                     }
                 }
+                if ("default_os" in imager) {
+                    selectNamedOS(imager["default_os"], osmodel)
+                }
+                if (imageWriter.isEmbeddedMode()) {
+                    if ("embedded_default_os" in imager) {
+                        selectNamedOS(imager["embedded_default_os"], osmodel)
+                    }
+                    if ("embedded_default_destination" in imager) {
+                        imageWriter.startDriveListPolling()
+                        setDefaultDest.drive = imager["embedded_default_destination"]
+                        setDefaultDest.start()
+                    }
+                }
             }
         })
+    }
+
+    Timer {
+        /* Verify if default drive is in our list after 100 ms */
+        id: setDefaultDest
+        property string drive : ""
+        interval: 100
+        onTriggered: {
+            for (var i = 0; i < driveListModel.rowCount(); i++)
+            {
+                /* FIXME: there should be a better way to iterate drivelist than
+                   fetch data by numeric role number */
+                if (driveListModel.data(driveListModel.index(i,0), 0x101) === drive) {
+                    selectDstItem({
+                        device: drive,
+                        description: driveListModel.data(driveListModel.index(i,0), 0x102),
+                        size: driveListModel.data(driveListModel.index(i,0), 0x103),
+                        readonly: false
+                    })
+                    break
+                }
+            }
+        }
     }
 
     function newSublist() {
