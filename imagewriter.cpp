@@ -85,6 +85,21 @@ ImageWriter::ImageWriter(QObject *parent)
         changeKeyboard(detectPiKeyboard());
         if (_currentKeyboard.isEmpty())
             _currentKeyboard = "us";
+
+        QFile f("/sys/bus/nvmem/devices/rmem0/nvmem");
+        if (f.exists() && f.open(f.ReadOnly))
+        {
+            QByteArrayList eepromSettings = f.readAll().split('\n');
+            f.close();
+            for (QByteArray setting : eepromSettings)
+            {
+                if (setting.startsWith("IMAGER_REPO_URL="))
+                {
+                    _repo = setting.mid(16).trimmed();
+                    qDebug() << "Repository from EEPROM:" << _repo;
+                }
+            }
+        }
     }
 
 #ifdef Q_OS_WIN
