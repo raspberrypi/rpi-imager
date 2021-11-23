@@ -1213,6 +1213,16 @@ QString ImageWriter::detectPiKeyboard()
     return QString();
 }
 
+bool ImageWriter::hasMouse()
+{
+    return !_embeddedMode || QFile::exists("/dev/input/mouse0");
+}
+
+bool ImageWriter::customRepo()
+{
+    return _repo.toString() != OSLIST_URL;
+}
+
 void MountUtilsLog(std::string msg) {
     Q_UNUSED(msg)
     //qDebug() << "mountutils:" << msg.c_str();

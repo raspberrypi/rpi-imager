@@ -83,7 +83,7 @@ ApplicationWindow {
                 anchors.rightMargin: 50
                 anchors.leftMargin: 50
 
-                rows: 4
+                rows: 6
                 columns: 3
                 columnSpacing: 25
 
@@ -267,6 +267,24 @@ ApplicationWindow {
                             }
                         }
                     }
+                }
+
+                Text {
+                    Layout.columnSpan: 3
+                    color: "#ffffff"
+                    font.pixelSize: 18
+                    font.family: roboto.name
+                    visible: imageWriter.isEmbeddedMode() && imageWriter.customRepo()
+                    text: qsTr("Using custom repository: %1").arg(imageWriter.constantOsListUrl())
+                }
+
+                Text {
+                    Layout.columnSpan: 3
+                    color: "#ffffff"
+                    font.pixelSize: 18
+                    font.family: roboto.name
+                    visible: !imageWriter.hasMouse()
+                    text: qsTr("Keyboard navigation: <tab> navigate to next button <space> press button/select item <arrow up/down> go up/down in lists")
                 }
 
                 RowLayout {

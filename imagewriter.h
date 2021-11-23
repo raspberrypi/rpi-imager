@@ -119,9 +119,11 @@ public:
     Q_INVOKABLE QString getCurrentKeyboard();
     Q_INVOKABLE void changeLanguage(const QString &newLanguageName);
     Q_INVOKABLE void changeKeyboard(const QString &newKeymapLayout);
+    Q_INVOKABLE bool customRepo();
 
     void replaceTranslator(QTranslator *trans);
     QString detectPiKeyboard();
+    Q_INVOKABLE bool hasMouse();
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
