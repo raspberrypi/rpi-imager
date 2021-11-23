@@ -1115,6 +1115,7 @@ void ImageWriter::changeLanguage(const QString &newLanguageName)
     if (trans->load(":/i18n/rpi-imager_"+langcode+".qm"))
     {
         replaceTranslator(trans);
+        _currentLang = newLanguageName;
     }
     else
     {
