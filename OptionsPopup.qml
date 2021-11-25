@@ -689,9 +689,8 @@ Popup {
             addFirstRun("dpkg-reconfigure -f noninteractive keyboard-configuration")
 
             addCloudInit("timezone: "+fieldTimezone.editText)
-            addCloudInitWriteFile("/etc/default/keyboard", kbdconfig, '0644')
-            addCloudInitRun("dpkg-reconfigure -f noninteractive keyboard-configuration || true")
-            addCloudInitRun("setupcon -k -v --force || true")
+            addCloudInitRun("localectl set-x11-keymap \""+fieldKeyboardLayout.editText+"\" pc105")
+            addCloudInitRun("setupcon -k --force || true")
         }
 
         if (firstrun.length) {
