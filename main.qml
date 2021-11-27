@@ -290,13 +290,9 @@ ApplicationWindow {
                 RowLayout {
                     id: langbar
                     Layout.columnSpan: 3
-                    Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
-                    /* FIXME: shouldn't use anchors here. But Layout bottom alignment does not
-                       seem to be respected */
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 5
+                    Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
+                    Layout.bottomMargin: 5
                     spacing: 10
-
                     visible: imageWriter.isEmbeddedMode()
 
                     Rectangle {
