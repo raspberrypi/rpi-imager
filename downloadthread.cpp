@@ -916,7 +916,9 @@ bool DownloadThread::_customizeImage()
             /* Not running as root, try to outsource mounting to udisks2 */
     #ifndef QT_NO_DBUS
             UDisks2Api udisks2;
-            mountpoints.push_back(udisks2.mountDevice(fatpartition).toStdString());
+            QString mp = udisks2.mountDevice(fatpartition);
+            if (!mp.isEmpty())
+                mountpoints.push_back(mp.toStdString());
     #endif
         }
         else

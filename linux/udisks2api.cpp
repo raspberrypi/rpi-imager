@@ -156,6 +156,8 @@ bool UDisks2Api::formatDrive(const QString &device, bool mountAfterwards)
         for (int attempt = 0; attempt < 10; attempt++)
         {
             qDebug() << "Mounting partition";
+            // User may need to enter password in authentication dialog if non-removable storage, so set long timeout
+            filesystem.setTimeout(3600 * 1000);
             QDBusReply<QString> mp = filesystem.call("Mount", mountOptions);
 
             if (mp.isValid())
@@ -171,6 +173,10 @@ bool UDisks2Api::formatDrive(const QString &device, bool mountAfterwards)
                 {
                     qDebug() << "Was already auto-mounted at:" << mps;
                     return true;
+                }
+                else
+                {
+                    qDebug() << "Error mounting:" << mp.error().message();
                 }
             }
 
@@ -197,12 +203,28 @@ QString UDisks2Api::mountDevice(const QString &device)
     for (int attempt = 0; attempt < 10; attempt++)
     {
         qDebug() << "Mounting partition";
+        // User may need to enter password in authentication dialog if non-removable storage, so set long timeout
+        filesystem.setTimeout(3600 * 1000);
         QDBusReply<QString> mp = filesystem.call("Mount", mountOptions);
 
         if (mp.isValid())
         {
             qDebug() << "Mounted file system at:" << mp;
             return mp;
+        }
+        else
+        {
+            /* Check if already auto-mounted */
+            auto mps = mountPoints(filesystem);
+            if (!mps.isEmpty())
+            {
+                qDebug() << "Was already auto-mounted at:" << mps;
+                return mps.first();
+            }
+            else
+            {
+                qDebug() << "Error mounting:" << mp.error().message();
+            }
         }
 
         QThread::sleep(1);
