@@ -30,6 +30,14 @@ sudo apt install --no-install-recommends build-essential devscripts debhelper cm
 git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 ```
 
+#### Building on the Pi
+
+If building on a device with limited memory (e.g. 1 GB Pi), disable parallel build or it may run out of memory:
+
+```
+export DEB_BUILD_OPTIONS="parallel=1"
+```
+
 #### Build the Debian package
 
 ```
