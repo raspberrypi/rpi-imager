@@ -1,3 +1,17 @@
+rpi-imager (1.6.3) unstable; urgency=medium
+
+  * Only apply advanced settings if the operating system indicates it
+    supports it by "init_format": "cloudinit" | "systemd" in the
+    repository. Some heuristics are used with custom images from disk.
+  * Advanced settings: add support for cloudinit format
+  * Advanced settings: add support for specifying username
+  * Some fixes to deal better with Linux distributions auto-mounting
+    drives
+  * Add Slovenija translation
+  * Adds support for zstd
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 09 Dec 2021 11:13:12 +0100
+
 rpi-imager (1.6.2) unstable; urgency=medium
 
   * Add website link support
