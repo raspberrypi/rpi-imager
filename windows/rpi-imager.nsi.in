@@ -666,6 +666,7 @@ WriteRegStr SHCTX "Software\Classes\.zip\OpenWithProgIds" "RPI_IMAGINGUTILITY" "
 WriteRegStr SHCTX "Software\Classes\.gz\OpenWithProgIds" "RPI_IMAGINGUTILITY" ""
 WriteRegStr SHCTX "Software\Classes\.xz\OpenWithProgIds" "RPI_IMAGINGUTILITY" ""
 WriteRegStr SHCTX "Software\Classes\.img\OpenWithProgIds" "RPI_IMAGINGUTILITY" ""
+WriteRegStr SHCTX "Software\Classes\.zstd\OpenWithProgIds" "RPI_IMAGINGUTILITY" ""
 WriteRegStr SHCTX "Software\Classes\RPI_IMAGINGUTILITY\shell\open" "FriendlyAppName" "Raspberry Pi Imager"
 WriteRegStr SHCTX "Software\Classes\RPI_IMAGINGUTILITY\shell\open\command" "" '"$INSTDIR\rpi-imager.exe" "%1"'
 
@@ -1112,7 +1113,8 @@ DeleteRegKey ${REG_ROOT} "${UNINSTALL_PATH}"
 DeleteRegValue SHCTX "Software\Classes\.zip\OpenWithProgIds" "RPI_IMAGINGUTILITY"
 DeleteRegValue SHCTX "Software\Classes\.gz\OpenWithProgIds" "RPI_IMAGINGUTILITY"
 DeleteRegValue SHCTX "Software\Classes\.xz\OpenWithProgIds" "RPI_IMAGINGUTILITY"
-DeleteRegValue SHCTX "Software\Classes\.zip\OpenWithProgIds" "RPI_IMAGINGUTILITY"
+DeleteRegValue SHCTX "Software\Classes\.img\OpenWithProgIds" "RPI_IMAGINGUTILITY"
+DeleteRegValue SHCTX "Software\Classes\.zstd\OpenWithProgIds" "RPI_IMAGINGUTILITY"
 DeleteRegKey SHCTX "Software\Classes\RPI_IMAGINGUTILITY"
 
 DeleteRegKey ${REG_ROOT} ""

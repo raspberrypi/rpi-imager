@@ -31,6 +31,13 @@
 
 static QTextStream cerr(stderr);
 
+/* Newer Qt versions throw warnings if using ::endl instead of Qt::endl
+   Older versions lack Qt::endl */
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+//using Qt::endl;
+#define endl  Qt::endl
+#endif
+
 #ifdef Q_OS_WIN
 static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QString &str) {
     cerr << str << endl;

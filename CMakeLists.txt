@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2020 Raspberry Pi (Trading) Limited
 
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.9.4)
 if (APPLE)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
 endif()
@@ -96,6 +96,17 @@ else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${DEPENDENCIES})
 endif()
 
+# Enable link time optimization if available
+include(CheckIPOSupported)
+check_ipo_supported(RESULT iposupported OUTPUT ipoerror)
+
+if(iposupported)
+    message("Enabled LTO")
+    set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+else()
+    message(STATUS "LTO not supported: <${ipoerror}>")
+endif()
+
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)
     # Target Windows 7 (needed for drivelist module)
@@ -122,14 +133,21 @@ if (WIN32)
     set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/cmliblzma/liblzma/api)
     set(LIBLZMA_LIBRARY cmliblzma)
 
+    # Bundled zstd
+    set(ZSTD_BUILD_PROGRAMS OFF)
+    set(ZSTD_BUILD_SHARED OFF)
+    add_subdirectory(dependencies/zstd-1.5.0/build/cmake)
+    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.0/lib)
+    set(ZSTD_LIBRARY libzstd_static)
+
     # Bundled libarchive
     set(ENABLE_TEST OFF CACHE BOOL "")
     set(ENABLE_TAR OFF CACHE BOOL "")
     set(ENABLE_CPIO OFF CACHE BOOL "")
     set(ENABLE_CAT OFF CACHE BOOL "")
-    add_subdirectory(dependencies/libarchive-3.4.2)
+    add_subdirectory(dependencies/libarchive-3.5.2)
     set(LibArchive_LIBRARIES archive_static)
-    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.4.2/libarchive)
+    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.5.2/libarchive)
 
     # Bundled fat32format
     add_subdirectory(dependencies/fat32format)
@@ -204,14 +222,21 @@ elseif(APPLE)
     set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/cmliblzma/liblzma/api)
     set(LIBLZMA_LIBRARY cmliblzma)
 
+    # Bundled zstd
+    set(ZSTD_BUILD_PROGRAMS OFF)
+    set(ZSTD_BUILD_SHARED OFF)
+    add_subdirectory(dependencies/zstd-1.5.0/build/cmake)
+    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.0/lib)
+    set(ZSTD_LIBRARY libzstd_static)
+
     # Bundled libarchive
     set(ENABLE_TEST OFF CACHE BOOL "")
     set(ENABLE_TAR OFF CACHE BOOL "")
     set(ENABLE_CPIO OFF CACHE BOOL "")
     set(ENABLE_CAT OFF CACHE BOOL "")
-    add_subdirectory(dependencies/libarchive-3.4.2)
+    add_subdirectory(dependencies/libarchive-3.5.2)
     set(LibArchive_LIBRARIES archive_static)
-    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.4.2/libarchive)
+    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.5.2/libarchive)
 
     find_library(Cocoa Cocoa)
     find_library(CoreFoundation CoreFoundation)

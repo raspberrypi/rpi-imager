@@ -242,7 +242,7 @@ void ImageWriter::startWrite()
 
     QByteArray urlstr = _src.toString(_src.FullyEncoded).toLatin1();
     QString lowercaseurl = urlstr.toLower();
-    bool compressed = lowercaseurl.endsWith(".zip") || lowercaseurl.endsWith(".xz") || lowercaseurl.endsWith(".bz2") || lowercaseurl.endsWith(".gz") || lowercaseurl.endsWith(".7z") || lowercaseurl.endsWith(".cache");
+    bool compressed = lowercaseurl.endsWith(".zip") || lowercaseurl.endsWith(".xz") || lowercaseurl.endsWith(".bz2") || lowercaseurl.endsWith(".gz") || lowercaseurl.endsWith(".7z") || lowercaseurl.endsWith(".zst") || lowercaseurl.endsWith(".cache");
     if (!_extrLen && _src.isLocalFile())
     {
         if (!compressed)
@@ -576,7 +576,7 @@ void ImageWriter::openFileDialog()
 
     QFileDialog *fd = new QFileDialog(nullptr, tr("Select image"),
                                       path,
-                                      "Image files (*.img *.zip *.iso *.gz *.xz);;All files (*.*)");
+                                      "Image files (*.img *.zip *.iso *.gz *.xz *.zst);;All files (*.*)");
     connect(fd, SIGNAL(fileSelected(QString)), SLOT(onFileSelected(QString)));
 
     if (_engine)
@@ -764,7 +764,7 @@ QByteArray ImageWriter::getUsbSourceOSlist()
     QJsonArray oslist;
     QDir dir("/media");
     QStringList medialist = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-    QStringList namefilters = {"*.img", "*.zip", "*.gz", "*.xz"};
+    QStringList namefilters = {"*.img", "*.zip", "*.gz", "*.xz", "*.zst"};
 
     for (auto devname : medialist)
     {
