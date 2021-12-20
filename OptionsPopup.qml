@@ -603,16 +603,23 @@ Popup {
                 addCloudInit("ssh_pwauth: true")
             }
             if (radioPubKeyAuthentication.checked) {
-                var pubkey = fieldPublicKey.text.replace(/\n/g, "")
+                var pubkey = fieldPublicKey.text
+                var pubkeyArr = pubkey.split("\n")
+
                 if (pubkey.length) {
                     addFirstRun("install -o \"$FIRSTUSER\" -m 700 -d \"$FIRSTUSERHOME/.ssh\"")
-                    addFirstRun("install -o \"$FIRSTUSER\" -m 600 <(echo \""+pubkey+"\") \"$FIRSTUSERHOME/.ssh/authorized_keys\"")
+                    addFirstRun("install -o \"$FIRSTUSER\" -m 600 <(printf \""+pubkey.replace(/\n/g, "\\n")+"\") \"$FIRSTUSERHOME/.ssh/authorized_keys\"")
                 }
                 addFirstRun("echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config")
 
                 addCloudInit("  lock_passwd: true")
                 addCloudInit("  ssh_authorized_keys:")
-                addCloudInit("    - "+pubkey)
+                for (var i=0; i<pubkeyArr.length; i++) {
+                    var pk = pubkeyArr[i].trim();
+                    if (pk) {
+                        addCloudInit("    - "+pk)
+                    }
+                }
                 addCloudInit("  sudo: ALL=(ALL) NOPASSWD:ALL")
             }
 
