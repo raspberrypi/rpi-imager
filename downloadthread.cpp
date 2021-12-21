@@ -526,7 +526,11 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
 
         return _file.seek(len) ? len : 0;
     }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QFuture<void> wh = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
+#else
     QFuture<void> wh = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
+#endif
 
     qint64 written = _file.write(buf, len);
     _bytesWritten += written;

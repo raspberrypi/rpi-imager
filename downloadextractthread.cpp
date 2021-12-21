@@ -171,7 +171,11 @@ void DownloadExtractThread::extractImageRun()
                 }
             }
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread *>(this), _abuf[_activeBuf], size);
+#else
             _writeFuture = QtConcurrent::run(static_cast<DownloadThread *>(this), &DownloadThread::_writeFile, _abuf[_activeBuf], size);
+#endif
             _activeBuf = _activeBuf ? 0 : 1;
             _writeThreadStarted = true;
         }
