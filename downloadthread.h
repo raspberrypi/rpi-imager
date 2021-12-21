@@ -163,6 +163,7 @@ protected:
     CURL *_c;
     curl_off_t _startOffset;
     std::atomic<std::uint64_t> _lastDlTotal, _lastDlNow, _verifyTotal, _lastVerifyNow, _bytesWritten;
+    std::uint64_t _lastFailureOffset;
     qint64 _sectorsStart;
     QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash, _config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
     char *_firstBlock;

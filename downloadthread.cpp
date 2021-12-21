@@ -34,7 +34,7 @@ QByteArray DownloadThread::_proxy;
 int DownloadThread::_curlCount = 0;
 
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
-    QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
+    QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
     _inputBufferSize(0), _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM)
 {
@@ -392,7 +392,7 @@ void DownloadThread::run()
     /* Deal with badly configured HTTP servers that terminate the connection quickly
        if connections stalls for some seconds while kernel commits buffers to slow SD card.
        And also reconnect if we detect from our end that transfer stalled for more than one minute */
-    while (ret == CURLE_PARTIAL_FILE || ret == CURLE_OPERATION_TIMEDOUT)
+    while (ret == CURLE_PARTIAL_FILE || ret == CURLE_OPERATION_TIMEDOUT || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset) )
     {
         time_t t = time(NULL);
         qDebug() << "HTTP connection lost. Time:" << t;
@@ -407,6 +407,7 @@ void DownloadThread::run()
         _lastFailureTime = t;
 
         _startOffset = _lastDlNow;
+        _lastFailureOffset = _lastDlNow;
         curl_easy_setopt(_c, CURLOPT_RESUME_FROM_LARGE, _startOffset);
 
         ret = curl_easy_perform(_c);
