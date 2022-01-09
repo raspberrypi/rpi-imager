@@ -278,6 +278,13 @@ Popup {
                             }
                         }
 
+                        CheckBox {
+                            id: chkWifiSSIDHidden
+                            Layout.columnSpan: 2
+                            text: qsTr("Hidden SSID")
+                            checked: false
+                        }
+
                         Text {
                             text: qsTr("Password:")
                             color: parent.enabled ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
@@ -461,6 +468,7 @@ Popup {
         }
         if ('wifiSSID' in settings) {
             fieldWifiSSID.text = settings.wifiSSID
+            chkWifiSSIDHidden.checked = settings.wifiSSIDHidden
             chkShowPassword.checked = false
             fieldWifiPassword.text = settings.wifiPassword
             fieldWifiCountry.currentIndex = fieldWifiCountry.find(settings.wifiCountry)
@@ -647,6 +655,9 @@ Popup {
             wpaconfig += "ap_scan=1\n\n"
             wpaconfig += "update_config=1\n"
             wpaconfig += "network={\n"
+            if (chkWifiSSIDHidden.checked) {
+                wpaconfig += "\tscan_ssid=1\n"
+            }
             wpaconfig += "\tssid=\""+fieldWifiSSID.text+"\"\n"
             var cryptedPsk = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
             wpaconfig += "\tpsk="+cryptedPsk+"\n"
@@ -670,6 +681,9 @@ Popup {
             cloudinitnetwork += "    access-points:\n"
             cloudinitnetwork += "      \""+fieldWifiSSID.text+"\":\n"
             cloudinitnetwork += "        password: \""+cryptedPsk+"\"\n"
+            if (chkWifiSSIDHidden.checked) {
+                cloudinitnetwork += "        hidden: true\n"
+            }
 
             /* FIXME: setting wifi country code broken on Ubuntu
                For unknown reasons udev does not trigger setregdomain automatically and as a result
@@ -744,6 +758,7 @@ Popup {
             }
             if (chkWifi.checked) {
                 settings.wifiSSID = fieldWifiSSID.text
+                settings.wifiSSIDHidden = chkWifiSSIDHidden.checked
                 settings.wifiPassword = fieldWifiPassword.text
                 settings.wifiCountry = fieldWifiCountry.editText
             }
