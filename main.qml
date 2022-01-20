@@ -255,16 +255,22 @@ ApplicationWindow {
                         font.family: roboto.name
                         Accessible.onPressAction: clicked()
                     }
-                    Image {
-                        id: customizebutton
-                        source: "icons/ic_cog_40px.svg"
-                        visible: false
 
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: {
-                                optionspopup.openPopup()
-                            }
+                    Button {
+                        Layout.bottomMargin: 25
+                        padding: 5
+                        id: customizebutton
+                        onClicked: {
+                            optionspopup.openPopup()
+                        }
+                        Material.background: "#ffffff"
+                        visible: false
+                        Accessible.description: qsTr("Select this button to access advanced settings")
+                        Accessible.onPressAction: clicked()
+
+                        contentItem: Image {
+                            source: "icons/ic_cog_red.svg"
+                            fillMode: Image.PreserveAspectFit
                         }
                     }
                 }
@@ -1051,6 +1057,29 @@ ApplicationWindow {
         progressText.text = qsTr("Finalizing...")
     }
 
+    function shuffle(arr) {
+        for (var i = 0; i < arr.length - 1; i++) {
+            var j = i + Math.floor(Math.random() * (arr.length - i));
+
+            var t = arr[j];
+            arr[j] = arr[i];
+            arr[i] = t;
+        }
+    }
+
+    function checkForRandom(list) {
+        for (var i in list) {
+            var entry = list[i]
+
+            if ("subitems" in entry) {
+                checkForRandom(entry["subitems"])
+                if ("random" in entry && entry["random"]) {
+                    shuffle(entry["subitems"])
+                }
+            }
+        }
+    }
+
     function oslistFromJson(o) {
         var lang_country = Qt.locale().name
         if ("os_list_"+lang_country in o) {
@@ -1068,7 +1097,9 @@ ApplicationWindow {
             return false
         }
 
-        return o["os_list"]
+        var oslist = o["os_list"]
+        checkForRandom(oslist)
+        return oslist
     }
 
     function selectNamedOS(name, collection)
