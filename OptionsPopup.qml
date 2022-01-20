@@ -153,71 +153,18 @@ Popup {
                     ColumnLayout {
                         enabled: chkSSH.checked
                         Layout.leftMargin: 40
-                        spacing: -5
-
-                        GridLayout {
-                            columns: 2
-                            columnSpacing: 10
-                            rowSpacing: -5
-
-                            Text {
-                                text: qsTr("Set username:")
-                                color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
-                            }
-                            TextField {
-                                id: fieldUserName
-                                text: "pi"
-                                Layout.minimumWidth: 200
-                                property bool indicateError: false
-
-                                onTextEdited: {
-                                    indicateError = false
-                                }
-                            }
-                        }
+                        spacing: -10
 
                         RadioButton {
                             id: radioPasswordAuthentication
                             text: qsTr("Use password authentication")
                             onCheckedChanged: {
                                 if (checked) {
+                                    chkSetUser.checked = true
                                     fieldUserPassword.forceActiveFocus()
                                 }
                             }
                         }
-
-                        GridLayout {
-                            Layout.leftMargin: 40
-                            columns: 2
-                            columnSpacing: 10
-                            rowSpacing: -5
-                            enabled: radioPasswordAuthentication.checked
-
-                            Text {
-                                text: qsTr("Set password for '%1' user:").arg(fieldUserName.text)
-                                color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
-                            }
-                            TextField {
-                                id: fieldUserPassword
-                                echoMode: TextInput.Password
-                                Layout.minimumWidth: 200
-                                property bool alreadyCrypted: false
-                                property bool indicateError: false
-
-                                onTextEdited: {
-                                    if (alreadyCrypted) {
-                                        /* User is trying to edit saved
-                                           (crypted) password, clear field */
-                                        alreadyCrypted = false
-                                        clear()
-                                    }
-                                    if (indicateError) {
-                                        indicateError = false
-                                    }
-                                }
-                            }
-                        }
-
                         RadioButton {
                             id: radioPubKeyAuthentication
                             text: qsTr("Allow public-key authentication only")
@@ -241,6 +188,67 @@ Popup {
                             TextField {
                                 id: fieldPublicKey
                                 Layout.minimumWidth: 200
+                            }
+                        }
+                    }
+
+                    CheckBox {
+                        id: chkSetUser
+                        text: qsTr("Set username and password")
+                        onCheckedChanged: {
+                            if (!checked && chkSSH.checked && radioPasswordAuthentication.checked) {
+                                checked = true;
+                            }
+                        }
+                    }
+
+                    ColumnLayout {
+                        enabled: chkSetUser.checked
+                        Layout.leftMargin: 40
+                        spacing: -5
+
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 10
+                            rowSpacing: -5
+
+                            Text {
+                                text: qsTr("Username:")
+                                color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                            }
+                            TextField {
+                                id: fieldUserName
+                                text: "pi"
+                                Layout.minimumWidth: 200
+                                property bool indicateError: false
+
+                                onTextEdited: {
+                                    indicateError = false
+                                }
+                            }
+
+                            Text {
+                                text: qsTr("Password:")
+                                color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
+                            }
+                            TextField {
+                                id: fieldUserPassword
+                                echoMode: TextInput.Password
+                                Layout.minimumWidth: 200
+                                property bool alreadyCrypted: false
+                                property bool indicateError: false
+
+                                onTextEdited: {
+                                    if (alreadyCrypted) {
+                                        /* User is trying to edit saved
+                                           (crypted) password, clear field */
+                                        alreadyCrypted = false
+                                        clear()
+                                    }
+                                    if (indicateError) {
+                                        indicateError = false
+                                    }
+                                }
                             }
                         }
                     }
@@ -457,9 +465,11 @@ Popup {
             fieldUserPassword.alreadyCrypted = true
             chkSSH.checked = true
             radioPasswordAuthentication.checked = true
+            chkSetUser.checked = true
         }
         if ('sshUserName' in settings) {
             fieldUserName.text = settings.sshUserName
+            chkSetUser.checked = true
         }
         if ('sshAuthorizedKeys' in settings) {
             fieldPublicKey.text = settings.sshAuthorizedKeys
@@ -589,9 +599,16 @@ Popup {
             addCloudInit("manage_etc_hosts: true")
             addCloudInit("packages:")
             addCloudInit("- avahi-daemon")
+            /* Disable date/time checks in apt as NTP may not have synchronized yet when installing packages */
+            addCloudInit("apt:")
+            addCloudInit("  conf: |")
+            addCloudInit("    Acquire {")
+            addCloudInit("      Check-Date \"false\";")
+            addCloudInit("    };")
             addCloudInit("")
         }
-        if (chkSSH.checked) {
+
+        if (chkSSH.checked || chkSetUser.checked) {
             // First user may not be called 'pi' on all distributions, so look username up
             addFirstRun("FIRSTUSER=`getent passwd 1000 | cut -d: -f1`");
             addFirstRun("FIRSTUSERHOME=`getent passwd 1000 | cut -d: -f6`")
@@ -601,16 +618,19 @@ Popup {
             addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo")
             addCloudInit("  shell: /bin/bash")
 
-            if (radioPasswordAuthentication.checked) {
+            if (chkSetUser.checked) {
                 var cryptedPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
                 addFirstRun("echo \"$FIRSTUSER:\""+escapeshellarg(cryptedPassword)+" | chpasswd -e")
 
                 addCloudInit("  lock_passwd: false")
                 addCloudInit("  passwd: "+cryptedPassword)
                 addCloudInit("")
+            }
+            if (chkSSH.checked && radioPasswordAuthentication.checked) {
                 addCloudInit("ssh_pwauth: true")
             }
-            if (radioPubKeyAuthentication.checked) {
+
+            if (chkSSH.checked && radioPubKeyAuthentication.checked) {
                 var pubkey = fieldPublicKey.text
                 var pubkeyArr = pubkey.split("\n")
 
@@ -646,7 +666,9 @@ Popup {
             addFirstRun("   fi")
             addFirstRun("fi")
 
-            addFirstRun("systemctl enable ssh")
+            if (chkSSH.checked) {
+                addFirstRun("systemctl enable ssh")
+            }
             addCloudInit("")
         }
         if (chkWifi.checked) {
