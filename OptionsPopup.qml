@@ -624,10 +624,6 @@ Popup {
 
                 addCloudInit("  lock_passwd: false")
                 addCloudInit("  passwd: "+cryptedPassword)
-                addCloudInit("")
-            }
-            if (chkSSH.checked && radioPasswordAuthentication.checked) {
-                addCloudInit("ssh_pwauth: true")
             }
 
             if (chkSSH.checked && radioPubKeyAuthentication.checked) {
@@ -640,7 +636,9 @@ Popup {
                 }
                 addFirstRun("echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config")
 
-                addCloudInit("  lock_passwd: true")
+                if (!chkSetUser.checked) {
+                    addCloudInit("  lock_passwd: true")
+                }
                 addCloudInit("  ssh_authorized_keys:")
                 for (var i=0; i<pubkeyArr.length; i++) {
                     var pk = pubkeyArr[i].trim();
@@ -649,6 +647,11 @@ Popup {
                     }
                 }
                 addCloudInit("  sudo: ALL=(ALL) NOPASSWD:ALL")
+            }
+            addCloudInit("")
+
+            if (chkSSH.checked && radioPasswordAuthentication.checked) {
+                addCloudInit("ssh_pwauth: true")
             }
 
             /* Rename first ("pi") user if a different desired username was specified */
