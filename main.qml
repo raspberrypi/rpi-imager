@@ -1024,8 +1024,11 @@ ApplicationWindow {
         msgpopup.title = qsTr("Write Successful")
         if (osbutton.text === qsTr("Erase"))
             msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
-        else if (imageWriter.isEmbeddedMode())
-            msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b>").arg(osbutton.text).arg(dstbutton.text)
+        else if (imageWriter.isEmbeddedMode()) {
+            //msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b>").arg(osbutton.text).arg(dstbutton.text)
+            /* Just reboot to the installed OS */
+            Qt.quit()
+        }
         else
             msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
         if (imageWriter.isEmbeddedMode()) {
