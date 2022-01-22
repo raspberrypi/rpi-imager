@@ -100,7 +100,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="994"/>
         <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossibile personalizzare. Il file &apos;%1&apos; non esiste.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="998"/>
@@ -120,12 +120,12 @@
     <message>
         <location filename="../downloadthread.cpp" line="1100"/>
         <source>Error creating user-data cloudinit file on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore nel creare il file cloudinit dei dati utente nella partizione FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="1114"/>
         <source>Error creating network-config cloudinit file on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore durante la creazione del file network-config cloudinit nella partizione FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="1137"/>
@@ -236,7 +236,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../driveformatthread.cpp" line="199"/>
         <source>Partitioning did not create expected FAT partition %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Il partizionamento non ha creato la partizione FAT prevista %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="208"/>
@@ -279,7 +279,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../imagewriter.cpp" line="975"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation type="unfinished"></translation>
+        <translation>Vuoi precompilare la password WiFi usando il portachiavi di sistema?</translation>
     </message>
 </context>
 <context>
@@ -315,7 +315,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../MsgPopup.qml" line="135"/>
         <source>QUIT</source>
-        <translation type="unfinished"></translation>
+        <translation>ESCI</translation>
     </message>
 </context>
 <context>
@@ -376,7 +376,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../OptionsPopup.qml" line="185"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished"></translation>
+        <translation>Imposta authorized_keys per &apos;%1&apos;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="258"/>
@@ -397,17 +397,17 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../OptionsPopup.qml" line="197"/>
         <source>Set username and password</source>
-        <translation type="unfinished"></translation>
+        <translation>Imposta nome utente e password</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="216"/>
         <source>Username:</source>
-        <translation type="unfinished"></translation>
+        <translation>Nome utente:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="292"/>
         <source>Hidden SSID</source>
-        <translation type="unfinished"></translation>
+        <translation>SSID nascosto</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="313"/>
@@ -607,27 +607,27 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../main.qml" line="268"/>
         <source>Select this button to access advanced settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleziona questo pulsante per accedere alle impostazioni avanzate</translation>
     </message>
     <message>
         <location filename="../main.qml" line="284"/>
         <source>Using custom repository: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Usa repository personalizzato: %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="293"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
-        <translation type="unfinished"></translation>
+        <translation>Navigazione da tastiera: &lt;tab&gt; vai al prossimo pulsante &lt;spazio&gt; premi il pulsante/seleziona la voce &lt;freccia su/giù&gt; vai su/giù negli elenchi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="313"/>
         <source>Language: </source>
-        <translation type="unfinished"></translation>
+        <translation>Lingua: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="336"/>
         <source>Keyboard: </source>
-        <translation type="unfinished"></translation>
+        <translation>Tastiera: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="483"/>
