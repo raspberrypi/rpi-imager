@@ -5,12 +5,17 @@ rpi-imager (1.6.3) unstable; urgency=medium
     repository. Some heuristics are used with custom images from disk.
   * Advanced settings: add support for cloudinit format
   * Advanced settings: add support for specifying username
+  * Advanced settings: allow setting username and password
+  * Advanced settings: allow hidden wifi SSID
+  * Advanced settings: allow multi-line authorized_keys
+  * Retry on GnuTLS Recv errors
   * Some fixes to deal better with Linux distributions auto-mounting
     drives
   * Add Slovenija translation
   * Adds support for zstd
+  * Allow nested subitems entries
 
- -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 09 Dec 2021 11:13:12 +0100
+ -- Floris Bos <bos@je-eigen-domein.nl>  Sun, 23 Jan 2022 16:39:46 +0100
 
 rpi-imager (1.6.2) unstable; urgency=medium
 
