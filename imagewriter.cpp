@@ -18,7 +18,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QProcess>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTimeZone>
@@ -89,9 +89,9 @@ ImageWriter::ImageWriter(QObject *parent)
         QFile f("/sys/bus/nvmem/devices/rmem0/nvmem");
         if (f.exists() && f.open(f.ReadOnly))
         {
-            QByteArrayList eepromSettings = f.readAll().split('\n');
+            const QByteArrayList eepromSettings = f.readAll().split('\n');
             f.close();
-            for (QByteArray setting : eepromSettings)
+            for (const QByteArray &setting : eepromSettings)
             {
                 if (setting.startsWith("IMAGER_REPO_URL="))
                 {
@@ -149,14 +149,14 @@ ImageWriter::ImageWriter(QObject *parent)
     _settings.endGroup();
 
     QDir dir(":/i18n", "rpi-imager_*.qm");
-    QStringList transFiles = dir.entryList();
+    const QStringList transFiles = dir.entryList();
     QLocale currentLocale;
     QStringList localeComponents = currentLocale.name().split('_');
     QString currentlangcode;
     if (!localeComponents.isEmpty())
         currentlangcode = localeComponents.first();
 
-    for (QString tf : transFiles)
+    for (const QString &tf : transFiles)
     {
         QString langcode = tf.mid(11, tf.length()-14);
         /* FIXME: we currently lack a font with support for Chinese characters in embedded mode */
@@ -728,12 +728,12 @@ bool ImageWriter::mountUsbSourceMedia()
     int devices = 0;
 #ifdef Q_OS_LINUX
     QDir dir("/sys/class/block");
-    QStringList list = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    const QStringList list = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
 
     if (!dir.exists("/media"))
         dir.mkdir("/media");
 
-    for (auto devname : list)
+    for (const QString &devname : list)
     {
         if (!devname.startsWith("mmcblk0") && !QFile::symLinkTarget("/sys/class/block/"+devname).contains("/devices/virtual/"))
         {
@@ -763,14 +763,14 @@ QByteArray ImageWriter::getUsbSourceOSlist()
 #ifdef Q_OS_LINUX
     QJsonArray oslist;
     QDir dir("/media");
-    QStringList medialist = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    const QStringList medialist = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     QStringList namefilters = {"*.img", "*.zip", "*.gz", "*.xz", "*.zst"};
 
-    for (auto devname : medialist)
+    for (const QString &devname : medialist)
     {
         QDir subdir("/media/"+devname);
-        QStringList files = subdir.entryList(namefilters, QDir::Files, QDir::Name);
-        for (auto file : files)
+        const QStringList files = subdir.entryList(namefilters, QDir::Files, QDir::Name);
+        for (const QString &file : files)
         {
             QString path = "/media/"+devname+"/"+file;
             QFileInfo fi(path);
@@ -885,13 +885,14 @@ QString ImageWriter::getSSID()
         }
         else
         {
-            QRegExp rx(regexpstr);
-            QList<QByteArray> outputlines = proc.readAll().replace('\r', "").split('\n');
+            QRegularExpression rx(regexpstr);
+            const QList<QByteArray> outputlines = proc.readAll().replace('\r', "").split('\n');
 
-            for (QByteArray line : outputlines) {
-                if (rx.indexIn(line) != -1)
+            for (const QByteArray &line : outputlines) {
+                QRegularExpressionMatch match = rx.match(line);
+                if (match.hasMatch())
                 {
-                    ssid = rx.cap(1);
+                    ssid = match.captured(1);
                     break;
                 }
             }
@@ -941,9 +942,11 @@ QString ImageWriter::getPSK(const QString &ssid)
                         {
                             QString xml = QString::fromWCharArray(xmlstr);
                             qDebug() << "XML wifi profile:" << xml;
-                            QRegExp rx("<keyMaterial>(.+)</keyMaterial>");
-                            if (rx.indexIn(xml) != -1) {
-                                psk = rx.cap(1);
+                            QRegularExpression rx("<keyMaterial>(.+)</keyMaterial>");
+                            QRegularExpressionMatch match = rx.match(xml);
+
+                            if (match.hasMatch()) {
+                                psk = match.captured(1);
                             }
 
                             WlanFreeMemory(xmlstr);
@@ -1061,7 +1064,8 @@ void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)
 {
     _settings.beginGroup("imagecustomization");
     _settings.remove("");
-    for (QString key : map.keys()) {
+    const QStringList keys = map.keys();
+    for (const QString &key : keys) {
         _settings.setValue(key, map.value(key));
     }
     _settings.endGroup();
@@ -1072,7 +1076,8 @@ QVariantMap ImageWriter::getSavedCustomizationSettings()
     QVariantMap result;
 
     _settings.beginGroup("imagecustomization");
-    for (QString key : _settings.childKeys()) {
+    const QStringList keys = _settings.childKeys();
+    for (const QString &key : keys) {
         result.insert(key, _settings.value(key));
     }
     _settings.endGroup();
@@ -1189,13 +1194,15 @@ QString ImageWriter::detectPiKeyboard()
     if (!typenr)
     {
         QDir dir("/dev/input/by-id");
-        QRegExp rx("RPI_Wired_Keyboard_([0-9]+)");
+        QRegularExpression rx("RPI_Wired_Keyboard_([0-9]+)");
 
-        for (QString fn : dir.entryList(QDir::Files))
+        const QStringList entries = dir.entryList(QDir::Files);
+        for (const QString &fn : entries)
         {
-            if (rx.indexIn(fn) != -1)
+            QRegularExpressionMatch match = rx.match(fn);
+            if (match.hasMatch())
             {
-                typenr = rx.cap(1).toUInt();
+                typenr = match.captured(1).toUInt();
             }
         }
     }
