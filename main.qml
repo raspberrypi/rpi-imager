@@ -255,16 +255,22 @@ ApplicationWindow {
                         font.family: roboto.name
                         Accessible.onPressAction: clicked()
                     }
-                    Image {
-                        id: customizebutton
-                        source: "icons/ic_cog_40px.svg"
-                        visible: false
 
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: {
-                                optionspopup.openPopup()
-                            }
+                    Button {
+                        Layout.bottomMargin: 25
+                        padding: 5
+                        id: customizebutton
+                        onClicked: {
+                            optionspopup.openPopup()
+                        }
+                        Material.background: "#ffffff"
+                        visible: false
+                        Accessible.description: qsTr("Select this button to access advanced settings")
+                        Accessible.onPressAction: clicked()
+
+                        contentItem: Image {
+                            source: "icons/ic_cog_red.svg"
+                            fillMode: Image.PreserveAspectFit
                         }
                     }
                 }
@@ -472,7 +478,7 @@ ApplicationWindow {
                     contains_multiple_files: false
                     release_date: ""
                     subitems_url: "internal://back"
-                    subitems: []
+                    subitems_json: ""
                     name: qsTr("Back")
                     description: qsTr("Go back to main menu")
                     tooltip: ""
@@ -514,7 +520,7 @@ ApplicationWindow {
             contains_multiple_files: false
             release_date: ""
             subitems_url: ""
-            subitems: []
+            subitems_json: ""
             name: qsTr("Erase")
             description: qsTr("Format card as FAT32")
             tooltip: ""
@@ -663,7 +669,7 @@ ApplicationWindow {
                 }
                 Image {
                     source: "icons/ic_chevron_right_40px.svg"
-                    visible: (typeof(subitems) == "object" && subitems.count) || (typeof(subitems_url) == "string" && subitems_url != "" && subitems_url != "internal://back")
+                    visible: (typeof(subitems_json) == "string" && subitems_json != "") || (typeof(subitems_url) == "string" && subitems_url != "" && subitems_url != "internal://back")
                     Layout.preferredHeight: 40
                     Layout.preferredWidth: 40
                     fillMode: Image.PreserveAspectFit
@@ -1032,8 +1038,11 @@ ApplicationWindow {
         msgpopup.title = qsTr("Write Successful")
         if (osbutton.text === qsTr("Erase"))
             msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
-        else if (imageWriter.isEmbeddedMode())
-            msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b>").arg(osbutton.text).arg(dstbutton.text)
+        else if (imageWriter.isEmbeddedMode()) {
+            //msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b>").arg(osbutton.text).arg(dstbutton.text)
+            /* Just reboot to the installed OS */
+            Qt.quit()
+        }
         else
             msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
         if (imageWriter.isEmbeddedMode()) {
@@ -1065,24 +1074,63 @@ ApplicationWindow {
         progressText.text = qsTr("Finalizing...")
     }
 
+    function shuffle(arr) {
+        for (var i = 0; i < arr.length - 1; i++) {
+            var j = i + Math.floor(Math.random() * (arr.length - i));
+
+            var t = arr[j];
+            arr[j] = arr[i];
+            arr[i] = t;
+        }
+    }
+
+    function checkForRandom(list) {
+        for (var i in list) {
+            var entry = list[i]
+
+            if ("subitems" in entry) {
+                checkForRandom(entry["subitems"])
+                if ("random" in entry && entry["random"]) {
+                    shuffle(entry["subitems"])
+                }
+            }
+        }
+    }
+
     function oslistFromJson(o) {
+        var oslist = false
         var lang_country = Qt.locale().name
         if ("os_list_"+lang_country in o) {
-            return o["os_list_"+lang_country]
+            oslist = o["os_list_"+lang_country]
         }
-        if (lang_country.includes("_")) {
+        else if (lang_country.includes("_")) {
             var lang = lang_country.substr(0, lang_country.indexOf("_"))
             if ("os_list_"+lang in o) {
-                return o["os_list_"+lang]
+                oslist = o["os_list_"+lang]
             }
         }
 
-        if (!"os_list" in o) {
-            onError(qsTr("Error parsing os_list.json"))
-            return false
+        if (!oslist) {
+            if (!"os_list" in o) {
+                onError(qsTr("Error parsing os_list.json"))
+                return false
+            }
+
+            oslist = o["os_list"]
         }
 
-        return o["os_list"]
+        checkForRandom(oslist)
+
+        /* Flatten subitems to subitems_json */
+        for (var i in oslist) {
+            var entry = oslist[i];
+            if ("subitems" in entry) {
+                entry["subitems_json"] = JSON.stringify(entry["subitems"])
+                delete entry["subitems"]
+            }
+        }
+
+        return oslist
     }
 
     function selectNamedOS(name, collection)
@@ -1090,8 +1138,8 @@ ApplicationWindow {
         for (var i = 0; i < collection.count; i++) {
             var os = collection.get(i)
 
-            if (typeof(os.subitems) !== "undefined") {
-                selectNamedOS(name, os.subitems)
+            if (typeof(os.subitems_json) == "string" && os.subitems_json != "") {
+                selectNamedOS(name, os.subitems_json)
             }
             else if (typeof(os.url) !== "undefined" && name === os.name) {
                 selectOSitem(os, false)
@@ -1177,12 +1225,19 @@ ApplicationWindow {
 
     function selectOSitem(d, selectFirstSubitem)
     {
-        if (typeof(d.subitems) == "object" && d.subitems.count) {
+        if (typeof(d.subitems_json) == "string" && d.subitems_json !== "") {
             var m = newSublist()
+            var subitems = JSON.parse(d.subitems_json)
 
-            for (var i=0; i<d.subitems.count; i++)
+            for (var i in subitems)
             {
-                m.append(d.subitems.get(i))
+                var entry = subitems[i];
+                if ("subitems" in entry) {
+                    /* Flatten sub-subitems entry */
+                    entry["subitems_json"] = JSON.stringify(entry["subitems"])
+                    delete entry["subitems"]
+                }
+                m.append(entry)
             }
 
             osswipeview.itemAt(osswipeview.currentIndex+1).currentIndex = (selectFirstSubitem === true) ? 0 : -1
