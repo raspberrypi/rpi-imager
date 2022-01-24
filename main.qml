@@ -547,97 +547,8 @@ ApplicationWindow {
 
         Item {
             width: window.width-100
-            height: image_download_size ? 100 : 60
+            height: contentLayout.implicitHeight + 24
             Accessible.name: name+".\n"+description
-
-            Rectangle {
-               id: bgrect
-               anchors.fill: parent
-               color: "#f5f5f5"
-               visible: mouseOver && parent.ListView.view.currentIndex !== index
-               property bool mouseOver: false
-            }
-            Rectangle {
-               id: borderrect
-               implicitHeight: 1
-               implicitWidth: parent.width
-               color: "#dcdcdc"
-               y: parent.height
-            }
-
-            Row {
-                leftPadding: 25
-
-                Column {
-                    width: 64
-
-                    Image {
-                        source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
-                        verticalAlignment: Image.AlignVCenter
-                        height: parent.parent.parent.height
-                        fillMode: Image.Pad
-                    }
-                    Text {
-                        text: " "
-//                      visible: !icon
-                    }
-                }
-                Column {
-                    width: parent.parent.width-64-50-25
-
-                    Text {
-                        verticalAlignment: Text.AlignVCenter
-                        height: parent.parent.parent.height
-                        font.family: roboto.name
-                        textFormat: Text.RichText
-                        text: {
-                            var txt = "<p style='margin-bottom: 5px; font-weight: bold;'>"+name
-                            if (typeof(website) == "string" && website) {
-                                txt += " &nbsp; <a href='"+website+"'> <img src='icons/ic_info_16px.png' align='top'></a>"
-                            }
-                            txt += "</p><font color='#1a1a1a'>"+description+"</font><font style='font-weight: 200' color='#646464'>"
-                            if (typeof(release_date) == "string" && release_date)
-                                txt += "<br>"+qsTr("Released: %1").arg(release_date)
-                            if (typeof(url) == "string" && url != "" && url != "internal://format") {
-                                if (typeof(extract_sha256) != "undefined" && imageWriter.isCached(url,extract_sha256)) {
-                                    txt += "<br>"+qsTr("Cached on your computer")
-                                } else if (url.startsWith("file://")) {
-                                    txt += "<br>"+qsTr("Local file")
-                                } else {
-                                    txt += "<br>"+qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1));
-                                }
-                            }
-                            txt += "</font>";
-
-                            return txt;
-                        }
-                        id: osText
-
-                        /*
-                        Accessible.role: Accessible.ListItem
-                        Accessible.name: name+".\n"+description
-                        Accessible.focusable: true
-                        Accessible.focused: parent.parent.parent.ListView.view.currentIndex === index
-                        */
-
-                        ToolTip {
-                            visible: osMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
-                            delay: 1000
-                            text: typeof(tooltip) == "string" ? tooltip : ""
-                            clip: false
-                        }
-                    }
-
-                }
-                Column {
-                    Image {
-                        source: "icons/ic_chevron_right_40px.svg"
-                        visible: (typeof(subitems_json) == "string" && subitems_json != "") || (typeof(subitems_url) == "string" && subitems_url != "" && subitems_url != "internal://back")
-                        height: parent.parent.parent.height
-                        fillMode: Image.Pad
-                    }
-                }
-            }
 
             MouseArea {
                 id: osMouseArea
@@ -654,11 +565,114 @@ ApplicationWindow {
                 }
 
                 onClicked: {
-                    if (osText.hoveredLink) {
-                        Qt.openUrlExternally(osText.hoveredLink)
-                    } else {
-                        selectOSitem(model)
+                    selectOSitem(model)
+                }
+            }
+
+            Rectangle {
+               id: bgrect
+               anchors.fill: parent
+               color: "#f5f5f5"
+               visible: mouseOver && parent.ListView.view.currentIndex !== index
+               property bool mouseOver: false
+            }
+            Rectangle {
+               id: borderrect
+               implicitHeight: 1
+               implicitWidth: parent.width
+               color: "#dcdcdc"
+               y: parent.height
+            }
+
+            RowLayout {
+                id: contentLayout
+                anchors {
+                    left: parent.left
+                    top: parent.top
+                    right: parent.right
+                    margins: 12
+                }
+                spacing: 12
+
+                Image {
+                    source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
+                    Layout.preferredHeight: 40
+                    Layout.preferredWidth: 40
+                    sourceSize.width: 40
+                    sourceSize.height: 40
+                    fillMode: Image.PreserveAspectFit
+                    verticalAlignment: Image.AlignVCenter
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+
+                    RowLayout {
+                        spacing: 12
+                        Text {
+                            text: name
+                            elide: Text.ElideRight
+                            font.family: roboto.name
+                            font.bold: true
+                        }
+                        Image {
+                            source: "icons/ic_info_16px.png"
+                            Layout.preferredHeight: 16
+                            Layout.preferredWidth: 16
+                            visible: typeof(website) == "string" && website
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: Qt.openUrlExternally(website)
+                            }
+                        }
+                        Item {
+                            Layout.fillWidth: true
+                        }
                     }
+
+                    Text {
+                        Layout.fillWidth: true
+                        font.family: roboto.name
+                        text: description
+                        wrapMode: Text.WordWrap
+                        color: "#1a1a1a"
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        color: "#646464"
+                        font.weight: Font.Light
+                        visible: typeof(release_date) == "string" && release_date
+                        text: qsTr("Released: %1").arg(release_date)
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        color: "#646464"
+                        font.weight: Font.Light
+                        visible: typeof(url) == "string" && url != "" && url != "internal://format"
+                        text: !url ? "" :
+                              typeof(extract_sha256) != "undefined" && imageWriter.isCached(url,extract_sha256)
+                                ? qsTr("Cached on your computer")
+                                : url.startsWith("file://")
+                                  ? qsTr("Local file")
+                                  : qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1))
+                    }
+
+                    ToolTip {
+                        visible: osMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
+                        delay: 1000
+                        text: typeof(tooltip) == "string" ? tooltip : ""
+                        clip: false
+                    }
+                }
+                Image {
+                    source: "icons/ic_chevron_right_40px.svg"
+                    visible: (typeof(subitems_json) == "string" && subitems_json != "") || (typeof(subitems_url) == "string" && subitems_url != "" && subitems_url != "internal://back")
+                    Layout.preferredHeight: 40
+                    Layout.preferredWidth: 40
+                    fillMode: Image.PreserveAspectFit
                 }
             }
         }
