@@ -618,10 +618,9 @@ Popup {
             addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo")
             addCloudInit("  shell: /bin/bash")
 
+            var cryptedPassword;
             if (chkSetUser.checked) {
-                var cryptedPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
-                addFirstRun("echo \"$FIRSTUSER:\""+escapeshellarg(cryptedPassword)+" | chpasswd -e")
-
+                cryptedPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
                 addCloudInit("  lock_passwd: false")
                 addCloudInit("  passwd: "+cryptedPassword)
             }
@@ -654,20 +653,28 @@ Popup {
                 addCloudInit("ssh_pwauth: true")
             }
 
-            /* Rename first ("pi") user if a different desired username was specified */
-            addFirstRun("if [ \"$FIRSTUSER\" != \""+fieldUserName.text+"\" ]; then")
-            addFirstRun("   usermod -l \""+fieldUserName.text+"\" \"$FIRSTUSER\"")
-            addFirstRun("   usermod -m -d \"/home/"+fieldUserName.text+"\" \""+fieldUserName.text+"\"")
-            addFirstRun("   if grep -q \"^autologin-user=\" /etc/lightdm/lightdm.conf ; then")
-            addFirstRun("      sed /etc/lightdm/lightdm.conf -i -e \"s/^autologin-user=.*/autologin-user="+fieldUserName.text+"/\"")
-            addFirstRun("   fi")
-            addFirstRun("   if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then")
-            addFirstRun("      sed /etc/systemd/system/getty@tty1.service.d/autologin.conf -i -e \"s/$FIRSTUSER/"+fieldUserName.text+"/\"")
-            addFirstRun("   fi")
-            addFirstRun("   if [ -f /etc/sudoers.d/010_pi-nopasswd ]; then")
-            addFirstRun("      sed -i \"s/^$FIRSTUSER /"+fieldUserName.text+" /\" /etc/sudoers.d/010_pi-nopasswd")
-            addFirstRun("   fi")
-            addFirstRun("fi")
+            if (chkSetUser.checked) {
+                /* Rename first ("pi") user if a different desired username was specified */
+                addFirstRun("if [ -f /usr/lib/userconf-pi/userconf ]; then")
+                addFirstRun("   /usr/lib/userconf-pi/userconf "+escapeshellarg(fieldUserName.text)+" "+escapeshellarg(cryptedPassword))
+                addFirstRun("else")
+                addFirstRun("   echo \"$FIRSTUSER:\""+escapeshellarg(cryptedPassword)+" | chpasswd -e")
+                addFirstRun("   if [ \"$FIRSTUSER\" != \""+fieldUserName.text+"\" ]; then")
+                addFirstRun("      usermod -l \""+fieldUserName.text+"\" \"$FIRSTUSER\"")
+                addFirstRun("      usermod -m -d \"/home/"+fieldUserName.text+"\" \""+fieldUserName.text+"\"")
+                addFirstRun("      groupmod -n \""+fieldUserName.text+"\" \"$FIRSTUSER\"")
+                addFirstRun("      if grep -q \"^autologin-user=\" /etc/lightdm/lightdm.conf ; then")
+                addFirstRun("         sed /etc/lightdm/lightdm.conf -i -e \"s/^autologin-user=.*/autologin-user="+fieldUserName.text+"/\"")
+                addFirstRun("      fi")
+                addFirstRun("      if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then")
+                addFirstRun("         sed /etc/systemd/system/getty@tty1.service.d/autologin.conf -i -e \"s/$FIRSTUSER/"+fieldUserName.text+"/\"")
+                addFirstRun("      fi")
+                addFirstRun("      if [ -f /etc/sudoers.d/010_pi-nopasswd ]; then")
+                addFirstRun("         sed -i \"s/^$FIRSTUSER /"+fieldUserName.text+" /\" /etc/sudoers.d/010_pi-nopasswd")
+                addFirstRun("      fi")
+                addFirstRun("   fi")
+                addFirstRun("fi")
+            }
 
             if (chkSSH.checked) {
                 addFirstRun("systemctl enable ssh")
@@ -716,7 +723,7 @@ Popup {
             addCloudInitRun("sed -i 's/^\s*REGDOMAIN=\S*/REGDOMAIN="+fieldWifiCountry.editText+"/' /etc/default/crda || true")
         }
         if (chkLocale.checked) {
-            if (chkSkipFirstUse) {
+            if (chkSkipFirstUse.checked) {
                 addFirstRun("rm -f /etc/xdg/autostart/piwiz.desktop")
                 addCloudInitRun("rm -f /etc/xdg/autostart/piwiz.desktop")
             }
