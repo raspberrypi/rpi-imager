@@ -3,11 +3,9 @@
         <file>main.qml</file>
         <file>qtquickcontrols2.conf</file>
         <file>icons/rpi-imager.ico</file>
-        <file>icons/rpi2.png</file>
         <file>fonts/Roboto-Bold.ttf</file>
         <file>fonts/Roboto-Light.ttf</file>
         <file>fonts/Roboto-Regular.ttf</file>
-        <file>icons/rpi2-hires.png</file>
         <file>icons/ic_chevron_left_40px.svg</file>
         <file>icons/ic_chevron_right_40px.svg</file>
         <file>icons/ic_sd_storage_40px.svg</file>
@@ -30,5 +28,9 @@
         <file>icons/ic_info_12px.png</file>
         <file>keymap-layouts.txt</file>
         <file>icons/ic_cog_red.svg</file>
+        <file>icons/cat_home_automation.png</file>
+        <file>icons/cat_language_specific_operating_systems.png</file>
+        <file>icons/cat_3d_printing.png</file>
+        <file>icons/logo_stacked_imager.png</file>
     </qresource>
 </RCC>

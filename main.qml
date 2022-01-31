@@ -63,7 +63,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
                 fillMode: Image.PreserveAspectFit
-                source: window.height > 700 ? "icons/rpi2-hires.png" : "icons/rpi2.png"
+                source: "icons/logo_stacked_imager.png"
                 width: window.width
                 height: window.height/2
             }

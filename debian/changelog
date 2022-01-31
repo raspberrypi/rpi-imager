@@ -1,4 +1,4 @@
-rpi-imager (1.6.3) unstable; urgency=medium
+rpi-imager (1.7.0) unstable; urgency=medium
 
   * Only apply advanced settings if the operating system indicates it
     supports it by "init_format": "cloudinit" | "systemd" in the
@@ -14,8 +14,10 @@ rpi-imager (1.6.3) unstable; urgency=medium
   * Add Slovenija translation
   * Adds support for zstd
   * Allow nested subitems entries
+  * Add word-wrapping to OS list (contributed by mzanetti)
+  * Update icons 
 
- -- Floris Bos <bos@je-eigen-domein.nl>  Sun, 23 Jan 2022 16:39:46 +0100
+ -- Floris Bos <bos@je-eigen-domein.nl>  Mon, 31 Jan 2022 13:33:47 +0100 
 
 rpi-imager (1.6.2) unstable; urgency=medium
 
