@@ -48,7 +48,7 @@ protected:
 
     QByteArray _popQueue();
     void _pushQueue(const char *data, size_t len);
-    virtual void _cancelExtract();
+    void _cancelExtract();
     virtual size_t _writeData(const char *buf, size_t len);
     virtual void _onDownloadSuccess();
     virtual void _onDownloadError(const QString &msg);
