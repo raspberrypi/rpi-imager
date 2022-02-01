@@ -144,8 +144,11 @@ Popup {
                                 if (!radioPasswordAuthentication.checked && !radioPubKeyAuthentication.checked) {
                                     radioPasswordAuthentication.checked = true
                                 }
-                                if (radioPasswordAuthentication.checked && !fieldUserPassword.length) {
-                                    fieldUserPassword.forceActiveFocus()
+                                if (radioPasswordAuthentication.checked) {
+                                    chkSetUser.checked = true
+                                    if (!fieldUserPassword.length) {
+                                        fieldUserPassword.forceActiveFocus()
+                                    }
                                 }
                             }
                         }
@@ -394,13 +397,13 @@ Popup {
             Button {
                 text: qsTr("SAVE")
                 onClicked: {
-                    if (chkSSH.checked && radioPasswordAuthentication.checked && fieldUserPassword.text.length == 0)
+                    if (chkSetUser.checked && fieldUserPassword.text.length == 0)
                     {
                         fieldUserPassword.indicateError = true
                         fieldUserPassword.forceActiveFocus()
                         return
                     }
-                    if (chkSSH.checked && fieldUserName.text.length == 0)
+                    if (chkSetUser.checked && fieldUserName.text.length == 0)
                     {
                         fieldUserName.indicateError = true
                         fieldUserName.forceActiveFocus()
@@ -463,9 +466,13 @@ Popup {
         if ('sshUserPassword' in settings) {
             fieldUserPassword.text = settings.sshUserPassword
             fieldUserPassword.alreadyCrypted = true
-            chkSSH.checked = true
-            radioPasswordAuthentication.checked = true
             chkSetUser.checked = true
+            /* Older imager versions did not have a sshEnabled setting.
+               Assume it is true if it does not exists and sshUserPassword is set */
+            if (!('sshEnabled' in settings) || settings.sshEnabled === "true") {
+                chkSSH.checked = true
+                radioPasswordAuthentication.checked = true
+            }
         }
         if ('sshUserName' in settings) {
             fieldUserName.text = settings.sshUserName
@@ -779,14 +786,14 @@ Popup {
             if (chkHostname.checked && fieldHostname.length) {
                 settings.hostname = fieldHostname.text
             }
-            if (chkSSH.checked) {
+            if (chkSetUser.checked) {
                 settings.sshUserName = fieldUserName.text
-                if (radioPasswordAuthentication.checked) {
-                    settings.sshUserPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
-                }
-                if (radioPubKeyAuthentication.checked) {
-                    settings.sshAuthorizedKeys = fieldPublicKey.text
-                }
+                settings.sshUserPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
+            }
+
+            settings.sshEnabled = chkSSH.checked
+            if (chkSSH.checked && radioPubKeyAuthentication.checked) {
+                settings.sshAuthorizedKeys = fieldPublicKey.text
             }
             if (chkWifi.checked) {
                 settings.wifiSSID = fieldWifiSSID.text
