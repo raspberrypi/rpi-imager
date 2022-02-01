@@ -56,7 +56,7 @@ DownloadExtractThread::~DownloadExtractThread()
 {
     _cancelled = true;
     _cancelExtract();
-    if (!_extractThread->wait(2000))
+    if (!_extractThread->wait(10000))
     {
         _extractThread->terminate();
     }
@@ -106,7 +106,7 @@ void DownloadExtractThread::_cancelExtract()
     _queue.clear();
     _queue.push_back(QByteArray());
     lock.unlock();
-    _cv.notify_one();
+    _cv.notify_all();
 }
 
 void DownloadExtractThread::cancelDownload()
