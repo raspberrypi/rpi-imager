@@ -3,7 +3,7 @@ Upstream-Name: rpi-imager
 Source: 
 
 Files: *
-Copyright: 2020 Raspberry Pi (Trading) Limited
+Copyright: 2020 Raspberry Pi Ltd
 License: Apache-2.0
 
 Files: dependencies/mountutils/* dependencies/drivelist/*

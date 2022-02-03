@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2021 Raspberry Pi (Trading) Limited
+ * Copyright (C) 2021 Raspberry Pi Ltd
  */
 
 import QtQuick 2.9

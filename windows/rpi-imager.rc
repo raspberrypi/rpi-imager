@@ -11,7 +11,7 @@ PRODUCTVERSION IMAGER_VERSION_CSV
     {
         BLOCK "040904b0"
         {
-            VALUE "CompanyName",     "Raspberry Pi"
+            VALUE "CompanyName",     "Raspberry Pi Ltd"
             VALUE "FileDescription", "Raspberry Pi Imager"
         }
     }

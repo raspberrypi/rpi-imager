@@ -3,7 +3,7 @@
 
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2020 Raspberry Pi (Trading) Limited
+ * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
 #include <QThread>

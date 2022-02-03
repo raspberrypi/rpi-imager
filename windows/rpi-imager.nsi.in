@@ -5,11 +5,10 @@
 ############################################################################################
 
 !define APP_NAME "Raspberry Pi Imager"
-!define COMP_NAME "Raspberry Pi"
-#!define WEB_SITE "https://www.raspberrypi.org/"
+!define COMP_NAME "Raspberry Pi Ltd"
 !define VERSION "@IMAGER_VERSION_STR@"
 !define INSTALLER_NAME "imager-${VERSION}.exe"
-!define COPYRIGHT "Raspberry Pi"
+!define COPYRIGHT "Raspberry Pi Ltd"
 !define DESCRIPTION "Raspberry Pi Imager"
 !define MAIN_APP_EXE "rpi-imager.exe"
 !define INSTALL_TYPE "SetShellVarContext current"
