@@ -1,3 +1,10 @@
+rpi-imager (1.7.1) unstable; urgency=medium
+
+  * Fix advanced settings being broken if there are saved wifi
+    settings and wifiSSIDHidden is not present
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 03 Feb 2022 18:38:15 +0100
+
 rpi-imager (1.7.0) unstable; urgency=medium
 
   * Only apply advanced settings if the operating system indicates it

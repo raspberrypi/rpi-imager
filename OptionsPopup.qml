@@ -469,7 +469,7 @@ Popup {
             chkSetUser.checked = true
             /* Older imager versions did not have a sshEnabled setting.
                Assume it is true if it does not exists and sshUserPassword is set */
-            if (!('sshEnabled' in settings) || settings.sshEnabled === "true") {
+            if (!('sshEnabled' in settings) || settings.sshEnabled === "true" || settings.sshEnabled === true) {
                 chkSSH.checked = true
                 radioPasswordAuthentication.checked = true
             }
@@ -485,7 +485,9 @@ Popup {
         }
         if ('wifiSSID' in settings) {
             fieldWifiSSID.text = settings.wifiSSID
-            chkWifiSSIDHidden.checked = settings.wifiSSIDHidden
+            if ('wifiSSIDHidden' in settings && settings.wifiSSIDHidden) {
+                chkWifiSSIDHidden.checked = true
+            }
             chkShowPassword.checked = false
             fieldWifiPassword.text = settings.wifiPassword
             fieldWifiCountry.currentIndex = fieldWifiCountry.find(settings.wifiCountry)
@@ -798,7 +800,9 @@ Popup {
             }
             if (chkWifi.checked) {
                 settings.wifiSSID = fieldWifiSSID.text
-                settings.wifiSSIDHidden = chkWifiSSIDHidden.checked
+                if (chkWifiSSIDHidden.checked) {
+                    settings.wifiSSIDHidden = true
+                }
                 settings.wifiPassword = fieldWifiPassword.text
                 settings.wifiCountry = fieldWifiCountry.editText
             }
