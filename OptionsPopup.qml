@@ -556,6 +556,7 @@ Popup {
         }
 
         open()
+        popupbody.forceActiveFocus()
     }
 
     function addCmdline(s) {
