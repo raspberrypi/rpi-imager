@@ -14,7 +14,7 @@ class DownloadStatsTelemetry : public QThread
 {
     Q_OBJECT
 public:
-    explicit DownloadStatsTelemetry(const QByteArray &url, const QByteArray &parentcategory, const QByteArray &osname, QObject *parent = nullptr);
+    explicit DownloadStatsTelemetry(const QByteArray &url, const QByteArray &parentcategory, const QByteArray &osname, bool embedded, const QString &imagerLang, QObject *parent = nullptr);
 
 protected:
     CURL *_c;

@@ -16,8 +16,12 @@ rpi-imager (1.7.0) unstable; urgency=medium
   * Allow nested subitems entries
   * Add word-wrapping to OS list (contributed by mzanetti)
   * Update icons 
+  * Telemetry: phone back home when image from repository is written:
+    - name of image written, parent category.
+    - about the computer running Imager: OS, version, architecture,
+      locale, Imager version, Pi revision.
 
- -- Floris Bos <bos@je-eigen-domein.nl>  Mon, 31 Jan 2022 13:33:47 +0100 
+ -- Floris Bos <bos@je-eigen-domein.nl>  Wed, 02 Feb 2022 19:47:17 +0100
 
 rpi-imager (1.6.2) unstable; urgency=medium
 

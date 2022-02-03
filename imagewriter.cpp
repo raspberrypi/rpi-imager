@@ -170,6 +170,7 @@ ImageWriter::ImageWriter(QObject *parent)
         if (langcode == currentlangcode)
         {
             _currentLang = langname;
+            _currentLangcode = currentlangcode;
         }
     }
     //_currentKeyboard = "us";
@@ -278,7 +279,7 @@ void ImageWriter::startWrite()
         _thread = new DownloadExtractThread(urlstr, _dst.toLatin1(), _expectedHash, this);
         if (_repo.toString() == OSLIST_URL)
         {
-            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), this);
+            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), _embeddedMode, _currentLangcode, this);
             connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
             tele->start();
         }
@@ -1136,6 +1137,7 @@ void ImageWriter::changeLanguage(const QString &newLanguageName)
     {
         replaceTranslator(trans);
         _currentLang = newLanguageName;
+        _currentLangcode = langcode;
     }
     else
     {
