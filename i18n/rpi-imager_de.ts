@@ -83,7 +83,7 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="287"/>
         <source>Write error while zero&apos;ing out MBR</source>
-        <translation>Schreibfehler während dem Löschen des MBR</translation>
+        <translation>Schreibfehler während des Löschens des MBR</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="299"/>
@@ -103,7 +103,7 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="853"/>
         <source>Waiting for FAT partition to be mounted</source>
-        <translation>Warten auf das Mounten der FAT-Partition</translation>
+        <translation>Warten auf das Einbinden der FAT-Partition</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="939"/>
@@ -382,7 +382,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="258"/>
         <source>Configure wifi</source>
-        <translation>Wifi enrichten</translation>
+        <translation>Wifi einrichten</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="277"/>
@@ -398,12 +398,12 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="197"/>
         <source>Set username and password</source>
-        <translation type="unfinished"></translation>
+        <translation>Benutzername und Passwort setzen:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="216"/>
         <source>Username:</source>
-        <translation type="unfinished"></translation>
+        <translation>Benutzername:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="292"/>
@@ -443,7 +443,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="366"/>
         <source>Persistent settings</source>
-        <translation>Dauerhafte Einstellugen</translation>
+        <translation>Dauerhafte Einstellungen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="374"/>
@@ -603,7 +603,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="163"/>
         <source>Select this button to change the destination storage device</source>
-        <translation>Klicken Sie auf diesen Knopf, um das Zeil-Speichermedium zu ändern</translation>
+        <translation>Klicken Sie auf diesen Knopf, um das Ziel-Speichermedium zu ändern</translation>
     </message>
     <message>
         <location filename="../main.qml" line="268"/>
@@ -740,12 +740,12 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="1028"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; wurde auf&lt;b&gt;%2&lt;/b&gt; geschrieben</translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; wurde auf &lt;b&gt;%2&lt;/b&gt; geschrieben</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1030"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; wurde auf&lt;b&gt;%2&lt;/b&gt; geschrieben&lt;br&gt;&lt;br&gt;Sie können die SD-Karte nun aus dem Lesegerät entfernen</translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; wurde auf &lt;b&gt;%2&lt;/b&gt; geschrieben&lt;br&gt;&lt;br&gt;Sie können die SD-Karte nun aus dem Lesegerät entfernen</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1096"/>
