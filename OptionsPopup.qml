@@ -802,7 +802,7 @@ Popup {
                 if (chkWifiSSIDHidden.checked) {
                     settings.wifiSSIDHidden = true
                 }
-                settings.wifiPassword = fieldWifiPassword.text
+                settings.wifiPassword = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
                 settings.wifiCountry = fieldWifiCountry.editText
             }
             if (chkLocale.checked) {
