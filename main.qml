@@ -8,6 +8,7 @@ import QtQuick.Window 2.2
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
+import "qmlcomponents"
 
 ApplicationWindow {
     id: window
@@ -105,10 +106,9 @@ ApplicationWindow {
                         horizontalAlignment: Text.AlignHCenter
                     }
 
-                    Button {
+                    ImButton {
                         id: osbutton
                         text: imageWriter.srcFileName() === "" ? qsTr("CHOOSE OS") : imageWriter.srcFileName()
-                        font.family: roboto.name
                         spacing: 0
                         padding: 0
                         bottomPadding: 0
@@ -119,11 +119,8 @@ ApplicationWindow {
                             ospopup.open()
                             osswipeview.currentItem.forceActiveFocus()
                         }
-                        Material.background: "#ffffff"
-                        Material.foreground: "#c51a4a"
                         Accessible.ignored: ospopup.visible || dstpopup.visible
                         Accessible.description: qsTr("Select this button to change the operating system")
-                        Accessible.onPressAction: clicked()
                     }
                 }
 
@@ -145,10 +142,9 @@ ApplicationWindow {
                         horizontalAlignment: Text.AlignHCenter
                     }
 
-                    Button {
+                    ImButton {
                         id: dstbutton
                         text: qsTr("CHOOSE STORAGE")
-                        font.family: roboto.name
                         Layout.minimumHeight: 40
                         Layout.preferredWidth: 100
                         Layout.fillWidth: true
@@ -157,11 +153,8 @@ ApplicationWindow {
                             dstpopup.open()
                             dstlist.forceActiveFocus()
                         }
-                        Material.background: "#ffffff"
-                        Material.foreground: "#c51a4a"
                         Accessible.ignored: ospopup.visible || dstpopup.visible
                         Accessible.description: qsTr("Select this button to change the destination storage device")
-                        Accessible.onPressAction: clicked()
                     }
                 }
 
@@ -175,18 +168,14 @@ ApplicationWindow {
                         Layout.preferredWidth: 100
                     }
 
-                    Button {
+                    ImButton {
                         id: writebutton
                         text: qsTr("WRITE")
-                        font.family: roboto.name
                         Layout.minimumHeight: 40
                         Layout.fillWidth: true
                         Accessible.ignored: ospopup.visible || dstpopup.visible
                         Accessible.description: qsTr("Select this button to start writing the image")
-
                         enabled: false
-                        Material.background: "#ffffff"
-                        Material.foreground: "#c51a4a"
                         onClicked: {
                             if (!imageWriter.readyToWrite()) {
                                 return
@@ -198,7 +187,6 @@ ApplicationWindow {
                                 confirmwritepopup.askForConfirmation()
                             }
                         }
-                        Accessible.onPressAction: clicked()
                     }
                 }
 
@@ -225,7 +213,7 @@ ApplicationWindow {
                         Material.background: "#d15d7d"
                     }
 
-                    Button {
+                    ImButton {
                         id: cancelwritebutton
                         text: qsTr("CANCEL WRITE")
                         onClicked: {
@@ -233,14 +221,10 @@ ApplicationWindow {
                             progressText.text = qsTr("Cancelling...")
                             imageWriter.cancelWrite()
                         }
-                        Material.background: "#ffffff"
-                        Material.foreground: "#c51a4a"
                         Layout.alignment: Qt.AlignRight
                         visible: false
-                        font.family: roboto.name
-                        Accessible.onPressAction: clicked()
                     }
-                    Button {
+                    ImButton {
                         id: cancelverifybutton
                         text: qsTr("CANCEL VERIFY")
                         onClicked: {
@@ -248,26 +232,19 @@ ApplicationWindow {
                             progressText.text = qsTr("Finalizing...")
                             imageWriter.setVerifyEnabled(false)
                         }
-                        Material.background: "#ffffff"
-                        Material.foreground: "#c51a4a"
                         Layout.alignment: Qt.AlignRight
                         visible: false
-                        font.family: roboto.name
-                        Accessible.onPressAction: clicked()
                     }
 
-                    Button {
+                    ImButton {
                         Layout.bottomMargin: 25
                         padding: 5
                         id: customizebutton
                         onClicked: {
                             optionspopup.openPopup()
                         }
-                        Material.background: "#ffffff"
                         visible: false
                         Accessible.description: qsTr("Select this button to access advanced settings")
-                        Accessible.onPressAction: clicked()
-
                         contentItem: Image {
                             source: "icons/ic_cog_red.svg"
                             fillMode: Image.PreserveAspectFit
@@ -458,6 +435,8 @@ ApplicationWindow {
                             if (currentIndex != -1)
                                 selectOSitem(model.get(currentIndex), true)
                         }
+                        Keys.onEnterPressed: Keys.onSpacePressed(event)
+                        Keys.onReturnPressed: Keys.onSpacePressed(event)
                     }
                 }
             }
@@ -505,6 +484,8 @@ ApplicationWindow {
                 if (currentIndex != -1)
                     selectOSitem(model.get(currentIndex))
             }
+            Keys.onEnterPressed: Keys.onSpacePressed(event)
+            Keys.onReturnPressed: Keys.onSpacePressed(event)
         }
     }
 
@@ -766,6 +747,8 @@ ApplicationWindow {
                             return
                         selectDstItem(currentItem)
                     }
+                    Keys.onEnterPressed: Keys.onSpacePressed(event)
+                    Keys.onReturnPressed: Keys.onSpacePressed(event)
                 }
             }
         }

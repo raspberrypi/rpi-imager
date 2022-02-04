@@ -7,6 +7,7 @@ import QtQuick 2.9
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
+import "qmlcomponents"
 
 Popup {
     id: popup
@@ -112,12 +113,12 @@ Popup {
                 ColumnLayout {
                     spacing: -10
 
-                    CheckBox {
+                    ImCheckBox {
                         id: chkOverscan
                         text: qsTr("Disable overscan")
                     }
                     RowLayout {
-                        CheckBox {
+                        ImCheckBox {
                             id: chkHostname
                             text: qsTr("Set hostname:")
                             onCheckedChanged: {
@@ -136,7 +137,7 @@ Popup {
                             color: chkHostname.checked ? "black" : "grey"
                         }
                     }
-                    CheckBox {
+                    ImCheckBox {
                         id: chkSSH
                         text: qsTr("Enable SSH")
                         onCheckedChanged: {
@@ -158,7 +159,7 @@ Popup {
                         Layout.leftMargin: 40
                         spacing: -10
 
-                        RadioButton {
+                        ImRadioButton {
                             id: radioPasswordAuthentication
                             text: qsTr("Use password authentication")
                             onCheckedChanged: {
@@ -168,7 +169,7 @@ Popup {
                                 }
                             }
                         }
-                        RadioButton {
+                        ImRadioButton {
                             id: radioPubKeyAuthentication
                             text: qsTr("Allow public-key authentication only")
                             onCheckedChanged: {
@@ -195,7 +196,7 @@ Popup {
                         }
                     }
 
-                    CheckBox {
+                    ImCheckBox {
                         id: chkSetUser
                         text: qsTr("Set username and password")
                         onCheckedChanged: {
@@ -256,7 +257,7 @@ Popup {
                         }
                     }
 
-                    CheckBox {
+                    ImCheckBox {
                         id: chkWifi
                         text: qsTr("Configure wifi")
                         onCheckedChanged: {
@@ -289,7 +290,7 @@ Popup {
                             }
                         }
 
-                        CheckBox {
+                        ImCheckBox {
                             id: chkWifiSSIDHidden
                             Layout.columnSpan: 2
                             text: qsTr("Hidden SSID")
@@ -310,7 +311,7 @@ Popup {
                             }
                         }
 
-                        CheckBox {
+                        ImCheckBox {
                             id: chkShowPassword
                             Layout.columnSpan: 2
                             text: qsTr("Show password")
@@ -327,7 +328,7 @@ Popup {
                         }
                     }
 
-                    CheckBox {
+                    ImCheckBox {
                         id: chkLocale
                         text: qsTr("Set locale settings")
                     }
@@ -357,7 +358,7 @@ Popup {
                             editable: true
                             Layout.minimumWidth: 200
                         }
-                        CheckBox {
+                        ImCheckBox {
                             id: chkSkipFirstUse
                             text: qsTr("Skip first-run wizard")
                         }
@@ -372,15 +373,15 @@ Popup {
                 ColumnLayout {
                     spacing: -10
 
-                    CheckBox {
+                    ImCheckBox {
                         id: chkBeep
                         text: qsTr("Play sound when finished")
                     }
-                    CheckBox {
+                    ImCheckBox {
                         id: chkEject
                         text: qsTr("Eject media when finished")
                     }
-                    CheckBox {
+                    ImCheckBox {
                         id: chkTelemtry
                         text: qsTr("Enable telemetry")
                     }
@@ -394,7 +395,7 @@ Popup {
             Layout.bottomMargin: 10
             spacing: 20
 
-            Button {
+            ImButton {
                 text: qsTr("SAVE")
                 onClicked: {
                     if (chkSetUser.checked && fieldUserPassword.text.length == 0)
@@ -432,10 +433,8 @@ Popup {
                     saveSettings()
                     popup.close()
                 }
-                Material.foreground: "#ffffff"
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
-                font.family: roboto.name
-                Accessible.onPressAction: clicked()
             }
 
             Text { text: " " }

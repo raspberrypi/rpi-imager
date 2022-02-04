@@ -7,6 +7,7 @@ import QtQuick 2.9
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
+import "qmlcomponents"
 
 Popup {
     id: msgpopup
@@ -90,40 +91,34 @@ Popup {
             Layout.bottomMargin: 10
             spacing: 20
 
-            Button {
+            ImButton {
                 text: qsTr("NO, CLEAR SETTINGS")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.no()
                 }
-                Material.foreground: "#ffffff"
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
-                font.family: roboto.name
-                Accessible.onPressAction: clicked()
             }
 
-            Button {
+            ImButton {
                 text: qsTr("YES")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.yes()
                 }
-                Material.foreground: "#ffffff"
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
-                font.family: roboto.name
-                Accessible.onPressAction: clicked()
             }
 
-            Button {
+            ImButton {
                 text: qsTr("EDIT SETTINGS")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.editSettings()
                 }
-                Material.foreground: "#ffffff"
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
-                font.family: roboto.name
-                Accessible.onPressAction: clicked()
             }
 
             Text { text: " " }

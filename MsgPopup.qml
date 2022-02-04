@@ -7,6 +7,7 @@ import QtQuick 2.9
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
+import "qmlcomponents"
 
 Popup {
     id: msgpopup
@@ -93,54 +94,47 @@ Popup {
             Layout.bottomMargin: 10
             spacing: 20
 
-            Button {
+            ImButton {
                 text: qsTr("NO")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.no()
                 }
-                Material.foreground: "#ffffff"
-                Material.background: "#c51a4a"
-                font.family: roboto.name
                 visible: msgpopup.noButton
-                Accessible.onPressAction: clicked()
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+                Material.background: "#c51a4a"
             }
 
-            Button {
+            ImButton {
                 text: qsTr("YES")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.yes()
                 }
-                Material.foreground: "#ffffff"
-                Material.background: "#c51a4a"
-                font.family: roboto.name
                 visible: msgpopup.yesButton
-                Accessible.onPressAction: clicked()
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+                Material.background: "#c51a4a"
             }
 
-            Button {
+            ImButton {
                 text: qsTr("CONTINUE")
                 onClicked: {
                     msgpopup.close()
                 }
-                Material.foreground: "#ffffff"
-                Material.background: "#c51a4a"
-                font.family: roboto.name
                 visible: msgpopup.continueButton
-                Accessible.onPressAction: clicked()
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+                Material.background: "#c51a4a"
             }
 
-            Button {
+            ImButton {
                 text: qsTr("QUIT")
                 onClicked: {
                     Qt.quit()
                 }
-                Material.foreground: "#ffffff"
-                Material.background: "#c51a4a"
                 font.family: roboto.name
                 visible: msgpopup.quitButton
-                Accessible.onPressAction: clicked()
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+                Material.background: "#c51a4a"
             }
 
             Text { text: " " }
