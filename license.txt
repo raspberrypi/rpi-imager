@@ -38,6 +38,9 @@ This software depends on the following third-party components covered by open so
 fat32format is only used on the Windows platform
 (to get around 32 GB limit of the official Windows format command)
 
+The embedded build -created with buildroot- also includes other software
+such as the Linux kernel, busybox, udev and util-linux.
+See embedded/legal-info for additional license details.
 
 ==
 Qt license

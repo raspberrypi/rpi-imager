@@ -1,0 +1,21 @@
+config BR2_PACKAGE_RPI_IMAGER
+        bool "rpi-imager"
+        select BR2_PACKAGE_QT5
+        select BR2_PACKAGE_QT5BASE_GUI
+        select BR2_PACKAGE_QT5BASE_CONCURRENT
+        select BR2_PACKAGE_QT5BASE_JPEG
+        select BR2_PACKAGE_QT5BASE_PNG
+        select BR2_PACKAGE_QT5SVG
+        select BR2_PACKAGE_QT5QUICKCONTROLS2
+        select BR2_PACKAGE_LIBCURL
+        select BR2_PACKAGE_LIBARCHIVE
+        select BR2_PACKAGE_ZSTD        
+        select BR2_PACKAGE_DOSFSTOOLS
+        select BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT
+        select BR2_PACKAGE_OPENSSL
+        select BR2_PACKAGE_CA_CERTIFICATES
+        select BR2_PACKAGE_QT5TOOLS
+        select BR2_PACKAGE_QT5TOOLS_LINGUIST_TOOLS
+        
+        help
+          Raspberry Pi Imager

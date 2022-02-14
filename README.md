@@ -9,6 +9,7 @@ Raspberry Pi Imaging Utility
 
 The main code of the Imaging Utility is made available under the terms of the Apache license.
 See license.txt and files in "src/dependencies" folder for more information about the various open source licenses that apply to the third-party dependencies used such as Qt, libarchive, drivelist, mountutils and libcurl.
+For the embedded (netboot) build see also "embedded/legal-info" for more information about the extra system software included in that.
 
 ## How to rebuild
 
@@ -91,7 +92,7 @@ sudo make install
 - Get the Qt online installer from: https://www.qt.io/download-open-source
 During installation, choose a Qt 5.x with Mingw32 32-bit toolchain and CMake.
 
-- If using the official Qt distribution that does NOT have schannel (Windows native SSL library) support, compile OpenSSL libraries ( https://wiki.qt.io/Compiling_OpenSSL_with_MinGW ) and copy the libssl/crypto DLLs to C:\qt\5.x\mingw73_32\bin
+- If using the official Qt distribution that does NOT have schannel (Windows native SSL library) support, compile OpenSSL libraries ( https://wiki.qt.io/Compiling_OpenSSL_with_MinGW ) and copy the libssl/crypto DLLs to C:\qt\5.x\mingw73_32\bin  the include files to C:\qt\5.x\mingw73_32\include and the import library files to C:\qt\5.x\mingw73_32\lib
 
 - For building installer get Nullsoft scriptable install system: https://nsis.sourceforge.io/Download
 
@@ -139,6 +140,23 @@ mv Raspberry\ Pi\ Imager\ .dmg imager.dmg
 xcrun altool --notarize-app -t osx -f imager.dmg --primary-bundle-id="org.raspberrypi.imagingutility" -u YOUR-EMAIL-ADDRESS -p YOUR-APP-SPECIFIC-APPLE-PASSWORD -itc_provider TEAM-ID-IF-APPLICABLE
 xcrun stapler staple imager.dmg
 ```
+
+### Linux embedded (netboot) build
+
+The embedded build runs under a minimalistic Linux distribution compiled by buildroot.
+To build:
+
+- You must be running a Linux system, and have the buildroot dependencies installed as listed in the buildroot manual: https://buildroot.org/downloads/manual/manual.html#requirement
+- Run:
+
+```
+cd rpi-imager/embedded
+./build.sh
+```
+
+The result will be in the "output" directory.
+The files can be copied to a FAT32 formatted SD card, and inserted in a Pi for testing.
+If you would like to build a (signed) netboot image there are tools for that at: https://github.com/raspberrypi/usbboot/tree/master/tools
 
 ## Other notes
 

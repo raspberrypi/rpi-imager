@@ -1,0 +1,2 @@
+source "$BR2_EXTERNAL_IMAGER_PATH/package/rpi-imager/Config.in"
+source "$BR2_EXTERNAL_IMAGER_PATH/package/rpi-firmware-custom/Config.in"

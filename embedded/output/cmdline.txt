@@ -1,0 +1,1 @@
+quiet console=serial0,115200 debugconsole

@@ -1,0 +1,42 @@
+#!/bin/sh
+
+#
+# Script executed at start
+#
+
+# Bail out on any error
+set -e
+
+case "$1" in
+  start)
+    #udevd --daemon
+    #udevadm trigger
+    if [ ! -e /dev/input/event0 ]; then
+        echo ""
+        echo "No input device detected"
+        echo "Remove micro-USB cable and attach mouse to continue"
+        echo ""
+        until [ -e /dev/input/event0 ]
+        do
+            sleep 0.1
+        done
+        clear
+    fi
+
+    echo Starting rpi-imager
+    export QT_QPA_EGLFS_ALWAYS_SET_MODE=1
+    PATH=/bin:/sbin:/usr/bin:/usr/sbin rpi-imager 2>/tmp/debug
+    sync
+    reboot -f
+    ;;
+
+  stop)
+    ;;
+  
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1  
+    ;;
+esac
+
+exit $?
