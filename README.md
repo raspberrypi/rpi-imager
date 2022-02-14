@@ -8,7 +8,7 @@ Raspberry Pi Imaging Utility
 ## License
 
 The main code of the Imaging Utility is made available under the terms of the Apache license.
-See license.txt and files in "dependencies" folder for more information about the various open source licenses that apply to the third-party dependencies used such as Qt, libarchive, drivelist, mountutils and libcurl.
+See license.txt and files in "src/dependencies" folder for more information about the various open source licenses that apply to the third-party dependencies used such as Qt, libarchive, drivelist, mountutils and libcurl.
 
 ## How to rebuild
 
@@ -77,7 +77,9 @@ git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 
 ```
 cd rpi-imager
-cmake .
+mkdir -p build
+cd build
+cmake ../src
 make
 sudo make install
 ```
@@ -101,10 +103,10 @@ If NOT and are you only compiling for your own personal use, comment out all lin
 Building can be done manually using the command-line, using "cmake", "make", etc., but if you are not that familar with setting up a proper Windows build environment (setting paths, etc.), it is easiest to use the Qt creator GUI instead.
 
 - Download source .zip from github and extract it to a folder on disk
-- Open CMakeLists.txt in Qt creator.
+- Open src/CMakeLists.txt in Qt creator.
 - For builds you distribute to others, make sure you choose "Release" in the toolchain settings and not the debug flavour.
 - Menu "Build" -> "Build all"
-- Result will be in ../build_rpi-imager_someversion
+- Result will be in build_rpi-imager_someversion
 - Go to the BUILD folder, right click on the .nsi script "Compile NSIS script", to create installer.
 
 Note: the CMake integration in Qt Creator is a bit flaky at times. If you made any custom changes to the CMakeLists.txt file and it subsequently gets in an endless loop where it never finishes the "configures" stage while re-processing the file, delete "build_rpi-imager_someversion" directory and try again.
@@ -121,9 +123,9 @@ During installation, choose a Qt 5.x edition and CMake.
 #### Building
 
 - Download source .zip from github and extract it to a folder on disk
-- Start Qt Creator (may need to start "finder" navigate to home folder using the "Go" menu, and find Qt folder to start it manually as it may not have created icon in Applications), and open CMakeLists.txt
+- Start Qt Creator (may need to start "finder" navigate to home folder using the "Go" menu, and find Qt folder to start it manually as it may not have created icon in Applications), and open src/CMakeLists.txt
 - Menu "Build" -> "Build all"
-- Result will be in ../build_rpi-imager_someversion
+- Result will be in build_rpi-imager_someversion
 - For distribution to others: code sign the .app, create a DMG, code sign the DMG, submit it for notarization to Apple and staple the notarization ticket to the DMG.
 
 E.g.:
