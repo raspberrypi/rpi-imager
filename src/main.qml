@@ -1143,7 +1143,7 @@ ApplicationWindow {
 
             if ("imager" in o) {
                 var imager = o["imager"]
-                if ("latest_version" in imager && "url" in imager) {
+                if (imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
                     if (!imageWriter.isEmbeddedMode() && imageWriter.isVersionNewer(imager["latest_version"])) {
                         updatepopup.url = imager["url"]
                         updatepopup.openPopup()

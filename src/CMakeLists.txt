@@ -6,6 +6,9 @@ if (APPLE)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
 endif()
 
+OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
+OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
+
 project(rpi-imager LANGUAGES CXX C)
 set(IMAGER_VERSION_MAJOR 1)
 set(IMAGER_VERSION_MINOR 7)
@@ -105,6 +108,18 @@ if(iposupported)
     set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 else()
     message(STATUS "LTO not supported: <${ipoerror}>")
+endif()
+
+if(ENABLE_TELEMETRY)
+    add_definitions(-DTELEMETRY_ENABLED_DEFAULT=true)
+else()
+    add_definitions(-DTELEMETRY_ENABLED_DEFAULT=false)
+endif()
+
+if(ENABLE_CHECK_VERSION)
+    add_definitions(-DCHECK_VERSION_DEFAULT=true)
+else()
+    add_definitions(-DCHECK_VERSION_DEFAULT=false)
 endif()
 
 # Because dependencies are typically not available by default on Windows, build bundled code
