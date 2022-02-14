@@ -65,20 +65,6 @@ CONFIG_NFS_FS=n
 CONFIG_IP_PNP=n
 CONFIG_MODULES=n
 
-#
-# Alternative USB driver
-# If used, you must also built the dwc2 overlay, 
-# and enable it in config.txt
-#
-
-CONFIG_USB_DWC2=y
-#CONFIG_USB_GADGET=y
-#CONFIG_USB_CONFIGFS=y
-#CONFIG_USB_CONFIGFS_SERIAL=y
-#CONFIG_USB_CONFIGFS_ACM=y
-#CONFIG_USB_CONFIGFS_ECM=y
-
-
 # Extra filessytems for using images from USB stick
 
 CONFIG_EXFAT_FS=y
@@ -153,6 +139,6 @@ CONFIG_BLK_DEBUG_FS=n
 CONFIG_RELAY=n
 CONFIG_AUDIT=n
 CONFIG_KALLSYMS=n
-
+CONFIG_USB_DWCOTG=n
 
 
