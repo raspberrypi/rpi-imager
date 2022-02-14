@@ -174,6 +174,9 @@ Popup {
                             text: qsTr("Allow public-key authentication only")
                             onCheckedChanged: {
                                 if (checked) {
+                                    if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
+                                        chkSetUser.checked = false
+                                    }
                                     fieldPublicKey.forceActiveFocus()
                                 }
                             }
@@ -462,6 +465,12 @@ Popup {
             fieldHostname.text = settings.hostname
             chkHostname.checked = true
         }
+        if ('sshAuthorizedKeys' in settings) {
+            fieldPublicKey.text = settings.sshAuthorizedKeys
+            radioPubKeyAuthentication.checked = true
+            chkSSH.checked = true
+        }
+
         if ('sshUserPassword' in settings) {
             fieldUserPassword.text = settings.sshUserPassword
             fieldUserPassword.alreadyCrypted = true
@@ -476,11 +485,6 @@ Popup {
         if ('sshUserName' in settings) {
             fieldUserName.text = settings.sshUserName
             chkSetUser.checked = true
-        }
-        if ('sshAuthorizedKeys' in settings) {
-            fieldPublicKey.text = settings.sshAuthorizedKeys
-            chkSSH.checked = true
-            radioPubKeyAuthentication.checked = true
         }
         if ('wifiSSID' in settings) {
             fieldWifiSSID.text = settings.wifiSSID
