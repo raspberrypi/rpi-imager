@@ -151,6 +151,14 @@ void DownloadExtractThread::extractImageRun()
                 throw runtime_error(archive_error_string(a));
             if (size == 0)
                 break;
+            if (size % 512 != 0)
+            {
+                size_t paddingBytes = 512-(size % 512);
+                qDebug() << "Image is NOT a valid disk image, as its length is not a multiple of the sector size of 512 bytes long";
+                qDebug() << "Last write() would be" << size << "bytes, but padding to" << size + paddingBytes << "bytes";
+                memset(_abuf[_activeBuf]+size, 0, paddingBytes);
+                size += paddingBytes;
+            }
 
             if (_writeThreadStarted)
             {
