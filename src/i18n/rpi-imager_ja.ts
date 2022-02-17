@@ -55,7 +55,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="198"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation type="unfinished"</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="219"/>
@@ -721,7 +721,7 @@
     <message>
         <location filename="../main.qml" line="1026"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b%gt;%1&lt;/b&gt; は削除されました。&lt;br&gt;&lt;bt&gt;SDカードをSDカードリーダーから取り出しても良いです。/translation>
+        <translation>&lt;b%gt;%1&lt;/b&gt; は削除されました。&lt;br&gt;&lt;bt&gt;SDカードをSDカードリーダーから取り出しても良いです。</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1028"/>
