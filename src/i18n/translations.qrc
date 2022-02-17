@@ -10,6 +10,6 @@
         <file>rpi-imager_tr.qm</file>
         <file>rpi-imager_zh.qm</file>
         <file>rpi-imager_ca.qm</file>
-        <file>rpi-imager_ja.pm</file>
+        <file>rpi-imager_ja.qm</file>
     </qresource>
 </RCC>
