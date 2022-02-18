@@ -463,6 +463,7 @@ ApplicationWindow {
                     tooltip: ""
                     website: ""
                     init_format: ""
+                    compatibility: ""
                 }
             }
 
@@ -491,32 +492,10 @@ ApplicationWindow {
 
     ListModel {
         id: osmodel
-
-        ListElement {
-            url: "internal://format"
-            icon: "icons/erase.png"
-            extract_size: 0
-            image_download_size: 0
-            extract_sha256: ""
-            contains_multiple_files: false
-            release_date: ""
-            subitems_url: ""
-            subitems_json: ""
-            name: qsTr("Erase")
-            description: qsTr("Format card as FAT32")
-            tooltip: ""
-            website: ""
-            init_format: ""
-        }
-
-        ListElement {
-            url: ""
-            icon: "icons/use_custom.png"
-            name: qsTr("Use custom")
-            description: qsTr("Select a custom .img from your computer")
-        }
-
+        dynamicRoles: true
         Component.onCompleted: {
+            append({url: "internal://format", icon: "icons/erase.png", name: qsTr("Erase"), description: qsTr("Format card as FAT32")})
+            append({icon: "icons/use_custom.png", name: qsTr("Use custom"), description: qsTr("Select a custom .img from your computer")})
             if (imageWriter.isOnline()) {
                 fetchOSlist();
             }
@@ -640,6 +619,28 @@ ApplicationWindow {
                                   ? qsTr("Local file")
                                   : qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1))
                     }
+
+                    RowLayout {
+                        Repeater {
+                            id: compatRepeater
+                            model: compatibility && compatibility !== "" ? compatibility.split(',') : 0
+                            delegate: Rectangle {
+                                color: "#004881"
+                                Layout.preferredHeight: childrenRect.height + 4
+                                Layout.preferredWidth: childrenRect.width + 8
+                                radius: 3
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    color: "white"
+                                    font.pixelSize: 10
+                                    font.family: roboto.name
+                                    font.weight: Font.Light
+                                }
+                            }
+                        }
+                    }
+
 
                     ToolTip {
                         visible: osMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
