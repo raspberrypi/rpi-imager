@@ -117,6 +117,10 @@ Popup {
                         id: chkOverscan
                         text: qsTr("Disable overscan")
                     }
+                    ImCheckBox {
+                        id: chkEnableUart
+                        text: qsTr("Enable UART")
+                    }
                     RowLayout {
                         ImCheckBox {
                             id: chkHostname
@@ -461,6 +465,9 @@ Popup {
         if ('disableOverscan' in settings) {
             chkOverscan.checked = true
         }
+        if ('enableUart' in settings) {
+            chkEnableUart.checked = true
+        }
         if ('hostname' in settings) {
             fieldHostname.text = settings.hostname
             chkHostname.checked = true
@@ -602,6 +609,9 @@ Popup {
 
         if (chkOverscan.checked) {
             addConfig("disable_overscan=1")
+        }
+        if (chkEnableUart.checked) {
+            addConfig("enable_uart=1")
         }
         if (chkHostname.checked && fieldHostname.length) {
             addFirstRun("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\t\\n\\r\"`")
@@ -788,6 +798,9 @@ Popup {
             var settings = { };
             if (chkOverscan.checked) {
                 settings.disableOverscan = true
+            }
+            if (chkEnableUart.checked) {
+                settings.enableUart = true
             }
             if (chkHostname.checked && fieldHostname.length) {
                 settings.hostname = fieldHostname.text
