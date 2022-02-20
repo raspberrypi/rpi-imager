@@ -117,14 +117,6 @@ Popup {
                         id: chkOverscan
                         text: qsTr("Disable overscan")
                     }
-                    ImCheckBox {
-                        id: chk2ndStageUart
-                        text: qsTr("2nd Stage Bootloader UART")
-                    }
-                    ImCheckBox {
-                        id: chkEnableUart
-                        text: qsTr("Enable UART")
-                    }
                     RowLayout {
                         ImCheckBox {
                             id: chkHostname
@@ -373,6 +365,14 @@ Popup {
                             id: chkSkipFirstUse
                             text: qsTr("Skip first-run wizard")
                         }
+                    }
+                    ImCheckBox {
+                        id: chk2ndStageUart
+                        text: qsTr("2nd Stage Bootloader UART")
+                    }
+                    ImCheckBox {
+                        id: chkEnableUart
+                        text: qsTr("Enable UART")
                     }
                 }
             }
