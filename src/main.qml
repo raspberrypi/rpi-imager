@@ -918,6 +918,10 @@ ApplicationWindow {
         id: usesavedsettingspopup
         onYes: {
             optionspopup.initialize()
+            if (!optionspopup.initialized){
+                optionspopup.validate()
+                return
+            }
             optionspopup.applySettings()
             confirmwritepopup.askForConfirmation()
         }
