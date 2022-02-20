@@ -118,6 +118,10 @@ Popup {
                         text: qsTr("Disable overscan")
                     }
                     ImCheckBox {
+                        id: chk2ndStageUart
+                        text: qsTr("2nd Stage Bootloader UART")
+                    }
+                    ImCheckBox {
                         id: chkEnableUart
                         text: qsTr("Enable UART")
                     }
@@ -468,6 +472,9 @@ Popup {
         if ('enableUart' in settings) {
             chkEnableUart.checked = true
         }
+        if ('secondStageUart' in settings) {
+            chk2ndStageUart.checked = true;
+        }
         if ('hostname' in settings) {
             fieldHostname.text = settings.hostname
             chkHostname.checked = true
@@ -612,6 +619,9 @@ Popup {
         }
         if (chkEnableUart.checked) {
             addConfig("enable_uart=1")
+        }
+        if (chk2ndStageUart.checked) {
+            addConfig("uart_2ndstage=1")
         }
         if (chkHostname.checked && fieldHostname.length) {
             addFirstRun("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\t\\n\\r\"`")
@@ -801,6 +811,9 @@ Popup {
             }
             if (chkEnableUart.checked) {
                 settings.enableUart = true
+            }
+            if (chk2ndStageUart.checked) {
+                settings.secondStageUart = true;
             }
             if (chkHostname.checked && fieldHostname.length) {
                 settings.hostname = fieldHostname.text
