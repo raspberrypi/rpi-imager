@@ -52,6 +52,10 @@ CONFIG_I2C_BCM2708=y
 CONFIG_NEW_LEDS=y
 CONFIG_LEDS_TRIGGERS=y
 
+# Enable consulting EEPROM values through /sys/bus/nvmem/devices/rmem0/nvmem
+
+CONFIG_NVMEM_RMEM=y
+
 #
 # By default the defconfig likes to create some modules we do not need
 #
