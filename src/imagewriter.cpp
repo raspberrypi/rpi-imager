@@ -160,8 +160,8 @@ ImageWriter::ImageWriter(QObject *parent)
     {
         QString langcode = tf.mid(11, tf.length()-14);
         /* FIXME: we currently lack a font with support for Chinese characters in embedded mode */
-        if (isEmbeddedMode() && langcode == "zh")
-            continue;
+        //if (isEmbeddedMode() && langcode == "zh")
+        //    continue;
 
         QLocale loc(langcode);
         /* Use "English" for "en" and not "American English" */

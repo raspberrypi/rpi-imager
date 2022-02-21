@@ -76,6 +76,7 @@ int main(int argc, char *argv[])
     /* Set default font */
     QStringList fontList = QFontDatabase::applicationFontFamilies(QFontDatabase::addApplicationFont(":/fonts/Roboto-Regular.ttf"));
     QGuiApplication::setFont(QFont(fontList.first(), 10));
+    QFontDatabase::addApplicationFont(":/fonts/DroidSansFallback.ttf");
 
     QLocale::Language l = QLocale::system().language();
     if (l == QLocale::AnyLanguage || l == QLocale::C)
