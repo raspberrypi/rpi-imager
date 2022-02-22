@@ -55,7 +55,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="198"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imagerがリムーバブルボリュームへアクセスすることがプライバシー設定(「ファイルとフォルダー」の中、またはディスクへのすべてのアクセス権限を付与する)で許可されているかを確認してください。</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="219"/>
@@ -448,7 +448,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="382"/>
         <source>Enable telemetry</source>
-        <translation type="unfinished"></translation>
+        <translation>テレメトリーを有効化する</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="395"/>
@@ -639,7 +639,7 @@
     <message>
         <location filename="../main.qml" line="607"/>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">インターネットからダウンロードする (%1GB)</translation>
+        <translation>インターネットからダウンロードする (%1GB)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="769"/>
