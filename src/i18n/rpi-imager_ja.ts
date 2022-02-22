@@ -582,19 +582,19 @@
     </message>
     <message>
         <location filename="../main.qml" line="336"/>
-        <source>キーボード: </source>
-        <translation type="unfinished"></translation>
+        <source>Keyboard: </source>
+        <translation>キーボード: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="524"/>
         <location filename="../main.qml" line="1025"/>
-        <source>削除</source>
-        <translation type="unfinished"></translation>
+        <source>Erase</source>
+        <translation>削除</translation>
     </message>
     <message>
         <location filename="../main.qml" line="525"/>
-        <source>SDカードをFAT32としてフォーマットする</source>
-        <translation type="unfinished"></translation>
+        <source>Format card as FAT32</source>
+        <translation>カードをFAT32でフォーマットする</translation>
     </message>
     <message>
         <location filename="../main.qml" line="534"/>
