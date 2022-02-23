@@ -13,5 +13,5 @@ dtoverlay=disable-wifi
 arm_boost=1
 
 [cm4]
-# Pinmux SoC USB port to XHCI host-only controller
-otg_mode=1
+dtoverlay=dwc2,dr_mode=host
+

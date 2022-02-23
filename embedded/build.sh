@@ -35,6 +35,7 @@ touch output/bootcode.bin
 
 mkdir -p output/overlays
 
+mv -f output/dwc2-overlay.dtb output/overlays/dwc2.dtbo
 mv -f output/vc4-fkms-v3d-pi4-overlay.dtb output/overlays/vc4-fkms-v3d-pi4.dtbo
 mv -f output/vc4-kms-v3d-pi4-overlay.dtb output/overlays/vc4-kms-v3d-pi4.dtbo
 mv -f output/disable-bt-overlay.dtb output/overlays/disable-bt.dtbo
