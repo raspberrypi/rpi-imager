@@ -552,6 +552,13 @@ Popup {
             chkSkipFirstUse.checked = true
         }
 
+        if (imageWriter.isEmbeddedMode()) {
+            /* For some reason there is no password mask character set by default on Embedded edition */
+            var bulletCharacter = String.fromCharCode(0x2022);
+            fieldUserPassword.passwordCharacter = bulletCharacter;
+            fieldWifiPassword.passwordCharacter = bulletCharacter;
+        }
+
         initialized = true
     }
 
