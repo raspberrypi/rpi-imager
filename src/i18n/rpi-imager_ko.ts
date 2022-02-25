@@ -367,7 +367,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="185"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>&apos;%1&apos; authorized_keys 설정:</translation>
+        <translation>&apos;%1&apos; 인증키 설정:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="258"/>
