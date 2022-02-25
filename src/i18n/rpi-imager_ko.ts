@@ -448,7 +448,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="382"/>
         <source>Enable telemetry</source>
-        <translation>원격 측정 사용</translation>
+        <translation>이미지 다운로드 통계 관하여 정보 수집 허용</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="395"/>
