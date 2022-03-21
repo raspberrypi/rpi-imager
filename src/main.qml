@@ -13,6 +13,7 @@ import "qmlcomponents"
 ApplicationWindow {
     id: window
     visible: true
+    property alias writebutton: writebutton
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 420
@@ -463,6 +464,7 @@ ApplicationWindow {
                     tooltip: ""
                     website: ""
                     init_format: ""
+                    disable_user: false
                 }
             }
 
@@ -1272,13 +1274,22 @@ ApplicationWindow {
                 }
             }
         } else {
-            imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
+
+            imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name, d.disable_user, typeof(d.init_format) != "undefined" ? d.init_format : "")
             osbutton.text = d.name
             ospopup.close()
             if (imageWriter.readyToWrite()) {
                 writebutton.enabled = true
             }
             customizebutton.visible = imageWriter.imageSupportsCustomization()
+            if (imageWriter.imageSupportsCustomization()){
+
+                if (!optionspopup.initialized) {
+                    optionspopup.initialize()
+                }
+
+                optionspopup.applySettings()
+            }
         }
     }
 

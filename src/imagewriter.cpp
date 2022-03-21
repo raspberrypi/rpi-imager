@@ -191,7 +191,7 @@ void ImageWriter::setEngine(QQmlApplicationEngine *engine)
 }
 
 /* Set URL to download from */
-void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, QByteArray initFormat)
+void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, bool disable_user, QByteArray initFormat)
 {
     _src = url;
     _downloadLen = downloadLen;
@@ -200,6 +200,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _multipleFilesInZip = multifilesinzip;
     _parentCategory = parentcategory;
     _osName = osname;
+    _disable_user = disable_user;
     _initFormat = (initFormat == "none") ? "" : initFormat;
 
     if (!_downloadLen && url.isLocalFile())
@@ -1028,6 +1029,10 @@ void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArr
     qDebug() << "Custom cmdline.txt entries:" << cmdline;
     qDebug() << "Custom firstuse.sh:" << firstrun;
     qDebug() << "Cloudinit:" << cloudinit;
+}
+
+bool ImageWriter::userDisabled(){
+    return _disable_user;
 }
 
 QString ImageWriter::crypt(const QByteArray &password)

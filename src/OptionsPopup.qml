@@ -226,6 +226,7 @@ Popup {
                             TextField {
                                 id: fieldUserName
                                 text: "pi"
+                                enabled: imageWriter.userDisabled()
                                 Layout.minimumWidth: 200
                                 property bool indicateError: false
 
@@ -675,6 +676,16 @@ Popup {
 
             if (chkSetUser.checked) {
                 /* Rename first ("pi") user if a different desired username was specified */
+                if (imageWriter.userDisabled()){
+                    // For now disabled user defaults to pi, could be changed later
+
+                   fieldUserName.text = "pi";
+                   fieldUserName.enabled = false;
+                }
+                else{
+                    fieldUserName.enabled = true;
+                }
+
                 addFirstRun("if [ -f /usr/lib/userconf-pi/userconf ]; then")
                 addFirstRun("   /usr/lib/userconf-pi/userconf "+escapeshellarg(fieldUserName.text)+" "+escapeshellarg(cryptedPassword))
                 addFirstRun("else")
