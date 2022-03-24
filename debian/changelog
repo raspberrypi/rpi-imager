@@ -1,3 +1,13 @@
+rpi-imager (1.7.2) unstable; urgency=medium
+
+  * Remove overscan/piwiz supression advanced options
+  * gz/xz/zstd custom images: pad if image size is not dividable by 512 byte
+  * Store saved wifi password hashed
+  * Make buttons blue on keyboard navigation
+  * Add Japan, Korean translations
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 24 Mar 2022 17:58:52 +0100
+
 rpi-imager (1.7.1) unstable; urgency=medium
 
   * Fix advanced settings being broken if there are saved wifi

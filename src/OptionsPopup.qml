@@ -113,10 +113,6 @@ Popup {
                 ColumnLayout {
                     spacing: -10
 
-                    ImCheckBox {
-                        id: chkOverscan
-                        text: qsTr("Disable overscan")
-                    }
                     RowLayout {
                         ImCheckBox {
                             id: chkHostname
@@ -262,7 +258,7 @@ Popup {
 
                     ImCheckBox {
                         id: chkWifi
-                        text: qsTr("Configure wifi")
+                        text: qsTr("Configure wireless LAN")
                         onCheckedChanged: {
                             if (checked) {
                                 if (!fieldWifiSSID.length) {
@@ -322,7 +318,7 @@ Popup {
                         }
 
                         Text {
-                            text: qsTr("Wifi country:")
+                            text: qsTr("Wireless LAN country:")
                             color: parent.enabled ? "black" : "grey"
                         }
                         ComboBox {
@@ -360,10 +356,6 @@ Popup {
                             id: fieldKeyboardLayout
                             editable: true
                             Layout.minimumWidth: 200
-                        }
-                        ImCheckBox {
-                            id: chkSkipFirstUse
-                            text: qsTr("Skip first-run wizard")
                         }
                     }
                 }
@@ -458,9 +450,6 @@ Popup {
             comboSaveSettings.currentIndex = 1
             hasSavedSettings = true
         }
-        if ('disableOverscan' in settings) {
-            chkOverscan.checked = true
-        }
         if ('hostname' in settings) {
             fieldHostname.text = settings.hostname
             chkHostname.checked = true
@@ -548,9 +537,6 @@ Popup {
                 }
             }
         }
-        if ('skipFirstUse' in settings) {
-            chkSkipFirstUse.checked = true
-        }
 
         if (imageWriter.isEmbeddedMode()) {
             /* For some reason there is no password mask character set by default on Embedded edition */
@@ -607,9 +593,6 @@ Popup {
         cloudinitwrite = ""
         cloudinitnetwork = ""
 
-        if (chkOverscan.checked) {
-            addConfig("disable_overscan=1")
-        }
         if (chkHostname.checked && fieldHostname.length) {
             addFirstRun("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\t\\n\\r\"`")
             addFirstRun("echo "+fieldHostname.text+" >/etc/hostname")
@@ -743,11 +726,6 @@ Popup {
             addCloudInitRun("sed -i 's/^\s*REGDOMAIN=\S*/REGDOMAIN="+fieldWifiCountry.editText+"/' /etc/default/crda || true")
         }
         if (chkLocale.checked) {
-            if (chkSkipFirstUse.checked) {
-                addFirstRun("rm -f /etc/xdg/autostart/piwiz.desktop")
-                addCloudInitRun("rm -f /etc/xdg/autostart/piwiz.desktop")
-            }
-
             var kbdconfig = "XKBMODEL=\"pc105\"\n"
             kbdconfig += "XKBLAYOUT=\""+fieldKeyboardLayout.editText+"\"\n"
             kbdconfig += "XKBVARIANT=\"\"\n"
@@ -793,9 +771,6 @@ Popup {
         if (comboSaveSettings.currentIndex == 1) {
             hasSavedSettings = true
             var settings = { };
-            if (chkOverscan.checked) {
-                settings.disableOverscan = true
-            }
             if (chkHostname.checked && fieldHostname.length) {
                 settings.hostname = fieldHostname.text
             }
@@ -819,9 +794,6 @@ Popup {
             if (chkLocale.checked) {
                 settings.timezone = fieldTimezone.editText
                 settings.keyboardLayout = fieldKeyboardLayout.editText
-                if (chkSkipFirstUse.checked) {
-                    settings.skipFirstUse = true
-                }
             }
 
             imageWriter.setSavedCustomizationSettings(settings)
