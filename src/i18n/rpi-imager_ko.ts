@@ -278,7 +278,7 @@
     <message>
         <location filename="../imagewriter.cpp" line="975"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation>와이파이 비밀번호를 미리 입력하시겠습니까?</translation>
+        <translation>wifi password를 미리 입력하시겠습니까?</translation>
     </message>
 </context>
 <context>
@@ -367,7 +367,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="185"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>&apos;%1&apos; authorized_keys 설정:</translation>
+        <translation>&apos;%1&apos; 인증키 설정:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="258"/>
@@ -418,7 +418,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="339"/>
         <source>Time zone:</source>
-        <translation>타임존:</translation>
+        <translation>시간대:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="349"/>
@@ -438,7 +438,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="374"/>
         <source>Play sound when finished</source>
-        <translation>완료되면 소리 재생</translation>
+        <translation>완료되면 소리 알림</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="378"/>
@@ -448,7 +448,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="382"/>
         <source>Enable telemetry</source>
-        <translation>원격 측정 사용</translation>
+        <translation>이미지 다운로드 통계 관하여 정보 수집 허용</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="395"/>
