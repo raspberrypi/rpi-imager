@@ -35,6 +35,5 @@
         <file>qmlcomponents/ImButton.qml</file>
         <file>qmlcomponents/ImCheckBox.qml</file>
         <file>qmlcomponents/ImRadioButton.qml</file>
-        <file>fonts/DroidSansFallback.ttf</file>
     </qresource>
 </RCC>
