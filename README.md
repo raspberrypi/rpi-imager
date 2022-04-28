@@ -112,7 +112,7 @@ Building can be done manually using the command-line, using "cmake", "make", etc
 
 Note: the CMake integration in Qt Creator is a bit flaky at times. If you made any custom changes to the CMakeLists.txt file and it subsequently gets in an endless loop where it never finishes the "configures" stage while re-processing the file, delete "build_rpi-imager_someversion" directory and try again.
 
-### Mac OS X
+### macOS
 
 #### Get dependencies
 
