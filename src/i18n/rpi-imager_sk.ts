@@ -100,7 +100,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="996"/>
         <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
-        <translation type="unfinished"></translation>
+        <translation>Prispôsobenie skončilo s chybou. Súbor &apos;%1&apos; neexistuje.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="1000"/>
@@ -120,17 +120,17 @@
     <message>
         <location filename="../downloadthread.cpp" line="1102"/>
         <source>Error creating user-data cloudinit file on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Chyba pri vytváraní súboru cloudinit s údajmi používateľa na partícií FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="1116"/>
         <source>Error creating network-config cloudinit file on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Chyba pri vytváraní súboru cloudinit s nastavením siete na partícií FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="1139"/>
         <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation>Chyba pri zápise cmdline.txt na FAT partícii</translation>
+        <translation>Chyba pri zápise cmdline.txt na FAT partíciu</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="432"/>
@@ -235,7 +235,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="199"/>
         <source>Partitioning did not create expected FAT partition %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Rozdelenie disku nevytvorilo očakávanú FAT partíciu %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="208"/>
@@ -278,7 +278,7 @@
     <message>
         <location filename="../imagewriter.cpp" line="979"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation type="unfinished"></translation>
+        <translation>Chcete predvyplniť heslo pre wifi zo systémovej kľúčenky?</translation>
     </message>
 </context>
 <context>
@@ -314,7 +314,7 @@
     <message>
         <location filename="../MsgPopup.qml" line="130"/>
         <source>QUIT</source>
-        <translation type="unfinished"></translation>
+        <translation>UKONČIŤ</translation>
     </message>
 </context>
 <context>
@@ -374,7 +374,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="188"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished"></translation>
+        <translation>Nastaviť authorized_keys pre &apos;%1&apos;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="261"/>
@@ -395,17 +395,17 @@
     <message>
         <location filename="../OptionsPopup.qml" line="200"/>
         <source>Set username and password</source>
-        <translation type="unfinished"></translation>
+        <translation>Nastaviť meno používateľa a heslo</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="219"/>
         <source>Username:</source>
-        <translation type="unfinished"></translation>
+        <translation>Meno používateľa:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="295"/>
         <source>Hidden SSID</source>
-        <translation type="unfinished"></translation>
+        <translation>Skryté SSID</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="316"/>
@@ -524,7 +524,7 @@
     <message>
         <location filename="../main.qml" line="111"/>
         <source>CHOOSE OS</source>
-        <translation>VÝBER OS</translation>
+        <translation>VYBERTE OS</translation>
     </message>
     <message>
         <location filename="../main.qml" line="135"/>
@@ -541,7 +541,7 @@
     <message>
         <location filename="../main.qml" line="173"/>
         <source>WRITE</source>
-        <translation>ZÁPIS</translation>
+        <translation>ZAPÍSAŤ</translation>
     </message>
     <message>
         <location filename="../main.qml" line="968"/>
@@ -588,27 +588,27 @@
     <message>
         <location filename="../main.qml" line="247"/>
         <source>Select this button to access advanced settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Použite toto tlačidlo na prístup k pokročilým nastaveniam</translation>
     </message>
     <message>
         <location filename="../main.qml" line="261"/>
         <source>Using custom repository: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Používa sa vlastný repozitár: %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="270"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
-        <translation type="unfinished"></translation>
+        <translation>Ovládanie pomocou klávesnice: &lt;tabulátor&gt; prechod na ďalšie tlačidlo &lt;medzerník&gt; stlačenie tlačidla/výber položky &lt;šípka hore/dole&gt; posun hore/dole v zoznamoch</translation>
     </message>
     <message>
         <location filename="../main.qml" line="290"/>
         <source>Language: </source>
-        <translation type="unfinished"></translation>
+        <translation>Jazyk:</translation>
     </message>
     <message>
         <location filename="../main.qml" line="313"/>
         <source>Keyboard: </source>
-        <translation type="unfinished"></translation>
+        <translation>Klávesnica: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="505"/>
