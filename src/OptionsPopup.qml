@@ -127,6 +127,7 @@ Popup {
                             id: fieldHostname
                             enabled: chkHostname.checked
                             text: "raspberrypi"
+                            selectByMouse: true
                         }
                         Text {
                             text : ".local"
@@ -191,6 +192,8 @@ Popup {
                             TextField {
                                 id: fieldPublicKey
                                 Layout.minimumWidth: 200
+                                selectByMouse: true
+
                             }
                         }
                     }
@@ -224,6 +227,7 @@ Popup {
                                 text: "pi"
                                 Layout.minimumWidth: 200
                                 property bool indicateError: false
+                                selectByMouse: true
 
                                 onTextEdited: {
                                     indicateError = false
@@ -240,7 +244,7 @@ Popup {
                                 Layout.minimumWidth: 200
                                 property bool alreadyCrypted: false
                                 property bool indicateError: false
-
+                                selectByMouse: true
                                 onTextEdited: {
                                     if (alreadyCrypted) {
                                         /* User is trying to edit saved
@@ -284,6 +288,7 @@ Popup {
                             id: fieldWifiSSID
                             Layout.minimumWidth: 200
                             property bool indicateError: false
+                            selectByMouse: true
                             onTextEdited: {
                                 indicateError = false
                             }
@@ -305,6 +310,7 @@ Popup {
                             Layout.minimumWidth: 200
                             echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
                             property bool indicateError: false
+                            selectByMouse: true
                             onTextEdited: {
                                 indicateError = false
                             }
