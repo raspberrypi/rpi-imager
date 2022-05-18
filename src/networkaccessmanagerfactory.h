@@ -8,16 +8,16 @@
 
 #include <QQmlNetworkAccessManagerFactory>
 
-class QNetworkDiskCache;
+class QNetworkAccessManager;
 
-class NetworkAccessManagerFactory : public QObject, public QQmlNetworkAccessManagerFactory
+class NetworkAccessManagerFactory : public QQmlNetworkAccessManagerFactory
 {
 public:
     NetworkAccessManagerFactory();
-    virtual QNetworkAccessManager *create(QObject *parent);
+    QNetworkAccessManager *create(QObject *parent) override;
 
 protected:
-    QNetworkDiskCache *_c;
+    QNetworkAccessManager *_nam;
 };
 
 #endif // NETWORKACCESSMANAGERFACTORY_H
