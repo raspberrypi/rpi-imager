@@ -488,7 +488,9 @@ Popup {
             }
             chkWifi.checked = true
         } else {
-            fieldWifiCountry.currentIndex = fieldWifiCountry.find("GB")
+            var language_country = Qt.locale().name
+            var country = language_country.split('_')[1]
+            fieldWifiCountry.currentIndex = fieldWifiCountry.find(country)
             fieldWifiSSID.text = imageWriter.getSSID()
             if (fieldWifiSSID.text.length) {
                 fieldWifiPassword.text = imageWriter.getPSK(fieldWifiSSID.text)
