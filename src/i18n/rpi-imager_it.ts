@@ -434,6 +434,11 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Layout tastiera:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Skip first-run wizard</source>
         <translation type="vanished">Salta procedura prima impostazione</translation>
     </message>

@@ -433,6 +433,11 @@
         <translation>Toetsenbord indeling:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Skip first-run wizard</source>
         <translation type="vanished">Eerste gebruik wizard overslaan</translation>
     </message>

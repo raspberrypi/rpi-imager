@@ -435,6 +435,11 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Tastaturlayout:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Skip first-run wizard</source>
         <translation type="vanished">Einrichtungsassistent überspringen</translation>
     </message>

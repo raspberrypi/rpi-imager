@@ -433,6 +433,11 @@
         <translation>Razporeditev tipkovnice:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Skip first-run wizard</source>
         <translation type="vanished">Preskoči čarovnika prvega zagona</translation>
     </message>

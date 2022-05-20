@@ -445,6 +445,11 @@
         <source>SAVE</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>

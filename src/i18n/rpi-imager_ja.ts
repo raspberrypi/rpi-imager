@@ -425,6 +425,11 @@
         <translation>キーボードレイアウト:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation>JP</translation>
+    </message>
+    <message>
         <source>Skip first-run wizard</source>
         <translation type="vanished">最初のセットアップウィザートをスキップする</translation>
     </message>

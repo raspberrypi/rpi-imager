@@ -425,6 +425,11 @@
         <translation>키보드 레이아웃:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Skip first-run wizard</source>
         <translation type="vanished">초기 실행 마법사 건너뛰기</translation>
     </message>

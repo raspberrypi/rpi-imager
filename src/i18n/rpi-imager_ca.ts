@@ -433,6 +433,11 @@
         <translation>Disposició del teclat</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Skip first-run wizard</source>
         <translation type="vanished">Omet l&apos;assistent de la primera arrencada</translation>
     </message>

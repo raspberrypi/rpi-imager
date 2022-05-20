@@ -429,6 +429,11 @@
         <translation>键盘布局：</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="495"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Skip first-run wizard</source>
         <translation type="vanished">跳过首次启动向导</translation>
     </message>

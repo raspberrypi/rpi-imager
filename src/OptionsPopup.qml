@@ -490,7 +490,10 @@ Popup {
         } else {
             var language_country = Qt.locale().name
             var country = language_country.split('_')[1]
-            fieldWifiCountry.currentIndex = fieldWifiCountry.find(country)
+            var index = fieldWifiCountry.find(country)
+            if (index < 0)
+                index = fieldWifiCountry.find(qsTr("GB"))
+            fieldWifiCountry.currentIndex = index
             fieldWifiSSID.text = imageWriter.getSSID()
             if (fieldWifiSSID.text.length) {
                 fieldWifiPassword.text = imageWriter.getPSK(fieldWifiSSID.text)
