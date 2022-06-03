@@ -75,8 +75,7 @@ le the PowerTools repo to find libarchive-devel.
 
 
 ```
-sudo dnf install --enablerepo=powertools git gcc gcc-c++ make cmake libarchive-devel libcurl-d
-evel openssl-devel qt5-qtbase-devel qt5-qtdeclarative-devel qt5-qtsvg-devel qt5-linguist
+sudo dnf install --enablerepo=powertools git gcc gcc-c++ make cmake libarchive-devel libcurl-devel openssl-devel qt5-qtbase-devel qt5-qtdeclarative-devel qt5-qtsvg-devel qt5-linguist
 ```
 
 
