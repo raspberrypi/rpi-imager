@@ -69,9 +69,7 @@ Install the build dependencies:
 sudo yum install git gcc gcc-c++ make cmake libarchive-devel libcurl-devel openssl-devel qt5-qtbase-devel qt5-qtquickcontrols2-devel qt5-qtsvg-devel qt5-linguist
 ```
 
-Note that on Centos8 Stream this is slightly different; you need dnf instead of yum, and the p
-ackage qt5-qtdeclarative-devel instead of qt5-qtquickcontrols2-devel, and you may need to enab
-le the PowerTools repo to find libarchive-devel.
+Note that on Centos8 Stream this is slightly different; you need dnf instead of yum, and the package qt5-qtdeclarative-devel instead of qt5-qtquickcontrols2-devel, and you may need to enable the PowerTools repo to find libarchive-devel.
 
 
 ```
