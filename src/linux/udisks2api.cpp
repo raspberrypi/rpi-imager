@@ -71,7 +71,7 @@ void UDisks2Api::_unmountDrive(const QString &driveDbusPath)
     if (!manager.isValid() || !list.isValid())
         return;
 
-    for (auto devpath : list.value())
+    for (const auto& devpath : list.value())
     {
         QString devpathStr = devpath.path();
 
@@ -263,7 +263,7 @@ QByteArrayList UDisks2Api::mountPoints(const QDBusInterface &filesystem)
     QVariantList args = {"org.freedesktop.UDisks2.Filesystem", "MountPoints"};
     msg.setArguments(args);
     QDBusMessage reply = QDBusConnection::systemBus().call(msg);
-    for (auto arg : reply.arguments())
+    for (const auto& arg : reply.arguments())
     {
         arg.value<QDBusVariant>().variant().value<QDBusArgument>() >> mps;
     }
