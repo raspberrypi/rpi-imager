@@ -31,12 +31,12 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QVersionNumber>
+#include <QtNetwork>
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
 #include <QApplication>
 #endif
 #ifdef Q_OS_DARWIN
-#include <QtNetwork>
 #include <QMessageBox>
 #include <security/security.h>
 #else
@@ -1049,18 +1049,7 @@ QString ImageWriter::crypt(const QByteArray &password)
 
 QString ImageWriter::pbkdf2(const QByteArray &psk, const QByteArray &ssid)
 {
-    /* Qt has support for calculating Pbkdf2 starting from Qt 5.12 but
-     * older Linux distributions may not have that.
-     * We can use OpenSSL instead on platforms that have that.
-     * But Mac OS X lacks that, so do use Qt there */
-
-#ifdef Q_OS_DARWIN
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, psk, ssid, 4096, 32).toHex();
-#else
-    QByteArray digest(32, 0);
-    PKCS5_PBKDF2_HMAC_SHA1(psk.constData(), psk.length(), (const unsigned char*) ssid.constData(), ssid.length(), 4096, digest.length(), (unsigned char *) digest.data());
-    return digest.toHex();
-#endif
 }
 
 void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)

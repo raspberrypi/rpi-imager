@@ -16,7 +16,11 @@
 #define SHA256_Update CC_SHA256_Update
 #define SHA256_Final  CC_SHA256_Final
 #else
+#ifdef HAVE_GNUTLS
+#include "gnutls/crypto.h"
+#else
 #include "openssl/sha.h"
+#endif
 #endif
 
 class AcceleratedCryptographicHash
@@ -29,7 +33,11 @@ public:
     QByteArray result();
 
 protected:
+#ifdef HAVE_GNUTLS
+    gnutls_hash_hd_t _sha256;
+#else
     SHA256_CTX _sha256;
+#endif
 };
 
 #endif // ACCELERATEDCRYPTOGRAPHICHASH_H
