@@ -498,7 +498,7 @@
     <message>
         <location filename="../main.qml" line="111"/>
         <source>CHOOSE OS</source>
-        <translation>WYBIERZ SYSTEM OPERACYJNY</translation>
+        <translation>WYBIERZ SYSTEM</translation>
     </message>
     <message>
         <location filename="../main.qml" line="123"/>
@@ -515,12 +515,12 @@
         <location filename="../main.qml" line="147"/>
         <location filename="../main.qml" line="1038"/>
         <source>CHOOSE STORAGE</source>
-        <translation>WYBIERZ PAMIĘĆ MASOWĄ</translation>
+        <translation>WYBIERZ PAMIĘĆ</translation>
     </message>
     <message>
         <location filename="../main.qml" line="173"/>
         <source>WRITE</source>
-        <translation>ZAPISZ</translation>
+        <translation>WGRAJ</translation>
     </message>
     <message>
         <location filename="../main.qml" line="177"/>
