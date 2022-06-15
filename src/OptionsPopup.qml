@@ -173,7 +173,7 @@ Popup {
                                     if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
                                         chkSetUser.checked = false
                                     }
-                                    fieldPublicKey.forceActiveFocus()
+                                    radioPubKeyString.checked = true
                                 }
                             }
                         }
@@ -184,13 +184,45 @@ Popup {
                             rowSpacing: -5
                             enabled: radioPubKeyAuthentication.checked
 
-                            Text {
+                            ImRadioButton {
+                                id: radioPubKeyString
                                 text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
-                                color: parent.enabled ? "black" : "grey"
+                                onCheckedChanged: {
+                                    fieldPublicKey.forceActiveFocus()
+                                }
                             }
+
                             TextField {
                                 id: fieldPublicKey
+                                enabled: radioPubKeyString.checked
                                 Layout.minimumWidth: 200
+                            }
+
+                            ImRadioButton {
+                                id: radioPubKeyGh
+                                text: qsTr("Get authorized keys for '%1' from GitHub:").arg(fieldUserName.text)
+                                contentItem: Text {
+                                    text: radioPubKeyGh.text
+                                    color: parent.enabled ? (fieldGithubUsername.indicateError ? "red" : "black") : "grey"
+                                    leftPadding: radioPubKeyGh.indicator.width + radioPubKeyGh.spacing
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                onCheckedChanged: {
+                                    fieldGithubUsername.forceActiveFocus()
+                                }
+                            }
+
+                            TextField {
+                                id: fieldGithubUsername
+                                enabled: radioPubKeyGh.checked
+                                placeholderText: qsTr("Username")
+                                
+                                property bool indicateError: false
+                                property string keyString
+
+                                onTextEdited: {
+                                    indicateError = false
+                                }
                             }
                         }
                     }
@@ -424,6 +456,15 @@ Popup {
                         }
                     }
 
+                    if (chkSSH.checked && radioPubKeyGh.checked && radioPubKeyAuthentication.checked){
+                        fieldGithubUsername.keyString = getSshKeysFromGh(fieldGithubUsername.text) || ""
+                        if (fieldGithubUsername.keyString.length == 0){
+                            fieldGithubUsername.indicateError = true
+                            fieldGithubUsername.forceActiveFocus()
+                            return
+                        }
+                    }
+
                     applySettings()
                     saveSettings()
                     popup.close()
@@ -437,6 +478,7 @@ Popup {
     }
 
     function initialize() {
+        var error = false
         chkBeep.checked = imageWriter.getBoolSetting("beep")
         chkTelemtry.checked = imageWriter.getBoolSetting("telemetry")
         chkEject.checked = imageWriter.getBoolSetting("eject")
@@ -454,8 +496,22 @@ Popup {
             fieldHostname.text = settings.hostname
             chkHostname.checked = true
         }
+
+        // SSH Keys
         if ('sshAuthorizedKeys' in settings) {
             fieldPublicKey.text = settings.sshAuthorizedKeys
+            radioPubKeyString.checked = true
+            radioPubKeyAuthentication.checked = true
+            chkSSH.checked = true
+        }
+
+        else if ('githubUserName' in settings){
+            fieldGithubUsername.text = settings.githubUserName
+            fieldGithubUsername.keyString = getSshKeysFromGh(settings.githubUserName) || ""
+            if (fieldGithubUsername.keyString.length == 0){
+                error = true
+            }
+            radioPubKeyGh.checked = true
             radioPubKeyAuthentication.checked = true
             chkSSH.checked = true
         }
@@ -545,7 +601,21 @@ Popup {
             fieldWifiPassword.passwordCharacter = bulletCharacter;
         }
 
-        initialized = true
+        if (!error){
+            // Initialization failed
+            initialized = true
+        }
+    }
+
+    function validate(){
+        // Validate settings at write-time
+        if (chkSSH.checked &&
+            radioPubKeyAuthentication.checked &&
+            radioPubKeyGh.checked &&
+            fieldGithubUsername.keyString.length == 0){
+            window.onError(qsTr("Cannot fetch the key from GitHub."))
+            error = true
+        }
     }
 
     function openPopup() {
@@ -581,6 +651,21 @@ Popup {
     }
     function addCloudInitRun(cmd) {
         cloudinitrun += "- "+cmd+"\n"
+    }
+
+    function getSshKeysFromGh(username){
+        // Load SSH public keys from github.com
+        // GET on https://github.com/<username>.keys
+        // load response as plain text
+        
+        const url = "https://github.com/"+username+".keys"
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 5000
+        xhr.open("GET", url, false) // sync
+        xhr.send()
+        if(xhr.readyState === XMLHttpRequest.DONE && xhr.status == 200){
+            return xhr.responseText.toString()
+        }
     }
 
     function applySettings()
@@ -629,7 +714,7 @@ Popup {
             }
 
             if (chkSSH.checked && radioPubKeyAuthentication.checked) {
-                var pubkey = fieldPublicKey.text
+                var pubkey = radioPubKeyString.checked ? fieldPublicKey.text : fieldGithubUsername.keyString
                 var pubkeyArr = pubkey.split("\n")
 
                 if (pubkey.length) {
@@ -781,7 +866,12 @@ Popup {
 
             settings.sshEnabled = chkSSH.checked
             if (chkSSH.checked && radioPubKeyAuthentication.checked) {
-                settings.sshAuthorizedKeys = fieldPublicKey.text
+                if (radioPubKeyString.checked){
+                    settings.sshAuthorizedKeys = fieldPublicKey.text
+                }
+                else if (radioPubKeyGh.checked) {
+                    settings.githubUserName = fieldGithubUsername.text
+                }
             }
             if (chkWifi.checked) {
                 settings.wifiSSID = fieldWifiSSID.text
