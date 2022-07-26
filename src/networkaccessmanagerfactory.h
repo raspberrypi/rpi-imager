@@ -10,14 +10,14 @@
 
 class QNetworkDiskCache;
 
-class NetworkAccessManagerFactory : public QObject, public QQmlNetworkAccessManagerFactory
+class NetworkAccessManagerFactory : public QQmlNetworkAccessManagerFactory
 {
 public:
     NetworkAccessManagerFactory();
     virtual QNetworkAccessManager *create(QObject *parent);
 
 protected:
-    QNetworkDiskCache *_c;
+    int _nr;
 };
 
 #endif // NETWORKACCESSMANAGERFACTORY_H

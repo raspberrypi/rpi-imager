@@ -14,19 +14,16 @@
 
 /* Configure caching for files downloaded from Internet by QML (e.g. os_list.json and icons) */
 NetworkAccessManagerFactory::NetworkAccessManagerFactory()
+    : _nr(0)
 {
-    _c = new QNetworkDiskCache(this);
-    _c->setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+QDir::separator()+"oslistcache");
-    /* Only cache images and not the .json */
-    //_c->remove(QUrl(OSLIST_URL));
-
-    /* Clear all for now as we do not know any potential subitems_url in advance */
-    _c->clear();
 }
 
 QNetworkAccessManager *NetworkAccessManagerFactory::create(QObject *parent)
 {
     QNetworkAccessManager *nam = new QNetworkAccessManager(parent);
-    nam->setCache(_c);
+    auto c = new QNetworkDiskCache(nam);
+    c->setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+QDir::separator()+"oslistcache"+QString::number(_nr++));
+    c->clear();
+    nam->setCache(c);
     return nam;
 }
