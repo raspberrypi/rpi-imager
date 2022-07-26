@@ -454,12 +454,6 @@ Popup {
             fieldHostname.text = settings.hostname
             chkHostname.checked = true
         }
-        if ('sshAuthorizedKeys' in settings) {
-            fieldPublicKey.text = settings.sshAuthorizedKeys
-            radioPubKeyAuthentication.checked = true
-            chkSSH.checked = true
-        }
-
         if ('sshUserPassword' in settings) {
             fieldUserPassword.text = settings.sshUserPassword
             fieldUserPassword.alreadyCrypted = true
@@ -471,6 +465,12 @@ Popup {
                 radioPasswordAuthentication.checked = true
             }
         }
+        if ('sshAuthorizedKeys' in settings) {
+            fieldPublicKey.text = settings.sshAuthorizedKeys
+            radioPubKeyAuthentication.checked = true
+            chkSSH.checked = true
+        }
+
         if ('sshUserName' in settings) {
             fieldUserName.text = settings.sshUserName
             chkSetUser.checked = true
