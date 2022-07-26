@@ -35,5 +35,6 @@
         <file>qmlcomponents/ImButton.qml</file>
         <file>qmlcomponents/ImCheckBox.qml</file>
         <file>qmlcomponents/ImRadioButton.qml</file>
+        <file>icons/cat_digital_signage.png</file>
     </qresource>
 </RCC>
