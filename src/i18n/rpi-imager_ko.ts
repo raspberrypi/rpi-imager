@@ -55,7 +55,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="198"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>확인합니다. if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</translation>
+        <translation>&apos;Raspberry Pi Imager&apos;가 개인 정보 설정(&apos;파일 및 폴더&apos;에서 또는 &apos;전체 디스크 액세스&apos;를 부여)에서 &apos;제거 가능한 볼륨&apos;에 액세스할 수 있는지 확인하세요.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="220"/>
@@ -75,7 +75,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="288"/>
         <source>Write error while zero&apos;ing out MBR</source>
-        <translation>Write error while zero&apos;ing out MBR</translation>
+        <translation>MBR을 zero&apos;ing out 하는 동안 쓰기 오류 발생 </translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="779"/>
@@ -361,7 +361,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="170"/>
         <source>Allow public-key authentication only</source>
-        <translation>인증된 공개 키만 허용</translation>
+        <translation>공개 키만 인증 허용</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="188"/>
@@ -371,7 +371,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="261"/>
         <source>Configure wireless LAN</source>
-        <translation>wifi 설정</translation>
+        <translation>무선 LAN 설정</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="280"/>
@@ -407,7 +407,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="321"/>
         <source>Wireless LAN country:</source>
-        <translation>Wifi 국가:</translation>
+        <translation>무선 LAN 국가:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="332"/>
@@ -436,7 +436,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="373"/>
         <source>Play sound when finished</source>
-        <translation>완료되면 소리 알림</translation>
+        <translation>완료되면 효과음으로 알림</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="377"/>
@@ -487,7 +487,7 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="115"/>
         <source>EDIT SETTINGS</source>
-        <translation>EDIT SETTINGS</translation>
+        <translation>설정을 편집하기</translation>
     </message>
 </context>
 <context>
@@ -506,7 +506,7 @@
     <message>
         <location filename="../main.qml" line="111"/>
         <source>CHOOSE OS</source>
-        <translation>운영체제 OS 선택</translation>
+        <translation>운영체제 선택</translation>
     </message>
     <message>
         <location filename="../main.qml" line="123"/>
@@ -571,7 +571,7 @@
     <message>
         <location filename="../main.qml" line="270"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
-        <translation>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</translation>
+        <translation>키보드 탐색: &lt;tab&gt; 다음 버튼으로 이동 &lt;space&gt; 버튼 선택 및 항목 선택 &lt;arrow up/down&gt; 목록에서 위아래로 이동</translation>
     </message>
     <message>
         <location filename="../main.qml" line="290"/>
@@ -679,7 +679,7 @@
     <message>
         <location filename="../main.qml" line="907"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation>이미저의 최신 버전을 사용할 수 있습니다.&lt;br&gt;다운받기 위해 웹사이트를 방문하시겠습니까??</translation>
+        <translation>Raspberry Pi Imager의 최신 버전을 사용할 수 있습니다.&lt;br&gt;다운받기 위해 웹사이트를 방문하시겠습니까??</translation>
     </message>
     <message>
         <location filename="../main.qml" line="968"/>
@@ -709,7 +709,7 @@
     <message>
         <location filename="../main.qml" line="1014"/>
         <source>Error</source>
-        <translation>오료</translation>
+        <translation>오류</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1021"/>
@@ -723,12 +723,12 @@
     </message>
     <message>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
-        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; 가 쓰여졌습니다. 위치 : &lt;b&gt;%2&lt;/b&gt;</translation>
+        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt;가 &lt;b&gt;%2&lt;/b&gt;에 쓰여졌습니다.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1030"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; 가 쓰여졌습니다. 위치 : &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;이제 SD card를 제거할 수 있습니다.</translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt;가 &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;에 쓰여졌습니다. 이제 SD card를 제거할 수 있습니다.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1098"/>
