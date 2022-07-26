@@ -56,7 +56,7 @@ QString UDisks2Api::_resolveDevice(const QString &device)
     if (!manager.isValid() || !list.isValid() || list.value().isEmpty())
         return QString();
 
-    return list.value().first().path();
+    return list.value().constFirst().path();
 }
 
 void UDisks2Api::_unmountDrive(const QString &driveDbusPath)
@@ -66,12 +66,13 @@ void UDisks2Api::_unmountDrive(const QString &driveDbusPath)
     QDBusInterface manager("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2/Manager",
                            "org.freedesktop.UDisks2.Manager", QDBusConnection::systemBus());
     QVariantMap options;
-    QDBusReply<QList<QDBusObjectPath>> list = manager.call("GetBlockDevices", options);
+    const QDBusReply<QList<QDBusObjectPath>> list = manager.call("GetBlockDevices", options);
 
     if (!manager.isValid() || !list.isValid())
         return;
 
-    for (const auto& devpath : list.value())
+    const auto listValue = list.value();
+    for (const auto& devpath : listValue)
     {
         QString devpathStr = devpath.path();
 
@@ -263,7 +264,8 @@ QByteArrayList UDisks2Api::mountPoints(const QDBusInterface &filesystem)
     QVariantList args = {"org.freedesktop.UDisks2.Filesystem", "MountPoints"};
     msg.setArguments(args);
     QDBusMessage reply = QDBusConnection::systemBus().call(msg);
-    for (const auto& arg : reply.arguments())
+    const auto replyArgs = reply.arguments();
+    for (const auto& arg : replyArgs)
     {
         arg.value<QDBusVariant>().variant().value<QDBusArgument>() >> mps;
     }

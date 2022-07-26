@@ -60,8 +60,8 @@ namespace Drivelist
         }
 
         QJsonDocument d = QJsonDocument::fromJson(output);
-        QJsonArray a = d.object()["blockdevices"].toArray();
-        for (auto i : a)
+        const QJsonArray a = d.object()["blockdevices"].toArray();
+        for (const auto &i : a)
         {
             DeviceDescriptor d;
             QJsonObject bdev = i.toObject();

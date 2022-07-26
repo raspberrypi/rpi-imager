@@ -92,7 +92,6 @@ int main(int argc, char *argv[])
     ImageWriter imageWriter;
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;
-    QTranslator *translator = new QTranslator;
     QString customQm;
     QSettings settings;
 
@@ -206,6 +205,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    QTranslator *translator = new QTranslator;
     if (customQm.isEmpty())
     {
 #ifdef Q_OS_DARWIN

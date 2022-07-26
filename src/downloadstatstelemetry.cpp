@@ -77,7 +77,7 @@ size_t DownloadStatsTelemetry::_curl_write_callback(char *, size_t size, size_t 
 size_t DownloadStatsTelemetry::_curl_header_callback( void *ptr, size_t size, size_t nmemb, void *)
 {
     int len = size*nmemb;
-    QByteArray headerstr((char *) ptr, len);
+    //QByteArray headerstr((char *) ptr, len);
     //qDebug() << "Received telemetry header:" << headerstr;
     return len;
 }

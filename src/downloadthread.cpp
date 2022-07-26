@@ -1012,7 +1012,7 @@ bool DownloadThread::_customizeImage()
             f.close();
         }
 
-        for (const QByteArray& item : configItems)
+        for (const QByteArray& item : qAsConst(configItems))
         {
             if (config.contains("#"+item)) {
                 /* Uncomment existing line */
