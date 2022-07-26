@@ -231,7 +231,7 @@ void DownloadExtractThread::extractMultiFileRun()
     {
         QThread::sleep(1);
         auto l = Drivelist::ListStorageDevices();
-        for (auto i : l)
+        for (const auto& i : l)
         {
             if (QByteArray::fromStdString(i.device).toLower() == devlower && i.mountpoints.size() == 1)
             {
@@ -363,7 +363,7 @@ void DownloadExtractThread::extractMultiFileRun()
             _cachefile.remove();
 
         qDebug() << "Deleting extracted files";
-        for (auto filename : filesExtracted)
+        for (const auto& filename : filesExtracted)
         {
             QFileInfo fi(filename);
             QString path = fi.path();

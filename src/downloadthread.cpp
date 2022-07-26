@@ -871,7 +871,7 @@ bool DownloadThread::_customizeImage()
     {
         QThread::sleep(1);
         auto l = Drivelist::ListStorageDevices();
-        for (auto i : l)
+        for (const auto& i : l)
         {
             if (QByteArray::fromStdString(i.device).toLower() == devlower && i.mountpoints.size())
             {
@@ -951,10 +951,10 @@ bool DownloadThread::_customizeImage()
         //
         qDebug() << "drive info. searching for:" << devlower;
         auto l = Drivelist::ListStorageDevices();
-        for (auto i : l)
+        for (const auto& i : l)
         {
             qDebug() << "drive" << QByteArray::fromStdString(i.device).toLower();
-            for (auto mp : i.mountpoints) {
+            for (const auto& mp : i.mountpoints) {
                 qDebug() << "mountpoint:" << QByteArray::fromStdString(mp);
             }
         }
@@ -973,7 +973,7 @@ bool DownloadThread::_customizeImage()
     {
         /* Search all mountpoints, as on some systems FAT partition
            may not be first volume */
-        for (auto mp : mountpoints)
+        for (const auto& mp : mountpoints)
         {
             folder = QString::fromStdString(mp);
             if (folder.right(1) == '\\')
@@ -1012,7 +1012,7 @@ bool DownloadThread::_customizeImage()
             f.close();
         }
 
-        for (QByteArray item : configItems)
+        for (const QByteArray& item : configItems)
         {
             if (config.contains("#"+item)) {
                 /* Uncomment existing line */

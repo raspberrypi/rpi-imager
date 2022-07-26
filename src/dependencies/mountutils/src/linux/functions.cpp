@@ -97,7 +97,7 @@ MOUNTUTILS_RESULT unmount_disk(const char *device_path) {
   size_t unmounts = 0;
   MOUNTUTILS_RESULT result_code = MOUNTUTILS_SUCCESS;
 
-  for (std::string mount_dir : mount_dirs) {
+  for (const std::string& mount_dir : mount_dirs) {
     MountUtilsLog("Unmounting " + mount_dir + "...");
 
     mount_path = mount_dir.c_str();
