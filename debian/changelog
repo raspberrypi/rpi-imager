@@ -8,6 +8,8 @@ rpi-imager (1.7.3) unstable; urgency=medium
   * Update Slovan/Korean language files
   * Allow selecting file names without extension
   * Add new regulatory-domain parameter to cloud-init files
+  * Add possibility to outsource handling of custom settings to script at
+    /usr/lib/raspberrypi-sys-mods/imager_custom
 
  -- Floris Bos <bos@je-eigen-domein.nl>  Sun, 31 Jul 2022 12:15:17 +0200
 

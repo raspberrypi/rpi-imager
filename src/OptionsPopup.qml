@@ -595,8 +595,12 @@ Popup {
 
         if (chkHostname.checked && fieldHostname.length) {
             addFirstRun("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\t\\n\\r\"`")
-            addFirstRun("echo "+fieldHostname.text+" >/etc/hostname")
-            addFirstRun("sed -i \"s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\\t"+fieldHostname.text+"/g\" /etc/hosts")
+            addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
+            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_hostname "+fieldHostname.text)
+            addFirstRun("else")
+            addFirstRun("   echo "+fieldHostname.text+" >/etc/hostname")
+            addFirstRun("   sed -i \"s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\\t"+fieldHostname.text+"/g\" /etc/hosts")
+            addFirstRun("fi")
 
             addCloudInit("hostname: "+fieldHostname.text)
             addCloudInit("manage_etc_hosts: true")
@@ -631,12 +635,22 @@ Popup {
             if (chkSSH.checked && radioPubKeyAuthentication.checked) {
                 var pubkey = fieldPublicKey.text
                 var pubkeyArr = pubkey.split("\n")
-
-                if (pubkey.length) {
-                    addFirstRun("install -o \"$FIRSTUSER\" -m 700 -d \"$FIRSTUSERHOME/.ssh\"")
-                    addFirstRun("install -o \"$FIRSTUSER\" -m 600 <(printf \""+pubkey.replace(/\n/g, "\\n")+"\") \"$FIRSTUSERHOME/.ssh/authorized_keys\"")
+                var pubkeySpaceSep = ''
+                for (var j=0; j<pubkeyArr.length; j++) {
+                    var pkitem = pubkeyArr[j].trim();
+                    if (pkitem) {
+                        pubkeySpaceSep += ' '+escapeshellarg(pkitem)
+                    }
                 }
-                addFirstRun("echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config")
+
+                addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
+                addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom enable_ssh -k"+pubkeySpaceSep)
+                addFirstRun("else")
+                addFirstRun("   install -o \"$FIRSTUSER\" -m 700 -d \"$FIRSTUSERHOME/.ssh\"")
+                addFirstRun("   install -o \"$FIRSTUSER\" -m 600 <(printf \""+pubkey.replace(/\n/g, "\\n")+"\") \"$FIRSTUSERHOME/.ssh/authorized_keys\"")
+                addFirstRun("   echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config")
+                addFirstRun("   systemctl enable ssh")
+                addFirstRun("fi")
 
                 if (!chkSetUser.checked) {
                     addCloudInit("  lock_passwd: true")
@@ -654,6 +668,11 @@ Popup {
 
             if (chkSSH.checked && radioPasswordAuthentication.checked) {
                 addCloudInit("ssh_pwauth: true")
+                addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
+                addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom enable_ssh")
+                addFirstRun("else")
+                addFirstRun("   systemctl enable ssh")
+                addFirstRun("fi")
             }
 
             if (chkSetUser.checked) {
@@ -678,10 +697,6 @@ Popup {
                 addFirstRun("   fi")
                 addFirstRun("fi")
             }
-
-            if (chkSSH.checked) {
-                addFirstRun("systemctl enable ssh")
-            }
             addCloudInit("")
         }
         if (chkWifi.checked) {
@@ -698,14 +713,21 @@ Popup {
             wpaconfig += "\tpsk="+cryptedPsk+"\n"
             wpaconfig += "}\n"
 
+            addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
+            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_wlan "
+                        +(chkWifiSSIDHidden.checked ? " -h " : "")
+                        +escapeshellarg(fieldWifiSSID.text)+" "+escapeshellarg(cryptedPsk)+" "+escapeshellarg(fieldWifiCountry.editText))
+            addFirstRun("else")
             addFirstRun("cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'WPAEOF'")
             addFirstRun(wpaconfig)
             addFirstRun("WPAEOF")
-            addFirstRun("chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf")
-            addFirstRun("rfkill unblock wifi")
-            addFirstRun("for filename in /var/lib/systemd/rfkill/*:wlan ; do")
-            addFirstRun("  echo 0 > $filename")
-            addFirstRun("done")
+            addFirstRun("   chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf")
+            addFirstRun("   rfkill unblock wifi")
+            addFirstRun("   for filename in /var/lib/systemd/rfkill/*:wlan ; do")
+            addFirstRun("       echo 0 > $filename")
+            addFirstRun("   done")
+            addFirstRun("fi")
+
 
             cloudinitnetwork  = "version: 2\n"
             cloudinitnetwork += "wifis:\n"
@@ -730,13 +752,18 @@ Popup {
             kbdconfig += "XKBVARIANT=\"\"\n"
             kbdconfig += "XKBOPTIONS=\"\"\n"
 
-            addFirstRun("rm -f /etc/localtime")
-            addFirstRun("echo \""+fieldTimezone.editText+"\" >/etc/timezone")
-            addFirstRun("dpkg-reconfigure -f noninteractive tzdata")
+            addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
+            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_keymap "+escapeshellarg(fieldKeyboardLayout.editText))
+            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_timezone "+escapeshellarg(fieldTimezone.editText))
+            addFirstRun("else")
+            addFirstRun("   rm -f /etc/localtime")
+            addFirstRun("   echo \""+fieldTimezone.editText+"\" >/etc/timezone")
+            addFirstRun("   dpkg-reconfigure -f noninteractive tzdata")
             addFirstRun("cat >/etc/default/keyboard <<'KBEOF'")
             addFirstRun(kbdconfig)
             addFirstRun("KBEOF")
-            addFirstRun("dpkg-reconfigure -f noninteractive keyboard-configuration")
+            addFirstRun("   dpkg-reconfigure -f noninteractive keyboard-configuration")
+            addFirstRun("fi")
 
             addCloudInit("timezone: "+fieldTimezone.editText)
             addCloudInitRun("localectl set-x11-keymap \""+fieldKeyboardLayout.editText+"\" pc105")
