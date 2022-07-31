@@ -1,3 +1,15 @@
+rpi-imager (1.7.3) unstable; urgency=medium
+
+  * Linux: use GnuTLS instead of OpenSSL for computing SHA256
+  * Fix persistenting public key authentication setting
+  * Linux: prefill wlan PSK if Linux distro uses NetworkManager
+  * Add digital signage icon
+  * Fix ""Cannot send events to objects owned by a different thread" warning
+  * Update Slovan/Korean language files
+  * Allow selecting file names without extension
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Sun, 31 Jul 2022 12:15:17 +0200
+
 rpi-imager (1.7.2) unstable; urgency=medium
 
   * Remove overscan/piwiz supression advanced options

@@ -57,6 +57,11 @@
 #include <QtPlatformHeaders/QEglFSFunctions>
 #endif
 
+#ifdef Q_OS_LINUX
+#ifndef QT_NO_DBUS
+#include "linux/networkmanagerapi.h"
+#endif
+#endif
 
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
@@ -991,8 +996,13 @@ QString ImageWriter::getPSK(const QString &ssid)
 
     return psk;
 #else
+#ifndef QT_NO_DBUS
+    NetworkManagerApi nm;
+    return nm.getPSK();
+#else
     Q_UNUSED(ssid)
     return QString();
+#endif
 #endif
 #endif
 }
