@@ -7,6 +7,7 @@ rpi-imager (1.7.3) unstable; urgency=medium
   * Fix ""Cannot send events to objects owned by a different thread" warning
   * Update Slovan/Korean language files
   * Allow selecting file names without extension
+  * Add new regulatory-domain parameter to cloud-init files
 
  -- Floris Bos <bos@je-eigen-domein.nl>  Sun, 31 Jul 2022 12:15:17 +0200
 

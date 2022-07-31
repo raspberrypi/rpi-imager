@@ -711,6 +711,7 @@ Popup {
             cloudinitnetwork += "wifis:\n"
             cloudinitnetwork += "  renderer: networkd\n"
             cloudinitnetwork += "  wlan0:\n"
+            cloudinitnetwork += "    regulatory-domain: \""+fieldWifiCountry.editText+"\"\n"
             cloudinitnetwork += "    dhcp4: true\n"
             cloudinitnetwork += "    optional: true\n"
             cloudinitnetwork += "    access-points:\n"
@@ -720,9 +721,7 @@ Popup {
                 cloudinitnetwork += "        hidden: true\n"
             }
 
-            /* FIXME: setting wifi country code broken on Ubuntu
-               For unknown reasons udev does not trigger setregdomain automatically and as a result
-               our setting in /etc/default/crda is being ignored by Ubuntu. */
+            /* legacy */
             addCloudInitRun("sed -i 's/^\s*REGDOMAIN=\S*/REGDOMAIN="+fieldWifiCountry.editText+"/' /etc/default/crda || true")
         }
         if (chkLocale.checked) {
