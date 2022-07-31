@@ -39,9 +39,6 @@
 #ifdef Q_OS_DARWIN
 #include <QMessageBox>
 #include <security/security.h>
-#else
-#include "openssl/evp.h"
-#include "openssl/sha.h"
 #endif
 
 #ifdef Q_OS_WIN
@@ -59,6 +56,7 @@
 #ifdef QT_NO_WIDGETS
 #include <QtPlatformHeaders/QEglFSFunctions>
 #endif
+
 
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
