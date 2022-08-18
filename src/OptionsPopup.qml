@@ -127,6 +127,9 @@ Popup {
                             id: fieldHostname
                             enabled: chkHostname.checked
                             text: "raspberrypi"
+                            /* FIXME: use RegularExpressionValidator instead when moving to newer Qt version.
+                               It is not available in 5.12 that is still being used by Ubuntu 20 LTS though */
+                            validator: RegExpValidator { regExp: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
                         }
                         Text {
                             text : ".local"
