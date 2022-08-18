@@ -7,7 +7,6 @@ rpi-imager (1.7.3) unstable; urgency=medium
   * Fix ""Cannot send events to objects owned by a different thread" warning
   * Update Slovan/Korean language files
   * Allow selecting file names without extension
-  * Add new regulatory-domain parameter to cloud-init files
   * Add possibility to outsource handling of custom settings to script at
     /usr/lib/raspberrypi-sys-mods/imager_custom
 
