@@ -113,12 +113,12 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="963"/>
         <source>Operating system did not mount FAT32 partition</source>
-        <translation>Das Betriebssystem band die FAT32-Partition nicht ein</translation>
+        <translation>Das Betriebssystem hat die FAT32-Partition nicht eingebunden.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="996"/>
         <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
-        <translation type="unfinished"></translation>
+        <translation>Modifizieren fehlgeschlagen. Die Datei &apos;%1&apos; existiert nicht.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="1000"/>
@@ -138,12 +138,12 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="1102"/>
         <source>Error creating user-data cloudinit file on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Erstellen der user-data cloudinit Datei auf der FAT-Partition</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="1116"/>
         <source>Error creating network-config cloudinit file on FAT partition</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Erstellen der network-config cloudinit Datei auf der FAT-Partition</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="1139"/>
@@ -241,7 +241,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../driveformatthread.cpp" line="199"/>
         <source>Partitioning did not create expected FAT partition %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Partitionierung hat nicht die erwartete FAT-partition %1 erstellt</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="208"/>
@@ -284,7 +284,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../imagewriter.cpp" line="979"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation type="unfinished"></translation>
+        <translation>Möchten Sie das Wifi-Passwort aus dem System-Schlüsselbund vorab ausfüllen?</translation>
     </message>
 </context>
 <context>
@@ -320,7 +320,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../MsgPopup.qml" line="130"/>
         <source>QUIT</source>
-        <translation type="unfinished"></translation>
+        <translation>BEENDEN</translation>
     </message>
 </context>
 <context>
@@ -407,7 +407,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="295"/>
         <source>Hidden SSID</source>
-        <translation type="unfinished"></translation>
+        <translation>Verborgene SSID</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="316"/>
@@ -606,12 +606,12 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="247"/>
         <source>Select this button to access advanced settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Klicken Sie auf diesen Knopf, um zu den erweiterten Einstellungen zu gelangen.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="261"/>
         <source>Using custom repository: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Verwende benutzerdefiniertes Repository: %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="270"/>
@@ -621,12 +621,12 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="290"/>
         <source>Language: </source>
-        <translation type="unfinished"></translation>
+        <translation>Sprache: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="313"/>
         <source>Keyboard: </source>
-        <translation type="unfinished"></translation>
+        <translation>Tastatur: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="462"/>
