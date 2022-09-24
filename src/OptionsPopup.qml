@@ -331,6 +331,68 @@ Popup {
                     }
 
                     ImCheckBox {
+                        id: chkWired
+                        text: qsTr("Configure static wired LAN")
+                        onCheckedChanged: {
+                            if (checked) {
+                                if (!fieldWiredCIDR.length) {
+                                    fieldWiredCIDR.forceActiveFocus()
+                                } else if (!fieldWiredGateway.length) {
+                                    fieldWiredGateway.forceActiveFocus()
+                                } else if (!fieldWiredDNSServers.length) {
+                                    fieldWiredDNSServers.forceActiveFocus()
+                                }
+                            }
+                        }
+                    }
+                    GridLayout {
+                        enabled: chkWired.checked
+                        Layout.leftMargin: 40
+                        columns: 2
+                        columnSpacing: 10
+                        rowSpacing: -5
+
+                        Text {
+                            text: qsTr("IP address/mask (CIDR):")
+                            color: parent.enabled ? (fieldWiredCIDR.indicateError ? "red" : "black") : "grey"
+                        }
+                        TextField {
+                            id: fieldWiredCIDR
+                            Layout.minimumWidth: 200
+                            property bool indicateError: false
+                            onTextEdited: {
+                                indicateError = false
+                            }
+                        }
+
+                        Text {
+                            text: qsTr("Network gateway:")
+                            color: parent.enabled ? (fieldWiredGateway.indicateError ? "red" : "black") : "grey"
+                        }
+                        TextField {
+                            id: fieldWiredGateway
+                            Layout.minimumWidth: 200
+                            property bool indicateError: false
+                            onTextEdited: {
+                                indicateError = false
+                            }
+                        }
+
+                        Text {
+                            text: qsTr("DNS servers:")
+                            color: parent.enabled ? (fieldWiredDNSServers.indicateError ? "red" : "black") : "grey"
+                        }
+                        TextField {
+                            id: fieldWiredDNSServers
+                            Layout.minimumWidth: 200
+                            property bool indicateError: false
+                            onTextEdited: {
+                                indicateError = false
+                            }
+                        }
+                    }
+
+                    ImCheckBox {
                         id: chkLocale
                         text: qsTr("Set locale settings")
                     }
@@ -427,6 +489,24 @@ Popup {
                         }
                     }
 
+                    if (chkWired.checked)
+                    {
+                        if (fieldWiredCIDR.text.length < 7 || fieldWiredCIDR.text.length > 15)
+                        {
+                            fieldWiredCIDR.indicateError = true
+                            fieldWiredCIDR.forceActiveFocus()
+                        }
+                        if (fieldWiredGateway.text.length < 7 || fieldWiredGateway.text.length > 15)
+                        {
+                            fieldWiredGateway.indicateError = true
+                            fieldWiredGateway.forceActiveFocus()
+                        }
+                        if (fieldWiredCIDR.indicateError || fieldWiredGateway.indicateError)
+                        {
+                            return
+                        }
+                    }
+
                     applySettings()
                     saveSettings()
                     popup.close()
@@ -478,6 +558,17 @@ Popup {
             fieldUserName.text = settings.sshUserName
             chkSetUser.checked = true
         }
+        if ('wiredCIDR' in settings) {
+            fieldWiredCIDR.text = settings.wiredCIDR
+            fieldWiredGateway.text = settings.wiredGateway
+            fieldWiredDNSServers.text = settings.wiredDNSServers
+            chkWired.checked = true
+        } else {
+            fieldWiredCIDR.text = "192.168.1.100/24"
+            fieldWiredGateway.text = "192.168.1.1"
+            fieldWiredDNSServers.text = "192.168.1.1 8.8.8.8"
+        }
+
         if ('wifiSSID' in settings) {
             fieldWifiSSID.text = settings.wifiSSID
             if ('wifiSSIDHidden' in settings && settings.wifiSSIDHidden) {
@@ -702,6 +793,9 @@ Popup {
             }
             addCloudInit("")
         }
+        if (chkWired.checked || chk.Wireless.checked) {
+            cloudinitnetwork = "version: 2\n"
+        }
         if (chkWifi.checked) {
             var wpaconfig = "country="+fieldWifiCountry.editText+"\n"
             wpaconfig += "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n"
@@ -732,7 +826,6 @@ Popup {
             addFirstRun("fi")
 
 
-            cloudinitnetwork  = "version: 2\n"
             cloudinitnetwork += "wifis:\n"
             cloudinitnetwork += "  renderer: networkd\n"
             cloudinitnetwork += "  wlan0:\n"
@@ -749,6 +842,26 @@ Popup {
                For unknown reasons udev does not trigger setregdomain automatically and as a result
                our setting in /etc/default/crda is being ignored by Ubuntu. */
             addCloudInitRun("sed -i 's/^\s*REGDOMAIN=\S*/REGDOMAIN="+fieldWifiCountry.editText+"/' /etc/default/crda || true")
+        }
+        if (chkWired.checked) {
+            var wiredconfig = "interface eth0\n"
+            wiredconfig += "static ip_address="+fieldWiredCIDR.text+"\n"
+            wiredconfig += "static routers="+fieldWiredGateway.text+"\n"
+            wiredconfig += "static domain_name_servers="+fieldWiredDNSServers.text+"\n"
+
+            addFirstRun("cat << 'ETH0' >> /etc/dhcpcd.conf")
+            addFirstRun(wiredconfig)
+            addFirstRun("ETH0")
+
+
+            cloudinitnetwork += "ethernets:\n"
+            cloudinitnetwork += "  renderer: networkd\n"
+            cloudinitnetwork += "  eth0:\n"
+            cloudinitnetwork += "    dhcp4: false\n"
+            cloudinitnetwork += "    addresses: ["+fieldWiredCIDR.text+"]\n"
+            cloudinitnetwork += "    gateway4: "+fieldWiredGateway.text+"\n"
+            cloudinitnetwork += "    nameservers:\n"
+            cloudinitnetwork += "      addresses: ["+fieldWiredDNSServers.text+"]\n"
         }
         if (chkLocale.checked) {
             var kbdconfig = "XKBMODEL=\"pc105\"\n"
@@ -820,6 +933,11 @@ Popup {
                 }
                 settings.wifiPassword = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
                 settings.wifiCountry = fieldWifiCountry.editText
+            }
+            if (chkWired.checked) {
+                settings.wiredCIDR = fieldWiredCIDR.text
+                settings.wiredGateway = fieldWiredGateway.text
+                settings.wiredDNSServers = fieldWiredDNSServers.text
             }
             if (chkLocale.checked) {
                 settings.timezone = fieldTimezone.editText
