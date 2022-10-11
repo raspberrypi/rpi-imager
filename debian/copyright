@@ -6,11 +6,15 @@ Files: *
 Copyright: 2020 Raspberry Pi Ltd
 License: Apache-2.0
 
-Files: dependencies/mountutils/* dependencies/drivelist/*
+Files: src/dependencies/mountutils/* src/dependencies/drivelist/*
 Copyright: 2017 Balena.io 
 License: Apache-2.0
 
-Files-Excluded: dependencies/cmcurl/* dependencies/cmliblzma/* dependencies/fat32format/* dependencies/libarchive-3.4.1/* dependencies/zlib-1.2.11/*
+Files: src/dependencies/sha256crypt/*
+Copyright: Released into the Public Domain by Ulrich Drepper
+License: public-domain
+
+Files-Excluded: src/dependencies/cmcurl/* src/dependencies/cmliblzma/* src/dependencies/fat32format/* src/dependencies/libarchive-3.4.1/* src/dependencies/zlib-1.2.11/*
 Comment: Not used in Linux build (depending on the official packages instead) 
 
 License: Apache-2.0
@@ -28,4 +32,8 @@ License: Apache-2.0
  .
  On Debian systems, the complete text of the Apache version 2.0 license
  can be found in "/usr/share/common-licenses/Apache-2.0".
+
+License: public-domain
+ SHA256-based Unix crypt implementation.
+ Released into the Public Domain by Ulrich Drepper
 
