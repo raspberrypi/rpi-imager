@@ -1,0 +1,158 @@
+.TH RPI\-IMAGER 1
+.
+.SH NAME
+rpi\-imager \- Flash disk images to removable storage
+.
+.
+.SH SYNOPSIS
+.SY rpi\-imager
+.OP \-\-debug
+.OP \-\-repo url
+.OP \-\-qm translations
+.OP \-\-disable\-telemetry
+.OP image-uri
+.YS
+.
+.SY rpi\-imager
+\-\-cli
+.OP \-\-debug
+.OP \-\-quiet
+.OP \-\-disable\-verify
+.OP \-\-sha256 expected-hash
+image-uri
+destination-device
+.YS
+.
+.SY rpi\-imager
+\-\-version
+.YS
+.
+.SY rpi\-imager
+\-\-help
+.YS
+.
+.
+.SH DESCRIPTION
+.B rpi\-imager
+is a utility for writing a disk image file, which may optionally be compressed,
+to a removable destination disk, such as a micro-SD card or a USB-attached SSD
+drive.
+.
+.PP
+When run without further command line arguments, the utility presents a simple
+graphical interface with controls for image-file selection, target drive
+selection, and one to start writing. In this mode, the Raspberry Pi server
+(and potentially third party servers) will be queried for available OS images.
+You may also specify an
+.I image-uri
+(which may be a local file, or an HTTP or HTTPS URL) to flash directly on the
+command line.
+.
+.PP
+When run with the
+.I \-\-cli
+argument, the utility directly flashes the
+.I image-uri
+given to the specified
+.IR destination-drive .
+In this case, the
+.I \-\-sha256
+option can be used to pass in the expected SHA256 checksum of the image.
+.
+.
+.SH OPTIONS
+.TP
+.B \-\-cli
+Do not launch the graphical interface; just flash the image given to the
+specified drive. In this mode, the
+.I image-uri
+and
+.I destination-device
+must both be specified.
+.
+.TP
+.B \-\-debug
+Output extra debugging information on the console.
+.
+.TP
+.B \-\-disable\-telemetry
+Do not report OS writes to
+.I http://rpi-imager-stats.raspberrypi.com/
+.
+.TP
+.B \-\-disable\-verify
+After writing the image, do not attempt to verify that the image was written
+correctly.
+Only valid when run with
+.IR \-\-cli .
+.
+.TP
+.B \-\-help
+Display a synopsis of the command line syntax and exit.
+.
+.TP
+.B \-\-quiet
+Suppress all console output.
+Only valid when run with
+.IR \-\-cli .
+.
+.TP
+.BI \-\-qm \ translations
+Specify an alternate Qt message translations file to use with the GUI.
+.
+.TP
+.BI \-\-repo \ url
+Instead of querying the Raspberry Pi servers for the list of available OS
+images, query this URL instead. The URL will be expected to return a JSON file
+conforming to the format described in the associated
+.IR json-schema .
+.
+.TP
+.BI \-\-sha256 \ expected-hash
+Verify that the image matches the
+.I expected-hash
+before writing it to the specified destination.
+Only valid when run with
+.IR \-\-cli .
+.
+.TP
+.B \-\-version
+Report the version of the utility, and the default URI it will attempt to
+query to determine the available OS images.
+.
+.TP
+image-uri
+If specified, the URI of the image to write to the destination. This may be a
+local file, or a remote URL supporting the HTTP or HTTPS protocols. This must
+be specified when using
+.IR \-\-cli .
+.
+.TP
+destination-device
+The device to which to write the specified image, e.g.
+.IR /dev/mmcblk0 .
+Only valid when run with
+.IR \-\-cli .
+.
+.
+.SH EXAMPLES
+.TP
+.B rpi\-imager
+Launch the graphical interface.
+.
+.TP
+.B rpi\-imager \-\-repo http://localhost:8080/os_list_utility.json
+Test a locally hosted version of the OS list with the graphical interface.
+.
+.TP
+.B rpi\-imager \-\-cli \-\-disable\-verify test.img /dev/mmcblk0
+Write
+.I test.img
+to
+.I /dev/mmcblk0
+without any verification of the image itself, and no check that the image
+flashed correctly. This also avoids launching the graphical interface.
+.
+.
+.SH SEE ALSO
+.BR dd (1)
