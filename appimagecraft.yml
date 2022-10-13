@@ -1,0 +1,21 @@
+version: 1
+
+project:
+  name: org.raspberrypi.rpi-imager
+  version_command: git describe --tags
+
+build:
+  cmake:
+    source_dir: src/
+
+scripts:
+  post_build:
+    - |
+      sed -i 's|Name=Imager|Name=Raspberry Pi Imager|' AppDir/usr/share/applications/rpi-imager.desktop
+
+appimage:
+  linuxdeploy:
+    plugins:
+      - qt
+    raw_environment:
+      QML_SOURCES_PATHS: "\"$PROJECT_ROOT\"/src/qmlcomponents/"
