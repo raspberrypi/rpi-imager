@@ -1,0 +1,5 @@
+# editor backups
+*.*swp*
+
+# AppImage related
+*.AppImage*
