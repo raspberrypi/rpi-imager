@@ -570,7 +570,7 @@ Popup {
         firstrun += s+"\n"
     }
     function escapeshellarg(arg) {
-        return "'"+arg.replace(/'/g, "\\'")+"'"
+        return "'"+arg.replace(/'/g, "'\"'\"'")+"'"
     }
     function addCloudInit(s) {
         cloudinit += s+"\n"
