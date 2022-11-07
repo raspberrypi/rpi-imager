@@ -111,12 +111,29 @@ QByteArray DownloadThread::_fileGetContentsTrimmed(const QString &filename)
 
 bool DownloadThread::_openAndPrepareDevice()
 {
-    emit preparationStatusUpdate(tr("opening drive"));
-
     if (_filename.startsWith("/dev/"))
     {
+        emit preparationStatusUpdate(tr("unmounting drive"));
+#ifdef Q_OS_DARWIN
+        /* Also unmount any APFS volumes using this physical disk */
+        auto l = Drivelist::ListStorageDevices();
+        for (const auto &i : l)
+        {
+            if (QByteArray::fromStdString(i.device) == _filename)
+            {
+                for (const auto &j : i.childDevices)
+                {
+                    qDebug() << "Unmounting APFS volume:" << j.c_str();
+                    unmount_disk(j.c_str());
+                }
+                break;
+            }
+        }
+#endif
+        qDebug() << "Unmounting:" << _filename;
         unmount_disk(_filename.constData());
     }
+    emit preparationStatusUpdate(tr("opening drive"));
 
     _file.setFileName(_filename);
 

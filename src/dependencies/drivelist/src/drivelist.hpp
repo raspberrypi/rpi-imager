@@ -38,11 +38,13 @@ struct DeviceDescriptor {
   std::string raw;
   std::string description;
   std::string error;
+  std::string parentDevice;
   uint64_t size;
   uint32_t blockSize = 512;
   uint32_t logicalBlockSize = 512;
   std::vector<std::string> mountpoints;
   std::vector<std::string> mountpointLabels;
+  std::vector<std::string> childDevices;
   bool isReadOnly;  // Device is read-only
   bool isSystem;  // Device is a system drive
   bool isVirtual;  // Device is a virtual storage device
