@@ -59,6 +59,7 @@ Popup {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
             onClicked: {
+                initialized = false
                 popup.close()
             }
         }
