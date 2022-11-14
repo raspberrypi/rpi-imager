@@ -633,7 +633,7 @@
     <message>
         <location filename="../main.qml" line="641"/>
         <source>Online - %1 GB download</source>
-        <translation>En ligne - %1 GO téléchargé</translation>
+        <translation>En ligne - %1 GO à télécharger</translation>
     </message>
     <message>
         <location filename="../main.qml" line="766"/>
