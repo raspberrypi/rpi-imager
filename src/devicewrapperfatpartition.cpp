@@ -483,7 +483,7 @@ bool DeviceWrapperFatPartition::dirNameExists(const QByteArray dirname)
     while (readDir(&entry))
     {
         if (!(entry.DIR_Attr & ATTR_LONG_NAME)
-                && dirname == QByteArray(entry.DIR_Name, sizeof(entry.DIR_Name)))
+                && dirname == QByteArray((char *) entry.DIR_Name, sizeof(entry.DIR_Name)))
         {
             return true;
         }

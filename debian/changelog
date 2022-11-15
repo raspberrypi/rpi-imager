@@ -1,3 +1,15 @@
+rpi-imager (1.7.4) unstable; urgency=medium
+
+  * Advanced settings: fix escaping single quotes
+  * Advanced settings: default to using username of logged-in user
+  * Now uses a different method to edit files on the FAT partition
+    to apply advanced settings. Imager now understands the FAT16/FAT32
+    file system format and can edit files by itself using the raw
+    disk device, without having to rely on the operating system
+    to mount the partition first.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Mon, 14 Nov 2022 21:49:27 +0100
+
 rpi-imager (1.7.3) unstable; urgency=medium
 
   * Linux: use GnuTLS instead of OpenSSL for computing SHA256

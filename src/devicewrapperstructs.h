@@ -6,6 +6,10 @@
  * Copyright (C) 2022 Raspberry Pi Ltd
  */
 
+#include <stdint.h>
+
+#pragma pack(push, 1)
+
 /* MBR on-disk structures */
 
 struct mbr_partition_entry {
@@ -15,7 +19,7 @@ struct mbr_partition_entry {
     char end_hsc[3];
     unsigned int starting_sector;
     unsigned int nr_of_sectors;
-} __attribute__ ((packed));
+};
 
 struct mbr_table {
     char bootcode[440];
@@ -23,7 +27,7 @@ struct mbr_table {
     unsigned char flags[2];
     mbr_partition_entry part[4];
     unsigned char signature[2];
-} __attribute__ ((packed));
+};
 
 
 /* File Allocation Table
@@ -55,7 +59,7 @@ struct fat16_bpb {
 
     uint8_t  Zeroes[448];
     uint8_t  Signature[2]; /* 0x55aa */
-} __attribute__ ((packed));
+};
 
 struct fat32_bpb {
     uint8_t  BS_jmpBoot[3];
@@ -89,7 +93,7 @@ struct fat32_bpb {
 
     uint8_t  Zeroes[420];
     uint8_t  Signature[2]; /* 0x55aa */
-} __attribute__ ((packed));
+};
 
 union fat_bpb {
     struct fat16_bpb fat16;
@@ -97,7 +101,7 @@ union fat_bpb {
 };
 
 struct dir_entry {
-    char     DIR_Name[11];
+    unsigned char DIR_Name[11];
     uint8_t  DIR_Attr;
     uint8_t  DIR_NTRes;
     uint8_t  DIR_CrtTimeTenth;
@@ -109,7 +113,7 @@ struct dir_entry {
     uint16_t DIR_WrtDate;
     uint16_t DIR_FstClusLO;
     uint32_t DIR_FileSize;
-} __attribute__ ((packed));
+};
 
 struct longfn_entry {
     uint8_t  LDIR_Ord;
@@ -120,7 +124,7 @@ struct longfn_entry {
     char     LDIR_Name2[12];
     uint16_t LDIR_FstClusLO;
     char     LDIR_Name3[4];
-} __attribute__ ((packed));
+};
 
 #define LAST_LONG_ENTRY 0x40
 
@@ -140,6 +144,8 @@ struct FSInfo {
     uint32_t FSI_Nxt_Free;
     uint8_t  FSI_Reserved2[12];
     uint8_t  FSI_TrailSig[4]; /* 0x00 0x00 0x55 0xAA */
-} __attribute__ ((packed));
+};
+
+#pragma pack(pop)
 
 #endif // DEVICEWRAPPERSTRUCTS_H
