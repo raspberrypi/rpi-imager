@@ -478,7 +478,10 @@ Popup {
         if ('sshUserName' in settings) {
             fieldUserName.text = settings.sshUserName
             chkSetUser.checked = true
+        } else {
+            fieldUserName.text = imageWriter.getCurrentUser()
         }
+
         if ('wifiSSID' in settings) {
             fieldWifiSSID.text = settings.wifiSSID
             if ('wifiSSIDHidden' in settings && settings.wifiSSIDHidden) {

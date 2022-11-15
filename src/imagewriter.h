@@ -117,6 +117,7 @@ public:
     Q_INVOKABLE QStringList getTranslations();
     Q_INVOKABLE QString getCurrentLanguage();
     Q_INVOKABLE QString getCurrentKeyboard();
+    Q_INVOKABLE QString getCurrentUser();
     Q_INVOKABLE void changeLanguage(const QString &newLanguageName);
     Q_INVOKABLE void changeKeyboard(const QString &newKeymapLayout);
     Q_INVOKABLE bool customRepo();

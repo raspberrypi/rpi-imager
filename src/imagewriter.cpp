@@ -1232,6 +1232,26 @@ QString ImageWriter::detectPiKeyboard()
     return QString();
 }
 
+QString ImageWriter::getCurrentUser()
+{
+    QString user = qgetenv("USER");
+
+    if (user.isEmpty())
+        user = qgetenv("USERNAME");
+
+    user = user.toLower();
+    if (user.contains(" "))
+    {
+        auto names = user.split(" ");
+        user = names.first();
+    }
+
+    if (user.isEmpty() || user == "root")
+        user = "pi";
+
+    return user;
+}
+
 bool ImageWriter::hasMouse()
 {
     return !_embeddedMode || QFile::exists("/dev/input/mouse0");
