@@ -347,6 +347,17 @@ void DeviceWrapperFatPartition::writeFile(const QString &filename, const QByteAr
     updateDirEntry(&entry);
 }
 
+inline QByteArray _dirEntryToShortName(struct dir_entry *entry)
+{
+    QByteArray base = QByteArray((char *) entry->DIR_Name, 8).trimmed().toLower();
+    QByteArray ext = QByteArray((char *) entry->DIR_Name+8, 3).trimmed().toLower();
+
+    if (ext.isEmpty())
+        return base;
+    else
+        return base+"."+ext;
+}
+
 bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct dir_entry *entry, bool createIfNotExist)
 {
     QString filenameRead, longFilenameLower = longFilename.toLower();
@@ -375,11 +386,9 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
             {
                 filenameRead.truncate(filenameRead.indexOf(QChar::Null));
 
-                //qDebug() << "Long filename:" << filenameRead << "Short:" << QByteArray(entry->DIR_Name, sizeof(entry->DIR_Name));
+                //qDebug() << "Long filename:" << filenameRead << "DIR_Name:" << QByteArray((char *) entry->DIR_Name, sizeof(entry->DIR_Name)) << "Short:" << _dirEntryToShortName(entry);
 
-                /* FIXME: should we check short file names as well, if they are not preceeded by long file name entry? */
-
-                if (filenameRead.toLower() == longFilenameLower)
+                if (filenameRead.toLower() == longFilenameLower || (filenameRead.isEmpty() && _dirEntryToShortName(entry) == longFilenameLower))
                 {
                     return true;
                 }
