@@ -329,7 +329,6 @@
                         "required": [
                             "name",
                             "description",
-                            "icon",
                             "subitems_url"
                         ],
                         "properties": {
@@ -415,7 +414,6 @@
                         "required": [
                             "name",
                             "description",
-                            "icon",
                             "subitems"
                         ],
                         "properties": {

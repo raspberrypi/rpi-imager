@@ -1,0 +1,5 @@
+#!/bin/sh
+
+echo "Bogus firstrun.sh file, used for automated testing of FAT16/FAT32 modification code only"
+
+exit 0

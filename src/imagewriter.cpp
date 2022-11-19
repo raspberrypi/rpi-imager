@@ -66,7 +66,7 @@
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
       _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
-      _embeddedMode(false), _online(false), _trans(nullptr)
+      _embeddedMode(false), _online(false), _customCacheFile(false), _trans(nullptr)
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
@@ -349,8 +349,11 @@ void ImageWriter::startWrite()
 
 void ImageWriter::onCacheFileUpdated(QByteArray sha256)
 {
-    _settings.setValue("caching/lastDownloadSHA256", sha256);
-    _settings.sync();
+    if (!_customCacheFile)
+    {
+        _settings.setValue("caching/lastDownloadSHA256", sha256);
+        _settings.sync();
+    }
     _cachedFileHash = sha256;
     qDebug() << "Done writing cache file";
 }
@@ -419,6 +422,14 @@ bool ImageWriter::isVersionNewer(const QString &version)
 void ImageWriter::setCustomOsListUrl(const QUrl &url)
 {
     _repo = url;
+}
+
+void ImageWriter::setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256)
+{
+    _cacheFileName = cacheFile;
+    _cachedFileHash = QFile::exists(cacheFile) ? sha256 : "";
+    _customCacheFile = true;
+    _cachingEnabled = true;
 }
 
 /* Start polling the list of available drives */
