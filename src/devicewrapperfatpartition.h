@@ -31,6 +31,7 @@ protected:
     uint32_t _fat32_firstRootDirCluster, _fat32_currentRootDirCluster;
     uint16_t _bytesPerSector, _fat32_fsinfoSector;
     QList<uint32_t> _fatStartOffset;
+    QList<uint32_t> _currentDirClusters;
 
     QList<uint32_t> getClusterChain(uint32_t firstCluster);
     void setFAT16(uint16_t cluster, uint16_t value);

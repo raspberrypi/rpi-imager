@@ -8,7 +8,7 @@ rpi-imager (1.7.4) unstable; urgency=medium
     disk device, without having to rely on the operating system
     to mount the partition first.
 
- -- Floris Bos <bos@je-eigen-domein.nl>  Mon, 14 Nov 2022 21:49:27 +0100
+ -- Floris Bos <bos@je-eigen-domein.nl>  Sun, 20 Nov 2022 17:30:20 +0100
 
 rpi-imager (1.7.3) unstable; urgency=medium
 

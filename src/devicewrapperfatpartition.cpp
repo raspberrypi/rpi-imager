@@ -506,6 +506,8 @@ void DeviceWrapperFatPartition::updateDirEntry(struct dir_entry *dirEntry)
     struct dir_entry iterEntry;
 
     openDir();
+    quint64 oldOffset = _offset;
+
     while (readDir(&iterEntry))
     {
         /* Look for existing entry with same short filename */
@@ -513,10 +515,12 @@ void DeviceWrapperFatPartition::updateDirEntry(struct dir_entry *dirEntry)
                 && memcmp(dirEntry->DIR_Name, iterEntry.DIR_Name, sizeof(iterEntry.DIR_Name)) == 0)
         {
             /* seek() back and write out new entry */
-            _offset -= sizeof(*dirEntry);
+            _offset = oldOffset;
             write((char *) dirEntry, sizeof(*dirEntry));
             return;
         }
+
+        oldOffset = _offset;
     }
 
     throw std::runtime_error("Error locating existing directory entry");
@@ -524,6 +528,7 @@ void DeviceWrapperFatPartition::updateDirEntry(struct dir_entry *dirEntry)
 
 void DeviceWrapperFatPartition::writeDirEntryAtCurrentPos(struct dir_entry *dirEntry)
 {
+    //qDebug() << "Write new entry" << QByteArray((char *) dirEntry->DIR_Name, 11);
     write((char *) dirEntry, sizeof(*dirEntry));
 
     if (_type == FAT32)
@@ -532,14 +537,22 @@ void DeviceWrapperFatPartition::writeDirEntryAtCurrentPos(struct dir_entry *dirE
         {
             /* We reached the end of the cluster, allocate/seek to next cluster */
             uint32_t nextCluster = getFAT(_fat32_currentRootDirCluster);
-            /* FIXME: should we check for circular cluster references? */
 
             if (nextCluster > 0xFFFFFF7)
             {
                 nextCluster = allocateCluster(_fat32_currentRootDirCluster);
             }
 
+            if (_currentDirClusters.contains(nextCluster))
+                throw std::runtime_error("Circular cluster references in FAT32 directory detected");
+            _currentDirClusters.append(nextCluster);
+
             _fat32_currentRootDirCluster = nextCluster;
+            seekCluster(_fat32_currentRootDirCluster);
+
+            /* Zero out entire new cluster, as fsck.fat does not stop reading entries at end-of-directory marker */
+            QByteArray zeroes(_bytesPerCluster, 0);
+            write(zeroes.data(), zeroes.length() );
             seekCluster(_fat32_currentRootDirCluster);
         }
     }
@@ -560,6 +573,10 @@ void DeviceWrapperFatPartition::openDir()
     {
         _fat32_currentRootDirCluster = _fat32_firstRootDirCluster;
         seekCluster(_fat32_currentRootDirCluster);
+        /* Keep track of directory clusters we seeked to, to be able
+           to detect circular references */
+        _currentDirClusters.clear();
+        _currentDirClusters.append(_fat32_currentRootDirCluster);
     }
 }
 
@@ -581,11 +598,13 @@ bool DeviceWrapperFatPartition::readDir(struct dir_entry *result)
         {
             /* We reached the end of the cluster, seek to next cluster */
             uint32_t nextCluster = getFAT(_fat32_currentRootDirCluster);
-            /* FIXME: should we check for circular cluster references? */
 
             if (nextCluster > 0xFFFFFF7)
                 throw std::runtime_error("Reached end of FAT32 root directory, but no end-of-directory marker found");
 
+            if (_currentDirClusters.contains(nextCluster))
+                throw std::runtime_error("Circular cluster references in FAT32 directory detected");
+            _currentDirClusters.append(nextCluster);
             _fat32_currentRootDirCluster = nextCluster;
             seekCluster(_fat32_currentRootDirCluster);
         }
