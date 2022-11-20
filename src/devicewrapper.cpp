@@ -161,6 +161,23 @@ DeviceWrapperFatPartition *DeviceWrapper::fatPartition(int nr)
     if (nr > 4 || nr < 1)
         throw std::runtime_error("Only basic partitions 1-4 supported");
 
+    /* GPT table handling */
+    struct gpt_header gpt;
+    struct gpt_partition gptpart;
+    pread((char *) &gpt, sizeof(gpt), 512);
+
+    if (!strcmp("EFI PART", gpt.Signature) && gpt.MyLBA == 1)
+    {
+        qDebug() << "Using GPT partition table";
+        if (nr > gpt.NumberOfPartitionEntries)
+            throw std::runtime_error("Partition does not exist");
+
+        pread((char *) &gptpart, sizeof(gptpart), gpt.PartitionEntryLBA*512 + gpt.SizeOfPartitionEntry*(nr-1));
+
+        return new DeviceWrapperFatPartition(this, gptpart.StartingLBA*512, (gptpart.EndingLBA-gptpart.StartingLBA+1)*512, this);
+    }
+
+    /* MBR table handling */
     struct mbr_table mbr;
     pread((char *) &mbr, sizeof(mbr), 0);
 

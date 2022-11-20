@@ -17,8 +17,8 @@ struct mbr_partition_entry {
     char begin_hsc[3];
     unsigned char id;
     char end_hsc[3];
-    unsigned int starting_sector;
-    unsigned int nr_of_sectors;
+    uint32_t starting_sector;
+    uint32_t nr_of_sectors;
 };
 
 struct mbr_table {
@@ -29,6 +29,36 @@ struct mbr_table {
     unsigned char signature[2];
 };
 
+/* GUID on-disk structures
+ * https://www.intel.com/content/dam/www/public/us/en/zip/efi-110.zip (p. 369)
+ */
+
+struct gpt_header {
+    char     Signature[8];
+    uint32_t Revision;
+    uint32_t HeaderSize;
+    uint32_t HeaderCRC32;
+    uint32_t Reserved;
+    uint64_t MyLBA;
+    uint64_t AlternateLBA;
+    uint64_t FirstUsableLBA;
+    uint64_t LastUsableLBA;
+    unsigned char DiskGUID[16];
+    uint64_t PartitionEntryLBA;
+    uint32_t NumberOfPartitionEntries;
+    uint32_t SizeOfPartitionEntry;
+    uint32_t PartitionEntryArrayCRC32;
+    char     Reserved2[420]; /* Assuming 512 byte sectors */
+};
+
+struct gpt_partition {
+    unsigned char PartitionTypeGuid[16];
+    unsigned char UniquePartitionGuid[16];
+    uint64_t StartingLBA;
+    uint64_t EndingLBA;
+    uint64_t Attributes;
+    char     PartitionName[72];
+};
 
 /* File Allocation Table
  * https://academy.cba.mit.edu/classes/networking_communications/SD/FAT.pdf
