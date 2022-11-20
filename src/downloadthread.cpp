@@ -585,7 +585,7 @@ void DownloadThread::_header(const string &header)
     {
         _lastModified = curl_getdate(header.data()+15, NULL);
     }
-    qDebug() << "Received header:" << header.c_str();
+    qDebug() << "Received header:" << QByteArray(header.c_str()).trimmed();
 }
 
 void DownloadThread::cancelDownload()
