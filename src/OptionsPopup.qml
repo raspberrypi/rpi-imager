@@ -181,20 +181,18 @@ Popup {
                                 }
                             }
                         }
-                        GridLayout {
+                        ColumnLayout {
                             Layout.leftMargin: 40
-                            columns: 2
-                            columnSpacing: 10
-                            rowSpacing: -5
+                            spacing: -5
                             enabled: radioPubKeyAuthentication.checked
 
                             Text {
                                 text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
                                 color: parent.enabled ? "black" : "grey"
                             }
-                            TextField {
+                            TextArea {
                                 id: fieldPublicKey
-                                Layout.minimumWidth: 200
+                                Layout.minimumHeight: 80
                             }
                         }
                     }
