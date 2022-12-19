@@ -84,7 +84,6 @@ ApplicationWindow {
                 anchors.rightMargin: 50
                 anchors.leftMargin: 50
 
-                rows: 6
                 columns: 3
                 columnSpacing: 25
 
@@ -270,75 +269,77 @@ ApplicationWindow {
                     text: qsTr("Keyboard navigation: <tab> navigate to next button <space> press button/select item <arrow up/down> go up/down in lists")
                 }
 
-                RowLayout {
+                Rectangle {
                     id: langbar
                     Layout.columnSpan: 3
                     Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
                     Layout.bottomMargin: 5
-                    spacing: 10
+                    Layout.minimumWidth: langbarContent.implicitWidth
+                    Layout.minimumHeight: langbarContent.implicitHeight
                     visible: imageWriter.isEmbeddedMode()
+                    color: "#ffffe3"
+                    radius: 5
 
-                    Rectangle {
-                        anchors.fill: langbar
-                        color: "#ffffe3"
-                        radius: 5
-                    }
+                    RowLayout {
+                        id: langbarContent
+                        spacing: 10
 
-                    Text {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        text: qsTr("Language: ")
-                        Layout.leftMargin: 30
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    ComboBox {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        model: imageWriter.getTranslations()
-                        Layout.preferredWidth: 200
-                        currentIndex: -1
-                        Component.onCompleted: {
-                            currentIndex = find(imageWriter.getCurrentLanguage())
+                        Text {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            text: qsTr("Language: ")
+                            Layout.leftMargin: 30
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
                         }
+                        ComboBox {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            model: imageWriter.getTranslations()
+                            Layout.preferredWidth: 200
+                            currentIndex: -1
+                            Component.onCompleted: {
+                                currentIndex = find(imageWriter.getCurrentLanguage())
+                            }
+                            onActivated: {
+                                imageWriter.changeLanguage(editText)
+                            }
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
+                        }
+                        Text {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            text: qsTr("Keyboard: ")
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
+                        }
+                        ComboBox {
+                            enabled: imageWriter.isEmbeddedMode()
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            model: imageWriter.getKeymapLayoutList()
+                            currentIndex: -1
+                            Component.onCompleted: {
+                                currentIndex = find(imageWriter.getCurrentKeyboard())
+                            }
+                            onActivated: {
+                                imageWriter.changeKeyboard(editText)
+                            }
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
+                            Layout.rightMargin: 30
+                        }
+                    }
+
+                    /* Language/keyboard bar is normally only visible in embedded mode.
+                    To test translations also show it when shift+ctrl+L is pressed. */
+                    Shortcut {
+                        sequences: ["Shift+Ctrl+L", "Shift+Meta+L"]
+                        context: Qt.ApplicationShortcut
                         onActivated: {
-                            imageWriter.changeLanguage(editText)
+                            langbar.visible = !langbar.visible
                         }
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    Text {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        text: qsTr("Keyboard: ")
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    ComboBox {
-                        enabled: imageWriter.isEmbeddedMode()
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        model: imageWriter.getKeymapLayoutList()
-                        currentIndex: -1
-                        Component.onCompleted: {
-                            currentIndex = find(imageWriter.getCurrentKeyboard())
-                        }
-                        onActivated: {
-                            imageWriter.changeKeyboard(editText)
-                        }
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                        Layout.rightMargin: 30
-                    }
-                }
-
-                /* Language/keyboard bar is normally only visible in embedded mode.
-                   To test translations also show it when shift+ctrl+L is pressed. */
-                Shortcut {
-                    sequences: ["Shift+Ctrl+L", "Shift+Meta+L"]
-                    context: Qt.ApplicationShortcut
-                    onActivated: {
-                        langbar.visible = true
                     }
                 }
             }

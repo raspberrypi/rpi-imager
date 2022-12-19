@@ -31,12 +31,20 @@ sudo apt install --no-install-recommends build-essential devscripts debhelper cm
 git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 ```
 
-#### Building on the Pi
+#### Build the software
 
-If building on a device with limited memory (e.g. 1 GB Pi), disable parallel build or it may run out of memory:
+*(Optional)* When modifying the application or trying to debug an issue, you can build the app and run it without packaging and installing the Debian package.
+If you're only interested in building the complete app, you can skip to the next step.
 
 ```
-export DEB_BUILD_OPTIONS="parallel=1"
+cd rpi-imager
+mkdir -p build
+cd build
+cmake ../src
+make
+
+# Run the compiled image from the current directory
+./rpi-imager
 ```
 
 #### Build the Debian package
@@ -46,15 +54,21 @@ cd rpi-imager
 debuild -uc -us
 ```
 
-debuild will compile everything, create a .deb package and put it in the parent directory.
-Can install it with apt:
+> Note: If building on a device with limited memory (e.g. 1 GB Pi), disable parallel build or it may run out of memory:
+> 
+> ```
+> export DEB_BUILD_OPTIONS="parallel=1"
+> ```
+
+`debuild` will compile the app and create a `.deb` package in the parent directory that you can install with `apt`:
 
 ```
-cd ..
-sudo apt install ./rpi-imager*.deb
+sudo apt install ../rpi-imager*.deb
+# or if you've made some changes and are rebuilding you can use
+sudo apt reinstall ../rpi-imager*.deb
 ```
 
-It should create an icon in the start menu under "Utilities" or "Accessories".
+This will create an icon in the start menu under "Utilities" or "Accessories" or you can run it from a terminal using the command `rpi-imager`.
 The imaging utility will normally be run as regular user, and will call udisks2 over DBus to perform privileged operations like opening the disk device for writing.
 If udisks2 is not functional on your Linux distribution, you can alternatively start it as "root" with sudo and similar tools.
 

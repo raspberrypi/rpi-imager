@@ -11,13 +11,11 @@ import "qmlcomponents"
 
 Popup {
     id: popup
-    //x: 62
-    x: (parent.width-width)/2
-    y: 10
-    //width: parent.width-125
-    width: popupbody.implicitWidth+60
+    anchors.centerIn: parent
+    width: 600
     height: parent.height-20
     padding: 0
+    font.family: roboto.name
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     property bool initialized: false
     property bool hasSavedSettings: false
@@ -29,412 +27,431 @@ Popup {
     property string cloudinitwrite
     property string cloudinitnetwork
 
-    // background of title
-    Rectangle {
-        color: "#f5f5f5"
-        anchors.right: parent.right
-        anchors.top: parent.top
-        height: 35
-        width: parent.width
-    }
-    // line under title
-    Rectangle {
-        color: "#afafaf"
-        width: parent.width
-        y: 35
-        implicitHeight: 1
-    }
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
 
-    Text {
-        id: msgx
-        text: "X"
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.rightMargin: 25
-        anchors.topMargin: 10
-        font.family: roboto.name
-        font.bold: true
+        // title bar
+        Rectangle {
+            id: titleBar
+            color: "#f5f5f5"
 
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                initialized = false
-                popup.close()
+            Layout.fillWidth: true
+            Layout.minimumHeight: 35
+
+            Text {
+                id: popupheader
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                anchors.fill: parent
+                font.bold: true
+                text: qsTr("Advanced options")
+            }
+
+            Text {
+                id: msgx
+                text: "X"
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 25
+                horizontalAlignment: Text.AlignRight
+                verticalAlignment: Text.AlignVCenter
+                font.bold: true
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.rightMargin: -10
+                    anchors.leftMargin: -10
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        initialized = false
+                        popup.close()
+                    }
+                }
             }
         }
-    }
-
-    ColumnLayout {
-        spacing: 20
-        anchors.fill: parent
-
-        Text {
-            id: popupheader
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
+        // line under title bar
+        Rectangle {
+            color: "#afafaf"
             Layout.fillWidth: true
-            Layout.topMargin: 10
-            font.family: roboto.name
-            font.bold: true
-            text: qsTr("Advanced options")
+            Layout.preferredHeight: 1
         }
 
         ScrollView {
             id: popupbody
-            font.family: roboto.name
-            //Layout.maximumWidth: popup.width-30
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: 25
-            Layout.topMargin: 10
+            // Tell the scroll view content Item to use all of the available width, otherwise it
+            // implicitly sizes the whatever is inside it (i.e. the ColumnLayout).  This means that
+            // anchors.fill: parent in the ColumnLayout has no effect because the parent is already
+            // sized to the child and we want it to stretch to fill the available space.
+            contentWidth: availableWidth
             clip: true
             ScrollBar.vertical.policy: ScrollBar.AlwaysOn
 
-          ColumnLayout {
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 25
+                anchors.rightMargin: 25
+                spacing: 10
 
-            GroupBox {
-                title: qsTr("Image customization options")
-                label: RowLayout {
-                    Label {
-                        text: parent.parent.title
-                    }
-                    ComboBox {
-                        id: comboSaveSettings
-                        model: {
-                            [qsTr("for this session only"),
-                             qsTr("to always use")]
+                GroupBox {
+                    Layout.topMargin: 10
+                    Layout.fillWidth: true
+
+                    title: qsTr("Image customization options")
+                    label: RowLayout {
+                        x: parent.leftPadding
+                        Label {
+                            text: parent.parent.title
                         }
-                        Layout.minimumWidth: 250
-                        Layout.maximumHeight: 40
-                        enabled: !imageWriter.isEmbeddedMode()
-                    }
-                }
-
-                ColumnLayout {
-                    spacing: -10
-
-                    RowLayout {
-                        ImCheckBox {
-                            id: chkHostname
-                            text: qsTr("Set hostname:")
-                            onCheckedChanged: {
-                                if (checked) {
-                                    fieldHostname.forceActiveFocus()
-                                }
+                        ComboBox {
+                            id: comboSaveSettings
+                            model: {
+                                [qsTr("for this session only"),
+                                qsTr("to always use")]
                             }
-                        }
-                        TextField {
-                            id: fieldHostname
-                            enabled: chkHostname.checked
-                            text: "raspberrypi"
-                            /* FIXME: use RegularExpressionValidator instead when moving to newer Qt version.
-                               It is not available in 5.12 that is still being used by Ubuntu 20 LTS though */
-                            validator: RegExpValidator { regExp: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
-                        }
-                        Text {
-                            text : ".local"
-                            color: chkHostname.checked ? "black" : "grey"
+                            Layout.minimumWidth: 250
+                            Layout.maximumHeight: 40
+                            enabled: !imageWriter.isEmbeddedMode()
                         }
                     }
-                    ImCheckBox {
-                        id: chkSSH
-                        text: qsTr("Enable SSH")
-                        onCheckedChanged: {
-                            if (checked) {
-                                if (!radioPasswordAuthentication.checked && !radioPubKeyAuthentication.checked) {
-                                    radioPasswordAuthentication.checked = true
-                                }
-                                if (radioPasswordAuthentication.checked) {
-                                    chkSetUser.checked = true
-                                    if (!fieldUserPassword.length) {
-                                        fieldUserPassword.forceActiveFocus()
-                                    }
-                                }
-                            }
-                        }
-                    }
+
                     ColumnLayout {
-                        enabled: chkSSH.checked
-                        Layout.leftMargin: 40
+                        anchors.fill: parent
                         spacing: -10
 
-                        ImRadioButton {
-                            id: radioPasswordAuthentication
-                            text: qsTr("Use password authentication")
-                            onCheckedChanged: {
-                                if (checked) {
-                                    chkSetUser.checked = true
-                                    fieldUserPassword.forceActiveFocus()
+                        RowLayout {
+                            ImCheckBox {
+                                id: chkHostname
+                                text: qsTr("Set hostname:")
+                                onCheckedChanged: {
+                                    if (checked) {
+                                        fieldHostname.forceActiveFocus()
+                                    }
                                 }
                             }
+                            TextField {
+                                id: fieldHostname
+                                enabled: chkHostname.checked
+                                text: "raspberrypi"
+                                /* FIXME: use RegularExpressionValidator instead when moving to newer Qt version.
+                                It is not available in 5.12 that is still being used by Ubuntu 20 LTS though */
+                                validator: RegExpValidator { regExp: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
+                            }
+                            Text {
+                                text : ".local"
+                                color: chkHostname.checked ? "black" : "grey"
+                            }
                         }
-                        ImRadioButton {
-                            id: radioPubKeyAuthentication
-                            text: qsTr("Allow public-key authentication only")
+                        ImCheckBox {
+                            id: chkSSH
+                            text: qsTr("Enable SSH")
                             onCheckedChanged: {
                                 if (checked) {
-                                    if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
-                                        chkSetUser.checked = false
+                                    if (!radioPasswordAuthentication.checked && !radioPubKeyAuthentication.checked) {
+                                        radioPasswordAuthentication.checked = true
                                     }
-                                    fieldPublicKey.forceActiveFocus()
+                                    if (radioPasswordAuthentication.checked) {
+                                        chkSetUser.checked = true
+                                        if (!fieldUserPassword.length) {
+                                            fieldUserPassword.forceActiveFocus()
+                                        }
+                                    }
                                 }
                             }
                         }
                         ColumnLayout {
+                            enabled: chkSSH.checked
+                            Layout.leftMargin: 40
+                            spacing: -10
+
+                            ImRadioButton {
+                                id: radioPasswordAuthentication
+                                text: qsTr("Use password authentication")
+                                onCheckedChanged: {
+                                    if (checked) {
+                                        chkSetUser.checked = true
+                                        fieldUserPassword.forceActiveFocus()
+                                    }
+                                }
+                            }
+                            ImRadioButton {
+                                id: radioPubKeyAuthentication
+                                text: qsTr("Allow public-key authentication only")
+                                onCheckedChanged: {
+                                    if (checked) {
+                                        if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
+                                            chkSetUser.checked = false
+                                        }
+                                        fieldPublicKey.forceActiveFocus()
+                                    }
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.leftMargin: 35
+                                Layout.fillWidth: true
+                                spacing: 7
+                                enabled: radioPubKeyAuthentication.checked
+
+                                Text {
+                                    text: qsTr("List of authorized SSH public keys.  This will be added to <i>/home/%1/.ssh/authorized_keys</i>.  See the documentation for <i>authorized_keys</i> for details about all supported formats. <br/> <i>Example: ssh-rsa <base64 public key> [optional friendly name]</i>").arg(fieldUserName.text)
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
+                                    color: parent.enabled ? "black" : "grey"
+                                }
+                                TextArea {
+                                    id: fieldPublicKey
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
+                                    text: "ssh-rsa <base64 public key> [optional friendly name]"
+                                }
+                            }
+                        }
+
+                        ImCheckBox {
+                            id: chkSetUser
+                            text: qsTr("Set username and password")
+                            onCheckedChanged: {
+                                if (!checked && chkSSH.checked && radioPasswordAuthentication.checked) {
+                                    checked = true;
+                                }
+                            }
+                        }
+
+                        ColumnLayout {
+                            enabled: chkSetUser.checked
                             Layout.leftMargin: 40
                             spacing: -5
-                            enabled: radioPubKeyAuthentication.checked
 
-                            Text {
-                                text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
-                                color: parent.enabled ? "black" : "grey"
-                            }
-                            TextArea {
-                                id: fieldPublicKey
-                                Layout.minimumHeight: 80
+                            GridLayout {
+                                columns: 2
+                                columnSpacing: 10
+                                rowSpacing: -5
+
+                                Text {
+                                    text: qsTr("Username:")
+                                    color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                                }
+                                TextField {
+                                    id: fieldUserName
+                                    text: "pi"
+                                    Layout.minimumWidth: 200
+                                    property bool indicateError: false
+
+                                    onTextEdited: {
+                                        indicateError = false
+                                    }
+                                }
+
+                                Text {
+                                    text: qsTr("Password:")
+                                    color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
+                                }
+                                TextField {
+                                    id: fieldUserPassword
+                                    echoMode: TextInput.Password
+                                    Layout.minimumWidth: 200
+                                    property bool alreadyCrypted: false
+                                    property bool indicateError: false
+
+                                    onTextEdited: {
+                                        if (alreadyCrypted) {
+                                            /* User is trying to edit saved
+                                            (crypted) password, clear field */
+                                            alreadyCrypted = false
+                                            clear()
+                                        }
+                                        if (indicateError) {
+                                            indicateError = false
+                                        }
+                                    }
+                                }
                             }
                         }
-                    }
 
-                    ImCheckBox {
-                        id: chkSetUser
-                        text: qsTr("Set username and password")
-                        onCheckedChanged: {
-                            if (!checked && chkSSH.checked && radioPasswordAuthentication.checked) {
-                                checked = true;
+                        ImCheckBox {
+                            id: chkWifi
+                            text: qsTr("Configure wireless LAN")
+                            onCheckedChanged: {
+                                if (checked) {
+                                    if (!fieldWifiSSID.length) {
+                                        fieldWifiSSID.forceActiveFocus()
+                                    } else if (!fieldWifiPassword.length) {
+                                        fieldWifiPassword.forceActiveFocus()
+                                    }
+                                }
                             }
                         }
-                    }
-
-                    ColumnLayout {
-                        enabled: chkSetUser.checked
-                        Layout.leftMargin: 40
-                        spacing: -5
-
                         GridLayout {
+                            enabled: chkWifi.checked
+                            Layout.leftMargin: 40
                             columns: 2
                             columnSpacing: 10
                             rowSpacing: -5
 
                             Text {
-                                text: qsTr("Username:")
-                                color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                                text: qsTr("SSID:")
+                                color: parent.enabled ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
                             }
                             TextField {
-                                id: fieldUserName
-                                text: "pi"
+                                id: fieldWifiSSID
                                 Layout.minimumWidth: 200
                                 property bool indicateError: false
-
                                 onTextEdited: {
                                     indicateError = false
                                 }
                             }
 
+                            ImCheckBox {
+                                id: chkWifiSSIDHidden
+                                Layout.columnSpan: 2
+                                text: qsTr("Hidden SSID")
+                                checked: false
+                            }
+
                             Text {
                                 text: qsTr("Password:")
-                                color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
+                                color: parent.enabled ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
                             }
                             TextField {
-                                id: fieldUserPassword
-                                echoMode: TextInput.Password
+                                id: fieldWifiPassword
                                 Layout.minimumWidth: 200
-                                property bool alreadyCrypted: false
+                                echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
                                 property bool indicateError: false
-
                                 onTextEdited: {
-                                    if (alreadyCrypted) {
-                                        /* User is trying to edit saved
-                                           (crypted) password, clear field */
-                                        alreadyCrypted = false
-                                        clear()
-                                    }
-                                    if (indicateError) {
-                                        indicateError = false
-                                    }
+                                    indicateError = false
                                 }
                             }
-                        }
-                    }
 
-                    ImCheckBox {
-                        id: chkWifi
-                        text: qsTr("Configure wireless LAN")
-                        onCheckedChanged: {
-                            if (checked) {
-                                if (!fieldWifiSSID.length) {
-                                    fieldWifiSSID.forceActiveFocus()
-                                } else if (!fieldWifiPassword.length) {
-                                    fieldWifiPassword.forceActiveFocus()
-                                }
+                            ImCheckBox {
+                                id: chkShowPassword
+                                Layout.columnSpan: 2
+                                text: qsTr("Show password")
+                                checked: true
                             }
-                        }
-                    }
-                    GridLayout {
-                        enabled: chkWifi.checked
-                        Layout.leftMargin: 40
-                        columns: 2
-                        columnSpacing: 10
-                        rowSpacing: -5
 
-                        Text {
-                            text: qsTr("SSID:")
-                            color: parent.enabled ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
-                        }
-                        TextField {
-                            id: fieldWifiSSID
-                            Layout.minimumWidth: 200
-                            property bool indicateError: false
-                            onTextEdited: {
-                                indicateError = false
+                            Text {
+                                text: qsTr("Wireless LAN country:")
+                                color: parent.enabled ? "black" : "grey"
+                            }
+                            ComboBox {
+                                id: fieldWifiCountry
+                                editable: true
                             }
                         }
 
                         ImCheckBox {
-                            id: chkWifiSSIDHidden
-                            Layout.columnSpan: 2
-                            text: qsTr("Hidden SSID")
-                            checked: false
+                            id: chkLocale
+                            text: qsTr("Set locale settings")
                         }
+                        GridLayout {
+                            enabled: chkLocale.checked
+                            Layout.leftMargin: 40
+                            columns: 2
+                            columnSpacing: 10
+                            rowSpacing: -5
 
-                        Text {
-                            text: qsTr("Password:")
-                            color: parent.enabled ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
-                        }
-                        TextField {
-                            id: fieldWifiPassword
-                            Layout.minimumWidth: 200
-                            echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
-                            property bool indicateError: false
-                            onTextEdited: {
-                                indicateError = false
+                            Text {
+                                text: qsTr("Time zone:")
+                                color: parent.enabled ? "black" : "grey"
+                            }
+                            ComboBox {
+                                id: fieldTimezone
+                                editable: true
+                                Layout.minimumWidth: 200
+                            }
+
+                            Text {
+                                text: qsTr("Keyboard layout:")
+                                color: parent.enabled ? "black" : "grey"
+                            }
+                            ComboBox {
+                                id: fieldKeyboardLayout
+                                editable: true
+                                Layout.minimumWidth: 200
                             }
                         }
+                    }
+                }
+
+                GroupBox {
+                    Layout.fillWidth: true
+                    Layout.bottomMargin: 40
+
+                    title: qsTr("Persistent settings")
+                    
+                    ColumnLayout {
+                        spacing: -10
 
                         ImCheckBox {
-                            id: chkShowPassword
-                            Layout.columnSpan: 2
-                            text: qsTr("Show password")
-                            checked: true
+                            id: chkBeep
+                            text: qsTr("Play sound when finished")
                         }
-
-                        Text {
-                            text: qsTr("Wireless LAN country:")
-                            color: parent.enabled ? "black" : "grey"
+                        ImCheckBox {
+                            id: chkEject
+                            text: qsTr("Eject media when finished")
                         }
-                        ComboBox {
-                            id: fieldWifiCountry
-                            editable: true
-                        }
-                    }
-
-                    ImCheckBox {
-                        id: chkLocale
-                        text: qsTr("Set locale settings")
-                    }
-                    GridLayout {
-                        enabled: chkLocale.checked
-                        Layout.leftMargin: 40
-                        columns: 2
-                        columnSpacing: 10
-                        rowSpacing: -5
-
-                        Text {
-                            text: qsTr("Time zone:")
-                            color: parent.enabled ? "black" : "grey"
-                        }
-                        ComboBox {
-                            id: fieldTimezone
-                            editable: true
-                            Layout.minimumWidth: 200
-                        }
-
-                        Text {
-                            text: qsTr("Keyboard layout:")
-                            color: parent.enabled ? "black" : "grey"
-                        }
-                        ComboBox {
-                            id: fieldKeyboardLayout
-                            editable: true
-                            Layout.minimumWidth: 200
+                        ImCheckBox {
+                            id: chkTelemtry
+                            text: qsTr("Enable telemetry")
                         }
                     }
                 }
             }
-
-            GroupBox {
-                title: qsTr("Persistent settings")
-                Layout.fillWidth: true
-
-                ColumnLayout {
-                    spacing: -10
-
-                    ImCheckBox {
-                        id: chkBeep
-                        text: qsTr("Play sound when finished")
-                    }
-                    ImCheckBox {
-                        id: chkEject
-                        text: qsTr("Eject media when finished")
-                    }
-                    ImCheckBox {
-                        id: chkTelemtry
-                        text: qsTr("Enable telemetry")
-                    }
-                }
-            }
-          }
         }
 
-        RowLayout {
-            Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
-            Layout.bottomMargin: 10
-            spacing: 20
+        // line over save button
+        Rectangle {
+            color: "#afafaf"
+            Layout.fillWidth: true
+            Layout.preferredHeight: 1
+        }
 
-            ImButton {
-                text: qsTr("SAVE")
-                onClicked: {
-                    if (chkSetUser.checked && fieldUserPassword.text.length == 0)
-                    {
-                        fieldUserPassword.indicateError = true
-                        fieldUserPassword.forceActiveFocus()
-                        return
-                    }
-                    if (chkSetUser.checked && fieldUserName.text.length == 0)
-                    {
-                        fieldUserName.indicateError = true
-                        fieldUserName.forceActiveFocus()
-                        return
-                    }
+        ImButton {
+            Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
+            Layout.margins: 10
 
-                    if (chkWifi.checked)
-                    {
-                        if (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64)
-                        {
-                            fieldWifiPassword.indicateError = true
-                            fieldWifiPassword.forceActiveFocus()
-                        }
-                        if (fieldWifiSSID.text.length == 0)
-                        {
-                            fieldWifiSSID.indicateError = true
-                            fieldWifiSSID.forceActiveFocus()
-                        }
-                        if (fieldWifiSSID.indicateError || fieldWifiPassword.indicateError)
-                        {
-                            return
-                        }
-                    }
-
-                    applySettings()
-                    saveSettings()
-                    popup.close()
+            text: qsTr("SAVE")
+            onClicked: {
+                if (chkSetUser.checked && fieldUserPassword.text.length == 0)
+                {
+                    fieldUserPassword.indicateError = true
+                    fieldUserPassword.forceActiveFocus()
+                    return
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
-            }
+                if (chkSetUser.checked && fieldUserName.text.length == 0)
+                {
+                    fieldUserName.indicateError = true
+                    fieldUserName.forceActiveFocus()
+                    return
+                }
 
-            Text { text: " " }
+                if (chkWifi.checked)
+                {
+                    if (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64)
+                    {
+                        fieldWifiPassword.indicateError = true
+                        fieldWifiPassword.forceActiveFocus()
+                    }
+                    if (fieldWifiSSID.text.length == 0)
+                    {
+                        fieldWifiSSID.indicateError = true
+                        fieldWifiSSID.forceActiveFocus()
+                    }
+                    if (fieldWifiSSID.indicateError || fieldWifiPassword.indicateError)
+                    {
+                        return
+                    }
+                }
+
+                applySettings()
+                saveSettings()
+                popup.close()
+            }
+            Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+            Material.background: "#c51a4a"
         }
     }
 
