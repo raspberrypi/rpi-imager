@@ -196,7 +196,7 @@ Popup {
                                 enabled: radioPubKeyAuthentication.checked
 
                                 Text {
-                                    text: qsTr("List of authorized SSH public keys.  This will be added to <i>/home/%1/.ssh/authorized_keys</i>.  See the documentation for <i>authorized_keys</i> for details about all supported formats. <br/> <i>Example: ssh-rsa <base64 public key> [optional friendly name]</i>").arg(fieldUserName.text)
+                                    text: qsTr("List of authorized SSH public keys.  This will be added to <i>/home/%1/.ssh/authorized_keys</i>.  See the documentation for <i>authorized_keys</i> for details about all supported formats. <br/> <i>Example: ssh-rsa &lt;base64 public key&gt; [optional friendly name]</i>").arg(fieldUserName.text)
                                     Layout.fillWidth: true
                                     wrapMode: Text.Wrap
                                     color: parent.enabled ? "black" : "grey"
