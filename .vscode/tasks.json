@@ -1,0 +1,37 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build and run",
+            "type": "shell",
+            "command": "make; ./rpi-imager",
+            "options": {
+                "cwd": "${workspaceFolder}/build",
+            },
+            "windows": {
+                "options": {
+                    "shell": {
+                        "executable": "pwsh",
+                        "args": [
+                            "-NoProfile"
+                        ]
+                    }
+                }
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true,
+            },
+            "runOptions": {
+                "instanceLimit": 1
+            },
+            "presentation": {
+                "showReuseMessage": false,
+                "clear": true
+            },
+        }
+    ]
+}
