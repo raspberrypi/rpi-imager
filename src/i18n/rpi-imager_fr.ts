@@ -515,7 +515,7 @@
         <location filename="../main.qml" line="147"/>
         <location filename="../main.qml" line="1038"/>
         <source>CHOOSE STORAGE</source>
-        <translation>CHOISISSEZ LE STOCKAGE</translation>
+        <translation>CHOISIR LE STOCKAGE</translation>
     </message>
     <message>
         <source>Select this button to change the destination SD card</source>
