@@ -332,22 +332,22 @@
     <message>
         <location filename="../OptionsPopup.qml" line="104"/>
         <source>for this session only</source>
-        <translation type="unfinished">pour cette session uniquement</translation>
+        <translation>pour cette session uniquement</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="105"/>
         <source>to always use</source>
-        <translation type="unfinished">pour toutes les sessions</translation>
+        <translation>pour toutes les sessions</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="119"/>
         <source>Set hostname:</source>
-        <translation type="unfinished">Nom d&apos;hôte</translation>
+        <translation>Nom d&apos;hôte</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="138"/>
         <source>Enable SSH</source>
-        <translation type="unfinished">Activer SSH</translation>
+        <translation>Activer SSH</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="160"/>
@@ -474,12 +474,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="105"/>
         <source>YES</source>
-        <translation type="unfinished">OUI</translation>
+        <translation>OUI</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="115"/>
         <source>EDIT SETTINGS</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">MODIFIER RÉGLAGES</translation>
     </message>
 </context>
 <context>
