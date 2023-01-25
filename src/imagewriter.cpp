@@ -912,6 +912,25 @@ QString ImageWriter::getSSID()
     return ssid;
 }
 
+inline QString unescapeXml(QString str)
+{
+    static const char *table[] = {
+        "&lt;", "<",
+        "&gt;", ">",
+        "&quot;", "\"",
+        "&apos;", "'",
+        "&amp;", "&"
+    };
+    int tableLen = sizeof(table) / sizeof(table[0]);
+
+    for (int i=0; i < tableLen; i+=2)
+    {
+        str.replace(table[i], table[i+1]);
+    }
+
+    return str;
+}
+
 QString ImageWriter::getPSK(const QString &ssid)
 {
 #ifdef Q_OS_WIN
@@ -956,7 +975,7 @@ QString ImageWriter::getPSK(const QString &ssid)
                             QRegularExpressionMatch match = rx.match(xml);
 
                             if (match.hasMatch()) {
-                                psk = match.captured(1);
+                                psk = unescapeXml(match.captured(1));
                             }
 
                             WlanFreeMemory(xmlstr);
