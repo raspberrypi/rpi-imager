@@ -32,7 +32,7 @@ VIAddVersionKey "FileVersion"  "${VERSION}"
 
 SetCompressor LZMA
 Name "${APP_NAME}"
-Caption "${APP_NAME}"
+Caption "${APP_NAME} ${VERSION}"
 OutFile "${INSTALLER_NAME}"
 BrandingText "${APP_NAME}"
 XPStyle on
