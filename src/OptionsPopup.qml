@@ -191,6 +191,7 @@ Popup {
                             Text {
                                 text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
                                 color: parent.enabled ? "black" : "grey"
+                                textFormat: Text.PlainText
                             }
                             TextField {
                                 id: fieldPublicKey
