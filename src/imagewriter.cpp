@@ -11,6 +11,7 @@
 #include "driveformatthread.h"
 #include "localfileextractthread.h"
 #include "downloadstatstelemetry.h"
+#include "wlancredentials.h"
 #include <archive.h>
 #include <archive_entry.h>
 #include <random>
@@ -38,29 +39,16 @@
 #endif
 #ifdef Q_OS_DARWIN
 #include <QMessageBox>
-#include <security/security.h>
 #endif
 
 #ifdef Q_OS_WIN
 #include <windows.h>
-#include <winioctl.h>
-#include <wlanapi.h>
-#ifndef WLAN_PROFILE_GET_PLAINTEXT_KEY
-#define WLAN_PROFILE_GET_PLAINTEXT_KEY 4
-#endif
-
 #include <QWinTaskbarButton>
 #include <QWinTaskbarProgress>
 #endif
 
 #ifdef QT_NO_WIDGETS
 #include <QtPlatformHeaders/QEglFSFunctions>
-#endif
-
-#ifdef Q_OS_LINUX
-#ifndef QT_NO_DBUS
-#include "linux/networkmanagerapi.h"
-#endif
 #endif
 
 ImageWriter::ImageWriter(QObject *parent)
@@ -863,173 +851,23 @@ QStringList ImageWriter::getKeymapLayoutList()
 
 QString ImageWriter::getSSID()
 {
-    /* Qt used to have proper bearer management that was able to provide a list of
-       SSIDs, but since they retired it, resort to calling platform specific tools for now.
-       Minimal implementation that only gets the currently connected SSID */
-
-    QString program, regexpstr, ssid;
-    QStringList args;
-    QProcess proc;
-
-#ifdef Q_OS_WIN
-    program = "netsh";
-    args << "wlan" << "show" << "interfaces";
-    regexpstr = "[ \t]+SSID[ \t]*: (.+)";
-#else
-#ifdef Q_OS_DARWIN
-    program = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport";
-    args << "-I";
-    regexpstr = "[ \t]+SSID: (.+)";
-#else
-    program = "iwgetid";
-    args << "-r";
-#endif
-#endif
-
-    proc.start(program, args);
-    if (proc.waitForStarted(2000) && proc.waitForFinished(2000))
-    {
-        if (regexpstr.isEmpty())
-        {
-            ssid = proc.readAll().trimmed();
-        }
-        else
-        {
-            QRegularExpression rx(regexpstr);
-            const QList<QByteArray> outputlines = proc.readAll().replace('\r', "").split('\n');
-
-            for (const QByteArray &line : outputlines) {
-                QRegularExpressionMatch match = rx.match(line);
-                if (match.hasMatch())
-                {
-                    ssid = match.captured(1);
-                    break;
-                }
-            }
-        }
-    }
-
-    return ssid;
+    return WlanCredentials::instance()->getSSID();
 }
 
-inline QString unescapeXml(QString str)
+QString ImageWriter::getPSK()
 {
-    static const char *table[] = {
-        "&lt;", "<",
-        "&gt;", ">",
-        "&quot;", "\"",
-        "&apos;", "'",
-        "&amp;", "&"
-    };
-    int tableLen = sizeof(table) / sizeof(table[0]);
-
-    for (int i=0; i < tableLen; i+=2)
-    {
-        str.replace(table[i], table[i+1]);
-    }
-
-    return str;
-}
-
-QString ImageWriter::getPSK(const QString &ssid)
-{
-#ifdef Q_OS_WIN
-    /* Windows allows retrieving wifi PSK */
-    HANDLE h;
-    DWORD ret = 0;
-    DWORD supportedVersion = 0;
-    DWORD clientVersion = 2;
-    QString psk;
-
-    if (WlanOpenHandle(clientVersion, NULL, &supportedVersion, &h) != ERROR_SUCCESS)
-        return QString();
-
-    PWLAN_INTERFACE_INFO_LIST ifList = NULL;
-
-    if (WlanEnumInterfaces(h, NULL, &ifList) == ERROR_SUCCESS)
-    {
-        for (int i=0; i < ifList->dwNumberOfItems; i++)
-        {
-            PWLAN_PROFILE_INFO_LIST profileList = NULL;
-
-            if (WlanGetProfileList(h, &ifList->InterfaceInfo[i].InterfaceGuid,
-                                   NULL, &profileList) == ERROR_SUCCESS)
-            {
-                for (int j=0; j < profileList->dwNumberOfItems; j++)
-                {
-                    QString s = QString::fromWCharArray(profileList->ProfileInfo[j].strProfileName);
-                    qDebug() << "Enumerating wifi profiles, SSID found:" << s << " looking for:" << ssid;
-
-                    if (s == ssid) {
-                        DWORD flags = WLAN_PROFILE_GET_PLAINTEXT_KEY;
-                        DWORD access = 0;
-                        DWORD ret = 0;
-                        LPWSTR xmlstr = NULL;
-
-                        if ( (ret = WlanGetProfile(h, &ifList->InterfaceInfo[i].InterfaceGuid, profileList->ProfileInfo[j].strProfileName,
-                                          NULL, &xmlstr, &flags, &access)) == ERROR_SUCCESS && xmlstr)
-                        {
-                            QString xml = QString::fromWCharArray(xmlstr);
-                            qDebug() << "XML wifi profile:" << xml;
-                            QRegularExpression rx("<keyMaterial>(.+)</keyMaterial>");
-                            QRegularExpressionMatch match = rx.match(xml);
-
-                            if (match.hasMatch()) {
-                                psk = unescapeXml(match.captured(1));
-                            }
-
-                            WlanFreeMemory(xmlstr);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (profileList) {
-                WlanFreeMemory(profileList);
-            }
-        }
-    }
-
-    if (ifList)
-        WlanFreeMemory(ifList);
-    WlanCloseHandle(h, NULL);
-
-    return psk;
-
-#else
 #ifdef Q_OS_DARWIN
-    SecKeychainRef keychainRef;
-    QString psk;
-    QByteArray ssidAscii = ssid.toLatin1();
-
+    /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
+     * Ask if user wants to obtain the wlan password first to make sure this is desired and
+     * to provide the user with context. */
     if (QMessageBox::question(nullptr, "",
-                          tr("Would you like to prefill the wifi password from the system keychain?")) == QMessageBox::Yes)
+                          tr("Would you like to prefill the wifi password from the system keychain?")) != QMessageBox::Yes)
     {
-        if (SecKeychainOpen("/Library/Keychains/System.keychain", &keychainRef) == errSecSuccess)
-        {
-            UInt32 resultLen;
-            void *result;
-            if (SecKeychainFindGenericPassword(keychainRef, 0, NULL, ssidAscii.length(), ssidAscii.constData(), &resultLen, &result, NULL) == errSecSuccess)
-            {
-                psk = QByteArray((char *) result, resultLen);
-                SecKeychainItemFreeContent(NULL, result);
-            }
-            CFRelease(keychainRef);
-        }
+        return QString();
     }
+#endif
 
-    return psk;
-#else
-#ifndef QT_NO_DBUS
-    NetworkManagerApi nm;
-    return nm.getPSK();
-#else
-    Q_UNUSED(ssid)
-    return QString();
-#endif
-#endif
-#endif
+    return WlanCredentials::instance()->getPSK();
 }
 
 bool ImageWriter::getBoolSetting(const QString &key)

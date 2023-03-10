@@ -499,7 +499,7 @@ Popup {
             fieldWifiCountry.currentIndex = fieldWifiCountry.find("GB")
             fieldWifiSSID.text = imageWriter.getSSID()
             if (fieldWifiSSID.text.length) {
-                fieldWifiPassword.text = imageWriter.getPSK(fieldWifiSSID.text)
+                fieldWifiPassword.text = imageWriter.getPSK()
                 if (fieldWifiPassword.text.length) {
                     chkShowPassword.checked = false
                     if (Qt.platform.os == "osx") {

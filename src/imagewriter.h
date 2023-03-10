@@ -103,7 +103,7 @@ public:
     Q_INVOKABLE QStringList getCountryList();
     Q_INVOKABLE QStringList getKeymapLayoutList();
     Q_INVOKABLE QString getSSID();
-    Q_INVOKABLE QString getPSK(const QString &ssid);
+    Q_INVOKABLE QString getPSK();
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);

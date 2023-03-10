@@ -12,8 +12,8 @@ OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
 project(rpi-imager LANGUAGES CXX C)
 set(IMAGER_VERSION_MAJOR 1)
 set(IMAGER_VERSION_MINOR 7)
-set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}.4")
-set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},4,0")
+set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}.4.1")
+set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},4,1")
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
 add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
 
@@ -23,21 +23,21 @@ set(CMAKE_AUTORCC ON)
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h drivelistmodelpollthread.h driveformatthread.h powersaveblocker.h cli.h
-    devicewrapper.h devicewrapperblockcacheentry.h devicewrapperpartition.h devicewrapperstructs.h devicewrapperfatpartition.h
+    devicewrapper.h devicewrapperblockcacheentry.h devicewrapperpartition.h devicewrapperstructs.h devicewrapperfatpartition.h wlancredentials.h
     downloadthread.h downloadextractthread.h localfileextractthread.h downloadstatstelemetry.h dependencies/mountutils/src/mountutils.hpp dependencies/sha256crypt/sha256crypt.h)
 
 # Add dependencies
 if (APPLE)
     set_source_files_properties("icons/rpi-imager.icns" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
     set(DEPENDENCIES acceleratedcryptographichash.cpp mac/macfile.cpp mac/macfile.h dependencies/mountutils/src/darwin/functions.cpp
+        mac/macwlancredentials.h mac/macwlancredentials.cpp
         dependencies/drivelist/src/darwin/list.mm dependencies/drivelist/src/darwin/REDiskList.m icons/rpi-imager.icns)
     enable_language(OBJC C)
 elseif (UNIX)
-    set(DEPENDENCIES dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp)
+    set(DEPENDENCIES dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp linux/networkmanagerapi.h linux/networkmanagerapi.cpp)
     find_package(Qt5DBus)
     if(Qt5DBus_FOUND)
-        set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h
-            linux/networkmanagerapi.h linux/networkmanagerapi.cpp)
+        set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
         set(EXTRALIBS Qt5::DBus)
         message("udisks2 support enabled")
     else()
@@ -62,7 +62,7 @@ elseif (UNIX)
     endif()
 elseif (WIN32)
     set(DEPENDENCIES acceleratedcryptographichash.cpp dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
-        windows/winfile.cpp windows/winfile.h
+        windows/winfile.cpp windows/winfile.h windows/winwlancredentials.h windows/winwlancredentials.cpp
         windows/rpi-imager.rc)
     find_package(Qt5WinExtras REQUIRED)
     set(EXTRALIBS setupapi wlanapi Qt5::WinExtras)
