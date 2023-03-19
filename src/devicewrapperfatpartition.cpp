@@ -1,6 +1,5 @@
 #include "devicewrapperfatpartition.h"
 #include "devicewrapperstructs.h"
-#include "qdebug.h"
 
 /*
  * SPDX-License-Identifier: Apache-2.0
@@ -314,7 +313,7 @@ void DeviceWrapperFatPartition::writeFile(const QString &filename, const QByteAr
     for (uint32_t cluster : qAsConst(clusterList))
     {
         seekCluster(cluster);
-        write(contents.data()+pos, qMin(_bytesPerCluster, contents.length()-pos));
+        write(contents.data()+pos, qMin((qsizetype)_bytesPerCluster, (qsizetype)(contents.length()-pos)));
 
         pos += _bytesPerCluster;
         if (pos >= contents.length())

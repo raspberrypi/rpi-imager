@@ -3,7 +3,7 @@
  * Copyright (C) 2021 Raspberry Pi Ltd
  */
 
-import QtQuick 2.9
+import QtQuick 2.15
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
@@ -128,9 +128,7 @@ Popup {
                             id: fieldHostname
                             enabled: chkHostname.checked
                             text: "raspberrypi"
-                            /* FIXME: use RegularExpressionValidator instead when moving to newer Qt version.
-                               It is not available in 5.12 that is still being used by Ubuntu 20 LTS though */
-                            validator: RegExpValidator { regExp: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
+                            validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
                         }
                         Text {
                             text : ".local"
