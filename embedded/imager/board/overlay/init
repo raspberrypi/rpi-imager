@@ -18,6 +18,7 @@ udevadm settle --timeout=2
 cat /proc/cpuinfo /sys/class/drm/*/edid > /dev/urandom
 
 # dhcpcd
+mkdir -p /var/run
 dhcpcd -f /etc/dhcpcd.conf --noarp 2>/dev/null &
 
 if grep -q debugconsole /proc/cmdline; then
