@@ -320,7 +320,7 @@ void DeviceWrapperFatPartition::writeFile(const QString &filename, const QByteAr
             break;
     }
 
-    if (clustersNeeded)
+    if (clustersNeeded && contents.length() % _bytesPerCluster)
     {
         /* Zero out last cluster tip */
         uint32_t extraBytesAtEndOfCluster = _bytesPerCluster - (contents.length() % _bytesPerCluster);

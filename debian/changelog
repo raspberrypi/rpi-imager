@@ -1,3 +1,10 @@
+rpi-imager (1.7.4.1) unstable; urgency=medium
+
+  * Advanced settings: fix creating files on FAT partition that are
+    an exact multiple of cluster size.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Wed, 22 Mar 2023 16:15:00 +0100
+
 rpi-imager (1.7.4) unstable; urgency=medium
 
   * Advanced settings: fix escaping single quotes
