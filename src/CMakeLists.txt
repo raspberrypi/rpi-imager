@@ -2,10 +2,6 @@
 # Copyright (C) 2020 Raspberry Pi Ltd
 
 cmake_minimum_required(VERSION 3.9.4)
-if (APPLE)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
-endif()
-
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
 
@@ -35,14 +31,6 @@ if (APPLE)
     enable_language(OBJC C)
 elseif (UNIX)
     set(DEPENDENCIES dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp linux/networkmanagerapi.h linux/networkmanagerapi.cpp)
-    find_package(Qt5DBus)
-    if(Qt5DBus_FOUND)
-        set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
-        set(EXTRALIBS Qt5::DBus)
-        message("udisks2 support enabled")
-    else()
-        message("DBUS not found. Disabling udisks2 support")
-    endif()
     find_package(ZLIB)
     if(ZLIB_FOUND)
         set(EXTRALIBS ${EXTRALIBS} ZLIB::ZLIB)
@@ -64,8 +52,7 @@ elseif (WIN32)
     set(DEPENDENCIES acceleratedcryptographichash.cpp dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
         windows/winfile.cpp windows/winfile.h windows/winwlancredentials.h windows/winwlancredentials.cpp
         windows/rpi-imager.rc)
-    find_package(Qt5WinExtras REQUIRED)
-    set(EXTRALIBS setupapi wlanapi Qt5::WinExtras)
+    set(EXTRALIBS setupapi wlanapi)
 endif()
 
 include_directories(BEFORE .)
@@ -100,13 +87,43 @@ set(SOURCES "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp")
 
-find_package(Qt5 5.14 COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets)
-if (Qt5Widgets_FOUND)
-    set(EXTRALIBS ${EXTRALIBS} Qt5::Widgets)
+find_package(Qt5 5.14 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
+if (Qt5_FOUND)
+    set(QT Qt5)
+    if (APPLE)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
+    endif()
+else()
+    find_package(Qt6 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
+    if (Qt6_FOUND)
+        set(QT Qt6)
+        if (APPLE)
+            set(CMAKE_OSX_DEPLOYMENT_TARGET "10.14" CACHE STRING "" FORCE)
+            set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
+        endif()
+    else()
+        message( FATAL_ERROR "Missing suitable Qt library (must be at least version 5.14)" )
+    endif()
+endif()
+
+if (${QT}Widgets_FOUND)
+    set(EXTRALIBS ${EXTRALIBS} ${QT}::Widgets)
+endif()
+if(${QT}DBus_FOUND)
+    set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
+    set(EXTRALIBS ${EXTRALIBS} ${QT}::DBus)
+    message("udisks2 support enabled")
+endif()
+if(${QT}WinExtras_FOUND)
+    set(EXTRALIBS ${EXTRALIBS} ${QT}::WinExtras)
 endif()
 
 #qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} i18n/rpi-imager_en.ts i18n/rpi-imager_nl.ts i18n/rpi-imager_zh.ts i18n/rpi-imager_tr.ts i18n/rpi-imager_fr.ts i18n/rpi-imager_de.ts i18n/rpi-imager_sk.ts i18n/rpi-imager_it.ts i18n/rpi-imager_ca.ts i18n/rpi-imager_sl.ts i18n/rpi-imager_ko.ts i18n/rpi-imager_ja.ts)
-qt5_add_translation(QM_FILES i18n/rpi-imager_en.ts i18n/rpi-imager_nl.ts i18n/rpi-imager_zh.ts i18n/rpi-imager_tr.ts i18n/rpi-imager_fr.ts i18n/rpi-imager_de.ts i18n/rpi-imager_sk.ts i18n/rpi-imager_it.ts i18n/rpi-imager_ca.ts i18n/rpi-imager_sl.ts i18n/rpi-imager_ko.ts i18n/rpi-imager_ja.ts)
+if (Qt5_FOUND)
+    qt5_add_translation(QM_FILES i18n/rpi-imager_en.ts i18n/rpi-imager_nl.ts i18n/rpi-imager_zh.ts i18n/rpi-imager_tr.ts i18n/rpi-imager_fr.ts i18n/rpi-imager_de.ts i18n/rpi-imager_sk.ts i18n/rpi-imager_it.ts i18n/rpi-imager_ca.ts i18n/rpi-imager_sl.ts i18n/rpi-imager_ko.ts i18n/rpi-imager_ja.ts)
+else()
+    qt_add_translation(QM_FILES i18n/rpi-imager_en.ts i18n/rpi-imager_nl.ts i18n/rpi-imager_zh.ts i18n/rpi-imager_tr.ts i18n/rpi-imager_fr.ts i18n/rpi-imager_de.ts i18n/rpi-imager_sk.ts i18n/rpi-imager_it.ts i18n/rpi-imager_ca.ts i18n/rpi-imager_sl.ts i18n/rpi-imager_ko.ts i18n/rpi-imager_ja.ts)
+endif()
 configure_file(i18n/translations.qrc "${CMAKE_CURRENT_BINARY_DIR}" COPYONLY)
 set(SOURCES ${SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/translations.qrc ${QM_FILES})
 
@@ -206,7 +223,7 @@ if (WIN32)
         COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe")
 
     # Windeploy
-    find_program(WINDEPLOYQT "windeployqt.exe" PATHS "${Qt5_DIR}/../../../bin")
+    find_program(WINDEPLOYQT "windeployqt.exe" PATHS "${${QT}_DIR}/../../../bin")
     if (NOT WINDEPLOYQT)
         message(FATAL_ERROR "Unable to locate windeployqt.exe")
     endif()
@@ -223,7 +240,7 @@ if (WIN32)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${Qt5_DIR}/../../../bin/libssl-1_1.dll" "${Qt5_DIR}/../../../bin/libcrypto-1_1.dll"
+            "${${QT}_DIR}/../../../bin/libssl-1_1.dll" "${${QT}_DIR}/../../../bin/libcrypto-1_1.dll"
             "${CMAKE_BINARY_DIR}/deploy")
 
     configure_file(
@@ -279,7 +296,7 @@ elseif(APPLE)
     set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} ${IOKit})
     set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in)
 
-    find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt5_DIR}/../../../bin")
+    find_program(MACDEPLOYQT "macdeployqt" PATHS "${${QT}_DIR}/../../../bin")
     if (NOT MACDEPLOYQT)
         message(FATAL_ERROR "Unable to locate macdeployqt")
     endif()
@@ -298,7 +315,7 @@ else()
             message(FATAL_ERROR "Unable to locate lsblk (used for disk enumeration)")
         endif()
 
-        execute_process(COMMAND "${LSBLK}" "--json" RESULT_VARIABLE ret)
+        execute_process(COMMAND "${LSBLK}" "--json" OUTPUT_QUIET RESULT_VARIABLE ret)
         if (ret EQUAL "1")
             message(FATAL_ERROR "util-linux package too old. lsblk does not support --json (used for disk enumeration)")
         endif()
@@ -315,12 +332,5 @@ else()
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
 
-get_target_property(QT_TARGET_TYPE Qt5::Core TYPE)
-if(${QT_TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
-    find_package(Qt5QmlImportScanner REQUIRED)
-    qt5_import_qml_plugins(${PROJECT_NAME})
-    qt5_import_plugins(${PROJECT_NAME} INCLUDE Qt5::QSvgPlugin)
-endif()
-
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Core Qt5::Quick Qt5::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
