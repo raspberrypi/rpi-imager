@@ -1,5 +1,6 @@
 #include "devicewrapperfatpartition.h"
 #include "devicewrapperstructs.h"
+#include <QDebug>
 
 /*
  * SPDX-License-Identifier: Apache-2.0
@@ -383,7 +384,8 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
         {
             if (entry->DIR_Name[0] != 0xE5)
             {
-                filenameRead.truncate(filenameRead.indexOf(QChar::Null));
+                if (filenameRead.indexOf(QChar::Null))
+                    filenameRead.truncate(filenameRead.indexOf(QChar::Null));
 
                 //qDebug() << "Long filename:" << filenameRead << "DIR_Name:" << QByteArray((char *) entry->DIR_Name, sizeof(entry->DIR_Name)) << "Short:" << _dirEntryToShortName(entry);
 
@@ -599,7 +601,13 @@ bool DeviceWrapperFatPartition::readDir(struct dir_entry *result)
             uint32_t nextCluster = getFAT(_fat32_currentRootDirCluster);
 
             if (nextCluster > 0xFFFFFF7)
-                throw std::runtime_error("Reached end of FAT32 root directory, but no end-of-directory marker found");
+            {
+                qDebug() << "Reached end of FAT32 root directory, but no end-of-directory marker found. Adding one in new cluster.";
+                nextCluster = allocateCluster(_fat32_currentRootDirCluster);
+                seekCluster(nextCluster);
+                QByteArray zeroes(_bytesPerCluster, 0);
+                write(zeroes.data(), zeroes.length() );
+            }
 
             if (_currentDirClusters.contains(nextCluster))
                 throw std::runtime_error("Circular cluster references in FAT32 directory detected");
