@@ -244,6 +244,28 @@ void UDisks2Api::unmountDrive(const QString &device)
     _unmountDrive(devpath);
 }
 
+void UDisks2Api::ejectDrive(const QString &device)
+{
+    QString devpath = _resolveDevice(device);
+    if (devpath.isEmpty())
+        return;
+
+    _unmountDrive(devpath);
+    ::sync();
+
+    QDBusInterface blockdevice("org.freedesktop.UDisks2", devpath,
+                               "org.freedesktop.UDisks2.Block", QDBusConnection::systemBus());
+    QString drivepath = blockdevice.property("Drive").value<QDBusObjectPath>().path();
+    if (!drivepath.isEmpty() && drivepath != "/")
+    {
+        QDBusInterface drive("org.freedesktop.UDisks2", drivepath,
+                             "org.freedesktop.UDisks2.Drive", QDBusConnection::systemBus());
+        QVariantMap ejectOptions;
+        qDebug() << "Ejecting drive: " << drive.property("Id").toString();
+        drive.call("Eject", ejectOptions);
+    }
+}
+
 QByteArrayList UDisks2Api::mountPoints(const QString &partitionDevice)
 {
     QString devpath = _resolveDevice(partitionDevice);

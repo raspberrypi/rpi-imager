@@ -775,7 +775,14 @@ void DownloadThread::_writeComplete()
 #endif
 
     if (_ejectEnabled)
+    {
         eject_disk(_filename.constData());
+#ifdef Q_OS_LINUX
+        /* mountutils only implemented unmount and not eject on Linux. Do so through udisks2 */
+        UDisks2Api udisks;
+        udisks.ejectDrive(_filename);
+#endif
+    }
 
     emit success();
 }

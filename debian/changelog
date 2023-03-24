@@ -2,8 +2,9 @@ rpi-imager (1.7.4.1) unstable; urgency=medium
 
   * Advanced settings: fix creating files on FAT partition that are
     an exact multiple of cluster size.
-  * Do you want to apply saved settings window: offer no option,
+  * Do you want to apply saved settings window: offer 'no' option,
     without clearing settings.
+  * Eject storage properly on Linux.
 
  -- Floris Bos <bos@je-eigen-domein.nl>  Fri, 24 Mar 2023 14:16:03 +0100
 
