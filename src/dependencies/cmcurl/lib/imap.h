@@ -7,11 +7,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 2009 - 2017, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -19,6 +19,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -70,18 +72,19 @@ struct IMAP {
    struct */
 struct imap_conn {
   struct pingpong pp;
-  imapstate state;            /* Always use imap.c:state() to change state! */
-  bool ssldone;               /* Is connect() over SSL done? */
-  bool preauth;               /* Is this connection PREAUTH? */
   struct SASL sasl;           /* SASL-related parameters */
-  unsigned int preftype;      /* Preferred authentication type */
-  int cmdid;                  /* Last used command ID */
-  char resptag[5];            /* Response tag to wait for */
-  bool tls_supported;         /* StartTLS capability supported by server */
-  bool login_disabled;        /* LOGIN command disabled by server */
-  bool ir_supported;          /* Initial response supported by server */
+  struct dynbuf dyn;          /* for the IMAP commands */
   char *mailbox;              /* The last selected mailbox */
   char *mailbox_uidvalidity;  /* UIDVALIDITY parsed from select response */
+  imapstate state;            /* Always use imap.c:state() to change state! */
+  char resptag[5];            /* Response tag to wait for */
+  unsigned char preftype;     /* Preferred authentication type */
+  unsigned char cmdid;        /* Last used command ID */
+  BIT(ssldone);               /* Is connect() over SSL done? */
+  BIT(preauth);               /* Is this connection PREAUTH? */
+  BIT(tls_supported);         /* StartTLS capability supported by server */
+  BIT(login_disabled);        /* LOGIN command disabled by server */
+  BIT(ir_supported);          /* Initial response supported by server */
 };
 
 extern const struct Curl_handler Curl_handler_imap;
@@ -93,6 +96,6 @@ extern const struct Curl_handler Curl_handler_imaps;
 
 /* Authentication type values */
 #define IMAP_TYPE_NONE      0
-#define IMAP_TYPE_ANY       ~0U
+#define IMAP_TYPE_ANY       (IMAP_TYPE_CLEARTEXT|IMAP_TYPE_SASL)
 
 #endif /* HEADER_CURL_IMAP_H */

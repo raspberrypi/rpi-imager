@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2019, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -17,6 +17,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -41,11 +43,6 @@
 #include <inet.h>
 #endif
 
-#if (defined(NETWARE) && defined(__NOVELL_LIBC__))
-#undef in_addr_t
-#define in_addr_t unsigned long
-#endif
-
 #include <curl/curl.h>
 #include "urldata.h"
 #include "sendf.h"
@@ -55,15 +52,16 @@
 #include "transfer.h"
 #include "escape.h"
 #include "http.h" /* for HTTP proxy tunnel stuff */
-#include "socks.h"
 #include "ftp.h"
 #include "fileinfo.h"
 #include "ftplistparser.h"
 #include "curl_range.h"
-#include "curl_sec.h"
+#include "curl_krb5.h"
 #include "strtoofft.h"
 #include "strcase.h"
 #include "vtls/vtls.h"
+#include "cfilters.h"
+#include "cf-socket.h"
 #include "connect.h"
 #include "strerror.h"
 #include "inet_ntop.h"
@@ -73,11 +71,10 @@
 #include "sockaddr.h" /* required for Curl_sockaddr_storage */
 #include "multiif.h"
 #include "url.h"
-#include "strcase.h"
 #include "speedcheck.h"
 #include "warnless.h"
 #include "http_proxy.h"
-#include "non-ascii.h"
+#include "socks.h"
 /* The last 3 #include files should be in this order */
 #include "curl_printf.h"
 #include "curl_memory.h"
@@ -96,69 +93,64 @@
 
 /* Local API functions */
 #ifndef DEBUGBUILD
-static void _state(struct connectdata *conn,
+static void _state(struct Curl_easy *data,
                    ftpstate newstate);
 #define state(x,y) _state(x,y)
 #else
-static void _state(struct connectdata *conn,
+static void _state(struct Curl_easy *data,
                    ftpstate newstate,
                    int lineno);
 #define state(x,y) _state(x,y,__LINE__)
 #endif
 
-static CURLcode ftp_sendquote(struct connectdata *conn,
+static CURLcode ftp_sendquote(struct Curl_easy *data,
+                              struct connectdata *conn,
                               struct curl_slist *quote);
-static CURLcode ftp_quit(struct connectdata *conn);
-static CURLcode ftp_parse_url_path(struct connectdata *conn);
-static CURLcode ftp_regular_transfer(struct connectdata *conn, bool *done);
+static CURLcode ftp_quit(struct Curl_easy *data, struct connectdata *conn);
+static CURLcode ftp_parse_url_path(struct Curl_easy *data);
+static CURLcode ftp_regular_transfer(struct Curl_easy *data, bool *done);
 #ifndef CURL_DISABLE_VERBOSE_STRINGS
-static void ftp_pasv_verbose(struct connectdata *conn,
-                             Curl_addrinfo *ai,
+static void ftp_pasv_verbose(struct Curl_easy *data,
+                             struct Curl_addrinfo *ai,
                              char *newhost, /* ascii version */
                              int port);
 #endif
-static CURLcode ftp_state_prepare_transfer(struct connectdata *conn);
-static CURLcode ftp_state_mdtm(struct connectdata *conn);
-static CURLcode ftp_state_quote(struct connectdata *conn,
+static CURLcode ftp_state_prepare_transfer(struct Curl_easy *data);
+static CURLcode ftp_state_mdtm(struct Curl_easy *data);
+static CURLcode ftp_state_quote(struct Curl_easy *data,
                                 bool init, ftpstate instate);
-static CURLcode ftp_nb_type(struct connectdata *conn,
+static CURLcode ftp_nb_type(struct Curl_easy *data,
+                            struct connectdata *conn,
                             bool ascii, ftpstate newstate);
 static int ftp_need_type(struct connectdata *conn,
                          bool ascii);
-static CURLcode ftp_do(struct connectdata *conn, bool *done);
-static CURLcode ftp_done(struct connectdata *conn,
+static CURLcode ftp_do(struct Curl_easy *data, bool *done);
+static CURLcode ftp_done(struct Curl_easy *data,
                          CURLcode, bool premature);
-static CURLcode ftp_connect(struct connectdata *conn, bool *done);
-static CURLcode ftp_disconnect(struct connectdata *conn, bool dead_connection);
-static CURLcode ftp_do_more(struct connectdata *conn, int *completed);
-static CURLcode ftp_multi_statemach(struct connectdata *conn, bool *done);
-static int ftp_getsock(struct connectdata *conn, curl_socket_t *socks,
-                       int numsocks);
-static int ftp_domore_getsock(struct connectdata *conn, curl_socket_t *socks,
-                              int numsocks);
-static CURLcode ftp_doing(struct connectdata *conn,
+static CURLcode ftp_connect(struct Curl_easy *data, bool *done);
+static CURLcode ftp_disconnect(struct Curl_easy *data,
+                               struct connectdata *conn, bool dead_connection);
+static CURLcode ftp_do_more(struct Curl_easy *data, int *completed);
+static CURLcode ftp_multi_statemach(struct Curl_easy *data, bool *done);
+static int ftp_getsock(struct Curl_easy *data, struct connectdata *conn,
+                       curl_socket_t *socks);
+static int ftp_domore_getsock(struct Curl_easy *data,
+                              struct connectdata *conn, curl_socket_t *socks);
+static CURLcode ftp_doing(struct Curl_easy *data,
                           bool *dophase_done);
-static CURLcode ftp_setup_connection(struct connectdata * conn);
-
-static CURLcode init_wc_data(struct connectdata *conn);
-static CURLcode wc_statemach(struct connectdata *conn);
-
+static CURLcode ftp_setup_connection(struct Curl_easy *data,
+                                     struct connectdata *conn);
+static CURLcode init_wc_data(struct Curl_easy *data);
+static CURLcode wc_statemach(struct Curl_easy *data);
 static void wc_data_dtor(void *ptr);
-
-static CURLcode ftp_state_retr(struct connectdata *conn, curl_off_t filesize);
-
-static CURLcode ftp_readresp(curl_socket_t sockfd,
+static CURLcode ftp_state_retr(struct Curl_easy *data, curl_off_t filesize);
+static CURLcode ftp_readresp(struct Curl_easy *data,
+                             curl_socket_t sockfd,
                              struct pingpong *pp,
                              int *ftpcode,
                              size_t *size);
-static CURLcode ftp_dophase_done(struct connectdata *conn,
+static CURLcode ftp_dophase_done(struct Curl_easy *data,
                                  bool connected);
-
-/* easy-to-use macro: */
-#define PPSENDF(x,y,z)  result = Curl_pp_sendf(x,y,z); \
-                        if(result)                     \
-                          return result
-
 
 /*
  * FTP protocol handler.
@@ -180,8 +172,10 @@ const struct Curl_handler Curl_handler_ftp = {
   ftp_disconnect,                  /* disconnect */
   ZERO_NULL,                       /* readwrite */
   ZERO_NULL,                       /* connection_check */
+  ZERO_NULL,                       /* attach connection */
   PORT_FTP,                        /* defport */
   CURLPROTO_FTP,                   /* protocol */
+  CURLPROTO_FTP,                   /* family */
   PROTOPT_DUAL | PROTOPT_CLOSEACTION | PROTOPT_NEEDSPWD |
   PROTOPT_NOURLQUERY | PROTOPT_PROXY_AS_HTTP |
   PROTOPT_WILDCARD /* flags */
@@ -209,20 +203,20 @@ const struct Curl_handler Curl_handler_ftps = {
   ftp_disconnect,                  /* disconnect */
   ZERO_NULL,                       /* readwrite */
   ZERO_NULL,                       /* connection_check */
+  ZERO_NULL,                       /* attach connection */
   PORT_FTPS,                       /* defport */
   CURLPROTO_FTPS,                  /* protocol */
+  CURLPROTO_FTP,                   /* family */
   PROTOPT_SSL | PROTOPT_DUAL | PROTOPT_CLOSEACTION |
   PROTOPT_NEEDSPWD | PROTOPT_NOURLQUERY | PROTOPT_WILDCARD /* flags */
 };
 #endif
 
-static void close_secondarysocket(struct connectdata *conn)
+static void close_secondarysocket(struct Curl_easy *data,
+                                  struct connectdata *conn)
 {
-  if(CURL_SOCKET_BAD != conn->sock[SECONDARYSOCKET]) {
-    Curl_closesocket(conn, conn->sock[SECONDARYSOCKET]);
-    conn->sock[SECONDARYSOCKET] = CURL_SOCKET_BAD;
-  }
-  conn->bits.tcpconnect[SECONDARYSOCKET] = FALSE;
+  Curl_conn_close(data, SECONDARYSOCKET);
+  Curl_conn_cf_discard_all(data, conn, SECONDARYSOCKET);
 }
 
 /*
@@ -255,18 +249,6 @@ static void freedirs(struct ftp_conn *ftpc)
   Curl_safefree(ftpc->newhost);
 }
 
-/* Returns non-zero if the given string contains CR (\r) or LF (\n),
-   which are not allowed within RFC 959 <string>.
-   Note: The input string is in the client's encoding which might
-   not be ASCII, so escape sequences \r & \n must be used instead
-   of hex values 0x0d & 0x0a.
-*/
-static bool isBadFtpString(const char *string)
-{
-  return ((NULL != strchr(string, '\r')) ||
-          (NULL != strchr(string, '\n'))) ? TRUE : FALSE;
-}
-
 /***********************************************************************
  *
  * AcceptServerConnect()
@@ -275,9 +257,9 @@ static bool isBadFtpString(const char *string)
  * called to accept the connection and close the listening socket
  *
  */
-static CURLcode AcceptServerConnect(struct connectdata *conn)
+static CURLcode AcceptServerConnect(struct Curl_easy *data)
 {
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
   curl_socket_t sock = conn->sock[SECONDARYSOCKET];
   curl_socket_t s = CURL_SOCKET_BAD;
 #ifdef ENABLE_IPV6
@@ -286,26 +268,28 @@ static CURLcode AcceptServerConnect(struct connectdata *conn)
   struct sockaddr_in add;
 #endif
   curl_socklen_t size = (curl_socklen_t) sizeof(add);
+  CURLcode result;
 
   if(0 == getsockname(sock, (struct sockaddr *) &add, &size)) {
     size = sizeof(add);
 
     s = accept(sock, (struct sockaddr *) &add, &size);
   }
-  Curl_closesocket(conn, sock); /* close the first socket */
 
   if(CURL_SOCKET_BAD == s) {
     failf(data, "Error accept()ing server connect");
     return CURLE_FTP_PORT_FAILED;
   }
-  infof(data, "Connection accepted from server\n");
+  infof(data, "Connection accepted from server");
   /* when this happens within the DO state it is important that we mark us as
      not needing DO_MORE anymore */
   conn->bits.do_more = FALSE;
 
-  conn->sock[SECONDARYSOCKET] = s;
   (void)curlx_nonblock(s, TRUE); /* enable non-blocking */
-  conn->sock_accepted[SECONDARYSOCKET] = TRUE;
+  /* Replace any filter on SECONDARY with one listening on this socket */
+  result = Curl_conn_tcp_accepted_set(data, conn, SECONDARYSOCKET, &s);
+  if(result)
+    return result;
 
   if(data->set.fsockopt) {
     int error = 0;
@@ -318,7 +302,7 @@ static CURLcode AcceptServerConnect(struct connectdata *conn)
     Curl_set_in_callback(data, false);
 
     if(error) {
-      close_secondarysocket(conn);
+      close_secondarysocket(data, conn);
       return CURLE_ABORTED_BY_CALLBACK;
     }
   }
@@ -348,7 +332,7 @@ static timediff_t ftp_timeleft_accept(struct Curl_easy *data)
   now = Curl_now();
 
   /* check if the generic timeout possibly is set shorter */
-  other =  Curl_timeleft(data, &now, FALSE);
+  other = Curl_timeleft(data, &now, FALSE);
   if(other && (other < timeout_ms))
     /* note that this also works fine for when other happens to be negative
        due to it already having elapsed */
@@ -374,22 +358,22 @@ static timediff_t ftp_timeleft_accept(struct Curl_easy *data)
  * connection for a negative response regarding a failure in connecting
  *
  */
-static CURLcode ReceivedServerConnect(struct connectdata *conn, bool *received)
+static CURLcode ReceivedServerConnect(struct Curl_easy *data, bool *received)
 {
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
   curl_socket_t ctrl_sock = conn->sock[FIRSTSOCKET];
   curl_socket_t data_sock = conn->sock[SECONDARYSOCKET];
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   struct pingpong *pp = &ftpc->pp;
   int result;
-  time_t timeout_ms;
+  timediff_t timeout_ms;
   ssize_t nread;
   int ftpcode;
 
   *received = FALSE;
 
   timeout_ms = ftp_timeleft_accept(data);
-  infof(data, "Checking for server connect\n");
+  infof(data, "Checking for server connect");
   if(timeout_ms < 0) {
     /* if a timeout was already reached, bail out */
     failf(data, "Accept timeout occurred while waiting server connect");
@@ -399,8 +383,8 @@ static CURLcode ReceivedServerConnect(struct connectdata *conn, bool *received)
   /* First check whether there is a cached response from server */
   if(pp->cache_size && pp->cache && pp->cache[0] > '3') {
     /* Data connection could not be established, let's return */
-    infof(data, "There is negative response in cache while serv connect\n");
-    Curl_GetFTPResponse(&nread, conn, &ftpcode);
+    infof(data, "There is negative response in cache while serv connect");
+    (void)Curl_GetFTPResponse(data, &nread, &ftpcode);
     return CURLE_FTP_ACCEPT_FAILED;
   }
 
@@ -417,12 +401,12 @@ static CURLcode ReceivedServerConnect(struct connectdata *conn, bool *received)
   default:
 
     if(result & CURL_CSELECT_IN2) {
-      infof(data, "Ready to accept data connection from server\n");
+      infof(data, "Ready to accept data connection from server");
       *received = TRUE;
     }
     else if(result & CURL_CSELECT_IN) {
-      infof(data, "Ctrl conn has data while waiting for data conn\n");
-      Curl_GetFTPResponse(&nread, conn, &ftpcode);
+      infof(data, "Ctrl conn has data while waiting for data conn");
+      (void)Curl_GetFTPResponse(data, &nread, &ftpcode);
 
       if(ftpcode/100 > 3)
         return CURLE_FTP_ACCEPT_FAILED;
@@ -445,19 +429,22 @@ static CURLcode ReceivedServerConnect(struct connectdata *conn, bool *received)
  * setup transfer parameters and initiate the data transfer.
  *
  */
-static CURLcode InitiateTransfer(struct connectdata *conn)
+static CURLcode InitiateTransfer(struct Curl_easy *data)
 {
-  struct Curl_easy *data = conn->data;
   CURLcode result = CURLE_OK;
+  struct connectdata *conn = data->conn;
+  bool connected;
 
-  if(conn->bits.ftp_use_data_ssl) {
-    /* since we only have a plaintext TCP connection here, we must now
-     * do the TLS stuff */
-    infof(data, "Doing the SSL/TLS handshake on the data stream\n");
-    result = Curl_ssl_connect(conn, SECONDARYSOCKET);
+  DEBUGF(infof(data, "ftp InitiateTransfer()"));
+  if(conn->bits.ftp_use_data_ssl && data->set.ftp_use_port &&
+     !Curl_conn_is_ssl(conn, SECONDARYSOCKET)) {
+    result = Curl_ssl_cfilter_add(data, conn, SECONDARYSOCKET);
     if(result)
       return result;
   }
+  result = Curl_conn_connect(data, SECONDARYSOCKET, TRUE, &connected);
+  if(result || !connected)
+    return result;
 
   if(conn->proto.ftpc.state_saved == FTP_STOR) {
     /* When we know we're uploading a specified file, we can get the file
@@ -476,7 +463,7 @@ static CURLcode InitiateTransfer(struct connectdata *conn)
   }
 
   conn->proto.ftpc.pp.pending_resp = TRUE; /* expect server response */
-  state(conn, FTP_STOP);
+  state(data, FTP_STOP);
 
   return CURLE_OK;
 }
@@ -490,14 +477,13 @@ static CURLcode InitiateTransfer(struct connectdata *conn)
  * accepted.
  *
  */
-static CURLcode AllowServerConnect(struct connectdata *conn, bool *connected)
+static CURLcode AllowServerConnect(struct Curl_easy *data, bool *connected)
 {
-  struct Curl_easy *data = conn->data;
-  time_t timeout_ms;
+  timediff_t timeout_ms;
   CURLcode result = CURLE_OK;
 
   *connected = FALSE;
-  infof(data, "Preparing for accepting server on data port\n");
+  infof(data, "Preparing for accepting server on data port");
 
   /* Save the time we start accepting server connect */
   Curl_pgrsTime(data, TIMER_STARTACCEPT);
@@ -506,31 +492,33 @@ static CURLcode AllowServerConnect(struct connectdata *conn, bool *connected)
   if(timeout_ms < 0) {
     /* if a timeout was already reached, bail out */
     failf(data, "Accept timeout occurred while waiting server connect");
-    return CURLE_FTP_ACCEPT_TIMEOUT;
+    result = CURLE_FTP_ACCEPT_TIMEOUT;
+    goto out;
   }
 
   /* see if the connection request is already here */
-  result = ReceivedServerConnect(conn, connected);
+  result = ReceivedServerConnect(data, connected);
   if(result)
-    return result;
+    goto out;
 
   if(*connected) {
-    result = AcceptServerConnect(conn);
+    result = AcceptServerConnect(data);
     if(result)
-      return result;
+      goto out;
 
-    result = InitiateTransfer(conn);
+    result = InitiateTransfer(data);
     if(result)
-      return result;
+      goto out;
   }
   else {
     /* Add timeout to multi handle and break out of the loop */
-    if(!result && *connected == FALSE) {
-      Curl_expire(data, data->set.accepttimeout > 0 ?
-                  data->set.accepttimeout: DEFAULT_ACCEPT_TIMEOUT, 0);
-    }
+    Curl_expire(data, data->set.accepttimeout ?
+                data->set.accepttimeout: DEFAULT_ACCEPT_TIMEOUT,
+                EXPIRE_FTP_ACCEPT);
   }
 
+out:
+  DEBUGF(infof(data, "ftp AllowServerConnect() -> %d", result));
   return result;
 }
 
@@ -542,9 +530,10 @@ static CURLcode AllowServerConnect(struct connectdata *conn, bool *connected)
 /* macro to check for the last line in an FTP server response */
 #define LASTLINE(line) (STATUSCODE(line) && (' ' == line[3]))
 
-static bool ftp_endofresp(struct connectdata *conn, char *line, size_t len,
-                          int *code)
+static bool ftp_endofresp(struct Curl_easy *data, struct connectdata *conn,
+                          char *line, size_t len, int *code)
 {
+  (void)data;
   (void)conn;
 
   if((len > 3) && LASTLINE(line)) {
@@ -555,36 +544,35 @@ static bool ftp_endofresp(struct connectdata *conn, char *line, size_t len,
   return FALSE;
 }
 
-static CURLcode ftp_readresp(curl_socket_t sockfd,
+static CURLcode ftp_readresp(struct Curl_easy *data,
+                             curl_socket_t sockfd,
                              struct pingpong *pp,
                              int *ftpcode, /* return the ftp-code if done */
                              size_t *size) /* size of the response */
 {
-  struct connectdata *conn = pp->conn;
-  struct Curl_easy *data = conn->data;
-#ifdef HAVE_GSSAPI
-  char * const buf = data->state.buffer;
-#endif
-  CURLcode result = CURLE_OK;
   int code;
+  CURLcode result = Curl_pp_readresp(data, sockfd, pp, &code, size);
 
-  result = Curl_pp_readresp(sockfd, pp, &code, size);
+#ifdef HAVE_GSSAPI
+  {
+    struct connectdata *conn = data->conn;
+    char * const buf = data->state.buffer;
 
-#if defined(HAVE_GSSAPI)
-  /* handle the security-oriented responses 6xx ***/
-  switch(code) {
-  case 631:
-    code = Curl_sec_read_msg(conn, buf, PROT_SAFE);
-    break;
-  case 632:
-    code = Curl_sec_read_msg(conn, buf, PROT_PRIVATE);
-    break;
-  case 633:
-    code = Curl_sec_read_msg(conn, buf, PROT_CONFIDENTIAL);
-    break;
-  default:
-    /* normal ftp stuff we pass through! */
-    break;
+    /* handle the security-oriented responses 6xx ***/
+    switch(code) {
+    case 631:
+      code = Curl_sec_read_msg(data, conn, buf, PROT_SAFE);
+      break;
+    case 632:
+      code = Curl_sec_read_msg(data, conn, buf, PROT_PRIVATE);
+      break;
+    case 633:
+      code = Curl_sec_read_msg(data, conn, buf, PROT_CONFIDENTIAL);
+      break;
+    default:
+      /* normal ftp stuff we pass through! */
+      break;
+    }
   }
 #endif
 
@@ -602,8 +590,8 @@ static CURLcode ftp_readresp(curl_socket_t sockfd,
      * This response code can come at any point so having it treated
      * generically is a good idea.
      */
-    infof(data, "We got a 421 - timeout!\n");
-    state(conn, FTP_STOP);
+    infof(data, "We got a 421 - timeout");
+    state(data, FTP_STOP);
     return CURLE_OPERATION_TIMEDOUT;
   }
 
@@ -618,8 +606,8 @@ static CURLcode ftp_readresp(curl_socket_t sockfd,
  *
  */
 
-CURLcode Curl_GetFTPResponse(ssize_t *nreadp, /* return number of bytes read */
-                             struct connectdata *conn,
+CURLcode Curl_GetFTPResponse(struct Curl_easy *data,
+                             ssize_t *nreadp, /* return number of bytes read */
                              int *ftpcode) /* return the ftp-code */
 {
   /*
@@ -629,8 +617,8 @@ CURLcode Curl_GetFTPResponse(ssize_t *nreadp, /* return number of bytes read */
    * Alas, read as much as possible, split up into lines, use the ending
    * line in a response or continue reading.  */
 
+  struct connectdata *conn = data->conn;
   curl_socket_t sockfd = conn->sock[FIRSTSOCKET];
-  struct Curl_easy *data = conn->data;
   CURLcode result = CURLE_OK;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   struct pingpong *pp = &ftpc->pp;
@@ -648,8 +636,8 @@ CURLcode Curl_GetFTPResponse(ssize_t *nreadp, /* return number of bytes read */
 
   while(!*ftpcode && !result) {
     /* check and reset timeout value every lap */
-    time_t timeout = Curl_pp_state_timeout(pp, FALSE);
-    time_t interval_ms;
+    timediff_t timeout = Curl_pp_state_timeout(data, pp, FALSE);
+    timediff_t interval_ms;
 
     if(timeout <= 0) {
       failf(data, "FTP response timeout");
@@ -682,7 +670,7 @@ CURLcode Curl_GetFTPResponse(ssize_t *nreadp, /* return number of bytes read */
        * wait for more data anyway.
        */
     }
-    else if(!Curl_conn_data_pending(conn, FIRSTSOCKET)) {
+    else if(!Curl_conn_data_pending(data, FIRSTSOCKET)) {
       switch(SOCKET_READABLE(sockfd, interval_ms)) {
       case -1: /* select() error, stop reading */
         failf(data, "FTP response aborted due to select/poll error: %d",
@@ -690,7 +678,7 @@ CURLcode Curl_GetFTPResponse(ssize_t *nreadp, /* return number of bytes read */
         return CURLE_RECV_ERROR;
 
       case 0: /* timeout */
-        if(Curl_pgrsUpdate(conn))
+        if(Curl_pgrsUpdate(data))
           return CURLE_ABORTED_BY_CALLBACK;
         continue; /* just continue in our loop for the timeout duration */
 
@@ -698,7 +686,7 @@ CURLcode Curl_GetFTPResponse(ssize_t *nreadp, /* return number of bytes read */
         break;
       }
     }
-    result = ftp_readresp(sockfd, pp, ftpcode, &nread);
+    result = ftp_readresp(data, sockfd, pp, ftpcode, &nread);
     if(result)
       break;
 
@@ -762,13 +750,14 @@ static const char * const ftp_state_names[]={
 #endif
 
 /* This is the ONLY way to change FTP state! */
-static void _state(struct connectdata *conn,
+static void _state(struct Curl_easy *data,
                    ftpstate newstate
 #ifdef DEBUGBUILD
                    , int lineno
 #endif
   )
 {
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
 #if defined(DEBUGBUILD)
@@ -777,7 +766,7 @@ static void _state(struct connectdata *conn,
   (void) lineno;
 #else
   if(ftpc->state != newstate)
-    infof(conn->data, "FTP %p (line %d) state change from %s to %s\n",
+    infof(data, "FTP %p (line %d) state change from %s to %s",
           (void *)ftpc, lineno, ftp_state_names[ftpc->state],
           ftp_state_names[newstate]);
 #endif
@@ -786,51 +775,54 @@ static void _state(struct connectdata *conn,
   ftpc->state = newstate;
 }
 
-static CURLcode ftp_state_user(struct connectdata *conn)
+static CURLcode ftp_state_user(struct Curl_easy *data,
+                               struct connectdata *conn)
 {
-  CURLcode result;
-  struct FTP *ftp = conn->data->req.protop;
-  /* send USER */
-  PPSENDF(&conn->proto.ftpc.pp, "USER %s", ftp->user?ftp->user:"");
-
-  state(conn, FTP_USER);
-  conn->data->state.ftp_trying_alternative = FALSE;
-
-  return CURLE_OK;
+  CURLcode result = Curl_pp_sendf(data,
+                                  &conn->proto.ftpc.pp, "USER %s",
+                                  conn->user?conn->user:"");
+  if(!result) {
+    struct ftp_conn *ftpc = &conn->proto.ftpc;
+    ftpc->ftp_trying_alternative = FALSE;
+    state(data, FTP_USER);
+  }
+  return result;
 }
 
-static CURLcode ftp_state_pwd(struct connectdata *conn)
+static CURLcode ftp_state_pwd(struct Curl_easy *data,
+                              struct connectdata *conn)
 {
-  CURLcode result;
+  CURLcode result = Curl_pp_sendf(data, &conn->proto.ftpc.pp, "%s", "PWD");
+  if(!result)
+    state(data, FTP_PWD);
 
-  /* send PWD to discover our entry point */
-  PPSENDF(&conn->proto.ftpc.pp, "%s", "PWD");
-  state(conn, FTP_PWD);
-
-  return CURLE_OK;
+  return result;
 }
 
 /* For the FTP "protocol connect" and "doing" phases only */
-static int ftp_getsock(struct connectdata *conn,
-                       curl_socket_t *socks,
-                       int numsocks)
+static int ftp_getsock(struct Curl_easy *data,
+                       struct connectdata *conn,
+                       curl_socket_t *socks)
 {
-  return Curl_pp_getsock(&conn->proto.ftpc.pp, socks, numsocks);
+  return Curl_pp_getsock(data, &conn->proto.ftpc.pp, socks);
 }
 
 /* For the FTP "DO_MORE" phase only */
-static int ftp_domore_getsock(struct connectdata *conn, curl_socket_t *socks,
-                              int numsocks)
+static int ftp_domore_getsock(struct Curl_easy *data,
+                              struct connectdata *conn, curl_socket_t *socks)
 {
   struct ftp_conn *ftpc = &conn->proto.ftpc;
-
-  if(!numsocks)
-    return GETSOCK_BLANK;
+  (void)data;
 
   /* When in DO_MORE state, we could be either waiting for us to connect to a
    * remote site, or we could wait for that site to connect to us. Or just
    * handle ordinary commands.
    */
+
+  DEBUGF(infof(data, "ftp_domore_getsock()"));
+  if(conn->cfilter[SECONDARYSOCKET]
+     && !Curl_conn_is_connected(conn, SECONDARYSOCKET))
+    return Curl_conn_get_select_socks(data, SECONDARYSOCKET, socks);
 
   if(FTP_STOP == ftpc->state) {
     int bits = GETSOCK_READSOCK(0);
@@ -838,27 +830,14 @@ static int ftp_domore_getsock(struct connectdata *conn, curl_socket_t *socks,
     /* if stopped and still in this state, then we're also waiting for a
        connect on the secondary connection */
     socks[0] = conn->sock[FIRSTSOCKET];
-
-    if(!conn->data->set.ftp_use_port) {
-      int s;
-      int i;
-      /* PORT is used to tell the server to connect to us, and during that we
-         don't do happy eyeballs, but we do if we connect to the server */
-      for(s = 1, i = 0; i<2; i++) {
-        if(conn->tempsock[i] != CURL_SOCKET_BAD) {
-          socks[s] = conn->tempsock[i];
-          bits |= GETSOCK_WRITESOCK(s++);
-        }
-      }
-    }
-    else {
+    if(conn->sock[SECONDARYSOCKET] != CURL_SOCKET_BAD) {
       socks[1] = conn->sock[SECONDARYSOCKET];
       bits |= GETSOCK_WRITESOCK(1) | GETSOCK_READSOCK(1);
     }
 
     return bits;
   }
-  return Curl_pp_getsock(&conn->proto.ftpc.pp, socks, numsocks);
+  return Curl_pp_getsock(data, &conn->proto.ftpc.pp, socks);
 }
 
 /* This is called after the FTP_QUOTE state is passed.
@@ -867,45 +846,47 @@ static int ftp_domore_getsock(struct connectdata *conn, curl_socket_t *socks,
    the correct directory. It may also need to send MKD commands to create
    missing ones, if that option is enabled.
 */
-static CURLcode ftp_state_cwd(struct connectdata *conn)
+static CURLcode ftp_state_cwd(struct Curl_easy *data,
+                              struct connectdata *conn)
 {
   CURLcode result = CURLE_OK;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
   if(ftpc->cwddone)
     /* already done and fine */
-    result = ftp_state_mdtm(conn);
+    result = ftp_state_mdtm(data);
   else {
+    /* FTPFILE_NOCWD with full path: expect ftpc->cwddone! */
+    DEBUGASSERT((data->set.ftp_filemethod != FTPFILE_NOCWD) ||
+                !(ftpc->dirdepth && ftpc->dirs[0][0] == '/'));
+
     ftpc->count2 = 0; /* count2 counts failed CWDs */
 
-    /* count3 is set to allow a MKD to fail once. In the case when first CWD
-       fails and then MKD fails (due to another session raced it to create the
-       dir) this then allows for a second try to CWD to it */
-    ftpc->count3 = (conn->data->set.ftp_create_missing_dirs == 2)?1:0;
-
-    if((conn->data->set.ftp_filemethod == FTPFILE_NOCWD) && !ftpc->cwdcount)
-      /* No CWD necessary */
-      result = ftp_state_mdtm(conn);
-    else if(conn->bits.reuse && ftpc->entrypath) {
+    if(conn->bits.reuse && ftpc->entrypath &&
+       /* no need to go to entrypath when we have an absolute path */
+       !(ftpc->dirdepth && ftpc->dirs[0][0] == '/')) {
       /* This is a re-used connection. Since we change directory to where the
          transfer is taking place, we must first get back to the original dir
          where we ended up after login: */
       ftpc->cwdcount = 0; /* we count this as the first path, then we add one
                              for all upcoming ones in the ftp->dirs[] array */
-      PPSENDF(&conn->proto.ftpc.pp, "CWD %s", ftpc->entrypath);
-      state(conn, FTP_CWD);
+      result = Curl_pp_sendf(data, &ftpc->pp, "CWD %s", ftpc->entrypath);
+      if(!result)
+        state(data, FTP_CWD);
     }
     else {
       if(ftpc->dirdepth) {
         ftpc->cwdcount = 1;
         /* issue the first CWD, the rest is sent when the CWD responses are
            received... */
-        PPSENDF(&conn->proto.ftpc.pp, "CWD %s", ftpc->dirs[ftpc->cwdcount -1]);
-        state(conn, FTP_CWD);
+        result = Curl_pp_sendf(data, &ftpc->pp, "CWD %s",
+                               ftpc->dirs[ftpc->cwdcount -1]);
+        if(!result)
+          state(data, FTP_CWD);
       }
       else {
         /* No CWD necessary */
-        result = ftp_state_mdtm(conn);
+        result = ftp_state_mdtm(data);
       }
     }
   }
@@ -918,18 +899,17 @@ typedef enum {
   DONE
 } ftpport;
 
-static CURLcode ftp_state_use_port(struct connectdata *conn,
+static CURLcode ftp_state_use_port(struct Curl_easy *data,
                                    ftpport fcmd) /* start with this */
-
 {
-  CURLcode result = CURLE_OK;
+  CURLcode result = CURLE_FTP_PORT_FAILED;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
-  struct Curl_easy *data = conn->data;
   curl_socket_t portsock = CURL_SOCKET_BAD;
-  char myhost[256] = "";
+  char myhost[MAX_IPADR_LEN + 1] = "";
 
   struct Curl_sockaddr_storage ss;
-  Curl_addrinfo *res, *ai;
+  struct Curl_addrinfo *res, *ai;
   curl_socklen_t sslen;
   char hbuf[NI_MAXHOST];
   struct sockaddr *sa = (struct sockaddr *)&ss;
@@ -937,9 +917,8 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
 #ifdef ENABLE_IPV6
   struct sockaddr_in6 * const sa6 = (void *)sa;
 #endif
-  char tmp[1024];
   static const char mode[][5] = { "EPRT", "PORT" };
-  int rc;
+  enum resolve_t rc;
   int error;
   char *host = NULL;
   char *string_ftpport = data->set.str[STRING_FTPPORT];
@@ -972,8 +951,10 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
     char *port_sep = NULL;
 
     addr = calloc(addrlen + 1, 1);
-    if(!addr)
-      return CURLE_OUT_OF_MEMORY;
+    if(!addr) {
+      result = CURLE_OUT_OF_MEMORY;
+      goto out;
+    }
 
 #ifdef ENABLE_IPV6
     if(*string_ftpport == '[') {
@@ -1011,7 +992,7 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
       }
 
     /* parse the port */
-    if(ip_end != NULL) {
+    if(ip_end) {
       port_start = strchr(ip_end, ':');
       if(port_start) {
         port_min = curlx_ultous(strtoul(port_start + 1, NULL, 10));
@@ -1033,18 +1014,20 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
     if(port_min > port_max)
       port_min = port_max = 0;
 
-
     if(*addr != '\0') {
       /* attempt to get the address of the given interface name */
-      switch(Curl_if2ip(conn->ip_addr->ai_family,
-                        Curl_ipv6_scope(conn->ip_addr->ai_addr),
-                        conn->scope_id, addr, hbuf, sizeof(hbuf))) {
+      switch(Curl_if2ip(conn->remote_addr->family,
+#ifdef ENABLE_IPV6
+                        Curl_ipv6_scope(&conn->remote_addr->sa_addr),
+                        conn->scope_id,
+#endif
+                        addr, hbuf, sizeof(hbuf))) {
         case IF2IP_NOT_FOUND:
           /* not an interface, use the given string as host name instead */
           host = addr;
           break;
         case IF2IP_AF_NOT_SUPPORTED:
-          return CURLE_FTP_PORT_FAILED;
+          goto out;
         case IF2IP_FOUND:
           host = hbuf; /* use the hbuf for host name */
       }
@@ -1055,33 +1038,36 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
   } /* data->set.ftpport */
 
   if(!host) {
+    const char *r;
     /* not an interface and not a host name, get default by extracting
        the IP from the control connection */
     sslen = sizeof(ss);
     if(getsockname(conn->sock[FIRSTSOCKET], sa, &sslen)) {
       failf(data, "getsockname() failed: %s",
             Curl_strerror(SOCKERRNO, buffer, sizeof(buffer)));
-      free(addr);
-      return CURLE_FTP_PORT_FAILED;
+      goto out;
     }
     switch(sa->sa_family) {
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      Curl_inet_ntop(sa->sa_family, &sa6->sin6_addr, hbuf, sizeof(hbuf));
+      r = Curl_inet_ntop(sa->sa_family, &sa6->sin6_addr, hbuf, sizeof(hbuf));
       break;
 #endif
     default:
-      Curl_inet_ntop(sa->sa_family, &sa4->sin_addr, hbuf, sizeof(hbuf));
+      r = Curl_inet_ntop(sa->sa_family, &sa4->sin_addr, hbuf, sizeof(hbuf));
       break;
+    }
+    if(!r) {
+      goto out;
     }
     host = hbuf; /* use this host name */
     possibly_non_local = FALSE; /* we know it is local now */
   }
 
   /* resolv ip/host to ip */
-  rc = Curl_resolv(conn, host, 0, FALSE, &h);
+  rc = Curl_resolv(data, host, 0, FALSE, &h);
   if(rc == CURLRESOLV_PENDING)
-    (void)Curl_resolver_wait_resolv(conn, &h);
+    (void)Curl_resolver_wait_resolv(data, &h);
   if(h) {
     res = h->addr;
     /* when we return from this function, we can forget about this entry
@@ -1091,13 +1077,11 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
   else
     res = NULL; /* failure! */
 
-  if(res == NULL) {
+  if(!res) {
     failf(data, "failed to resolve the address provided to PORT: %s", host);
-    free(addr);
-    return CURLE_FTP_PORT_FAILED;
+    goto out;
   }
 
-  free(addr);
   host = NULL;
 
   /* step 2, create a socket for the requested address */
@@ -1105,8 +1089,7 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
   portsock = CURL_SOCKET_BAD;
   error = 0;
   for(ai = res; ai; ai = ai->ai_next) {
-    result = Curl_socket(conn, ai, NULL, &portsock);
-    if(result) {
+    if(Curl_socket_open(data, ai, NULL, conn->transport, &portsock)) {
       error = SOCKERRNO;
       continue;
     }
@@ -1115,8 +1098,9 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
   if(!ai) {
     failf(data, "socket failure: %s",
           Curl_strerror(error, buffer, sizeof(buffer)));
-    return CURLE_FTP_PORT_FAILED;
+    goto out;
   }
+  DEBUGF(infof(data, "ftp_state_use_port(), opened socket"));
 
   /* step 3, bind to a suitable local address */
 
@@ -1138,15 +1122,14 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
         /* The requested bind address is not local.  Use the address used for
          * the control connection instead and restart the port loop
          */
-        infof(data, "bind(port=%hu) on non-local address failed: %s\n", port,
+        infof(data, "bind(port=%hu) on non-local address failed: %s", port,
               Curl_strerror(error, buffer, sizeof(buffer)));
 
         sslen = sizeof(ss);
         if(getsockname(conn->sock[FIRSTSOCKET], sa, &sslen)) {
           failf(data, "getsockname() failed: %s",
                 Curl_strerror(SOCKERRNO, buffer, sizeof(buffer)));
-          Curl_closesocket(conn, portsock);
-          return CURLE_FTP_PORT_FAILED;
+          goto out;
         }
         port = port_min;
         possibly_non_local = FALSE; /* don't try this again */
@@ -1155,8 +1138,7 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
       if(error != EADDRINUSE && error != EACCES) {
         failf(data, "bind(port=%hu) failed: %s", port,
               Curl_strerror(error, buffer, sizeof(buffer)));
-        Curl_closesocket(conn, portsock);
-        return CURLE_FTP_PORT_FAILED;
+        goto out;
       }
     }
     else
@@ -1165,31 +1147,30 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
     port++;
   }
 
-  /* maybe all ports were in use already*/
+  /* maybe all ports were in use already */
   if(port > port_max) {
-    failf(data, "bind() failed, we ran out of ports!");
-    Curl_closesocket(conn, portsock);
-    return CURLE_FTP_PORT_FAILED;
+    failf(data, "bind() failed, we ran out of ports");
+    goto out;
   }
 
   /* get the name again after the bind() so that we can extract the
      port number it uses now */
   sslen = sizeof(ss);
-  if(getsockname(portsock, (struct sockaddr *)sa, &sslen)) {
+  if(getsockname(portsock, sa, &sslen)) {
     failf(data, "getsockname() failed: %s",
           Curl_strerror(SOCKERRNO, buffer, sizeof(buffer)));
-    Curl_closesocket(conn, portsock);
-    return CURLE_FTP_PORT_FAILED;
+    goto out;
   }
+  DEBUGF(infof(data, "ftp_state_use_port(), socket bound to port %d", port));
 
   /* step 4, listen on the socket */
 
   if(listen(portsock, 1)) {
     failf(data, "socket failure: %s",
           Curl_strerror(SOCKERRNO, buffer, sizeof(buffer)));
-    Curl_closesocket(conn, portsock);
-    return CURLE_FTP_PORT_FAILED;
+    goto out;
   }
+  DEBUGF(infof(data, "ftp_state_use_port(), listening on %d", port));
 
   /* step 5, send the proper FTP command */
 
@@ -1236,24 +1217,21 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
        * EPRT |2|1080::8:800:200C:417A|5282|
        */
 
-      result = Curl_pp_sendf(&ftpc->pp, "%s |%d|%s|%hu|", mode[fcmd],
+      result = Curl_pp_sendf(data, &ftpc->pp, "%s |%d|%s|%hu|", mode[fcmd],
                              sa->sa_family == AF_INET?1:2,
                              myhost, port);
       if(result) {
         failf(data, "Failure sending EPRT command: %s",
               curl_easy_strerror(result));
-        Curl_closesocket(conn, portsock);
-        /* don't retry using PORT */
-        ftpc->count1 = PORT;
-        /* bail out */
-        state(conn, FTP_STOP);
-        return result;
+        goto out;
       }
       break;
     }
     if(PORT == fcmd) {
+      /* large enough for [IP address],[num],[num] */
+      char target[sizeof(myhost) + 20];
       char *source = myhost;
-      char *dest = tmp;
+      char *dest = target;
 
       /* translate x.x.x.x to x,x,x,x */
       while(source && *source) {
@@ -1267,14 +1245,11 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
       *dest = 0;
       msnprintf(dest, 20, ",%d,%d", (int)(port>>8), (int)(port&0xff));
 
-      result = Curl_pp_sendf(&ftpc->pp, "%s %s", mode[fcmd], tmp);
+      result = Curl_pp_sendf(data, &ftpc->pp, "%s %s", mode[fcmd], target);
       if(result) {
         failf(data, "Failure sending PORT command: %s",
               curl_easy_strerror(result));
-        Curl_closesocket(conn, portsock);
-        /* bail out */
-        state(conn, FTP_STOP);
-        return result;
+        goto out;
       }
       break;
     }
@@ -1283,32 +1258,30 @@ static CURLcode ftp_state_use_port(struct connectdata *conn,
   /* store which command was sent */
   ftpc->count1 = fcmd;
 
-  close_secondarysocket(conn);
+  /* Replace any filter on SECONDARY with one listening on this socket */
+  result = Curl_conn_tcp_listen_set(data, conn, SECONDARYSOCKET, &portsock);
+  if(result)
+    goto out;
+  portsock = CURL_SOCKET_BAD; /* now held in filter */
+  state(data, FTP_PORT);
 
-  /* we set the secondary socket variable to this for now, it is only so that
-     the cleanup function will close it in case we fail before the true
-     secondary stuff is made */
-  conn->sock[SECONDARYSOCKET] = portsock;
-
-  /* this tcpconnect assignment below is a hackish work-around to make the
-     multi interface with active FTP work - as it will not wait for a
-     (passive) connect in Curl_is_connected().
-
-     The *proper* fix is to make sure that the active connection from the
-     server is done in a non-blocking way. Currently, it is still BLOCKING.
-  */
-  conn->bits.tcpconnect[SECONDARYSOCKET] = TRUE;
-
-  state(conn, FTP_PORT);
+out:
+  if(result) {
+    state(data, FTP_STOP);
+  }
+  if(portsock != CURL_SOCKET_BAD)
+    Curl_socket_close(data, conn, portsock);
+  free(addr);
   return result;
 }
 
-static CURLcode ftp_state_use_pasv(struct connectdata *conn)
+static CURLcode ftp_state_use_pasv(struct Curl_easy *data,
+                                   struct connectdata *conn)
 {
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   CURLcode result = CURLE_OK;
   /*
-    Here's the excecutive summary on what to do:
+    Here's the executive summary on what to do:
 
     PASV is RFC959, expect:
     227 Entering Passive Mode (a1,a2,a3,a4,p1,p2)
@@ -1333,12 +1306,12 @@ static CURLcode ftp_state_use_pasv(struct connectdata *conn)
 
   modeoff = conn->bits.ftp_use_epsv?0:1;
 
-  PPSENDF(&ftpc->pp, "%s", mode[modeoff]);
-
-  ftpc->count1 = modeoff;
-  state(conn, FTP_PASV);
-  infof(conn->data, "Connect data stream passively\n");
-
+  result = Curl_pp_sendf(data, &ftpc->pp, "%s", mode[modeoff]);
+  if(!result) {
+    ftpc->count1 = modeoff;
+    state(data, FTP_PASV);
+    infof(data, "Connect data stream passively");
+  }
   return result;
 }
 
@@ -1349,95 +1322,97 @@ static CURLcode ftp_state_use_pasv(struct connectdata *conn)
  * request is made. Thus, if an actual transfer is to be made this is where we
  * take off for real.
  */
-static CURLcode ftp_state_prepare_transfer(struct connectdata *conn)
+static CURLcode ftp_state_prepare_transfer(struct Curl_easy *data)
 {
   CURLcode result = CURLE_OK;
-  struct FTP *ftp = conn->data->req.protop;
-  struct Curl_easy *data = conn->data;
+  struct FTP *ftp = data->req.p.ftp;
+  struct connectdata *conn = data->conn;
 
-  if(ftp->transfer != FTPTRANSFER_BODY) {
+  if(ftp->transfer != PPTRANSFER_BODY) {
     /* doesn't transfer any data */
 
     /* still possibly do PRE QUOTE jobs */
-    state(conn, FTP_RETR_PREQUOTE);
-    result = ftp_state_quote(conn, TRUE, FTP_RETR_PREQUOTE);
+    state(data, FTP_RETR_PREQUOTE);
+    result = ftp_state_quote(data, TRUE, FTP_RETR_PREQUOTE);
   }
   else if(data->set.ftp_use_port) {
     /* We have chosen to use the PORT (or similar) command */
-    result = ftp_state_use_port(conn, EPRT);
+    result = ftp_state_use_port(data, EPRT);
   }
   else {
     /* We have chosen (this is default) to use the PASV (or similar) command */
     if(data->set.ftp_use_pret) {
       /* The user has requested that we send a PRET command
          to prepare the server for the upcoming PASV */
-      if(!conn->proto.ftpc.file) {
-        PPSENDF(&conn->proto.ftpc.pp, "PRET %s",
-                data->set.str[STRING_CUSTOMREQUEST]?
-                data->set.str[STRING_CUSTOMREQUEST]:
-                (data->set.ftp_list_only?"NLST":"LIST"));
-      }
-      else if(data->set.upload) {
-        PPSENDF(&conn->proto.ftpc.pp, "PRET STOR %s", conn->proto.ftpc.file);
-      }
-      else {
-        PPSENDF(&conn->proto.ftpc.pp, "PRET RETR %s", conn->proto.ftpc.file);
-      }
-      state(conn, FTP_PRET);
+      struct ftp_conn *ftpc = &conn->proto.ftpc;
+      if(!conn->proto.ftpc.file)
+        result = Curl_pp_sendf(data, &ftpc->pp, "PRET %s",
+                               data->set.str[STRING_CUSTOMREQUEST]?
+                               data->set.str[STRING_CUSTOMREQUEST]:
+                               (data->state.list_only?"NLST":"LIST"));
+      else if(data->set.upload)
+        result = Curl_pp_sendf(data, &ftpc->pp, "PRET STOR %s",
+                               conn->proto.ftpc.file);
+      else
+        result = Curl_pp_sendf(data, &ftpc->pp, "PRET RETR %s",
+                               conn->proto.ftpc.file);
+      if(!result)
+        state(data, FTP_PRET);
     }
-    else {
-      result = ftp_state_use_pasv(conn);
-    }
+    else
+      result = ftp_state_use_pasv(data, conn);
   }
   return result;
 }
 
-static CURLcode ftp_state_rest(struct connectdata *conn)
+static CURLcode ftp_state_rest(struct Curl_easy *data,
+                               struct connectdata *conn)
 {
   CURLcode result = CURLE_OK;
-  struct FTP *ftp = conn->data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
-  if((ftp->transfer != FTPTRANSFER_BODY) && ftpc->file) {
+  if((ftp->transfer != PPTRANSFER_BODY) && ftpc->file) {
     /* if a "head"-like request is being made (on a file) */
 
     /* Determine if server can respond to REST command and therefore
        whether it supports range */
-    PPSENDF(&conn->proto.ftpc.pp, "REST %d", 0);
-
-    state(conn, FTP_REST);
+    result = Curl_pp_sendf(data, &ftpc->pp, "REST %d", 0);
+    if(!result)
+      state(data, FTP_REST);
   }
   else
-    result = ftp_state_prepare_transfer(conn);
+    result = ftp_state_prepare_transfer(data);
 
   return result;
 }
 
-static CURLcode ftp_state_size(struct connectdata *conn)
+static CURLcode ftp_state_size(struct Curl_easy *data,
+                               struct connectdata *conn)
 {
   CURLcode result = CURLE_OK;
-  struct FTP *ftp = conn->data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
-  if((ftp->transfer == FTPTRANSFER_INFO) && ftpc->file) {
+  if((ftp->transfer == PPTRANSFER_INFO) && ftpc->file) {
     /* if a "head"-like request is being made (on a file) */
 
     /* we know ftpc->file is a valid pointer to a file name */
-    PPSENDF(&ftpc->pp, "SIZE %s", ftpc->file);
-
-    state(conn, FTP_SIZE);
+    result = Curl_pp_sendf(data, &ftpc->pp, "SIZE %s", ftpc->file);
+    if(!result)
+      state(data, FTP_SIZE);
   }
   else
-    result = ftp_state_rest(conn);
+    result = ftp_state_rest(data, conn);
 
   return result;
 }
 
-static CURLcode ftp_state_list(struct connectdata *conn)
+static CURLcode ftp_state_list(struct Curl_easy *data)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
-  struct FTP *ftp = data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
+  struct connectdata *conn = data->conn;
 
   /* If this output is to be machine-parsed, the NLST command might be better
      to use, since the LIST command output is not specified or standard in any
@@ -1445,117 +1420,108 @@ static CURLcode ftp_state_list(struct connectdata *conn)
      servers either... */
 
   /*
-     if FTPFILE_NOCWD was specified, we are currently in
-     the user's home directory, so we should add the path
+     if FTPFILE_NOCWD was specified, we should add the path
      as argument for the LIST / NLST / or custom command.
      Whether the server will support this, is uncertain.
 
      The other ftp_filemethods will CWD into dir/dir/ first and
      then just do LIST (in that case: nothing to do here)
   */
-  char *cmd, *lstArg, *slashPos;
-  const char *inpath = ftp->path;
+  char *lstArg = NULL;
+  char *cmd;
 
-  lstArg = NULL;
-  if((data->set.ftp_filemethod == FTPFILE_NOCWD) &&
-     inpath && inpath[0] && strchr(inpath, '/')) {
-    size_t n = strlen(inpath);
-
-    /* Check if path does not end with /, as then we cut off the file part */
-    if(inpath[n - 1] != '/') {
-      /* chop off the file part if format is dir/dir/file */
-      slashPos = strrchr(inpath, '/');
-      n = slashPos - inpath;
-    }
-    result = Curl_urldecode(data, inpath, n, &lstArg, NULL, TRUE);
+  if((data->set.ftp_filemethod == FTPFILE_NOCWD) && ftp->path) {
+    /* url-decode before evaluation: e.g. paths starting/ending with %2f */
+    const char *slashPos = NULL;
+    char *rawPath = NULL;
+    result = Curl_urldecode(ftp->path, 0, &rawPath, NULL, REJECT_CTRL);
     if(result)
       return result;
+
+    slashPos = strrchr(rawPath, '/');
+    if(slashPos) {
+      /* chop off the file part if format is dir/file otherwise remove
+         the trailing slash for dir/dir/ except for absolute path / */
+      size_t n = slashPos - rawPath;
+      if(n == 0)
+        ++n;
+
+      lstArg = rawPath;
+      lstArg[n] = '\0';
+    }
+    else
+      free(rawPath);
   }
 
   cmd = aprintf("%s%s%s",
                 data->set.str[STRING_CUSTOMREQUEST]?
                 data->set.str[STRING_CUSTOMREQUEST]:
-                (data->set.ftp_list_only?"NLST":"LIST"),
+                (data->state.list_only?"NLST":"LIST"),
                 lstArg? " ": "",
                 lstArg? lstArg: "");
-
-  if(!cmd) {
-    free(lstArg);
-    return CURLE_OUT_OF_MEMORY;
-  }
-
-  result = Curl_pp_sendf(&conn->proto.ftpc.pp, "%s", cmd);
-
   free(lstArg);
+
+  if(!cmd)
+    return CURLE_OUT_OF_MEMORY;
+
+  result = Curl_pp_sendf(data, &conn->proto.ftpc.pp, "%s", cmd);
   free(cmd);
 
-  if(result)
-    return result;
-
-  state(conn, FTP_LIST);
+  if(!result)
+    state(data, FTP_LIST);
 
   return result;
 }
 
-static CURLcode ftp_state_retr_prequote(struct connectdata *conn)
+static CURLcode ftp_state_retr_prequote(struct Curl_easy *data)
 {
-  CURLcode result = CURLE_OK;
-
   /* We've sent the TYPE, now we must send the list of prequote strings */
-
-  result = ftp_state_quote(conn, TRUE, FTP_RETR_PREQUOTE);
-
-  return result;
+  return ftp_state_quote(data, TRUE, FTP_RETR_PREQUOTE);
 }
 
-static CURLcode ftp_state_stor_prequote(struct connectdata *conn)
+static CURLcode ftp_state_stor_prequote(struct Curl_easy *data)
 {
-  CURLcode result = CURLE_OK;
-
   /* We've sent the TYPE, now we must send the list of prequote strings */
-
-  result = ftp_state_quote(conn, TRUE, FTP_STOR_PREQUOTE);
-
-  return result;
+  return ftp_state_quote(data, TRUE, FTP_STOR_PREQUOTE);
 }
 
-static CURLcode ftp_state_type(struct connectdata *conn)
+static CURLcode ftp_state_type(struct Curl_easy *data)
 {
   CURLcode result = CURLE_OK;
-  struct FTP *ftp = conn->data->req.protop;
-  struct Curl_easy *data = conn->data;
+  struct FTP *ftp = data->req.p.ftp;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
   /* If we have selected NOBODY and HEADER, it means that we only want file
      information. Which in FTP can't be much more than the file size and
      date. */
-  if(data->set.opt_no_body && ftpc->file &&
-     ftp_need_type(conn, data->set.prefer_ascii)) {
+  if(data->req.no_body && ftpc->file &&
+     ftp_need_type(conn, data->state.prefer_ascii)) {
     /* The SIZE command is _not_ RFC 959 specified, and therefore many servers
        may not support it! It is however the only way we have to get a file's
        size! */
 
-    ftp->transfer = FTPTRANSFER_INFO;
+    ftp->transfer = PPTRANSFER_INFO;
     /* this means no actual transfer will be made */
 
     /* Some servers return different sizes for different modes, and thus we
        must set the proper type before we check the size */
-    result = ftp_nb_type(conn, data->set.prefer_ascii, FTP_TYPE);
+    result = ftp_nb_type(data, conn, data->state.prefer_ascii, FTP_TYPE);
     if(result)
       return result;
   }
   else
-    result = ftp_state_size(conn);
+    result = ftp_state_size(data, conn);
 
   return result;
 }
 
 /* This is called after the CWD commands have been done in the beginning of
    the DO phase */
-static CURLcode ftp_state_mdtm(struct connectdata *conn)
+static CURLcode ftp_state_mdtm(struct Curl_easy *data)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
   /* Requested time of file or time-depended transfer? */
@@ -1563,25 +1529,27 @@ static CURLcode ftp_state_mdtm(struct connectdata *conn)
 
     /* we have requested to get the modified-time of the file, this is a white
        spot as the MDTM is not mentioned in RFC959 */
-    PPSENDF(&ftpc->pp, "MDTM %s", ftpc->file);
+    result = Curl_pp_sendf(data, &ftpc->pp, "MDTM %s", ftpc->file);
 
-    state(conn, FTP_MDTM);
+    if(!result)
+      state(data, FTP_MDTM);
   }
   else
-    result = ftp_state_type(conn);
+    result = ftp_state_type(data);
 
   return result;
 }
 
 
 /* This is called after the TYPE and possible quote commands have been sent */
-static CURLcode ftp_state_ul_setup(struct connectdata *conn,
+static CURLcode ftp_state_ul_setup(struct Curl_easy *data,
                                    bool sizechecked)
 {
   CURLcode result = CURLE_OK;
-  struct FTP *ftp = conn->data->req.protop;
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
+  struct FTP *ftp = data->req.p.ftp;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
+  bool append = data->set.remote_append;
 
   if((data->state.resume_from && !sizechecked) ||
      ((data->state.resume_from > 0) && sizechecked)) {
@@ -1601,13 +1569,14 @@ static CURLcode ftp_state_ul_setup(struct connectdata *conn,
 
     if(data->state.resume_from < 0) {
       /* Got no given size to start from, figure it out */
-      PPSENDF(&ftpc->pp, "SIZE %s", ftpc->file);
-      state(conn, FTP_STOR_SIZE);
+      result = Curl_pp_sendf(data, &ftpc->pp, "SIZE %s", ftpc->file);
+      if(!result)
+        state(data, FTP_STOR_SIZE);
       return result;
     }
 
     /* enable append */
-    data->set.ftp_append = TRUE;
+    append = TRUE;
 
     /* Let's read off the proper amount of bytes from the input. */
     if(conn->seek_func) {
@@ -1648,37 +1617,37 @@ static CURLcode ftp_state_ul_setup(struct connectdata *conn,
       data->state.infilesize -= data->state.resume_from;
 
       if(data->state.infilesize <= 0) {
-        infof(data, "File already completely uploaded\n");
+        infof(data, "File already completely uploaded");
 
         /* no data to transfer */
         Curl_setup_transfer(data, -1, -1, FALSE, -1);
 
         /* Set ->transfer so that we won't get any error in
          * ftp_done() because we didn't transfer anything! */
-        ftp->transfer = FTPTRANSFER_NONE;
+        ftp->transfer = PPTRANSFER_NONE;
 
-        state(conn, FTP_STOP);
+        state(data, FTP_STOP);
         return CURLE_OK;
       }
     }
     /* we've passed, proceed as normal */
   } /* resume_from */
 
-  PPSENDF(&ftpc->pp, data->set.ftp_append?"APPE %s":"STOR %s",
-          ftpc->file);
-
-  state(conn, FTP_STOR);
+  result = Curl_pp_sendf(data, &ftpc->pp, append?"APPE %s":"STOR %s",
+                         ftpc->file);
+  if(!result)
+    state(data, FTP_STOR);
 
   return result;
 }
 
-static CURLcode ftp_state_quote(struct connectdata *conn,
+static CURLcode ftp_state_quote(struct Curl_easy *data,
                                 bool init,
                                 ftpstate instate)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
-  struct FTP *ftp = data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   bool quote = FALSE;
   struct curl_slist *item;
@@ -1725,8 +1694,10 @@ static CURLcode ftp_state_quote(struct connectdata *conn,
       else
         ftpc->count2 = 0; /* failure means cancel operation */
 
-      PPSENDF(&ftpc->pp, "%s", cmd);
-      state(conn, instate);
+      result = Curl_pp_sendf(data, &ftpc->pp, "%s", cmd);
+      if(result)
+        return result;
+      state(data, instate);
       quote = TRUE;
     }
   }
@@ -1736,36 +1707,44 @@ static CURLcode ftp_state_quote(struct connectdata *conn,
     switch(instate) {
     case FTP_QUOTE:
     default:
-      result = ftp_state_cwd(conn);
+      result = ftp_state_cwd(data, conn);
       break;
     case FTP_RETR_PREQUOTE:
-      if(ftp->transfer != FTPTRANSFER_BODY)
-        state(conn, FTP_STOP);
+      if(ftp->transfer != PPTRANSFER_BODY)
+        state(data, FTP_STOP);
       else {
         if(ftpc->known_filesize != -1) {
           Curl_pgrsSetDownloadSize(data, ftpc->known_filesize);
-          result = ftp_state_retr(conn, ftpc->known_filesize);
+          result = ftp_state_retr(data, ftpc->known_filesize);
         }
         else {
-          if(data->set.ignorecl) {
-            /* This code is to support download of growing files.  It prevents
-               the state machine from requesting the file size from the
-               server.  With an unknown file size the download continues until
-               the server terminates it, otherwise the client stops if the
-               received byte count exceeds the reported file size.  Set option
-               CURLOPT_IGNORE_CONTENT_LENGTH to 1 to enable this behavior.*/
-            PPSENDF(&ftpc->pp, "RETR %s", ftpc->file);
-            state(conn, FTP_RETR);
+          if(data->set.ignorecl || data->state.prefer_ascii) {
+            /* 'ignorecl' is used to support download of growing files.  It
+               prevents the state machine from requesting the file size from
+               the server.  With an unknown file size the download continues
+               until the server terminates it, otherwise the client stops if
+               the received byte count exceeds the reported file size.  Set
+               option CURLOPT_IGNORE_CONTENT_LENGTH to 1 to enable this
+               behavior.
+
+               In addition: asking for the size for 'TYPE A' transfers is not
+               constructive since servers don't report the converted size. So
+               skip it.
+            */
+            result = Curl_pp_sendf(data, &ftpc->pp, "RETR %s", ftpc->file);
+            if(!result)
+              state(data, FTP_RETR);
           }
           else {
-            PPSENDF(&ftpc->pp, "SIZE %s", ftpc->file);
-            state(conn, FTP_RETR_SIZE);
+            result = Curl_pp_sendf(data, &ftpc->pp, "SIZE %s", ftpc->file);
+            if(!result)
+              state(data, FTP_RETR_SIZE);
           }
         }
       }
       break;
     case FTP_STOR_PREQUOTE:
-      result = ftp_state_ul_setup(conn, FALSE);
+      result = ftp_state_ul_setup(data, FALSE);
       break;
     case FTP_POSTQUOTE:
       break;
@@ -1777,25 +1756,34 @@ static CURLcode ftp_state_quote(struct connectdata *conn,
 
 /* called from ftp_state_pasv_resp to switch to PASV in case of EPSV
    problems */
-static CURLcode ftp_epsv_disable(struct connectdata *conn)
+static CURLcode ftp_epsv_disable(struct Curl_easy *data,
+                                 struct connectdata *conn)
 {
   CURLcode result = CURLE_OK;
 
-  if(conn->bits.ipv6 && !(conn->bits.tunnel_proxy || conn->bits.socksproxy)) {
+  if(conn->bits.ipv6
+#ifndef CURL_DISABLE_PROXY
+     && !(conn->bits.tunnel_proxy || conn->bits.socksproxy)
+#endif
+    ) {
     /* We can't disable EPSV when doing IPv6, so this is instead a fail */
-    failf(conn->data, "Failed EPSV attempt, exiting\n");
+    failf(data, "Failed EPSV attempt, exiting");
     return CURLE_WEIRD_SERVER_REPLY;
   }
 
-  infof(conn->data, "Failed EPSV attempt. Disabling EPSV\n");
+  infof(data, "Failed EPSV attempt. Disabling EPSV");
   /* disable it for next transfer */
   conn->bits.ftp_use_epsv = FALSE;
-  conn->data->state.errorbuf = FALSE; /* allow error message to get
+  Curl_conn_close(data, SECONDARYSOCKET);
+  Curl_conn_cf_discard_all(data, conn, SECONDARYSOCKET);
+  data->state.errorbuf = FALSE; /* allow error message to get
                                          rewritten */
-  PPSENDF(&conn->proto.ftpc.pp, "%s", "PASV");
-  conn->proto.ftpc.count1++;
-  /* remain in/go to the FTP_PASV state */
-  state(conn, FTP_PASV);
+  result = Curl_pp_sendf(data, &conn->proto.ftpc.pp, "%s", "PASV");
+  if(!result) {
+    conn->proto.ftpc.count1++;
+    /* remain in/go to the FTP_PASV state */
+    state(data, FTP_PASV);
+  }
   return result;
 }
 
@@ -1806,20 +1794,44 @@ static char *control_address(struct connectdata *conn)
      If a proxy tunnel is used, returns the original host name instead, because
      the effective control connection address is the proxy address,
      not the ftp host. */
+#ifndef CURL_DISABLE_PROXY
   if(conn->bits.tunnel_proxy || conn->bits.socksproxy)
     return conn->host.name;
-
-  return conn->ip_addr_str;
+#endif
+  return conn->primary_ip;
 }
 
-static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
+static bool match_pasv_6nums(const char *p,
+                             unsigned int *array) /* 6 numbers */
+{
+  int i;
+  for(i = 0; i < 6; i++) {
+    unsigned long num;
+    char *endp;
+    if(i) {
+      if(*p != ',')
+        return FALSE;
+      p++;
+    }
+    if(!ISDIGIT(*p))
+      return FALSE;
+    num = strtoul(p, &endp, 10);
+    if(num > 255)
+      return FALSE;
+    array[i] = (unsigned int)num;
+    p = endp;
+  }
+  return TRUE;
+}
+
+static CURLcode ftp_state_pasv_resp(struct Curl_easy *data,
                                     int ftpcode)
 {
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   CURLcode result;
-  struct Curl_easy *data = conn->data;
   struct Curl_dns_entry *addr = NULL;
-  int rc;
+  enum resolve_t rc;
   unsigned short connectport; /* the local port connect() should use! */
   char *str = &data->state.buffer[4];  /* start on the first letter */
 
@@ -1831,27 +1843,18 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
     /* positive EPSV response */
     char *ptr = strchr(str, '(');
     if(ptr) {
-      unsigned int num;
-      char separator[4];
+      char sep;
       ptr++;
-      if(5 == sscanf(ptr, "%c%c%c%u%c",
-                     &separator[0],
-                     &separator[1],
-                     &separator[2],
-                     &num,
-                     &separator[3])) {
-        const char sep1 = separator[0];
-        int i;
-
-        /* The four separators should be identical, or else this is an oddly
-           formatted reply and we bail out immediately. */
-        for(i = 1; i<4; i++) {
-          if(separator[i] != sep1) {
-            ptr = NULL; /* set to NULL to signal error */
-            break;
-          }
-        }
-        if(num > 0xffff) {
+      /* |||12345| */
+      sep = ptr[0];
+      /* the ISDIGIT() check here is because strtoul() accepts leading minus
+         etc */
+      if((ptr[1] == sep) && (ptr[2] == sep) && ISDIGIT(ptr[3])) {
+        char *endp;
+        unsigned long num = strtoul(&ptr[3], &endp, 10);
+        if(*endp != sep)
+          ptr = NULL;
+        else if(num > 0xffff) {
           failf(data, "Illegal port number in EPSV reply");
           return CURLE_FTP_WEIRD_PASV_REPLY;
         }
@@ -1873,8 +1876,7 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
   else if((ftpc->count1 == 1) &&
           (ftpcode == 227)) {
     /* positive PASV response */
-    unsigned int ip[4];
-    unsigned int port[2];
+    unsigned int ip[6];
 
     /*
      * Scan for a sequence of six comma-separated numbers and use them as
@@ -1886,15 +1888,12 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
      * "227 Entering passive mode. 127,0,0,1,4,51"
      */
     while(*str) {
-      if(6 == sscanf(str, "%u,%u,%u,%u,%u,%u",
-                     &ip[0], &ip[1], &ip[2], &ip[3],
-                     &port[0], &port[1]))
+      if(match_pasv_6nums(str, ip))
         break;
       str++;
     }
 
-    if(!*str || (ip[0] > 255) || (ip[1] > 255)  || (ip[2] > 255)  ||
-       (ip[3] > 255) || (port[0] > 255)  || (port[1] > 255) ) {
+    if(!*str) {
       failf(data, "Couldn't interpret the 227-response");
       return CURLE_FTP_WEIRD_227_FORMAT;
     }
@@ -1903,7 +1902,7 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
     if(data->set.ftp_skip_ip) {
       /* told to ignore the remotely given IP but instead use the host we used
          for the control connection */
-      infof(data, "Skip %u.%u.%u.%u for data connection, re-use %s instead\n",
+      infof(data, "Skip %u.%u.%u.%u for data connection, re-use %s instead",
             ip[0], ip[1], ip[2], ip[3],
             conn->host.name);
       ftpc->newhost = strdup(control_address(conn));
@@ -1914,17 +1913,18 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
     if(!ftpc->newhost)
       return CURLE_OUT_OF_MEMORY;
 
-    ftpc->newport = (unsigned short)(((port[0]<<8) + port[1]) & 0xffff);
+    ftpc->newport = (unsigned short)(((ip[4]<<8) + ip[5]) & 0xffff);
   }
   else if(ftpc->count1 == 0) {
     /* EPSV failed, move on to PASV */
-    return ftp_epsv_disable(conn);
+    return ftp_epsv_disable(data, conn);
   }
   else {
     failf(data, "Bad PASV/EPSV response: %03d", ftpcode);
     return CURLE_FTP_WEIRD_PASV_REPLY;
   }
 
+#ifndef CURL_DISABLE_PROXY
   if(conn->bits.proxy) {
     /*
      * This connection uses a proxy and we need to connect to the proxy again
@@ -1933,11 +1933,11 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
      */
     const char * const host_name = conn->bits.socksproxy ?
       conn->socks_proxy.host.name : conn->http_proxy.host.name;
-    rc = Curl_resolv(conn, host_name, (int)conn->port, FALSE, &addr);
+    rc = Curl_resolv(data, host_name, conn->port, FALSE, &addr);
     if(rc == CURLRESOLV_PENDING)
       /* BLOCKING, ignores the return code but 'addr' will be NULL in
          case of failure */
-      (void)Curl_resolver_wait_resolv(conn, &addr);
+      (void)Curl_resolver_wait_resolv(data, &addr);
 
     connectport =
       (unsigned short)conn->port; /* we connect to the proxy's port */
@@ -1947,12 +1947,25 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
       return CURLE_COULDNT_RESOLVE_PROXY;
     }
   }
-  else {
+  else
+#endif
+  {
     /* normal, direct, ftp connection */
-    rc = Curl_resolv(conn, ftpc->newhost, ftpc->newport, FALSE, &addr);
+    DEBUGASSERT(ftpc->newhost);
+
+    /* postponed address resolution in case of tcp fastopen */
+    if(conn->bits.tcp_fastopen && !conn->bits.reuse && !ftpc->newhost[0]) {
+      Curl_conn_ev_update_info(data, conn);
+      Curl_safefree(ftpc->newhost);
+      ftpc->newhost = strdup(control_address(conn));
+      if(!ftpc->newhost)
+        return CURLE_OUT_OF_MEMORY;
+    }
+
+    rc = Curl_resolv(data, ftpc->newhost, ftpc->newport, FALSE, &addr);
     if(rc == CURLRESOLV_PENDING)
       /* BLOCKING */
-      (void)Curl_resolver_wait_resolv(conn, &addr);
+      (void)Curl_resolver_wait_resolv(data, &addr);
 
     connectport = ftpc->newport; /* we connect to the remote port */
 
@@ -1962,13 +1975,14 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
     }
   }
 
-  conn->bits.tcpconnect[SECONDARYSOCKET] = FALSE;
-  result = Curl_connecthost(conn, addr);
+  result = Curl_conn_setup(data, conn, SECONDARYSOCKET, addr,
+                           conn->bits.ftp_use_data_ssl?
+                           CURL_CF_SSL_ENABLE : CURL_CF_SSL_DISABLE);
 
   if(result) {
     Curl_resolv_unlock(data, addr); /* we're done using this address */
     if(ftpc->count1 == 0 && ftpcode == 229)
-      return ftp_epsv_disable(conn);
+      return ftp_epsv_disable(data, conn);
 
     return result;
   }
@@ -1982,7 +1996,7 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
 
   if(data->set.verbose)
     /* this just dumps information about this second connection */
-    ftp_pasv_verbose(conn, addr->addr, ftpc->newhost, connectport);
+    ftp_pasv_verbose(data, addr->addr, ftpc->newhost, connectport);
 
   Curl_resolv_unlock(data, addr); /* we're done using this address */
 
@@ -1993,15 +2007,15 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
     return CURLE_OUT_OF_MEMORY;
 
   conn->bits.do_more = TRUE;
-  state(conn, FTP_STOP); /* this phase is completed */
+  state(data, FTP_STOP); /* this phase is completed */
 
   return result;
 }
 
-static CURLcode ftp_state_port_resp(struct connectdata *conn,
+static CURLcode ftp_state_port_resp(struct Curl_easy *data,
                                     int ftpcode)
 {
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   ftpport fcmd = (ftpport)ftpc->count1;
   CURLcode result = CURLE_OK;
@@ -2012,7 +2026,7 @@ static CURLcode ftp_state_port_resp(struct connectdata *conn,
     /* the command failed */
 
     if(EPRT == fcmd) {
-      infof(data, "disabling EPRT usage\n");
+      infof(data, "disabling EPRT usage");
       conn->bits.ftp_use_eprt = FALSE;
     }
     fcmd++;
@@ -2023,23 +2037,47 @@ static CURLcode ftp_state_port_resp(struct connectdata *conn,
     }
     else
       /* try next */
-      result = ftp_state_use_port(conn, fcmd);
+      result = ftp_state_use_port(data, fcmd);
   }
   else {
-    infof(data, "Connect data stream actively\n");
-    state(conn, FTP_STOP); /* end of DO phase */
-    result = ftp_dophase_done(conn, FALSE);
+    infof(data, "Connect data stream actively");
+    state(data, FTP_STOP); /* end of DO phase */
+    result = ftp_dophase_done(data, FALSE);
   }
 
   return result;
 }
 
-static CURLcode ftp_state_mdtm_resp(struct connectdata *conn,
+static int twodigit(const char *p)
+{
+  return (p[0]-'0') * 10 + (p[1]-'0');
+}
+
+static bool ftp_213_date(const char *p, int *year, int *month, int *day,
+                         int *hour, int *minute, int *second)
+{
+  size_t len = strlen(p);
+  if(len < 14)
+    return FALSE;
+  *year = twodigit(&p[0]) * 100 + twodigit(&p[2]);
+  *month = twodigit(&p[4]);
+  *day = twodigit(&p[6]);
+  *hour = twodigit(&p[8]);
+  *minute = twodigit(&p[10]);
+  *second = twodigit(&p[12]);
+
+  if((*month > 12) || (*day > 31) || (*hour > 23) || (*minute > 59) ||
+     (*second > 60))
+    return FALSE;
+  return TRUE;
+}
+
+static CURLcode ftp_state_mdtm_resp(struct Curl_easy *data,
                                     int ftpcode)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
-  struct FTP *ftp = data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
   switch(ftpcode) {
@@ -2048,28 +2086,27 @@ static CURLcode ftp_state_mdtm_resp(struct connectdata *conn,
       /* we got a time. Format should be: "YYYYMMDDHHMMSS[.sss]" where the
          last .sss part is optional and means fractions of a second */
       int year, month, day, hour, minute, second;
-      if(6 == sscanf(&data->state.buffer[4], "%04d%02d%02d%02d%02d%02d",
-                     &year, &month, &day, &hour, &minute, &second)) {
+      if(ftp_213_date(&data->state.buffer[4],
+                      &year, &month, &day, &hour, &minute, &second)) {
         /* we have a time, reformat it */
         char timebuf[24];
-        time_t secs = time(NULL);
-
         msnprintf(timebuf, sizeof(timebuf),
                   "%04d%02d%02d %02d:%02d:%02d GMT",
                   year, month, day, hour, minute, second);
         /* now, convert this into a time() value: */
-        data->info.filetime = curl_getdate(timebuf, &secs);
+        data->info.filetime = Curl_getdate_capped(timebuf);
       }
 
 #ifdef CURL_FTP_HTTPSTYLE_HEAD
       /* If we asked for a time of the file and we actually got one as well,
-         we "emulate" a HTTP-style header in our output. */
+         we "emulate" an HTTP-style header in our output. */
 
-      if(data->set.opt_no_body &&
+      if(data->req.no_body &&
          ftpc->file &&
          data->set.get_filetime &&
          (data->info.filetime >= 0) ) {
         char headerbuf[128];
+        int headerbuflen;
         time_t filetime = data->info.filetime;
         struct tm buffer;
         const struct tm *tm = &buffer;
@@ -2079,7 +2116,7 @@ static CURLcode ftp_state_mdtm_resp(struct connectdata *conn,
           return result;
 
         /* format: "Tue, 15 Nov 1994 12:45:26" */
-        msnprintf(headerbuf, sizeof(headerbuf),
+        headerbuflen = msnprintf(headerbuf, sizeof(headerbuf),
                   "Last-Modified: %s, %02d %s %4d %02d:%02d:%02d GMT\r\n",
                   Curl_wkday[tm->tm_wday?tm->tm_wday-1:6],
                   tm->tm_mday,
@@ -2088,7 +2125,8 @@ static CURLcode ftp_state_mdtm_resp(struct connectdata *conn,
                   tm->tm_hour,
                   tm->tm_min,
                   tm->tm_sec);
-        result = Curl_client_write(conn, CLIENTWRITE_BOTH, headerbuf, 0);
+        result = Curl_client_write(data, CLIENTWRITE_BOTH, headerbuf,
+                                   headerbuflen);
         if(result)
           return result;
       } /* end of a ridiculous amount of conditionals */
@@ -2096,11 +2134,13 @@ static CURLcode ftp_state_mdtm_resp(struct connectdata *conn,
     }
     break;
   default:
-    infof(data, "unsupported MDTM reply format\n");
+    infof(data, "unsupported MDTM reply format");
     break;
-  case 550: /* "No such file or directory" */
-    failf(data, "Given file does not exist");
-    result = CURLE_FTP_COULDNT_RETR_FILE;
+  case 550: /* 550 is used for several different problems, e.g.
+               "No such file or directory" or "Permission denied".
+               It does not mean that the file does not exist at all. */
+    infof(data, "MDTM failed: file does not exist or permission problem,"
+          " continuing");
     break;
   }
 
@@ -2110,41 +2150,41 @@ static CURLcode ftp_state_mdtm_resp(struct connectdata *conn,
       case CURL_TIMECOND_IFMODSINCE:
       default:
         if(data->info.filetime <= data->set.timevalue) {
-          infof(data, "The requested document is not new enough\n");
-          ftp->transfer = FTPTRANSFER_NONE; /* mark to not transfer data */
+          infof(data, "The requested document is not new enough");
+          ftp->transfer = PPTRANSFER_NONE; /* mark to not transfer data */
           data->info.timecond = TRUE;
-          state(conn, FTP_STOP);
+          state(data, FTP_STOP);
           return CURLE_OK;
         }
         break;
       case CURL_TIMECOND_IFUNMODSINCE:
         if(data->info.filetime > data->set.timevalue) {
-          infof(data, "The requested document is not old enough\n");
-          ftp->transfer = FTPTRANSFER_NONE; /* mark to not transfer data */
+          infof(data, "The requested document is not old enough");
+          ftp->transfer = PPTRANSFER_NONE; /* mark to not transfer data */
           data->info.timecond = TRUE;
-          state(conn, FTP_STOP);
+          state(data, FTP_STOP);
           return CURLE_OK;
         }
         break;
       } /* switch */
     }
     else {
-      infof(data, "Skipping time comparison\n");
+      infof(data, "Skipping time comparison");
     }
   }
 
   if(!result)
-    result = ftp_state_type(conn);
+    result = ftp_state_type(data);
 
   return result;
 }
 
-static CURLcode ftp_state_type_resp(struct connectdata *conn,
+static CURLcode ftp_state_type_resp(struct Curl_easy *data,
                                     int ftpcode,
                                     ftpstate instate)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
 
   if(ftpcode/100 != 2) {
     /* "sasserftpd" and "(u)r(x)bot ftpd" both responds with 226 after a
@@ -2154,29 +2194,30 @@ static CURLcode ftp_state_type_resp(struct connectdata *conn,
     return CURLE_FTP_COULDNT_SET_TYPE;
   }
   if(ftpcode != 200)
-    infof(data, "Got a %03d response code instead of the assumed 200\n",
+    infof(data, "Got a %03d response code instead of the assumed 200",
           ftpcode);
 
   if(instate == FTP_TYPE)
-    result = ftp_state_size(conn);
+    result = ftp_state_size(data, conn);
   else if(instate == FTP_LIST_TYPE)
-    result = ftp_state_list(conn);
+    result = ftp_state_list(data);
   else if(instate == FTP_RETR_TYPE)
-    result = ftp_state_retr_prequote(conn);
+    result = ftp_state_retr_prequote(data);
   else if(instate == FTP_STOR_TYPE)
-    result = ftp_state_stor_prequote(conn);
+    result = ftp_state_stor_prequote(data);
 
   return result;
 }
 
-static CURLcode ftp_state_retr(struct connectdata *conn,
-                                         curl_off_t filesize)
+static CURLcode ftp_state_retr(struct Curl_easy *data,
+                               curl_off_t filesize)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
-  struct FTP *ftp = data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
+  DEBUGF(infof(data, "ftp_state_retr()"));
   if(data->set.max_filesize && (filesize > data->set.max_filesize)) {
     failf(data, "Maximum file size exceeded");
     return CURLE_FILESIZE_EXCEEDED;
@@ -2187,7 +2228,7 @@ static CURLcode ftp_state_retr(struct connectdata *conn,
     /* We always (attempt to) get the size of downloads, so it is done before
        this even when not doing resumes. */
     if(filesize == -1) {
-      infof(data, "ftp server doesn't support SIZE\n");
+      infof(data, "ftp server doesn't support SIZE");
       /* We couldn't get the size and therefore we can't know if there really
          is a part of the file left to get, although the server will just
          close the connection when we start the connection so it won't cause
@@ -2224,74 +2265,99 @@ static CURLcode ftp_state_retr(struct connectdata *conn,
     if(ftp->downloadsize == 0) {
       /* no data to transfer */
       Curl_setup_transfer(data, -1, -1, FALSE, -1);
-      infof(data, "File already completely downloaded\n");
+      infof(data, "File already completely downloaded");
 
       /* Set ->transfer so that we won't get any error in ftp_done()
        * because we didn't transfer the any file */
-      ftp->transfer = FTPTRANSFER_NONE;
-      state(conn, FTP_STOP);
+      ftp->transfer = PPTRANSFER_NONE;
+      state(data, FTP_STOP);
       return CURLE_OK;
     }
 
     /* Set resume file transfer offset */
     infof(data, "Instructs server to resume from offset %"
-          CURL_FORMAT_CURL_OFF_T "\n", data->state.resume_from);
+          CURL_FORMAT_CURL_OFF_T, data->state.resume_from);
 
-    PPSENDF(&ftpc->pp, "REST %" CURL_FORMAT_CURL_OFF_T,
-            data->state.resume_from);
-
-    state(conn, FTP_RETR_REST);
+    result = Curl_pp_sendf(data, &ftpc->pp, "REST %" CURL_FORMAT_CURL_OFF_T,
+                           data->state.resume_from);
+    if(!result)
+      state(data, FTP_RETR_REST);
   }
   else {
     /* no resume */
-    PPSENDF(&ftpc->pp, "RETR %s", ftpc->file);
-    state(conn, FTP_RETR);
+    result = Curl_pp_sendf(data, &ftpc->pp, "RETR %s", ftpc->file);
+    if(!result)
+      state(data, FTP_RETR);
   }
 
   return result;
 }
 
-static CURLcode ftp_state_size_resp(struct connectdata *conn,
+static CURLcode ftp_state_size_resp(struct Curl_easy *data,
                                     int ftpcode,
                                     ftpstate instate)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
   curl_off_t filesize = -1;
   char *buf = data->state.buffer;
 
   /* get the size from the ascii string: */
-  if(ftpcode == 213)
+  if(ftpcode == 213) {
+    /* To allow servers to prepend "rubbish" in the response string, we scan
+       for all the digits at the end of the response and parse only those as a
+       number. */
+    char *start = &buf[4];
+    char *fdigit = strchr(start, '\r');
+    if(fdigit) {
+      do
+        fdigit--;
+      while(ISDIGIT(*fdigit) && (fdigit > start));
+      if(!ISDIGIT(*fdigit))
+        fdigit++;
+    }
+    else
+      fdigit = start;
     /* ignores parsing errors, which will make the size remain unknown */
-    (void)curlx_strtoofft(buf + 4, NULL, 0, &filesize);
+    (void)curlx_strtoofft(fdigit, NULL, 10, &filesize);
+
+  }
+  else if(ftpcode == 550) { /* "No such file or directory" */
+    /* allow a SIZE failure for (resumed) uploads, when probing what command
+       to use */
+    if(instate != FTP_STOR_SIZE) {
+      failf(data, "The file does not exist");
+      return CURLE_REMOTE_FILE_NOT_FOUND;
+    }
+  }
 
   if(instate == FTP_SIZE) {
 #ifdef CURL_FTP_HTTPSTYLE_HEAD
     if(-1 != filesize) {
       char clbuf[128];
-      msnprintf(clbuf, sizeof(clbuf),
+      int clbuflen = msnprintf(clbuf, sizeof(clbuf),
                 "Content-Length: %" CURL_FORMAT_CURL_OFF_T "\r\n", filesize);
-      result = Curl_client_write(conn, CLIENTWRITE_BOTH, clbuf, 0);
+      result = Curl_client_write(data, CLIENTWRITE_BOTH, clbuf, clbuflen);
       if(result)
         return result;
     }
 #endif
     Curl_pgrsSetDownloadSize(data, filesize);
-    result = ftp_state_rest(conn);
+    result = ftp_state_rest(data, data->conn);
   }
   else if(instate == FTP_RETR_SIZE) {
     Curl_pgrsSetDownloadSize(data, filesize);
-    result = ftp_state_retr(conn, filesize);
+    result = ftp_state_retr(data, filesize);
   }
   else if(instate == FTP_STOR_SIZE) {
     data->state.resume_from = filesize;
-    result = ftp_state_ul_setup(conn, TRUE);
+    result = ftp_state_ul_setup(data, TRUE);
   }
 
   return result;
 }
 
-static CURLcode ftp_state_rest_resp(struct connectdata *conn,
+static CURLcode ftp_state_rest_resp(struct Curl_easy *data,
+                                    struct connectdata *conn,
                                     int ftpcode,
                                     ftpstate instate)
 {
@@ -2304,22 +2370,24 @@ static CURLcode ftp_state_rest_resp(struct connectdata *conn,
 #ifdef CURL_FTP_HTTPSTYLE_HEAD
     if(ftpcode == 350) {
       char buffer[24]= { "Accept-ranges: bytes\r\n" };
-      result = Curl_client_write(conn, CLIENTWRITE_BOTH, buffer, 0);
+      result = Curl_client_write(data, CLIENTWRITE_BOTH, buffer,
+                                 strlen(buffer));
       if(result)
         return result;
     }
 #endif
-    result = ftp_state_prepare_transfer(conn);
+    result = ftp_state_prepare_transfer(data);
     break;
 
   case FTP_RETR_REST:
     if(ftpcode != 350) {
-      failf(conn->data, "Couldn't use REST");
+      failf(data, "Couldn't use REST");
       result = CURLE_FTP_COULDNT_USE_REST;
     }
     else {
-      PPSENDF(&ftpc->pp, "RETR %s", ftpc->file);
-      state(conn, FTP_RETR);
+      result = Curl_pp_sendf(data, &ftpc->pp, "RETR %s", ftpc->file);
+      if(!result)
+        state(data, FTP_RETR);
     }
     break;
   }
@@ -2327,15 +2395,15 @@ static CURLcode ftp_state_rest_resp(struct connectdata *conn,
   return result;
 }
 
-static CURLcode ftp_state_stor_resp(struct connectdata *conn,
+static CURLcode ftp_state_stor_resp(struct Curl_easy *data,
                                     int ftpcode, ftpstate instate)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
 
   if(ftpcode >= 400) {
     failf(data, "Failed FTP upload: %0d", ftpcode);
-    state(conn, FTP_STOP);
+    state(data, FTP_STOP);
     /* oops, we never close the sockets! */
     return CURLE_UPLOAD_FAILED;
   }
@@ -2346,31 +2414,31 @@ static CURLcode ftp_state_stor_resp(struct connectdata *conn,
   if(data->set.ftp_use_port) {
     bool connected;
 
-    state(conn, FTP_STOP); /* no longer in STOR state */
+    state(data, FTP_STOP); /* no longer in STOR state */
 
-    result = AllowServerConnect(conn, &connected);
+    result = AllowServerConnect(data, &connected);
     if(result)
       return result;
 
     if(!connected) {
       struct ftp_conn *ftpc = &conn->proto.ftpc;
-      infof(data, "Data conn was not available immediately\n");
+      infof(data, "Data conn was not available immediately");
       ftpc->wait_data_conn = TRUE;
     }
 
     return CURLE_OK;
   }
-  return InitiateTransfer(conn);
+  return InitiateTransfer(data);
 }
 
 /* for LIST and RETR responses */
-static CURLcode ftp_state_get_resp(struct connectdata *conn,
-                                    int ftpcode,
-                                    ftpstate instate)
+static CURLcode ftp_state_get_resp(struct Curl_easy *data,
+                                   int ftpcode,
+                                   ftpstate instate)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
-  struct FTP *ftp = data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
+  struct connectdata *conn = data->conn;
 
   if((ftpcode == 150) || (ftpcode == 125)) {
 
@@ -2404,7 +2472,8 @@ static CURLcode ftp_state_get_resp(struct connectdata *conn,
      */
 
     if((instate != FTP_LIST) &&
-       !data->set.prefer_ascii &&
+       !data->state.prefer_ascii &&
+       !data->set.ignorecl &&
        (ftp->downloadsize < 1)) {
       /*
        * It seems directory listings either don't show the size or very
@@ -2432,9 +2501,10 @@ static CURLcode ftp_state_get_resp(struct connectdata *conn,
           bytes--;
         }
         /* if we have nothing but digits: */
-        if(bytes++) {
+        if(bytes) {
+          ++bytes;
           /* get the number! */
-          (void)curlx_strtoofft(bytes, NULL, 0, &size);
+          (void)curlx_strtoofft(bytes, NULL, 10, &size);
         }
       }
     }
@@ -2443,14 +2513,14 @@ static CURLcode ftp_state_get_resp(struct connectdata *conn,
 
     if(size > data->req.maxdownload && data->req.maxdownload > 0)
       size = data->req.size = data->req.maxdownload;
-    else if((instate != FTP_LIST) && (data->set.prefer_ascii))
+    else if((instate != FTP_LIST) && (data->state.prefer_ascii))
       size = -1; /* kludge for servers that understate ASCII mode file size */
 
-    infof(data, "Maxdownload = %" CURL_FORMAT_CURL_OFF_T "\n",
+    infof(data, "Maxdownload = %" CURL_FORMAT_CURL_OFF_T,
           data->req.maxdownload);
 
     if(instate != FTP_LIST)
-      infof(data, "Getting file with size: %" CURL_FORMAT_CURL_OFF_T "\n",
+      infof(data, "Getting file with size: %" CURL_FORMAT_CURL_OFF_T,
             size);
 
     /* FTP download: */
@@ -2460,25 +2530,25 @@ static CURLcode ftp_state_get_resp(struct connectdata *conn,
     if(data->set.ftp_use_port) {
       bool connected;
 
-      result = AllowServerConnect(conn, &connected);
+      result = AllowServerConnect(data, &connected);
       if(result)
         return result;
 
       if(!connected) {
         struct ftp_conn *ftpc = &conn->proto.ftpc;
-        infof(data, "Data conn was not available immediately\n");
-        state(conn, FTP_STOP);
+        infof(data, "Data conn was not available immediately");
+        state(data, FTP_STOP);
         ftpc->wait_data_conn = TRUE;
       }
     }
     else
-      return InitiateTransfer(conn);
+      return InitiateTransfer(data);
   }
   else {
     if((instate == FTP_LIST) && (ftpcode == 450)) {
       /* simply no matching files in the dir listing */
-      ftp->transfer = FTPTRANSFER_NONE; /* don't download anything */
-      state(conn, FTP_STOP); /* this phase is over */
+      ftp->transfer = PPTRANSFER_NONE; /* don't download anything */
+      state(data, FTP_STOP); /* this phase is over */
     }
     else {
       failf(data, "RETR response: %03d", ftpcode);
@@ -2492,11 +2562,12 @@ static CURLcode ftp_state_get_resp(struct connectdata *conn,
 }
 
 /* after USER, PASS and ACCT */
-static CURLcode ftp_state_loggedin(struct connectdata *conn)
+static CURLcode ftp_state_loggedin(struct Curl_easy *data)
 {
   CURLcode result = CURLE_OK;
+  struct connectdata *conn = data->conn;
 
-  if(conn->ssl[FIRSTSOCKET].use) {
+  if(conn->bits.ftp_use_control_ssl) {
     /* PBSZ = PROTECTION BUFFER SIZE.
 
     The 'draft-murray-auth-ftp-ssl' (draft 12, page 7) says:
@@ -2511,42 +2582,44 @@ static CURLcode ftp_state_loggedin(struct connectdata *conn)
     parameter of '0' to indicate that no buffering is taking place
     and the data connection should not be encapsulated.
     */
-    PPSENDF(&conn->proto.ftpc.pp, "PBSZ %d", 0);
-    state(conn, FTP_PBSZ);
+    result = Curl_pp_sendf(data, &conn->proto.ftpc.pp, "PBSZ %d", 0);
+    if(!result)
+      state(data, FTP_PBSZ);
   }
   else {
-    result = ftp_state_pwd(conn);
+    result = ftp_state_pwd(data, conn);
   }
   return result;
 }
 
 /* for USER and PASS responses */
-static CURLcode ftp_state_user_resp(struct connectdata *conn,
-                                    int ftpcode,
-                                    ftpstate instate)
+static CURLcode ftp_state_user_resp(struct Curl_easy *data,
+                                    int ftpcode)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
-  struct FTP *ftp = data->req.protop;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
-  (void)instate; /* no use for this yet */
 
   /* some need password anyway, and others just return 2xx ignored */
   if((ftpcode == 331) && (ftpc->state == FTP_USER)) {
     /* 331 Password required for ...
        (the server requires to send the user's password too) */
-    PPSENDF(&ftpc->pp, "PASS %s", ftp->passwd?ftp->passwd:"");
-    state(conn, FTP_PASS);
+    result = Curl_pp_sendf(data, &ftpc->pp, "PASS %s",
+                           conn->passwd?conn->passwd:"");
+    if(!result)
+      state(data, FTP_PASS);
   }
   else if(ftpcode/100 == 2) {
     /* 230 User ... logged in.
        (the user logged in with or without password) */
-    result = ftp_state_loggedin(conn);
+    result = ftp_state_loggedin(data);
   }
   else if(ftpcode == 332) {
     if(data->set.str[STRING_FTP_ACCOUNT]) {
-      PPSENDF(&ftpc->pp, "ACCT %s", data->set.str[STRING_FTP_ACCOUNT]);
-      state(conn, FTP_ACCT);
+      result = Curl_pp_sendf(data, &ftpc->pp, "ACCT %s",
+                             data->set.str[STRING_FTP_ACCOUNT]);
+      if(!result)
+        state(data, FTP_ACCT);
     }
     else {
       failf(data, "ACCT requested but none available");
@@ -2559,14 +2632,16 @@ static CURLcode ftp_state_user_resp(struct connectdata *conn,
     530 User ... access denied
     (the server denies to log the specified user) */
 
-    if(conn->data->set.str[STRING_FTP_ALTERNATIVE_TO_USER] &&
-        !conn->data->state.ftp_trying_alternative) {
+    if(data->set.str[STRING_FTP_ALTERNATIVE_TO_USER] &&
+       !ftpc->ftp_trying_alternative) {
       /* Ok, USER failed.  Let's try the supplied command. */
-      PPSENDF(&conn->proto.ftpc.pp, "%s",
-              conn->data->set.str[STRING_FTP_ALTERNATIVE_TO_USER]);
-      conn->data->state.ftp_trying_alternative = TRUE;
-      state(conn, FTP_USER);
-      result = CURLE_OK;
+      result =
+        Curl_pp_sendf(data, &ftpc->pp, "%s",
+                      data->set.str[STRING_FTP_ALTERNATIVE_TO_USER]);
+      if(!result) {
+        ftpc->ftp_trying_alternative = TRUE;
+        state(data, FTP_USER);
+      }
     }
     else {
       failf(data, "Access denied: %03d", ftpcode);
@@ -2577,37 +2652,36 @@ static CURLcode ftp_state_user_resp(struct connectdata *conn,
 }
 
 /* for ACCT response */
-static CURLcode ftp_state_acct_resp(struct connectdata *conn,
+static CURLcode ftp_state_acct_resp(struct Curl_easy *data,
                                     int ftpcode)
 {
   CURLcode result = CURLE_OK;
-  struct Curl_easy *data = conn->data;
   if(ftpcode != 230) {
     failf(data, "ACCT rejected by server: %03d", ftpcode);
     result = CURLE_FTP_WEIRD_PASS_REPLY; /* FIX */
   }
   else
-    result = ftp_state_loggedin(conn);
+    result = ftp_state_loggedin(data);
 
   return result;
 }
 
 
-static CURLcode ftp_statemach_act(struct connectdata *conn)
+static CURLcode ftp_statemachine(struct Curl_easy *data,
+                                 struct connectdata *conn)
 {
   CURLcode result;
   curl_socket_t sock = conn->sock[FIRSTSOCKET];
-  struct Curl_easy *data = conn->data;
   int ftpcode;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   struct pingpong *pp = &ftpc->pp;
-  static const char ftpauth[][4]  = { "SSL", "TLS" };
+  static const char * const ftpauth[] = { "SSL", "TLS" };
   size_t nread = 0;
 
   if(pp->sendleft)
-    return Curl_pp_flushsend(pp);
+    return Curl_pp_flushsend(data, pp);
 
-  result = ftp_readresp(sock, pp, &ftpcode, &nread);
+  result = ftp_readresp(data, sock, pp, &ftpcode, &nread);
   if(result)
     return result;
 
@@ -2615,9 +2689,12 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
     /* we have now received a full FTP server response */
     switch(ftpc->state) {
     case FTP_WAIT220:
-      if(ftpcode == 230)
-        /* 230 User logged in - already! */
-        return ftp_state_user_resp(conn, ftpcode, ftpc->state);
+      if(ftpcode == 230) {
+        /* 230 User logged in - already! Take as 220 if TLS required. */
+        if(data->set.use_ssl <= CURLUSESSL_TRY ||
+           conn->bits.ftp_use_control_ssl)
+          return ftp_state_user_resp(data, ftpcode);
+      }
       else if(ftpcode != 220) {
         failf(data, "Got a %03d ftp-server response when 220 was expected",
               ftpcode);
@@ -2635,18 +2712,16 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
            set a valid level */
         Curl_sec_request_prot(conn, data->set.str[STRING_KRB_LEVEL]);
 
-        if(Curl_sec_login(conn))
-          infof(data, "Logging in with password in cleartext!\n");
-        else
-          infof(data, "Authentication successful\n");
+        if(Curl_sec_login(data, conn)) {
+          failf(data, "secure login failed");
+          return CURLE_WEIRD_SERVER_REPLY;
+        }
+        infof(data, "Authentication successful");
       }
 #endif
 
-      if(data->set.use_ssl &&
-         (!conn->ssl[FIRSTSOCKET].use ||
-          (conn->bits.proxy_ssl_connected[FIRSTSOCKET] &&
-           !conn->proxy_ssl[FIRSTSOCKET].use))) {
-        /* We don't have a SSL/TLS connection yet, but FTPS is
+      if(data->set.use_ssl && !conn->bits.ftp_use_control_ssl) {
+        /* We don't have a SSL/TLS control connection yet, but FTPS is
            requested. Try a FTPS connection now */
 
         ftpc->count3 = 0;
@@ -2665,19 +2740,20 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
                 (int)data->set.ftpsslauth);
           return CURLE_UNKNOWN_OPTION; /* we don't know what to do */
         }
-        PPSENDF(&ftpc->pp, "AUTH %s", ftpauth[ftpc->count1]);
-        state(conn, FTP_AUTH);
+        result = Curl_pp_sendf(data, &ftpc->pp, "AUTH %s",
+                               ftpauth[ftpc->count1]);
+        if(!result)
+          state(data, FTP_AUTH);
       }
-      else {
-        result = ftp_state_user(conn);
-        if(result)
-          return result;
-      }
-
+      else
+        result = ftp_state_user(data, conn);
       break;
 
     case FTP_AUTH:
       /* we have gotten the response to a previous AUTH command */
+
+      if(pp->cache_size)
+        return CURLE_WEIRD_SERVER_REPLY; /* Forbid pipelining in response. */
 
       /* RFC2228 (page 5) says:
        *
@@ -2687,17 +2763,27 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
        */
 
       if((ftpcode == 234) || (ftpcode == 334)) {
-        /* Curl_ssl_connect is BLOCKING */
-        result = Curl_ssl_connect(conn, FIRSTSOCKET);
+        /* this was BLOCKING, keep it so for now */
+        bool done;
+        if(!Curl_conn_is_ssl(conn, FIRSTSOCKET)) {
+          result = Curl_ssl_cfilter_add(data, conn, FIRSTSOCKET);
+          if(result) {
+            /* we failed and bail out */
+            return CURLE_USE_SSL_FAILED;
+          }
+        }
+        result = Curl_conn_connect(data, FIRSTSOCKET, TRUE, &done);
         if(!result) {
           conn->bits.ftp_use_data_ssl = FALSE; /* clear-text data */
-          result = ftp_state_user(conn);
+          conn->bits.ftp_use_control_ssl = TRUE; /* SSL on control */
+          result = ftp_state_user(data, conn);
         }
       }
       else if(ftpc->count3 < 1) {
         ftpc->count3++;
         ftpc->count1 += ftpc->count2; /* get next attempt */
-        result = Curl_pp_sendf(&ftpc->pp, "AUTH %s", ftpauth[ftpc->count1]);
+        result = Curl_pp_sendf(data, &ftpc->pp, "AUTH %s",
+                               ftpauth[ftpc->count1]);
         /* remain in this same state */
       }
       else {
@@ -2706,27 +2792,25 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
           result = CURLE_USE_SSL_FAILED;
         else
           /* ignore the failure and continue */
-          result = ftp_state_user(conn);
+          result = ftp_state_user(data, conn);
       }
-
-      if(result)
-        return result;
       break;
 
     case FTP_USER:
     case FTP_PASS:
-      result = ftp_state_user_resp(conn, ftpcode, ftpc->state);
+      result = ftp_state_user_resp(data, ftpcode);
       break;
 
     case FTP_ACCT:
-      result = ftp_state_acct_resp(conn, ftpcode);
+      result = ftp_state_acct_resp(data, ftpcode);
       break;
 
     case FTP_PBSZ:
-      PPSENDF(&ftpc->pp, "PROT %c",
-              data->set.use_ssl == CURLUSESSL_CONTROL ? 'C' : 'P');
-      state(conn, FTP_PROT);
-
+      result =
+        Curl_pp_sendf(data, &ftpc->pp, "PROT %c",
+                      data->set.use_ssl == CURLUSESSL_CONTROL ? 'C' : 'P');
+      if(!result)
+        state(data, FTP_PROT);
       break;
 
     case FTP_PROT:
@@ -2743,31 +2827,25 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
       if(data->set.ftp_ccc) {
         /* CCC - Clear Command Channel
          */
-        PPSENDF(&ftpc->pp, "%s", "CCC");
-        state(conn, FTP_CCC);
+        result = Curl_pp_sendf(data, &ftpc->pp, "%s", "CCC");
+        if(!result)
+          state(data, FTP_CCC);
       }
-      else {
-        result = ftp_state_pwd(conn);
-        if(result)
-          return result;
-      }
+      else
+        result = ftp_state_pwd(data, conn);
       break;
 
     case FTP_CCC:
       if(ftpcode < 500) {
         /* First shut down the SSL layer (note: this call will block) */
-        result = Curl_ssl_shutdown(conn, FIRSTSOCKET);
+        result = Curl_ssl_cfilter_remove(data, FIRSTSOCKET);
 
-        if(result) {
-          failf(conn->data, "Failed to clear the command channel (CCC)");
-          return result;
-        }
+        if(result)
+          failf(data, "Failed to clear the command channel (CCC)");
       }
-
-      /* Then continue as normal */
-      result = ftp_state_pwd(conn);
-      if(result)
-        return result;
+      if(!result)
+        /* Then continue as normal */
+        result = ftp_state_pwd(data, conn);
       break;
 
     case FTP_PWD:
@@ -2817,7 +2895,7 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
             store++;
             ptr++;
           }
-          *store = '\0'; /* zero terminate */
+          *store = '\0'; /* null-terminate */
         }
         if(entry_extracted) {
           /* If the path name does not look like an absolute path (i.e.: it
@@ -2833,35 +2911,34 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
              systems. */
 
           if(!ftpc->server_os && dir[0] != '/') {
-
-            result = Curl_pp_sendf(&ftpc->pp, "%s", "SYST");
+            result = Curl_pp_sendf(data, &ftpc->pp, "%s", "SYST");
             if(result) {
               free(dir);
               return result;
             }
             Curl_safefree(ftpc->entrypath);
             ftpc->entrypath = dir; /* remember this */
-            infof(data, "Entry path is '%s'\n", ftpc->entrypath);
+            infof(data, "Entry path is '%s'", ftpc->entrypath);
             /* also save it where getinfo can access it: */
             data->state.most_recent_ftp_entrypath = ftpc->entrypath;
-            state(conn, FTP_SYST);
+            state(data, FTP_SYST);
             break;
           }
 
           Curl_safefree(ftpc->entrypath);
           ftpc->entrypath = dir; /* remember this */
-          infof(data, "Entry path is '%s'\n", ftpc->entrypath);
+          infof(data, "Entry path is '%s'", ftpc->entrypath);
           /* also save it where getinfo can access it: */
           data->state.most_recent_ftp_entrypath = ftpc->entrypath;
         }
         else {
           /* couldn't get the path */
           free(dir);
-          infof(data, "Failed to figure out path\n");
+          infof(data, "Failed to figure out path");
         }
       }
-      state(conn, FTP_STOP); /* we are done with the CONNECT phase! */
-      DEBUGF(infof(data, "protocol connect phase DONE\n"));
+      state(data, FTP_STOP); /* we are done with the CONNECT phase! */
+      DEBUGF(infof(data, "protocol connect phase DONE"));
       break;
 
     case FTP_SYST:
@@ -2881,13 +2958,13 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
           ptr++;
         for(store = os; *ptr && *ptr != ' ';)
           *store++ = *ptr++;
-        *store = '\0'; /* zero terminate */
+        *store = '\0'; /* null-terminate */
 
         /* Check for special servers here. */
 
         if(strcasecompare(os, "OS/400")) {
           /* Force OS400 name format 1. */
-          result = Curl_pp_sendf(&ftpc->pp, "%s", "SITE NAMEFMT 1");
+          result = Curl_pp_sendf(data, &ftpc->pp, "%s", "SITE NAMEFMT 1");
           if(result) {
             free(os);
             return result;
@@ -2895,7 +2972,7 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
           /* remember target server OS */
           Curl_safefree(ftpc->server_os);
           ftpc->server_os = os;
-          state(conn, FTP_NAMEFMT);
+          state(data, FTP_NAMEFMT);
           break;
         }
         /* Nothing special for the target server. */
@@ -2907,19 +2984,19 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
         /* Cannot identify server OS. Continue anyway and cross fingers. */
       }
 
-      state(conn, FTP_STOP); /* we are done with the CONNECT phase! */
-      DEBUGF(infof(data, "protocol connect phase DONE\n"));
+      state(data, FTP_STOP); /* we are done with the CONNECT phase! */
+      DEBUGF(infof(data, "protocol connect phase DONE"));
       break;
 
     case FTP_NAMEFMT:
       if(ftpcode == 250) {
         /* Name format change successful: reload initial path. */
-        ftp_state_pwd(conn);
+        ftp_state_pwd(data, conn);
         break;
       }
 
-      state(conn, FTP_STOP); /* we are done with the CONNECT phase! */
-      DEBUGF(infof(data, "protocol connect phase DONE\n"));
+      state(data, FTP_STOP); /* we are done with the CONNECT phase! */
+      DEBUGF(infof(data, "protocol connect phase DONE"));
       break;
 
     case FTP_QUOTE:
@@ -2928,45 +3005,48 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
     case FTP_STOR_PREQUOTE:
       if((ftpcode >= 400) && !ftpc->count2) {
         /* failure response code, and not allowed to fail */
-        failf(conn->data, "QUOT command failed with %03d", ftpcode);
-        return CURLE_QUOTE_ERROR;
+        failf(data, "QUOT command failed with %03d", ftpcode);
+        result = CURLE_QUOTE_ERROR;
       }
-      result = ftp_state_quote(conn, FALSE, ftpc->state);
-      if(result)
-        return result;
-
+      else
+        result = ftp_state_quote(data, FALSE, ftpc->state);
       break;
 
     case FTP_CWD:
       if(ftpcode/100 != 2) {
         /* failure to CWD there */
-        if(conn->data->set.ftp_create_missing_dirs &&
+        if(data->set.ftp_create_missing_dirs &&
            ftpc->cwdcount && !ftpc->count2) {
           /* try making it */
           ftpc->count2++; /* counter to prevent CWD-MKD loops */
-          PPSENDF(&ftpc->pp, "MKD %s", ftpc->dirs[ftpc->cwdcount - 1]);
-          state(conn, FTP_MKD);
+
+          /* count3 is set to allow MKD to fail once per dir. In the case when
+          CWD fails and then MKD fails (due to another session raced it to
+          create the dir) this then allows for a second try to CWD to it. */
+          ftpc->count3 = (data->set.ftp_create_missing_dirs == 2) ? 1 : 0;
+
+          result = Curl_pp_sendf(data, &ftpc->pp, "MKD %s",
+                                 ftpc->dirs[ftpc->cwdcount - 1]);
+          if(!result)
+            state(data, FTP_MKD);
         }
         else {
           /* return failure */
           failf(data, "Server denied you to change to the given directory");
           ftpc->cwdfail = TRUE; /* don't remember this path as we failed
                                    to enter it */
-          return CURLE_REMOTE_ACCESS_DENIED;
+          result = CURLE_REMOTE_ACCESS_DENIED;
         }
       }
       else {
         /* success */
         ftpc->count2 = 0;
-        if(++ftpc->cwdcount <= ftpc->dirdepth) {
+        if(++ftpc->cwdcount <= ftpc->dirdepth)
           /* send next CWD */
-          PPSENDF(&ftpc->pp, "CWD %s", ftpc->dirs[ftpc->cwdcount - 1]);
-        }
-        else {
-          result = ftp_state_mdtm(conn);
-          if(result)
-            return result;
-        }
+          result = Curl_pp_sendf(data, &ftpc->pp, "CWD %s",
+                                 ftpc->dirs[ftpc->cwdcount - 1]);
+        else
+          result = ftp_state_mdtm(data);
       }
       break;
 
@@ -2974,33 +3054,36 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
       if((ftpcode/100 != 2) && !ftpc->count3--) {
         /* failure to MKD the dir */
         failf(data, "Failed to MKD dir: %03d", ftpcode);
-        return CURLE_REMOTE_ACCESS_DENIED;
+        result = CURLE_REMOTE_ACCESS_DENIED;
       }
-      state(conn, FTP_CWD);
-      /* send CWD */
-      PPSENDF(&ftpc->pp, "CWD %s", ftpc->dirs[ftpc->cwdcount - 1]);
+      else {
+        state(data, FTP_CWD);
+        /* send CWD */
+        result = Curl_pp_sendf(data, &ftpc->pp, "CWD %s",
+                               ftpc->dirs[ftpc->cwdcount - 1]);
+      }
       break;
 
     case FTP_MDTM:
-      result = ftp_state_mdtm_resp(conn, ftpcode);
+      result = ftp_state_mdtm_resp(data, ftpcode);
       break;
 
     case FTP_TYPE:
     case FTP_LIST_TYPE:
     case FTP_RETR_TYPE:
     case FTP_STOR_TYPE:
-      result = ftp_state_type_resp(conn, ftpcode, ftpc->state);
+      result = ftp_state_type_resp(data, ftpcode, ftpc->state);
       break;
 
     case FTP_SIZE:
     case FTP_RETR_SIZE:
     case FTP_STOR_SIZE:
-      result = ftp_state_size_resp(conn, ftpcode, ftpc->state);
+      result = ftp_state_size_resp(data, ftpcode, ftpc->state);
       break;
 
     case FTP_REST:
     case FTP_RETR_REST:
-      result = ftp_state_rest_resp(conn, ftpcode, ftpc->state);
+      result = ftp_state_rest_resp(data, conn, ftpcode, ftpc->state);
       break;
 
     case FTP_PRET:
@@ -3009,31 +3092,31 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
         failf(data, "PRET command not accepted: %03d", ftpcode);
         return CURLE_FTP_PRET_FAILED;
       }
-      result = ftp_state_use_pasv(conn);
+      result = ftp_state_use_pasv(data, conn);
       break;
 
     case FTP_PASV:
-      result = ftp_state_pasv_resp(conn, ftpcode);
+      result = ftp_state_pasv_resp(data, ftpcode);
       break;
 
     case FTP_PORT:
-      result = ftp_state_port_resp(conn, ftpcode);
+      result = ftp_state_port_resp(data, ftpcode);
       break;
 
     case FTP_LIST:
     case FTP_RETR:
-      result = ftp_state_get_resp(conn, ftpcode, ftpc->state);
+      result = ftp_state_get_resp(data, ftpcode, ftpc->state);
       break;
 
     case FTP_STOR:
-      result = ftp_state_stor_resp(conn, ftpcode, ftpc->state);
+      result = ftp_state_stor_resp(data, ftpcode, ftpc->state);
       break;
 
     case FTP_QUIT:
       /* fallthrough, just stop! */
     default:
       /* internal error */
-      state(conn, FTP_STOP);
+      state(data, FTP_STOP);
       break;
     }
   } /* if(ftpcode) */
@@ -3043,11 +3126,12 @@ static CURLcode ftp_statemach_act(struct connectdata *conn)
 
 
 /* called repeatedly until done from multi.c */
-static CURLcode ftp_multi_statemach(struct connectdata *conn,
+static CURLcode ftp_multi_statemach(struct Curl_easy *data,
                                     bool *done)
 {
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
-  CURLcode result = Curl_pp_statemach(&ftpc->pp, FALSE, FALSE);
+  CURLcode result = Curl_pp_statemach(data, &ftpc->pp, FALSE, FALSE);
 
   /* Check for the state outside of the Curl_socket_check() return code checks
      since at times we are in fact already in this state when this function
@@ -3057,14 +3141,15 @@ static CURLcode ftp_multi_statemach(struct connectdata *conn,
   return result;
 }
 
-static CURLcode ftp_block_statemach(struct connectdata *conn)
+static CURLcode ftp_block_statemach(struct Curl_easy *data,
+                                    struct connectdata *conn)
 {
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   struct pingpong *pp = &ftpc->pp;
   CURLcode result = CURLE_OK;
 
   while(ftpc->state != FTP_STOP) {
-    result = Curl_pp_statemach(pp, TRUE, TRUE /* disconnecting */);
+    result = Curl_pp_statemach(data, pp, TRUE, TRUE /* disconnecting */);
     if(result)
       break;
   }
@@ -3080,10 +3165,11 @@ static CURLcode ftp_block_statemach(struct connectdata *conn)
  * phase is done when this function returns, or FALSE if not.
  *
  */
-static CURLcode ftp_connect(struct connectdata *conn,
-                                 bool *done) /* see description above */
+static CURLcode ftp_connect(struct Curl_easy *data,
+                            bool *done) /* see description above */
 {
   CURLcode result;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   struct pingpong *pp = &ftpc->pp;
 
@@ -3092,25 +3178,24 @@ static CURLcode ftp_connect(struct connectdata *conn,
   /* We always support persistent connections on ftp */
   connkeep(conn, "FTP default");
 
-  pp->response_time = RESP_TIMEOUT; /* set default response time-out */
-  pp->statemach_act = ftp_statemach_act;
-  pp->endofresp = ftp_endofresp;
-  pp->conn = conn;
+  PINGPONG_SETUP(pp, ftp_statemachine, ftp_endofresp);
 
   if(conn->handler->flags & PROTOPT_SSL) {
     /* BLOCKING */
-    result = Curl_ssl_connect(conn, FIRSTSOCKET);
+    result = Curl_conn_connect(data, FIRSTSOCKET, TRUE, done);
     if(result)
       return result;
+    conn->bits.ftp_use_control_ssl = TRUE;
   }
 
-  Curl_pp_init(pp); /* init the generic pingpong data */
+  Curl_pp_setup(pp); /* once per transfer */
+  Curl_pp_init(data, pp); /* init the generic pingpong data */
 
   /* When we connect, we start in the state where we await the 220
      response */
-  state(conn, FTP_WAIT220);
+  state(data, FTP_WAIT220);
 
-  result = ftp_multi_statemach(conn, done);
+  result = ftp_multi_statemach(data, done);
 
   return result;
 }
@@ -3124,17 +3209,18 @@ static CURLcode ftp_connect(struct connectdata *conn,
  *
  * Input argument is already checked for validity.
  */
-static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
+static CURLcode ftp_done(struct Curl_easy *data, CURLcode status,
                          bool premature)
 {
-  struct Curl_easy *data = conn->data;
-  struct FTP *ftp = data->req.protop;
+  struct connectdata *conn = data->conn;
+  struct FTP *ftp = data->req.p.ftp;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   struct pingpong *pp = &ftpc->pp;
   ssize_t nread;
   int ftpcode;
   CURLcode result = CURLE_OK;
-  char *path = NULL;
+  char *rawPath = NULL;
+  size_t pathLen = 0;
 
   if(!ftp)
     return CURLE_OK;
@@ -3172,54 +3258,52 @@ static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
     break;
   }
 
-  /* now store a copy of the directory we are in */
-  free(ftpc->prevpath);
-
   if(data->state.wildcardmatch) {
     if(data->set.chunk_end && ftpc->file) {
       Curl_set_in_callback(data, true);
-      data->set.chunk_end(data->wildcard.customptr);
+      data->set.chunk_end(data->set.wildcardptr);
       Curl_set_in_callback(data, false);
     }
     ftpc->known_filesize = -1;
   }
 
   if(!result)
-    /* get the "raw" path */
-    result = Curl_urldecode(data, ftp->path, 0, &path, NULL, TRUE);
+    /* get the url-decoded "raw" path */
+    result = Curl_urldecode(ftp->path, 0, &rawPath, &pathLen,
+                            REJECT_CTRL);
   if(result) {
     /* We can limp along anyway (and should try to since we may already be in
      * the error path) */
     ftpc->ctl_valid = FALSE; /* mark control connection as bad */
     connclose(conn, "FTP: out of memory!"); /* mark for connection closure */
+    free(ftpc->prevpath);
     ftpc->prevpath = NULL; /* no path remembering */
   }
-  else {
-    size_t flen = ftpc->file?strlen(ftpc->file):0; /* file is "raw" already */
-    size_t dlen = strlen(path)-flen;
-    if(!ftpc->cwdfail) {
-      ftpc->prevmethod = data->set.ftp_filemethod;
-      if(dlen && (data->set.ftp_filemethod != FTPFILE_NOCWD)) {
-        ftpc->prevpath = path;
-        if(flen)
-          /* if 'path' is not the whole string */
-          ftpc->prevpath[dlen] = 0; /* terminate */
+  else { /* remember working directory for connection reuse */
+    if((data->set.ftp_filemethod == FTPFILE_NOCWD) && (rawPath[0] == '/'))
+      free(rawPath); /* full path => no CWDs happened => keep ftpc->prevpath */
+    else {
+      free(ftpc->prevpath);
+
+      if(!ftpc->cwdfail) {
+        if(data->set.ftp_filemethod == FTPFILE_NOCWD)
+          pathLen = 0; /* relative path => working directory is FTP home */
+        else
+          pathLen -= ftpc->file?strlen(ftpc->file):0; /* file is url-decoded */
+
+        rawPath[pathLen] = '\0';
+        ftpc->prevpath = rawPath;
       }
       else {
-        free(path);
-        /* we never changed dir */
-        ftpc->prevpath = strdup("");
-        if(!ftpc->prevpath)
-          return CURLE_OUT_OF_MEMORY;
+        free(rawPath);
+        ftpc->prevpath = NULL; /* no path */
       }
-      if(ftpc->prevpath)
-        infof(data, "Remembering we are in dir \"%s\"\n", ftpc->prevpath);
     }
-    else {
-      ftpc->prevpath = NULL; /* no path */
-      free(path);
-    }
+
+    if(ftpc->prevpath)
+      infof(data, "Remembering we are in dir \"%s\"", ftpc->prevpath);
   }
+
   /* free the dir tree and file parts */
   freedirs(ftpc);
 
@@ -3232,7 +3316,7 @@ static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
   if(conn->sock[SECONDARYSOCKET] != CURL_SOCKET_BAD) {
     if(!result && ftpc->dont_check && data->req.maxdownload > 0) {
       /* partial download completed */
-      result = Curl_pp_sendf(pp, "%s", "ABOR");
+      result = Curl_pp_sendf(data, pp, "%s", "ABOR");
       if(result) {
         failf(data, "Failure sending ABOR command: %s",
               curl_easy_strerror(result));
@@ -3241,18 +3325,10 @@ static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
       }
     }
 
-    if(conn->ssl[SECONDARYSOCKET].use) {
-      /* The secondary socket is using SSL so we must close down that part
-         first before we close the socket for real */
-      Curl_ssl_close(conn, SECONDARYSOCKET);
-
-      /* Note that we keep "use" set to TRUE since that (next) connection is
-         still requested to use SSL */
-    }
-    close_secondarysocket(conn);
+    close_secondarysocket(data, conn);
   }
 
-  if(!result && (ftp->transfer == FTPTRANSFER_BODY) && ftpc->ctl_valid &&
+  if(!result && (ftp->transfer == PPTRANSFER_BODY) && ftpc->ctl_valid &&
      pp->pending_resp && !premature) {
     /*
      * Let's see what the server says about the transfer we just performed,
@@ -3260,12 +3336,12 @@ static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
      * data has been transferred. This happens when doing through NATs etc that
      * abandon old silent connections.
      */
-    long old_time = pp->response_time;
+    timediff_t old_time = pp->response_time;
 
     pp->response_time = 60*1000; /* give it only a minute for now */
     pp->response = Curl_now(); /* timeout relative now */
 
-    result = Curl_GetFTPResponse(&nread, conn, &ftpcode);
+    result = Curl_GetFTPResponse(data, &nread, &ftpcode);
 
     pp->response_time = old_time; /* set this back to previous value */
 
@@ -3275,22 +3351,33 @@ static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
       connclose(conn, "Timeout or similar in FTP DONE operation"); /* close */
     }
 
-    if(result)
+    if(result) {
+      Curl_safefree(ftp->pathalloc);
       return result;
+    }
 
     if(ftpc->dont_check && data->req.maxdownload > 0) {
       /* we have just sent ABOR and there is no reliable way to check if it was
        * successful or not; we have to close the connection now */
-      infof(data, "partial download completed, closing connection\n");
+      infof(data, "partial download completed, closing connection");
       connclose(conn, "Partial download with no ability to check");
       return result;
     }
 
     if(!ftpc->dont_check) {
       /* 226 Transfer complete, 250 Requested file action okay, completed. */
-      if((ftpcode != 226) && (ftpcode != 250)) {
+      switch(ftpcode) {
+      case 226:
+      case 250:
+        break;
+      case 552:
+        failf(data, "Exceeded storage allocation");
+        result = CURLE_REMOTE_DISK_FULL;
+        break;
+      default:
         failf(data, "server did not report OK, got %d", ftpcode);
         result = CURLE_PARTIAL_FILE;
+        break;
       }
     }
   }
@@ -3303,10 +3390,10 @@ static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
     if((-1 != data->state.infilesize) &&
        (data->state.infilesize != data->req.writebytecount) &&
        !data->set.crlf &&
-       (ftp->transfer == FTPTRANSFER_BODY)) {
+       (ftp->transfer == PPTRANSFER_BODY)) {
       failf(data, "Uploaded unaligned file size (%" CURL_FORMAT_CURL_OFF_T
             " out of %" CURL_FORMAT_CURL_OFF_T " bytes)",
-            data->req.bytecount, data->state.infilesize);
+            data->req.writebytecount, data->state.infilesize);
       result = CURLE_PARTIAL_FILE;
     }
   }
@@ -3329,18 +3416,18 @@ static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
     else if(!ftpc->dont_check &&
             !data->req.bytecount &&
             (data->req.size>0)) {
-      failf(data, "No data was received!");
+      failf(data, "No data was received");
       result = CURLE_FTP_COULDNT_RETR_FILE;
     }
   }
 
   /* clear these for next connection */
-  ftp->transfer = FTPTRANSFER_BODY;
+  ftp->transfer = PPTRANSFER_BODY;
   ftpc->dont_check = FALSE;
 
   /* Send any post-transfer QUOTE strings? */
   if(!status && !result && !premature && data->set.postquote)
-    result = ftp_sendquote(conn, data->set.postquote);
+    result = ftp_sendquote(data, conn, data->set.postquote);
   Curl_safefree(ftp->pathalloc);
   return result;
 }
@@ -3356,20 +3443,21 @@ static CURLcode ftp_done(struct connectdata *conn, CURLcode status,
  */
 
 static
-CURLcode ftp_sendquote(struct connectdata *conn, struct curl_slist *quote)
+CURLcode ftp_sendquote(struct Curl_easy *data,
+                       struct connectdata *conn, struct curl_slist *quote)
 {
   struct curl_slist *item;
-  ssize_t nread;
-  int ftpcode;
-  CURLcode result;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   struct pingpong *pp = &ftpc->pp;
 
   item = quote;
   while(item) {
     if(item->data) {
+      ssize_t nread;
       char *cmd = item->data;
       bool acceptfail = FALSE;
+      CURLcode result;
+      int ftpcode = 0;
 
       /* if a command starts with an asterisk, which a legal FTP command never
          can, the command will be allowed to fail without it causing any
@@ -3381,16 +3469,16 @@ CURLcode ftp_sendquote(struct connectdata *conn, struct curl_slist *quote)
         acceptfail = TRUE;
       }
 
-      PPSENDF(&conn->proto.ftpc.pp, "%s", cmd);
-
-      pp->response = Curl_now(); /* timeout relative now */
-
-      result = Curl_GetFTPResponse(&nread, conn, &ftpcode);
+      result = Curl_pp_sendf(data, &ftpc->pp, "%s", cmd);
+      if(!result) {
+        pp->response = Curl_now(); /* timeout relative now */
+        result = Curl_GetFTPResponse(data, &nread, &ftpcode);
+      }
       if(result)
         return result;
 
       if(!acceptfail && (ftpcode >= 400)) {
-        failf(conn->data, "QUOT string not accepted: %s", cmd);
+        failf(data, "QUOT string not accepted: %s", cmd);
         return CURLE_QUOTE_ERROR;
       }
     }
@@ -3421,7 +3509,8 @@ static int ftp_need_type(struct connectdata *conn,
  * sets one of them.
  * If the transfer type is not sent, simulate on OK response in newstate
  */
-static CURLcode ftp_nb_type(struct connectdata *conn,
+static CURLcode ftp_nb_type(struct Curl_easy *data,
+                            struct connectdata *conn,
                             bool ascii, ftpstate newstate)
 {
   struct ftp_conn *ftpc = &conn->proto.ftpc;
@@ -3429,16 +3518,18 @@ static CURLcode ftp_nb_type(struct connectdata *conn,
   char want = (char)(ascii?'A':'I');
 
   if(ftpc->transfertype == want) {
-    state(conn, newstate);
-    return ftp_state_type_resp(conn, 200, newstate);
+    state(data, newstate);
+    return ftp_state_type_resp(data, 200, newstate);
   }
 
-  PPSENDF(&ftpc->pp, "TYPE %c", want);
-  state(conn, newstate);
+  result = Curl_pp_sendf(data, &ftpc->pp, "TYPE %c", want);
+  if(!result) {
+    state(data, newstate);
 
-  /* keep track of our current transfer type */
-  ftpc->transfertype = want;
-  return CURLE_OK;
+    /* keep track of our current transfer type */
+    ftpc->transfertype = want;
+  }
+  return result;
 }
 
 /***************************************************************************
@@ -3452,14 +3543,14 @@ static CURLcode ftp_nb_type(struct connectdata *conn,
  */
 #ifndef CURL_DISABLE_VERBOSE_STRINGS
 static void
-ftp_pasv_verbose(struct connectdata *conn,
-                 Curl_addrinfo *ai,
+ftp_pasv_verbose(struct Curl_easy *data,
+                 struct Curl_addrinfo *ai,
                  char *newhost, /* ascii version */
                  int port)
 {
   char buf[256];
   Curl_printable_address(ai, buf, sizeof(buf));
-  infof(conn->data, "Connecting to %s (%s) port %d\n", newhost, buf, port);
+  infof(data, "Connecting to %s (%s) port %d", newhost, buf, port);
 }
 #endif
 
@@ -3474,91 +3565,75 @@ ftp_pasv_verbose(struct connectdata *conn,
  * EPSV).
  */
 
-static CURLcode ftp_do_more(struct connectdata *conn, int *completep)
+static CURLcode ftp_do_more(struct Curl_easy *data, int *completep)
 {
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   CURLcode result = CURLE_OK;
   bool connected = FALSE;
   bool complete = FALSE;
 
-  /* the ftp struct is inited in ftp_connect() */
-  struct FTP *ftp = data->req.protop;
+  /* the ftp struct is inited in ftp_connect(). If we are connecting to an HTTP
+   * proxy then the state will not be valid until after that connection is
+   * complete */
+  struct FTP *ftp = NULL;
 
-  /* if the second connection isn't done yet, wait for it */
-  if(!conn->bits.tcpconnect[SECONDARYSOCKET]) {
-    if(Curl_connect_ongoing(conn)) {
-      /* As we're in TUNNEL_CONNECT state now, we know the proxy name and port
-         aren't used so we blank their arguments. */
-      result = Curl_proxyCONNECT(conn, SECONDARYSOCKET, NULL, 0);
-
-      return result;
-    }
-
-    result = Curl_is_connected(conn, SECONDARYSOCKET, &connected);
-
-    /* Ready to do more? */
-    if(connected) {
-      DEBUGF(infof(data, "DO-MORE connected phase starts\n"));
-    }
-    else {
+  /* if the second connection isn't done yet, wait for it to have
+   * connected to the remote host. When using proxy tunneling, this
+   * means the tunnel needs to have been establish. However, we
+   * can not expect the remote host to talk to us in any way yet.
+   * So, when using ftps: the SSL handshake will not start until we
+   * tell the remote server that we are there. */
+  if(conn->cfilter[SECONDARYSOCKET]) {
+    result = Curl_conn_connect(data, SECONDARYSOCKET, FALSE, &connected);
+    if(result || !Curl_conn_is_ip_connected(data, SECONDARYSOCKET)) {
       if(result && (ftpc->count1 == 0)) {
         *completep = -1; /* go back to DOING please */
         /* this is a EPSV connect failing, try PASV instead */
-        return ftp_epsv_disable(conn);
+        return ftp_epsv_disable(data, conn);
       }
       return result;
     }
   }
 
-  result = Curl_proxy_connect(conn, SECONDARYSOCKET);
-  if(result)
-    return result;
-
-  if(CONNECT_SECONDARYSOCKET_PROXY_SSL())
-    return result;
-
-  if(conn->bits.tunnel_proxy && conn->bits.httpproxy &&
-     Curl_connect_ongoing(conn))
-    return result;
-
+  /* Curl_proxy_connect might have moved the protocol state */
+  ftp = data->req.p.ftp;
 
   if(ftpc->state) {
     /* already in a state so skip the initial commands.
        They are only done to kickstart the do_more state */
-    result = ftp_multi_statemach(conn, &complete);
+    result = ftp_multi_statemach(data, &complete);
 
     *completep = (int)complete;
 
     /* if we got an error or if we don't wait for a data connection return
        immediately */
-    if(result || (ftpc->wait_data_conn != TRUE))
+    if(result || !ftpc->wait_data_conn)
       return result;
 
-    if(ftpc->wait_data_conn)
-      /* if we reach the end of the FTP state machine here, *complete will be
-         TRUE but so is ftpc->wait_data_conn, which says we need to wait for
-         the data connection and therefore we're not actually complete */
-      *completep = 0;
+    /* if we reach the end of the FTP state machine here, *complete will be
+       TRUE but so is ftpc->wait_data_conn, which says we need to wait for the
+       data connection and therefore we're not actually complete */
+    *completep = 0;
   }
 
-  if(ftp->transfer <= FTPTRANSFER_INFO) {
+  if(ftp->transfer <= PPTRANSFER_INFO) {
     /* a transfer is about to take place, or if not a file name was given
        so we'll do a SIZE on it later and then we need the right TYPE first */
 
     if(ftpc->wait_data_conn == TRUE) {
       bool serv_conned;
 
-      result = ReceivedServerConnect(conn, &serv_conned);
+      result = ReceivedServerConnect(data, &serv_conned);
       if(result)
         return result; /* Failed to accept data connection */
 
       if(serv_conned) {
         /* It looks data connection is established */
-        result = AcceptServerConnect(conn);
+        result = AcceptServerConnect(data);
         ftpc->wait_data_conn = FALSE;
         if(!result)
-          result = InitiateTransfer(conn);
+          result = InitiateTransfer(data);
 
         if(result)
           return result;
@@ -3568,11 +3643,12 @@ static CURLcode ftp_do_more(struct connectdata *conn, int *completep)
       }
     }
     else if(data->set.upload) {
-      result = ftp_nb_type(conn, data->set.prefer_ascii, FTP_STOR_TYPE);
+      result = ftp_nb_type(data, conn, data->state.prefer_ascii,
+                           FTP_STOR_TYPE);
       if(result)
         return result;
 
-      result = ftp_multi_statemach(conn, &complete);
+      result = ftp_multi_statemach(data, &complete);
       if(ftpc->wait_data_conn)
         /* if we reach the end of the FTP state machine here, *complete will be
            TRUE but so is ftpc->wait_data_conn, which says we need to wait for
@@ -3585,7 +3661,7 @@ static CURLcode ftp_do_more(struct connectdata *conn, int *completep)
       /* download */
       ftp->downloadsize = -1; /* unknown as of yet */
 
-      result = Curl_range(conn);
+      result = Curl_range(data);
 
       if(result == CURLE_OK && data->req.maxdownload >= 0) {
         /* Don't check for successful transfer */
@@ -3594,40 +3670,39 @@ static CURLcode ftp_do_more(struct connectdata *conn, int *completep)
 
       if(result)
         ;
-      else if(data->set.ftp_list_only || !ftpc->file) {
+      else if(data->state.list_only || !ftpc->file) {
         /* The specified path ends with a slash, and therefore we think this
            is a directory that is requested, use LIST. But before that we
            need to set ASCII transfer mode. */
 
         /* But only if a body transfer was requested. */
-        if(ftp->transfer == FTPTRANSFER_BODY) {
-          result = ftp_nb_type(conn, TRUE, FTP_LIST_TYPE);
+        if(ftp->transfer == PPTRANSFER_BODY) {
+          result = ftp_nb_type(data, conn, TRUE, FTP_LIST_TYPE);
           if(result)
             return result;
         }
         /* otherwise just fall through */
       }
       else {
-        result = ftp_nb_type(conn, data->set.prefer_ascii, FTP_RETR_TYPE);
+        result = ftp_nb_type(data, conn, data->state.prefer_ascii,
+                             FTP_RETR_TYPE);
         if(result)
           return result;
       }
 
-      result = ftp_multi_statemach(conn, &complete);
+      result = ftp_multi_statemach(data, &complete);
       *completep = (int)complete;
     }
     return result;
   }
 
-  if(!result && (ftp->transfer != FTPTRANSFER_BODY))
-    /* no data to transfer. FIX: it feels like a kludge to have this here
-       too! */
-    Curl_setup_transfer(data, -1, -1, FALSE, -1);
+  /* no data to transfer */
+  Curl_setup_transfer(data, -1, -1, FALSE, -1);
 
   if(!ftpc->wait_data_conn) {
     /* no waiting for the data connection so this is now complete */
     *completep = 1;
-    DEBUGF(infof(data, "DO-MORE phase ends with %d\n", (int)result));
+    DEBUGF(infof(data, "DO-MORE phase ends with %d", (int)result));
   }
 
   return result;
@@ -3644,37 +3719,37 @@ static CURLcode ftp_do_more(struct connectdata *conn, int *completep)
  */
 
 static
-CURLcode ftp_perform(struct connectdata *conn,
+CURLcode ftp_perform(struct Curl_easy *data,
                      bool *connected,  /* connect status after PASV / PORT */
                      bool *dophase_done)
 {
   /* this is FTP and no proxy */
   CURLcode result = CURLE_OK;
 
-  DEBUGF(infof(conn->data, "DO phase starts\n"));
+  DEBUGF(infof(data, "DO phase starts"));
 
-  if(conn->data->set.opt_no_body) {
+  if(data->req.no_body) {
     /* requested no body means no transfer... */
-    struct FTP *ftp = conn->data->req.protop;
-    ftp->transfer = FTPTRANSFER_INFO;
+    struct FTP *ftp = data->req.p.ftp;
+    ftp->transfer = PPTRANSFER_INFO;
   }
 
   *dophase_done = FALSE; /* not done yet */
 
   /* start the first command in the DO phase */
-  result = ftp_state_quote(conn, TRUE, FTP_QUOTE);
+  result = ftp_state_quote(data, TRUE, FTP_QUOTE);
   if(result)
     return result;
 
   /* run the state-machine */
-  result = ftp_multi_statemach(conn, dophase_done);
+  result = ftp_multi_statemach(data, dophase_done);
 
-  *connected = conn->bits.tcpconnect[SECONDARYSOCKET];
+  *connected = Curl_conn_is_connected(data->conn, SECONDARYSOCKET);
 
-  infof(conn->data, "ftp_perform ends with SECONDARY: %d\n", *connected);
+  infof(data, "ftp_perform ends with SECONDARY: %d", *connected);
 
   if(*dophase_done) {
-    DEBUGF(infof(conn->data, "DO phase is complete1\n"));
+    DEBUGF(infof(data, "DO phase is complete1"));
   }
 
   return result;
@@ -3688,12 +3763,12 @@ static void wc_data_dtor(void *ptr)
   free(ftpwc);
 }
 
-static CURLcode init_wc_data(struct connectdata *conn)
+static CURLcode init_wc_data(struct Curl_easy *data)
 {
   char *last_slash;
-  struct FTP *ftp = conn->data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
   char *path = ftp->path;
-  struct WildcardData *wildcard = &(conn->data->wildcard);
+  struct WildcardData *wildcard = data->wildcard;
   CURLcode result = CURLE_OK;
   struct ftp_wc *ftpwc = NULL;
 
@@ -3702,7 +3777,7 @@ static CURLcode init_wc_data(struct connectdata *conn)
     last_slash++;
     if(last_slash[0] == '\0') {
       wildcard->state = CURLWC_CLEAN;
-      result = ftp_parse_url_path(conn);
+      result = ftp_parse_url_path(data);
       return result;
     }
     wildcard->pattern = strdup(last_slash);
@@ -3719,7 +3794,7 @@ static CURLcode init_wc_data(struct connectdata *conn)
     }
     else { /* only list */
       wildcard->state = CURLWC_CLEAN;
-      result = ftp_parse_url_path(conn);
+      result = ftp_parse_url_path(data);
       return result;
     }
   }
@@ -3741,15 +3816,15 @@ static CURLcode init_wc_data(struct connectdata *conn)
     goto fail;
   }
 
-  wildcard->protdata = ftpwc; /* put it to the WildcardData tmp pointer */
+  wildcard->ftpwc = ftpwc; /* put it to the WildcardData tmp pointer */
   wildcard->dtor = wc_data_dtor;
 
   /* wildcard does not support NOCWD option (assert it?) */
-  if(conn->data->set.ftp_filemethod == FTPFILE_NOCWD)
-    conn->data->set.ftp_filemethod = FTPFILE_MULTICWD;
+  if(data->set.ftp_filemethod == FTPFILE_NOCWD)
+    data->set.ftp_filemethod = FTPFILE_MULTICWD;
 
   /* try to parse ftp url */
-  result = ftp_parse_url_path(conn);
+  result = ftp_parse_url_path(data);
   if(result) {
     goto fail;
   }
@@ -3761,15 +3836,15 @@ static CURLcode init_wc_data(struct connectdata *conn)
   }
 
   /* backup old write_function */
-  ftpwc->backup.write_function = conn->data->set.fwrite_func;
+  ftpwc->backup.write_function = data->set.fwrite_func;
   /* parsing write function */
-  conn->data->set.fwrite_func = Curl_ftp_parselist;
+  data->set.fwrite_func = Curl_ftp_parselist;
   /* backup old file descriptor */
-  ftpwc->backup.file_descriptor = conn->data->set.out;
-  /* let the writefunc callback know what curl pointer is working with */
-  conn->data->set.out = conn;
+  ftpwc->backup.file_descriptor = data->set.out;
+  /* let the writefunc callback know the transfer */
+  data->set.out = data;
 
-  infof(conn->data, "Wildcard - Parsing started\n");
+  infof(data, "Wildcard - Parsing started");
   return CURLE_OK;
 
   fail:
@@ -3779,133 +3854,136 @@ static CURLcode init_wc_data(struct connectdata *conn)
   }
   Curl_safefree(wildcard->pattern);
   wildcard->dtor = ZERO_NULL;
-  wildcard->protdata = NULL;
+  wildcard->ftpwc = NULL;
   return result;
 }
 
-/* This is called recursively */
-static CURLcode wc_statemach(struct connectdata *conn)
+static CURLcode wc_statemach(struct Curl_easy *data)
 {
-  struct WildcardData * const wildcard = &(conn->data->wildcard);
+  struct WildcardData * const wildcard = data->wildcard;
+  struct connectdata *conn = data->conn;
   CURLcode result = CURLE_OK;
 
-  switch(wildcard->state) {
-  case CURLWC_INIT:
-    result = init_wc_data(conn);
-    if(wildcard->state == CURLWC_CLEAN)
-      /* only listing! */
-      break;
-    wildcard->state = result ? CURLWC_ERROR : CURLWC_MATCHING;
-    break;
-
-  case CURLWC_MATCHING: {
-    /* In this state is LIST response successfully parsed, so lets restore
-       previous WRITEFUNCTION callback and WRITEDATA pointer */
-    struct ftp_wc *ftpwc = wildcard->protdata;
-    conn->data->set.fwrite_func = ftpwc->backup.write_function;
-    conn->data->set.out = ftpwc->backup.file_descriptor;
-    ftpwc->backup.write_function = ZERO_NULL;
-    ftpwc->backup.file_descriptor = NULL;
-    wildcard->state = CURLWC_DOWNLOADING;
-
-    if(Curl_ftp_parselist_geterror(ftpwc->parser)) {
-      /* error found in LIST parsing */
-      wildcard->state = CURLWC_CLEAN;
-      return wc_statemach(conn);
-    }
-    if(wildcard->filelist.size == 0) {
-      /* no corresponding file */
-      wildcard->state = CURLWC_CLEAN;
-      return CURLE_REMOTE_FILE_NOT_FOUND;
-    }
-    return wc_statemach(conn);
-  }
-
-  case CURLWC_DOWNLOADING: {
-    /* filelist has at least one file, lets get first one */
-    struct ftp_conn *ftpc = &conn->proto.ftpc;
-    struct curl_fileinfo *finfo = wildcard->filelist.head->ptr;
-    struct FTP *ftp = conn->data->req.protop;
-
-    char *tmp_path = aprintf("%s%s", wildcard->path, finfo->filename);
-    if(!tmp_path)
-      return CURLE_OUT_OF_MEMORY;
-
-    /* switch default ftp->path and tmp_path */
-    free(ftp->pathalloc);
-    ftp->pathalloc = ftp->path = tmp_path;
-
-    infof(conn->data, "Wildcard - START of \"%s\"\n", finfo->filename);
-    if(conn->data->set.chunk_bgn) {
-      long userresponse;
-      Curl_set_in_callback(conn->data, true);
-      userresponse = conn->data->set.chunk_bgn(
-        finfo, wildcard->customptr, (int)wildcard->filelist.size);
-      Curl_set_in_callback(conn->data, false);
-      switch(userresponse) {
-      case CURL_CHUNK_BGN_FUNC_SKIP:
-        infof(conn->data, "Wildcard - \"%s\" skipped by user\n",
-              finfo->filename);
-        wildcard->state = CURLWC_SKIP;
-        return wc_statemach(conn);
-      case CURL_CHUNK_BGN_FUNC_FAIL:
-        return CURLE_CHUNK_FAILED;
-      }
-    }
-
-    if(finfo->filetype != CURLFILETYPE_FILE) {
-      wildcard->state = CURLWC_SKIP;
-      return wc_statemach(conn);
-    }
-
-    if(finfo->flags & CURLFINFOFLAG_KNOWN_SIZE)
-      ftpc->known_filesize = finfo->size;
-
-    result = ftp_parse_url_path(conn);
-    if(result)
+  for(;;) {
+    switch(wildcard->state) {
+    case CURLWC_INIT:
+      result = init_wc_data(data);
+      if(wildcard->state == CURLWC_CLEAN)
+        /* only listing! */
+        return result;
+      wildcard->state = result ? CURLWC_ERROR : CURLWC_MATCHING;
       return result;
 
-    /* we don't need the Curl_fileinfo of first file anymore */
-    Curl_llist_remove(&wildcard->filelist, wildcard->filelist.head, NULL);
+    case CURLWC_MATCHING: {
+      /* In this state is LIST response successfully parsed, so lets restore
+         previous WRITEFUNCTION callback and WRITEDATA pointer */
+      struct ftp_wc *ftpwc = wildcard->ftpwc;
+      data->set.fwrite_func = ftpwc->backup.write_function;
+      data->set.out = ftpwc->backup.file_descriptor;
+      ftpwc->backup.write_function = ZERO_NULL;
+      ftpwc->backup.file_descriptor = NULL;
+      wildcard->state = CURLWC_DOWNLOADING;
 
-    if(wildcard->filelist.size == 0) { /* remains only one file to down. */
-      wildcard->state = CURLWC_CLEAN;
-      /* after that will be ftp_do called once again and no transfer
-         will be done because of CURLWC_CLEAN state */
-      return CURLE_OK;
+      if(Curl_ftp_parselist_geterror(ftpwc->parser)) {
+        /* error found in LIST parsing */
+        wildcard->state = CURLWC_CLEAN;
+        continue;
+      }
+      if(wildcard->filelist.size == 0) {
+        /* no corresponding file */
+        wildcard->state = CURLWC_CLEAN;
+        return CURLE_REMOTE_FILE_NOT_FOUND;
+      }
+      continue;
     }
-  } break;
 
-  case CURLWC_SKIP: {
-    if(conn->data->set.chunk_end) {
-      Curl_set_in_callback(conn->data, true);
-      conn->data->set.chunk_end(conn->data->wildcard.customptr);
-      Curl_set_in_callback(conn->data, false);
+    case CURLWC_DOWNLOADING: {
+      /* filelist has at least one file, lets get first one */
+      struct ftp_conn *ftpc = &conn->proto.ftpc;
+      struct curl_fileinfo *finfo = wildcard->filelist.head->ptr;
+      struct FTP *ftp = data->req.p.ftp;
+
+      char *tmp_path = aprintf("%s%s", wildcard->path, finfo->filename);
+      if(!tmp_path)
+        return CURLE_OUT_OF_MEMORY;
+
+      /* switch default ftp->path and tmp_path */
+      free(ftp->pathalloc);
+      ftp->pathalloc = ftp->path = tmp_path;
+
+      infof(data, "Wildcard - START of \"%s\"", finfo->filename);
+      if(data->set.chunk_bgn) {
+        long userresponse;
+        Curl_set_in_callback(data, true);
+        userresponse = data->set.chunk_bgn(
+          finfo, data->set.wildcardptr, (int)wildcard->filelist.size);
+        Curl_set_in_callback(data, false);
+        switch(userresponse) {
+        case CURL_CHUNK_BGN_FUNC_SKIP:
+          infof(data, "Wildcard - \"%s\" skipped by user",
+                finfo->filename);
+          wildcard->state = CURLWC_SKIP;
+          continue;
+        case CURL_CHUNK_BGN_FUNC_FAIL:
+          return CURLE_CHUNK_FAILED;
+        }
+      }
+
+      if(finfo->filetype != CURLFILETYPE_FILE) {
+        wildcard->state = CURLWC_SKIP;
+        continue;
+      }
+
+      if(finfo->flags & CURLFINFOFLAG_KNOWN_SIZE)
+        ftpc->known_filesize = finfo->size;
+
+      result = ftp_parse_url_path(data);
+      if(result)
+        return result;
+
+      /* we don't need the Curl_fileinfo of first file anymore */
+      Curl_llist_remove(&wildcard->filelist, wildcard->filelist.head, NULL);
+
+      if(wildcard->filelist.size == 0) { /* remains only one file to down. */
+        wildcard->state = CURLWC_CLEAN;
+        /* after that will be ftp_do called once again and no transfer
+           will be done because of CURLWC_CLEAN state */
+        return CURLE_OK;
+      }
+      return result;
     }
-    Curl_llist_remove(&wildcard->filelist, wildcard->filelist.head, NULL);
-    wildcard->state = (wildcard->filelist.size == 0) ?
-                      CURLWC_CLEAN : CURLWC_DOWNLOADING;
-    return wc_statemach(conn);
+
+    case CURLWC_SKIP: {
+      if(data->set.chunk_end) {
+        Curl_set_in_callback(data, true);
+        data->set.chunk_end(data->set.wildcardptr);
+        Curl_set_in_callback(data, false);
+      }
+      Curl_llist_remove(&wildcard->filelist, wildcard->filelist.head, NULL);
+      wildcard->state = (wildcard->filelist.size == 0) ?
+        CURLWC_CLEAN : CURLWC_DOWNLOADING;
+      continue;
+    }
+
+    case CURLWC_CLEAN: {
+      struct ftp_wc *ftpwc = wildcard->ftpwc;
+      result = CURLE_OK;
+      if(ftpwc)
+        result = Curl_ftp_parselist_geterror(ftpwc->parser);
+
+      wildcard->state = result ? CURLWC_ERROR : CURLWC_DONE;
+      return result;
+    }
+
+    case CURLWC_DONE:
+    case CURLWC_ERROR:
+    case CURLWC_CLEAR:
+      if(wildcard->dtor)
+        wildcard->dtor(wildcard->ftpwc);
+      return result;
+    }
   }
-
-  case CURLWC_CLEAN: {
-    struct ftp_wc *ftpwc = wildcard->protdata;
-    result = CURLE_OK;
-    if(ftpwc)
-      result = Curl_ftp_parselist_geterror(ftpwc->parser);
-
-    wildcard->state = result ? CURLWC_ERROR : CURLWC_DONE;
-  } break;
-
-  case CURLWC_DONE:
-  case CURLWC_ERROR:
-  case CURLWC_CLEAR:
-    if(wildcard->dtor)
-      wildcard->dtor(wildcard->protdata);
-    break;
-  }
-
-  return result;
+  /* UNREACHABLE */
 }
 
 /***********************************************************************
@@ -3917,18 +3995,19 @@ static CURLcode wc_statemach(struct connectdata *conn)
  *
  * The input argument is already checked for validity.
  */
-static CURLcode ftp_do(struct connectdata *conn, bool *done)
+static CURLcode ftp_do(struct Curl_easy *data, bool *done)
 {
   CURLcode result = CURLE_OK;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
   *done = FALSE; /* default to false */
   ftpc->wait_data_conn = FALSE; /* default to no such wait */
 
-  if(conn->data->state.wildcardmatch) {
-    result = wc_statemach(conn);
-    if(conn->data->wildcard.state == CURLWC_SKIP ||
-      conn->data->wildcard.state == CURLWC_DONE) {
+  if(data->state.wildcardmatch) {
+    result = wc_statemach(data);
+    if(data->wildcard->state == CURLWC_SKIP ||
+       data->wildcard->state == CURLWC_DONE) {
       /* do not call ftp_regular_transfer */
       return CURLE_OK;
     }
@@ -3936,70 +4015,12 @@ static CURLcode ftp_do(struct connectdata *conn, bool *done)
       return result;
   }
   else { /* no wildcard FSM needed */
-    result = ftp_parse_url_path(conn);
+    result = ftp_parse_url_path(data);
     if(result)
       return result;
   }
 
-  result = ftp_regular_transfer(conn, done);
-
-  return result;
-}
-
-
-CURLcode Curl_ftpsend(struct connectdata *conn, const char *cmd)
-{
-  ssize_t bytes_written;
-#define SBUF_SIZE 1024
-  char s[SBUF_SIZE];
-  size_t write_len;
-  char *sptr = s;
-  CURLcode result = CURLE_OK;
-#ifdef HAVE_GSSAPI
-  enum protection_level data_sec = conn->data_prot;
-#endif
-
-  if(!cmd)
-    return CURLE_BAD_FUNCTION_ARGUMENT;
-
-  write_len = strlen(cmd);
-  if(!write_len || write_len > (sizeof(s) -3))
-    return CURLE_BAD_FUNCTION_ARGUMENT;
-
-  memcpy(&s, cmd, write_len);
-  strcpy(&s[write_len], "\r\n"); /* append a trailing CRLF */
-  write_len += 2;
-  bytes_written = 0;
-
-  result = Curl_convert_to_network(conn->data, s, write_len);
-  /* Curl_convert_to_network calls failf if unsuccessful */
-  if(result)
-    return result;
-
-  for(;;) {
-#ifdef HAVE_GSSAPI
-    conn->data_prot = PROT_CMD;
-#endif
-    result = Curl_write(conn, conn->sock[FIRSTSOCKET], sptr, write_len,
-                        &bytes_written);
-#ifdef HAVE_GSSAPI
-    DEBUGASSERT(data_sec > PROT_NONE && data_sec < PROT_LAST);
-    conn->data_prot = data_sec;
-#endif
-
-    if(result)
-      break;
-
-    if(conn->data->set.verbose)
-      Curl_debug(conn->data, CURLINFO_HEADER_OUT, sptr, (size_t)bytes_written);
-
-    if(bytes_written != (ssize_t)write_len) {
-      write_len -= bytes_written;
-      sptr += bytes_written;
-    }
-    else
-      break;
-  }
+  result = ftp_regular_transfer(data, done);
 
   return result;
 }
@@ -4014,24 +4035,24 @@ CURLcode Curl_ftpsend(struct connectdata *conn, const char *cmd)
  * connection.
  *
  */
-static CURLcode ftp_quit(struct connectdata *conn)
+static CURLcode ftp_quit(struct Curl_easy *data, struct connectdata *conn)
 {
   CURLcode result = CURLE_OK;
 
   if(conn->proto.ftpc.ctl_valid) {
-    result = Curl_pp_sendf(&conn->proto.ftpc.pp, "%s", "QUIT");
+    result = Curl_pp_sendf(data, &conn->proto.ftpc.pp, "%s", "QUIT");
     if(result) {
-      failf(conn->data, "Failure sending QUIT command: %s",
+      failf(data, "Failure sending QUIT command: %s",
             curl_easy_strerror(result));
       conn->proto.ftpc.ctl_valid = FALSE; /* mark control connection as bad */
       connclose(conn, "QUIT command failed"); /* mark for connection closure */
-      state(conn, FTP_STOP);
+      state(data, FTP_STOP);
       return result;
     }
 
-    state(conn, FTP_QUIT);
+    state(data, FTP_QUIT);
 
-    result = ftp_block_statemach(conn);
+    result = ftp_block_statemach(data, conn);
   }
 
   return result;
@@ -4044,7 +4065,9 @@ static CURLcode ftp_quit(struct connectdata *conn)
  * Disconnect from an FTP server. Cleanup protocol-specific per-connection
  * resources. BLOCKING.
  */
-static CURLcode ftp_disconnect(struct connectdata *conn, bool dead_connection)
+static CURLcode ftp_disconnect(struct Curl_easy *data,
+                               struct connectdata *conn,
+                               bool dead_connection)
 {
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   struct pingpong *pp = &ftpc->pp;
@@ -4060,31 +4083,29 @@ static CURLcode ftp_disconnect(struct connectdata *conn, bool dead_connection)
     ftpc->ctl_valid = FALSE;
 
   /* The FTP session may or may not have been allocated/setup at this point! */
-  (void)ftp_quit(conn); /* ignore errors on the QUIT */
+  (void)ftp_quit(data, conn); /* ignore errors on the QUIT */
 
   if(ftpc->entrypath) {
-    struct Curl_easy *data = conn->data;
     if(data->state.most_recent_ftp_entrypath == ftpc->entrypath) {
       data->state.most_recent_ftp_entrypath = NULL;
     }
-    free(ftpc->entrypath);
-    ftpc->entrypath = NULL;
+    Curl_safefree(ftpc->entrypath);
   }
 
   freedirs(ftpc);
-  free(ftpc->prevpath);
-  ftpc->prevpath = NULL;
-  free(ftpc->server_os);
-  ftpc->server_os = NULL;
-
+  Curl_safefree(ftpc->account);
+  Curl_safefree(ftpc->alternative_to_user);
+  Curl_safefree(ftpc->prevpath);
+  Curl_safefree(ftpc->server_os);
   Curl_pp_disconnect(pp);
-
-#ifdef HAVE_GSSAPI
   Curl_sec_end(conn);
-#endif
-
   return CURLE_OK;
 }
+
+#ifdef _MSC_VER
+/* warning C4706: assignment within conditional expression */
+#pragma warning(disable:4706)
+#endif
 
 /***********************************************************************
  *
@@ -4094,215 +4115,174 @@ static CURLcode ftp_disconnect(struct connectdata *conn, bool dead_connection)
  *
  */
 static
-CURLcode ftp_parse_url_path(struct connectdata *conn)
+CURLcode ftp_parse_url_path(struct Curl_easy *data)
 {
-  struct Curl_easy *data = conn->data;
   /* the ftp struct is already inited in ftp_connect() */
-  struct FTP *ftp = data->req.protop;
+  struct FTP *ftp = data->req.p.ftp;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
-  const char *slash_pos;  /* position of the first '/' char in curpos */
-  const char *path_to_use = ftp->path;
-  const char *cur_pos;
-  const char *filename = NULL;
-
-  cur_pos = path_to_use; /* current position in path. point at the begin of
-                            next path component */
+  const char *slashPos = NULL;
+  const char *fileName = NULL;
+  CURLcode result = CURLE_OK;
+  char *rawPath = NULL; /* url-decoded "raw" path */
+  size_t pathLen = 0;
 
   ftpc->ctl_valid = FALSE;
   ftpc->cwdfail = FALSE;
 
+  /* url-decode ftp path before further evaluation */
+  result = Curl_urldecode(ftp->path, 0, &rawPath, &pathLen, REJECT_CTRL);
+  if(result) {
+    failf(data, "path contains control characters");
+    return result;
+  }
+
   switch(data->set.ftp_filemethod) {
-  case FTPFILE_NOCWD:
-    /* fastest, but less standard-compliant */
+    case FTPFILE_NOCWD: /* fastest, but less standard-compliant */
 
-    /*
-      The best time to check whether the path is a file or directory is right
-      here. so:
-
-      the first condition in the if() right here, is there just in case
-      someone decides to set path to NULL one day
-   */
-    if(path_to_use[0] &&
-       (path_to_use[strlen(path_to_use) - 1] != '/') )
-      filename = path_to_use;  /* this is a full file path */
-    /*
-      else {
-        ftpc->file is not used anywhere other than for operations on a file.
-        In other words, never for directory operations.
-        So we can safely leave filename as NULL here and use it as a
-        argument in dir/file decisions.
-      }
-    */
-    break;
-
-  case FTPFILE_SINGLECWD:
-    /* get the last slash */
-    if(!path_to_use[0]) {
-      /* no dir, no file */
-      ftpc->dirdepth = 0;
+      if((pathLen > 0) && (rawPath[pathLen - 1] != '/'))
+          fileName = rawPath;  /* this is a full file path */
+      /*
+        else: ftpc->file is not used anywhere other than for operations on
+              a file. In other words, never for directory operations.
+              So we can safely leave filename as NULL here and use it as a
+              argument in dir/file decisions.
+      */
       break;
-    }
-    slash_pos = strrchr(cur_pos, '/');
-    if(slash_pos || !*cur_pos) {
-      size_t dirlen = slash_pos-cur_pos;
-      CURLcode result;
 
-      ftpc->dirs = calloc(1, sizeof(ftpc->dirs[0]));
-      if(!ftpc->dirs)
-        return CURLE_OUT_OF_MEMORY;
+    case FTPFILE_SINGLECWD:
+      slashPos = strrchr(rawPath, '/');
+      if(slashPos) {
+        /* get path before last slash, except for / */
+        size_t dirlen = slashPos - rawPath;
+        if(dirlen == 0)
+          dirlen = 1;
 
-      if(!dirlen)
-        dirlen++;
+        ftpc->dirs = calloc(1, sizeof(ftpc->dirs[0]));
+        if(!ftpc->dirs) {
+          free(rawPath);
+          return CURLE_OUT_OF_MEMORY;
+        }
 
-      result = Curl_urldecode(conn->data, slash_pos ? cur_pos : "/",
-                              slash_pos ? dirlen : 1,
-                              &ftpc->dirs[0], NULL,
-                              TRUE);
-      if(result) {
-        freedirs(ftpc);
-        return result;
+        ftpc->dirs[0] = calloc(1, dirlen + 1);
+        if(!ftpc->dirs[0]) {
+          free(rawPath);
+          return CURLE_OUT_OF_MEMORY;
+        }
+
+        strncpy(ftpc->dirs[0], rawPath, dirlen);
+        ftpc->dirdepth = 1; /* we consider it to be a single dir */
+        fileName = slashPos + 1; /* rest is file name */
       }
-      ftpc->dirdepth = 1; /* we consider it to be a single dir */
-      filename = slash_pos ? slash_pos + 1 : cur_pos; /* rest is file name */
-    }
-    else
-      filename = cur_pos;  /* this is a file name only */
-    break;
+      else
+        fileName = rawPath; /* file name only (or empty) */
+      break;
 
-  default: /* allow pretty much anything */
-  case FTPFILE_MULTICWD:
-    ftpc->dirdepth = 0;
-    ftpc->diralloc = 5; /* default dir depth to allocate */
-    ftpc->dirs = calloc(ftpc->diralloc, sizeof(ftpc->dirs[0]));
-    if(!ftpc->dirs)
-      return CURLE_OUT_OF_MEMORY;
+    default: /* allow pretty much anything */
+    case FTPFILE_MULTICWD: {
+      /* current position: begin of next path component */
+      const char *curPos = rawPath;
 
-    /* we have a special case for listing the root dir only */
-    if(!strcmp(path_to_use, "/")) {
-      cur_pos++; /* make it point to the zero byte */
-      ftpc->dirs[0] = strdup("/");
-      ftpc->dirdepth++;
-    }
-    else {
-      /* parse the URL path into separate path components */
-      while((slash_pos = strchr(cur_pos, '/')) != NULL) {
-        /* 1 or 0 pointer offset to indicate absolute directory */
-        ssize_t absolute_dir = ((cur_pos - ftp->path > 0) &&
-                                (ftpc->dirdepth == 0))?1:0;
+      /* number of entries allocated for the 'dirs' array */
+      size_t dirAlloc = 0;
+      const char *str = rawPath;
+      for(; *str != 0; ++str)
+        if (*str == '/')
+          ++dirAlloc;
 
-        /* seek out the next path component */
-        if(slash_pos-cur_pos) {
+      if(dirAlloc) {
+        ftpc->dirs = calloc(dirAlloc, sizeof(ftpc->dirs[0]));
+        if(!ftpc->dirs) {
+          free(rawPath);
+          return CURLE_OUT_OF_MEMORY;
+        }
+
+        /* parse the URL path into separate path components */
+        while((slashPos = strchr(curPos, '/'))) {
+          size_t compLen = slashPos - curPos;
+
+          /* path starts with a slash: add that as a directory */
+          if((compLen == 0) && (ftpc->dirdepth == 0))
+            ++compLen;
+
           /* we skip empty path components, like "x//y" since the FTP command
              CWD requires a parameter and a non-existent parameter a) doesn't
              work on many servers and b) has no effect on the others. */
-          size_t len = slash_pos - cur_pos + absolute_dir;
-          CURLcode result =
-            Curl_urldecode(conn->data, cur_pos - absolute_dir, len,
-                           &ftpc->dirs[ftpc->dirdepth], NULL,
-                           TRUE);
-          if(result) {
-            freedirs(ftpc);
-            return result;
-          }
-        }
-        else {
-          cur_pos = slash_pos + 1; /* jump to the rest of the string */
-          if(!ftpc->dirdepth) {
-            /* path starts with a slash, add that as a directory */
-            ftpc->dirs[ftpc->dirdepth] = strdup("/");
-            if(!ftpc->dirs[ftpc->dirdepth++]) { /* run out of memory ... */
-              failf(data, "no memory");
-              freedirs(ftpc);
+          if(compLen > 0) {
+            char *comp = calloc(1, compLen + 1);
+            if(!comp) {
+              free(rawPath);
               return CURLE_OUT_OF_MEMORY;
             }
+            strncpy(comp, curPos, compLen);
+            ftpc->dirs[ftpc->dirdepth++] = comp;
           }
-          continue;
-        }
-
-        cur_pos = slash_pos + 1; /* jump to the rest of the string */
-        if(++ftpc->dirdepth >= ftpc->diralloc) {
-          /* enlarge array */
-          char **bigger;
-          ftpc->diralloc *= 2; /* double the size each time */
-          bigger = realloc(ftpc->dirs, ftpc->diralloc * sizeof(ftpc->dirs[0]));
-          if(!bigger) {
-            freedirs(ftpc);
-            return CURLE_OUT_OF_MEMORY;
-          }
-          ftpc->dirs = bigger;
+          curPos = slashPos + 1;
         }
       }
+      DEBUGASSERT((size_t)ftpc->dirdepth <= dirAlloc);
+      fileName = curPos; /* the rest is the file name (or empty) */
     }
-    filename = cur_pos;  /* the rest is the file name */
     break;
   } /* switch */
 
-  if(filename && *filename) {
-    CURLcode result =
-      Curl_urldecode(conn->data, filename, 0,  &ftpc->file, NULL, TRUE);
-
-    if(result) {
-      freedirs(ftpc);
-      return result;
-    }
-  }
+  if(fileName && *fileName)
+    ftpc->file = strdup(fileName);
   else
-    ftpc->file = NULL; /* instead of point to a zero byte, we make it a NULL
-                          pointer */
+    ftpc->file = NULL; /* instead of point to a zero byte,
+                            we make it a NULL pointer */
 
-  if(data->set.upload && !ftpc->file && (ftp->transfer == FTPTRANSFER_BODY)) {
+  if(data->set.upload && !ftpc->file && (ftp->transfer == PPTRANSFER_BODY)) {
     /* We need a file name when uploading. Return error! */
-    failf(data, "Uploading to a URL without a file name!");
+    failf(data, "Uploading to a URL without a file name");
+    free(rawPath);
     return CURLE_URL_MALFORMAT;
   }
 
   ftpc->cwddone = FALSE; /* default to not done */
 
-  if(ftpc->prevpath) {
-    /* prevpath is "raw" so we convert the input path before we compare the
-       strings */
-    size_t dlen;
-    char *path;
-    CURLcode result =
-      Curl_urldecode(conn->data, ftp->path, 0, &path, &dlen, TRUE);
-    if(result) {
-      freedirs(ftpc);
-      return result;
-    }
+  if((data->set.ftp_filemethod == FTPFILE_NOCWD) && (rawPath[0] == '/'))
+    ftpc->cwddone = TRUE; /* skip CWD for absolute paths */
+  else { /* newly created FTP connections are already in entry path */
+    const char *oldPath = conn->bits.reuse ? ftpc->prevpath : "";
+    if(oldPath) {
+      size_t n = pathLen;
+      if(data->set.ftp_filemethod == FTPFILE_NOCWD)
+        n = 0; /* CWD to entry for relative paths */
+      else
+        n -= ftpc->file?strlen(ftpc->file):0;
 
-    dlen -= ftpc->file?strlen(ftpc->file):0;
-    if((dlen == strlen(ftpc->prevpath)) &&
-       !strncmp(path, ftpc->prevpath, dlen) &&
-       (ftpc->prevmethod == data->set.ftp_filemethod)) {
-      infof(data, "Request has same path as previous transfer\n");
-      ftpc->cwddone = TRUE;
+      if((strlen(oldPath) == n) && !strncmp(rawPath, oldPath, n)) {
+        infof(data, "Request has same path as previous transfer");
+        ftpc->cwddone = TRUE;
+      }
     }
-    free(path);
   }
 
+  free(rawPath);
   return CURLE_OK;
 }
 
 /* call this when the DO phase has completed */
-static CURLcode ftp_dophase_done(struct connectdata *conn,
-                                 bool connected)
+static CURLcode ftp_dophase_done(struct Curl_easy *data, bool connected)
 {
-  struct FTP *ftp = conn->data->req.protop;
+  struct connectdata *conn = data->conn;
+  struct FTP *ftp = data->req.p.ftp;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
 
   if(connected) {
     int completed;
-    CURLcode result = ftp_do_more(conn, &completed);
+    CURLcode result = ftp_do_more(data, &completed);
 
     if(result) {
-      close_secondarysocket(conn);
+      close_secondarysocket(data, conn);
       return result;
     }
   }
 
-  if(ftp->transfer != FTPTRANSFER_BODY)
+  if(ftp->transfer != PPTRANSFER_BODY)
     /* no data to transfer */
-    Curl_setup_transfer(conn->data, -1, -1, FALSE, -1);
+    Curl_setup_transfer(data, -1, -1, FALSE, -1);
   else if(!connected)
     /* since we didn't connect now, we want do_more to get called */
     conn->bits.do_more = TRUE;
@@ -4313,17 +4293,17 @@ static CURLcode ftp_dophase_done(struct connectdata *conn,
 }
 
 /* called from multi.c while DOing */
-static CURLcode ftp_doing(struct connectdata *conn,
+static CURLcode ftp_doing(struct Curl_easy *data,
                           bool *dophase_done)
 {
-  CURLcode result = ftp_multi_statemach(conn, dophase_done);
+  CURLcode result = ftp_multi_statemach(data, dophase_done);
 
   if(result)
-    DEBUGF(infof(conn->data, "DO phase failed\n"));
+    DEBUGF(infof(data, "DO phase failed"));
   else if(*dophase_done) {
-    result = ftp_dophase_done(conn, FALSE /* not connected */);
+    result = ftp_dophase_done(data, FALSE /* not connected */);
 
-    DEBUGF(infof(conn->data, "DO phase is complete2\n"));
+    DEBUGF(infof(data, "DO phase is complete2"));
   }
   return result;
 }
@@ -4341,12 +4321,12 @@ static CURLcode ftp_doing(struct connectdata *conn,
  * ftp_done() function without finding any major problem.
  */
 static
-CURLcode ftp_regular_transfer(struct connectdata *conn,
+CURLcode ftp_regular_transfer(struct Curl_easy *data,
                               bool *dophase_done)
 {
   CURLcode result = CURLE_OK;
   bool connected = FALSE;
-  struct Curl_easy *data = conn->data;
+  struct connectdata *conn = data->conn;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
   data->req.size = -1; /* make sure this is unknown at this point */
 
@@ -4357,7 +4337,7 @@ CURLcode ftp_regular_transfer(struct connectdata *conn,
 
   ftpc->ctl_valid = TRUE; /* starts good */
 
-  result = ftp_perform(conn,
+  result = ftp_perform(data,
                        &connected, /* have we connected after PASV/PORT */
                        dophase_done); /* all commands in the DO-phase done? */
 
@@ -4367,7 +4347,7 @@ CURLcode ftp_regular_transfer(struct connectdata *conn,
       /* the DO phase has not completed yet */
       return CURLE_OK;
 
-    result = ftp_dophase_done(conn, connected);
+    result = ftp_dophase_done(data, connected);
 
     if(result)
       return result;
@@ -4378,15 +4358,36 @@ CURLcode ftp_regular_transfer(struct connectdata *conn,
   return result;
 }
 
-static CURLcode ftp_setup_connection(struct connectdata *conn)
+static CURLcode ftp_setup_connection(struct Curl_easy *data,
+                                     struct connectdata *conn)
 {
-  struct Curl_easy *data = conn->data;
   char *type;
   struct FTP *ftp;
+  CURLcode result = CURLE_OK;
+  struct ftp_conn *ftpc = &conn->proto.ftpc;
 
-  conn->data->req.protop = ftp = calloc(sizeof(struct FTP), 1);
-  if(NULL == ftp)
+  ftp = calloc(sizeof(struct FTP), 1);
+  if(!ftp)
     return CURLE_OUT_OF_MEMORY;
+
+  /* clone connection related data that is FTP specific */
+  if(data->set.str[STRING_FTP_ACCOUNT]) {
+    ftpc->account = strdup(data->set.str[STRING_FTP_ACCOUNT]);
+    if(!ftpc->account) {
+      free(ftp);
+      return CURLE_OUT_OF_MEMORY;
+    }
+  }
+  if(data->set.str[STRING_FTP_ALTERNATIVE_TO_USER]) {
+    ftpc->alternative_to_user =
+      strdup(data->set.str[STRING_FTP_ALTERNATIVE_TO_USER]);
+    if(!ftpc->alternative_to_user) {
+      Curl_safefree(ftpc->account);
+      free(ftp);
+      return CURLE_OUT_OF_MEMORY;
+    }
+  }
+  data->req.p.ftp = ftp;
 
   ftp->path = &data->state.up.path[1]; /* don't include the initial slash */
 
@@ -4401,43 +4402,32 @@ static CURLcode ftp_setup_connection(struct connectdata *conn)
     char command;
     *type = 0;                     /* it was in the middle of the hostname */
     command = Curl_raw_toupper(type[6]);
-    conn->bits.type_set = TRUE;
 
     switch(command) {
     case 'A': /* ASCII mode */
-      data->set.prefer_ascii = TRUE;
+      data->state.prefer_ascii = TRUE;
       break;
 
     case 'D': /* directory mode */
-      data->set.ftp_list_only = TRUE;
+      data->state.list_only = TRUE;
       break;
 
     case 'I': /* binary mode */
     default:
       /* switch off ASCII */
-      data->set.prefer_ascii = FALSE;
+      data->state.prefer_ascii = FALSE;
       break;
     }
   }
 
   /* get some initial data into the ftp struct */
-  ftp->transfer = FTPTRANSFER_BODY;
+  ftp->transfer = PPTRANSFER_BODY;
   ftp->downloadsize = 0;
+  ftpc->known_filesize = -1; /* unknown size for now */
+  ftpc->use_ssl = data->set.use_ssl;
+  ftpc->ccc = data->set.ftp_ccc;
 
-  /* No need to duplicate user+password, the connectdata struct won't change
-     during a session, but we re-init them here since on subsequent inits
-     since the conn struct may have changed or been replaced.
-  */
-  ftp->user = conn->user;
-  ftp->passwd = conn->passwd;
-  if(isBadFtpString(ftp->user))
-    return CURLE_URL_MALFORMAT;
-  if(isBadFtpString(ftp->passwd))
-    return CURLE_URL_MALFORMAT;
-
-  conn->proto.ftpc.known_filesize = -1; /* unknown size for now */
-
-  return CURLE_OK;
+  return result;
 }
 
 #endif /* CURL_DISABLE_FTP */

@@ -5,12 +5,12 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 2009, Markus Moeller, <markus_moeller@compuserve.com>
- * Copyright (C) 2012 - 2018, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Markus Moeller, <markus_moeller@compuserve.com>
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -18,6 +18,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -28,6 +30,7 @@
 #include "curl_gssapi.h"
 #include "urldata.h"
 #include "sendf.h"
+#include "cfilters.h"
 #include "connect.h"
 #include "timeval.h"
 #include "socks.h"
@@ -51,7 +54,7 @@ static int check_gss_err(struct Curl_easy *data,
   if(GSS_ERROR(major_status)) {
     OM_uint32 maj_stat, min_stat;
     OM_uint32 msg_ctx = 0;
-    gss_buffer_desc status_string;
+    gss_buffer_desc status_string = GSS_C_EMPTY_BUFFER;
     char buf[1024];
     size_t len;
 
@@ -92,21 +95,21 @@ static int check_gss_err(struct Curl_easy *data,
       }
       gss_release_buffer(&min_stat, &status_string);
     }
-    failf(data, "GSS-API error: %s failed:\n%s", function, buf);
+    failf(data, "GSS-API error: %s failed: %s", function, buf);
     return 1;
   }
 
   return 0;
 }
 
-CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
-                                      struct connectdata *conn)
+CURLcode Curl_SOCKS5_gssapi_negotiate(struct Curl_cfilter *cf,
+                                      struct Curl_easy *data)
 {
-  struct Curl_easy *data = conn->data;
-  curl_socket_t sock = conn->sock[sockindex];
+  struct connectdata *conn = cf->conn;
+  curl_socket_t sock = conn->sock[cf->sockindex];
   CURLcode code;
   ssize_t actualread;
-  ssize_t written;
+  ssize_t nwritten;
   int result;
   OM_uint32 gss_major_status, gss_minor_status, gss_status;
   OM_uint32 gss_ret_flags;
@@ -115,7 +118,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
   gss_buffer_desc  gss_send_token = GSS_C_EMPTY_BUFFER;
   gss_buffer_desc  gss_recv_token = GSS_C_EMPTY_BUFFER;
   gss_buffer_desc  gss_w_token = GSS_C_EMPTY_BUFFER;
-  gss_buffer_desc* gss_token = GSS_C_NO_BUFFER;
+  gss_buffer_desc *gss_token = GSS_C_NO_BUFFER;
   gss_name_t       server = GSS_C_NO_NAME;
   gss_name_t       gss_client_name = GSS_C_NO_NAME;
   unsigned short   us_length;
@@ -167,6 +170,8 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
     return CURLE_COULDNT_CONNECT;
   }
 
+  (void)curlx_nonblock(sock, FALSE);
+
   /* As long as we need to keep sending some context info, and there's no  */
   /* errors, keep sending it...                                            */
   for(;;) {
@@ -193,14 +198,14 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
       return CURLE_COULDNT_CONNECT;
     }
 
-    if(gss_send_token.length != 0) {
+    if(gss_send_token.length) {
       socksreq[0] = 1;    /* GSS-API subnegotiation version */
       socksreq[1] = 1;    /* authentication message type */
       us_length = htons((short)gss_send_token.length);
       memcpy(socksreq + 2, &us_length, sizeof(short));
 
-      code = Curl_write_plain(conn, sock, (char *)socksreq, 4, &written);
-      if(code || (4 != written)) {
+      nwritten = Curl_conn_cf_send(cf->next, data, (char *)socksreq, 4, &code);
+      if(code || (4 != nwritten)) {
         failf(data, "Failed to send GSS-API authentication request.");
         gss_release_name(&gss_status, &server);
         gss_release_buffer(&gss_status, &gss_recv_token);
@@ -209,10 +214,10 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
         return CURLE_COULDNT_CONNECT;
       }
 
-      code = Curl_write_plain(conn, sock, (char *)gss_send_token.value,
-                              gss_send_token.length, &written);
-
-      if(code || ((ssize_t)gss_send_token.length != written)) {
+      nwritten = Curl_conn_cf_send(cf->next, data,
+                                   (char *)gss_send_token.value,
+                                   gss_send_token.length, &code);
+      if(code || ((ssize_t)gss_send_token.length != nwritten)) {
         failf(data, "Failed to send GSS-API authentication token.");
         gss_release_name(&gss_status, &server);
         gss_release_buffer(&gss_status, &gss_recv_token);
@@ -225,7 +230,8 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
 
     gss_release_buffer(&gss_status, &gss_send_token);
     gss_release_buffer(&gss_status, &gss_recv_token);
-    if(gss_major_status != GSS_S_CONTINUE_NEEDED) break;
+    if(gss_major_status != GSS_S_CONTINUE_NEEDED)
+      break;
 
     /* analyse response */
 
@@ -237,7 +243,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
      * +----+------+-----+----------------+
      */
 
-    result = Curl_blockread_all(conn, sock, (char *)socksreq, 4, &actualread);
+    result = Curl_blockread_all(cf, data, (char *)socksreq, 4, &actualread);
     if(result || (actualread != 4)) {
       failf(data, "Failed to receive GSS-API authentication response.");
       gss_release_name(&gss_status, &server);
@@ -254,7 +260,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
       return CURLE_COULDNT_CONNECT;
     }
 
-    if(socksreq[1] != 1) { /* status / messgae type */
+    if(socksreq[1] != 1) { /* status / message type */
       failf(data, "Invalid GSS-API authentication response type (%d %d).",
             socksreq[0], socksreq[1]);
       gss_release_name(&gss_status, &server);
@@ -276,7 +282,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
       return CURLE_OUT_OF_MEMORY;
     }
 
-    result = Curl_blockread_all(conn, sock, (char *)gss_recv_token.value,
+    result = Curl_blockread_all(cf, data, (char *)gss_recv_token.value,
                                 gss_recv_token.length, &actualread);
 
     if(result || (actualread != us_length)) {
@@ -325,7 +331,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
   user[gss_send_token.length] = '\0';
   gss_release_name(&gss_status, &gss_client_name);
   gss_release_buffer(&gss_status, &gss_send_token);
-  infof(data, "SOCKS5 server authencticated user %s with GSS-API.\n",user);
+  infof(data, "SOCKS5 server authenticated user %s with GSS-API.",user);
   free(user);
   user = NULL;
 
@@ -341,7 +347,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
   else if(gss_ret_flags & GSS_C_INTEG_FLAG)
     gss_enc = 1;
 
-  infof(data, "SOCKS5 server supports GSS-API %s data protection.\n",
+  infof(data, "SOCKS5 server supports GSS-API %s data protection.",
         (gss_enc == 0)?"no":((gss_enc==1)?"integrity":"confidentiality"));
   /* force for the moment to no data protection */
   gss_enc = 0;
@@ -405,8 +411,8 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
     memcpy(socksreq + 2, &us_length, sizeof(short));
   }
 
-  code = Curl_write_plain(conn, sock, (char *)socksreq, 4, &written);
-  if(code  || (4 != written)) {
+  nwritten = Curl_conn_cf_send(cf->next, data, (char *)socksreq, 4, &code);
+  if(code  || (4 != nwritten)) {
     failf(data, "Failed to send GSS-API encryption request.");
     gss_release_buffer(&gss_status, &gss_w_token);
     gss_delete_sec_context(&gss_status, &gss_context, NULL);
@@ -415,17 +421,18 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
 
   if(data->set.socks5_gssapi_nec) {
     memcpy(socksreq, &gss_enc, 1);
-    code = Curl_write_plain(conn, sock, socksreq, 1, &written);
-    if(code || ( 1 != written)) {
+    nwritten = Curl_conn_cf_send(cf->next, data, (char *)socksreq, 1, &code);
+    if(code || ( 1 != nwritten)) {
       failf(data, "Failed to send GSS-API encryption type.");
       gss_delete_sec_context(&gss_status, &gss_context, NULL);
       return CURLE_COULDNT_CONNECT;
     }
   }
   else {
-    code = Curl_write_plain(conn, sock, (char *)gss_w_token.value,
-                            gss_w_token.length, &written);
-    if(code || ((ssize_t)gss_w_token.length != written)) {
+    nwritten = Curl_conn_cf_send(cf->next, data,
+                                 (char *)gss_w_token.value,
+                                 gss_w_token.length, &code);
+    if(code || ((ssize_t)gss_w_token.length != nwritten)) {
       failf(data, "Failed to send GSS-API encryption type.");
       gss_release_buffer(&gss_status, &gss_w_token);
       gss_delete_sec_context(&gss_status, &gss_context, NULL);
@@ -434,7 +441,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
     gss_release_buffer(&gss_status, &gss_w_token);
   }
 
-  result = Curl_blockread_all(conn, sock, (char *)socksreq, 4, &actualread);
+  result = Curl_blockread_all(cf, data, (char *)socksreq, 4, &actualread);
   if(result || (actualread != 4)) {
     failf(data, "Failed to receive GSS-API encryption response.");
     gss_delete_sec_context(&gss_status, &gss_context, NULL);
@@ -449,7 +456,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
     return CURLE_COULDNT_CONNECT;
   }
 
-  if(socksreq[1] != 2) { /* status / messgae type */
+  if(socksreq[1] != 2) { /* status / message type */
     failf(data, "Invalid GSS-API encryption response type (%d %d).",
           socksreq[0], socksreq[1]);
     gss_delete_sec_context(&gss_status, &gss_context, NULL);
@@ -465,7 +472,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
     gss_delete_sec_context(&gss_status, &gss_context, NULL);
     return CURLE_OUT_OF_MEMORY;
   }
-  result = Curl_blockread_all(conn, sock, (char *)gss_recv_token.value,
+  result = Curl_blockread_all(cf, data, (char *)gss_recv_token.value,
                               gss_recv_token.length, &actualread);
 
   if(result || (actualread != us_length)) {
@@ -490,7 +497,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
     gss_release_buffer(&gss_status, &gss_recv_token);
 
     if(gss_w_token.length != 1) {
-      failf(data, "Invalid GSS-API encryption response length (%d).",
+      failf(data, "Invalid GSS-API encryption response length (%zu).",
             gss_w_token.length);
       gss_release_buffer(&gss_status, &gss_w_token);
       gss_delete_sec_context(&gss_status, &gss_context, NULL);
@@ -502,7 +509,7 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
   }
   else {
     if(gss_recv_token.length != 1) {
-      failf(data, "Invalid GSS-API encryption response length (%d).",
+      failf(data, "Invalid GSS-API encryption response length (%zu).",
             gss_recv_token.length);
       gss_release_buffer(&gss_status, &gss_recv_token);
       gss_delete_sec_context(&gss_status, &gss_context, NULL);
@@ -513,7 +520,9 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(int sockindex,
     gss_release_buffer(&gss_status, &gss_recv_token);
   }
 
-  infof(data, "SOCKS5 access with%s protection granted.\n",
+  (void)curlx_nonblock(sock, TRUE);
+
+  infof(data, "SOCKS5 access with%s protection granted.",
         (socksreq[0] == 0)?"out GSS-API data":
         ((socksreq[0] == 1)?" GSS-API integrity":" GSS-API confidentiality"));
 

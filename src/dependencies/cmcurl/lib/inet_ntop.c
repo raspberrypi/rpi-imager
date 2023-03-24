@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1996-2001  Internet Software Consortium.
+ * Copyright (C) 1996-2022  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,6 +13,8 @@
  * FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
  * NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * SPDX-License-Identifier: ISC
  */
 /*
  * Original code by Paul Vixie. "curlified" by Gisle Vanem.
@@ -40,7 +42,16 @@
 #define INT16SZ          2
 
 /*
- * Format an IPv4 address, more or less like inet_ntoa().
+ * If ENABLE_IPV6 is disabled, we still want to parse IPv6 addresses, so make
+ * sure we have _some_ value for AF_INET6 without polluting our fake value
+ * everywhere.
+ */
+#if !defined(ENABLE_IPV6) && !defined(AF_INET6)
+#define AF_INET6 (AF_INET + 1)
+#endif
+
+/*
+ * Format an IPv4 address, more or less like inet_ntop().
  *
  * Returns `dst' (as a const)
  * Note:
@@ -70,7 +81,6 @@ static char *inet_ntop4 (const unsigned char *src, char *dst, size_t size)
   return dst;
 }
 
-#ifdef ENABLE_IPV6
 /*
  * Convert IPv6 binary address into presentation (printable) format.
  */
@@ -134,7 +144,7 @@ static char *inet_ntop6 (const unsigned char *src, char *dst, size_t size)
 
     /* Are we following an initial run of 0x00s or any real hex?
      */
-    if(i != 0)
+    if(i)
       *tp++ = ':';
 
     /* Is this address an encapsulated IPv4?
@@ -166,7 +176,6 @@ static char *inet_ntop6 (const unsigned char *src, char *dst, size_t size)
   strcpy(dst, tmp);
   return dst;
 }
-#endif  /* ENABLE_IPV6 */
 
 /*
  * Convert a network format address to presentation format.
@@ -185,10 +194,8 @@ char *Curl_inet_ntop(int af, const void *src, char *buf, size_t size)
   switch(af) {
   case AF_INET:
     return inet_ntop4((const unsigned char *)src, buf, size);
-#ifdef ENABLE_IPV6
   case AF_INET6:
     return inet_ntop6((const unsigned char *)src, buf, size);
-#endif
   default:
     errno = EAFNOSUPPORT;
     return NULL;

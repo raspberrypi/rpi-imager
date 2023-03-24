@@ -7,11 +7,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2019, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -20,7 +20,11 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
+
+#include "curl_setup.h"
 
 #ifdef USE_WINSOCK
 #include <curl/curl.h> /* for curl_socket_t */
@@ -32,8 +36,6 @@
 unsigned short curlx_ultous(unsigned long ulnum);
 
 unsigned char curlx_ultouc(unsigned long ulnum);
-
-int curlx_ultosi(unsigned long ulnum);
 
 int curlx_uztosi(size_t uznum);
 
@@ -67,7 +69,7 @@ curl_socket_t curlx_sitosk(int i);
 
 #endif /* USE_WINSOCK */
 
-#if defined(WIN32) || defined(_WIN32)
+#if defined(WIN32)
 
 ssize_t curlx_read(int fd, void *buf, size_t count);
 
@@ -80,7 +82,7 @@ ssize_t curlx_write(int fd, const void *buf, size_t count);
 #  define write(fd, buf, count) curlx_write(fd, buf, count)
 #endif
 
-#endif /* WIN32 || _WIN32 */
+#endif /* WIN32 */
 
 #if defined(__INTEL_COMPILER) && defined(__unix__)
 
@@ -93,19 +95,6 @@ void curlx_FD_ZERO(fd_set *fdset);
 unsigned short curlx_htons(unsigned short usnum);
 
 unsigned short curlx_ntohs(unsigned short usnum);
-
-#ifndef BUILDING_WARNLESS_C
-#  undef  FD_ISSET
-#  define FD_ISSET(a,b) curlx_FD_ISSET((a),(b))
-#  undef  FD_SET
-#  define FD_SET(a,b)   curlx_FD_SET((a),(b))
-#  undef  FD_ZERO
-#  define FD_ZERO(a)    curlx_FD_ZERO((a))
-#  undef  htons
-#  define htons(a)      curlx_htons((a))
-#  undef  ntohs
-#  define ntohs(a)      curlx_ntohs((a))
-#endif
 
 #endif /* __INTEL_COMPILER && __unix__ */
 

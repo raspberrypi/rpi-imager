@@ -7,11 +7,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 2018 - 2019, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -20,28 +20,14 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 
 #include "urldata.h"
 #include "curl_addrinfo.h"
 
 #ifndef CURL_DISABLE_DOH
-
-/*
- * Curl_doh() resolve a name using DoH (DNS-over-HTTPS). It resolves a name
- * and returns a 'Curl_addrinfo *' with the address information.
- */
-
-Curl_addrinfo *Curl_doh(struct connectdata *conn,
-                        const char *hostname,
-                        int port,
-                        int *waitp);
-
-CURLcode Curl_doh_is_resolved(struct connectdata *conn,
-                              struct Curl_dns_entry **dns);
-
-int Curl_doh_getsock(struct connectdata *conn, curl_socket_t *socks,
-                     int numsocks);
 
 typedef enum {
   DOH_OK,
@@ -56,24 +42,52 @@ typedef enum {
   DOH_DNS_UNEXPECTED_TYPE,  /* 9 */
   DOH_DNS_UNEXPECTED_CLASS, /* 10 */
   DOH_NO_CONTENT,           /* 11 */
-  DOH_DNS_BAD_ID            /* 12 */
+  DOH_DNS_BAD_ID,           /* 12 */
+  DOH_DNS_NAME_TOO_LONG     /* 13 */
 } DOHcode;
 
 typedef enum {
   DNS_TYPE_A = 1,
   DNS_TYPE_NS = 2,
   DNS_TYPE_CNAME = 5,
-  DNS_TYPE_AAAA = 28
+  DNS_TYPE_AAAA = 28,
+  DNS_TYPE_DNAME = 39           /* RFC6672 */
 } DNStype;
+
+/* one of these for each DoH request */
+struct dnsprobe {
+  CURL *easy;
+  DNStype dnstype;
+  unsigned char dohbuffer[512];
+  size_t dohlen;
+  struct dynbuf serverdoh;
+};
+
+struct dohdata {
+  struct curl_slist *headers;
+  struct dnsprobe probe[DOH_PROBE_SLOTS];
+  unsigned int pending; /* still outstanding requests */
+  int port;
+  const char *host;
+};
+
+/*
+ * Curl_doh() resolve a name using DoH (DNS-over-HTTPS). It resolves a name
+ * and returns a 'Curl_addrinfo *' with the address information.
+ */
+
+struct Curl_addrinfo *Curl_doh(struct Curl_easy *data,
+                               const char *hostname,
+                               int port,
+                               int *waitp);
+
+CURLcode Curl_doh_is_resolved(struct Curl_easy *data,
+                              struct Curl_dns_entry **dns);
+
+int Curl_doh_getsock(struct connectdata *conn, curl_socket_t *socks);
 
 #define DOH_MAX_ADDR 24
 #define DOH_MAX_CNAME 4
-
-struct cnamestore {
-  size_t len;       /* length of cname */
-  char *alloc;      /* allocated pointer */
-  size_t allocsize; /* allocated size */
-};
 
 struct dohaddr {
   int type;
@@ -84,11 +98,11 @@ struct dohaddr {
 };
 
 struct dohentry {
-  unsigned int ttl;
-  int numaddr;
+  struct dynbuf cname[DOH_MAX_CNAME];
   struct dohaddr addr[DOH_MAX_ADDR];
+  int numaddr;
+  unsigned int ttl;
   int numcname;
-  struct cnamestore cname[DOH_MAX_CNAME];
 };
 
 
@@ -98,14 +112,15 @@ DOHcode doh_encode(const char *host,
                    unsigned char *dnsp, /* buffer */
                    size_t len,  /* buffer size */
                    size_t *olen); /* output length */
-DOHcode doh_decode(unsigned char *doh,
+DOHcode doh_decode(const unsigned char *doh,
                    size_t dohlen,
                    DNStype dnstype,
                    struct dohentry *d);
+void de_init(struct dohentry *d);
 void de_cleanup(struct dohentry *d);
 #endif
 
-#else /* if DOH is disabled */
+#else /* if DoH is disabled */
 #define Curl_doh(a,b,c,d) NULL
 #define Curl_doh_is_resolved(x,y) CURLE_COULDNT_RESOLVE_HOST
 #endif

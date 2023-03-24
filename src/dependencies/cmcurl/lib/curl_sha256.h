@@ -7,11 +7,12 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2010, Florin Petriuc, <petriuc.florin@gmail.com>
+ * Copyright (C) Florin Petriuc, <petriuc.florin@gmail.com>
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -20,12 +21,27 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 
 #ifndef CURL_DISABLE_CRYPTO_AUTH
+#include <curl/curl.h>
+#include "curl_hmac.h"
 
-void Curl_sha256it(unsigned char *outbuffer,
-                const unsigned char *input);
+extern const struct HMAC_params Curl_HMAC_SHA256[1];
+
+#ifdef USE_WOLFSSL
+/* SHA256_DIGEST_LENGTH is an enum value in wolfSSL. Need to import it from
+ * sha.h */
+#include <wolfssl/options.h>
+#include <wolfssl/openssl/sha.h>
+#else
+#define SHA256_DIGEST_LENGTH 32
+#endif
+
+CURLcode Curl_sha256it(unsigned char *outbuffer, const unsigned char *input,
+                       const size_t len);
 
 #endif
 

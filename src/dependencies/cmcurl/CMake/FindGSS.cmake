@@ -1,3 +1,26 @@
+#***************************************************************************
+#                                  _   _ ____  _
+#  Project                     ___| | | |  _ \| |
+#                             / __| | | | |_) | |
+#                            | (__| |_| |  _ <| |___
+#                             \___|\___/|_| \_\_____|
+#
+# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
+#
+# This software is licensed as described in the file COPYING, which
+# you should have received as part of this distribution. The terms
+# are also available at https://curl.se/docs/copyright.html.
+#
+# You may opt to use, copy, modify, merge, publish, distribute and/or sell
+# copies of the Software, and permit persons to whom the Software is
+# furnished to do so, under the terms of the COPYING file.
+#
+# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+# KIND, either express or implied.
+#
+# SPDX-License-Identifier: curl
+#
+###########################################################################
 # - Try to find the GSS Kerberos library
 # Once done this will define
 #
@@ -62,6 +85,7 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
           COMMAND ${_GSS_CONFIGURE_SCRIPT} "--cflags" "gssapi"
           OUTPUT_VARIABLE _GSS_CFLAGS
           RESULT_VARIABLE _GSS_CONFIGURE_FAILED
+          OUTPUT_STRIP_TRAILING_WHITESPACE
       )
     message(STATUS "CFLAGS: ${_GSS_CFLAGS}")
     if(NOT _GSS_CONFIGURE_FAILED) # 0 means success
@@ -84,6 +108,7 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
         COMMAND ${_GSS_CONFIGURE_SCRIPT} "--libs" "gssapi"
         OUTPUT_VARIABLE _GSS_LIB_FLAGS
         RESULT_VARIABLE _GSS_CONFIGURE_FAILED
+        OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     message(STATUS "LDFLAGS: ${_GSS_LIB_FLAGS}")
 
@@ -110,6 +135,7 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
         COMMAND ${_GSS_CONFIGURE_SCRIPT} "--version"
         OUTPUT_VARIABLE _GSS_VERSION
         RESULT_VARIABLE _GSS_CONFIGURE_FAILED
+        OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 
     # older versions may not have the "--version" parameter. In this case we just don't care.
@@ -121,6 +147,7 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
         COMMAND ${_GSS_CONFIGURE_SCRIPT} "--vendor"
         OUTPUT_VARIABLE _GSS_VENDOR
         RESULT_VARIABLE _GSS_CONFIGURE_FAILED
+        OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 
     # older versions may not have the "--vendor" parameter. In this case we just don't care.
@@ -134,7 +161,7 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
       endif()
     endif()
 
-  else() # either there is no config script or we are on platform that doesn't provide one (Windows?)
+  else() # either there is no config script or we are on a platform that doesn't provide one (Windows?)
 
     find_path(_GSS_INCLUDE_DIR
         NAMES
@@ -154,17 +181,17 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
         set(GSS_FLAVOUR "MIT")
       else()
         # prevent compiling the header - just check if we can include it
-        set(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} -D__ROKEN_H__")
+        list(APPEND CMAKE_REQUIRED_DEFINITIONS -D__ROKEN_H__)
         check_include_file( "roken.h" _GSS_HAVE_ROKEN_H)
 
         check_include_file( "heimdal/roken.h" _GSS_HAVE_HEIMDAL_ROKEN_H)
         if(_GSS_HAVE_ROKEN_H OR _GSS_HAVE_HEIMDAL_ROKEN_H)
           set(GSS_FLAVOUR "Heimdal")
         endif()
-        set(CMAKE_REQUIRED_DEFINITIONS "")
+        list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D__ROKEN_H__)
       endif()
     else()
-      # I'm not convienced if this is the right way but this is what autotools do at the moment
+      # I'm not convinced if this is the right way but this is what autotools do at the moment
       find_path(_GSS_INCLUDE_DIR
           NAMES
               "gssapi.h"
