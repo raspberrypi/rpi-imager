@@ -33,163 +33,161 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <location filename="../downloadthread.cpp" line="147"/>
+        <location filename="../downloadthread.cpp" line="166"/>
         <source>Error running diskpart: %1</source>
         <translation>Errore esecuzione diskpart: %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="168"/>
+        <location filename="../downloadthread.cpp" line="187"/>
         <source>Error removing existing partitions</source>
         <translation>Errore rimozione partizioni esistenti</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="194"/>
+        <location filename="../downloadthread.cpp" line="213"/>
         <source>Authentication cancelled</source>
         <translation>Autenticazione annullata</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="197"/>
+        <location filename="../downloadthread.cpp" line="216"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
         <translation>Errore esecuzione auhopen per ottenere accesso al dispositivo disco %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="198"/>
+        <location filename="../downloadthread.cpp" line="217"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Verifica se a &apos;Raspberry Pi Imager&apos; è consentito l&apos;accesso a &apos;volumi rimovibili&apos; nelle impostazioni privacy (in &apos;file e cartelle&apos; o in alternativa concedi &apos;accesso completo al disco&apos;).</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="220"/>
+        <location filename="../downloadthread.cpp" line="239"/>
         <source>Cannot open storage device &apos;%1&apos;.</source>
         <translation>Impossibile aprire dispositivo storage &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="262"/>
+        <location filename="../downloadthread.cpp" line="281"/>
         <source>discarding existing data on drive</source>
         <translation>elimina i dati esistenti nell&apos;unità</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="282"/>
+        <location filename="../downloadthread.cpp" line="301"/>
         <source>zeroing out first and last MB of drive</source>
         <translation>azzera il primo e l&apos;ultimo MB dell&apos;unità</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="288"/>
+        <location filename="../downloadthread.cpp" line="307"/>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>Errore scrittura durante azzeramento MBR</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="779"/>
+        <location filename="../downloadthread.cpp" line="813"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>Errore lettura dallo storage.&lt;br&gt;La scheda SD potrebbe essere danneggiata.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="855"/>
         <source>Waiting for FAT partition to be mounted</source>
-        <translation>Attesa montaggio partizione FAT</translation>
+        <translation type="vanished">Attesa montaggio partizione FAT</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="941"/>
         <source>Error mounting FAT32 partition</source>
-        <translation>Errore montaggio partizione FAT32</translation>
+        <translation type="vanished">Errore montaggio partizione FAT32</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="963"/>
         <source>Operating system did not mount FAT32 partition</source>
-        <translation>Il sistema operativo non ha montato la partizione FAT32</translation>
+        <translation type="vanished">Il sistema operativo non ha montato la partizione FAT32</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="996"/>
         <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
-        <translation>Impossibile personalizzare. Il file &apos;%1&apos; non esiste.</translation>
+        <translation type="vanished">Impossibile personalizzare. Il file &apos;%1&apos; non esiste.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="1000"/>
+        <location filename="../downloadthread.cpp" line="885"/>
         <source>Customizing image</source>
         <translation>Personalizza immagine</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="1085"/>
         <source>Error creating firstrun.sh on FAT partition</source>
-        <translation>Errore creazione firstrun.sh nella partizione FAT</translation>
+        <translation type="vanished">Errore creazione firstrun.sh nella partizione FAT</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="1037"/>
         <source>Error writing to config.txt on FAT partition</source>
-        <translation>Errore scrittura in config.txt nella partizione FAT</translation>
+        <translation type="vanished">Errore scrittura in config.txt nella partizione FAT</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="1102"/>
         <source>Error creating user-data cloudinit file on FAT partition</source>
-        <translation>Errore nel creare il file cloudinit dei dati utente nella partizione FAT</translation>
+        <translation type="vanished">Errore nel creare il file cloudinit dei dati utente nella partizione FAT</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="1116"/>
         <source>Error creating network-config cloudinit file on FAT partition</source>
-        <translation>Errore durante la creazione del file network-config cloudinit nella partizione FAT</translation>
+        <translation type="vanished">Errore durante la creazione del file network-config cloudinit nella partizione FAT</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="1139"/>
         <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation>Errore scrittura in cmdline.txt nella partizione FAT</translation>
+        <translation type="vanished">Errore scrittura in cmdline.txt nella partizione FAT</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="432"/>
+        <location filename="../downloadthread.cpp" line="451"/>
         <source>Access denied error while writing file to disk.</source>
         <translation>Errore accesso negato durante la scrittura del file su disco.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="437"/>
+        <location filename="../downloadthread.cpp" line="456"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation>Sembra sia abilitato l&apos;accesso controllato alle cartelle. 
 Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos;elenco delle app consentite e riprova.</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="444"/>
+        <location filename="../downloadthread.cpp" line="463"/>
         <source>Error writing file to disk</source>
         <translation>Errore scrittura file su disco</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="463"/>
+        <location filename="../downloadthread.cpp" line="482"/>
         <source>Error downloading: %1</source>
         <translation>Errore download: %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="686"/>
+        <location filename="../downloadthread.cpp" line="705"/>
+        <location filename="../downloadthread.cpp" line="757"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>Errore scrittura nello storage (durante flushing)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="693"/>
+        <location filename="../downloadthread.cpp" line="712"/>
+        <location filename="../downloadthread.cpp" line="764"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>Errore scrittura nello storage (durante fsync)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="674"/>
+        <location filename="../downloadthread.cpp" line="693"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>Download corrotto.&lt;br&gt;L&apos;hash non corrisponde</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="114"/>
+        <location filename="../downloadthread.cpp" line="118"/>
+        <source>unmounting drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="138"/>
         <source>opening drive</source>
         <translation>apertura unità</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="300"/>
+        <location filename="../downloadthread.cpp" line="319"/>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>Errore di scrittura durante il tentativo di azzerare l&apos;ultima parte della scheda.&lt;br&gt;La scheda potrebbe riportare una capacità maggiore di quella reale (possibile contraffazione).</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="389"/>
+        <location filename="../downloadthread.cpp" line="408"/>
         <source>starting download</source>
         <translation>avvio download</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="719"/>
+        <location filename="../downloadthread.cpp" line="747"/>
         <source>Error writing first block (partition table)</source>
         <translation>Errore scrittura primo blocco (tabella partizione)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="798"/>
+        <location filename="../downloadthread.cpp" line="832"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Verifica scrittura fallita.&lt;br&gt;Il contenuto della SD è differente da quello che vi è stato scritto.</translation>
     </message>
@@ -257,27 +255,27 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
 <context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="257"/>
+        <location filename="../imagewriter.cpp" line="248"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>La capacità dello storage non è sufficiente.&lt;br&gt;Sono necessari almeno %1 GB.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="263"/>
+        <location filename="../imagewriter.cpp" line="254"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Il file sorgente non è un&apos;immagine disco valida.&lt;br&gt;La dimensione file %1 non è un multiplo di 512 byte.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="445"/>
+        <location filename="../imagewriter.cpp" line="442"/>
         <source>Downloading and writing image</source>
         <translation>Download e scrittura file immagine</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="578"/>
+        <location filename="../imagewriter.cpp" line="575"/>
         <source>Select image</source>
         <translation>Seleziona file immagine</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="979"/>
+        <location filename="../imagewriter.cpp" line="864"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
         <translation>Vuoi precompilare la password WiFi usando il portachiavi di sistema?</translation>
     </message>
@@ -321,22 +319,22 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
 <context>
     <name>OptionsPopup</name>
     <message>
-        <location filename="../OptionsPopup.qml" line="79"/>
+        <location filename="../OptionsPopup.qml" line="80"/>
         <source>Advanced options</source>
         <translation>Opzioni avanzate</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="96"/>
+        <location filename="../OptionsPopup.qml" line="97"/>
         <source>Image customization options</source>
         <translation>Opzioni personalizzazione immagine</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="104"/>
+        <location filename="../OptionsPopup.qml" line="105"/>
         <source>for this session only</source>
         <translation>solo per questa sessione</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="105"/>
+        <location filename="../OptionsPopup.qml" line="106"/>
         <source>to always use</source>
         <translation>da usare sempre</translation>
     </message>
@@ -345,17 +343,17 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation type="vanished">Disabilita overscan</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="119"/>
+        <location filename="../OptionsPopup.qml" line="120"/>
         <source>Set hostname:</source>
         <translation>Imposta nome host:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="138"/>
+        <location filename="../OptionsPopup.qml" line="140"/>
         <source>Enable SSH</source>
         <translation>Abilita SSH</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="160"/>
+        <location filename="../OptionsPopup.qml" line="162"/>
         <source>Use password authentication</source>
         <translation>Usa password autenticazione</translation>
     </message>
@@ -364,7 +362,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation type="vanished">Imposta password utente &apos;pi&apos;:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="170"/>
+        <location filename="../OptionsPopup.qml" line="172"/>
         <source>Allow public-key authentication only</source>
         <translation>Permetti solo autenticazione con chiave pubblica</translation>
     </message>
@@ -373,63 +371,63 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation type="vanished">Imposta authorized_key per &apos;pi&apos;:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="188"/>
+        <location filename="../OptionsPopup.qml" line="190"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
         <translation>Imposta authorized_keys per &apos;%1&apos;:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="261"/>
+        <location filename="../OptionsPopup.qml" line="264"/>
         <source>Configure wireless LAN</source>
         <translation>Configura WiFi</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="280"/>
+        <location filename="../OptionsPopup.qml" line="283"/>
         <source>SSID:</source>
         <translation>SSID:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="234"/>
-        <location filename="../OptionsPopup.qml" line="300"/>
+        <location filename="../OptionsPopup.qml" line="237"/>
+        <location filename="../OptionsPopup.qml" line="303"/>
         <source>Password:</source>
         <translation>Password:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="200"/>
+        <location filename="../OptionsPopup.qml" line="203"/>
         <source>Set username and password</source>
         <translation>Imposta nome utente e password</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="219"/>
+        <location filename="../OptionsPopup.qml" line="222"/>
         <source>Username:</source>
         <translation>Nome utente:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="295"/>
+        <location filename="../OptionsPopup.qml" line="298"/>
         <source>Hidden SSID</source>
         <translation>SSID nascosto</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="316"/>
+        <location filename="../OptionsPopup.qml" line="319"/>
         <source>Show password</source>
         <translation>Visualizza password</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="321"/>
+        <location filename="../OptionsPopup.qml" line="324"/>
         <source>Wireless LAN country:</source>
         <translation>Nazione WiFi:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="332"/>
+        <location filename="../OptionsPopup.qml" line="335"/>
         <source>Set locale settings</source>
         <translation>Imposta configurazioni locali</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="342"/>
+        <location filename="../OptionsPopup.qml" line="345"/>
         <source>Time zone:</source>
         <translation>Fuso orario:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="352"/>
+        <location filename="../OptionsPopup.qml" line="355"/>
         <source>Keyboard layout:</source>
         <translation>Layout tastiera:</translation>
     </message>
@@ -438,27 +436,27 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation type="vanished">Salta procedura prima impostazione</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="365"/>
+        <location filename="../OptionsPopup.qml" line="368"/>
         <source>Persistent settings</source>
         <translation>Impostazioni persistenti</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="373"/>
+        <location filename="../OptionsPopup.qml" line="376"/>
         <source>Play sound when finished</source>
         <translation>Riproduci suono quando completato</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="377"/>
+        <location filename="../OptionsPopup.qml" line="380"/>
         <source>Eject media when finished</source>
         <translation>Espelli media quando completato</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="381"/>
+        <location filename="../OptionsPopup.qml" line="384"/>
         <source>Enable telemetry</source>
         <translation>Abilita telemetria</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="394"/>
+        <location filename="../OptionsPopup.qml" line="397"/>
         <source>SAVE</source>
         <translation>SALVA</translation>
     </message>
@@ -474,27 +472,32 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
 <context>
     <name>UseSavedSettingsPopup</name>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="72"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Warning: advanced settings set</source>
         <translation>Attenzione: impostazioni avanzate impostate</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="86"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply the image customization settings saved earlier?</source>
         <translation>Vuoi applicare le impostazioni di personalizzazione dell&apos;immagine salvate in precedenza?</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="95"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="96"/>
+        <source>NO</source>
+        <translation>NO</translation>
+    </message>
+    <message>
+        <location filename="../UseSavedSettingsPopup.qml" line="106"/>
         <source>NO, CLEAR SETTINGS</source>
         <translation>NO, AZZERA IMPOSTAZIONI</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="105"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="116"/>
         <source>YES</source>
         <translation>SI&apos;</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="115"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="126"/>
         <source>EDIT SETTINGS</source>
         <translation>MODIFICA IMPOSTAZIONI</translation>
     </message>
@@ -530,7 +533,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <location filename="../main.qml" line="147"/>
-        <location filename="../main.qml" line="1038"/>
+        <location filename="../main.qml" line="1041"/>
         <source>CHOOSE STORAGE</source>
         <translation>SCEGLI SCHEDA SD</translation>
     </message>
@@ -555,7 +558,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <location filename="../main.qml" line="221"/>
-        <location filename="../main.qml" line="965"/>
+        <location filename="../main.qml" line="968"/>
         <source>Cancelling...</source>
         <translation>Annullamento...</translation>
     </message>
@@ -566,14 +569,14 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <location filename="../main.qml" line="232"/>
-        <location filename="../main.qml" line="988"/>
-        <location filename="../main.qml" line="1057"/>
+        <location filename="../main.qml" line="991"/>
+        <location filename="../main.qml" line="1060"/>
         <source>Finalizing...</source>
         <translation>Finalizzazione...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="505"/>
-        <location filename="../main.qml" line="1022"/>
+        <location filename="../main.qml" line="1025"/>
         <source>Erase</source>
         <translation>Cancella</translation>
     </message>
@@ -695,7 +698,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>È disponibile una nuova versione di Imager.&lt;br&gt;Vuoi visitare il sito web per scaricare la nuova versione?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="968"/>
+        <location filename="../main.qml" line="971"/>
         <source>Writing... %1%</source>
         <translation>Scrittura...%1</translation>
     </message>
@@ -705,32 +708,32 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Tutti i dati esistenti in &apos;%1&apos; verranno eliminati.&lt;br&gt;Sei sicuro di voler continuare?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="947"/>
+        <location filename="../main.qml" line="950"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Errore durante download elenco SO da internet</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="991"/>
+        <location filename="../main.qml" line="994"/>
         <source>Verifying... %1%</source>
         <translation>Verifica...%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="998"/>
+        <location filename="../main.qml" line="1001"/>
         <source>Preparing to write... (%1)</source>
         <translation>Preparazione scrittura... (%1)</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1014"/>
+        <location filename="../main.qml" line="1017"/>
         <source>Error</source>
         <translation>Errore</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1021"/>
+        <location filename="../main.qml" line="1024"/>
         <source>Write Successful</source>
         <translation>Scrittura completata senza errori</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1023"/>
+        <location filename="../main.qml" line="1026"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>Azzeramento di &lt;b&gt;%1&lt;/b&gt; completato&lt;br&gt;&lt;br&gt;Ora puoi rimuovere la scheda SD dal lettore</translation>
     </message>
@@ -739,22 +742,22 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation type="vanished">Scrittura di &lt;b&gt;%1&lt;/b&gt; in &lt;b&gt;%2&lt;/b&gt;completata</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1030"/>
+        <location filename="../main.qml" line="1033"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>Scrittura di &lt;b&gt;%1&lt;/b&gt; in &lt;b&gt;%2&lt;/b&gt;completata&lt;br&gt;&lt;br&gt;Ora puoi rimuovere la scheda SD dal lettore</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1098"/>
+        <location filename="../main.qml" line="1101"/>
         <source>Error parsing os_list.json</source>
         <translation>Errore durante analisi file os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1271"/>
+        <location filename="../main.qml" line="1274"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Prima collega una chiavetta USB contenente il file immagine.&lt;br&gt;Il file immagine deve essere presente nella cartella principale della chiavetta USB.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1287"/>
+        <location filename="../main.qml" line="1290"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>La scheda SD è protetta da scrittura.&lt;br&gt;Sposta verso l&apos;alto l&apos;interruttore LOCK sul lato sinistro della scheda SD e riprova.</translation>
     </message>

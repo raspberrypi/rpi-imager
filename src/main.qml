@@ -922,6 +922,9 @@ ApplicationWindow {
             confirmwritepopup.askForConfirmation()
         }
         onNo: {
+            confirmwritepopup.askForConfirmation()
+        }
+        onNoClearSettings: {
             imageWriter.clearSavedCustomizationSettings()
             confirmwritepopup.askForConfirmation()
         }

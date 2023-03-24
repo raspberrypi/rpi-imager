@@ -20,6 +20,7 @@ Popup {
 
     signal yes()
     signal no()
+    signal noClearSettings()
     signal editSettings()
 
     // background of title
@@ -92,10 +93,20 @@ Popup {
             spacing: 20
 
             ImButton {
-                text: qsTr("NO, CLEAR SETTINGS")
+                text: qsTr("NO")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.no()
+                }
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+                Material.background: "#c51a4a"
+            }
+
+            ImButton {
+                text: qsTr("NO, CLEAR SETTINGS")
+                onClicked: {
+                    msgpopup.close()
+                    msgpopup.noClearSettings()
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
