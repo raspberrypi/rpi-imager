@@ -12,10 +12,7 @@ set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}.4.1")
 set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},4,1")
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
 add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h drivelistmodelpollthread.h driveformatthread.h powersaveblocker.h cli.h
@@ -109,7 +106,7 @@ endif()
 if (${QT}Widgets_FOUND)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::Widgets)
 endif()
-if(${QT}DBus_FOUND)
+if(${QT}DBus_FOUND AND UNIX AND NOT APPLE)
     set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::DBus)
     message("udisks2 support enabled")
@@ -133,6 +130,9 @@ if (WIN32)
 else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${DEPENDENCIES})
 endif()
+
+set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOMOC ON)
+set_property(TARGET ${PROJECT_NAME} PROPERTY AUTORCC ON)
 
 # Enable link time optimization if available
 include(CheckIPOSupported)
@@ -165,9 +165,9 @@ if (WIN32)
     find_package(OpenSSL REQUIRED)
 
     # Bundled zlib
-    add_subdirectory(dependencies/zlib-1.2.11)
+    add_subdirectory(dependencies/zlib-1.2.13)
     set(ZLIB_LIBRARY zlibstatic)
-    set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib-1.2.11)
+    set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib-1.2.13)
 
     # Bundled libcurl
     set(CMAKE_CURL_INCLUDES)
@@ -186,8 +186,8 @@ if (WIN32)
     # Bundled zstd
     set(ZSTD_BUILD_PROGRAMS OFF)
     set(ZSTD_BUILD_SHARED OFF)
-    add_subdirectory(dependencies/zstd-1.5.0/build/cmake)
-    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.0/lib)
+    add_subdirectory(dependencies/zstd-1.5.4/build/cmake)
+    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.4/lib)
     set(ZSTD_LIBRARY libzstd_static)
 
     # Bundled libarchive
@@ -195,9 +195,11 @@ if (WIN32)
     set(ENABLE_TAR OFF CACHE BOOL "")
     set(ENABLE_CPIO OFF CACHE BOOL "")
     set(ENABLE_CAT OFF CACHE BOOL "")
-    add_subdirectory(dependencies/libarchive-3.5.2)
+    add_subdirectory(dependencies/libarchive-3.6.2)
+    # Disable shared libarchive (we only want static)
+    set_target_properties(archive PROPERTIES EXCLUDE_FROM_ALL 1)
     set(LibArchive_LIBRARIES archive_static)
-    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.5.2/libarchive)
+    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.6.2/libarchive)
 
     # Bundled fat32format
     add_subdirectory(dependencies/fat32format)
@@ -209,7 +211,9 @@ if (WIN32)
         COMMAND ${CMAKE_STRIP} "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
 
     # Code signing
-    find_program(SIGNTOOL "signtool.exe" PATHS "c:/Program Files (x86)/Microsoft SDKs/ClickOnce/SignTool")
+    find_program(SIGNTOOL "signtool.exe" PATHS
+        "c:/Program Files (x86)/Microsoft SDKs/ClickOnce/SignTool"
+        "c:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64")
     if (NOT SIGNTOOL)
         message(FATAL_ERROR "Unable to locate signtool.exe used for code signing")
     endif()
@@ -275,8 +279,8 @@ elseif(APPLE)
     # Bundled zstd
     set(ZSTD_BUILD_PROGRAMS OFF)
     set(ZSTD_BUILD_SHARED OFF)
-    add_subdirectory(dependencies/zstd-1.5.0/build/cmake)
-    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.0/lib)
+    add_subdirectory(dependencies/zstd-1.5.4/build/cmake)
+    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.4/lib)
     set(ZSTD_LIBRARY libzstd_static)
 
     # Bundled libarchive
@@ -284,9 +288,11 @@ elseif(APPLE)
     set(ENABLE_TAR OFF CACHE BOOL "")
     set(ENABLE_CPIO OFF CACHE BOOL "")
     set(ENABLE_CAT OFF CACHE BOOL "")
-    add_subdirectory(dependencies/libarchive-3.5.2)
+    add_subdirectory(dependencies/libarchive-3.6.2)
+    # Disable shared libarchive (we only want static)
+    set_target_properties(archive PROPERTIES EXCLUDE_FROM_ALL 1)
     set(LibArchive_LIBRARIES archive_static)
-    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.5.2/libarchive)
+    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.6.2/libarchive)
 
     find_library(Cocoa Cocoa)
     find_library(CoreFoundation CoreFoundation)
