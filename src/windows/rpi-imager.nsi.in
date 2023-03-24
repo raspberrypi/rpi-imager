@@ -27,12 +27,13 @@ VIAddVersionKey "CompanyName"  "${COMP_NAME}"
 VIAddVersionKey "LegalCopyright"  "${COPYRIGHT}"
 VIAddVersionKey "FileDescription"  "${DESCRIPTION}"
 VIAddVersionKey "FileVersion"  "${VERSION}"
+VIAddVersionKey "ProductVersion" "${VERSION}"
 
 ######################################################################
 
 SetCompressor LZMA
 Name "${APP_NAME}"
-Caption "${APP_NAME}"
+Caption "${APP_NAME} ${VERSION}"
 OutFile "${INSTALLER_NAME}"
 BrandingText "${APP_NAME}"
 XPStyle on
