@@ -164,7 +164,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../downloadthread.cpp" line="118"/>
         <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
+        <translation>smontaggio unità</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="138"/>
