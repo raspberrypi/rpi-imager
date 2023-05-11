@@ -377,7 +377,10 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
              /* Using memcpy() because it has no problems accessing unaligned struct members */
             memcpy(lnamePartStr, l->LDIR_Name1, 10);
             memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
+#pragma GCC diagnostics push
+#pragma GCC diagnostic ignored "-Wstringop-overflow="           
             memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
+#pragma GCC diagnostics pop            
             filenameRead = lnamePart + filenameRead;
         }
         else
