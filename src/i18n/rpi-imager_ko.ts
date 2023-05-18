@@ -163,7 +163,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="118"/>
         <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
+        <translation>드라이브 마운트 해제</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="138"/>
