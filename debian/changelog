@@ -6,7 +6,7 @@ rpi-imager (1.7.4.1) unstable; urgency=medium
     without clearing settings.
   * Eject storage properly on Linux.
 
- -- Floris Bos <bos@je-eigen-domein.nl>  Fri, 24 Mar 2023 14:16:03 +0100
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 18 May 2023 15:05:28 +0200 
 
 rpi-imager (1.7.4) unstable; urgency=medium
 
