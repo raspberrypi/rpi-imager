@@ -63,13 +63,13 @@ InstallDir "$PROGRAMFILES\Raspberry Pi Imager"
   ; That will have written an uninstaller binary for us.  Now we sign it with your
   ; favorite code signing tool.
  
-  !system '"c:\Program Files (x86)\Microsoft SDKs\ClickOnce\SignTool\signtool.exe" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "$%TEMP%\uninstall.exe"' = 0
+  !system '"@SIGNTOOL@" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "$%TEMP%\uninstall.exe"' = 0
  
   ; Good.  Now we can carry on writing the real installer.
  
   OutFile "${INSTALLER_NAME}"
   SetCompressor /SOLID lzma
-  !finalize '"c:\Program Files (x86)\Microsoft SDKs\ClickOnce\SignTool\signtool.exe" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "%1"'
+  !finalize '"@SIGNTOOL@" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "%1"'
 !endif
 
 ###

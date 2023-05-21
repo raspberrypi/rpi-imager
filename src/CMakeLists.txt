@@ -228,6 +228,7 @@ if (WIN32)
     if (NOT SIGNTOOL)
         message(FATAL_ERROR "Unable to locate signtool.exe used for code signing")
     endif()
+    add_definitions(-DSIGNTOOL="${SIGNTOOL}")
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
