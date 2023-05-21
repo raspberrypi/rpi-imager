@@ -8,11 +8,28 @@
 #include <winioctl.h>
 #include <wlanapi.h>
 #include <Windot11.h>
+#include <delayimp.h>
 #include <QDebug>
 #include <QRegularExpression>
 #ifndef WLAN_PROFILE_GET_PLAINTEXT_KEY
 #define WLAN_PROFILE_GET_PLAINTEXT_KEY 4
 #endif
+
+static HINSTANCE hWlanApi = NULL;
+
+/* Called by dlltool generated delaylib code that is used for lazy loading
+   wlanapi.dll */
+FARPROC WINAPI dllDelayNotifyHook(unsigned dliNotify, PDelayLoadInfo)
+{
+    if (dliNotify == dliNotePreLoadLibrary)
+    {
+        return (FARPROC) hWlanApi;
+    }
+
+    return NULL;
+}
+
+PfnDliHook __pfnDliNotifyHook2 = dllDelayNotifyHook;
 
 inline QString unescapeXml(QString str)
 {
@@ -35,6 +52,14 @@ inline QString unescapeXml(QString str)
 
 WinWlanCredentials::WinWlanCredentials()
 {
+    if (!hWlanApi)
+        hWlanApi = LoadLibraryExA("wlanapi.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!hWlanApi)
+    {
+        qDebug() << "wlanapi.dll not available";
+        return;
+    }
+
     /* Get both SSID and PSK in one go, and store it in variables */
     HANDLE h;
     DWORD supportedVersion = 0;
