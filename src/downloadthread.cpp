@@ -153,7 +153,7 @@ bool DownloadThread::_openAndPrepareDevice()
             qDebug() << "Removing partition table from Windows drive #" << _nr << "(" << _filename << ")";
 
             QProcess proc;
-            proc.start("diskpart");
+            proc.start("diskpart", QStringList());
             proc.waitForStarted();
             proc.write("select disk "+_nr+"\r\n"
                             "clean\r\n"

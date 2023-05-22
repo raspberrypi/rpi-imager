@@ -6,6 +6,10 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+
 #include <QString>
 #include <QThread>
 #include <QFile>

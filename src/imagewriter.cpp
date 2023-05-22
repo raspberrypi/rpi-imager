@@ -3,9 +3,9 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#include "downloadextractthread.h"
 #include "imagewriter.h"
 #include "drivelistitem.h"
-#include "downloadextractthread.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/sha256crypt/sha256crypt.h"
 #include "driveformatthread.h"
