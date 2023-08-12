@@ -161,7 +161,7 @@ ApplicationWindow {
                         }
                         onDrop: {
                             if (mimeData.hasUrls())
-                                imageWriter.setSrcFileName(mimeData.urls()[0].toLocalFile())
+                                onFileSelected(mimeData.urls()[0].toLocalFile())
 
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible
