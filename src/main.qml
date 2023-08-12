@@ -153,6 +153,17 @@ ApplicationWindow {
                             dstpopup.open()
                             dstlist.forceActiveFocus()
                         }
+                        acceptDrops: true
+                        onDragEnter: {
+                            if (mimeData.hasUrls())
+                                drag.acceptProposedAction()
+
+                        }
+                        onDrop: {
+                            if (mimeData.hasUrls())
+                                imageWriter.setSrcFileName(mimeData.urls()[0].toLocalFile())
+
+                        }
                         Accessible.ignored: ospopup.visible || dstpopup.visible
                         Accessible.description: qsTr("Select this button to change the destination storage device")
                     }
