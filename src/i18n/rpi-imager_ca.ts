@@ -83,33 +83,9 @@
         <translation>S&apos;ha produït un error en llegir l&apos;emmagatzematge.&lt;br&gt;És possible que la targeta SD estigui malmesa.</translation>
     </message>
     <message>
-        <source>Waiting for FAT partition to be mounted</source>
-        <translation type="vanished">S&apos;està esperant que la partició FAT s&apos;hagi muntat</translation>
-    </message>
-    <message>
-        <source>Error mounting FAT32 partition</source>
-        <translation type="vanished">S&apos;ha produït un error en muntar la partició FAT32</translation>
-    </message>
-    <message>
-        <source>Operating system did not mount FAT32 partition</source>
-        <translation type="vanished">El sistema operatiu no ha muntat la partició FAT32</translation>
-    </message>
-    <message>
         <location filename="../downloadthread.cpp" line="885"/>
         <source>Customizing image</source>
         <translation>S&apos;està personalitzant la imatge</translation>
-    </message>
-    <message>
-        <source>Error creating firstrun.sh on FAT partition</source>
-        <translation type="vanished">S&apos;ha produït un error en crear el fitxer «firstrun.sh» a la partició FAT</translation>
-    </message>
-    <message>
-        <source>Error writing to config.txt on FAT partition</source>
-        <translation type="vanished">S&apos;ha produït un error en escriure al fitxer «config.txt» a la partició FAT</translation>
-    </message>
-    <message>
-        <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation type="vanished">S&apos;ha produït un error en escriure al fitxer «cmdline.txt» a la partició FAT</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="451"/>
@@ -151,7 +127,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="118"/>
         <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està desmuntant el dispositiu</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="138"/>
@@ -221,7 +197,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="199"/>
         <source>Partitioning did not create expected FAT partition %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No s&apos;ha pogut crear la partició FAT %1 esperada</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="208"/>
@@ -264,7 +240,7 @@
     <message>
         <location filename="../imagewriter.cpp" line="864"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation type="unfinished"></translation>
+        <translation>Voleu emplenar la contrasenya del wifi des del clauer del sistema?</translation>
     </message>
 </context>
 <context>
@@ -300,7 +276,7 @@
     <message>
         <location filename="../MsgPopup.qml" line="130"/>
         <source>QUIT</source>
-        <translation type="unfinished"></translation>
+        <translation>SURT</translation>
     </message>
 </context>
 <context>
@@ -326,10 +302,6 @@
         <translation>per utilitzar sempre</translation>
     </message>
     <message>
-        <source>Disable overscan</source>
-        <translation type="vanished">Desactiva el sobreescaneig (overscan)</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="120"/>
         <source>Set hostname:</source>
         <translation>Defineix un nom de la màquina (hostname):</translation>
@@ -345,22 +317,14 @@
         <translation>Utilitza l&apos;autenticació de contrasenya</translation>
     </message>
     <message>
-        <source>Set password for &apos;pi&apos; user:</source>
-        <translation type="vanished">Establiu la contrasenya per a l&apos;usuari «pi»:</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="172"/>
         <source>Allow public-key authentication only</source>
         <translation>Permet només l&apos;autenticació de claus públiques</translation>
     </message>
     <message>
-        <source>Set authorized_keys for &apos;pi&apos;:</source>
-        <translation type="vanished">Establiu «authorized_keys» per a l&apos;usuari «pi»:</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="190"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished"></translation>
+        <translation>Establiu «authorized_keys» per a l&apos;usuari «%1»:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="264"/>
@@ -376,22 +340,22 @@
         <location filename="../OptionsPopup.qml" line="237"/>
         <location filename="../OptionsPopup.qml" line="303"/>
         <source>Password:</source>
-        <translation>Contrasenya</translation>
+        <translation>Contrasenya:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="203"/>
         <source>Set username and password</source>
-        <translation type="unfinished"></translation>
+        <translation>Defineix el nom d&apos;usuari i contrasenya</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="222"/>
         <source>Username:</source>
-        <translation type="unfinished"></translation>
+        <translation>Nom d&apos;usuari:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="298"/>
         <source>Hidden SSID</source>
-        <translation type="unfinished"></translation>
+        <translation>SSID oculta</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="319"/>
@@ -401,7 +365,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="324"/>
         <source>Wireless LAN country:</source>
-        <translation>País de la wifi:</translation>
+        <translation>País del wifi:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="335"/>
@@ -416,11 +380,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="355"/>
         <source>Keyboard layout:</source>
-        <translation>Disposició del teclat</translation>
-    </message>
-    <message>
-        <source>Skip first-run wizard</source>
-        <translation type="vanished">Omet l&apos;assistent de la primera arrencada</translation>
+        <translation>Disposició del teclat:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="368"/>
@@ -560,27 +520,27 @@
     <message>
         <location filename="../main.qml" line="247"/>
         <source>Select this button to access advanced settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleccioneu aquest botó per accedir a la configuració avançada</translation>
     </message>
     <message>
         <location filename="../main.qml" line="261"/>
         <source>Using custom repository: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està usant el repositori personalitzat: %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="270"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
-        <translation type="unfinished"></translation>
+        <translation>Navegació per teclat: &lt;tab&gt; navega al botó següent &lt;espai&gt; prem el botó o selecciona l&apos;element &lt;fletxa amunt o avall&gt; desplaçament per les llistes</translation>
     </message>
     <message>
         <location filename="../main.qml" line="290"/>
         <source>Language: </source>
-        <translation type="unfinished"></translation>
+        <translation>Idioma: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="313"/>
         <source>Keyboard: </source>
-        <translation type="unfinished"></translation>
+        <translation>Teclat: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="505"/>
@@ -636,7 +596,7 @@
     <message>
         <location filename="../main.qml" line="641"/>
         <source>Online - %1 GB download</source>
-        <translation>Baixada en línia de: %1 GB</translation>
+        <translation>Disponible en línia (%1 GB)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="766"/>
@@ -719,10 +679,6 @@
         <location filename="../main.qml" line="1026"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>S&apos;ha esborrat &lt;b&gt;%1&lt;/b&gt;&lt;br&gt;&lt;br&gt;Ja podeu retirar la targeta SD del lector</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
-        <translation type="vanished">S&apos;ha escrit el «&lt;b&gt;%1&lt;/b&gt;» a &lt;b&gt;%2&lt;/b&gt;</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1033"/>
