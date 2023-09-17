@@ -12,7 +12,7 @@
         <location filename="../downloadextractthread.cpp" line="197"/>
         <location filename="../downloadextractthread.cpp" line="386"/>
         <source>Error extracting archive: %1</source>
-        <translation>Erreur lors de l&apos;extraction de l&apos;archive : %1</translation>
+        <translation>Erreur lors de l&apos;extraction de l&apos;archive&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../downloadextractthread.cpp" line="262"/>
@@ -35,7 +35,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="166"/>
         <source>Error running diskpart: %1</source>
-        <translation>Erreur lors de l&apos;exécution de diskpart : %1</translation>
+        <translation>Erreur lors de l&apos;exécution de diskpart&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="187"/>
@@ -55,7 +55,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="217"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez vérifier dans les réglages de confidentialité (sous &apos;fichiers et dossiers&apos;) si &apos;Raspberry Pi Imager&apos; est autorisé à accéder aux volumes amovibles (ou bien donnez-lui accès complet au disque).</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="239"/>
@@ -131,17 +131,17 @@
     <message>
         <location filename="../downloadthread.cpp" line="456"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;accès contrôlé aux dossiers semble être activé. Veuillez ajouter rpi-imager.exe et fat32format.exe à la liste des applications autorisées et réessayez.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="463"/>
         <source>Error writing file to disk</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur d&apos;écriture de fichier sur le disque</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="482"/>
         <source>Error downloading: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur de téléchargement&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="705"/>
@@ -163,7 +163,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="118"/>
         <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
+        <translation>démontage du disque</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="138"/>
@@ -198,7 +198,7 @@
         <location filename="../driveformatthread.cpp" line="124"/>
         <location filename="../driveformatthread.cpp" line="185"/>
         <source>Error partitioning: %1</source>
-        <translation>Erreur de partitionnement : %1</translation>
+        <translation>Erreur de partitionnement&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="84"/>
@@ -208,7 +208,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="94"/>
         <source>Error running fat32format: %1</source>
-        <translation>Erreur lors de l&apos;exécution de fat32format : %1</translation>
+        <translation>Erreur lors de l&apos;exécution de fat32format&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="104"/>
@@ -218,7 +218,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="109"/>
         <source>Invalid device: %1</source>
-        <translation>Périphérique non valide : %1</translation>
+        <translation>Périphérique non valide&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="146"/>
@@ -243,7 +243,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="218"/>
         <source>Error running mkfs.fat: %1</source>
-        <translation>Erreur lors de l&apos;exécution de mkfs.fat : %1</translation>
+        <translation>Erreur lors de l&apos;exécution de mkfs.fat&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="225"/>
@@ -276,7 +276,7 @@
     <message>
         <location filename="../imagewriter.cpp" line="864"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation>Voulez-vous pré-remplir le mot de passe Wi-Fi à partir du trousseau du système ?</translation>
+        <translation>Voulez-vous pré-remplir le mot de passe Wi-Fi à partir du trousseau du système&nbsp;?</translation>
     </message>
 </context>
 <context>
@@ -325,7 +325,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="97"/>
         <source>Image customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>Options de personnalisation de l&apos;image</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="105"/>
@@ -360,7 +360,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="190"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>Définir authorized_keys pour &apos;%1&apos; :</translation>
+        <translation>Définir authorized_keys pour &apos;%1&apos;&nbsp;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="264"/>
@@ -370,13 +370,13 @@
     <message>
         <location filename="../OptionsPopup.qml" line="283"/>
         <source>SSID:</source>
-        <translation>SSID :</translation>
+        <translation>SSID&nbsp;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="237"/>
         <location filename="../OptionsPopup.qml" line="303"/>
         <source>Password:</source>
-        <translation>Mot de passe :</translation>
+        <translation>Mot de passe&nbsp;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="203"/>
@@ -386,7 +386,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="222"/>
         <source>Username:</source>
-        <translation>Nom d&apos;utilisateur :</translation>
+        <translation>Nom d&apos;utilisateur&nbsp;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="298"/>
@@ -401,7 +401,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="324"/>
         <source>Wireless LAN country:</source>
-        <translation>Pays Wi-Fi :</translation>
+        <translation>Pays Wi-Fi&nbsp;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="335"/>
@@ -411,12 +411,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="345"/>
         <source>Time zone:</source>
-        <translation>Fuseau horaire :</translation>
+        <translation>Fuseau horaire&nbsp;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="355"/>
         <source>Keyboard layout:</source>
-        <translation>Type de clavier :</translation>
+        <translation>Type de clavier&nbsp;:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="368"/>
@@ -457,12 +457,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Warning: advanced settings set</source>
-        <translation type="unfinished"></translation>
+        <translation>Attention&nbsp;: réglages avancés définis</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply the image customization settings saved earlier?</source>
-        <translation type="unfinished"></translation>
+        <translation>Voulez-vous appliquer les réglages de personnalisation de l&apos;image enregistrés précédemment&nbsp;?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="96"/>
@@ -472,7 +472,7 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="106"/>
         <source>NO, CLEAR SETTINGS</source>
-        <translation type="unfinished"></translation>
+        <translation>NON, EFFACER LES RÉGLAGES</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="116"/>
@@ -482,7 +482,7 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="126"/>
         <source>EDIT SETTINGS</source>
-        <translation type="unfinished">MODIFIER RÉGLAGES</translation>
+        <translation>MODIFIER RÉGLAGES</translation>
     </message>
 </context>
 <context>
@@ -596,22 +596,22 @@
     <message>
         <location filename="../main.qml" line="261"/>
         <source>Using custom repository: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Utilisation d&apos;un dépôt personnalisé&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="270"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
-        <translation type="unfinished"></translation>
+        <translation>Navigation au clavier&nbsp;: &lt;tab&gt; passer au bouton suivant &lt;espace&gt; presser un bouton/sélectionner un élément &lt;flèche haut/bas&gt; monter/descendre dans les listes</translation>
     </message>
     <message>
         <location filename="../main.qml" line="290"/>
         <source>Language: </source>
-        <translation>Langue : </translation>
+        <translation>Langue&nbsp;: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="313"/>
         <source>Keyboard: </source>
-        <translation>Clavier : </translation>
+        <translation>Clavier&nbsp;: </translation>
     </message>
     <message>
         <location filename="../main.qml" line="462"/>
@@ -621,7 +621,7 @@
     <message>
         <location filename="../main.qml" line="628"/>
         <source>Released: %1</source>
-        <translation>Sorti le : %1</translation>
+        <translation>Publié le&nbsp;: %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="638"/>
@@ -643,7 +643,7 @@
         <location filename="../main.qml" line="818"/>
         <location filename="../main.qml" line="824"/>
         <source>Mounted as %1</source>
-        <translation>Mounté à %1</translation>
+        <translation>Monté sur %1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="820"/>
@@ -653,32 +653,32 @@
     <message>
         <location filename="../main.qml" line="862"/>
         <source>Are you sure you want to quit?</source>
-        <translation>Voulez-vous vraiment quitter ?</translation>
+        <translation>Voulez-vous vraiment quitter&nbsp;?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="863"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>Raspberry Pi Imager est encore occupé.&lt;br&gt;Voulez-vous vraiment quitter ?</translation>
+        <translation>Raspberry Pi Imager est encore occupé.&lt;br&gt;Voulez-vous vraiment quitter&nbsp;?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="882"/>
         <source>Preparing to write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Préparation de l&apos;écriture...</translation>
     </message>
     <message>
         <location filename="../main.qml" line="906"/>
         <source>Update available</source>
-        <translation type="unfinished"></translation>
+        <translation>Mise à jour disponible</translation>
     </message>
     <message>
         <location filename="../main.qml" line="907"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Une version plus récente d&apos;Imager est disponible.&lt;br&gt;Voulez-vous accéder au site web pour la télécharger&nbsp;?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1001"/>
         <source>Preparing to write... (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Préparation de l&apos;écriture... (%1)</translation>
     </message>
     <message>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
@@ -687,7 +687,7 @@
     <message>
         <location filename="../main.qml" line="1290"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>La carte SD est protégée en écriture.&lt;br&gt;Poussez vers le haut le commutateur de verrouillage sur le côté gauche de la carte et essayez à nouveau.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="874"/>
@@ -702,7 +702,7 @@
     <message>
         <location filename="../main.qml" line="895"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>Toutes les données sur le périphérique de stockage &apos;%1&apos; vont être supprimées.&lt;br&gt;Voulez-vous vraiment continuer ?</translation>
+        <translation>Toutes les données sur le périphérique de stockage &apos;%1&apos; vont être supprimées.&lt;br&gt;Voulez-vous vraiment continuer&nbsp;?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="950"/>
