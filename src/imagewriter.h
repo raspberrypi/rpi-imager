@@ -98,6 +98,9 @@ public:
 
     /* Functions to collect information from computer running imager to make image customization easier */
     Q_INVOKABLE QString getDefaultPubKey();
+    Q_INVOKABLE bool hasPubKey();
+    Q_INVOKABLE bool hasSshKeyGen();
+    Q_INVOKABLE void generatePubKey();
     Q_INVOKABLE QString getTimezone();
     Q_INVOKABLE QStringList getTimezoneList();
     Q_INVOKABLE QStringList getCountryList();
@@ -178,6 +181,8 @@ protected:
 #endif
 
     void _parseCompressedFile();
+    QString _pubKeyFileName();
+    QString _privKeyFileName();
 };
 
 #endif // IMAGEWRITER_H

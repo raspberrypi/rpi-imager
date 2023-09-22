@@ -790,10 +790,22 @@ QByteArray ImageWriter::getUsbSourceOSlist()
 #endif
 }
 
+QString ImageWriter::_pubKeyFileName()
+{
+    return QDir::homePath()+"/.ssh/id_rsa.pub";
+}
+
+QString ImageWriter::_privKeyFileName()
+{
+    QString fn = _pubKeyFileName();
+    fn.chop(4);
+    return fn;
+}
+
 QString ImageWriter::getDefaultPubKey()
 {
     QByteArray pubkey;
-    QFile pubfile(QDir::homePath()+"/.ssh/id_rsa.pub");
+    QFile pubfile(_pubKeyFileName());
 
     if (pubfile.exists() && pubfile.open(QFile::ReadOnly))
     {
@@ -802,6 +814,26 @@ QString ImageWriter::getDefaultPubKey()
     }
 
     return pubkey;
+}
+
+bool ImageWriter::hasPubKey()
+{
+    return QFile::exists(_pubKeyFileName());
+}
+
+bool ImageWriter::hasSshKeyGen()
+{
+    return true;
+}
+
+void ImageWriter::generatePubKey()
+{
+    if (!hasPubKey() && !QFile::exists(_privKeyFileName()))
+    {
+        QStringList args;
+        args << "-t" << "rsa" << "-f" << _privKeyFileName() << "-N" << "";
+        QProcess::execute("ssh-keygen", args);
+    }
 }
 
 QString ImageWriter::getTimezone()
