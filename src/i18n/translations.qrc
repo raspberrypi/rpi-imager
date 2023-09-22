@@ -13,5 +13,6 @@
         <file>rpi-imager_zh.qm</file>
         <file>rpi-imager_ca.qm</file>
         <file>rpi-imager_ja.qm</file>
+        <file>rpi-imager_uk.qm</file>
     </qresource>
 </RCC>
