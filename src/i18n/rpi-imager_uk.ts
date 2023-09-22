@@ -147,7 +147,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="747"/>
         <source>Error writing first block (partition table)</source>
-        <translatio>Помилка під час запису першого блоку (таблиця розділів)</translation>
+        <translation>Помилка під час запису першого блоку (таблиця розділів)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="832"/>
