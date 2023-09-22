@@ -372,15 +372,12 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
         {
             struct longfn_entry *l = (struct longfn_entry *) entry;
             /* A part can have 13 UTF-16 characters */
-            QString lnamePart(13, QChar::Null);
-            char *lnamePartStr = (char *) lnamePart.data();
+            char lnamePartStr[26] = {0};
              /* Using memcpy() because it has no problems accessing unaligned struct members */
             memcpy(lnamePartStr, l->LDIR_Name1, 10);
             memcpy(lnamePartStr+10, l->LDIR_Name2, 12);
-#pragma GCC diagnostics push
-#pragma GCC diagnostic ignored "-Wstringop-overflow="           
             memcpy(lnamePartStr+22, l->LDIR_Name3, 4);
-#pragma GCC diagnostics pop            
+            QString lnamePart( (QChar *) lnamePartStr, 13);
             filenameRead = lnamePart + filenameRead;
         }
         else
