@@ -342,6 +342,20 @@ ApplicationWindow {
                     }
                 }
             }
+
+            DropArea {
+                anchors.fill: parent
+                onEntered: {
+                    if (drag.active && mimeData.hasUrls()) {
+                        drag.acceptProposedAction()
+                    }
+                }
+                onDropped: {
+                    if (drop.urls && drop.urls.length > 0) {
+                        onFileSelected(drop.urls[0].toString())
+                    }
+                }
+            }
         }
     }
 
