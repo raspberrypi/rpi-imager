@@ -2,6 +2,7 @@
     <qresource prefix="/i18n">
         <file>rpi-imager_de.qm</file>
         <file>rpi-imager_en.qm</file>
+        <file>rpi-imager_es.qm</file>
         <file>rpi-imager_fr.qm</file>
         <file>rpi-imager_it.qm</file>
         <file>rpi-imager_ko.qm</file>
