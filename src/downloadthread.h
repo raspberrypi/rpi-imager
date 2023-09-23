@@ -141,6 +141,7 @@ protected:
     virtual void run();
     virtual void _onDownloadSuccess();
     virtual void _onDownloadError(const QString &msg);
+    virtual void _onWriteError();
 
     void _hashData(const char *buf, size_t len);
     void _writeComplete();

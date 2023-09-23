@@ -444,23 +444,7 @@ void DownloadThread::run()
             break;
         case CURLE_WRITE_ERROR:
             deleteDownloadedFile();
-
-#ifdef Q_OS_WIN
-            if (_file.errorCode() == ERROR_ACCESS_DENIED)
-            {
-                QString msg = tr("Access denied error while writing file to disk.");
-                QSettings registry("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
-                                   QSettings::Registry64Format);
-                if (registry.value("EnableControlledFolderAccess").toInt() == 1)
-                {
-                    msg += "<br>"+tr("Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.");
-                }
-                _onDownloadError(msg);
-            }
-            else
-#endif
-            if (!_cancelled)
-                _onDownloadError(tr("Error writing file to disk"));
+            _onWriteError();
             break;
         case CURLE_ABORTED_BY_CALLBACK:
             deleteDownloadedFile();
@@ -669,6 +653,26 @@ void DownloadThread::_onDownloadError(const QString &msg)
 {
     _cancelled = true;
     emit error(msg);
+}
+
+void DownloadThread::_onWriteError()
+{
+#ifdef Q_OS_WIN
+    if (_file.errorCode() == ERROR_ACCESS_DENIED)
+    {
+        QString msg = tr("Access denied error while writing file to disk.");
+        QSettings registry("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
+                           QSettings::Registry64Format);
+        if (registry.value("EnableControlledFolderAccess").toInt() == 1)
+        {
+            msg += "<br>"+tr("Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.");
+        }
+        _onDownloadError(msg);
+    }
+    else
+#endif
+    if (!_cancelled)
+        _onDownloadError(tr("Error writing file to disk"));
 }
 
 void DownloadThread::_closeFiles()
