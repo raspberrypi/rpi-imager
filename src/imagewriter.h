@@ -183,6 +183,8 @@ protected:
     void _parseCompressedFile();
     QString _pubKeyFileName();
     QString _privKeyFileName();
+    QString _sshKeyDir();
+    QString _sshKeyGen();
 };
 
 #endif // IMAGEWRITER_H

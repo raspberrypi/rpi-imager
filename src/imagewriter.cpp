@@ -45,6 +45,7 @@
 #include <windows.h>
 #include <QWinTaskbarButton>
 #include <QWinTaskbarProgress>
+#include <QProcessEnvironment>
 #endif
 
 #ifdef QT_NO_WIDGETS
@@ -790,16 +791,19 @@ QByteArray ImageWriter::getUsbSourceOSlist()
 #endif
 }
 
+QString ImageWriter::_sshKeyDir()
+{
+    return QDir::homePath()+"/.ssh";
+}
+
 QString ImageWriter::_pubKeyFileName()
 {
-    return QDir::homePath()+"/.ssh/id_rsa.pub";
+    return _sshKeyDir()+"/id_rsa.pub";
 }
 
 QString ImageWriter::_privKeyFileName()
 {
-    QString fn = _pubKeyFileName();
-    fn.chop(4);
-    return fn;
+    return _sshKeyDir()+"/id_rsa";
 }
 
 QString ImageWriter::getDefaultPubKey()
@@ -821,18 +825,45 @@ bool ImageWriter::hasPubKey()
     return QFile::exists(_pubKeyFileName());
 }
 
+QString ImageWriter::_sshKeyGen()
+{
+#ifdef Q_OS_WIN
+    QString windir = QProcessEnvironment::systemEnvironment().value("windir");
+    return QDir::fromNativeSeparators(windir+"\\SysNative\\OpenSSH\\ssh-keygen.exe");
+#else
+    return "ssh-keygen";
+#endif
+}
+
 bool ImageWriter::hasSshKeyGen()
 {
+#ifdef Q_OS_WIN
+    return QFile::exists(_sshKeyGen());
+#else
     return true;
+#endif
 }
 
 void ImageWriter::generatePubKey()
 {
     if (!hasPubKey() && !QFile::exists(_privKeyFileName()))
     {
+        QDir dir;
+        QProcess proc;
+        QString progName = _sshKeyGen();
         QStringList args;
         args << "-t" << "rsa" << "-f" << _privKeyFileName() << "-N" << "";
-        QProcess::execute("ssh-keygen", args);
+
+        if (!dir.exists(_sshKeyDir()))
+        {
+            qDebug() << "Creating" << _sshKeyDir();
+            dir.mkdir(_sshKeyDir());
+        }
+
+        qDebug() << "Executing:" << progName << args;
+        proc.start(progName, args);
+        proc.waitForFinished();
+        qDebug() << proc.readAll();
     }
 }
 

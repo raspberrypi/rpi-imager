@@ -31,7 +31,7 @@ Window {
 
     ColumnLayout {
         id: cl
-        spacing: 20
+        spacing: 10
         anchors.fill: parent
 
         ScrollView {
@@ -69,6 +69,11 @@ Window {
 
                     TabButton {
                         text: qsTr("General")
+                        onClicked: {
+                            if (chkSetUser.checked && !fieldUserPassword.length) {
+                                fieldUserPassword.forceActiveFocus()
+                            }
+                        }
                     }
                     TabButton {
                         text: qsTr("Services")
@@ -101,6 +106,7 @@ Window {
                                     id: fieldHostname
                                     enabled: chkHostname.checked
                                     text: "raspberrypi"
+                                    selectByMouse: true
                                     validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
                                 }
                                 Text {
@@ -109,13 +115,15 @@ Window {
                                 }
                             }
 
-
                             ImCheckBox {
                                 id: chkSetUser
                                 text: qsTr("Set username and password")
                                 onCheckedChanged: {
                                     if (!checked && chkSSH.checked && radioPasswordAuthentication.checked) {
                                         checked = true;
+                                    }
+                                    if (checked && !fieldUserPassword.length) {
+                                        fieldUserPassword.forceActiveFocus()
                                     }
                                 }
                             }
@@ -138,6 +146,7 @@ Window {
                                         id: fieldUserName
                                         text: "pi"
                                         Layout.minimumWidth: 200
+                                        selectByMouse: true
                                         property bool indicateError: false
 
                                         onTextEdited: {
@@ -153,6 +162,7 @@ Window {
                                         id: fieldUserPassword
                                         echoMode: TextInput.Password
                                         Layout.minimumWidth: 200
+                                        selectByMouse: true
                                         property bool alreadyCrypted: false
                                         property bool indicateError: false
 
@@ -198,17 +208,11 @@ Window {
                                 TextField {
                                     id: fieldWifiSSID
                                     Layout.minimumWidth: 200
+                                    selectByMouse: true
                                     property bool indicateError: false
                                     onTextEdited: {
                                         indicateError = false
                                     }
-                                }
-
-                                ImCheckBox {
-                                    id: chkWifiSSIDHidden
-                                    Layout.columnSpan: 2
-                                    text: qsTr("Hidden SSID")
-                                    checked: false
                                 }
 
                                 Text {
@@ -218,6 +222,7 @@ Window {
                                 TextField {
                                     id: fieldWifiPassword
                                     Layout.minimumWidth: 200
+                                    selectByMouse: true
                                     echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
                                     property bool indicateError: false
                                     onTextEdited: {
@@ -225,11 +230,20 @@ Window {
                                     }
                                 }
 
-                                ImCheckBox {
-                                    id: chkShowPassword
+                                RowLayout {
                                     Layout.columnSpan: 2
-                                    text: qsTr("Show password")
-                                    checked: true
+
+                                    ImCheckBox {
+                                        id: chkShowPassword
+                                        text: qsTr("Show password")
+                                        checked: true
+                                    }
+                                    ImCheckBox {
+                                        id: chkWifiSSIDHidden
+                                        Layout.columnSpan: 2
+                                        text: qsTr("Hidden SSID")
+                                        checked: false
+                                    }
                                 }
 
                                 Text {
@@ -289,9 +303,6 @@ Window {
                                         }
                                         if (radioPasswordAuthentication.checked) {
                                             chkSetUser.checked = true
-                                            if (!fieldUserPassword.length) {
-                                                fieldUserPassword.forceActiveFocus()
-                                            }
                                         }
                                     }
                                 }
@@ -339,6 +350,7 @@ Window {
                                         id: fieldPublicKey
                                         wrapMode: TextEdit.WrapAnywhere
                                         Layout.minimumWidth: 400
+                                        selectByMouse: true
                                     }
 
                                     ImButton {
