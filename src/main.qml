@@ -15,11 +15,9 @@ ApplicationWindow {
     visible: true
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
-    height: imageWriter.isEmbeddedMode() ? -1 : 420
+    height: imageWriter.isEmbeddedMode() ? -1 : 450
     minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
-    //maximumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
-    //maximumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
 
@@ -270,65 +268,67 @@ ApplicationWindow {
                     text: qsTr("Keyboard navigation: <tab> navigate to next button <space> press button/select item <arrow up/down> go up/down in lists")
                 }
 
-                RowLayout {
-                    id: langbar
+                Rectangle {
+                    id: langbarRect
                     Layout.columnSpan: 3
                     Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
                     Layout.bottomMargin: 5
-                    spacing: 10
                     visible: imageWriter.isEmbeddedMode()
+                    implicitWidth: langbar.width
+                    implicitHeight: langbar.height
+                    color: "#ffffe3"
+                    radius: 5
 
-                    Rectangle {
-                        anchors.fill: langbar
-                        color: "#ffffe3"
-                        radius: 5
-                    }
+                    RowLayout {
+                        id: langbar
+                        spacing: 10
 
-                    Text {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        text: qsTr("Language: ")
-                        Layout.leftMargin: 30
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    ComboBox {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        model: imageWriter.getTranslations()
-                        Layout.preferredWidth: 200
-                        currentIndex: -1
-                        Component.onCompleted: {
-                            currentIndex = find(imageWriter.getCurrentLanguage())
+                        Text {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            text: qsTr("Language: ")
+                            Layout.leftMargin: 30
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
                         }
-                        onActivated: {
-                            imageWriter.changeLanguage(editText)
+                        ComboBox {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            model: imageWriter.getTranslations()
+                            Layout.preferredWidth: 200
+                            currentIndex: -1
+                            Component.onCompleted: {
+                                currentIndex = find(imageWriter.getCurrentLanguage())
+                            }
+                            onActivated: {
+                                imageWriter.changeLanguage(editText)
+                            }
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
                         }
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    Text {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        text: qsTr("Keyboard: ")
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    ComboBox {
-                        enabled: imageWriter.isEmbeddedMode()
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        model: imageWriter.getKeymapLayoutList()
-                        currentIndex: -1
-                        Component.onCompleted: {
-                            currentIndex = find(imageWriter.getCurrentKeyboard())
+                        Text {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            text: qsTr("Keyboard: ")
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
                         }
-                        onActivated: {
-                            imageWriter.changeKeyboard(editText)
+                        ComboBox {
+                            enabled: imageWriter.isEmbeddedMode()
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            model: imageWriter.getKeymapLayoutList()
+                            currentIndex: -1
+                            Component.onCompleted: {
+                                currentIndex = find(imageWriter.getCurrentKeyboard())
+                            }
+                            onActivated: {
+                                imageWriter.changeKeyboard(editText)
+                            }
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
+                            Layout.rightMargin: 30
                         }
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                        Layout.rightMargin: 30
                     }
                 }
 
@@ -338,7 +338,7 @@ ApplicationWindow {
                     sequences: ["Shift+Ctrl+L", "Shift+Meta+L"]
                     context: Qt.ApplicationShortcut
                     onActivated: {
-                        langbar.visible = true
+                        langbarRect.visible = true
                     }
                 }
             }
@@ -419,6 +419,59 @@ ApplicationWindow {
                 font.bold: true
             }
 
+            Rectangle {
+                id: modelRowRect
+                color: "#ffffe3"
+                Layout.fillWidth: true
+                implicitHeight: modelRow.implicitHeight
+                visible: osswipeview.currentIndex == 0
+                Layout.bottomMargin: -10
+
+                Row {
+                    id: modelRow
+                    spacing: 15
+                    leftPadding: 15
+
+                    Text {
+                        id: modelText
+                        text: qsTr("Pi model:")
+                        font.family: roboto.name
+                        verticalAlignment: Qt.AlignVCenter
+                        height: parent.height
+                    }
+
+                    ComboBox {
+                        id: deviceModelCombo
+                        model: ListModel {
+                            id: deviceModel
+                            ListElement {
+                                name: qsTr("[ All ]")
+                                tags: "[]"
+                            }
+                        }
+                        width: 300
+                        textRole: "name"
+                        font.family: roboto.name
+                        font.pixelSize: 12
+                        currentIndex: 0
+                        onCurrentIndexChanged: {
+                            /* Reload list */
+                            httpRequest(imageWriter.constantOsListUrl(), function (x) {
+                                var o = JSON.parse(x.responseText)
+                                var oslist = oslistFromJson(o)
+                                if (oslist === false)
+                                    return
+
+                                osmodel.remove(0, osmodel.count-2)
+                                for (var i in oslist) {
+                                    osmodel.insert(osmodel.count-2, oslist[i])
+                                }
+                            })
+                        }
+                    }
+                }
+            }
+
             Item {
                 clip: true
                 Layout.preferredWidth: oslist.width
@@ -434,7 +487,7 @@ ApplicationWindow {
                         currentIndex: -1
                         delegate: osdelegate
                         width: window.width-100
-                        height: window.height-100
+                        height: modelRowRect.visible ? window.height-100-modelRowRect.height : window.height-100
                         boundsBehavior: Flickable.StopAtBounds
                         highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
                         ScrollBar.vertical: ScrollBar {
@@ -887,7 +940,7 @@ ApplicationWindow {
         noButton: true
         title: qsTr("Warning")
         onYes: {
-            langbar.visible = false
+            langbarRect.visible = false
             writebutton.enabled = false
             customizebutton.visible = false
             cancelwritebutton.enabled = true
@@ -1097,6 +1150,40 @@ ApplicationWindow {
         }
     }
 
+    function filterItems(list, tags)
+    {
+        if (!tags || !tags.length)
+            return
+
+        var i = list.length
+        while (i--) {
+            var entry = list[i]
+
+            if ("devices" in entry && entry["devices"].length) {
+                var foundTag = false
+
+                for (var j in tags)
+                {
+                    if (entry["devices"].includes(tags[j]))
+                    {
+                        foundTag = true
+                        break
+                    }
+                }
+
+                if (!foundTag)
+                {
+                    list.splice(i, 1)
+                    continue
+                }
+            }
+
+            if ("subitems" in entry) {
+                filterItems(entry["subitems"], tags)
+            }
+        }
+    }
+
     function oslistFromJson(o) {
         var oslist = false
         var lang_country = Qt.locale().name
@@ -1119,6 +1206,7 @@ ApplicationWindow {
             oslist = o["os_list"]
         }
 
+        filterItems(oslist, JSON.parse(deviceModel.get(deviceModelCombo.currentIndex).tags))
         checkForRandom(oslist)
 
         /* Flatten subitems to subitems_json */
@@ -1160,6 +1248,21 @@ ApplicationWindow {
 
             if ("imager" in o) {
                 var imager = o["imager"]
+
+                if ("devices" in imager)
+                {
+                    var devices = imager["devices"]
+                    for (var j in devices)
+                    {
+                        devices[j]["tags"] = JSON.stringify(devices[j]["tags"])
+                        deviceModel.append(devices[j])
+                        if ("default" in devices[j] && devices[j]["default"])
+                        {
+                            deviceModelCombo.currentIndex = deviceModel.count-1
+                        }
+                    }
+                }
+
                 if (imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
                     if (!imageWriter.isEmbeddedMode() && imageWriter.isVersionNewer(imager["latest_version"])) {
                         updatepopup.url = imager["url"]
