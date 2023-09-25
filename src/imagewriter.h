@@ -181,6 +181,7 @@ protected:
 #endif
 
     void _parseCompressedFile();
+    void _parseXZFile();
     QString _pubKeyFileName();
     QString _privKeyFileName();
     QString _sshKeyDir();

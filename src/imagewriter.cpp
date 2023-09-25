@@ -14,6 +14,7 @@
 #include "wlancredentials.h"
 #include <archive.h>
 #include <archive_entry.h>
+#include <lzma.h>
 #include <random>
 #include <QFileInfo>
 #include <QQmlApplicationEngine>
@@ -242,6 +243,8 @@ void ImageWriter::startWrite()
             _extrLen = _downloadLen;
         else if (lowercaseurl.endsWith(".zip"))
             _parseCompressedFile();
+        else if (lowercaseurl.endsWith(".xz"))
+            _parseXZFile();
     }
 
     if (_devLen && _extrLen > _devLen)
@@ -646,6 +649,47 @@ void ImageWriter::_parseCompressedFile()
         _multipleFilesInZip = true;
 
     qDebug() << "Parsed .zip file containing" << numFiles << "files, uncompressed size:" << _extrLen;
+}
+
+void ImageWriter::_parseXZFile()
+{
+    QFile f(_src.toLocalFile());
+    lzma_stream_flags opts = { 0 };
+    _extrLen = 0;
+
+    if (f.size() > LZMA_STREAM_HEADER_SIZE && f.open(f.ReadOnly))
+    {
+        f.seek(f.size()-LZMA_STREAM_HEADER_SIZE);
+        QByteArray footer = f.read(LZMA_STREAM_HEADER_SIZE);
+        lzma_ret ret = lzma_stream_footer_decode(&opts, (const uint8_t *) footer.constData());
+
+        if (ret == LZMA_OK && opts.backward_size < 1000000 && opts.backward_size < f.size()-LZMA_STREAM_HEADER_SIZE)
+        {
+            f.seek(f.size()-LZMA_STREAM_HEADER_SIZE-opts.backward_size);
+            QByteArray buf = f.read(opts.backward_size+LZMA_STREAM_HEADER_SIZE);
+            lzma_index *idx;
+            uint64_t memlimit = UINT64_MAX;
+            size_t pos = 0;
+
+            ret = lzma_index_buffer_decode(&idx, &memlimit, NULL, (const uint8_t *) buf.constData(), &pos, buf.size());
+            if (ret == LZMA_OK)
+            {
+                _extrLen = lzma_index_uncompressed_size(idx);
+                qDebug() << "Parsed .xz file. Uncompressed size:" << _extrLen;
+            }
+            else
+            {
+                qDebug() << "Unable to parse index of .xz file";
+            }
+            lzma_index_end(idx, NULL);
+        }
+        else
+        {
+            qDebug() << "Unable to parse footer of .xz file";
+        }
+
+        f.close();
+    }
 }
 
 bool ImageWriter::isOnline()

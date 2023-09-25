@@ -9,6 +9,7 @@ rpi-imager (1.7.6) unstable; urgency=medium
   * Workaround for ArchLinux's lsblk labeling internal SD card readers
     (mmcblk0) as non-removable storage.
   * Allow drag-dropping image files to Imager.
+  * Local .xz files: parse uncompressed size for better progress reports.
 
  -- Floris Bos <bos@je-eigen-domein.nl>  Sat, 23 Sep 2023 19:47:40 +0200
 
