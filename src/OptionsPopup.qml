@@ -753,10 +753,7 @@ Window {
                 cloudinitnetwork += "        hidden: true\n"
             }
 
-            /* FIXME: setting wifi country code broken on Ubuntu
-               For unknown reasons udev does not trigger setregdomain automatically and as a result
-               our setting in /etc/default/crda is being ignored by Ubuntu. */
-            addCloudInitRun("sed -i 's/^\s*REGDOMAIN=\S*/REGDOMAIN="+fieldWifiCountry.editText+"/' /etc/default/crda || true")
+            addCmdline("cfg80211.ieee80211_regdom="+fieldWifiCountry.editText)
         }
         if (chkLocale.checked) {
             var kbdconfig = "XKBMODEL=\"pc105\"\n"
