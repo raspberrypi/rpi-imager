@@ -467,18 +467,28 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="97"/>
+        <location filename="../main.qml" line="109"/>
+        <source>CHOOSE DEVICE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="120"/>
+        <source>Select this button to choose your target Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="132"/>
         <location filename="../main.qml" line="413"/>
         <source>Operating System</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="109"/>
+        <location filename="../main.qml" line="144"/>
         <source>CHOOSE OS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="121"/>
+        <location filename="../main.qml" line="156"/>
         <source>Select this button to change the operating system</source>
         <translation type="unfinished"></translation>
     </message>

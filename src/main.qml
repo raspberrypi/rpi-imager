@@ -14,9 +14,9 @@ ApplicationWindow {
     id: window
     visible: true
 
-    width: imageWriter.isEmbeddedMode() ? -1 : 680
+    width: imageWriter.isEmbeddedMode() ? -1 : 800
     height: imageWriter.isEmbeddedMode() ? -1 : 450
-    minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
+    minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 800
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
@@ -24,6 +24,8 @@ ApplicationWindow {
     FontLoader {id: roboto;      source: "fonts/Roboto-Regular.ttf"}
     FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}
     FontLoader {id: robotoBold;  source: "fonts/Roboto-Bold.ttf"}
+
+    property string hwTags
 
     onClosing: {
         if (progressBar.visible) {
@@ -83,11 +85,47 @@ ApplicationWindow {
                 anchors.leftMargin: 50
 
                 rows: 6
-                columns: 3
+                columns: 4
                 columnSpacing: 25
 
                 ColumnLayout {
-                    id: columnLayout
+                    id: columnLayout0
+                    spacing: 0
+                    Layout.fillWidth: true
+
+                    Text {
+                        id: text0
+                        color: "#ffffff"
+                        text: qsTr("Select your device")
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 17
+                        Layout.preferredWidth: 100
+                        font.pixelSize: 12
+                        font.family: robotoBold.name
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    ImButton {
+                        id: hwbutton
+                        text: qsTr("CHOOSE DEVICE")
+                        spacing: 0
+                        padding: 0
+                        bottomPadding: 0
+                        topPadding: 0
+                        Layout.minimumHeight: 40
+                        Layout.fillWidth: true
+                        onClicked: {
+                            hwpopup.open()
+                            hwswipeview.currentItem.forceActiveFocus()
+                        }
+                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.description: qsTr("Select this button to choose your target Raspberry Pi")
+                    }
+                }
+
+                ColumnLayout {
+                    id: columnLayout1
                     spacing: 0
                     Layout.fillWidth: true
 
@@ -359,6 +397,107 @@ ApplicationWindow {
         }
     }
 
+    Popup {
+        id: hwpopup
+        x: 50
+        y: 25
+        width: parent.width-100
+        height: parent.height-50
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        property string hwselected: ""
+
+        // background of title
+        Rectangle {
+            color: "#f5f5f5"
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 35
+            width: parent.width
+        }
+        // line under title
+        Rectangle {
+            color: "#afafaf"
+            width: parent.width
+            y: 35
+            implicitHeight: 1
+        }
+
+        Text {
+            text: "X"
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: 25
+            anchors.topMargin: 10
+            font.family: roboto.name
+            font.bold: true
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    hwpopup.close()
+                }
+            }
+        }
+
+        ColumnLayout {
+            spacing: 10
+
+            Text {
+                text: qsTr("Raspberry Pi Device")
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                Layout.fillWidth: true
+                Layout.topMargin: 10
+                font.family: roboto.name
+                font.bold: true
+            }
+
+            Item {
+                clip: true
+                Layout.preferredWidth: hwlist.width
+                Layout.preferredHeight: hwlist.height
+
+                SwipeView {
+                    id: hwswipeview
+                    interactive: false
+
+                    ListView {
+                        id: hwlist
+                        model: ListModel {
+                            id: deviceModel
+                            ListElement {
+                                name: qsTr("[ All ]")
+                                tags: "[]"
+                            }
+                        }
+                        currentIndex: -1
+                        delegate: hwdelegate
+                        width: window.width-100
+                        height: window.height-100
+                        boundsBehavior: Flickable.StopAtBounds
+                        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+                        ScrollBar.vertical: ScrollBar {
+                            width: 10
+                            policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                        }
+                        Keys.onSpacePressed: {
+                            if (currentIndex != -1)
+                                selectHWitem(model.get(currentIndex))
+                        }
+                        Accessible.onPressAction: {
+                            if (currentIndex != -1)
+                                selectHWitem(model.get(currentIndex))
+                        }
+                        Keys.onEnterPressed: Keys.onSpacePressed(event)
+                        Keys.onReturnPressed: Keys.onSpacePressed(event)
+                    }
+                }
+            }
+        }
+    }
+
     /*
       Popup for OS selection
      */
@@ -419,59 +558,6 @@ ApplicationWindow {
                 font.bold: true
             }
 
-            Rectangle {
-                id: modelRowRect
-                color: "#ffffe3"
-                Layout.fillWidth: true
-                implicitHeight: modelRow.implicitHeight
-                visible: osswipeview.currentIndex == 0
-                Layout.bottomMargin: -10
-
-                Row {
-                    id: modelRow
-                    spacing: 15
-                    leftPadding: 15
-
-                    Text {
-                        id: modelText
-                        text: qsTr("Pi model:")
-                        font.family: roboto.name
-                        verticalAlignment: Qt.AlignVCenter
-                        height: parent.height
-                    }
-
-                    ComboBox {
-                        id: deviceModelCombo
-                        model: ListModel {
-                            id: deviceModel
-                            ListElement {
-                                name: qsTr("[ All ]")
-                                tags: "[]"
-                            }
-                        }
-                        width: 300
-                        textRole: "name"
-                        font.family: roboto.name
-                        font.pixelSize: 12
-                        currentIndex: 0
-                        onCurrentIndexChanged: {
-                            /* Reload list */
-                            httpRequest(imageWriter.constantOsListUrl(), function (x) {
-                                var o = JSON.parse(x.responseText)
-                                var oslist = oslistFromJson(o)
-                                if (oslist === false)
-                                    return
-
-                                osmodel.remove(0, osmodel.count-2)
-                                for (var i in oslist) {
-                                    osmodel.insert(osmodel.count-2, oslist[i])
-                                }
-                            })
-                        }
-                    }
-                }
-            }
-
             Item {
                 clip: true
                 Layout.preferredWidth: oslist.width
@@ -487,7 +573,7 @@ ApplicationWindow {
                         currentIndex: -1
                         delegate: osdelegate
                         width: window.width-100
-                        height: modelRowRect.visible ? window.height-100-modelRowRect.height : window.height-100
+                        height: window.height-100
                         boundsBehavior: Flickable.StopAtBounds
                         highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
                         ScrollBar.vertical: ScrollBar {
@@ -559,33 +645,100 @@ ApplicationWindow {
     ListModel {
         id: osmodel
 
-        ListElement {
-            url: "internal://format"
-            icon: "icons/erase.png"
-            extract_size: 0
-            image_download_size: 0
-            extract_sha256: ""
-            contains_multiple_files: false
-            release_date: ""
-            subitems_url: ""
-            subitems_json: ""
-            name: qsTr("Erase")
-            description: qsTr("Format card as FAT32")
-            tooltip: ""
-            website: ""
-            init_format: ""
-        }
-
-        ListElement {
-            url: ""
-            icon: "icons/use_custom.png"
-            name: qsTr("Use custom")
-            description: qsTr("Select a custom .img from your computer")
-        }
-
         Component.onCompleted: {
             if (imageWriter.isOnline()) {
                 fetchOSlist();
+            }
+        }
+    }
+
+    Component {
+        id: hwdelegate
+
+        Item {
+            width: window.width-100
+            height: contentLayout.implicitHeight + 24
+            Accessible.name: name+".\n"+description
+
+            MouseArea {
+                id: hwMouseArea
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+
+                onEntered: {
+                    bgrect.mouseOver = true
+                }
+
+                onExited: {
+                    bgrect.mouseOver = false
+                }
+
+                onClicked: {
+                    selectHWitem(model)
+                }
+            }
+
+            Rectangle {
+               id: bgrect
+               anchors.fill: parent
+               color: "#f5f5f5"
+               visible: mouseOver && parent.ListView.view.currentIndex !== index
+               property bool mouseOver: false
+            }
+            Rectangle {
+               id: borderrect
+               implicitHeight: 1
+               implicitWidth: parent.width
+               color: "#dcdcdc"
+               y: parent.height
+            }
+
+            RowLayout {
+                id: contentLayout
+                anchors {
+                    left: parent.left
+                    top: parent.top
+                    right: parent.right
+                    margins: 12
+                }
+                spacing: 12
+
+                Image {
+                    source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
+                    Layout.preferredHeight: 40
+                    Layout.preferredWidth: 40
+                    sourceSize.width: 40
+                    sourceSize.height: 40
+                    fillMode: Image.PreserveAspectFit
+                    verticalAlignment: Image.AlignVCenter
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+
+                    Text {
+                        text: name
+                        elide: Text.ElideRight
+                        font.family: roboto.name
+                        font.bold: true
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        font.family: roboto.name
+                        text: description
+                        wrapMode: Text.WordWrap
+                        color: "#1a1a1a"
+                    }
+
+                    ToolTip {
+                        visible: hwMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
+                        delay: 1000
+                        text: typeof(tooltip) == "string" ? tooltip : ""
+                        clip: false
+                    }
+                }
             }
         }
     }
@@ -1206,7 +1359,9 @@ ApplicationWindow {
             oslist = o["os_list"]
         }
 
-        filterItems(oslist, JSON.parse(deviceModel.get(deviceModelCombo.currentIndex).tags))
+        if (hwTags != "") {
+            filterItems(oslist, JSON.parse(hwTags))
+        }
         checkForRandom(oslist)
 
         /* Flatten subitems to subitems_json */
@@ -1242,8 +1397,9 @@ ApplicationWindow {
             var oslist = oslistFromJson(o)
             if (oslist === false)
                 return
+            osmodel.clear()
             for (var i in oslist) {
-                osmodel.insert(osmodel.count-2, oslist[i])
+                osmodel.append(oslist[i])
             }
 
             if ("imager" in o) {
@@ -1251,6 +1407,7 @@ ApplicationWindow {
 
                 if ("devices" in imager)
                 {
+                    deviceModel.clear()
                     var devices = imager["devices"]
                     for (var j in devices)
                     {
@@ -1258,7 +1415,7 @@ ApplicationWindow {
                         deviceModel.append(devices[j])
                         if ("default" in devices[j] && devices[j]["default"])
                         {
-                            deviceModelCombo.currentIndex = deviceModel.count-1
+                            hwlist.currentIndex = deviceModel.count-1
                         }
                     }
                 }
@@ -1283,6 +1440,31 @@ ApplicationWindow {
                     }
                 }
             }
+
+            /* Add in our 'special' items. */
+            osmodel.append({
+                url: "internal://format",
+                icon: "icons/erase.png",
+                extract_size: 0,
+                image_download_size: 0,
+                extract_sha256: "",
+                contains_multiple_files: false,
+                release_date: "",
+                subitems_url: "",
+                subitems_json: "",
+                name: qsTr("Erase"),
+                description: qsTr("Format card as FAT32"),
+                tooltip: "",
+                website: "",
+                init_format: ""
+            })
+
+            osmodel.append({
+                url: "",
+                icon: "icons/use_custom.png",
+                name: qsTr("Use custom"),
+                description: qsTr("Select a custom .img from your computer")
+            })
         })
     }
 
@@ -1324,6 +1506,25 @@ ApplicationWindow {
         }
 
         return m
+    }
+
+    function selectHWitem(hwmodel) {
+        hwTags = hwmodel.tags
+        /* Reload list */
+        httpRequest(imageWriter.constantOsListUrl(), function (x) {
+            var o = JSON.parse(x.responseText)
+            var oslist = oslistFromJson(o)
+            if (oslist === false)
+                return
+
+            osmodel.remove(0, osmodel.count-2)
+            for (var i in oslist) {
+                osmodel.insert(osmodel.count-2, oslist[i])
+            }
+        })
+
+        hwbutton.text = hwmodel.name
+        hwpopup.close()
     }
 
     function selectOSitem(d, selectFirstSubitem)
