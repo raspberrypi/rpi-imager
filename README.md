@@ -65,7 +65,7 @@ If udisks2 is not functional on your Linux distribution, you can alternatively s
 Install the build dependencies:
 
 ```
-sudo yum install git gcc gcc-c++ make cmake libarchive-devel libcurl-devel openssl-devel qt5-qtbase-devel qt5-qtquickcontrols2-devel qt5-qtsvg-devel qt5-linguist
+sudo yum install git gcc gcc-c++ make cmake libarchive-devel libcurl-devel lzma-sdk-devel openssl-devel qt5-qtbase-devel qt5-qtquickcontrols2-devel qt5-qtsvg-devel qt5-linguist
 ```
 
 #### Get the source
