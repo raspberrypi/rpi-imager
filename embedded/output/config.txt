@@ -3,14 +3,15 @@ hdmi_pixel_freq_limit=200000000
 [HDMI:1]
 hdmi_pixel_freq_limit=200000000
 [all]
-kernel=zImage
+kernel=Image.gz
 initramfs rootfs.cpio.zst
 disable_overscan=1
 enable_uart=1
-dtoverlay=vc4-fkms-v3d-pi4
+dtoverlay=vc4-kms-v3d
 dtoverlay=disable-bt
 dtoverlay=disable-wifi
 arm_boost=1
+arm_64bit=1
 
 [cm4]
 dtoverlay=dwc2,dr_mode=host

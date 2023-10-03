@@ -26,7 +26,7 @@ if grep -q debugconsole /proc/cmdline; then
 fi
 
 if grep -q blockingconsole /proc/cmdline; then
-    /sbin/getty -L ttyAMA0 0 vt100
+    /sbin/getty -L console 0 vt100
 fi
 
 /etc/init.d/S99rpi-imager start
