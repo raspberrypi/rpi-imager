@@ -241,7 +241,7 @@ ApplicationWindow {
                         onClicked: {
                             optionspopup.openPopup()
                         }
-                        visible: false
+                        visible: imageWriter.imageSupportsCustomization()
                         Accessible.description: qsTr("Select this button to access advanced settings")
                         contentItem: Image {
                             source: "icons/ic_cog_red.svg"
