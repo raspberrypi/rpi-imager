@@ -541,6 +541,7 @@ ApplicationWindow {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     ospopup.close()
+                    osswipeview.decrementCurrentIndex()
                 }
             }
         }
@@ -1266,6 +1267,7 @@ ApplicationWindow {
         imageWriter.setSrc(file)
         osbutton.text = imageWriter.srcFileName()
         ospopup.close()
+        osswipeview.decrementCurrentIndex()
         if (imageWriter.readyToWrite()) {
             writebutton.enabled = true
         }
@@ -1596,6 +1598,7 @@ ApplicationWindow {
             imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
             osbutton.text = d.name
             ospopup.close()
+            osswipeview.decrementCurrentIndex()
             if (imageWriter.readyToWrite()) {
                 writebutton.enabled = true
             }
