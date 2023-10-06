@@ -4,6 +4,6 @@ Version=1.0
 Name=Imager
 Comment=Raspberry Pi Imager
 Icon=rpi-imager
-Exec=rpi-imager
+Exec=rpi-imager %F
 Categories=Utility
 StartupNotify=false
