@@ -470,6 +470,8 @@ ApplicationWindow {
                             ListElement {
                                 name: qsTr("[ All ]")
                                 tags: "[]"
+                                icon: ""
+                                description: ""
                             }
                         }
                         currentIndex: -1
