@@ -135,7 +135,6 @@ ApplicationWindow {
                         text: qsTr("Operating System")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
                         font.pixelSize: 12
                         font.family: robotoBold.name
                         font.bold: true
@@ -171,7 +170,6 @@ ApplicationWindow {
                         text: qsTr("Storage")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
                         font.pixelSize: 12
                         font.family: robotoBold.name
                         font.bold: true
@@ -181,8 +179,12 @@ ApplicationWindow {
                     ImButton {
                         id: dstbutton
                         text: qsTr("CHOOSE STORAGE")
+                        spacing: 0
+                        padding: 0
+                        bottomPadding: 0
+                        topPadding: 0
                         Layout.minimumHeight: 40
-                        Layout.preferredWidth: 100
+                        Layout.preferredWidth: 200
                         Layout.fillWidth: true
                         onClicked: {
                             imageWriter.startDriveListPolling()
@@ -191,7 +193,7 @@ ApplicationWindow {
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible
                         Accessible.description: qsTr("Select this button to change the destination storage device")
-                    }
+                                            }
                 }
 
                 ColumnLayout {
