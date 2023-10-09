@@ -1,4 +1,4 @@
-build
+build**
 .vscode
 obj-**
 debian**
