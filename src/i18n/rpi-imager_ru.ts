@@ -536,7 +536,7 @@
         <location filename="../main.qml" line="145"/>
         <location filename="../main.qml" line="1108"/>
         <source>CHOOSE STORAGE</source>
-        <translation>ВЫБРАТЬ ЗАПОМИНАЮЩЕЕ УСТРОЙСТВО</translation>
+        <translation>ВЫБРАТЬ ЗАПОМ. УСТРОЙСТВО</translation>
     </message>
     <message>
         <location filename="../main.qml" line="171"/>
