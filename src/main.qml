@@ -14,9 +14,9 @@ ApplicationWindow {
     id: window
     visible: true
 
-    width: imageWriter.isEmbeddedMode() ? -1 : 730
+    width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 450
-    minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 730
+    minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
@@ -89,20 +89,22 @@ ApplicationWindow {
 
             GridLayout {
                 id: gridLayout
-                rowSpacing: 25
+                rowSpacing: 15
 
                 anchors.fill: parent
                 anchors.topMargin: 25
                 anchors.rightMargin: 50
                 anchors.leftMargin: 50
 
-                rows: 6
-                columns: 4
-                columnSpacing: 25
+                rows: 5
+                columns: 3
+                columnSpacing: 15
 
                 ColumnLayout {
                     id: columnLayout0
                     spacing: 0
+                    Layout.row: 0
+                    Layout.column: 0
                     Layout.fillWidth: true
 
                     Text {
@@ -131,7 +133,7 @@ ApplicationWindow {
                             hwpopup.open()
                             hwlistview.currentItem.forceActiveFocus()
                         }
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to choose your target Raspberry Pi")
                     }
                 }
@@ -139,6 +141,8 @@ ApplicationWindow {
                 ColumnLayout {
                     id: columnLayout1
                     spacing: 0
+                    Layout.row: 0
+                    Layout.column: 1
                     Layout.fillWidth: true
 
                     Text {
@@ -166,7 +170,7 @@ ApplicationWindow {
                             ospopup.open()
                             osswipeview.currentItem.forceActiveFocus()
                         }
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to change the operating system")
                     }
                 }
@@ -174,6 +178,8 @@ ApplicationWindow {
                 ColumnLayout {
                     id: columnLayout2
                     spacing: 0
+                    Layout.row: 0
+                    Layout.column: 2
                     Layout.fillWidth: true
 
                     Text {
@@ -203,27 +209,25 @@ ApplicationWindow {
                             dstpopup.open()
                             dstlist.forceActiveFocus()
                         }
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to change the destination storage device")
                     }
                 }
 
                 ColumnLayout {
                     spacing: 0
+                    Layout.row: 1
+                    Layout.column: 2
                     Layout.fillWidth: true
-
-                    Text {
-                        text: " "
-                        Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
-                    }
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
                     ImButton {
                         id: writebutton
                         text: qsTr("WRITE")
+                        Layout.bottomMargin: 25
                         Layout.minimumHeight: 40
                         Layout.fillWidth: true
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to start writing the image")
                         enabled: false
                         onClicked: {
@@ -242,7 +246,9 @@ ApplicationWindow {
 
                 ColumnLayout {
                     id: columnLayout3
-                    Layout.columnSpan: 4
+                    Layout.columnSpan: 2
+                    Layout.row: 1
+                    Layout.column: 0
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
                     Text {
@@ -254,9 +260,13 @@ ApplicationWindow {
                         visible: false
                         horizontalAlignment: Text.AlignHCenter
                         Layout.fillWidth: true
+                        Layout.bottomMargin: 25
+                        padding: 5
                     }
 
                     ProgressBar {
+                        Layout.bottomMargin: 25
+                        padding: 5
                         id: progressBar
                         Layout.fillWidth: true
                         visible: false
@@ -264,6 +274,8 @@ ApplicationWindow {
                     }
 
                     ImButton {
+                        Layout.bottomMargin: 25
+                        padding: 5
                         id: cancelwritebutton
                         text: qsTr("CANCEL WRITE")
                         onClicked: {
@@ -275,6 +287,8 @@ ApplicationWindow {
                         visible: false
                     }
                     ImButton {
+                        Layout.bottomMargin: 25
+                        padding: 5
                         id: cancelverifybutton
                         text: qsTr("CANCEL VERIFY")
                         onClicked: {
