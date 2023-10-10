@@ -307,8 +307,8 @@
                                 "description": "Provides a JSON-format list of strings representing Raspberry Pi devices that are supported with this image",
                                 "default": "",
                                 "examples": [
-                                    "[\"1a\", \"1b\"]",
-                                    "[\"4\", \"5\"]",
+                                    "[\"pi1a\", \"pi1b\"]",
+                                    "[\"pi4\", \"pi5\"]",
                                     "[\"cm3\", \"cm4\"]"
                                 ]
                             },
