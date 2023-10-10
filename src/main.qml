@@ -25,7 +25,19 @@ ApplicationWindow {
     FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}
     FontLoader {id: robotoBold;  source: "fonts/Roboto-Bold.ttf"}
 
+    /** hw device list storage
+      *
+      * To allow us to filter the OS list, we maintain an application-wide record of the selected device
+      * tags.
+      */
     property string hwTags
+    
+    /** 0: Exclusive, must match explicit device names only, no untagged
+        1: Exclusive by prefix, must match the device name as a prefix, no untagged
+        2: Inclusive, match explicit device names and untagged
+        3: Inclusive by prefix, match explicit device names and untagged
+        */
+    property int hwTagMatchingType
 
     onClosing: {
         if (progressBar.visible) {
@@ -474,6 +486,7 @@ ApplicationWindow {
                                 tags: "[]"
                                 icon: ""
                                 description: ""
+                                matching_type: "exclusive"
                             }
                         }
                         currentIndex: -1
@@ -1309,7 +1322,7 @@ ApplicationWindow {
         }
     }
 
-    function filterItems(list, tags)
+    function filterItems(list, tags, matchingType)
     {
         if (!tags || !tags.length)
             return
@@ -1321,24 +1334,67 @@ ApplicationWindow {
             if ("devices" in entry && entry["devices"].length) {
                 var foundTag = false
 
-                for (var j in tags)
-                {
-                    if (entry["devices"].includes(tags[j]))
-                    {
-                        foundTag = true
+                switch(matchingType) {
+                    case 0: /* exact matching */
+                    case 2: /* exact matching */
+                        for (var j in tags)
+                        {
+                            if (entry["devices"].includes(tags[j]))
+                            {
+                                foundTag = true
+                                break
+                            }
+                        }
+                        /* If there's no match, remove this item from the list. */
+                        if (!foundTag)
+                        {
+                            list.splice(i, 1)
+                            continue
+                        }
                         break
-                    }
+                    case 1: /* Exlusive by prefix matching */
+                    case 3: /* Inclusive by prefix matching */
+                        for (var deviceTypePrefix in tags) {
+                            for (var deviceSpec in entry["devices"]) {
+                                if (deviceSpec.startsWith(deviceTypePrefix)) {
+                                    foundTag = true
+                                    break
+                                }
+                            }
+                            /* Terminate outer loop early if we've already
+                             * decided it's a match
+                             */
+                            if (foundTag) {
+                                break
+                            }
+                        }
+                        /* If there's no match, remove this item from the list. */
+                        if (!foundTag)
+                        {
+                            list.splice(i, 1)
+                            continue
+                        }
+                        break
                 }
-
-                if (!foundTag)
-                {
-                    list.splice(i, 1)
-                    continue
+            } else {
+                /* No device list attached? If we're in an exclusive mode that's bad news indeed. */
+                switch (matchingType) {
+                    case 0:
+                    case 1:
+                        if (!("subitems" in entry)) {
+                            /* If you're not carrying subitems, you're not going in. */
+                            list.splice(i, 1)
+                        }
+                        break
+                    case 2:
+                    case 3:
+                        /* Inclusive filtering. We're keeping this one. */
+                        break;
                 }
             }
 
             if ("subitems" in entry) {
-                filterItems(entry["subitems"], tags)
+                filterItems(entry["subitems"], tags, hwTagMatchingType)
             }
         }
     }
@@ -1366,7 +1422,7 @@ ApplicationWindow {
         }
 
         if (hwTags != "") {
-            filterItems(oslist, JSON.parse(hwTags))
+            filterItems(oslist, JSON.parse(hwTags), hwTagMatchingType)
         }
         checkForRandom(oslist)
 
@@ -1516,6 +1572,28 @@ ApplicationWindow {
 
     function selectHWitem(hwmodel) {
         hwTags = hwmodel.tags
+        
+        if (hwmodel.matching_type) {
+            
+            switch (hwmodel.matching_type) {
+                case "exclusive":
+                    hwTagMatchingType = 0
+                    break;
+                case "exclusive_prefix":
+                    hwTagMatchingType = 1
+                    break;
+                case "inclusive":
+                    hwTagMatchingType = 2
+                    break;
+                case "inclusive_prefix":
+                    hwTagMatchingType = 3
+                    break;
+            }
+        } else {
+            /* Default is exclusive exact matching */
+            hwTagMatchingType = 0
+        }
+
         /* Reload list */
         httpRequest(imageWriter.constantOsListUrl(), function (x) {
             var o = JSON.parse(x.responseText)
