@@ -301,15 +301,28 @@
                                 ]
                             },
                             "devices": {
-                                "$id": "#/properties/os_list/items/anyOf/0/properties/compat_with",
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/devices",
                                 "type": "array",
-                                "title": "The compat_with schema",
+                                "title": "The devices schema",
                                 "description": "Provides a JSON-format list of strings representing Raspberry Pi devices that are supported with this image",
                                 "default": "",
                                 "examples": [
                                     "[\"pi1a\", \"pi1b\"]",
                                     "[\"pi4\", \"pi5\"]",
                                     "[\"cm3\", \"cm4\"]"
+                                ]
+                            },
+                            "matching_type": {
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/matching_type",
+                                "type": "array",
+                                "title": "The matching_type schema",
+                                "description": "Allows specification of the matching algorithm to use for device tags. If you set this to 'exclusive', any image that does not explicitly tag your target device will not be displayed. Set to 'prefix' to allow for family matching (eg, match all Pi1 devices), but no untagged images. Set to 'inclusive', and get your exact device name and all untagged images. Finally, if you set to 'inclusive_prefix', you can match all images tagged with your family prefix (eg, Pi1), and any untagged image.",
+                                "default": "exclusive",
+                                "examples": [
+                                    "exclusive",
+                                    "exclusive_prefix",
+                                    "inclusive",
+                                    "inclusive_prefix"
                                 ]
                             },
                             "website": {
