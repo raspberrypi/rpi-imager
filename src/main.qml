@@ -117,7 +117,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         onClicked: {
                             hwpopup.open()
-                            hwswipeview.currentItem.forceActiveFocus()
+                            hwlistview.currentItem.forceActiveFocus()
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible
                         Accessible.description: qsTr("Select this button to choose your target Raspberry Pi")
@@ -193,7 +193,7 @@ ApplicationWindow {
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible
                         Accessible.description: qsTr("Select this button to change the destination storage device")
-                                            }
+                    }
                 }
 
                 ColumnLayout {
@@ -461,8 +461,8 @@ ApplicationWindow {
                 Layout.preferredWidth: hwlist.width
                 Layout.preferredHeight: hwlist.height
 
-                SwipeView {
-                    id: hwswipeview
+                ListView {
+                    id: hwlistview
                     interactive: false
 
                     ListView {
