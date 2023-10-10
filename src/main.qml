@@ -14,9 +14,9 @@ ApplicationWindow {
     id: window
     visible: true
 
-    width: imageWriter.isEmbeddedMode() ? -1 : 800
+    width: imageWriter.isEmbeddedMode() ? -1 : 730
     height: imageWriter.isEmbeddedMode() ? -1 : 450
-    minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 800
+    minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 730
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
