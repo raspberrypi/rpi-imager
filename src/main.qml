@@ -242,7 +242,7 @@ ApplicationWindow {
 
                 ColumnLayout {
                     id: columnLayout3
-                    Layout.columnSpan: 3
+                    Layout.columnSpan: 4
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
                     Text {
