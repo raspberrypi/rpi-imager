@@ -31,7 +31,7 @@ ApplicationWindow {
       * tags.
       */
     property string hwTags
-    
+
     /** 0: Exclusive, must match explicit device names only, no untagged
         1: Exclusive by prefix, must match the device name as a prefix, no untagged
         2: Inclusive, match explicit device names and untagged
@@ -284,25 +284,8 @@ ApplicationWindow {
                     }
 
                     ImButton {
-                        Layout.bottomMargin: 25
-                        Layout.minimumHeight: 40
-                        Layout.preferredWidth: 200
-                        Layout.alignment: Qt.AlignRight
-                        padding: 5
-                        id: customizebutton
-                        onClicked: {
-                            optionspopup.openPopup()
-                        }
-                        visible: imageWriter.imageSupportsCustomization()
-                        Accessible.description: qsTr("Select this button to access advanced settings")
-                        contentItem: Image {
-                            source: "icons/ic_cog_red.svg"
-                            fillMode: Image.PreserveAspectFit
-                        }
-                    }
-                    ImButton {
                         id: writebutton
-                        text: qsTr("WRITE")
+                        text: qsTr("Next")
                         Layout.bottomMargin: 25
                         Layout.minimumHeight: 40
                         Layout.preferredWidth: 200
@@ -315,7 +298,7 @@ ApplicationWindow {
                                 return
                             }
 
-                            if (!optionspopup.initialized && imageWriter.imageSupportsCustomization() && imageWriter.hasSavedCustomizationSettings()) {
+                            if (!optionspopup.visible && imageWriter.imageSupportsCustomization()) {
                                 usesavedsettingspopup.openPopup()
                             } else {
                                 confirmwritepopup.askForConfirmation()
@@ -1136,7 +1119,6 @@ ApplicationWindow {
             langbarRect.visible = false
             writebutton.visible = false
             writebutton.enabled = false
-            customizebutton.visible = false
             cancelwritebutton.enabled = true
             cancelwritebutton.visible = true
             cancelverifybutton.enabled = true
@@ -1266,7 +1248,6 @@ ApplicationWindow {
     function resetWriteButton() {
         progressText.visible = false
         progressBar.visible = false
-        customizebutton.visible = imageWriter.imageSupportsCustomization()
         osbutton.enabled = true
         dstbutton.enabled = true
         hwbutton.enabled = true
@@ -1313,7 +1294,6 @@ ApplicationWindow {
         if (imageWriter.readyToWrite()) {
             writebutton.enabled = true
         }
-        customizebutton.visible = imageWriter.imageSupportsCustomization()
     }
 
     function onCancelled() {
@@ -1597,9 +1577,8 @@ ApplicationWindow {
 
     function selectHWitem(hwmodel) {
         hwTags = hwmodel.tags
-        
+
         if (hwmodel.matching_type) {
-            
             switch (hwmodel.matching_type) {
                 case "exclusive":
                     hwTagMatchingType = 0
@@ -1709,7 +1688,6 @@ ApplicationWindow {
             if (imageWriter.readyToWrite()) {
                 writebutton.enabled = true
             }
-            customizebutton.visible = imageWriter.imageSupportsCustomization()
         }
     }
 
