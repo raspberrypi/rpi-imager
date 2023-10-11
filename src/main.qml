@@ -111,7 +111,7 @@ ApplicationWindow {
                     Text {
                         id: text0
                         color: "#ffffff"
-                        text: qsTr("Select your device")
+                        text: qsTr("Raspberry Pi Device")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
                         Layout.preferredWidth: 100
