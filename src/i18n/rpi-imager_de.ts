@@ -4,10 +4,6 @@
 <context>
     <name>DownloadExtractThread</name>
     <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">Fehler beim Schreiben auf den Speicher</translation>
-    </message>
-    <message>
         <location filename="../downloadextractthread.cpp" line="196"/>
         <location filename="../downloadextractthread.cpp" line="385"/>
         <source>Error extracting archive: %1</source>
@@ -27,6 +23,10 @@
         <location filename="../downloadextractthread.cpp" line="304"/>
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Fehler beim Wechseln in den Ordner &quot;%1&quot;</translation>
+    </message>
+    <message>
+        <source>Error writing to storage</source>
+        <translation type="vanished">Fehler beim Schreiben auf den Speicher</translation>
     </message>
 </context>
 <context>
@@ -100,50 +100,9 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
         <translation>Download wird gestartet</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="826"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>Fehler beim Lesen vom Speicher.&lt;br&gt;Die SD-Karte könnte defekt sein.</translation>
-    </message>
-    <message>
-        <source>Waiting for FAT partition to be mounted</source>
-        <translation type="vanished">Warten auf das Einbinden der FAT-Partition</translation>
-    </message>
-    <message>
-        <source>Error mounting FAT32 partition</source>
-        <translation type="vanished">Fehler beim Einbinden der FAT32-Partition</translation>
-    </message>
-    <message>
-        <source>Operating system did not mount FAT32 partition</source>
-        <translation type="vanished">Das Betriebssystem hat die FAT32-Partition nicht eingebunden.</translation>
-    </message>
-    <message>
-        <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
-        <translation type="vanished">Modifizieren fehlgeschlagen. Die Datei &apos;%1&apos; existiert nicht.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="898"/>
-        <source>Customizing image</source>
-        <translation>Image modifizieren</translation>
-    </message>
-    <message>
-        <source>Error creating firstrun.sh on FAT partition</source>
-        <translation type="vanished">Fehler beim Erstellen von firstrun.sh auf der FAT-Partition</translation>
-    </message>
-    <message>
-        <source>Error writing to config.txt on FAT partition</source>
-        <translation type="vanished">Fehler beim Schreiben in config.txt auf der FAT-Partition</translation>
-    </message>
-    <message>
-        <source>Error creating user-data cloudinit file on FAT partition</source>
-        <translation type="vanished">Fehler beim Erstellen der user-data cloudinit Datei auf der FAT-Partition</translation>
-    </message>
-    <message>
-        <source>Error creating network-config cloudinit file on FAT partition</source>
-        <translation type="vanished">Fehler beim Erstellen der network-config cloudinit Datei auf der FAT-Partition</translation>
-    </message>
-    <message>
-        <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation type="vanished">Fehler beim Schreiben in cmdline.txt auf der FAT-Partition</translation>
+        <location filename="../downloadthread.cpp" line="466"/>
+        <source>Error downloading: %1</source>
+        <translation>Fehler beim Herunterladen: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="663"/>
@@ -162,11 +121,6 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <location filename="../downloadthread.cpp" line="675"/>
         <source>Error writing file to disk</source>
         <translation>Fehler beim Schreiben der Datei auf den Speicher</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="466"/>
-        <source>Error downloading: %1</source>
-        <translation>Fehler beim Herunterladen: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="697"/>
@@ -191,9 +145,55 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Fehler beim Schreiben auf des ersten Blocks (Partitionstabelle)</translation>
     </message>
     <message>
+        <location filename="../downloadthread.cpp" line="826"/>
+        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <translation>Fehler beim Lesen vom Speicher.&lt;br&gt;Die SD-Karte könnte defekt sein.</translation>
+    </message>
+    <message>
         <location filename="../downloadthread.cpp" line="845"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Verifizierung fehlgeschlagen. Der Inhalt der SD-Karte weicht von dem Inhalt ab, der geschrieben werden sollte.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="898"/>
+        <source>Customizing image</source>
+        <translation>Image modifizieren</translation>
+    </message>
+    <message>
+        <source>Waiting for FAT partition to be mounted</source>
+        <translation type="vanished">Warten auf das Einbinden der FAT-Partition</translation>
+    </message>
+    <message>
+        <source>Error mounting FAT32 partition</source>
+        <translation type="vanished">Fehler beim Einbinden der FAT32-Partition</translation>
+    </message>
+    <message>
+        <source>Operating system did not mount FAT32 partition</source>
+        <translation type="vanished">Das Betriebssystem hat die FAT32-Partition nicht eingebunden.</translation>
+    </message>
+    <message>
+        <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
+        <translation type="vanished">Modifizieren fehlgeschlagen. Die Datei &apos;%1&apos; existiert nicht.</translation>
+    </message>
+    <message>
+        <source>Error creating firstrun.sh on FAT partition</source>
+        <translation type="vanished">Fehler beim Erstellen von firstrun.sh auf der FAT-Partition</translation>
+    </message>
+    <message>
+        <source>Error writing to config.txt on FAT partition</source>
+        <translation type="vanished">Fehler beim Schreiben in config.txt auf der FAT-Partition</translation>
+    </message>
+    <message>
+        <source>Error creating user-data cloudinit file on FAT partition</source>
+        <translation type="vanished">Fehler beim Erstellen der user-data cloudinit Datei auf der FAT-Partition</translation>
+    </message>
+    <message>
+        <source>Error creating network-config cloudinit file on FAT partition</source>
+        <translation type="vanished">Fehler beim Erstellen der network-config cloudinit Datei auf der FAT-Partition</translation>
+    </message>
+    <message>
+        <source>Error writing to cmdline.txt on FAT partition</source>
+        <translation type="vanished">Fehler beim Schreiben in cmdline.txt auf der FAT-Partition</translation>
     </message>
 </context>
 <context>
@@ -343,75 +343,6 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Immer verwenden</translation>
     </message>
     <message>
-        <source>Disable overscan</source>
-        <translation type="vanished">Overscan deaktivieren</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="98"/>
-        <source>Set hostname:</source>
-        <translation>Hostname:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="298"/>
-        <source>Enable SSH</source>
-        <translation>SSH aktivieren</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="317"/>
-        <source>Use password authentication</source>
-        <translation>Password zur Authentifizierung verwenden</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="327"/>
-        <source>Allow public-key authentication only</source>
-        <translation>Authentifizierung via Public-Key</translation>
-    </message>
-    <message>
-        <source>Set password for &apos;%1&apos; user:</source>
-        <translation type="vanished">Passwort für &apos;%1&apos;:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="345"/>
-        <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>authorized_keys für &apos;%1&apos;:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
-        <source>Configure wireless LAN</source>
-        <translation>Wifi einrichten</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
-        <source>SSID:</source>
-        <translation>SSID:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
-        <source>Password:</source>
-        <translation>Passwort:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="120"/>
-        <source>Set username and password</source>
-        <translation>Benutzername und Passwort setzen:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="142"/>
-        <source>Username:</source>
-        <translation>Benutzername:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
-        <source>Hidden SSID</source>
-        <translation>Verborgene SSID</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="238"/>
-        <source>Show password</source>
-        <translation>Passwort anzeigen</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
         <translation type="unfinished"></translation>
@@ -425,6 +356,47 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="98"/>
+        <source>Set hostname:</source>
+        <translation>Hostname:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="120"/>
+        <source>Set username and password</source>
+        <translation>Benutzername und Passwort setzen:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="142"/>
+        <source>Username:</source>
+        <translation>Benutzername:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="158"/>
+        <location filename="../OptionsPopup.qml" line="219"/>
+        <source>Password:</source>
+        <translation>Passwort:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="186"/>
+        <source>Configure wireless LAN</source>
+        <translation>Wifi einrichten</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="205"/>
+        <source>SSID:</source>
+        <translation>SSID:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="238"/>
+        <source>Show password</source>
+        <translation>Passwort anzeigen</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="244"/>
+        <source>Hidden SSID</source>
+        <translation>Verborgene SSID</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="250"/>
@@ -447,17 +419,29 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Tastaturlayout:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="298"/>
+        <source>Enable SSH</source>
+        <translation>SSH aktivieren</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="317"/>
+        <source>Use password authentication</source>
+        <translation>Password zur Authentifizierung verwenden</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="327"/>
+        <source>Allow public-key authentication only</source>
+        <translation>Authentifizierung via Public-Key</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="345"/>
+        <source>Set authorized_keys for &apos;%1&apos;:</source>
+        <translation>authorized_keys für &apos;%1&apos;:</translation>
+    </message>
+    <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Skip first-run wizard</source>
-        <translation type="vanished">Einrichtungsassistent überspringen</translation>
-    </message>
-    <message>
-        <source>Persistent settings</source>
-        <translation type="vanished">Dauerhafte Einstellungen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -479,6 +463,22 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <source>SAVE</source>
         <translation>SPEICHERN</translation>
     </message>
+    <message>
+        <source>Disable overscan</source>
+        <translation type="vanished">Overscan deaktivieren</translation>
+    </message>
+    <message>
+        <source>Set password for &apos;%1&apos; user:</source>
+        <translation type="vanished">Passwort für &apos;%1&apos;:</translation>
+    </message>
+    <message>
+        <source>Skip first-run wizard</source>
+        <translation type="vanished">Einrichtungsassistent überspringen</translation>
+    </message>
+    <message>
+        <source>Persistent settings</source>
+        <translation type="vanished">Dauerhafte Einstellungen</translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -492,12 +492,12 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Warning: advanced settings set</source>
+        <source>Use image customisation?</source>
         <translation>Warnung: Erweiterte Optionen festgelegt</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply the image customization settings saved earlier?</source>
+        <source>Would you like to apply image customization settings?</source>
         <translation>Möchten Sie die vorher festgelegten OS-Modifizierungen anwenden?</translation>
     </message>
     <message>
@@ -529,6 +529,22 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="114"/>
+        <location filename="../main.qml" line="467"/>
+        <source>Raspberry Pi Device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="126"/>
+        <source>CHOOSE DEVICE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="138"/>
+        <source>Select this button to choose your target Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="97"/>
         <location filename="../main.qml" line="413"/>
         <source>Operating System</source>
@@ -557,18 +573,14 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>SD-KARTE WÄHLEN</translation>
     </message>
     <message>
-        <source>Select this button to change the destination SD card</source>
-        <translation type="vanished">Klicke auf diesen Knopf, um die Ziel-SD-Karte zu ändern</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="171"/>
         <source>WRITE</source>
         <translation>SCHREIBEN</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
-        <source>Select this button to start writing the image</source>
-        <translation>Klicke auf diesen Knopf, um mit dem Schreiben zu beginnen</translation>
+        <location filename="../main.qml" line="155"/>
+        <source>Select this button to change the destination storage device</source>
+        <translation>Klicken Sie auf diesen Knopf, um das Ziel-Speichermedium zu ändern</translation>
     </message>
     <message>
         <location filename="../main.qml" line="216"/>
@@ -594,35 +606,14 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Finalisieren...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
-        <source>Erase</source>
-        <translation>Löschen</translation>
+        <location filename="../main.qml" line="288"/>
+        <source>Next</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="573"/>
-        <source>Format card as FAT32</source>
-        <translation>Karte als FAT32 formatieren</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="582"/>
-        <source>Use custom</source>
-        <translation>Eigenes Image</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="583"/>
-        <source>Select a custom .img from your computer</source>
-        <translation>Wählen Sie eine eigene .img-Datei von Ihrem Computer</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="528"/>
-        <source>Back</source>
-        <translation>Zurück</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="155"/>
-        <source>Select this button to change the destination storage device</source>
-        <translation>Klicken Sie auf diesen Knopf, um das Ziel-Speichermedium zu ändern</translation>
+        <location filename="../main.qml" line="175"/>
+        <source>Select this button to start writing the image</source>
+        <translation>Klicke auf diesen Knopf, um mit dem Schreiben zu beginnen</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
@@ -658,6 +649,11 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <location filename="../main.qml" line="448"/>
         <source>[ All ]</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="528"/>
+        <source>Back</source>
+        <translation>Zurück</translation>
     </message>
     <message>
         <location filename="../main.qml" line="529"/>
@@ -717,6 +713,11 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Schreiben wird vorbereitet...</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="962"/>
+        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
+        <translation>Alle vorhandenen Daten auf &apos;%1&apos; werden gelöscht.&lt;br&gt;Möchten Sie wirklich fortfahren?</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="973"/>
         <source>Update available</source>
         <translation>Update verfügbar</translation>
@@ -727,19 +728,14 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Eine neuere Version von Imager ist verfügbar. &lt;br&gt;Möchten Sie die Webseite besuchen, um das Update herunterzuladen?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
-        <source>Writing... %1%</source>
-        <translation>Schreiben... %1%</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="962"/>
-        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>Alle vorhandenen Daten auf &apos;%1&apos; werden gelöscht.&lt;br&gt;Möchten Sie wirklich fortfahren?</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Fehler beim Herunterladen der Betriebssystemsliste aus dem Internet</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1038"/>
+        <source>Writing... %1%</source>
+        <translation>Schreiben... %1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1061"/>
@@ -762,13 +758,15 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Schreiben erfolgreich</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="572"/>
+        <location filename="../main.qml" line="1092"/>
+        <source>Erase</source>
+        <translation>Löschen</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1093"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; wurde geleert&lt;br&gt;&lt;br&gt;Sie können die SD-Karte nun aus dem Lesegerät entfernen</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
-        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; wurde auf &lt;b&gt;%2&lt;/b&gt; geschrieben</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1100"/>
@@ -781,6 +779,21 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <translation>Fehler beim Parsen von os_list.json</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="573"/>
+        <source>Format card as FAT32</source>
+        <translation>Karte als FAT32 formatieren</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="582"/>
+        <source>Use custom</source>
+        <translation>Eigenes Image</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="583"/>
+        <source>Select a custom .img from your computer</source>
+        <translation>Wählen Sie eine eigene .img-Datei von Ihrem Computer</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1391"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Verbinden Sie zuerst einen USB-Stick mit Images.&lt;br&gt;Die Images müssen sich im Wurzelverzeichnes des USB-Sticks befinden.</translation>
@@ -789,6 +802,14 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <location filename="../main.qml" line="1407"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>Die Speicherkarte ist schreibgeschützt.&lt;br&gt;Schieben Sie den Schutzschalter auf der linken Seite nach oben, und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <source>Select this button to change the destination SD card</source>
+        <translation type="vanished">Klicke auf diesen Knopf, um die Ziel-SD-Karte zu ändern</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
+        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; wurde auf &lt;b&gt;%2&lt;/b&gt; geschrieben</translation>
     </message>
 </context>
 </TS>

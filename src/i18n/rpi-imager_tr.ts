@@ -4,10 +4,6 @@
 <context>
     <name>DownloadExtractThread</name>
     <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">Depolama birimine yazma hatası</translation>
-    </message>
-    <message>
         <location filename="../downloadextractthread.cpp" line="196"/>
         <location filename="../downloadextractthread.cpp" line="385"/>
         <source>Error extracting archive: %1</source>
@@ -28,9 +24,23 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Dizin değiştirirken hata oluştu &apos;%1&apos;</translation>
     </message>
+    <message>
+        <source>Error writing to storage</source>
+        <translation type="vanished">Depolama birimine yazma hatası</translation>
+    </message>
 </context>
 <context>
     <name>DownloadThread</name>
+    <message>
+        <location filename="../downloadthread.cpp" line="118"/>
+        <source>unmounting drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="138"/>
+        <source>opening drive</source>
+        <translation>sürücü açılıyor</translation>
+    </message>
     <message>
         <location filename="../downloadthread.cpp" line="166"/>
         <source>Error running diskpart: %1</source>
@@ -77,22 +87,19 @@
         <translation>MBR sıfırlanırken yazma hatası</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="826"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>Depolamadan okuma hatası.&lt;br&gt;SD kart arızalı olabilir.</translation>
+        <location filename="../downloadthread.cpp" line="319"/>
+        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
+        <translation>Kartın son kısmını sıfırlamaya çalışırken yazma hatası. Kart yanlış kapasitenin tanımını yapıyor olabilir (olası sahte bölüm boyutu tanımı)</translation>
     </message>
     <message>
-        <source>Error mounting FAT32 partition</source>
-        <translation type="obsolete">FAT32 bölümü bağlanırken hata oluştu</translation>
+        <location filename="../downloadthread.cpp" line="408"/>
+        <source>starting download</source>
+        <translation>indirmeye başlanıyor</translation>
     </message>
     <message>
-        <source>Operating system did not mount FAT32 partition</source>
-        <translation type="obsolete">İşletim sistemi FAT32 bölümünü bağlamadı</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="898"/>
-        <source>Customizing image</source>
-        <translation type="unfinished"></translation>
+        <location filename="../downloadthread.cpp" line="466"/>
+        <source>Error downloading: %1</source>
+        <translation>İndirilirken hata oluştu: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="663"/>
@@ -110,9 +117,9 @@
         <translation>Dosyayı diske yazma hatası</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="466"/>
-        <source>Error downloading: %1</source>
-        <translation>İndirilirken hata oluştu: %1</translation>
+        <location filename="../downloadthread.cpp" line="697"/>
+        <source>Download corrupt. Hash does not match</source>
+        <translation>İndirme bozuk. Hash eşleşmiyor</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="709"/>
@@ -127,39 +134,32 @@
         <translation>Depoya yazma hatası (fsync sırasında)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="697"/>
-        <source>Download corrupt. Hash does not match</source>
-        <translation>İndirme bozuk. Hash eşleşmiyor</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="118"/>
-        <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="138"/>
-        <source>opening drive</source>
-        <translation>sürücü açılıyor</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="319"/>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>Kartın son kısmını sıfırlamaya çalışırken yazma hatası. Kart yanlış kapasitenin tanımını yapıyor olabilir (olası sahte bölüm boyutu tanımı)</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="408"/>
-        <source>starting download</source>
-        <translation>indirmeye başlanıyor</translation>
-    </message>
-    <message>
         <location filename="../downloadthread.cpp" line="751"/>
         <source>Error writing first block (partition table)</source>
         <translation>İlk bloğu yazma hatası (bölüm tablosu)</translation>
     </message>
     <message>
+        <location filename="../downloadthread.cpp" line="826"/>
+        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <translation>Depolamadan okuma hatası.&lt;br&gt;SD kart arızalı olabilir.</translation>
+    </message>
+    <message>
         <location filename="../downloadthread.cpp" line="845"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Yazma doğrulanamadı. SD kartın içeriği, üzerine yazılandan farklı.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="898"/>
+        <source>Customizing image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error mounting FAT32 partition</source>
+        <translation type="obsolete">FAT32 bölümü bağlanırken hata oluştu</translation>
+    </message>
+    <message>
+        <source>Operating system did not mount FAT32 partition</source>
+        <translation type="obsolete">İşletim sistemi FAT32 bölümünü bağlamadı</translation>
     </message>
 </context>
 <context>
@@ -329,6 +329,62 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="120"/>
+        <source>Set username and password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="142"/>
+        <source>Username:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="158"/>
+        <location filename="../OptionsPopup.qml" line="219"/>
+        <source>Password:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="186"/>
+        <source>Configure wireless LAN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="205"/>
+        <source>SSID:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="238"/>
+        <source>Show password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="244"/>
+        <source>Hidden SSID</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="250"/>
+        <source>Wireless LAN country:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="261"/>
+        <source>Set locale settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="271"/>
+        <source>Time zone:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="281"/>
+        <source>Keyboard layout:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../OptionsPopup.qml" line="298"/>
         <source>Enable SSH</source>
         <translation type="unfinished"></translation>
@@ -351,62 +407,6 @@
     <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
-        <source>Configure wireless LAN</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
-        <source>SSID:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
-        <source>Password:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="120"/>
-        <source>Set username and password</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="142"/>
-        <source>Username:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
-        <source>Hidden SSID</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="238"/>
-        <source>Show password</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="250"/>
-        <source>Wireless LAN country:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="261"/>
-        <source>Set locale settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="271"/>
-        <source>Time zone:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="281"/>
-        <source>Keyboard layout:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -442,12 +442,12 @@
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Warning: advanced settings set</source>
+        <source>Use image customisation?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply the image customization settings saved earlier?</source>
+        <source>Would you like to apply image customization settings?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -479,6 +479,22 @@
         <translation>Raspberry Pi Imaj Yöneticisi v%1</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="114"/>
+        <location filename="../main.qml" line="467"/>
+        <source>Raspberry Pi Device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="126"/>
+        <source>CHOOSE DEVICE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="138"/>
+        <source>Select this button to choose your target Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="97"/>
         <location filename="../main.qml" line="413"/>
         <source>Operating System</source>
@@ -507,18 +523,14 @@
         <translation>SD KART SEÇİN</translation>
     </message>
     <message>
-        <source>Select this button to change the destination SD card</source>
-        <translation type="vanished">Hedef SD kartı değiştirmek için bu düğmeyi seçin</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="171"/>
         <source>WRITE</source>
         <translation>YAZ</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
-        <source>Select this button to start writing the image</source>
-        <translation>Görüntüyü yazmaya başlamak için bu düğmeyi seçin</translation>
+        <location filename="../main.qml" line="155"/>
+        <source>Select this button to change the destination storage device</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../main.qml" line="216"/>
@@ -544,35 +556,14 @@
         <translation>Bitiriliyor...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
-        <source>Erase</source>
-        <translation>Sil</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="573"/>
-        <source>Format card as FAT32</source>
-        <translation>Kartı FAT32 olarak biçimlendir</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="582"/>
-        <source>Use custom</source>
-        <translation>Özel imaj kullan</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="583"/>
-        <source>Select a custom .img from your computer</source>
-        <translation>Bilgisayarınızdan özel bir .img seçin</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="528"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="155"/>
-        <source>Select this button to change the destination storage device</source>
+        <location filename="../main.qml" line="288"/>
+        <source>Next</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="175"/>
+        <source>Select this button to start writing the image</source>
+        <translation>Görüntüyü yazmaya başlamak için bu düğmeyi seçin</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
@@ -608,6 +599,11 @@
         <location filename="../main.qml" line="448"/>
         <source>[ All ]</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="528"/>
+        <source>Back</source>
+        <translation>Geri</translation>
     </message>
     <message>
         <location filename="../main.qml" line="529"/>
@@ -668,6 +664,11 @@
         <translation>Yazdırmaya hazırlanıyor...</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="962"/>
+        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
+        <translation>&apos;%1&apos; üzerindeki mevcut tüm veriler silinecek.&lt;br&gt;Devam etmek istediğinizden emin misiniz?</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="973"/>
         <source>Update available</source>
         <translation>Güncelleme bulunuyor</translation>
@@ -678,19 +679,14 @@
         <translation>Görüntüleyicinin daha yeni bir sürümü var. &lt;br&gt; İndirmek için web sitesini ziyaret etmek ister misiniz?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
-        <source>Writing... %1%</source>
-        <translation>Yazılıyor... %1%</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="962"/>
-        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>&apos;%1&apos; üzerindeki mevcut tüm veriler silinecek.&lt;br&gt;Devam etmek istediğinizden emin misiniz?</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
         <translation>İnternetten işletim sistemi listesi indirilirken hata oluştu</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1038"/>
+        <source>Writing... %1%</source>
+        <translation>Yazılıyor... %1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1061"/>
@@ -713,13 +709,15 @@
         <translation>Başarılı Yazıldı</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="572"/>
+        <location filename="../main.qml" line="1092"/>
+        <source>Erase</source>
+        <translation>Sil</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1093"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; silindi &lt;br&gt;&lt;br&gt; Artık SD kartı okuyucudan çıkarabilirsiniz</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
-        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt; üzerine yazıldı</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1100"/>
@@ -732,6 +730,21 @@
         <translation>os_list.json ayrıştırma hatası</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="573"/>
+        <source>Format card as FAT32</source>
+        <translation>Kartı FAT32 olarak biçimlendir</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="582"/>
+        <source>Use custom</source>
+        <translation>Özel imaj kullan</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="583"/>
+        <source>Select a custom .img from your computer</source>
+        <translation>Bilgisayarınızdan özel bir .img seçin</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1391"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Önce görüntüler içeren bir USB bellek bağlayın.&lt;br&gt; Görüntüler USB belleğin kök klasöründe bulunmalıdır.</translation>
@@ -740,6 +753,14 @@
         <location filename="../main.qml" line="1407"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>SD kart yazma korumalı. &lt;br&gt; Kartın sol tarafındaki kilit anahtarını yukarı itin ve tekrar deneyin.</translation>
+    </message>
+    <message>
+        <source>Select this button to change the destination SD card</source>
+        <translation type="vanished">Hedef SD kartı değiştirmek için bu düğmeyi seçin</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
+        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt; üzerine yazıldı</translation>
     </message>
 </context>
 </TS>

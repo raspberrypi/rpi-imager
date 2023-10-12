@@ -4,10 +4,6 @@
 <context>
     <name>DownloadExtractThread</name>
     <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">Fout bij schrijven naar opslag</translation>
-    </message>
-    <message>
         <location filename="../downloadextractthread.cpp" line="196"/>
         <location filename="../downloadextractthread.cpp" line="385"/>
         <source>Error extracting archive: %1</source>
@@ -28,9 +24,23 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Fout bij openen map &apos;%1&apos;</translation>
     </message>
+    <message>
+        <source>Error writing to storage</source>
+        <translation type="vanished">Fout bij schrijven naar opslag</translation>
+    </message>
 </context>
 <context>
     <name>DownloadThread</name>
+    <message>
+        <location filename="../downloadthread.cpp" line="118"/>
+        <source>unmounting drive</source>
+        <translation>unmounten van schijf</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="138"/>
+        <source>opening drive</source>
+        <translation>openen van opslag</translation>
+    </message>
     <message>
         <location filename="../downloadthread.cpp" line="166"/>
         <source>Error running diskpart: %1</source>
@@ -77,9 +87,71 @@
         <translation>Fout bij wissen MBR</translation>
     </message>
     <message>
+        <location filename="../downloadthread.cpp" line="319"/>
+        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
+        <translation>Fout bij wissen laatste deel van de SD kaart.&lt;br&gt;Kaart geeft mogelijk onjuiste capaciteit aan (mogelijk counterfeit).</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="408"/>
+        <source>starting download</source>
+        <translation>beginnen met downloaden</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="466"/>
+        <source>Error downloading: %1</source>
+        <translation>Fout bij downloaden: %1</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="663"/>
+        <source>Access denied error while writing file to disk.</source>
+        <translation>Toegang geweigerd bij het schrijven naar opslag.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="668"/>
+        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
+        <translation>Controller Folder Access lijkt aan te staan. Gelieve zowel rpi-imager.exe als fat32format.exe toe te voegen aan de lijst met uitsluitingen en het nogmaals te proberen.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="675"/>
+        <source>Error writing file to disk</source>
+        <translation>Fout bij schrijven naar opslag</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="697"/>
+        <source>Download corrupt. Hash does not match</source>
+        <translation>Download corrupt. Hash komt niet overeen</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="709"/>
+        <location filename="../downloadthread.cpp" line="761"/>
+        <source>Error writing to storage (while flushing)</source>
+        <translation>Fout bij schrijven naar opslag (tijdens flushen)</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="716"/>
+        <location filename="../downloadthread.cpp" line="768"/>
+        <source>Error writing to storage (while fsync)</source>
+        <translation>Fout bij schrijven naar opslag (tijdens fsync)</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="751"/>
+        <source>Error writing first block (partition table)</source>
+        <translation>Fout bij schrijven naar eerste deel van kaart (partitie tabel)</translation>
+    </message>
+    <message>
         <location filename="../downloadthread.cpp" line="826"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>Fout bij lezen van SD kaart.&lt;br&gt;Kaart is mogelijk defect.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="845"/>
+        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <translation>Verificatie mislukt. De gegevens die op de SD kaart staan wijken af van wat er naar geschreven is.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="898"/>
+        <source>Customizing image</source>
+        <translation>Bezig met aanpassen besturingssysteem</translation>
     </message>
     <message>
         <source>Waiting for FAT partition to be mounted</source>
@@ -96,11 +168,6 @@
     <message>
         <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
         <translation type="vanished">Fout bij aanpassen besturingssysteem. Bestand &apos;%1&apos; bestaat niet.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="898"/>
-        <source>Customizing image</source>
-        <translation>Bezig met aanpassen besturingssysteem</translation>
     </message>
     <message>
         <source>Error creating firstrun.sh on FAT partition</source>
@@ -121,73 +188,6 @@
     <message>
         <source>Error writing to cmdline.txt on FAT partition</source>
         <translation type="vanished">Fout bij schrijven cmdline.txt op FAT partitie</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="663"/>
-        <source>Access denied error while writing file to disk.</source>
-        <translation>Toegang geweigerd bij het schrijven naar opslag.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="668"/>
-        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation>Controller Folder Access lijkt aan te staan. Gelieve zowel rpi-imager.exe als fat32format.exe toe te voegen aan de lijst met uitsluitingen en het nogmaals te proberen.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="675"/>
-        <source>Error writing file to disk</source>
-        <translation>Fout bij schrijven naar opslag</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="466"/>
-        <source>Error downloading: %1</source>
-        <translation>Fout bij downloaden: %1</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="709"/>
-        <location filename="../downloadthread.cpp" line="761"/>
-        <source>Error writing to storage (while flushing)</source>
-        <translation>Fout bij schrijven naar opslag (tijdens flushen)</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="716"/>
-        <location filename="../downloadthread.cpp" line="768"/>
-        <source>Error writing to storage (while fsync)</source>
-        <translation>Fout bij schrijven naar opslag (tijdens fsync)</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="697"/>
-        <source>Download corrupt. Hash does not match</source>
-        <translation>Download corrupt. Hash komt niet overeen</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="118"/>
-        <source>unmounting drive</source>
-        <translation>unmounten van schijf</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="138"/>
-        <source>opening drive</source>
-        <translation>openen van opslag</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="319"/>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>Fout bij wissen laatste deel van de SD kaart.&lt;br&gt;Kaart geeft mogelijk onjuiste capaciteit aan (mogelijk counterfeit).</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="408"/>
-        <source>starting download</source>
-        <translation>beginnen met downloaden</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="751"/>
-        <source>Error writing first block (partition table)</source>
-        <translation>Fout bij schrijven naar eerste deel van kaart (partitie tabel)</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="845"/>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>Verificatie mislukt. De gegevens die op de SD kaart staan wijken af van wat er naar geschreven is.</translation>
     </message>
 </context>
 <context>
@@ -337,79 +337,6 @@
         <translation>om altijd te gebruiken</translation>
     </message>
     <message>
-        <source>Disable overscan</source>
-        <translation type="vanished">Overscan uitschakelen</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="98"/>
-        <source>Set hostname:</source>
-        <translation>Hostnaam:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="298"/>
-        <source>Enable SSH</source>
-        <translation>SSH inschakelen</translation>
-    </message>
-    <message>
-        <source>Set username:</source>
-        <translation type="vanished">Gebruikersnaam:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="317"/>
-        <source>Use password authentication</source>
-        <translation>Gebruik wachtwoord authenticatie</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="327"/>
-        <source>Allow public-key authentication only</source>
-        <translation>Gebruik uitsluitend public-key authenticatie</translation>
-    </message>
-    <message>
-        <source>Set password for &apos;%1&apos; user:</source>
-        <translation type="vanished">Wachtwoord voor &apos;%1&apos; gebruiker:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="345"/>
-        <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>authorized_keys voor &apos;%1&apos;:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
-        <source>Configure wireless LAN</source>
-        <translation>Wifi instellen</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
-        <source>SSID:</source>
-        <translation>SSID:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
-        <source>Password:</source>
-        <translation>Wachtwoord:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="120"/>
-        <source>Set username and password</source>
-        <translation>Gebruikersnaam en wachtwoord instellen</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="142"/>
-        <source>Username:</source>
-        <translation>Gebruikersnaam:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
-        <source>Hidden SSID</source>
-        <translation>Verborgen SSID</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="238"/>
-        <source>Show password</source>
-        <translation>Wachtwoord laten zien</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
         <translation>Algemeen</translation>
@@ -423,6 +350,47 @@
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
         <translation>Opties</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="98"/>
+        <source>Set hostname:</source>
+        <translation>Hostnaam:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="120"/>
+        <source>Set username and password</source>
+        <translation>Gebruikersnaam en wachtwoord instellen</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="142"/>
+        <source>Username:</source>
+        <translation>Gebruikersnaam:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="158"/>
+        <location filename="../OptionsPopup.qml" line="219"/>
+        <source>Password:</source>
+        <translation>Wachtwoord:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="186"/>
+        <source>Configure wireless LAN</source>
+        <translation>Wifi instellen</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="205"/>
+        <source>SSID:</source>
+        <translation>SSID:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="238"/>
+        <source>Show password</source>
+        <translation>Wachtwoord laten zien</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="244"/>
+        <source>Hidden SSID</source>
+        <translation>Verborgen SSID</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="250"/>
@@ -445,17 +413,29 @@
         <translation>Toetsenbord indeling:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="298"/>
+        <source>Enable SSH</source>
+        <translation>SSH inschakelen</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="317"/>
+        <source>Use password authentication</source>
+        <translation>Gebruik wachtwoord authenticatie</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="327"/>
+        <source>Allow public-key authentication only</source>
+        <translation>Gebruik uitsluitend public-key authenticatie</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="345"/>
+        <source>Set authorized_keys for &apos;%1&apos;:</source>
+        <translation>authorized_keys voor &apos;%1&apos;:</translation>
+    </message>
+    <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
         <translation>START SSH-KEYGEN</translation>
-    </message>
-    <message>
-        <source>Skip first-run wizard</source>
-        <translation type="vanished">Eerste gebruik wizard overslaan</translation>
-    </message>
-    <message>
-        <source>Persistent settings</source>
-        <translation type="vanished">Permanente instellingen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -477,6 +457,26 @@
         <source>SAVE</source>
         <translation>OPSLAAN</translation>
     </message>
+    <message>
+        <source>Disable overscan</source>
+        <translation type="vanished">Overscan uitschakelen</translation>
+    </message>
+    <message>
+        <source>Set username:</source>
+        <translation type="vanished">Gebruikersnaam:</translation>
+    </message>
+    <message>
+        <source>Set password for &apos;%1&apos; user:</source>
+        <translation type="vanished">Wachtwoord voor &apos;%1&apos; gebruiker:</translation>
+    </message>
+    <message>
+        <source>Skip first-run wizard</source>
+        <translation type="vanished">Eerste gebruik wizard overslaan</translation>
+    </message>
+    <message>
+        <source>Persistent settings</source>
+        <translation type="vanished">Permanente instellingen</translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -490,12 +490,12 @@
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Warning: advanced settings set</source>
+        <source>Use image customisation?</source>
         <translation>Opgeslagen instellingen toepassen</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply the image customization settings saved earlier?</source>
+        <source>Would you like to apply image customization settings?</source>
         <translation>Wilt u de eerder opgeslagen image customization instellingen toepassen?</translation>
     </message>
     <message>
@@ -527,14 +527,20 @@
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="929"/>
-        <source>Are you sure you want to quit?</source>
-        <translation>Weet u zeker dat u wilt afsluiten?</translation>
+        <location filename="../main.qml" line="114"/>
+        <location filename="../main.qml" line="467"/>
+        <source>Raspberry Pi Device</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="930"/>
-        <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>Raspberry Pi Imager is nog niet klaar.&lt;br&gt;Weet u zeker dat u wilt afsluiten?</translation>
+        <location filename="../main.qml" line="126"/>
+        <source>CHOOSE DEVICE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="138"/>
+        <source>Select this button to choose your target Raspberry Pi</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -546,6 +552,11 @@
         <location filename="../main.qml" line="109"/>
         <source>CHOOSE OS</source>
         <translation>SELECTEER OS</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="121"/>
+        <source>Select this button to change the operating system</source>
+        <translation>Kies deze knop om een besturingssysteem te kiezen</translation>
     </message>
     <message>
         <location filename="../main.qml" line="133"/>
@@ -565,28 +576,14 @@
         <translation>SCHRIJF</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
-        <source>Writing... %1%</source>
-        <translation>Schrijven... %1%</translation>
+        <location filename="../main.qml" line="155"/>
+        <source>Select this button to change the destination storage device</source>
+        <translation>Klik op deze knop om het opslagapparaat te wijzigen</translation>
     </message>
     <message>
         <location filename="../main.qml" line="216"/>
         <source>CANCEL WRITE</source>
         <translation>Annuleer schrijven</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="121"/>
-        <source>Select this button to change the operating system</source>
-        <translation>Kies deze knop om een besturingssysteem te kiezen</translation>
-    </message>
-    <message>
-        <source>Select this button to change the destination SD card</source>
-        <translation type="vanished">Kies deze knop om de SD kaart te kiezen</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="175"/>
-        <source>Select this button to start writing the image</source>
-        <translation>Kies deze knop om te beginnen met het schrijven van de image</translation>
     </message>
     <message>
         <location filename="../main.qml" line="219"/>
@@ -605,6 +602,16 @@
         <location filename="../main.qml" line="1127"/>
         <source>Finalizing...</source>
         <translation>Afronden...</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="288"/>
+        <source>Next</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="175"/>
+        <source>Select this button to start writing the image</source>
+        <translation>Kies deze knop om te beginnen met het schrijven van de image</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
@@ -642,25 +649,24 @@
         <translation>[ Alle modellen ]</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
-        <source>Erase</source>
-        <translation>Wissen</translation>
+        <location filename="../main.qml" line="528"/>
+        <source>Back</source>
+        <translation>Terug</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="573"/>
-        <source>Format card as FAT32</source>
-        <translation>Formatteer kaart als FAT32</translation>
+        <location filename="../main.qml" line="529"/>
+        <source>Go back to main menu</source>
+        <translation>Terug naar hoofdmenu</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="582"/>
-        <source>Use custom</source>
-        <translation>Gebruik eigen bestand</translation>
+        <location filename="../main.qml" line="695"/>
+        <source>Released: %1</source>
+        <translation>Release datum: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="583"/>
-        <source>Select a custom .img from your computer</source>
-        <translation>Selecteer een eigen .img bestand</translation>
+        <location filename="../main.qml" line="705"/>
+        <source>Cached on your computer</source>
+        <translation>Opgeslagen op computer</translation>
     </message>
     <message>
         <location filename="../main.qml" line="707"/>
@@ -668,9 +674,31 @@
         <translation>Lokaal bestand</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="708"/>
+        <source>Online - %1 GB download</source>
+        <translation>Online %1 GB download</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="833"/>
+        <location filename="../main.qml" line="885"/>
+        <location filename="../main.qml" line="891"/>
+        <source>Mounted as %1</source>
+        <translation>Mounted op %1</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="887"/>
         <source>[WRITE PROTECTED]</source>
         <translation>[ALLEEN LEZEN]</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="929"/>
+        <source>Are you sure you want to quit?</source>
+        <translation>Weet u zeker dat u wilt afsluiten?</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="930"/>
+        <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
+        <translation>Raspberry Pi Imager is nog niet klaar.&lt;br&gt;Weet u zeker dat u wilt afsluiten?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="941"/>
@@ -698,80 +726,24 @@
         <translation>Er is een nieuwere versie van Imager beschikbaar.&lt;br&gt;Wilt u de website bezoeken om deze te downloaden?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1068"/>
-        <source>Preparing to write... (%1)</source>
-        <translation>Voorbereiden... (%1)</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="1093"/>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; is gewist&lt;br&gt;&lt;br&gt;U kunt nu de SD kaart uit de lezer halen</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
-        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; is geschreven naar &lt;b&gt;%2&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="1202"/>
-        <source>Error parsing os_list.json</source>
-        <translation>Fout bij parsen os_list.json</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="1391"/>
-        <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation>Sluit eerst een USB stick met images aan.&lt;br&gt;De images moeten in de hoofdmap van de USB stick staan.</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="1407"/>
-        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation>SD kaart is tegen schrijven beveiligd.&lt;br&gt;Druk het schuifje aan de linkerkant van de SD kaart omhoog, en probeer nogmaals.</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="528"/>
-        <source>Back</source>
-        <translation>Terug</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="155"/>
-        <source>Select this button to change the destination storage device</source>
-        <translation>Klik op deze knop om het opslagapparaat te wijzigen</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="529"/>
-        <source>Go back to main menu</source>
-        <translation>Terug naar hoofdmenu</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="695"/>
-        <source>Released: %1</source>
-        <translation>Release datum: %1</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="705"/>
-        <source>Cached on your computer</source>
-        <translation>Opgeslagen op computer</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="708"/>
-        <source>Online - %1 GB download</source>
-        <translation>Online %1 GB download</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="833"/>
-        <location filename="../main.qml" line="885"/>
-        <location filename="../main.qml" line="891"/>
-        <source>Mounted as %1</source>
-        <translation>Mounted op %1</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Fout bij downloaden van lijst met besturingssystemen</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="1038"/>
+        <source>Writing... %1%</source>
+        <translation>Schrijven... %1%</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1061"/>
         <source>Verifying... %1%</source>
         <translation>Verifiëren... %1%</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1068"/>
+        <source>Preparing to write... (%1)</source>
+        <translation>Voorbereiden... (%1)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1084"/>
@@ -784,9 +756,58 @@
         <translation>Klaar met schrijven</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="572"/>
+        <location filename="../main.qml" line="1092"/>
+        <source>Erase</source>
+        <translation>Wissen</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1093"/>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
+        <translation>&lt;b&gt;%1&lt;/b&gt; is gewist&lt;br&gt;&lt;br&gt;U kunt nu de SD kaart uit de lezer halen</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1100"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; is geschreven naar &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;U kunt nu de SD kaart uit de lezer halen</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1202"/>
+        <source>Error parsing os_list.json</source>
+        <translation>Fout bij parsen os_list.json</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="573"/>
+        <source>Format card as FAT32</source>
+        <translation>Formatteer kaart als FAT32</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="582"/>
+        <source>Use custom</source>
+        <translation>Gebruik eigen bestand</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="583"/>
+        <source>Select a custom .img from your computer</source>
+        <translation>Selecteer een eigen .img bestand</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1391"/>
+        <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
+        <translation>Sluit eerst een USB stick met images aan.&lt;br&gt;De images moeten in de hoofdmap van de USB stick staan.</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1407"/>
+        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
+        <translation>SD kaart is tegen schrijven beveiligd.&lt;br&gt;Druk het schuifje aan de linkerkant van de SD kaart omhoog, en probeer nogmaals.</translation>
+    </message>
+    <message>
+        <source>Select this button to change the destination SD card</source>
+        <translation type="vanished">Kies deze knop om de SD kaart te kiezen</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
+        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; is geschreven naar &lt;b&gt;%2&lt;/b&gt;</translation>
     </message>
 </context>
 </TS>

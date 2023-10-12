@@ -28,6 +28,16 @@
 <context>
     <name>DownloadThread</name>
     <message>
+        <location filename="../downloadthread.cpp" line="118"/>
+        <source>unmounting drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="138"/>
+        <source>opening drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../downloadthread.cpp" line="166"/>
         <source>Error running diskpart: %1</source>
         <translation type="unfinished"></translation>
@@ -73,13 +83,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="826"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <location filename="../downloadthread.cpp" line="319"/>
+        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="898"/>
-        <source>Customizing image</source>
+        <location filename="../downloadthread.cpp" line="408"/>
+        <source>starting download</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="466"/>
+        <source>Error downloading: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -98,8 +113,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="466"/>
-        <source>Error downloading: %1</source>
+        <location filename="../downloadthread.cpp" line="697"/>
+        <source>Download corrupt. Hash does not match</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -115,38 +130,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="697"/>
-        <source>Download corrupt. Hash does not match</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="118"/>
-        <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="138"/>
-        <source>opening drive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="319"/>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="408"/>
-        <source>starting download</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../downloadthread.cpp" line="751"/>
         <source>Error writing first block (partition table)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../downloadthread.cpp" line="826"/>
+        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../downloadthread.cpp" line="845"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="898"/>
+        <source>Customizing image</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -317,6 +317,62 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="120"/>
+        <source>Set username and password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="142"/>
+        <source>Username:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="158"/>
+        <location filename="../OptionsPopup.qml" line="219"/>
+        <source>Password:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="186"/>
+        <source>Configure wireless LAN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="205"/>
+        <source>SSID:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="238"/>
+        <source>Show password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="244"/>
+        <source>Hidden SSID</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="250"/>
+        <source>Wireless LAN country:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="261"/>
+        <source>Set locale settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="271"/>
+        <source>Time zone:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="281"/>
+        <source>Keyboard layout:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../OptionsPopup.qml" line="298"/>
         <source>Enable SSH</source>
         <translation type="unfinished"></translation>
@@ -339,62 +395,6 @@
     <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
-        <source>Configure wireless LAN</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
-        <source>SSID:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
-        <source>Password:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="120"/>
-        <source>Set username and password</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="142"/>
-        <source>Username:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
-        <source>Hidden SSID</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="238"/>
-        <source>Show password</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="250"/>
-        <source>Wireless LAN country:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="261"/>
-        <source>Set locale settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="271"/>
-        <source>Time zone:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="281"/>
-        <source>Keyboard layout:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -430,12 +430,12 @@
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Warning: advanced settings set</source>
+        <source>Use image customisation?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply the image customization settings saved earlier?</source>
+        <source>Would you like to apply image customization settings?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -464,6 +464,12 @@
     <message>
         <location filename="../main.qml" line="22"/>
         <source>Raspberry Pi Imager v%1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="114"/>
+        <location filename="../main.qml" line="467"/>
+        <source>Raspberry Pi Device</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -510,8 +516,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
-        <source>Select this button to start writing the image</source>
+        <location filename="../main.qml" line="155"/>
+        <source>Select this button to change the destination storage device</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -535,6 +541,16 @@
         <location filename="../main.qml" line="1058"/>
         <location filename="../main.qml" line="1127"/>
         <source>Finalizing...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="288"/>
+        <source>Next</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="175"/>
+        <source>Select this button to start writing the image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -573,34 +589,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
-        <source>Erase</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="573"/>
-        <source>Format card as FAT32</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="582"/>
-        <source>Use custom</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="583"/>
-        <source>Select a custom .img from your computer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="528"/>
         <source>Back</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="155"/>
-        <source>Select this button to change the destination storage device</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -661,6 +651,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../main.qml" line="962"/>
+        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="973"/>
         <source>Update available</source>
         <translation type="unfinished"></translation>
@@ -671,18 +666,13 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
-        <source>Writing... %1%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="962"/>
-        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1038"/>
+        <source>Writing... %1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -706,6 +696,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../main.qml" line="572"/>
+        <location filename="../main.qml" line="1092"/>
+        <source>Erase</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1093"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation type="unfinished"></translation>
@@ -718,6 +714,21 @@
     <message>
         <location filename="../main.qml" line="1202"/>
         <source>Error parsing os_list.json</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="573"/>
+        <source>Format card as FAT32</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="582"/>
+        <source>Use custom</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="583"/>
+        <source>Select a custom .img from your computer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
