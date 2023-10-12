@@ -475,12 +475,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use image customisation?</source>
-        <translation>警告：高级设置已设置</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply image customization settings?</source>
-        <translation>您要应用之前保存的自定义镜像设置吗？</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>

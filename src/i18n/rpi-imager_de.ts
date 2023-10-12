@@ -493,12 +493,12 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use image customisation?</source>
-        <translation>Warnung: Erweiterte Optionen festgelegt</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply image customization settings?</source>
-        <translation>Möchten Sie die vorher festgelegten OS-Modifizierungen anwenden?</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
