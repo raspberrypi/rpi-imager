@@ -112,19 +112,26 @@ Building can be done manually using the command-line, using "cmake", "make", etc
 
 Note: the CMake integration in Qt Creator is a bit flaky at times. If you made any custom changes to the CMakeLists.txt file and it subsequently gets in an endless loop where it never finishes the "configures" stage while re-processing the file, delete "build_rpi-imager_someversion" directory and try again.
 
-### Mac OS X
+### macOS
 
 #### Get dependencies
 
-- Get the Qt online installer from: https://www.qt.io/download-open-source
-During installation, choose a Qt 5.x edition and CMake.
+- Install XCode from the macOS App Store
+    - It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store. (Privileged apps are not allowed in the Mac store)
+- Install Homebrew (https://brew.sh/)
+- Using Homebrew:
+    - Install qt5: ```brew install qt@5```
+    - Install qtcreator ```brew install --cask qt-creator```
+    - Install cmake ```brew install cmake```
+- Configure QtCreator to use your Qt5 installation
+    - Open QtCreator, and when it offers to link with a Qt Version, use the path offered by Homebrew during the installation of qt@5. Alternatively, you can compute it by substituting your Homebrew prefix:
+        - ```$HOMEBREW_PREFIX/opt/qt@5```
 - For creating a .DMG for distribution you can use an utility like: https://github.com/sindresorhus/create-dmg
-- It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store. (Privileged apps are not allowed in the Mac store)
 
 #### Building
 
 - Download source .zip from github and extract it to a folder on disk
-- Start Qt Creator (may need to start "finder" navigate to home folder using the "Go" menu, and find Qt folder to start it manually as it may not have created icon in Applications), and open src/CMakeLists.txt
+- Start Qt Creator and open ```src/CMakeLists.txt``` as a Project
 - Menu "Build" -> "Build all"
 - Result will be in build_rpi-imager_someversion
 - For distribution to others: code sign the .app, create a DMG, code sign the DMG, submit it for notarization to Apple and staple the notarization ticket to the DMG.
