@@ -34,12 +34,12 @@
     <message>
         <location filename="../downloadthread.cpp" line="118"/>
         <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
+        <translation>Laufwerk wird ausgehängt</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="138"/>
         <source>opening drive</source>
-        <translation>Gerät wird geöffnet</translation>
+        <translation>Laufwerk wird geöffnet</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="166"/>
@@ -64,10 +64,8 @@
     <message>
         <location filename="../downloadthread.cpp" line="217"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translatorcomment>I don&apos;t use Mac OS, I would need help here. Unfinished translation:
-
-Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos;removable volumes&apos; in privacy settings hat (unter &apos;files and folders&apos;. Sie können ihm auch &apos;full disk access&apos; geben).</translatorcomment>
-        <translation type="unfinished"></translation>
+        <translatorcomment>Not sure if current macOS has that option (or if it got moved/renamed)</translatorcomment>
+        <translation type="unfinished">Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos;removable volumes&apos; in privacy settings hat (unter &apos;files and folders&apos;. Sie können ihm auch &apos;full disk access&apos; geben).</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="239"/>
@@ -112,10 +110,7 @@ Bitte stellen Sie sicher, dass &apos;Raspberry Pi Imager&apos; Zugriff auf &apos
     <message>
         <location filename="../downloadthread.cpp" line="668"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translatorcomment>I don&apos;t use Windows either. What is &quot;Controlled Folder Access&quot; in the German version?
-
-Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-imager.exe als auch fat32format.exe zur Liste der erlaubten Apps hinzu und versuchen sie es erneut.</translatorcomment>
-        <translation type="unfinished"></translation>
+        <translation>&quot;Überwachter Ordnerzugriff&quot; scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-imager.exe als auch fat32format.exe zur Liste der erlaubten Apps hinzu und versuchen sie es erneut.</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="675"/>
@@ -142,7 +137,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../downloadthread.cpp" line="751"/>
         <source>Error writing first block (partition table)</source>
-        <translation>Fehler beim Schreiben auf des ersten Blocks (Partitionstabelle)</translation>
+        <translation>Fehler beim Schreiben des ersten Blocks (Partitionstabelle)</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="826"/>
@@ -213,7 +208,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../driveformatthread.cpp" line="94"/>
         <source>Error running fat32format: %1</source>
-        <translation>Fehler beim Verwenden von fat32format: %1</translation>
+        <translation>Fehler beim Ausführen von fat32format: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="104"/>
@@ -248,7 +243,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../driveformatthread.cpp" line="218"/>
         <source>Error running mkfs.fat: %1</source>
-        <translation>Fehler beim Verwenden von mkfs.fat: %1</translation>
+        <translation>Fehler beim Ausführen von mkfs.fat: %1</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="225"/>
@@ -335,27 +330,27 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
         <source>for this session only</source>
-        <translation>Nur für diese Sitzung</translation>
+        <translation>nur für diese Sitzung</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="58"/>
         <source>to always use</source>
-        <translation>Immer verwenden</translation>
+        <translation>immer verwenden</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>Allgemein</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="79"/>
         <source>Services</source>
-        <translation type="unfinished"></translation>
+        <translation>Dienste</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Optionen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="98"/>
@@ -365,7 +360,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="120"/>
         <source>Set username and password</source>
-        <translation>Benutzername und Passwort setzen:</translation>
+        <translation>Benutzername und Passwort festlegen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="142"/>
@@ -426,7 +421,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="317"/>
         <source>Use password authentication</source>
-        <translation>Password zur Authentifizierung verwenden</translation>
+        <translation>Passwort zur Authentifizierung verwenden</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="327"/>
@@ -456,7 +451,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../OptionsPopup.qml" line="383"/>
         <source>Enable telemetry</source>
-        <translation>Telemetry aktivieren</translation>
+        <translation>Telemetrie aktivieren</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="397"/>
@@ -498,7 +493,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply image customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Möchten Sie die vorher festgelegten OS-Modifizierungen anwenden?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -532,17 +527,17 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
         <location filename="../main.qml" line="114"/>
         <location filename="../main.qml" line="467"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Gerät</translation>
     </message>
     <message>
         <location filename="../main.qml" line="126"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>GERÄT WÄHLEN</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Klicken Sie auf diesen Knopf, um den gewünschten Raspberry Pi auszuwählen</translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -558,7 +553,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="121"/>
         <source>Select this button to change the operating system</source>
-        <translation>Klicke auf diesen Knopf, um das Betriebssystem zu ändern</translation>
+        <translation>Klicken Sie auf diesen Knopf, um das Betriebssystem zu ändern</translation>
     </message>
     <message>
         <location filename="../main.qml" line="133"/>
@@ -613,7 +608,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="175"/>
         <source>Select this button to start writing the image</source>
-        <translation>Klicke auf diesen Knopf, um mit dem Schreiben zu beginnen</translation>
+        <translation>Klicken Sie auf diesen Knopf, um mit dem Schreiben zu beginnen</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
@@ -643,12 +638,12 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="437"/>
         <source>Pi model:</source>
-        <translation type="unfinished"></translation>
+        <translation>Pi Modell:</translation>
     </message>
     <message>
         <location filename="../main.qml" line="448"/>
         <source>[ All ]</source>
-        <translation type="unfinished"></translation>
+        <translation>[ Alle ]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="528"/>
@@ -740,7 +735,7 @@ Controlled Folder Access scheint aktiviert zu sein. Bitte fügen Sie sowohl rpi-
     <message>
         <location filename="../main.qml" line="1061"/>
         <source>Verifying... %1%</source>
-        <translation>Verifizierung... %1%</translation>
+        <translation>Verifizieren... %1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1068"/>
