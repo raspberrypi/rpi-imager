@@ -205,7 +205,7 @@ if (WIN32)
     set(ZSTD_BUILD_PROGRAMS OFF)
     set(ZSTD_BUILD_SHARED OFF)
     add_subdirectory(dependencies/zstd-1.5.4/build/cmake)
-    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.4/lib)
+    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.4/lib CACHE PATH "zstd include dir")
     set(ZSTD_LIBRARY libzstd_static)
 
     # Bundled libarchive
