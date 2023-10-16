@@ -1,0 +1,29 @@
+diff --git a/src/OptionsPopup.qml b/src/OptionsPopup.qml
+index 568d1cd..9e36607 100644
+--- a/src/OptionsPopup.qml
++++ b/src/OptionsPopup.qml
+@@ -10,13 +10,19 @@ import QtQuick.Controls.Material 2.2
+ import QtQuick.Window 2.15
+ import "qmlcomponents"
+ 
+-Window {
++Popup {
+     id: popup
+     width: cl.implicitWidth+cl.spacing
+-    minimumWidth: width
+-    maximumWidth: width
+-    minimumHeight: 125
+-    height: Math.min(750, cl.implicitHeight)
++    /* Only in embedded version */
++    x: (parent.width-width)/2
++    y: 10
++    height: parent.height-20
++    property string title
++
++    function show() { open() }
++    function raise() { }
++    /*  */
++
+     title: qsTr("Advanced options")
+ 
+     property bool initialized: false
