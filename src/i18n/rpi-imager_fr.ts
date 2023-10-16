@@ -625,7 +625,7 @@
     <message>
         <location filename="../main.qml" line="437"/>
         <source>Pi model:</source>
-        <translation>Modèle RPi</translation>
+        <translation>Modèle RPi&#xa0;:</translation>
     </message>
     <message>
         <location filename="../main.qml" line="448"/>
