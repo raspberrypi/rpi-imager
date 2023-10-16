@@ -491,12 +491,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use image customisation?</source>
-        <translation type="unfinished"></translation>
+        <translation>Image aanpassen?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply image customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Wilt u uw eigen instellingen op de image toepassen?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -530,17 +530,17 @@
         <location filename="../main.qml" line="114"/>
         <location filename="../main.qml" line="467"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Model</translation>
     </message>
     <message>
         <location filename="../main.qml" line="126"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>KIES MODEL</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Kies deze knop om het Raspberry Pi model te selecteren</translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -551,7 +551,7 @@
     <message>
         <location filename="../main.qml" line="109"/>
         <source>CHOOSE OS</source>
-        <translation>SELECTEER OS</translation>
+        <translation>KIES OS</translation>
     </message>
     <message>
         <location filename="../main.qml" line="121"/>
@@ -568,7 +568,7 @@
         <location filename="../main.qml" line="145"/>
         <location filename="../main.qml" line="1108"/>
         <source>CHOOSE STORAGE</source>
-        <translation>KIES OPSLAGAPPARAAT</translation>
+        <translation>KIES OPSLAG</translation>
     </message>
     <message>
         <location filename="../main.qml" line="171"/>
@@ -606,7 +606,7 @@
     <message>
         <location filename="../main.qml" line="288"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>Volgende</translation>
     </message>
     <message>
         <location filename="../main.qml" line="175"/>
