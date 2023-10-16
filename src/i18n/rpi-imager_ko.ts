@@ -318,13 +318,13 @@
     <name>OptionsPopup</name>
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
-        <source>Advanced options</source>
-        <translation>고급 옵션</translation>
+        <source>OS customization</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
-        <source>Image customization options</source>
-        <translation>이미지 사용자 정의 옵션</translation>
+        <source>OS customization options</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>

@@ -319,13 +319,13 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <name>OptionsPopup</name>
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
-        <source>Advanced options</source>
-        <translation>Opzioni avanzate</translation>
+        <source>OS customization</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
-        <source>Image customization options</source>
-        <translation>Opzioni personalizzazione immagine</translation>
+        <source>OS customization options</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>

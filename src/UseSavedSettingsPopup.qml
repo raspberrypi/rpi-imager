@@ -70,7 +70,7 @@ Popup {
             Layout.topMargin: 10
             font.family: roboto.name
             font.bold: true
-            text: qsTr("Use image customisation?")
+            text: qsTr("Use OS customization?")
         }
 
         Text {
@@ -85,7 +85,7 @@ Popup {
             Layout.topMargin: 25
             Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
             Accessible.name: text.replace(/<\/?[^>]+(>|$)/g, "")
-            text: qsTr("Would you like to apply image customization settings?")
+            text: qsTr("Would you like to apply OS customization settings?")
         }
 
         RowLayout {
@@ -95,10 +95,10 @@ Popup {
             id: buttons
 
             ImButton {
-                text: qsTr("NO")
+                text: qsTr("EDIT SETTINGS")
                 onClicked: {
                     msgpopup.close()
-                    msgpopup.no()
+                    msgpopup.editSettings()
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
@@ -127,10 +127,10 @@ Popup {
             }
 
             ImButton {
-                text: qsTr("EDIT SETTINGS")
+                text: qsTr("NO")
                 onClicked: {
                     msgpopup.close()
-                    msgpopup.editSettings()
+                    msgpopup.no()
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
