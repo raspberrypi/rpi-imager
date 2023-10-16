@@ -1,7 +1,3 @@
-[HDMI:0]
-hdmi_pixel_freq_limit=200000000
-[HDMI:1]
-hdmi_pixel_freq_limit=200000000
 [all]
 kernel=Image.gz
 initramfs rootfs.cpio.zst

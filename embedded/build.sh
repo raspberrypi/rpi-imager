@@ -7,6 +7,7 @@ BUILDROOT_TAR=buildroot-20231002.tar.bz2
 
 if [ ! -e $BUILDROOT ]; then
     tar xjf $BUILDROOT_TAR
+    patch -p0 < buildroot-mesa3d-pi5.patch
 fi
 
 if [ ! -e $BUILDROOT/.config ]; then

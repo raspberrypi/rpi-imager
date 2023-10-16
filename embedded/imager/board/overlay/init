@@ -22,7 +22,7 @@ mkdir -p /var/run
 dhcpcd -f /etc/dhcpcd.conf --noarp 2>/dev/null &
 
 if grep -q debugconsole /proc/cmdline; then
-	/sbin/getty -L ttyAMA0 0 vt100 &
+	/sbin/getty -L console 0 vt100 &
 fi
 
 if grep -q blockingconsole /proc/cmdline; then
