@@ -283,7 +283,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>Advanced options</source>
-        <translation>Розширені опції</translation>
+        <translation>Розширені налаштування</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
@@ -298,27 +298,27 @@
     <message>
         <location filename="../OptionsPopup.qml" line="58"/>
         <source>to always use</source>
-        <translation>завжди використовувати</translation>
+        <translation>для постійного використання</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>Загальні</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="79"/>
         <source>Services</source>
-        <translation type="unfinished"></translation>
+        <translation>Сервіси</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Налаштування</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="98"/>
         <source>Set hostname:</source>
-        <translation>Змінити ім&apos;я хосту</translation>
+        <translation>Встановити ім&apos;я хосту:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="120"/>
@@ -354,7 +354,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="244"/>
         <source>Hidden SSID</source>
-        <translation>Схована SSID</translation>
+        <translation>Прихована SSID</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="250"/>
@@ -379,7 +379,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="298"/>
         <source>Enable SSH</source>
-        <translation>Увімкнути SHH</translation>
+        <translation>Увімкнути SSH</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="317"/>
@@ -389,7 +389,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="327"/>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished"></translation>
+        <translation>Дозволити аутентифікацію лише через публічні ключі</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="345"/>
@@ -399,7 +399,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
+        <translation>ЗАПУСТИТИ SHH-KEYGEN</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -439,12 +439,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use image customisation?</source>
-        <translation type="unfinished"></translation>
+        <translation>Використовувати кастомізацію образу?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply image customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Чи бажаєте ви прийняти налаштування кастомізації образу?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -478,17 +478,17 @@
         <location filename="../main.qml" line="114"/>
         <location filename="../main.qml" line="467"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Пристрій Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="126"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>ОБРАТИ ПРИСТРІЙ</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Оберіть цю кнопку, щоб обрати модель вашої Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -554,7 +554,7 @@
     <message>
         <location filename="../main.qml" line="288"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>Далі</translation>
     </message>
     <message>
         <location filename="../main.qml" line="175"/>
@@ -589,12 +589,12 @@
     <message>
         <location filename="../main.qml" line="437"/>
         <source>Pi model:</source>
-        <translation type="unfinished"></translation>
+        <translation>Модель Raspberry Pi:</translation>
     </message>
     <message>
         <location filename="../main.qml" line="448"/>
         <source>[ All ]</source>
-        <translation type="unfinished"></translation>
+        <translation>[Усі]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="528"/>
