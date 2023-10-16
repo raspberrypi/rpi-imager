@@ -4,10 +4,6 @@
 <context>
     <name>DownloadExtractThread</name>
     <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">Помилка запису на накопичувач</translation>
-    </message>
-    <message>
         <location filename="../downloadextractthread.cpp" line="196"/>
         <location filename="../downloadextractthread.cpp" line="385"/>
         <source>Error extracting archive: %1</source>
@@ -28,9 +24,23 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Помилка при зміні каталогу на &apos;%1&apos;</translation>
     </message>
+    <message>
+        <source>Error writing to storage</source>
+        <translation type="vanished">Помилка запису на накопичувач</translation>
+    </message>
 </context>
 <context>
     <name>DownloadThread</name>
+    <message>
+        <location filename="../downloadthread.cpp" line="118"/>
+        <source>unmounting drive</source>
+        <translation>диск від&apos;єднується</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="138"/>
+        <source>opening drive</source>
+        <translation>диск відкривається</translation>
+    </message>
     <message>
         <location filename="../downloadthread.cpp" line="166"/>
         <source>Error running diskpart: %1</source>
@@ -77,14 +87,19 @@
         <translation>Помилка при обнулюванні MBR</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="826"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>Помилка читання накопичувача.&lt;br&gt;SD-карта пам&apos;яті може бути пошкоджена.</translation>
+        <location filename="../downloadthread.cpp" line="319"/>
+        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
+        <translation>Помилка запису під час обнулювання останнього розділу карти пам&apos;яті.&lt;br&gt;Можливо заявлений об&apos;єм карти не збігається з реальним (можливо карта є підробленою).</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="898"/>
-        <source>Customizing image</source>
-        <translation>Налаштування образа</translation>
+        <location filename="../downloadthread.cpp" line="408"/>
+        <source>starting download</source>
+        <translation>початок завантаження</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="466"/>
+        <source>Error downloading: %1</source>
+        <translation>Помилка завантаження: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="663"/>
@@ -102,9 +117,9 @@
         <translation>Помилка запису файлу на диск</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="466"/>
-        <source>Error downloading: %1</source>
-        <translation>Помилка завантаження: %1</translation>
+        <location filename="../downloadthread.cpp" line="697"/>
+        <source>Download corrupt. Hash does not match</source>
+        <translation>Завантаження пошкоджено. Хеш сума не збігається</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="709"/>
@@ -119,39 +134,24 @@
         <translation>Помилка запису на накопичувач (при виконанні fsync)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="697"/>
-        <source>Download corrupt. Hash does not match</source>
-        <translation>Завантаження пошкоджено. Хеш сума не збігається</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="118"/>
-        <source>unmounting drive</source>
-        <translation>диск від&apos;єднується</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="138"/>
-        <source>opening drive</source>
-        <translation>диск відкривається</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="319"/>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>Помилка запису під час обнулювання останнього розділу карти пам&apos;яті.&lt;br&gt;Можливо заявлений об&apos;єм карти не збігається з реальним (можливо карта є підробленою).</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="408"/>
-        <source>starting download</source>
-        <translation>початок завантаження</translation>
-    </message>
-    <message>
         <location filename="../downloadthread.cpp" line="751"/>
         <source>Error writing first block (partition table)</source>
         <translation>Помилка під час запису першого блоку (таблиця розділів)</translation>
     </message>
     <message>
+        <location filename="../downloadthread.cpp" line="826"/>
+        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <translation>Помилка читання накопичувача.&lt;br&gt;SD-карта пам&apos;яті може бути пошкоджена.</translation>
+    </message>
+    <message>
         <location filename="../downloadthread.cpp" line="845"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Помилка перевірки запису. Зміст SD-карти пам&apos;яті відрізняється від того, що було записано туди.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="898"/>
+        <source>Customizing image</source>
+        <translation>Налаштування образа</translation>
     </message>
 </context>
 <context>
@@ -283,7 +283,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>Advanced options</source>
-        <translation>Розширені опції</translation>
+        <translation>Розширені налаштування</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
@@ -298,68 +298,27 @@
     <message>
         <location filename="../OptionsPopup.qml" line="58"/>
         <source>to always use</source>
-        <translation>завжди використовувати</translation>
+        <translation>для постійного використання</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>Загальні</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="79"/>
         <source>Services</source>
-        <translation type="unfinished"></translation>
+        <translation>Сервіси</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Налаштування</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="98"/>
         <source>Set hostname:</source>
-        <translation>Змінити ім&apos;я хосту</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="298"/>
-        <source>Enable SSH</source>
-        <translation>Увімкнути SHH</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="317"/>
-        <source>Use password authentication</source>
-        <translation>Використовувати аутентефікацію черз пароль</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="327"/>
-        <source>Allow public-key authentication only</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="345"/>
-        <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>Встановити authorized_keys для &apos;%1&apos;:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="357"/>
-        <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
-        <source>Configure wireless LAN</source>
-        <translation>Налаштувати Wi-Fi</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
-        <source>SSID:</source>
-        <translation>SSID:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
-        <source>Password:</source>
-        <translation>Пароль:</translation>
+        <translation>Встановити ім&apos;я хосту:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="120"/>
@@ -372,14 +331,30 @@
         <translation>Ім&apos;я користувача:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
-        <source>Hidden SSID</source>
-        <translation>Схована SSID</translation>
+        <location filename="../OptionsPopup.qml" line="158"/>
+        <location filename="../OptionsPopup.qml" line="219"/>
+        <source>Password:</source>
+        <translation>Пароль:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="186"/>
+        <source>Configure wireless LAN</source>
+        <translation>Налаштувати Wi-Fi</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="205"/>
+        <source>SSID:</source>
+        <translation>SSID:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="238"/>
         <source>Show password</source>
         <translation>Показати пароль</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="244"/>
+        <source>Hidden SSID</source>
+        <translation>Прихована SSID</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="250"/>
@@ -402,8 +377,29 @@
         <translation>Розкладка клавіатури:</translation>
     </message>
     <message>
-        <source>Persistent settings</source>
-        <translation type="vanished">Постійні налаштування</translation>
+        <location filename="../OptionsPopup.qml" line="298"/>
+        <source>Enable SSH</source>
+        <translation>Увімкнути SSH</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="317"/>
+        <source>Use password authentication</source>
+        <translation>Використовувати аутентефікацію черз пароль</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="327"/>
+        <source>Allow public-key authentication only</source>
+        <translation>Дозволити аутентифікацію лише через публічні ключі</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="345"/>
+        <source>Set authorized_keys for &apos;%1&apos;:</source>
+        <translation>Встановити authorized_keys для &apos;%1&apos;:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="357"/>
+        <source>RUN SSH-KEYGEN</source>
+        <translation>ЗАПУСТИТИ SHH-KEYGEN</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -425,6 +421,10 @@
         <source>SAVE</source>
         <translation>ЗБЕРЕГТИ</translation>
     </message>
+    <message>
+        <source>Persistent settings</source>
+        <translation type="vanished">Постійні налаштування</translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -438,13 +438,13 @@
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Warning: advanced settings set</source>
-        <translation>Увага: змінені розширені налаштування</translation>
+        <source>Use image customisation?</source>
+        <translation>Використовувати кастомізацію образу?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply the image customization settings saved earlier?</source>
-        <translation>Прийняти збережені раніше налаштування образу?</translation>
+        <source>Would you like to apply image customization settings?</source>
+        <translation>Чи бажаєте ви прийняти налаштування кастомізації образу?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -473,6 +473,22 @@
         <location filename="../main.qml" line="22"/>
         <source>Raspberry Pi Imager v%1</source>
         <translation>Raspberry Pi Imager, версія %1</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="114"/>
+        <location filename="../main.qml" line="467"/>
+        <source>Raspberry Pi Device</source>
+        <translation>Пристрій Raspberry Pi</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="126"/>
+        <source>CHOOSE DEVICE</source>
+        <translation>ОБРАТИ ПРИСТРІЙ</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="138"/>
+        <source>Select this button to choose your target Raspberry Pi</source>
+        <translation>Оберіть цю кнопку, щоб обрати модель вашої Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -508,9 +524,9 @@
         <translation>ЗАПИСАТИ</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
-        <source>Select this button to start writing the image</source>
-        <translation>Натисніть цю кнопку, щоб розпочати запис образу</translation>
+        <location filename="../main.qml" line="155"/>
+        <source>Select this button to change the destination storage device</source>
+        <translation>Натисніть цю кнопку, щоб змінити пристрій призначення</translation>
     </message>
     <message>
         <location filename="../main.qml" line="216"/>
@@ -534,6 +550,16 @@
         <location filename="../main.qml" line="1127"/>
         <source>Finalizing...</source>
         <translation>Завершення...</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="288"/>
+        <source>Next</source>
+        <translation>Далі</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="175"/>
+        <source>Select this button to start writing the image</source>
+        <translation>Натисніть цю кнопку, щоб розпочати запис образу</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
@@ -563,43 +589,17 @@
     <message>
         <location filename="../main.qml" line="437"/>
         <source>Pi model:</source>
-        <translation type="unfinished"></translation>
+        <translation>Модель Raspberry Pi:</translation>
     </message>
     <message>
         <location filename="../main.qml" line="448"/>
         <source>[ All ]</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
-        <source>Erase</source>
-        <translation>Видалити</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="573"/>
-        <source>Format card as FAT32</source>
-        <translation>Форматувати карту у FAT32</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="582"/>
-        <source>Use custom</source>
-        <translation>Власний образ</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="583"/>
-        <source>Select a custom .img from your computer</source>
-        <translation>Обрати власний .img з вашого комп&apos;ютера</translation>
+        <translation>[Усі]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="528"/>
         <source>Back</source>
         <translation>Назад</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="155"/>
-        <source>Select this button to change the destination storage device</source>
-        <translation>Натисніть цю кнопку, щоб змінити пристрій призначення</translation>
     </message>
     <message>
         <location filename="../main.qml" line="529"/>
@@ -659,6 +659,11 @@
         <translation>Підготовка до запису...</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="962"/>
+        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
+        <translation>Усі уснуючі дані у &apos;%1&apos; будуть видалені.&lt;br&gt; Ви впевнені, що бажаєте продовжити?</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="973"/>
         <source>Update available</source>
         <translation>Доступно оновлення</translation>
@@ -669,19 +674,14 @@
         <translation>Доступна нова версія Imager.&lt;br&gt;Бажаєте завітати на сайт та завантажити її?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
-        <source>Writing... %1%</source>
-        <translation>Записування...%1%</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="962"/>
-        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>Усі уснуючі дані у &apos;%1&apos; будуть видалені.&lt;br&gt; Ви впевнені, що бажаєте продовжити?</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Помилка завантаження списку ОС із Інтернету</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1038"/>
+        <source>Writing... %1%</source>
+        <translation>Записування...%1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1061"/>
@@ -704,6 +704,12 @@
         <translation>Успішно записано</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="572"/>
+        <location filename="../main.qml" line="1092"/>
+        <source>Erase</source>
+        <translation>Видалити</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1093"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; був успішно видалено.br&gt;&lt;br&gt; тепер можна дістати SD карту із считувача</translation>
@@ -717,6 +723,21 @@
         <location filename="../main.qml" line="1202"/>
         <source>Error parsing os_list.json</source>
         <translation>Помилка парсування os_list.json</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="573"/>
+        <source>Format card as FAT32</source>
+        <translation>Форматувати карту у FAT32</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="582"/>
+        <source>Use custom</source>
+        <translation>Власний образ</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="583"/>
+        <source>Select a custom .img from your computer</source>
+        <translation>Обрати власний .img з вашого комп&apos;ютера</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1391"/>

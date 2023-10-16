@@ -70,7 +70,7 @@ Popup {
             Layout.topMargin: 10
             font.family: roboto.name
             font.bold: true
-            text: qsTr("Warning: advanced settings set")
+            text: qsTr("Use image customisation?")
         }
 
         Text {
@@ -83,8 +83,9 @@ Popup {
             Layout.fillHeight: true
             Layout.leftMargin: 25
             Layout.topMargin: 25
+            Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
             Accessible.name: text.replace(/<\/?[^>]+(>|$)/g, "")
-            text: qsTr("Would you like to apply the image customization settings saved earlier?")
+            text: qsTr("Would you like to apply image customization settings?")
         }
 
         RowLayout {
@@ -111,6 +112,7 @@ Popup {
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
+                enabled: imageWriter.hasSavedCustomizationSettings() ? true : false
             }
 
             ImButton {
@@ -121,6 +123,7 @@ Popup {
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
+                enabled: imageWriter.hasSavedCustomizationSettings() ? true : false
             }
 
             ImButton {

@@ -4,10 +4,6 @@
 <context>
     <name>DownloadExtractThread</name>
     <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">Napaka pisanja na disk</translation>
-    </message>
-    <message>
         <location filename="../downloadextractthread.cpp" line="196"/>
         <location filename="../downloadextractthread.cpp" line="385"/>
         <source>Error extracting archive: %1</source>
@@ -28,9 +24,23 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Napaka spremembe direktorija &apos;%1%&apos;</translation>
     </message>
+    <message>
+        <source>Error writing to storage</source>
+        <translation type="vanished">Napaka pisanja na disk</translation>
+    </message>
 </context>
 <context>
     <name>DownloadThread</name>
+    <message>
+        <location filename="../downloadthread.cpp" line="118"/>
+        <source>unmounting drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="138"/>
+        <source>opening drive</source>
+        <translation>Odpiranje pogona</translation>
+    </message>
     <message>
         <location filename="../downloadthread.cpp" line="166"/>
         <source>Error running diskpart: %1</source>
@@ -77,9 +87,71 @@
         <translation>Napaka zapisovanja med ničenjem MBR</translation>
     </message>
     <message>
+        <location filename="../downloadthread.cpp" line="319"/>
+        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
+        <translation>Napaka ničenja zadnjega dela diska.&lt;br&gt;Disk morebiti sporoča napačno velikost(možen ponaredek).</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="408"/>
+        <source>starting download</source>
+        <translation>Začetek prenosa</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="466"/>
+        <source>Error downloading: %1</source>
+        <translation>Napaka prenosa:%1</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="663"/>
+        <source>Access denied error while writing file to disk.</source>
+        <translation>Napaka zavrnitve dostopa med pisanjem na disk.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="668"/>
+        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
+        <translation>Izgleda, da jevklopljen nadzor dostopa do map. Prosim dodajte oba rpi-imager.exe in fat32format.exe na seznam dovoljenih aplikacij in poizkusite znova.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="675"/>
+        <source>Error writing file to disk</source>
+        <translation>Napaka pisanja na disk</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="697"/>
+        <source>Download corrupt. Hash does not match</source>
+        <translation>Prenos poškodovan.Hash se ne ujema</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="709"/>
+        <location filename="../downloadthread.cpp" line="761"/>
+        <source>Error writing to storage (while flushing)</source>
+        <translation>Napaka pisanja na disk (med brisanjem)</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="716"/>
+        <location filename="../downloadthread.cpp" line="768"/>
+        <source>Error writing to storage (while fsync)</source>
+        <translation>Napaka pisanja na disk (med fsync)</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="751"/>
+        <source>Error writing first block (partition table)</source>
+        <translation>Napaka pisanja prvega bloka (particijska tabela)</translation>
+    </message>
+    <message>
         <location filename="../downloadthread.cpp" line="826"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>Napaka branja iz diska.&lt;br&gt;SD kartica/disk je mogoče v okvari.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="845"/>
+        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <translation>Preverjanje pisanja spodletelo. Vsebina diska je drugačna, od tega, kar je bilo nanj zapisano.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="898"/>
+        <source>Customizing image</source>
+        <translation>Prilagajanje slike diska</translation>
     </message>
     <message>
         <source>Waiting for FAT partition to be mounted</source>
@@ -96,11 +168,6 @@
     <message>
         <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
         <translation type="vanished">Prilagoditev ni možna. Datoteka &apos;%1&apos; ne obstaja.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="898"/>
-        <source>Customizing image</source>
-        <translation>Prilagajanje slike diska</translation>
     </message>
     <message>
         <source>Error creating firstrun.sh on FAT partition</source>
@@ -121,73 +188,6 @@
     <message>
         <source>Error writing to cmdline.txt on FAT partition</source>
         <translation type="vanished">Napaka pisanja v cmdline.txt na FAT particiji</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="663"/>
-        <source>Access denied error while writing file to disk.</source>
-        <translation>Napaka zavrnitve dostopa med pisanjem na disk.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="668"/>
-        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation>Izgleda, da jevklopljen nadzor dostopa do map. Prosim dodajte oba rpi-imager.exe in fat32format.exe na seznam dovoljenih aplikacij in poizkusite znova.</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="675"/>
-        <source>Error writing file to disk</source>
-        <translation>Napaka pisanja na disk</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="466"/>
-        <source>Error downloading: %1</source>
-        <translation>Napaka prenosa:%1</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="709"/>
-        <location filename="../downloadthread.cpp" line="761"/>
-        <source>Error writing to storage (while flushing)</source>
-        <translation>Napaka pisanja na disk (med brisanjem)</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="716"/>
-        <location filename="../downloadthread.cpp" line="768"/>
-        <source>Error writing to storage (while fsync)</source>
-        <translation>Napaka pisanja na disk (med fsync)</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="697"/>
-        <source>Download corrupt. Hash does not match</source>
-        <translation>Prenos poškodovan.Hash se ne ujema</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="118"/>
-        <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="138"/>
-        <source>opening drive</source>
-        <translation>Odpiranje pogona</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="319"/>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>Napaka ničenja zadnjega dela diska.&lt;br&gt;Disk morebiti sporoča napačno velikost(možen ponaredek).</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="408"/>
-        <source>starting download</source>
-        <translation>Začetek prenosa</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="751"/>
-        <source>Error writing first block (partition table)</source>
-        <translation>Napaka pisanja prvega bloka (particijska tabela)</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="845"/>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>Preverjanje pisanja spodletelo. Vsebina diska je drugačna, od tega, kar je bilo nanj zapisano.</translation>
     </message>
 </context>
 <context>
@@ -337,79 +337,6 @@
         <translation>vedno</translation>
     </message>
     <message>
-        <source>Disable overscan</source>
-        <translation type="vanished">Onemogoči overscan</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="98"/>
-        <source>Set hostname:</source>
-        <translation>Ime naprave:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="298"/>
-        <source>Enable SSH</source>
-        <translation>Omogoči SSH</translation>
-    </message>
-    <message>
-        <source>Set username:</source>
-        <translation type="vanished">Nastavi uporabniško ime:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="317"/>
-        <source>Use password authentication</source>
-        <translation>Uporabi geslo za avtentifikacijo</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="327"/>
-        <source>Allow public-key authentication only</source>
-        <translation>Dovoli le avtentifikacijo z javnim kjučem</translation>
-    </message>
-    <message>
-        <source>Set password for &apos;%1&apos; user:</source>
-        <translation type="vanished">Nastavi geslo za uporabnika &apos;%1&apos;:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="345"/>
-        <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>Nastavi authorized_keys za &apos;%1&apos;:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
-        <source>Configure wireless LAN</source>
-        <translation>Nastavi WiFi</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
-        <source>SSID:</source>
-        <translation>SSID:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
-        <source>Password:</source>
-        <translation>Geslo:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="120"/>
-        <source>Set username and password</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="142"/>
-        <source>Username:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
-        <source>Hidden SSID</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="238"/>
-        <source>Show password</source>
-        <translation>Pokaži geslo</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
         <translation type="unfinished"></translation>
@@ -422,6 +349,47 @@
     <message>
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="98"/>
+        <source>Set hostname:</source>
+        <translation>Ime naprave:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="120"/>
+        <source>Set username and password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="142"/>
+        <source>Username:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="158"/>
+        <location filename="../OptionsPopup.qml" line="219"/>
+        <source>Password:</source>
+        <translation>Geslo:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="186"/>
+        <source>Configure wireless LAN</source>
+        <translation>Nastavi WiFi</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="205"/>
+        <source>SSID:</source>
+        <translation>SSID:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="238"/>
+        <source>Show password</source>
+        <translation>Pokaži geslo</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="244"/>
+        <source>Hidden SSID</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -445,17 +413,29 @@
         <translation>Razporeditev tipkovnice:</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="298"/>
+        <source>Enable SSH</source>
+        <translation>Omogoči SSH</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="317"/>
+        <source>Use password authentication</source>
+        <translation>Uporabi geslo za avtentifikacijo</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="327"/>
+        <source>Allow public-key authentication only</source>
+        <translation>Dovoli le avtentifikacijo z javnim kjučem</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="345"/>
+        <source>Set authorized_keys for &apos;%1&apos;:</source>
+        <translation>Nastavi authorized_keys za &apos;%1&apos;:</translation>
+    </message>
+    <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Skip first-run wizard</source>
-        <translation type="vanished">Preskoči čarovnika prvega zagona</translation>
-    </message>
-    <message>
-        <source>Persistent settings</source>
-        <translation type="vanished">Trajne nastavitve</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -477,6 +457,26 @@
         <source>SAVE</source>
         <translation>SHRANI</translation>
     </message>
+    <message>
+        <source>Disable overscan</source>
+        <translation type="vanished">Onemogoči overscan</translation>
+    </message>
+    <message>
+        <source>Set username:</source>
+        <translation type="vanished">Nastavi uporabniško ime:</translation>
+    </message>
+    <message>
+        <source>Set password for &apos;%1&apos; user:</source>
+        <translation type="vanished">Nastavi geslo za uporabnika &apos;%1&apos;:</translation>
+    </message>
+    <message>
+        <source>Skip first-run wizard</source>
+        <translation type="vanished">Preskoči čarovnika prvega zagona</translation>
+    </message>
+    <message>
+        <source>Persistent settings</source>
+        <translation type="vanished">Trajne nastavitve</translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -490,13 +490,13 @@
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Warning: advanced settings set</source>
-        <translation>Opozorilo: nastavljene napredne nastavitve</translation>
+        <source>Use image customisation?</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply the image customization settings saved earlier?</source>
-        <translation>Bi želeli uporabit prilagoditve slike diska shranjene nazadnje?</translation>
+        <source>Would you like to apply image customization settings?</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -525,6 +525,22 @@
         <location filename="../main.qml" line="22"/>
         <source>Raspberry Pi Imager v%1</source>
         <translation>Raspberry Pi Imager v%1</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="114"/>
+        <location filename="../main.qml" line="467"/>
+        <source>Raspberry Pi Device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="126"/>
+        <source>CHOOSE DEVICE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="138"/>
+        <source>Select this button to choose your target Raspberry Pi</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -560,9 +576,9 @@
         <translation>ZAPIŠI</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
-        <source>Select this button to start writing the image</source>
-        <translation>Izberite za gumb za začetek pisanja slike diska</translation>
+        <location filename="../main.qml" line="155"/>
+        <source>Select this button to change the destination storage device</source>
+        <translation>Uporabite ta gumb za spremembo ciljnega diska</translation>
     </message>
     <message>
         <location filename="../main.qml" line="216"/>
@@ -586,6 +602,16 @@
         <location filename="../main.qml" line="1127"/>
         <source>Finalizing...</source>
         <translation>Zakjučujem...</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="288"/>
+        <source>Next</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="175"/>
+        <source>Select this button to start writing the image</source>
+        <translation>Izberite za gumb za začetek pisanja slike diska</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
@@ -623,35 +649,9 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
-        <source>Erase</source>
-        <translation>Odstrani</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="573"/>
-        <source>Format card as FAT32</source>
-        <translation>Formatiraj disk v FAT32</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="582"/>
-        <source>Use custom</source>
-        <translation>Uporabi drugo</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="583"/>
-        <source>Select a custom .img from your computer</source>
-        <translation>Izberite drug .img iz vašega računalnika</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="528"/>
         <source>Back</source>
         <translation>Nazaj</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="155"/>
-        <source>Select this button to change the destination storage device</source>
-        <translation>Uporabite ta gumb za spremembo ciljnega diska</translation>
     </message>
     <message>
         <location filename="../main.qml" line="529"/>
@@ -711,6 +711,11 @@
         <translation>Priprava na pisanje...</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="962"/>
+        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
+        <translation>VSI obstoječi podatki na &apos;%1&apos; bodo izbrisani.&lt;br&gt;A ste prepričani, da želite nadaljevati?</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="973"/>
         <source>Update available</source>
         <translation>Posodobitev na voljo</translation>
@@ -721,19 +726,14 @@
         <translation>Na voljo je nova verzija tega programa. &lt;br&gt;Želite obiskati spletno stran za prenos?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
-        <source>Writing... %1%</source>
-        <translation>Pišem...%1%</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="962"/>
-        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>VSI obstoječi podatki na &apos;%1&apos; bodo izbrisani.&lt;br&gt;A ste prepričani, da želite nadaljevati?</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
         <translation>Napaka prenosa seznama OS iz interneta</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1038"/>
+        <source>Writing... %1%</source>
+        <translation>Pišem...%1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1061"/>
@@ -756,13 +756,15 @@
         <translation>Zapisovanje uspešno</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="572"/>
+        <location filename="../main.qml" line="1092"/>
+        <source>Erase</source>
+        <translation>Odstrani</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1093"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; je pobrisan&lt;br&gt;&lt;br&gt;Sedaj lahko odstranite SD kartico iz čitalca oz iztaknete USB disk</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
-        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; je zapisan na &lt;b&gt;%2&lt;/b&gt;</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1100"/>
@@ -775,6 +777,21 @@
         <translation>Napaka procesiranja os_list.json</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="573"/>
+        <source>Format card as FAT32</source>
+        <translation>Formatiraj disk v FAT32</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="582"/>
+        <source>Use custom</source>
+        <translation>Uporabi drugo</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="583"/>
+        <source>Select a custom .img from your computer</source>
+        <translation>Izberite drug .img iz vašega računalnika</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1391"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Najprej prikopite USB disk, ki vsebuje slike diskov.&lt;br&gt;Slike diskov se morajo nahajati v korenski mapi USB diska.</translation>
@@ -783,6 +800,10 @@
         <location filename="../main.qml" line="1407"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>SD kartica je zaščitena pred pisanjem.&lt;br&gt;Premaknite stikalo zaklepanja, na levi strani kartice in poizkusite znova.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
+        <translation type="vanished">&lt;b&gt;%1&lt;/b&gt; je zapisan na &lt;b&gt;%2&lt;/b&gt;</translation>
     </message>
 </context>
 </TS>

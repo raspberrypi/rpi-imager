@@ -4,10 +4,6 @@
 <context>
     <name>DownloadExtractThread</name>
     <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">S&apos;ha produït un error en escriure a l&apos;emmagatzematge</translation>
-    </message>
-    <message>
         <location filename="../downloadextractthread.cpp" line="196"/>
         <location filename="../downloadextractthread.cpp" line="385"/>
         <source>Error extracting archive: %1</source>
@@ -28,9 +24,23 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>S&apos;ha produït un error en canviar al directori «%1»</translation>
     </message>
+    <message>
+        <source>Error writing to storage</source>
+        <translation type="vanished">S&apos;ha produït un error en escriure a l&apos;emmagatzematge</translation>
+    </message>
 </context>
 <context>
     <name>DownloadThread</name>
+    <message>
+        <location filename="../downloadthread.cpp" line="118"/>
+        <source>unmounting drive</source>
+        <translation>S&apos;està desmuntant el dispositiu</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="138"/>
+        <source>opening drive</source>
+        <translation>S&apos;està obrint la unitat</translation>
+    </message>
     <message>
         <location filename="../downloadthread.cpp" line="166"/>
         <source>Error running diskpart: %1</source>
@@ -77,14 +87,19 @@
         <translation>S&apos;ha produït un error en esborrar amb zeros l&apos;«MBR».</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="826"/>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>S&apos;ha produït un error en llegir l&apos;emmagatzematge.&lt;br&gt;És possible que la targeta SD estigui malmesa.</translation>
+        <location filename="../downloadthread.cpp" line="319"/>
+        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
+        <translation>S&apos;ha produït un error d&apos;escriptura en esborrar amb zeros l&apos;última part de la targeta.&lt;br&gt;La targeta podria estar indicant una capacitat errònia (possible falsificació)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="898"/>
-        <source>Customizing image</source>
-        <translation>S&apos;està personalitzant la imatge</translation>
+        <location filename="../downloadthread.cpp" line="408"/>
+        <source>starting download</source>
+        <translation>S&apos;està iniciant la baixada</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="466"/>
+        <source>Error downloading: %1</source>
+        <translation>S&apos;ha produït un error en la baixada: %1</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="663"/>
@@ -102,9 +117,9 @@
         <translation>S&apos;ha produït un error en escriure el fitxer al disc</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="466"/>
-        <source>Error downloading: %1</source>
-        <translation>S&apos;ha produït un error en la baixada: %1</translation>
+        <location filename="../downloadthread.cpp" line="697"/>
+        <source>Download corrupt. Hash does not match</source>
+        <translation>La baixada està corrompuda. El «hash» no coincideix</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="709"/>
@@ -119,39 +134,24 @@
         <translation>S&apos;ha produït un error en escriure a l&apos;emmagatzematge (procés: fsync)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="697"/>
-        <source>Download corrupt. Hash does not match</source>
-        <translation>La baixada està corrompuda. El «hash» no coincideix</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="118"/>
-        <source>unmounting drive</source>
-        <translation>S&apos;està desmuntant el dispositiu</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="138"/>
-        <source>opening drive</source>
-        <translation>S&apos;està obrint la unitat</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="319"/>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>S&apos;ha produït un error d&apos;escriptura en esborrar amb zeros l&apos;última part de la targeta.&lt;br&gt;La targeta podria estar indicant una capacitat errònia (possible falsificació)</translation>
-    </message>
-    <message>
-        <location filename="../downloadthread.cpp" line="408"/>
-        <source>starting download</source>
-        <translation>S&apos;està iniciant la baixada</translation>
-    </message>
-    <message>
         <location filename="../downloadthread.cpp" line="751"/>
         <source>Error writing first block (partition table)</source>
         <translation>S&apos;ha produït un error en escriure el primer bloc (taula de particions)</translation>
     </message>
     <message>
+        <location filename="../downloadthread.cpp" line="826"/>
+        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <translation>S&apos;ha produït un error en llegir l&apos;emmagatzematge.&lt;br&gt;És possible que la targeta SD estigui malmesa.</translation>
+    </message>
+    <message>
         <location filename="../downloadthread.cpp" line="845"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Ha fallat la verificació de l&apos;escriptura. El contingut de la targeta SD és diferent del que s&apos;hi ha escrit.</translation>
+    </message>
+    <message>
+        <location filename="../downloadthread.cpp" line="898"/>
+        <source>Customizing image</source>
+        <translation>S&apos;està personalitzant la imatge</translation>
     </message>
 </context>
 <context>
@@ -321,6 +321,62 @@
         <translation>Defineix un nom de la màquina (hostname):</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="120"/>
+        <source>Set username and password</source>
+        <translation>Defineix el nom d&apos;usuari i contrasenya</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="142"/>
+        <source>Username:</source>
+        <translation>Nom d&apos;usuari:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="158"/>
+        <location filename="../OptionsPopup.qml" line="219"/>
+        <source>Password:</source>
+        <translation>Contrasenya:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="186"/>
+        <source>Configure wireless LAN</source>
+        <translation>Configura la wifi</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="205"/>
+        <source>SSID:</source>
+        <translation>SSID:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="238"/>
+        <source>Show password</source>
+        <translation>Mostra la contrasenya</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="244"/>
+        <source>Hidden SSID</source>
+        <translation>SSID oculta</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="250"/>
+        <source>Wireless LAN country:</source>
+        <translation>País del wifi:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="261"/>
+        <source>Set locale settings</source>
+        <translation>Estableix la configuració regional</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="271"/>
+        <source>Time zone:</source>
+        <translation>Fus horari:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsPopup.qml" line="281"/>
+        <source>Keyboard layout:</source>
+        <translation>Disposició del teclat:</translation>
+    </message>
+    <message>
         <location filename="../OptionsPopup.qml" line="298"/>
         <source>Enable SSH</source>
         <translation>Activa el protocol SSH</translation>
@@ -346,66 +402,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
-        <source>Configure wireless LAN</source>
-        <translation>Configura la wifi</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
-        <source>SSID:</source>
-        <translation>SSID:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
-        <source>Password:</source>
-        <translation>Contrasenya:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="120"/>
-        <source>Set username and password</source>
-        <translation>Defineix el nom d&apos;usuari i contrasenya</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="142"/>
-        <source>Username:</source>
-        <translation>Nom d&apos;usuari:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
-        <source>Hidden SSID</source>
-        <translation>SSID oculta</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="238"/>
-        <source>Show password</source>
-        <translation>Mostra la contrasenya</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="250"/>
-        <source>Wireless LAN country:</source>
-        <translation>País del wifi:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="261"/>
-        <source>Set locale settings</source>
-        <translation>Estableix la configuració regional</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="271"/>
-        <source>Time zone:</source>
-        <translation>Fus horari:</translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="281"/>
-        <source>Keyboard layout:</source>
-        <translation>Disposició del teclat:</translation>
-    </message>
-    <message>
-        <source>Persistent settings</source>
-        <translation type="vanished">Configuració persistent</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="375"/>
         <source>Play sound when finished</source>
         <translation>Fes un so quan acabi</translation>
@@ -425,6 +421,10 @@
         <source>SAVE</source>
         <translation>DESA</translation>
     </message>
+    <message>
+        <source>Persistent settings</source>
+        <translation type="vanished">Configuració persistent</translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -438,13 +438,13 @@
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Warning: advanced settings set</source>
-        <translation>Avís: hi ha opcions avançades establertes</translation>
+        <source>Use image customisation?</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply the image customization settings saved earlier?</source>
-        <translation>Voleu aplicar la configuració personalitzada de la imatge desada anteriorment?</translation>
+        <source>Would you like to apply image customization settings?</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -473,6 +473,22 @@
         <location filename="../main.qml" line="22"/>
         <source>Raspberry Pi Imager v%1</source>
         <translation>Raspberry Pi Imager v%1</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="114"/>
+        <location filename="../main.qml" line="467"/>
+        <source>Raspberry Pi Device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="126"/>
+        <source>CHOOSE DEVICE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="138"/>
+        <source>Select this button to choose your target Raspberry Pi</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -508,9 +524,9 @@
         <translation>ESCRIU</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
-        <source>Select this button to start writing the image</source>
-        <translation>Seleccioneu aquest botó per a començar l&apos;escriptura de la imatge</translation>
+        <location filename="../main.qml" line="155"/>
+        <source>Select this button to change the destination storage device</source>
+        <translation>Seleccioneu aquest botó per a canviar la destinació del dispositiu d&apos;emmagatzematge</translation>
     </message>
     <message>
         <location filename="../main.qml" line="216"/>
@@ -534,6 +550,16 @@
         <location filename="../main.qml" line="1127"/>
         <source>Finalizing...</source>
         <translation>S&apos;està finalitzant...</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="288"/>
+        <source>Next</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="175"/>
+        <source>Select this button to start writing the image</source>
+        <translation>Seleccioneu aquest botó per a començar l&apos;escriptura de la imatge</translation>
     </message>
     <message>
         <location filename="../main.qml" line="245"/>
@@ -571,35 +597,9 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
-        <source>Erase</source>
-        <translation>Esborra</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="573"/>
-        <source>Format card as FAT32</source>
-        <translation>Formata la targeta com a FAT32</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="582"/>
-        <source>Use custom</source>
-        <translation>Utilitza una personalitzada</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="583"/>
-        <source>Select a custom .img from your computer</source>
-        <translation>Selecciona una imatge .img personalitzada de l&apos;ordinador</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="528"/>
         <source>Back</source>
         <translation>Enrere</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="155"/>
-        <source>Select this button to change the destination storage device</source>
-        <translation>Seleccioneu aquest botó per a canviar la destinació del dispositiu d&apos;emmagatzematge</translation>
     </message>
     <message>
         <location filename="../main.qml" line="529"/>
@@ -659,6 +659,11 @@
         <translation>S&apos;està preparant per a escriure...</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="962"/>
+        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
+        <translation>Totes les dades existents a «%1» s&apos;esborraràn.&lt;br&gt;Esteu segur que voleu continuar?</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="973"/>
         <source>Update available</source>
         <translation>Hi ha una actualització disponible</translation>
@@ -669,19 +674,14 @@
         <translation>Hi ha una nova versió de l&apos;Imager disponible.&lt;br&gt;Voleu visitar el lloc web per baixar-la?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
-        <source>Writing... %1%</source>
-        <translation>S&apos;està escrivint... %1%</translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="962"/>
-        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>Totes les dades existents a «%1» s&apos;esborraràn.&lt;br&gt;Esteu segur que voleu continuar?</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
         <translation>S&apos;ha produït un error en baixar la llista dels SO d&apos;internet</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1038"/>
+        <source>Writing... %1%</source>
+        <translation>S&apos;està escrivint... %1%</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1061"/>
@@ -704,6 +704,12 @@
         <translation>S&apos;ha escrit amb èxit</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="572"/>
+        <location filename="../main.qml" line="1092"/>
+        <source>Erase</source>
+        <translation>Esborra</translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="1093"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>S&apos;ha esborrat &lt;b&gt;%1&lt;/b&gt;&lt;br&gt;&lt;br&gt;Ja podeu retirar la targeta SD del lector</translation>
@@ -717,6 +723,21 @@
         <location filename="../main.qml" line="1202"/>
         <source>Error parsing os_list.json</source>
         <translation>S&apos;ha produït un error en analitzar os_lists.json</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="573"/>
+        <source>Format card as FAT32</source>
+        <translation>Formata la targeta com a FAT32</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="582"/>
+        <source>Use custom</source>
+        <translation>Utilitza una personalitzada</translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="583"/>
+        <source>Select a custom .img from your computer</source>
+        <translation>Selecciona una imatge .img personalitzada de l&apos;ordinador</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1391"/>
