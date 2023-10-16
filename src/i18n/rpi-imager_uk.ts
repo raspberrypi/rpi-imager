@@ -379,7 +379,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="298"/>
         <source>Enable SSH</source>
-        <translation>Увімкнути SHH</translation>
+        <translation>Увімкнути SSH</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="317"/>
@@ -399,7 +399,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation>ЗАПУСТИТИ ГЕНЕРАЦІЮ КЛЮЧА SHH</translation>
+        <translation>ЗАПУСТИТИ SHH-KEYGEN</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
