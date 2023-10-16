@@ -17,7 +17,7 @@ Window {
     maximumWidth: width
     minimumHeight: 125
     height: Math.min(750, cl.implicitHeight)
-    title: qsTr("Advanced options")
+    title: qsTr("OS Customization")
 
     property bool initialized: false
     property bool hasSavedSettings: false
@@ -49,7 +49,7 @@ Window {
 
                 RowLayout {
                     Label {
-                        text: qsTr("Image customization options")
+                        text: qsTr("OS customization options")
                     }
                     ComboBox {
                         id: comboSaveSettings
@@ -539,7 +539,7 @@ Window {
                 /* Lacking an easy cross-platform to fetch keyboard layout
                    from host system, just default to "gb" for people in
                    UK time zone for now, and "us" for everyone else */
-                if (tz == "Europe/London") {
+                if (tz === "Europe/London") {
                     fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("gb")
                 } else {
                     fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")

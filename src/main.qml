@@ -25,6 +25,20 @@ ApplicationWindow {
     FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}
     FontLoader {id: robotoBold;  source: "fonts/Roboto-Bold.ttf"}
 
+    /** hw device list storage
+      *
+      * To allow us to filter the OS list, we maintain an application-wide record of the selected device
+      * tags.
+      */
+    property string hwTags
+
+    /** 0: Exclusive, must match explicit device names only, no untagged
+        1: Exclusive by prefix, must match the device name as a prefix, no untagged
+        2: Inclusive, match explicit device names and untagged
+        3: Inclusive by prefix, match explicit device names and untagged
+        */
+    property int hwTagMatchingType
+
     onClosing: {
         if (progressBar.visible) {
             close.accepted = false
@@ -55,40 +69,81 @@ ApplicationWindow {
         spacing: 0
 
         Rectangle {
-            implicitHeight: window.height/2
+            implicitHeight: window.height/3
 
             Image {
                 id: image
-                Layout.fillWidth: true
+                //Layout.fillWidth: true
+                Layout.fillHeight: true
                 Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
                 fillMode: Image.PreserveAspectFit
-                source: "icons/logo_stacked_imager.png"
+                source: "icons/logo_sxs_imager.png"
                 width: window.width
-                height: window.height/2
+                height: window.height/3
             }
         }
 
         Rectangle {
             color: "#c31c4a"
             implicitWidth: window.width
-            implicitHeight: window.height/2
+            implicitHeight: (window.height/3) * 2
 
             GridLayout {
                 id: gridLayout
-                rowSpacing: 25
+                rowSpacing: 15
 
                 anchors.fill: parent
                 anchors.topMargin: 25
                 anchors.rightMargin: 50
                 anchors.leftMargin: 50
 
-                rows: 6
+                rows: 5
                 columns: 3
-                columnSpacing: 25
+                columnSpacing: 15
 
                 ColumnLayout {
-                    id: columnLayout
+                    id: columnLayout0
                     spacing: 0
+                    Layout.row: 0
+                    Layout.column: 0
+                    Layout.fillWidth: true
+
+                    Text {
+                        id: text0
+                        color: "#ffffff"
+                        text: qsTr("Raspberry Pi Device")
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 17
+                        Layout.preferredWidth: 100
+                        font.pixelSize: 12
+                        font.family: robotoBold.name
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    ImButton {
+                        id: hwbutton
+                        text: qsTr("CHOOSE DEVICE")
+                        spacing: 0
+                        padding: 0
+                        bottomPadding: 0
+                        topPadding: 0
+                        Layout.minimumHeight: 40
+                        Layout.fillWidth: true
+                        onClicked: {
+                            hwpopup.open()
+                            hwlistview.currentItem.forceActiveFocus()
+                        }
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
+                        Accessible.description: qsTr("Select this button to choose your target Raspberry Pi")
+                    }
+                }
+
+                ColumnLayout {
+                    id: columnLayout1
+                    spacing: 0
+                    Layout.row: 0
+                    Layout.column: 1
                     Layout.fillWidth: true
 
                     Text {
@@ -97,7 +152,6 @@ ApplicationWindow {
                         text: qsTr("Operating System")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
                         font.pixelSize: 12
                         font.family: robotoBold.name
                         font.bold: true
@@ -117,7 +171,7 @@ ApplicationWindow {
                             ospopup.open()
                             osswipeview.currentItem.forceActiveFocus()
                         }
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to change the operating system")
                     }
                 }
@@ -125,6 +179,8 @@ ApplicationWindow {
                 ColumnLayout {
                     id: columnLayout2
                     spacing: 0
+                    Layout.row: 0
+                    Layout.column: 2
                     Layout.fillWidth: true
 
                     Text {
@@ -133,7 +189,6 @@ ApplicationWindow {
                         text: qsTr("Storage")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
                         font.pixelSize: 12
                         font.family: robotoBold.name
                         font.bold: true
@@ -143,55 +198,29 @@ ApplicationWindow {
                     ImButton {
                         id: dstbutton
                         text: qsTr("CHOOSE STORAGE")
+                        spacing: 0
+                        padding: 0
+                        bottomPadding: 0
+                        topPadding: 0
                         Layout.minimumHeight: 40
-                        Layout.preferredWidth: 100
+                        Layout.preferredWidth: 200
                         Layout.fillWidth: true
                         onClicked: {
                             imageWriter.startDriveListPolling()
                             dstpopup.open()
                             dstlist.forceActiveFocus()
                         }
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to change the destination storage device")
                     }
                 }
 
                 ColumnLayout {
+                    id: columnLayoutProgress
                     spacing: 0
-                    Layout.fillWidth: true
-
-                    Text {
-                        text: " "
-                        Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
-                    }
-
-                    ImButton {
-                        id: writebutton
-                        text: qsTr("WRITE")
-                        Layout.minimumHeight: 40
-                        Layout.fillWidth: true
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
-                        Accessible.description: qsTr("Select this button to start writing the image")
-                        enabled: false
-                        onClicked: {
-                            if (!imageWriter.readyToWrite()) {
-                                return
-                            }
-
-                            if (!optionspopup.initialized && imageWriter.imageSupportsCustomization() && imageWriter.hasSavedCustomizationSettings()) {
-                                usesavedsettingspopup.openPopup()
-                            } else {
-                                confirmwritepopup.askForConfirmation()
-                            }
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    id: columnLayout3
-                    Layout.columnSpan: 3
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                    Layout.row: 1
+                    Layout.column: 0
+                    Layout.columnSpan: 2
 
                     Text {
                         id: progressText
@@ -202,16 +231,32 @@ ApplicationWindow {
                         visible: false
                         horizontalAlignment: Text.AlignHCenter
                         Layout.fillWidth: true
+                        Layout.bottomMargin: 25
+                        padding: 5
                     }
 
                     ProgressBar {
+                        Layout.bottomMargin: 25
+                        padding: 5
                         id: progressBar
                         Layout.fillWidth: true
                         visible: false
                         Material.background: "#d15d7d"
                     }
+                }
+
+                ColumnLayout {
+                    id: columnLayout3
+                    Layout.row: 1
+                    Layout.column: 2
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                    spacing: 0
 
                     ImButton {
+                        Layout.bottomMargin: 25
+                        Layout.minimumHeight: 40
+                        Layout.preferredWidth: 200
+                        padding: 5
                         id: cancelwritebutton
                         text: qsTr("CANCEL WRITE")
                         onClicked: {
@@ -223,6 +268,10 @@ ApplicationWindow {
                         visible: false
                     }
                     ImButton {
+                        Layout.bottomMargin: 25
+                        Layout.minimumHeight: 40
+                        Layout.preferredWidth: 200
+                        padding: 5
                         id: cancelverifybutton
                         text: qsTr("CANCEL VERIFY")
                         onClicked: {
@@ -235,17 +284,25 @@ ApplicationWindow {
                     }
 
                     ImButton {
+                        id: writebutton
+                        text: qsTr("Next")
                         Layout.bottomMargin: 25
-                        padding: 5
-                        id: customizebutton
+                        Layout.minimumHeight: 40
+                        Layout.preferredWidth: 200
+                        Layout.alignment: Qt.AlignRight
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
+                        Accessible.description: qsTr("Select this button to start writing the image")
+                        enabled: false
                         onClicked: {
-                            optionspopup.openPopup()
-                        }
-                        visible: imageWriter.imageSupportsCustomization()
-                        Accessible.description: qsTr("Select this button to access advanced settings")
-                        contentItem: Image {
-                            source: "icons/ic_cog_red.svg"
-                            fillMode: Image.PreserveAspectFit
+                            if (!imageWriter.readyToWrite()) {
+                                return
+                            }
+
+                            if (!optionspopup.visible && imageWriter.imageSupportsCustomization()) {
+                                usesavedsettingspopup.openPopup()
+                            } else {
+                                confirmwritepopup.askForConfirmation()
+                            }
                         }
                     }
                 }
@@ -359,6 +416,110 @@ ApplicationWindow {
         }
     }
 
+    Popup {
+        id: hwpopup
+        x: 50
+        y: 25
+        width: parent.width-100
+        height: parent.height-50
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        property string hwselected: ""
+
+        // background of title
+        Rectangle {
+            color: "#f5f5f5"
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 35
+            width: parent.width
+        }
+        // line under title
+        Rectangle {
+            color: "#afafaf"
+            width: parent.width
+            y: 35
+            implicitHeight: 1
+        }
+
+        Text {
+            text: "X"
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: 25
+            anchors.topMargin: 10
+            font.family: roboto.name
+            font.bold: true
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    hwpopup.close()
+                }
+            }
+        }
+
+        ColumnLayout {
+            spacing: 10
+
+            Text {
+                text: qsTr("Raspberry Pi Device")
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                Layout.fillWidth: true
+                Layout.topMargin: 10
+                font.family: roboto.name
+                font.bold: true
+            }
+
+            Item {
+                clip: true
+                Layout.preferredWidth: hwlist.width
+                Layout.preferredHeight: hwlist.height
+
+                ListView {
+                    id: hwlistview
+                    interactive: false
+
+                    ListView {
+                        id: hwlist
+                        model: ListModel {
+                            id: deviceModel
+                            ListElement {
+                                name: qsTr("[ All ]")
+                                tags: "[]"
+                                icon: ""
+                                description: ""
+                                matching_type: "exclusive"
+                            }
+                        }
+                        currentIndex: -1
+                        delegate: hwdelegate
+                        width: window.width-100
+                        height: window.height-100
+                        boundsBehavior: Flickable.StopAtBounds
+                        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+                        ScrollBar.vertical: ScrollBar {
+                            width: 10
+                            policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                        }
+                        Keys.onSpacePressed: {
+                            if (currentIndex != -1)
+                                selectHWitem(model.get(currentIndex))
+                        }
+                        Accessible.onPressAction: {
+                            if (currentIndex != -1)
+                                selectHWitem(model.get(currentIndex))
+                        }
+                        Keys.onEnterPressed: Keys.onSpacePressed(event)
+                        Keys.onReturnPressed: Keys.onSpacePressed(event)
+                    }
+                }
+            }
+        }
+    }
+
     /*
       Popup for OS selection
      */
@@ -402,6 +563,7 @@ ApplicationWindow {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     ospopup.close()
+                    osswipeview.decrementCurrentIndex()
                 }
             }
         }
@@ -419,59 +581,6 @@ ApplicationWindow {
                 font.bold: true
             }
 
-            Rectangle {
-                id: modelRowRect
-                color: "#ffffe3"
-                Layout.fillWidth: true
-                implicitHeight: modelRow.implicitHeight
-                visible: osswipeview.currentIndex == 0
-                Layout.bottomMargin: -10
-
-                Row {
-                    id: modelRow
-                    spacing: 15
-                    leftPadding: 15
-
-                    Text {
-                        id: modelText
-                        text: qsTr("Pi model:")
-                        font.family: roboto.name
-                        verticalAlignment: Qt.AlignVCenter
-                        height: parent.height
-                    }
-
-                    ComboBox {
-                        id: deviceModelCombo
-                        model: ListModel {
-                            id: deviceModel
-                            ListElement {
-                                name: qsTr("[ All ]")
-                                tags: "[]"
-                            }
-                        }
-                        width: 300
-                        textRole: "name"
-                        font.family: roboto.name
-                        font.pixelSize: 12
-                        currentIndex: 0
-                        onCurrentIndexChanged: {
-                            /* Reload list */
-                            httpRequest(imageWriter.constantOsListUrl(), function (x) {
-                                var o = JSON.parse(x.responseText)
-                                var oslist = oslistFromJson(o)
-                                if (oslist === false)
-                                    return
-
-                                osmodel.remove(0, osmodel.count-2)
-                                for (var i in oslist) {
-                                    osmodel.insert(osmodel.count-2, oslist[i])
-                                }
-                            })
-                        }
-                    }
-                }
-            }
-
             Item {
                 clip: true
                 Layout.preferredWidth: oslist.width
@@ -487,7 +596,7 @@ ApplicationWindow {
                         currentIndex: -1
                         delegate: osdelegate
                         width: window.width-100
-                        height: modelRowRect.visible ? window.height-100-modelRowRect.height : window.height-100
+                        height: window.height-100
                         boundsBehavior: Flickable.StopAtBounds
                         highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
                         ScrollBar.vertical: ScrollBar {
@@ -559,33 +668,100 @@ ApplicationWindow {
     ListModel {
         id: osmodel
 
-        ListElement {
-            url: "internal://format"
-            icon: "icons/erase.png"
-            extract_size: 0
-            image_download_size: 0
-            extract_sha256: ""
-            contains_multiple_files: false
-            release_date: ""
-            subitems_url: ""
-            subitems_json: ""
-            name: qsTr("Erase")
-            description: qsTr("Format card as FAT32")
-            tooltip: ""
-            website: ""
-            init_format: ""
-        }
-
-        ListElement {
-            url: ""
-            icon: "icons/use_custom.png"
-            name: qsTr("Use custom")
-            description: qsTr("Select a custom .img from your computer")
-        }
-
         Component.onCompleted: {
             if (imageWriter.isOnline()) {
                 fetchOSlist();
+            }
+        }
+    }
+
+    Component {
+        id: hwdelegate
+
+        Item {
+            width: window.width-100
+            height: contentLayout.implicitHeight + 24
+            Accessible.name: name+".\n"+description
+
+            MouseArea {
+                id: hwMouseArea
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+
+                onEntered: {
+                    bgrect.mouseOver = true
+                }
+
+                onExited: {
+                    bgrect.mouseOver = false
+                }
+
+                onClicked: {
+                    selectHWitem(model)
+                }
+            }
+
+            Rectangle {
+               id: bgrect
+               anchors.fill: parent
+               color: "#f5f5f5"
+               visible: mouseOver && parent.ListView.view.currentIndex !== index
+               property bool mouseOver: false
+            }
+            Rectangle {
+               id: borderrect
+               implicitHeight: 1
+               implicitWidth: parent.width
+               color: "#dcdcdc"
+               y: parent.height
+            }
+
+            RowLayout {
+                id: contentLayout
+                anchors {
+                    left: parent.left
+                    top: parent.top
+                    right: parent.right
+                    margins: 12
+                }
+                spacing: 12
+
+                Image {
+                    source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
+                    Layout.preferredHeight: 64
+                    Layout.preferredWidth: 64
+                    sourceSize.width: 64
+                    sourceSize.height: 64
+                    fillMode: Image.PreserveAspectFit
+                    verticalAlignment: Image.AlignVCenter
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+
+                    Text {
+                        text: name
+                        elide: Text.ElideRight
+                        font.family: roboto.name
+                        font.bold: true
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        font.family: roboto.name
+                        text: description
+                        wrapMode: Text.WordWrap
+                        color: "#1a1a1a"
+                    }
+
+                    ToolTip {
+                        visible: hwMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
+                        delay: 1000
+                        text: typeof(tooltip) == "string" ? tooltip : ""
+                        clip: false
+                    }
+                }
             }
         }
     }
@@ -941,8 +1117,8 @@ ApplicationWindow {
         title: qsTr("Warning")
         onYes: {
             langbarRect.visible = false
+            writebutton.visible = false
             writebutton.enabled = false
-            customizebutton.visible = false
             cancelwritebutton.enabled = true
             cancelwritebutton.visible = true
             cancelverifybutton.enabled = true
@@ -953,6 +1129,7 @@ ApplicationWindow {
             progressBar.Material.accent = "#ffffff"
             osbutton.enabled = false
             dstbutton.enabled = false
+            hwbutton.enabled = false
             imageWriter.setVerifyEnabled(true)
             imageWriter.startWrite()
         }
@@ -1071,9 +1248,9 @@ ApplicationWindow {
     function resetWriteButton() {
         progressText.visible = false
         progressBar.visible = false
-        customizebutton.visible = imageWriter.imageSupportsCustomization()
         osbutton.enabled = true
         dstbutton.enabled = true
+        hwbutton.enabled = true
         writebutton.visible = true
         writebutton.enabled = imageWriter.readyToWrite()
         cancelwritebutton.visible = false
@@ -1113,10 +1290,10 @@ ApplicationWindow {
         imageWriter.setSrc(file)
         osbutton.text = imageWriter.srcFileName()
         ospopup.close()
+        osswipeview.decrementCurrentIndex()
         if (imageWriter.readyToWrite()) {
             writebutton.enabled = true
         }
-        customizebutton.visible = imageWriter.imageSupportsCustomization()
     }
 
     function onCancelled() {
@@ -1150,7 +1327,7 @@ ApplicationWindow {
         }
     }
 
-    function filterItems(list, tags)
+    function filterItems(list, tags, matchingType)
     {
         if (!tags || !tags.length)
             return
@@ -1162,24 +1339,67 @@ ApplicationWindow {
             if ("devices" in entry && entry["devices"].length) {
                 var foundTag = false
 
-                for (var j in tags)
-                {
-                    if (entry["devices"].includes(tags[j]))
-                    {
-                        foundTag = true
+                switch(matchingType) {
+                    case 0: /* exact matching */
+                    case 2: /* exact matching */
+                        for (var j in tags)
+                        {
+                            if (entry["devices"].includes(tags[j]))
+                            {
+                                foundTag = true
+                                break
+                            }
+                        }
+                        /* If there's no match, remove this item from the list. */
+                        if (!foundTag)
+                        {
+                            list.splice(i, 1)
+                            continue
+                        }
                         break
-                    }
+                    case 1: /* Exlusive by prefix matching */
+                    case 3: /* Inclusive by prefix matching */
+                        for (var deviceTypePrefix in tags) {
+                            for (var deviceSpec in entry["devices"]) {
+                                if (deviceSpec.startsWith(deviceTypePrefix)) {
+                                    foundTag = true
+                                    break
+                                }
+                            }
+                            /* Terminate outer loop early if we've already
+                             * decided it's a match
+                             */
+                            if (foundTag) {
+                                break
+                            }
+                        }
+                        /* If there's no match, remove this item from the list. */
+                        if (!foundTag)
+                        {
+                            list.splice(i, 1)
+                            continue
+                        }
+                        break
                 }
-
-                if (!foundTag)
-                {
-                    list.splice(i, 1)
-                    continue
+            } else {
+                /* No device list attached? If we're in an exclusive mode that's bad news indeed. */
+                switch (matchingType) {
+                    case 0:
+                    case 1:
+                        if (!("subitems" in entry)) {
+                            /* If you're not carrying subitems, you're not going in. */
+                            list.splice(i, 1)
+                        }
+                        break
+                    case 2:
+                    case 3:
+                        /* Inclusive filtering. We're keeping this one. */
+                        break;
                 }
             }
 
             if ("subitems" in entry) {
-                filterItems(entry["subitems"], tags)
+                filterItems(entry["subitems"], tags, hwTagMatchingType)
             }
         }
     }
@@ -1206,7 +1426,9 @@ ApplicationWindow {
             oslist = o["os_list"]
         }
 
-        filterItems(oslist, JSON.parse(deviceModel.get(deviceModelCombo.currentIndex).tags))
+        if (hwTags != "") {
+            filterItems(oslist, JSON.parse(hwTags), hwTagMatchingType)
+        }
         checkForRandom(oslist)
 
         /* Flatten subitems to subitems_json */
@@ -1242,8 +1464,9 @@ ApplicationWindow {
             var oslist = oslistFromJson(o)
             if (oslist === false)
                 return
+            osmodel.clear()
             for (var i in oslist) {
-                osmodel.insert(osmodel.count-2, oslist[i])
+                osmodel.append(oslist[i])
             }
 
             if ("imager" in o) {
@@ -1251,6 +1474,7 @@ ApplicationWindow {
 
                 if ("devices" in imager)
                 {
+                    deviceModel.clear()
                     var devices = imager["devices"]
                     for (var j in devices)
                     {
@@ -1258,7 +1482,7 @@ ApplicationWindow {
                         deviceModel.append(devices[j])
                         if ("default" in devices[j] && devices[j]["default"])
                         {
-                            deviceModelCombo.currentIndex = deviceModel.count-1
+                            hwlist.currentIndex = deviceModel.count-1
                         }
                     }
                 }
@@ -1283,6 +1507,31 @@ ApplicationWindow {
                     }
                 }
             }
+
+            /* Add in our 'special' items. */
+            osmodel.append({
+                url: "internal://format",
+                icon: "icons/erase.png",
+                extract_size: 0,
+                image_download_size: 0,
+                extract_sha256: "",
+                contains_multiple_files: false,
+                release_date: "",
+                subitems_url: "",
+                subitems_json: "",
+                name: qsTr("Erase"),
+                description: qsTr("Format card as FAT32"),
+                tooltip: "",
+                website: "",
+                init_format: ""
+            })
+
+            osmodel.append({
+                url: "",
+                icon: "icons/use_custom.png",
+                name: qsTr("Use custom"),
+                description: qsTr("Select a custom .img from your computer")
+            })
         })
     }
 
@@ -1324,6 +1573,46 @@ ApplicationWindow {
         }
 
         return m
+    }
+
+    function selectHWitem(hwmodel) {
+        hwTags = hwmodel.tags
+
+        if (hwmodel.matching_type) {
+            switch (hwmodel.matching_type) {
+                case "exclusive":
+                    hwTagMatchingType = 0
+                    break;
+                case "exclusive_prefix":
+                    hwTagMatchingType = 1
+                    break;
+                case "inclusive":
+                    hwTagMatchingType = 2
+                    break;
+                case "inclusive_prefix":
+                    hwTagMatchingType = 3
+                    break;
+            }
+        } else {
+            /* Default is exclusive exact matching */
+            hwTagMatchingType = 0
+        }
+
+        /* Reload list */
+        httpRequest(imageWriter.constantOsListUrl(), function (x) {
+            var o = JSON.parse(x.responseText)
+            var oslist = oslistFromJson(o)
+            if (oslist === false)
+                return
+
+            osmodel.remove(0, osmodel.count-2)
+            for (var i in oslist) {
+                osmodel.insert(osmodel.count-2, oslist[i])
+            }
+        })
+
+        hwbutton.text = hwmodel.name
+        hwpopup.close()
     }
 
     function selectOSitem(d, selectFirstSubitem)
@@ -1395,10 +1684,10 @@ ApplicationWindow {
             imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
             osbutton.text = d.name
             ospopup.close()
+            osswipeview.decrementCurrentIndex()
             if (imageWriter.readyToWrite()) {
                 writebutton.enabled = true
             }
-            customizebutton.visible = imageWriter.imageSupportsCustomization()
         }
     }
 
