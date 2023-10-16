@@ -729,10 +729,10 @@ ApplicationWindow {
 
                 Image {
                     source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
-                    Layout.preferredHeight: 40
-                    Layout.preferredWidth: 40
-                    sourceSize.width: 40
-                    sourceSize.height: 40
+                    Layout.preferredHeight: 64
+                    Layout.preferredWidth: 64
+                    sourceSize.width: 64
+                    sourceSize.height: 64
                     fillMode: Image.PreserveAspectFit
                     verticalAlignment: Image.AlignVCenter
                     Layout.alignment: Qt.AlignVCenter
