@@ -626,6 +626,11 @@ ApplicationWindow {
                         }
                         Keys.onEnterPressed: Keys.onSpacePressed(event)
                         Keys.onReturnPressed: Keys.onSpacePressed(event)
+                        Keys.onRightPressed: {
+                            // Navigate into sublists but don't select an OS entry
+                            if (currentIndex != -1 && isOSsublist(model.get(currentIndex)))
+                                selectOSitem(model.get(currentIndex), true)
+                        }
                     }
                 }
             }
@@ -675,6 +680,15 @@ ApplicationWindow {
             }
             Keys.onEnterPressed: Keys.onSpacePressed(event)
             Keys.onReturnPressed: Keys.onSpacePressed(event)
+            Keys.onRightPressed: {
+                // Navigate into sublists but don't select an OS entry
+                if (currentIndex != -1 && isOSsublist(model.get(currentIndex)))
+                    selectOSitem(model.get(currentIndex), true)
+            }
+            Keys.onLeftPressed: {
+                osswipeview.decrementCurrentIndex()
+                ospopup.categorySelected = ""
+            }
         }
     }
 
@@ -1626,6 +1640,23 @@ ApplicationWindow {
 
         hwbutton.text = hwmodel.name
         hwpopup.close()
+    }
+
+    /// Is the item a sub-list or sub-sub-list in the OS selection model?
+    function isOSsublist(d) {
+        // Top level category
+        if (typeof(d.subitems_json) == "string" && d.subitems_json !== "") {
+            return true
+        }
+
+        // Sub-category
+        if (typeof(d.subitems_url) == "string" && d.subitems_url !== ""
+            && d.subitems_url !== "internal://back")
+        {
+            return true
+        }
+
+        return false
     }
 
     function selectOSitem(d, selectFirstSubitem)
