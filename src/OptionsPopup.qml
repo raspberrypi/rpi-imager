@@ -48,13 +48,6 @@ Window {
             //ScrollBar.vertical.policy: ScrollBar.AlwaysOn
 
             ColumnLayout {
-
-                RowLayout {
-                    Label {
-                        text: qsTr("OS customization options")
-                    }
-                }
-
                 TabBar {
                     id: bar
                     Layout.fillWidth: true
