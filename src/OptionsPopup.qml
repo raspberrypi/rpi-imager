@@ -830,22 +830,46 @@ Window {
 
     function clearCustomizationFields()
     {
-        fieldHostname.clear()
-        fieldUserName.clear()
+        /* Bind copies of the lists */
+        fieldTimezone.model = imageWriter.getTimezoneList()
+        fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
+        fieldWifiCountry.model = imageWriter.getCountryList()
+
+        fieldHostname.text = "raspberrypi"
+        fieldUserName.text = imageWriter.getCurrentUser()
         fieldUserPassword.clear()
         radioPubKeyAuthentication.checked = false
         radioPasswordAuthentication.checked = false
         fieldPublicKey.clear()
-        fieldWifiSSID.clear()
-        fieldWifiCountry.currentIndex = -1
-        fieldWifiPassword.clear()
-        fieldTimezone.currentIndex = -1
-        fieldKeyboardLayout.currentIndex = -1
+
+        /* Timezone Settings*/
+        fieldTimezone.currentIndex = fieldTimezone.find(imageWriter.getTimezone())
+        /* Lacking an easy cross-platform to fetch keyboard layout
+            from host system, just default to "gb" for people in
+            UK time zone for now, and "us" for everyone else */
+        if (imageWriter.getTimezone() === "Europe/London") {
+            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("gb")
+        } else {
+            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")
+        }
+        
         chkSetUser.checked = false
         chkSSH.checked = false
         chkLocale.checked = false
-        chkWifi.checked = false
         chkWifiSSIDHidden.checked = false
         chkHostname.checked = false
+
+        /* WiFi Settings */
+        fieldWifiSSID.text = imageWriter.getSSID()
+        if (fieldWifiSSID.text.length) {
+            fieldWifiPassword.text = imageWriter.getPSK()
+            if (fieldWifiPassword.text.length) {
+                chkShowPassword.checked = false
+                if (Qt.platform.os == "osx") {
+                    /* User indicated wifi must be prefilled */
+                    chkWifi.checked = true
+                }
+            }
+        }
     }
 }
