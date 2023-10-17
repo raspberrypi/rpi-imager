@@ -492,12 +492,12 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use image customisation?</source>
-        <translation type="unfinished"></translation>
+        <translation>Vuoi usare personalizzazione immagini?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply image customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Vuoi applicare impostazioni personalizzazione immagine?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -531,17 +531,17 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <location filename="../main.qml" line="114"/>
         <location filename="../main.qml" line="467"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Dispositivo Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="126"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>SCEGLI DISPOSITIVO</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleziona questo pulsante per scegliere il Raspberry Pi destinazione</translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -607,7 +607,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../main.qml" line="288"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>Avanti</translation>
     </message>
     <message>
         <location filename="../main.qml" line="175"/>
