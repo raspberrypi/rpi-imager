@@ -237,7 +237,6 @@ ApplicationWindow {
 
                     ProgressBar {
                         Layout.bottomMargin: 25
-                        padding: 5
                         id: progressBar
                         Layout.fillWidth: true
                         visible: false
