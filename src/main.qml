@@ -69,24 +69,43 @@ ApplicationWindow {
         spacing: 0
 
         Rectangle {
-            implicitHeight: window.height/3
+            id: logoContainer
+            implicitHeight: window.height/4
 
             Image {
                 id: image
-                //Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-                fillMode: Image.PreserveAspectFit
                 source: "icons/logo_sxs_imager.png"
-                width: window.width
-                height: window.height/3
+
+                // Specify the maximum size of the image
+                width: window.width * 0.45
+                height: window.height / 3
+
+                // Within the image's specified size rectangle, resize the
+                // image to fit within the rectangle while keeping its aspect
+                // ratio the same.  Preserving the aspect ratio implies some
+                // extra padding between the Image's extend and the actual
+                // image content: align left so all this padding is on the
+                // right.
+                fillMode: Image.PreserveAspectFit
+                horizontalAlignment: Image.AlignLeft
+
+                // Keep the left side of the image 40 pixels from the left
+                // edge
+                anchors.left: logoContainer.left
+                anchors.leftMargin: 40
+
+                // Equal padding above and below the image
+                anchors.top: logoContainer.top
+                anchors.bottom: logoContainer.bottom
+                anchors.topMargin: window.height / 25
+                anchors.bottomMargin: window.height / 25
             }
         }
 
         Rectangle {
             color: "#c31c4a"
             implicitWidth: window.width
-            implicitHeight: (window.height/3) * 2
+            implicitHeight: window.height * (1 - 1/4)
 
             GridLayout {
                 id: gridLayout
