@@ -29,6 +29,8 @@ Window {
     property string cloudinitwrite
     property string cloudinitnetwork
 
+    signal saveSettingsSignal(var settings)
+
     ColumnLayout {
         id: cl
         spacing: 10
@@ -50,16 +52,6 @@ Window {
                 RowLayout {
                     Label {
                         text: qsTr("OS customization options")
-                    }
-                    ComboBox {
-                        id: comboSaveSettings
-                        model: {
-                            [qsTr("for this session only"),
-                             qsTr("to always use")]
-                        }
-                        Layout.minimumWidth: 250
-                        Layout.maximumHeight: 40
-                        enabled: !imageWriter.isEmbeddedMode()
                     }
                 }
 
@@ -453,7 +445,6 @@ Window {
         fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
 
         if (Object.keys(settings).length) {
-            comboSaveSettings.currentIndex = 1
             hasSavedSettings = true
         }
         if ('hostname' in settings) {
@@ -807,43 +798,61 @@ Window {
 
     function saveSettings()
     {
-        if (comboSaveSettings.currentIndex == 1) {
-            hasSavedSettings = true
-            var settings = { };
-            if (chkHostname.checked && fieldHostname.length) {
-                settings.hostname = fieldHostname.text
-            }
-            if (chkSetUser.checked) {
-                settings.sshUserName = fieldUserName.text
-                settings.sshUserPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
-            }
+        var settings = { };
+        if (chkHostname.checked && fieldHostname.length) {
+            settings.hostname = fieldHostname.text
+        }
+        if (chkSetUser.checked) {
+            settings.sshUserName = fieldUserName.text
+            settings.sshUserPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
+        }
 
-            settings.sshEnabled = chkSSH.checked
-            if (chkSSH.checked && radioPubKeyAuthentication.checked) {
-                settings.sshAuthorizedKeys = fieldPublicKey.text
+        settings.sshEnabled = chkSSH.checked
+        if (chkSSH.checked && radioPubKeyAuthentication.checked) {
+            settings.sshAuthorizedKeys = fieldPublicKey.text
+        }
+        if (chkWifi.checked) {
+            settings.wifiSSID = fieldWifiSSID.text
+            if (chkWifiSSIDHidden.checked) {
+                settings.wifiSSIDHidden = true
             }
-            if (chkWifi.checked) {
-                settings.wifiSSID = fieldWifiSSID.text
-                if (chkWifiSSIDHidden.checked) {
-                    settings.wifiSSIDHidden = true
-                }
-                settings.wifiPassword = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
-                settings.wifiCountry = fieldWifiCountry.editText
-            }
-            if (chkLocale.checked) {
-                settings.timezone = fieldTimezone.editText
-                settings.keyboardLayout = fieldKeyboardLayout.editText
-            }
-
-            imageWriter.setSavedCustomizationSettings(settings)
-
-        } else if (hasSavedSettings) {
-            imageWriter.clearSavedCustomizationSettings()
-            hasSavedSettings = false
+            settings.wifiPassword = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
+            settings.wifiCountry = fieldWifiCountry.editText
+        }
+        if (chkLocale.checked) {
+            settings.timezone = fieldTimezone.editText
+            settings.keyboardLayout = fieldKeyboardLayout.editText
         }
 
         imageWriter.setSetting("beep", chkBeep.checked)
         imageWriter.setSetting("eject", chkEject.checked)
         imageWriter.setSetting("telemetry", chkTelemtry.checked)
+
+        if (chkHostname.checked || chkSetUser.checked || chkSSH.checked || chkWifi.checked || chkLocale.checked) {
+            /* OS customization to be applied. */
+            hasSavedSettings = true
+            saveSettingsSignal(settings)
+        }
+    }
+
+    function clearCustomizationFields()
+    {
+        fieldHostname.clear()
+        fieldUserName.clear()
+        fieldUserPassword.clear()
+        radioPubKeyAuthentication.checked = false
+        radioPasswordAuthentication.checked = false
+        fieldPublicKey.clear()
+        fieldWifiSSID.clear()
+        fieldWifiCountry.currentIndex = -1
+        fieldWifiPassword.clear()
+        fieldTimezone.currentIndex = -1
+        fieldKeyboardLayout.currentIndex = -1
+        chkSetUser.checked = false
+        chkSSH.checked = false
+        chkLocale.checked = false
+        chkWifi.checked = false
+        chkWifiSSIDHidden.checked = false
+        chkHostname.checked = false
     }
 }

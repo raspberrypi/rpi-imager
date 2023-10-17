@@ -1183,6 +1183,10 @@ ApplicationWindow {
 
     OptionsPopup {
         id: optionspopup
+        onSaveSettingsSignal: {
+            imageWriter.setSavedCustomizationSettings(settings)
+            usesavedsettingspopup.hasSavedSettings = true
+        }
     }
 
     UseSavedSettingsPopup {
@@ -1196,6 +1200,8 @@ ApplicationWindow {
             confirmwritepopup.askForConfirmation()
         }
         onNoClearSettings: {
+            hasSavedSettings = false
+            optionspopup.clearCustomizationFields()
             imageWriter.clearSavedCustomizationSettings()
             confirmwritepopup.askForConfirmation()
         }

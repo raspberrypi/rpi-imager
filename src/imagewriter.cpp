@@ -1039,6 +1039,7 @@ void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)
         _settings.setValue(key, map.value(key));
     }
     _settings.endGroup();
+    _settings.sync();
 }
 
 QVariantMap ImageWriter::getSavedCustomizationSettings()
@@ -1060,10 +1061,12 @@ void ImageWriter::clearSavedCustomizationSettings()
     _settings.beginGroup("imagecustomization");
     _settings.remove("");
     _settings.endGroup();
+    _settings.sync();
 }
 
 bool ImageWriter::hasSavedCustomizationSettings()
 {
+    _settings.sync();
     _settings.beginGroup("imagecustomization");
     bool result = !_settings.childKeys().isEmpty();
     _settings.endGroup();

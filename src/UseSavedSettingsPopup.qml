@@ -18,6 +18,8 @@ Popup {
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
+    property bool hasSavedSettings: false
+
     signal yes()
     signal no()
     signal noClearSettings()
@@ -105,6 +107,7 @@ Popup {
             }
 
             ImButton {
+                id: noAndClearButton
                 text: qsTr("NO, CLEAR SETTINGS")
                 onClicked: {
                     msgpopup.close()
@@ -112,10 +115,11 @@ Popup {
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
-                enabled: imageWriter.hasSavedCustomizationSettings() ? true : false
+                enabled: false
             }
 
             ImButton {
+                id: yesButton
                 text: qsTr("YES")
                 onClicked: {
                     msgpopup.close()
@@ -123,7 +127,7 @@ Popup {
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
-                enabled: imageWriter.hasSavedCustomizationSettings() ? true : false
+                enabled: false
             }
 
             ImButton {
@@ -142,6 +146,16 @@ Popup {
 
     function openPopup() {
         open()
+        if (hasSavedSettings) {
+            /* HACK: Bizarrely, the button enabled characteristics are not re-evaluated on open.
+             * So, let's manually _force_ these buttons to be enabled */
+            yesButton.enabled = true
+            noAndClearButton.enabled = true
+        } else {
+            yesButton.enabled = false
+            noAndClearButton.enabled = false
+        }
+
         // trigger screen reader to speak out message
         msgpopupbody.forceActiveFocus()
     }
