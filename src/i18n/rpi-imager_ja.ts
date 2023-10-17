@@ -34,7 +34,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="118"/>
         <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
+        <translation>ドライブをアンマウントしています</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="138"/>
@@ -64,7 +64,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="217"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation type="unfinished">Raspberry Pi Imagerがリムーバブルボリュームへアクセスすることがプライバシー設定(「ファイルとフォルダー」の中、またはディスクへのすべてのアクセス権限を付与する)で許可されているかを確認してください。</translation>
+        <translation>Raspberry Pi Imagerがリムーバブルボリュームへアクセスすることが「プライバシーとセキュリティ」の「ファイルとフォルダー」の設定、または「フルディスクアクセス」の付与によって許可されているかを確認してください。</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="239"/>
@@ -324,7 +324,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>Image customization options</source>
-        <translation>カスタマイズオプション</translation>
+        <translation>イメージカスタマイズオプション</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
@@ -339,17 +339,17 @@
     <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>一般</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="79"/>
         <source>Services</source>
-        <translation type="unfinished"></translation>
+        <translation>サービス</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>オプション</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="98"/>
@@ -435,7 +435,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
+        <translation>ssh-keygenを実行する</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -450,7 +450,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="383"/>
         <source>Enable telemetry</source>
-        <translation type="unfinished">テレメトリーを有効化する</translation>
+        <translation>テレメトリーを有効化</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="397"/>
@@ -483,17 +483,17 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use image customisation?</source>
-        <translation type="unfinished"></translation>
+        <translation>イメージカスタマイズを使用しますか？</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply image customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>イメージカスタマイズ設定を適用しますか？</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
         <source>NO</source>
-        <translation type="unfinished">いいえ</translation>
+        <translation>いいえ</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="107"/>
@@ -522,17 +522,17 @@
         <location filename="../main.qml" line="114"/>
         <location filename="../main.qml" line="467"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Piデバイス</translation>
     </message>
     <message>
         <location filename="../main.qml" line="126"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>デバイスを選択</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>対象のRaspberry Piを選択するには、このボタンを押してください。</translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -543,7 +543,7 @@
     <message>
         <location filename="../main.qml" line="109"/>
         <source>CHOOSE OS</source>
-        <translation>OSを選ぶ</translation>
+        <translation>OSを選択</translation>
     </message>
     <message>
         <location filename="../main.qml" line="121"/>
@@ -560,7 +560,7 @@
         <location filename="../main.qml" line="145"/>
         <location filename="../main.qml" line="1108"/>
         <source>CHOOSE STORAGE</source>
-        <translation>ストレージを選ぶ</translation>
+        <translation>ストレージを選択</translation>
     </message>
     <message>
         <location filename="../main.qml" line="171"/>
@@ -598,7 +598,7 @@
     <message>
         <location filename="../main.qml" line="288"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>次へ</translation>
     </message>
     <message>
         <location filename="../main.qml" line="175"/>
@@ -633,12 +633,12 @@
     <message>
         <location filename="../main.qml" line="437"/>
         <source>Pi model:</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi モデル:</translation>
     </message>
     <message>
         <location filename="../main.qml" line="448"/>
         <source>[ All ]</source>
-        <translation type="unfinished"></translation>
+        <translation>[すべて]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="528"/>
@@ -668,14 +668,14 @@
     <message>
         <location filename="../main.qml" line="708"/>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">インターネットからダウンロードする (%1GB)</translation>
+        <translation>インターネットからダウンロード - %1 GB</translation>
     </message>
     <message>
         <location filename="../main.qml" line="833"/>
         <location filename="../main.qml" line="885"/>
         <location filename="../main.qml" line="891"/>
         <source>Mounted as %1</source>
-        <translation>%1としてマウントされています</translation>
+        <translation>%1 としてマウントされています</translation>
     </message>
     <message>
         <location filename="../main.qml" line="887"/>
@@ -705,7 +705,7 @@
     <message>
         <location filename="../main.qml" line="962"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>%1に存在するすべてのデータは完全に削除されます。本当に続けますか？</translation>
+        <translation>%1 に存在するすべてのデータは完全に削除されます。本当に続けますか？</translation>
     </message>
     <message>
         <location filename="../main.qml" line="973"/>
@@ -791,7 +791,7 @@
     <message>
         <location filename="../main.qml" line="1407"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation>SDカードは書き込みが制限されています。&lt;br&gt;カードの左上にあるロックスイッチを上げてロックを解除し、もう一度お試しください。</translation>
+        <translation>SDカードへの書き込みが制限されています。&lt;br&gt;カードの左上にあるロックスイッチを上げてロックを解除し、もう一度お試しください。</translation>
     </message>
     <message>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
