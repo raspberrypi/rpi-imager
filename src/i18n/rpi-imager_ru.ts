@@ -34,7 +34,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="118"/>
         <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
+        <translation>отключение диска</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="138"/>
@@ -339,17 +339,17 @@
     <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>Общие</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="79"/>
         <source>Services</source>
-        <translation type="unfinished"></translation>
+        <translation>Службы</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Параметры</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="98"/>
@@ -435,7 +435,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
+        <translation>ВЫПОЛНИТЬ SSH-KEYGEN</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -475,12 +475,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use image customisation?</source>
-        <translation type="unfinished"></translation>
+        <translation>Использовать настройку образа?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply image customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Применить параметры настройки образа?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -514,17 +514,17 @@
         <location filename="../main.qml" line="114"/>
         <location filename="../main.qml" line="467"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="126"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>ВЫБРАТЬ УСТРОЙСТВО</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Нажмите эту кнопку, чтобы выбрать целевое устройство Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -590,7 +590,7 @@
     <message>
         <location filename="../main.qml" line="288"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>Далее</translation>
     </message>
     <message>
         <location filename="../main.qml" line="175"/>
@@ -625,12 +625,12 @@
     <message>
         <location filename="../main.qml" line="437"/>
         <source>Pi model:</source>
-        <translation type="unfinished"></translation>
+        <translation>Модель Pi:</translation>
     </message>
     <message>
         <location filename="../main.qml" line="448"/>
         <source>[ All ]</source>
-        <translation type="unfinished"></translation>
+        <translation>[ Все ]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="528"/>
