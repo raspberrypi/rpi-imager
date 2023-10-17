@@ -132,7 +132,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         onClicked: {
                             hwpopup.open()
-                            hwlistview.currentItem.forceActiveFocus()
+                            hwlist.currentItem.forceActiveFocus()
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to choose your target Raspberry Pi")
@@ -478,42 +478,37 @@ ApplicationWindow {
                 Layout.preferredHeight: hwlist.height
 
                 ListView {
-                    id: hwlistview
-                    interactive: false
-
-                    ListView {
-                        id: hwlist
-                        model: ListModel {
-                            id: deviceModel
-                            ListElement {
-                                name: qsTr("[ All ]")
-                                tags: "[]"
-                                icon: ""
-                                description: ""
-                                matching_type: "exclusive"
-                            }
+                    id: hwlist
+                    model: ListModel {
+                        id: deviceModel
+                        ListElement {
+                            name: qsTr("[ All ]")
+                            tags: "[]"
+                            icon: ""
+                            description: ""
+                            matching_type: "exclusive"
                         }
-                        currentIndex: -1
-                        delegate: hwdelegate
-                        width: window.width-100
-                        height: window.height-100
-                        boundsBehavior: Flickable.StopAtBounds
-                        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
-                        ScrollBar.vertical: ScrollBar {
-                            width: 10
-                            policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-                        }
-                        Keys.onSpacePressed: {
-                            if (currentIndex != -1)
-                                selectHWitem(model.get(currentIndex))
-                        }
-                        Accessible.onPressAction: {
-                            if (currentIndex != -1)
-                                selectHWitem(model.get(currentIndex))
-                        }
-                        Keys.onEnterPressed: Keys.onSpacePressed(event)
-                        Keys.onReturnPressed: Keys.onSpacePressed(event)
                     }
+                    currentIndex: -1
+                    delegate: hwdelegate
+                    width: window.width-100
+                    height: window.height-100
+                    boundsBehavior: Flickable.StopAtBounds
+                    highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+                    ScrollBar.vertical: ScrollBar {
+                        width: 10
+                        policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                    }
+                    Keys.onSpacePressed: {
+                        if (currentIndex != -1)
+                            selectHWitem(model.get(currentIndex))
+                    }
+                    Accessible.onPressAction: {
+                        if (currentIndex != -1)
+                            selectHWitem(model.get(currentIndex))
+                    }
+                    Keys.onEnterPressed: Keys.onSpacePressed(event)
+                    Keys.onReturnPressed: Keys.onSpacePressed(event)
                 }
             }
         }
