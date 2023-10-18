@@ -7,8 +7,10 @@ rpi-imager (1.8.0) unstable; urgency=medium
   * OS customization: Enforce choice as part of write flow
   * OS customization: Fixes for state consistency across UI
   * Home: Add mechanism for selecting Raspberry Pi device
-  * Adds Spanish/Ukrainian translations
-  * Updates French, Catalan, Italian, German, Spanish, Russian, Japanese translations
+  * i18n: Adds Spanish/Ukrainian translations
+  * i18n: Updates French, Catalan, Italian, German, Spanish, Russian,
+          Japanese translations
+  * i18n: Use en_US as refernce string, and make en_GB a translation
   * Workaround for ArchLinux's lsblk labeling internal SD card readers
     (mmcblk0) as non-removable storage.
   * Allow drag-dropping image files to Imager.
