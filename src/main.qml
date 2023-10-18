@@ -1208,6 +1208,9 @@ ApplicationWindow {
         onEditSettings: {
             optionspopup.openPopup()
         }
+        onCloseSettings: {
+            optionspopup.close()
+        }
     }
 
     /* Utility functions */

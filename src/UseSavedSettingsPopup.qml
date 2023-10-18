@@ -17,6 +17,7 @@ Popup {
     height: msgpopupbody.implicitHeight+150
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    modal: true
 
     property bool hasSavedSettings: false
 
@@ -24,6 +25,7 @@ Popup {
     signal no()
     signal noClearSettings()
     signal editSettings()
+    signal closeSettings()
 
     // background of title
     Rectangle {
@@ -99,7 +101,11 @@ Popup {
             ImButton {
                 text: qsTr("EDIT SETTINGS")
                 onClicked: {
-                    msgpopup.close()
+                    // Don't close this dialog when "edit settings" is
+                    // clicked, as we don't want the user to fall back to the
+                    // start of the flow. After editing the settings we want
+                    // then to once again have the choice about whether to use
+                    // customisation or not.
                     msgpopup.editSettings()
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
@@ -115,7 +121,7 @@ Popup {
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
-                enabled: false
+                enabled: hasSavedSettings
             }
 
             ImButton {
@@ -127,7 +133,7 @@ Popup {
                 }
                 Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
                 Material.background: "#c51a4a"
-                enabled: false
+                enabled: hasSavedSettings
             }
 
             ImButton {
@@ -146,17 +152,20 @@ Popup {
 
     function openPopup() {
         open()
-        if (hasSavedSettings) {
+        if (imageWriter.hasSavedCustomizationSettings()) {
             /* HACK: Bizarrely, the button enabled characteristics are not re-evaluated on open.
              * So, let's manually _force_ these buttons to be enabled */
-            yesButton.enabled = true
-            noAndClearButton.enabled = true
-        } else {
-            yesButton.enabled = false
-            noAndClearButton.enabled = false
+            hasSavedSettings = true
         }
 
         // trigger screen reader to speak out message
         msgpopupbody.forceActiveFocus()
+    }
+
+    onClosed: {
+        // Close the advanced options window if this msgbox is dismissed,
+        // in order to prevent the user from starting writing while the
+        // advanced options window is open.
+        closeSettings()
     }
 }
