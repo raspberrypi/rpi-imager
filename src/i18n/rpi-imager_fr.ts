@@ -318,7 +318,7 @@
     <name>OptionsPopup</name>
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
-        <source>OS customization</source>
+        <source>OS Customization</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -474,13 +474,13 @@
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Use image customisation?</source>
-        <translation>Utiliser la personnalisation&#xa0;?</translation>
+        <source>Use OS customization?</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply image customization settings?</source>
-        <translation>Voulez-vous applquer les réglages personnalisés de l&apos;image&#xa0;?</translation>
+        <source>Would you like to apply OS customization settings?</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>

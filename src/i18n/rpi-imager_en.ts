@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="en_US">
+<TS version="2.1" language="en_GB">
 <context>
     <name>DownloadExtractThread</name>
     <message>
@@ -147,7 +147,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="898"/>
         <source>Customizing image</source>
-        <translation type="unfinished"></translation>
+        <translation>Customising OS</translation>
     </message>
 </context>
 <context>
@@ -278,13 +278,13 @@
     <name>OptionsPopup</name>
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
-        <source>OS customization</source>
-        <translation type="unfinished"></translation>
+        <source>OS Customization</source>
+        <translation>OS Customisation</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>OS customisation options</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
@@ -430,13 +430,13 @@
     <name>UseSavedSettingsPopup</name>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
-        <source>Use image customisation?</source>
-        <translation type="unfinished"></translation>
+        <source>Use OS customization?</source>
+        <translation>Use OS customisation?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
-        <source>Would you like to apply image customization settings?</source>
-        <translation type="unfinished"></translation>
+        <source>Would you like to apply OS customization settings?</source>
+        <translation>Would you like to apply OS customisation settings?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
