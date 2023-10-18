@@ -306,13 +306,13 @@
     <name>OptionsPopup</name>
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
-        <source>Advanced options</source>
-        <translation>高级设置</translation>
+        <source>OS customization</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
-        <source>Image customization options</source>
-        <translation>镜像自定义选项</translation>
+        <source>OS customization options</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>

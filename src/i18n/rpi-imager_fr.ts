@@ -318,13 +318,13 @@
     <name>OptionsPopup</name>
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
-        <source>Advanced options</source>
-        <translation>Réglages avancés</translation>
+        <source>OS customization</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
-        <source>Image customization options</source>
-        <translation>Options de personnalisation de l&apos;image</translation>
+        <source>OS customization options</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>

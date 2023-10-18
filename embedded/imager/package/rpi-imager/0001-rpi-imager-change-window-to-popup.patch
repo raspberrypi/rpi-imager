@@ -24,6 +24,6 @@ index 568d1cd..9e36607 100644
 +    function raise() { }
 +    /*  */
 +
-     title: qsTr("Advanced options")
+     title: qsTr("OS Customization")
  
      property bool initialized: false

@@ -18,6 +18,8 @@ Popup {
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
+    property bool hasSavedSettings: false
+
     signal yes()
     signal no()
     signal noClearSettings()
@@ -70,7 +72,7 @@ Popup {
             Layout.topMargin: 10
             font.family: roboto.name
             font.bold: true
-            text: qsTr("Use image customisation?")
+            text: qsTr("Use OS customization?")
         }
 
         Text {
@@ -85,7 +87,7 @@ Popup {
             Layout.topMargin: 25
             Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
             Accessible.name: text.replace(/<\/?[^>]+(>|$)/g, "")
-            text: qsTr("Would you like to apply image customization settings?")
+            text: qsTr("Would you like to apply OS customization settings?")
         }
 
         RowLayout {
@@ -93,38 +95,6 @@ Popup {
             Layout.bottomMargin: 10
             spacing: 20
             id: buttons
-
-            ImButton {
-                text: qsTr("NO")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.no()
-                }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
-            }
-
-            ImButton {
-                text: qsTr("NO, CLEAR SETTINGS")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.noClearSettings()
-                }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
-                enabled: imageWriter.hasSavedCustomizationSettings() ? true : false
-            }
-
-            ImButton {
-                text: qsTr("YES")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.yes()
-                }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
-                enabled: imageWriter.hasSavedCustomizationSettings() ? true : false
-            }
 
             ImButton {
                 text: qsTr("EDIT SETTINGS")
@@ -136,12 +106,56 @@ Popup {
                 Material.background: "#c51a4a"
             }
 
+            ImButton {
+                id: noAndClearButton
+                text: qsTr("NO, CLEAR SETTINGS")
+                onClicked: {
+                    msgpopup.close()
+                    msgpopup.noClearSettings()
+                }
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+                Material.background: "#c51a4a"
+                enabled: false
+            }
+
+            ImButton {
+                id: yesButton
+                text: qsTr("YES")
+                onClicked: {
+                    msgpopup.close()
+                    msgpopup.yes()
+                }
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+                Material.background: "#c51a4a"
+                enabled: false
+            }
+
+            ImButton {
+                text: qsTr("NO")
+                onClicked: {
+                    msgpopup.close()
+                    msgpopup.no()
+                }
+                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
+                Material.background: "#c51a4a"
+            }
+
             Text { text: " " }
         }
     }
 
     function openPopup() {
         open()
+        if (hasSavedSettings) {
+            /* HACK: Bizarrely, the button enabled characteristics are not re-evaluated on open.
+             * So, let's manually _force_ these buttons to be enabled */
+            yesButton.enabled = true
+            noAndClearButton.enabled = true
+        } else {
+            yesButton.enabled = false
+            noAndClearButton.enabled = false
+        }
+
         // trigger screen reader to speak out message
         msgpopupbody.forceActiveFocus()
     }
