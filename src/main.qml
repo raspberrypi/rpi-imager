@@ -151,7 +151,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         onClicked: {
                             hwpopup.open()
-                            hwlist.currentItem.forceActiveFocus()
+                            hwlist.forceActiveFocus()
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to choose your target Raspberry Pi")
@@ -1122,6 +1122,9 @@ ApplicationWindow {
 
     MsgPopup {
         id: msgpopup
+        onOpened: {
+            forceActiveFocus()
+        }
     }
 
     MsgPopup {
@@ -1142,6 +1145,7 @@ ApplicationWindow {
         yesButton: true
         noButton: true
         title: qsTr("Warning")
+        modal: true
         onYes: {
             langbarRect.visible = false
             writebutton.visible = false
@@ -1165,6 +1169,10 @@ ApplicationWindow {
         {
             text = qsTr("All existing data on '%1' will be erased.<br>Are you sure you want to continue?").arg(dstbutton.text)
             openPopup()
+        }
+
+        onOpened: {
+            forceActiveFocus()
         }
     }
 
