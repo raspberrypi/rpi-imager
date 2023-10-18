@@ -1,17 +1,20 @@
-rpi-imager (1.7.6) unstable; urgency=medium
+rpi-imager (1.8.0) unstable; urgency=medium
 
-  * Advanced options: change to tabbed UI
-  * Advanced options: make SSH public key field a textarea
-  * Advanced options: add convenience button to run ssh-keygen
-  * Choose OS screen: Add Pi model selection box
+  * Advanced options: Rename to OS customization
+  * OS customization: change to tabbed UI
+  * OS customization: make SSH public key field a textarea
+  * OS customization: add convenience button to run ssh-keygen
+  * OS customization: Enforce choice as part of write flow
+  * OS customization: Fixes for state consistency across UI
+  * Home: Add mechanism for selecting Raspberry Pi device
   * Adds Spanish/Ukrainian translations
-  * Updates French translation
+  * Updates French, Catalan, Italian, German, Spanish, Russian, Japanese translations
   * Workaround for ArchLinux's lsblk labeling internal SD card readers
     (mmcblk0) as non-removable storage.
   * Allow drag-dropping image files to Imager.
   * Local .xz files: parse uncompressed size for better progress reports.
 
- -- Floris Bos <bos@je-eigen-domein.nl>  Sat, 23 Sep 2023 19:47:40 +0200
+ -- Floris Bos <bos@je-eigen-domein.nl>  Wed, 18 Oct 2023 18:00:00 +0200
 
 rpi-imager (1.7.5) unstable; urgency=medium
 
