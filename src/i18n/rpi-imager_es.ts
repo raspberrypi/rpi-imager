@@ -283,12 +283,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
+        <translation>Personalización del SO</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>Opciones de personalización del SO</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
@@ -437,14 +437,14 @@
 <context>
     <name>UseSavedSettingsPopup</name>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="73"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="77"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
+        <translation>¿Usar la personalización del SO?</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="87"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="92"/>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>¿Desea aplicar los ajustes de personalización del SO?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -676,7 +676,7 @@
     <message>
         <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
-        <translation>Error al descargar la lista de sistemas operativos de Internet</translation>
+        <translation>Error al descargar la lista de SO de Internet</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1038"/>
