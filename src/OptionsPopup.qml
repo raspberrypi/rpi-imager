@@ -378,7 +378,7 @@ Window {
             Layout.bottomMargin: 10
             spacing: 20
 
-            ImButton {
+            ImButtonRed {
                 text: qsTr("SAVE")
                 onClicked: {
                     if (chkSetUser.checked && fieldUserPassword.text.length == 0)
@@ -419,8 +419,6 @@ Window {
                     saveSettings()
                     popup.close()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
             Text { text: " " }
@@ -852,7 +850,7 @@ Window {
         } else {
             fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")
         }
-        
+
         chkSetUser.checked = false
         chkSSH.checked = false
         chkLocale.checked = false

@@ -98,7 +98,7 @@ Popup {
             spacing: 20
             id: buttons
 
-            ImButton {
+            ImButtonRed {
                 text: qsTr("EDIT SETTINGS")
                 onClicked: {
                     // Don't close this dialog when "edit settings" is
@@ -108,42 +108,34 @@ Popup {
                     // customisation or not.
                     msgpopup.editSettings()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
-            ImButton {
+            ImButtonRed {
                 id: noAndClearButton
                 text: qsTr("NO, CLEAR SETTINGS")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.noClearSettings()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
                 enabled: hasSavedSettings
             }
 
-            ImButton {
+            ImButtonRed {
                 id: yesButton
                 text: qsTr("YES")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.yes()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
                 enabled: hasSavedSettings
             }
 
-            ImButton {
+            ImButtonRed {
                 text: qsTr("NO")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.no()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
             Text { text: " " }

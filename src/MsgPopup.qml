@@ -94,47 +94,39 @@ Popup {
             Layout.bottomMargin: 10
             spacing: 20
 
-            ImButton {
+            ImButtonRed {
                 text: qsTr("NO")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.no()
                 }
                 visible: msgpopup.noButton
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
-            ImButton {
+            ImButtonRed {
                 text: qsTr("YES")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.yes()
                 }
                 visible: msgpopup.yesButton
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
-            ImButton {
+            ImButtonRed {
                 text: qsTr("CONTINUE")
                 onClicked: {
                     msgpopup.close()
                 }
                 visible: msgpopup.continueButton
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
-            ImButton {
+            ImButtonRed {
                 text: qsTr("QUIT")
                 onClicked: {
                     Qt.quit()
                 }
                 font.family: roboto.name
                 visible: msgpopup.quitButton
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
             Text { text: " " }
