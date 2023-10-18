@@ -24,10 +24,6 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Errore passaggio a cartella &apos;%1&apos;</translation>
     </message>
-    <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">Errore scrittura nello storage</translation>
-    </message>
 </context>
 <context>
     <name>DownloadThread</name>
@@ -153,42 +149,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <location filename="../downloadthread.cpp" line="898"/>
         <source>Customizing image</source>
         <translation>Personalizza immagine</translation>
-    </message>
-    <message>
-        <source>Waiting for FAT partition to be mounted</source>
-        <translation type="vanished">Attesa montaggio partizione FAT</translation>
-    </message>
-    <message>
-        <source>Error mounting FAT32 partition</source>
-        <translation type="vanished">Errore montaggio partizione FAT32</translation>
-    </message>
-    <message>
-        <source>Operating system did not mount FAT32 partition</source>
-        <translation type="vanished">Il sistema operativo non ha montato la partizione FAT32</translation>
-    </message>
-    <message>
-        <source>Unable to customize. File &apos;%1&apos; does not exist.</source>
-        <translation type="vanished">Impossibile personalizzare. Il file &apos;%1&apos; non esiste.</translation>
-    </message>
-    <message>
-        <source>Error creating firstrun.sh on FAT partition</source>
-        <translation type="vanished">Errore creazione firstrun.sh nella partizione FAT</translation>
-    </message>
-    <message>
-        <source>Error writing to config.txt on FAT partition</source>
-        <translation type="vanished">Errore scrittura in config.txt nella partizione FAT</translation>
-    </message>
-    <message>
-        <source>Error creating user-data cloudinit file on FAT partition</source>
-        <translation type="vanished">Errore nel creare il file cloudinit dei dati utente nella partizione FAT</translation>
-    </message>
-    <message>
-        <source>Error creating network-config cloudinit file on FAT partition</source>
-        <translation type="vanished">Errore durante la creazione del file network-config cloudinit nella partizione FAT</translation>
-    </message>
-    <message>
-        <source>Error writing to cmdline.txt on FAT partition</source>
-        <translation type="vanished">Errore scrittura in cmdline.txt nella partizione FAT</translation>
     </message>
 </context>
 <context>
@@ -320,12 +280,12 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
+        <translation>Personalizzazione SO</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>Opzioni personalizzazione SO</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
@@ -458,26 +418,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <source>SAVE</source>
         <translation>SALVA</translation>
     </message>
-    <message>
-        <source>Disable overscan</source>
-        <translation type="vanished">Disabilita overscan</translation>
-    </message>
-    <message>
-        <source>Set password for &apos;pi&apos; user:</source>
-        <translation type="vanished">Imposta password utente &apos;pi&apos;:</translation>
-    </message>
-    <message>
-        <source>Set authorized_keys for &apos;pi&apos;:</source>
-        <translation type="vanished">Imposta authorized_key per &apos;pi&apos;:</translation>
-    </message>
-    <message>
-        <source>Skip first-run wizard</source>
-        <translation type="vanished">Salta procedura prima impostazione</translation>
-    </message>
-    <message>
-        <source>Persistent settings</source>
-        <translation type="vanished">Impostazioni persistenti</translation>
-    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -492,12 +432,12 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
+        <translation>Vuoi usare la personalizzaizone SO?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Vuoi applicare le impostazioni personalizzazione sistema operativo?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -801,14 +741,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <location filename="../main.qml" line="1407"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>La scheda SD è protetta da scrittura.&lt;br&gt;Sposta verso l&apos;alto l&apos;interruttore LOCK sul lato sinistro della scheda SD e riprova.</translation>
-    </message>
-    <message>
-        <source>Select this button to change the destination SD card</source>
-        <translation type="vanished">Seleziona questo pulsante per modificare la scheda SD destinazione</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
-        <translation type="vanished">Scrittura di &lt;b&gt;%1&lt;/b&gt; in &lt;b&gt;%2&lt;/b&gt;completata</translation>
     </message>
 </context>
 </TS>
