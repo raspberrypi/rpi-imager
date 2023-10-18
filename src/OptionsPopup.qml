@@ -36,6 +36,12 @@ Window {
         spacing: 10
         anchors.fill: parent
 
+        // Keys handlers can only be attached to Items. Window is not an
+        // Item, but ColumnLayout is, so put this handler here.
+        Keys.onEscapePressed: {
+            popup.close()
+        }
+
         ScrollView {
             id: popupbody
             font.family: roboto.name
