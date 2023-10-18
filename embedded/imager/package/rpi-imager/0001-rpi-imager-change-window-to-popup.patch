@@ -1,7 +1,7 @@
-diff --git a/src/OptionsPopup.qml b/src/OptionsPopup.qml
+diff --git src/OptionsPopup.qml src/OptionsPopup.qml
 index 568d1cd..9e36607 100644
---- a/src/OptionsPopup.qml
-+++ b/src/OptionsPopup.qml
+--- src/OptionsPopup.qml
++++ src/OptionsPopup.qml
 @@ -10,13 +10,19 @@ import QtQuick.Controls.Material 2.2
  import QtQuick.Window 2.15
  import "qmlcomponents"
