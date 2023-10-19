@@ -320,12 +320,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
+        <translation>OS Anpassungen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>OS Anpassungen Optionen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
@@ -488,12 +488,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
+        <translation>OS Anpassungen anwenden?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Möchten Sie die vorher festgelegten OS Anpassungen anwenden?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -720,7 +720,7 @@
     <message>
         <location filename="../main.qml" line="974"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation>Eine neuere Version von Imager ist verfügbar. &lt;br&gt;Möchten Sie die Webseite besuchen, um das Update herunterzuladen?</translation>
+        <translation>Eine neuere Version von Imager ist verfügbar.&lt;br&gt;Möchten Sie die Webseite besuchen, um das Update herunterzuladen?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1017"/>
