@@ -120,12 +120,13 @@ Note: the CMake integration in Qt Creator is a bit flaky at times. If you made a
     - It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store. (Privileged apps are not allowed in the Mac store)
 - Install Homebrew (https://brew.sh/)
 - Using Homebrew:
-    - Install qt5: ```brew install qt@5```
+    - Install qt6: ```brew install qt@6```
     - Install qtcreator ```brew install --cask qt-creator```
     - Install cmake ```brew install cmake```
-- Configure QtCreator to use your Qt5 installation
-    - Open QtCreator, and when it offers to link with a Qt Version, use the path offered by Homebrew during the installation of qt@5. Alternatively, you can compute it by substituting your Homebrew prefix:
-        - ```$HOMEBREW_PREFIX/opt/qt@5```
+- Configure QtCreator to use your Qt6 installation
+    - Open QtCreator, and at the bottom of the screen you will see a yellow notification bar with the option to link to a Qt installation. Select "Link with Qt". In the pop-up that follows, enter the path to your homebrew installation of Qt6. You can get the path by asking Homebrew
+        - ```brew info qt@6```
+        - Take the path supplied under the _Caveats_ section.
 - For creating a .DMG for distribution you can use an utility like: https://github.com/sindresorhus/create-dmg
 
 #### Building
