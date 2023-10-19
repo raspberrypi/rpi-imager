@@ -1444,6 +1444,11 @@ ApplicationWindow {
 
             if ("subitems" in entry) {
                 filterItems(entry["subitems"], tags, hwTagMatchingType)
+
+                // If this sub-list has no items then hide it
+                if (entry["subitems"].length == 0) {
+                    list.splice(i, 1)
+                }
             }
         }
     }
@@ -1654,6 +1659,15 @@ ApplicationWindow {
                 osmodel.insert(osmodel.count-2, oslist[i])
             }
         })
+
+        // When the HW device is changed, reset the OS selection otherwise
+        // you get a weird effect with the selection moving around in the list
+        // when the user next opens the OS list, and the user could still have
+        // an OS selected which isn't compatible with this HW device
+        oslist.currentIndex = -1
+        osswipeview.currentIndex = 0
+        osbutton.text = qsTr("CHOOSE OS")
+        writebutton.enabled = false
 
         hwbutton.text = hwmodel.name
         hwpopup.close()
