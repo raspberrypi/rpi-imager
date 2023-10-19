@@ -1,3 +1,10 @@
+rpi-imager (1.8.1) unstable; urgency=medium
+
+  * Hide empty categories when filtering
+  * i8n: Updates German translation
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 19 Oct 2023 20:16:16 +0200
+
 rpi-imager (1.8.0) unstable; urgency=medium
 
   * Advanced options: Rename to OS customization
