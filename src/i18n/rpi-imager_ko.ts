@@ -319,12 +319,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
+        <translation>OS 커스터마이징</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>OS 커스터마이징 옵션</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
@@ -339,17 +339,17 @@
     <message>
         <location filename="../OptionsPopup.qml" line="71"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>일반</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="79"/>
         <source>Services</source>
-        <translation type="unfinished"></translation>
+        <translation>서비스</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="82"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>옵션</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="98"/>
@@ -435,7 +435,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-KEYGEN 실행</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -483,12 +483,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
+        <translation>OS 커스터마이징을 사용하십니까?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>OS 커스터마이징 설정을 적용하시겠습니까?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
@@ -522,17 +522,17 @@
         <location filename="../main.qml" line="114"/>
         <location filename="../main.qml" line="467"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>라즈베리파이(Raspberry Pi) 디바이스</translation>
     </message>
     <message>
         <location filename="../main.qml" line="126"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>장치 선택</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>이 버튼을 선택하면 타켓 Raspberry Pi 를 선택할 수 있습니다</translation>
     </message>
     <message>
         <location filename="../main.qml" line="97"/>
@@ -598,7 +598,7 @@
     <message>
         <location filename="../main.qml" line="288"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>다음</translation>
     </message>
     <message>
         <location filename="../main.qml" line="175"/>
@@ -633,12 +633,12 @@
     <message>
         <location filename="../main.qml" line="437"/>
         <source>Pi model:</source>
-        <translation type="unfinished"></translation>
+        <translation>파이 모델</translation>
     </message>
     <message>
         <location filename="../main.qml" line="448"/>
         <source>[ All ]</source>
-        <translation type="unfinished"></translation>
+        <translation>[ 전체 ]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="528"/>
