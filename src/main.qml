@@ -1654,6 +1654,19 @@ ApplicationWindow {
             if (oslist === false)
                 return
 
+            /* As we're filtering the OS list, we need to ensure we present a 'Recommended' OS.
+             * To do this, we exploit a convention of how we build the OS list. By convention,
+             * the preferred OS for a device is listed at the top level of the list, and is at the
+             * lowest index. So..
+             */
+            if (oslist.length != 0) {
+                var candidate = oslist[0]
+
+                if ("description" in candidate && !("subitems" in candidate)) {
+                    candidate["description"] += " (Recommended)"
+                }
+            }
+
             osmodel.remove(0, osmodel.count-2)
             for (var i in oslist) {
                 osmodel.insert(osmodel.count-2, oslist[i])
