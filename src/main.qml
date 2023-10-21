@@ -1679,6 +1679,7 @@ ApplicationWindow {
         // an OS selected which isn't compatible with this HW device
         oslist.currentIndex = -1
         osswipeview.currentIndex = 0
+        imageWriter.setSrc("")
         osbutton.text = qsTr("CHOOSE OS")
         writebutton.enabled = false
 
