@@ -755,7 +755,7 @@ ApplicationWindow {
                 spacing: 12
 
                 Image {
-                    source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
+                    source: typeof icon === "undefined" ? "" : icon
                     Layout.preferredHeight: 64
                     Layout.preferredWidth: 64
                     sourceSize.width: 64
