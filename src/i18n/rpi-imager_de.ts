@@ -436,7 +436,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="357"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-KEYGEN ausführen</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="375"/>
@@ -527,12 +527,12 @@
         <location filename="../main.qml" line="114"/>
         <location filename="../main.qml" line="467"/>
         <source>Raspberry Pi Device</source>
-        <translation>Raspberry Pi Gerät</translation>
+        <translation>Raspberry Pi Modell</translation>
     </message>
     <message>
         <location filename="../main.qml" line="126"/>
         <source>CHOOSE DEVICE</source>
-        <translation>GERÄT WÄHLEN</translation>
+        <translation>MODELL WÄHLEN</translation>
     </message>
     <message>
         <location filename="../main.qml" line="138"/>
@@ -543,7 +543,7 @@
         <location filename="../main.qml" line="97"/>
         <location filename="../main.qml" line="413"/>
         <source>Operating System</source>
-        <translation>Betriebssystem</translation>
+        <translation>Betriebssystem (OS)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="109"/>
@@ -603,7 +603,7 @@
     <message>
         <location filename="../main.qml" line="288"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>Weiter</translation>
     </message>
     <message>
         <location filename="../main.qml" line="175"/>
