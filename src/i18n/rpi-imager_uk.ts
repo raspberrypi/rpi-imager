@@ -283,12 +283,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Налаштування ОС</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Опції налаштувування ОС</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
