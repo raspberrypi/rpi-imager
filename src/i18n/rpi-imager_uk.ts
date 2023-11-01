@@ -283,12 +283,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished">Налаштування ОС</translation>
+        <translation>Налаштування ОС</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation type="unfinished">Опції налаштувування ОС</translation>
+        <translation>Опції налаштування ОС</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
@@ -359,7 +359,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="250"/>
         <source>Wireless LAN country:</source>
-        <translation>Країна Wi-Fi:</translation>
+        <translation>Країна Wi-Fi локальної мережі:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="261"/>
@@ -384,7 +384,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="317"/>
         <source>Use password authentication</source>
-        <translation>Використовувати аутентефікацію черз пароль</translation>
+        <translation>Використовувати аутентефікацію через пароль</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="327"/>
@@ -439,12 +439,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Використовувати налаштування ОС?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Чи бажаєте ви прийняти налаштування ОС?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
