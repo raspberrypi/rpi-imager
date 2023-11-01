@@ -339,7 +339,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="186"/>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">Налаштувати бездротову LAN мережу</translation>
+        <translation>Налаштувати бездротову LAN мережу</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="205"/>
@@ -359,7 +359,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="250"/>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">Країна бездротової LAN мережі:</translation>
+        <translation>Країна бездротової LAN мережі:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="261"/>
