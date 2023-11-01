@@ -339,7 +339,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="186"/>
         <source>Configure wireless LAN</source>
-        <translation>Налаштувати Wi-Fi</translation>
+        <translation type="unfinished">Налаштувати бездротову LAN мережу</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="205"/>
@@ -359,7 +359,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="250"/>
         <source>Wireless LAN country:</source>
-        <translation>Країна Wi-Fi локальної мережі:</translation>
+        <translation type="unfinished">Країна бездротової LAN мережі:</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="261"/>
@@ -439,7 +439,7 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished">Використовувати налаштування ОС?</translation>
+        <translation>Використовувати налаштування ОС?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
