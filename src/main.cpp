@@ -140,6 +140,16 @@ int main(int argc, char *argv[])
     }
 
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+
+    /** QtQuick on QT5 exhibits spurious disk cache failures that cannot be
+     * resolved by a user in a trivial manner (they have to delete the cache manually).
+     * 
+     * This flag can potentially noticeably increase the start time of the application, however
+     * between this and a hard-to-detect spurious failure affecting Linux, macOS and Windows,
+     * this trade is the one most likely to result in a good experience for the widest group
+     * of users.
+     */
+    qputenv("QML_DISABLE_DISK_CACHE", "true");
 #ifdef Q_OS_WIN
     // prefer ANGLE (DirectX) over desktop OpenGL
     QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
