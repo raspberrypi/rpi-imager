@@ -1469,27 +1469,37 @@ ApplicationWindow {
         if (!oslist) {
             if (!"os_list" in o) {
                 onError(qsTr("Error parsing os_list.json"))
-                return false
+            } else {
+                oslist = o["os_list"]
+
+                if (hwTags != "") {
+                    filterItems(oslist, JSON.parse(hwTags), hwTagMatchingType)
+                }
+                checkForRandom(oslist)
+
+                /* Flatten subitems to subitems_json */
+                for (var i in oslist) {
+                    var entry = oslist[i];
+                    if ("subitems" in entry) {
+                        entry["subitems_json"] = JSON.stringify(entry["subitems"])
+                        delete entry["subitems"]
+                    }
+                }
+
+                return oslist
             }
-
-            oslist = o["os_list"]
         }
 
-        if (hwTags != "") {
-            filterItems(oslist, JSON.parse(hwTags), hwTagMatchingType)
-        }
-        checkForRandom(oslist)
-
-        /* Flatten subitems to subitems_json */
-        for (var i in oslist) {
-            var entry = oslist[i];
-            if ("subitems" in entry) {
-                entry["subitems_json"] = JSON.stringify(entry["subitems"])
-                delete entry["subitems"]
-            }
-        }
-
-        return oslist
+        /* Return an empty model, rather than a different type.
+         * Do this because everywhere we use oslistFromJson, we're testing (directly or indirectly)
+         * for the number of items in the model - which in this failure case will be 0, skipping over
+         * the caller's use of the model options.
+         * 
+         * All of this, of course, assumes the caller actually checks the length of the collection returned
+         * before blithely asking for data, but we can't effectively guard against that, and that was a failure
+         * of the previous scheme, too.
+         */
+        return {}
     }
 
     function selectNamedOS(name, collection)
@@ -1511,8 +1521,6 @@ ApplicationWindow {
         httpRequest(imageWriter.constantOsListUrl(), function (x) {
             var o = JSON.parse(x.responseText)
             var oslist = oslistFromJson(o)
-            if (oslist === false)
-                return
             osmodel.clear()
             for (var i in oslist) {
                 osmodel.append(oslist[i])
@@ -1651,8 +1659,6 @@ ApplicationWindow {
         httpRequest(imageWriter.constantOsListUrl(), function (x) {
             var o = JSON.parse(x.responseText)
             var oslist = oslistFromJson(o)
-            if (oslist === false)
-                return
 
             /* As we're filtering the OS list, we need to ensure we present a 'Recommended' OS.
              * To do this, we exploit a convention of how we build the OS list. By convention,
@@ -1739,8 +1745,6 @@ ApplicationWindow {
                 httpRequest(suburl, function (x) {
                     var o = JSON.parse(x.responseText)
                     var oslist = oslistFromJson(o)
-                    if (oslist === false)
-                        return
                     for (var i in oslist) {
                         m.append(oslist[i])
                     }
