@@ -3,7 +3,6 @@ name: Bug report
 about: Thanks for the report!
 title: "[BUG]"
 labels: bug
-assignees: cillian64, tdewey-rpi
 
 ---
 
