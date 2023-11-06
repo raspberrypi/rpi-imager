@@ -3,7 +3,6 @@ name: Feature request
 about: What would you like to see from rpi-imager?
 title: "[FEATURE]"
 labels: enhancement
-assignees: cillian64, tdewey-rpi
 
 ---
 
