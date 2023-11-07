@@ -404,7 +404,12 @@ Window {
 
                     if (chkWifi.checked)
                     {
-                        if (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64)
+                        // Valid Wi-Fi PSKs are:
+                        // - 0 characters (indicating an open network)
+                        // - 8-63 characters (passphrase)
+                        // - 64 characters (hashed passphrase, as hex)
+                        if (fieldWifiPassword.text.length > 0 &&
+                            (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64))
                         {
                             fieldWifiPassword.indicateError = true
                             fieldWifiPassword.forceActiveFocus()
@@ -712,7 +717,11 @@ Window {
                 wpaconfig += "\tscan_ssid=1\n"
             }
             wpaconfig += "\tssid=\""+fieldWifiSSID.text+"\"\n"
-            var cryptedPsk = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
+
+            const isPassphrase = fieldWifiPassword.text.length >= 8 &&
+                fieldWifiPassword.text.length < 64
+            var cryptedPsk = isPassphrase ? imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
+                                          : fieldWifiPassword.text
             wpaconfig += "\tpsk="+cryptedPsk+"\n"
             wpaconfig += "}\n"
 
@@ -813,8 +822,13 @@ Window {
             if (chkWifiSSIDHidden.checked) {
                 settings.wifiSSIDHidden = true
             }
-            settings.wifiPassword = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
             settings.wifiCountry = fieldWifiCountry.editText
+
+            const isPassphrase = fieldWifiPassword.text.length >= 8 &&
+                fieldWifiPassword.text.length < 64
+            var cryptedPsk = isPassphrase ? imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
+                                          : fieldWifiPassword.text
+            settings.wifiPassword = cryptedPsk
         }
         if (chkLocale.checked) {
             settings.timezone = fieldTimezone.editText
