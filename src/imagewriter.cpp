@@ -533,22 +533,24 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
 }
 
 QByteArray ImageWriter::getFilteredOSlist() {
-    QJsonArray referenceArray = {};
-    QJsonObject referenceImagerMeta = {};
-    if (!_completeOsList.isEmpty()) {
+    QJsonArray reference_os_list_array = {};
+    QJsonObject reference_imager_metadata = {};
+    {
         std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
-        referenceArray = _completeOsList.object()["os_list"].toArray();
-        referenceImagerMeta = _completeOsList.object()["imager"].toObject();
+        if (!_completeOsList.isEmpty()) {
+            reference_os_list_array = _completeOsList.object()["os_list"].toArray();
+            reference_imager_metadata = _completeOsList.object()["imager"].toObject();
+        }
     }
 
-    referenceArray.append(QJsonObject({
+    reference_os_list_array.append(QJsonObject({
             {"name",  tr("Erase")},
             {"description", tr("Format card as FAT32")},
             {"icon", "icons/erase.png"},
             {"url", "internal://format"},
         }));
 
-    referenceArray.append(QJsonObject({
+    reference_os_list_array.append(QJsonObject({
             {"name",  tr("Use custom")},
             {"description", tr("Select a custom .img from your computer")},
             {"icon", "icons/use_custom.png"},
@@ -557,8 +559,8 @@ QByteArray ImageWriter::getFilteredOSlist() {
 
     return QJsonDocument(
         QJsonObject({
-            {"imager", referenceImagerMeta},
-            {"os_list", referenceArray},
+            {"imager", reference_imager_metadata},
+            {"os_list", reference_os_list_array},
         }
     )).toJson();
 }
