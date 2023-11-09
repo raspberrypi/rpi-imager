@@ -486,18 +486,18 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
         auto httpStatusCode = data->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
         if (httpStatusCode >= 200 && httpStatusCode < 300) {
-            auto responseDoc = QJsonDocument::fromJson(data->readAll()).object();
+            auto response_object = QJsonDocument::fromJson(data->readAll()).object();
 
-            if (responseDoc.contains("os_list")) {
+            if (response_object.contains("os_list")) {
                 // Step 1: Insert the items into the canonical JSON document.
                 //         It doesn't matter that these may still contain subitems_url items
                 //         As these will be fixed up as the subitems_url instances are blinked in
                 if (_completeOsList.isEmpty()) {
                     std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
-                    _completeOsList = QJsonDocument(responseDoc);
+                    _completeOsList = QJsonDocument(response_object);
                 } else {
                     std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
-                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), responseDoc["os_list"].toArray(), data->url());
+                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->url());
                     auto imager_meta = _completeOsList["imager"].toObject();
                     _completeOsList = QJsonDocument(QJsonObject({
                         {"imager", imager_meta},
@@ -505,7 +505,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     }));
                 }
 
-                findAndQueueUnresolvedSubitemsJson(responseDoc["os_list"].toArray(), _networkManager.get());
+                findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager.get());
                 emit osListPrepared();
             } else {
                 qDebug() << "Incorrectly formatted OS list at: " << data->url();
