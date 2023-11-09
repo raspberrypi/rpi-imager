@@ -60,7 +60,8 @@ namespace {
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
       _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
-      _embeddedMode(false), _online(false), _customCacheFile(false), _trans(nullptr)
+      _embeddedMode(false), _online(false), _customCacheFile(false), _trans(nullptr),
+      _networkManager(this)
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
@@ -173,8 +174,7 @@ ImageWriter::ImageWriter(QObject *parent)
     //_currentKeyboard = "us";
 
     // Centralised network manager, for fetching OS lists
-    _networkManager = std::make_unique<QNetworkAccessManager>(this);
-    connect(_networkManager.get(), SIGNAL(finished(QNetworkReply *)), this, SLOT(handleNetworkRequestFinished(QNetworkReply *)));
+    connect(&_networkManager, SIGNAL(finished(QNetworkReply *)), this, SLOT(handleNetworkRequestFinished(QNetworkReply *)));
 }
 
 ImageWriter::~ImageWriter()
@@ -452,7 +452,7 @@ namespace {
         return returnArray;
     }
 
-    void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager *manager, uint8_t count = 0) {
+    void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager &manager, uint8_t count = 0) {
         if (count > MAX_SUBITEMS_DEPTH) {
             qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
             return;
@@ -465,7 +465,7 @@ namespace {
                 findAndQueueUnresolvedSubitemsJson(entryObject["subitems"].toArray(), manager, count++);
             } else if (entryObject.contains("subitems_url")) {
                 auto url = entryObject["subitems_url"].toString();
-                manager->get(QNetworkRequest(url));
+                manager.get(QNetworkRequest(url));
             }
         }
     }
@@ -505,7 +505,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     }));
                 }
 
-                findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager.get());
+                findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager);
                 emit osListPrepared();
             } else {
                 qDebug() << "Incorrectly formatted OS list at: " << data->url();
@@ -572,7 +572,7 @@ void ImageWriter::beginOSListFetch() {
     
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
-   _networkManager->get(QNetworkRequest(request));
+   _networkManager.get(QNetworkRequest(request));
 }
 
 void ImageWriter::setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256)

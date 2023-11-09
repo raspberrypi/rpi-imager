@@ -181,7 +181,7 @@ private:
     // Recursively walk all the entries with subitems and, for any which
     // refer to an external JSON list, fetch the list and put it in place.
     void fillSubLists(QJsonArray &topLevel);
-    std::unique_ptr<QNetworkAccessManager> _networkManager;
+    QNetworkAccessManager _networkManager;
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter;
     std::mutex _deviceListMutationMutex;
