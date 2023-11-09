@@ -441,11 +441,8 @@ namespace {
                 ositemObject["subitems"] = findAndInsertJsonResult(ositemObject["subitems"].toArray(), incomingBody, referenceUrl, count++);
             } else if (ositemObject.contains("subitems_url")) {
                 if ( !ositemObject["subitems_url"].toString().compare(referenceUrl.toString())) {
-                   // qDebug() << "Replacing URL [" << ositemObject["subitems_url"] << "] with body";
                     ositemObject.insert("subitems", incomingBody);
                     ositemObject.remove("subitems_url");
-                } else {
-                    //qDebug() << "Moving to next match for " << referenceUrl << " as we didn't match with " << ositemObject["subitems_url"].toString();
                 }
             }
 
@@ -456,7 +453,6 @@ namespace {
     }
 
     void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager *manager, uint8_t count = 0) {
-        // Step 2: Queue the other downloads.
         if (count > MAX_SUBITEMS_DEPTH) {
             qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
             return;
@@ -484,14 +480,12 @@ void ImageWriter::setHWFilterList(const QByteArray &json) {
 
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
     // Defer deletion
-    //data->deleteLater();
+    data->deleteLater();
 
     if (data->error() == QNetworkReply::NoError) {
         auto httpStatusCode = data->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
         if (httpStatusCode >= 200 && httpStatusCode < 300) {
-           // TODO: Indicate download complete, hand back for re-assembly. Userdata to point to qJsonDocument?
-
             auto responseDoc = QJsonDocument::fromJson(data->readAll()).object();
 
             if (responseDoc.contains("os_list")) {
@@ -502,7 +496,6 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
                     _completeOsList = QJsonDocument(responseDoc);
                 } else {
-                    // TODO: Insert into current graph
                     std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
                     auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), responseDoc["os_list"].toArray(), data->url());
                     auto imager_meta = _completeOsList["imager"].toObject();
@@ -512,7 +505,6 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     }));
                 }
 
-                // TODO: Find and queue subitem downloads. Recursively?
                 findAndQueueUnresolvedSubitemsJson(responseDoc["os_list"].toArray(), _networkManager.get());
                 emit osListPrepared();
             } else {
@@ -540,9 +532,6 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
     }
 }
 
-/** You are expected to have called setDeviceFilter from the UI before making this call.
- *  If you have not, you will effectively get the full list. With some extras.
-*/
 QByteArray ImageWriter::getFilteredOSlist() {
     QJsonArray referenceArray = {};
     QJsonObject referenceImagerMeta = {};
