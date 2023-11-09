@@ -53,6 +53,10 @@
 #include <QtPlatformHeaders/QEglFSFunctions>
 #endif
 
+namespace {
+    constexpr uint MAX_SUBITEMS_DEPTH = 16;
+} // namespace anonymous
+
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
       _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
@@ -167,6 +171,10 @@ ImageWriter::ImageWriter(QObject *parent)
         }
     }
     //_currentKeyboard = "us";
+
+    // Centralised network manager, for fetching OS lists
+    _networkManager = std::make_unique<QNetworkAccessManager>(this);
+    connect(_networkManager.get(), SIGNAL(finished(QNetworkReply *)), this, SLOT(handleNetworkRequestFinished(QNetworkReply *)));
 }
 
 ImageWriter::~ImageWriter()
@@ -414,6 +422,166 @@ bool ImageWriter::isVersionNewer(const QString &version)
 void ImageWriter::setCustomOsListUrl(const QUrl &url)
 {
     _repo = url;
+}
+
+namespace {
+    QJsonArray findAndInsertJsonResult(QJsonArray parent_list, QJsonArray incomingBody, QUrl referenceUrl, uint8_t count = 0) {
+        if (count > MAX_SUBITEMS_DEPTH) {
+            qDebug() << "Aborting insertion of subitems, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
+            return {};
+        }
+
+        QJsonArray returnArray = {};
+
+        for (auto ositem : parent_list) {
+            auto ositemObject = ositem.toObject();
+
+            if (ositemObject.contains("subitems")) {
+                // Recurse!
+                ositemObject["subitems"] = findAndInsertJsonResult(ositemObject["subitems"].toArray(), incomingBody, referenceUrl, count++);
+            } else if (ositemObject.contains("subitems_url")) {
+                if ( !ositemObject["subitems_url"].toString().compare(referenceUrl.toString())) {
+                   // qDebug() << "Replacing URL [" << ositemObject["subitems_url"] << "] with body";
+                    ositemObject.insert("subitems", incomingBody);
+                    ositemObject.remove("subitems_url");
+                } else {
+                    //qDebug() << "Moving to next match for " << referenceUrl << " as we didn't match with " << ositemObject["subitems_url"].toString();
+                }
+            }
+
+            returnArray += ositemObject;
+        }
+
+        return returnArray;
+    }
+
+    void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager *manager, uint8_t count = 0) {
+        // Step 2: Queue the other downloads.
+        if (count > MAX_SUBITEMS_DEPTH) {
+            qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
+            return;
+        }
+
+        for (auto entry : incoming) {
+            auto entryObject = entry.toObject();
+            if (entryObject.contains("subitems")) {
+                // No need to handle a return - this isn't processing a list, it's searching and queuing downloads.
+                findAndQueueUnresolvedSubitemsJson(entryObject["subitems"].toArray(), manager, count++);
+            } else if (entryObject.contains("subitems_url")) {
+                auto url = entryObject["subitems_url"].toString();
+                manager->get(QNetworkRequest(url));
+            }
+        }
+    }
+} // namespace anonymous
+
+
+void ImageWriter::setHWFilterList(const QByteArray &json) {
+    QJsonDocument json_document = QJsonDocument::fromJson(json);
+
+    _deviceFilter = json_document.array();
+}
+
+void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
+    // Defer deletion
+    //data->deleteLater();
+
+    if (data->error() == QNetworkReply::NoError) {
+        auto httpStatusCode = data->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+        if (httpStatusCode >= 200 && httpStatusCode < 300) {
+           // TODO: Indicate download complete, hand back for re-assembly. Userdata to point to qJsonDocument?
+
+            auto responseDoc = QJsonDocument::fromJson(data->readAll()).object();
+
+            if (responseDoc.contains("os_list")) {
+                // Step 1: Insert the items into the canonical JSON document.
+                //         It doesn't matter that these may still contain subitems_url items
+                //         As these will be fixed up as the subitems_url instances are blinked in
+                if (_completeOsList.isEmpty()) {
+                    std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
+                    _completeOsList = QJsonDocument(responseDoc);
+                } else {
+                    // TODO: Insert into current graph
+                    std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
+                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), responseDoc["os_list"].toArray(), data->url());
+                    auto imager_meta = _completeOsList["imager"].toObject();
+                    _completeOsList = QJsonDocument(QJsonObject({
+                        {"imager", imager_meta},
+                        {"os_list", new_list}
+                    }));
+                }
+
+                // TODO: Find and queue subitem downloads. Recursively?
+                findAndQueueUnresolvedSubitemsJson(responseDoc["os_list"].toArray(), _networkManager.get());
+                emit osListPrepared();
+            } else {
+                qDebug() << "Incorrectly formatted OS list at: " << data->url();
+            }
+        } else if (httpStatusCode >= 300 && httpStatusCode < 400) {
+            auto request = QNetworkRequest(data->url());
+
+            request.setAttribute(QNetworkRequest::RedirectionTargetAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+
+            data->manager()->get(request);
+
+            // maintain manager
+            return;
+        } else if (httpStatusCode >= 400 && httpStatusCode < 600) {
+            // HTTP Error
+            qDebug() << "Failed to fetch URL [" << data->url() << "], got: " << httpStatusCode;
+        } else {
+            // Completely unknown error, worth logging separately
+            qDebug() << "Failed to fetch URL [" << data->url() << "], got unknown response code: " << httpStatusCode;
+        }
+    } else {
+        // QT Error.
+        qDebug() << "Unrecognised QT error: " << data->error() << ", explainer: " << data->errorString();
+    }
+}
+
+/** You are expected to have called setDeviceFilter from the UI before making this call.
+ *  If you have not, you will effectively get the full list. With some extras.
+*/
+QByteArray ImageWriter::getFilteredOSlist() {
+    QJsonArray referenceArray = {};
+    QJsonObject referenceImagerMeta = {};
+    if (!_completeOsList.isEmpty()) {
+        std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
+        referenceArray = _completeOsList.object()["os_list"].toArray();
+        referenceImagerMeta = _completeOsList.object()["imager"].toObject();
+    }
+
+    referenceArray.append(QJsonObject({
+            {"name",  tr("Erase")},
+            {"description", tr("Format card as FAT32")},
+            {"icon", "icons/erase.png"},
+            {"url", "internal://format"},
+        }));
+
+    referenceArray.append(QJsonObject({
+            {"name",  tr("Use custom")},
+            {"description", tr("Select a custom .img from your computer")},
+            {"icon", "icons/use_custom.png"},
+            {"url", ""},
+        }));
+
+    return QJsonDocument(
+        QJsonObject({
+            {"imager", referenceImagerMeta},
+            {"os_list", referenceArray},
+        }
+    )).toJson();
+}
+
+void ImageWriter::beginOSListFetch() {
+    QNetworkRequest request = QNetworkRequest(constantOsListUrl());
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+    
+    // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
+    // a complete cached OS list.
+   _networkManager->get(QNetworkRequest(request));
 }
 
 void ImageWriter::setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256)

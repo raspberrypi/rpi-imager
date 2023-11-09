@@ -6,6 +6,11 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#include <memory>
+
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QNetworkAccessManager>
 #include <QObject>
 #include <QTimer>
 #include <QUrl>
@@ -73,6 +78,15 @@ public:
 
     /* Set custom repository */
     Q_INVOKABLE void setCustomOsListUrl(const QUrl &url);
+
+    /* Get the cached OS list. This may be empty if network connectivity is not available. */
+    Q_INVOKABLE QByteArray getFilteredOSlist();
+
+    /** Begin the asynchronous fetch of the OS lists, and associated sublists. */
+    Q_INVOKABLE void beginOSListFetch();
+
+    /** Set the HW filter, for a filtered view of the OS list */
+    Q_INVOKABLE void setHWFilterList(const QByteArray &json);
 
     /* Set custom cache file */
     void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
@@ -144,6 +158,7 @@ signals:
     void finalizing();
     void networkOnline();
     void preparationStatusUpdate(QVariant msg);
+    void osListPrepared();
 
 protected slots:
 
@@ -160,6 +175,16 @@ protected slots:
     void onFinalizing();
     void onTimeSyncReply(QNetworkReply *reply);
     void onPreparationStatusUpdate(QString msg);
+    void handleNetworkRequestFinished(QNetworkReply *data);
+
+private:
+    // Recursively walk all the entries with subitems and, for any which
+    // refer to an external JSON list, fetch the list and put it in place.
+    void fillSubLists(QJsonArray &topLevel);
+    std::unique_ptr<QNetworkAccessManager> _networkManager;
+    QJsonDocument _completeOsList;
+    QJsonArray _deviceFilter;
+    std::mutex _deviceListMutationMutex;
 
 protected:
     QUrl _src, _repo;
