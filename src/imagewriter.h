@@ -85,9 +85,6 @@ public:
     /** Begin the asynchronous fetch of the OS lists, and associated sublists. */
     Q_INVOKABLE void beginOSListFetch();
 
-    /** Set the HW filter, for a filtered view of the OS list */
-    Q_INVOKABLE void setHWFilterList(const QByteArray &json);
-
     /* Set custom cache file */
     void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
 

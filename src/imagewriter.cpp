@@ -472,12 +472,6 @@ namespace {
 } // namespace anonymous
 
 
-void ImageWriter::setHWFilterList(const QByteArray &json) {
-    QJsonDocument json_document = QJsonDocument::fromJson(json);
-
-    _deviceFilter = json_document.array();
-}
-
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
     // Defer deletion
     data->deleteLater();
