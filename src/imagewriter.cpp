@@ -476,7 +476,6 @@ namespace {
 
 
 void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive) {
-    std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
     QJsonDocument json_document = QJsonDocument::fromJson(json);
     _deviceFilter = json_document.array();
     _deviceFilterIsInclusive = inclusive;
@@ -497,10 +496,8 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                 //         It doesn't matter that these may still contain subitems_url items
                 //         As these will be fixed up as the subitems_url instances are blinked in
                 if (_completeOsList.isEmpty()) {
-                    std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
                     _completeOsList = QJsonDocument(response_object);
                 } else {
-                    std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
                     auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url());
                     auto imager_meta = _completeOsList["imager"].toObject();
                     _completeOsList = QJsonDocument(QJsonObject({
@@ -579,8 +576,6 @@ namespace {
                     }
                 }
             }
-
-            //returnArray += ositemObject;
         }
 
         return returnArray;
@@ -591,7 +586,6 @@ QByteArray ImageWriter::getFilteredOSlist() {
     QJsonArray reference_os_list_array = {};
     QJsonObject reference_imager_metadata = {};
     {
-        std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
         if (!_completeOsList.isEmpty()) {
             reference_os_list_array = filterOsListWithHWTags(_completeOsList.object()["os_list"].toArray(), _deviceFilter, _deviceFilterIsInclusive);
             reference_imager_metadata = _completeOsList.object()["imager"].toObject();

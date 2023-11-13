@@ -185,7 +185,6 @@ private:
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter;
     bool _deviceFilterIsInclusive;
-    std::mutex _deviceListMutationMutex;
 
 protected:
     QUrl _src, _repo;
