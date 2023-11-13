@@ -25,20 +25,6 @@ ApplicationWindow {
     FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}
     FontLoader {id: robotoBold;  source: "fonts/Roboto-Bold.ttf"}
 
-    /** hw device list storage
-      *
-      * To allow us to filter the OS list, we maintain an application-wide record of the selected device
-      * tags.
-      */
-    property string hwTags
-
-    /** 0: Exclusive, must match explicit device names only, no untagged
-        1: Exclusive by prefix, must match the device name as a prefix, no untagged
-        2: Inclusive, match explicit device names and untagged
-        3: Inclusive by prefix, match explicit device names and untagged
-        */
-    property int hwTagMatchingType
-
     onClosing: {
         if (progressBar.visible) {
             close.accepted = false
@@ -1267,7 +1253,6 @@ ApplicationWindow {
     }
 
     function onOsListPrepared() {
-        console.log("OS list updated.");
         fetchOSlist()
     }
 
@@ -1457,9 +1442,6 @@ ApplicationWindow {
             oslist_parsed = o["os_list"]
         }
 
-        if (hwTags != "") {
-            filterItems(oslist_parsed, JSON.parse(hwTags), hwTagMatchingType)
-        }
         checkForRandom(oslist_parsed)
 
         /* Flatten subitems to subitems_json */
@@ -1581,27 +1563,20 @@ ApplicationWindow {
     }
 
     function selectHWitem(hwmodel) {
-        hwTags = hwmodel.tags
+        /* Default is exclusive matching */
+        var inclusive = false
 
         if (hwmodel.matching_type) {
             switch (hwmodel.matching_type) {
                 case "exclusive":
-                    hwTagMatchingType = 0
-                    break;
-                case "exclusive_prefix":
-                    hwTagMatchingType = 1
                     break;
                 case "inclusive":
-                    hwTagMatchingType = 2
-                    break;
-                case "inclusive_prefix":
-                    hwTagMatchingType = 3
+                    inclusive = true
                     break;
             }
-        } else {
-            /* Default is exclusive exact matching */
-            hwTagMatchingType = 0
         }
+
+        imageWriter.setHWFilterList(hwmodel.tags, inclusive)
 
         /* Reload list */
         var oslist_json = imageWriter.getFilteredOSlist();
