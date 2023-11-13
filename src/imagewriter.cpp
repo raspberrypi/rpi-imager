@@ -465,7 +465,10 @@ namespace {
                 findAndQueueUnresolvedSubitemsJson(entryObject["subitems"].toArray(), manager, count++);
             } else if (entryObject.contains("subitems_url")) {
                 auto url = entryObject["subitems_url"].toString();
-                manager.get(QNetworkRequest(url));
+                auto request = QNetworkRequest(url);
+                request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                        QNetworkRequest::NoLessSafeRedirectPolicy);
+                manager.get(request);
             }
         }
     }
@@ -498,7 +501,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     _completeOsList = QJsonDocument(response_object);
                 } else {
                     std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
-                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->url());
+                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url());
                     auto imager_meta = _completeOsList["imager"].toObject();
                     _completeOsList = QJsonDocument(QJsonObject({
                         {"imager", imager_meta},
@@ -512,6 +515,8 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                 qDebug() << "Incorrectly formatted OS list at: " << data->url();
             }
         } else if (httpStatusCode >= 300 && httpStatusCode < 400) {
+            // We should _never_ enter this branch. All requests are set to follow redirections
+            // at their call sites - so the only way you got here was a logic defect.
             auto request = QNetworkRequest(data->url());
 
             request.setAttribute(QNetworkRequest::RedirectionTargetAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -622,7 +627,7 @@ void ImageWriter::beginOSListFetch() {
     
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
-   _networkManager.get(QNetworkRequest(request));
+   _networkManager.get(request);
 }
 
 void ImageWriter::setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256)
