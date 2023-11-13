@@ -472,10 +472,11 @@ namespace {
 } // namespace anonymous
 
 
-void ImageWriter::setHWFilterList(const QByteArray &json) {
+void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive) {
+    std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
     QJsonDocument json_document = QJsonDocument::fromJson(json);
-
     _deviceFilter = json_document.array();
+    _deviceFilterIsInclusive = inclusive;
 }
 
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
@@ -532,13 +533,62 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
     }
 }
 
+namespace {
+    QJsonArray filterOsListWithHWTags(QJsonArray incoming_os_list, QJsonArray hw_filter, const bool inclusive, uint8_t count = 0) {
+        if (count > MAX_SUBITEMS_DEPTH) {
+            qDebug() << "Aborting insertion of subitems, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
+            return {};
+        }
+
+        QJsonArray returnArray = {};
+
+        for (auto ositem : incoming_os_list) {
+            auto ositemObject = ositem.toObject();
+
+            if (ositemObject.contains("subitems")) {
+                // Recurse!
+                ositemObject["subitems"] = filterOsListWithHWTags(ositemObject["subitems"].toArray(), hw_filter, inclusive, count++);
+                if (ositemObject["subitems"].toArray().count() > 0) {
+                    returnArray += ositemObject;
+                }
+            } else {
+                // Filter this one!
+                if (ositemObject.contains("devices")) {
+                    auto keep = false;
+                    auto ositem_devices = ositemObject["devices"].toArray();
+
+                    for (auto compat_device : ositem_devices) {
+                        if (hw_filter.contains(compat_device.toString())) {
+                            keep = true;
+                            break;
+                        }
+                    }
+
+                    if (keep) {
+                        returnArray.append(ositem);
+                    }
+                } else {
+                    // No devices tags, so work out if we're exclusive or inclusive filtering!
+                    if (inclusive) {
+                        returnArray.append(ositem);
+                    }
+                }
+            }
+
+            //returnArray += ositemObject;
+        }
+
+        return returnArray;
+    }
+} // namespace anonymous
+
 QByteArray ImageWriter::getFilteredOSlist() {
     QJsonArray reference_os_list_array = {};
     QJsonObject reference_imager_metadata = {};
     {
         std::lock_guard<std::mutex> lock(_deviceListMutationMutex);
         if (!_completeOsList.isEmpty()) {
-            reference_os_list_array = _completeOsList.object()["os_list"].toArray();
+            reference_os_list_array = filterOsListWithHWTags(_completeOsList.object()["os_list"].toArray(), _deviceFilter, _deviceFilterIsInclusive);
             reference_imager_metadata = _completeOsList.object()["imager"].toObject();
         }
     }

@@ -86,7 +86,7 @@ public:
     Q_INVOKABLE void beginOSListFetch();
 
     /** Set the HW filter, for a filtered view of the OS list */
-    Q_INVOKABLE void setHWFilterList(const QByteArray &json);
+    Q_INVOKABLE void setHWFilterList(const QByteArray &json, const bool &inclusive);
 
     /* Set custom cache file */
     void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
@@ -184,6 +184,7 @@ private:
     QNetworkAccessManager _networkManager;
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter;
+    bool _deviceFilterIsInclusive;
     std::mutex _deviceListMutationMutex;
 
 protected:
