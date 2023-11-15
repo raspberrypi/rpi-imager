@@ -1,3 +1,18 @@
+rpi-imager (1.8.2) unstable; urgency=medium
+
+  * Home: Device filtering reworked to download OS list eagerly
+  * OS List: Fixed 'Recommended' tag annotation
+  * i18n: Added zh-TW Traditional Chinese translation
+  * i18n: Updated Korean, German, Ukranian, translations
+  * build: Linux: Fix libdrm dependency requirement on non-embedded
+                  build.
+  * Commmon: Disable QML caching entirely
+  * OS customisation: Allow use if only cloudinit payload available
+  * OS customisation: Allow empty PSK for 'Open' WiFi networks.
+  * OS List: Use ImageList v4 URL
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 15 Nov 2023 20:16:16 +0200
+
 rpi-imager (1.8.1) unstable; urgency=medium
 
   * Hide empty categories when filtering
