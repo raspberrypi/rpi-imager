@@ -587,7 +587,14 @@ QByteArray ImageWriter::getFilteredOSlist() {
     QJsonObject reference_imager_metadata = {};
     {
         if (!_completeOsList.isEmpty()) {
-            reference_os_list_array = filterOsListWithHWTags(_completeOsList.object()["os_list"].toArray(), _deviceFilter, _deviceFilterIsInclusive);
+            if (!_deviceFilter.isEmpty()) {
+                reference_os_list_array = filterOsListWithHWTags(_completeOsList.object()["os_list"].toArray(), _deviceFilter, _deviceFilterIsInclusive);
+            } else {
+                // The device filter can be an empty array when a device filter has not been selected, or has explicitly been selected as
+                // "no filtering". In that case, avoid walking the tree and use the unfiltered list.
+                reference_os_list_array = _completeOsList.object()["os_list"].toArray();
+            }
+
             reference_imager_metadata = _completeOsList.object()["imager"].toObject();
         }
     }
