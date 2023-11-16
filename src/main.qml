@@ -1191,6 +1191,7 @@ ApplicationWindow {
             confirmwritepopup.askForConfirmation()
         }
         onNo: {
+            imageWriter.setImageCustomization("", "", "", "", "")
             confirmwritepopup.askForConfirmation()
         }
         onNoClearSettings: {
