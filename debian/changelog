@@ -1,3 +1,10 @@
+rpi-imager (1.8.3) unstable; urgency=medium
+
+  * Home: Fixed "No filtering" option
+  * OS customisation: Fixed no-customisation flow
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 16 Nov 2023 14:00:00 +0200
+
 rpi-imager (1.8.2) unstable; urgency=medium
 
   * Home: Device filtering reworked to download OS list eagerly
@@ -11,7 +18,7 @@ rpi-imager (1.8.2) unstable; urgency=medium
   * OS customisation: Allow empty PSK for 'Open' WiFi networks.
   * OS List: Use ImageList v4 URL
 
- -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 15 Nov 2023 20:16:16 +0200
+ -- Floris Bos <bos@je-eigen-domein.nl>  Wed, 15 Nov 2023 20:16:16 +0200
 
 rpi-imager (1.8.1) unstable; urgency=medium
 
