@@ -488,7 +488,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
     if (data->error() == QNetworkReply::NoError) {
         auto httpStatusCode = data->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
-        if (httpStatusCode >= 200 && httpStatusCode < 300) {
+        if (httpStatusCode >= 200 && httpStatusCode < 300 || httpStatusCode == 0) {
             auto response_object = QJsonDocument::fromJson(data->readAll()).object();
 
             if (response_object.contains("os_list")) {
