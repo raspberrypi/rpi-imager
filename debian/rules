@@ -6,3 +6,5 @@
 %:
 	dh $@ --sourcedirectory=src
 
+override_dh_auto_configure:
+	dh_auto_configure -- -DENABLE_CHECK_VERSION=OFF
