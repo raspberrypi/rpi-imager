@@ -894,7 +894,9 @@ ApplicationWindow {
                                 ? qsTr("Cached on your computer")
                                 : url.startsWith("file://")
                                   ? qsTr("Local file")
-                                  : qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1))
+                                  : image_download_size >= 1073741824
+                                  ? qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1))
+                                  : qsTr("Online - %1 MB download").arg((image_download_size/1048576).toFixed(1))
                     }
 
                     ToolTip {

@@ -253,27 +253,47 @@
 <context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="248"/>
+        <location filename="../imagewriter.cpp" line="260"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>Kapaciteta diska ni zadostna.&lt;br&gt;Biti mora vsaj %1 GB.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="254"/>
+        <location filename="../imagewriter.cpp" line="266"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Vhodna datoteka ni veljavna slika diska.&lt;br&gt;Velikost datoteke %1 bajtov ni večkratnik od 512 bajtov.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="442"/>
+        <location filename="../imagewriter.cpp" line="603"/>
+        <source>Erase</source>
+        <translation type="unfinished">Odstrani</translation>
+    </message>
+    <message>
+        <location filename="../imagewriter.cpp" line="604"/>
+        <source>Format card as FAT32</source>
+        <translation type="unfinished">Formatiraj disk v FAT32</translation>
+    </message>
+    <message>
+        <location filename="../imagewriter.cpp" line="610"/>
+        <source>Use custom</source>
+        <translation type="unfinished">Uporabi drugo</translation>
+    </message>
+    <message>
+        <location filename="../imagewriter.cpp" line="611"/>
+        <source>Select a custom .img from your computer</source>
+        <translation type="unfinished">Izberite drug .img iz vašega računalnika</translation>
+    </message>
+    <message>
+        <location filename="../imagewriter.cpp" line="661"/>
         <source>Downloading and writing image</source>
         <translation>Prenašanje in zapisovanje slike</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="575"/>
+        <location filename="../imagewriter.cpp" line="794"/>
         <source>Select image</source>
         <translation>Izberite sliko</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="896"/>
+        <location filename="../imagewriter.cpp" line="1186"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
         <translation>A bi želeli uporabiti WiFi geslo iz kjučev tega sistema?</translation>
     </message>
@@ -299,17 +319,17 @@
         <translation>NE</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="109"/>
+        <location filename="../MsgPopup.qml" line="107"/>
         <source>YES</source>
         <translation>DA</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="120"/>
+        <location filename="../MsgPopup.qml" line="116"/>
         <source>CONTINUE</source>
         <translation>NADALJUJ</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="130"/>
+        <location filename="../MsgPopup.qml" line="124"/>
         <source>QUIT</source>
         <translation>IZHOD</translation>
     </message>
@@ -322,138 +342,131 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="52"/>
-        <source>OS customization options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../OptionsPopup.qml" line="57"/>
         <source>for this session only</source>
-        <translation>samo za to sejo</translation>
+        <translation type="vanished">samo za to sejo</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="58"/>
         <source>to always use</source>
-        <translation>vedno</translation>
+        <translation type="vanished">vedno</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="71"/>
+        <location filename="../OptionsPopup.qml" line="62"/>
         <source>General</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="79"/>
+        <location filename="../OptionsPopup.qml" line="70"/>
         <source>Services</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="82"/>
+        <location filename="../OptionsPopup.qml" line="73"/>
         <source>Options</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="98"/>
+        <location filename="../OptionsPopup.qml" line="89"/>
         <source>Set hostname:</source>
         <translation>Ime naprave:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="120"/>
+        <location filename="../OptionsPopup.qml" line="111"/>
         <source>Set username and password</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="142"/>
+        <location filename="../OptionsPopup.qml" line="133"/>
         <source>Username:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
+        <location filename="../OptionsPopup.qml" line="149"/>
+        <location filename="../OptionsPopup.qml" line="210"/>
         <source>Password:</source>
         <translation>Geslo:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
+        <location filename="../OptionsPopup.qml" line="177"/>
         <source>Configure wireless LAN</source>
         <translation>Nastavi WiFi</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
+        <location filename="../OptionsPopup.qml" line="196"/>
         <source>SSID:</source>
         <translation>SSID:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="238"/>
+        <location filename="../OptionsPopup.qml" line="229"/>
         <source>Show password</source>
         <translation>Pokaži geslo</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
+        <location filename="../OptionsPopup.qml" line="235"/>
         <source>Hidden SSID</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="250"/>
+        <location filename="../OptionsPopup.qml" line="241"/>
         <source>Wireless LAN country:</source>
         <translation>WiFi je v državi:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="261"/>
+        <location filename="../OptionsPopup.qml" line="252"/>
         <source>Set locale settings</source>
         <translation>Nastavitve jezika</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="271"/>
+        <location filename="../OptionsPopup.qml" line="262"/>
         <source>Time zone:</source>
         <translation>Časovni pas:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="281"/>
+        <location filename="../OptionsPopup.qml" line="272"/>
         <source>Keyboard layout:</source>
         <translation>Razporeditev tipkovnice:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="298"/>
+        <location filename="../OptionsPopup.qml" line="289"/>
         <source>Enable SSH</source>
         <translation>Omogoči SSH</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="317"/>
+        <location filename="../OptionsPopup.qml" line="308"/>
         <source>Use password authentication</source>
         <translation>Uporabi geslo za avtentifikacijo</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="327"/>
+        <location filename="../OptionsPopup.qml" line="318"/>
         <source>Allow public-key authentication only</source>
         <translation>Dovoli le avtentifikacijo z javnim kjučem</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="345"/>
+        <location filename="../OptionsPopup.qml" line="336"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
         <translation>Nastavi authorized_keys za &apos;%1&apos;:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="357"/>
+        <location filename="../OptionsPopup.qml" line="348"/>
         <source>RUN SSH-KEYGEN</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="375"/>
+        <location filename="../OptionsPopup.qml" line="366"/>
         <source>Play sound when finished</source>
         <translation>Zaigraj zvok, ko končaš</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="379"/>
+        <location filename="../OptionsPopup.qml" line="370"/>
         <source>Eject media when finished</source>
         <translation>Izvrzi medij, ko končaš</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="383"/>
+        <location filename="../OptionsPopup.qml" line="374"/>
         <source>Enable telemetry</source>
         <translation>Omogoči telemetrijo</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="397"/>
+        <location filename="../OptionsPopup.qml" line="388"/>
         <source>SAVE</source>
         <translation>SHRANI</translation>
     </message>
@@ -489,32 +502,32 @@
 <context>
     <name>UseSavedSettingsPopup</name>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="73"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="77"/>
         <source>Use OS customization?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="87"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="92"/>
         <source>Would you like to apply OS customization settings?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="97"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="134"/>
         <source>NO</source>
         <translation>NE</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="107"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="115"/>
         <source>NO, CLEAR SETTINGS</source>
         <translation>NE, POBRIŠI NASTAVITVE</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="117"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="125"/>
         <source>YES</source>
         <translation>DA</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="127"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="102"/>
         <source>EDIT SETTINGS</source>
         <translation>UREDI NASTAVITVE</translation>
     </message>
@@ -527,277 +540,267 @@
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="114"/>
-        <location filename="../main.qml" line="467"/>
+        <location filename="../main.qml" line="119"/>
+        <location filename="../main.qml" line="471"/>
         <source>Raspberry Pi Device</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="126"/>
+        <location filename="../main.qml" line="131"/>
         <source>CHOOSE DEVICE</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="138"/>
+        <location filename="../main.qml" line="143"/>
         <source>Select this button to choose your target Raspberry Pi</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="97"/>
-        <location filename="../main.qml" line="413"/>
+        <location filename="../main.qml" line="157"/>
+        <location filename="../main.qml" line="574"/>
         <source>Operating System</source>
         <translation>Operacijski Sistem</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="109"/>
+        <location filename="../main.qml" line="168"/>
+        <location filename="../main.qml" line="1616"/>
         <source>CHOOSE OS</source>
         <translation>IZBERI OS</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="121"/>
+        <location filename="../main.qml" line="180"/>
         <source>Select this button to change the operating system</source>
         <translation>Izberite ta gumb za menjavo operacijskega sistema</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="133"/>
-        <location filename="../main.qml" line="780"/>
+        <location filename="../main.qml" line="194"/>
+        <location filename="../main.qml" line="971"/>
         <source>Storage</source>
         <translation>SD kartica ali USB disk</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="1108"/>
+        <location filename="../main.qml" line="205"/>
+        <location filename="../main.qml" line="1299"/>
         <source>CHOOSE STORAGE</source>
         <translation>IZBERI DISK</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="171"/>
         <source>WRITE</source>
-        <translation>ZAPIŠI</translation>
+        <translation type="vanished">ZAPIŠI</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="155"/>
+        <location filename="../main.qml" line="219"/>
         <source>Select this button to change the destination storage device</source>
         <translation>Uporabite ta gumb za spremembo ciljnega diska</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="216"/>
+        <location filename="../main.qml" line="265"/>
         <source>CANCEL WRITE</source>
         <translation>PREKINI ZAPISOVANJE</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="219"/>
-        <location filename="../main.qml" line="1035"/>
+        <location filename="../main.qml" line="268"/>
+        <location filename="../main.qml" line="1222"/>
         <source>Cancelling...</source>
         <translation>Prekinjam...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="227"/>
+        <location filename="../main.qml" line="280"/>
         <source>CANCEL VERIFY</source>
         <translation>PREKINI PREVERJANJE</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="230"/>
-        <location filename="../main.qml" line="1058"/>
-        <location filename="../main.qml" line="1127"/>
+        <location filename="../main.qml" line="283"/>
+        <location filename="../main.qml" line="1245"/>
+        <location filename="../main.qml" line="1318"/>
         <source>Finalizing...</source>
         <translation>Zakjučujem...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="288"/>
+        <location filename="../main.qml" line="292"/>
         <source>Next</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
+        <location filename="../main.qml" line="298"/>
         <source>Select this button to start writing the image</source>
         <translation>Izberite za gumb za začetek pisanja slike diska</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="245"/>
-        <source>Select this button to access advanced settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="259"/>
+        <location filename="../main.qml" line="320"/>
         <source>Using custom repository: %1</source>
         <translation>Uporabljam repozitorij po meri: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="268"/>
+        <location filename="../main.qml" line="329"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
         <translation>Navigacija s tipkovnico: &lt;tab&gt; pojdi na naslednji gumb &lt;preslednica&gt; pritisni gumb/izberi element &lt;puščica gor/dol&gt; premakni gor/dol po seznamu</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="289"/>
+        <location filename="../main.qml" line="350"/>
         <source>Language: </source>
         <translation>Jezik: </translation>
     </message>
     <message>
-        <location filename="../main.qml" line="312"/>
+        <location filename="../main.qml" line="373"/>
         <source>Keyboard: </source>
         <translation>Tipkovnica: </translation>
     </message>
     <message>
-        <location filename="../main.qml" line="437"/>
-        <source>Pi model:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="448"/>
+        <location filename="../main.qml" line="490"/>
         <source>[ All ]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="528"/>
+        <location filename="../main.qml" line="641"/>
         <source>Back</source>
         <translation>Nazaj</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="529"/>
+        <location filename="../main.qml" line="642"/>
         <source>Go back to main menu</source>
         <translation>Pojdi nazaj na glavni meni</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="695"/>
+        <location filename="../main.qml" line="884"/>
         <source>Released: %1</source>
         <translation>Izdano: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="705"/>
+        <location filename="../main.qml" line="894"/>
         <source>Cached on your computer</source>
         <translation>Predpolnjeno na vaš računalnik</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="707"/>
+        <location filename="../main.qml" line="896"/>
         <source>Local file</source>
         <translation>Lokalna datoteka</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="708"/>
+        <location filename="../main.qml" line="898"/>
         <source>Online - %1 GB download</source>
         <translation>Iz spleta - %1 GB prenos</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="833"/>
-        <location filename="../main.qml" line="885"/>
-        <location filename="../main.qml" line="891"/>
+        <location filename="../main.qml" line="899"/>
+        <source>Online - %1 MB download</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1024"/>
+        <location filename="../main.qml" line="1076"/>
+        <location filename="../main.qml" line="1082"/>
         <source>Mounted as %1</source>
         <translation>Priklopljen kot %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="887"/>
+        <location filename="../main.qml" line="1078"/>
         <source>[WRITE PROTECTED]</source>
         <translation>[ZAŠČITENO PRED PISANJEM]</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="929"/>
+        <location filename="../main.qml" line="1123"/>
         <source>Are you sure you want to quit?</source>
         <translation>A ste prepričani, da želite končat?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="930"/>
+        <location filename="../main.qml" line="1124"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
         <translation>Raspberry Pi Imager je še vedno zaposlen.&lt;br&gt;A ste prepričani, da želite končati?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="941"/>
+        <location filename="../main.qml" line="1135"/>
         <source>Warning</source>
         <translation>Opozorilo</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="949"/>
+        <location filename="../main.qml" line="1144"/>
         <source>Preparing to write...</source>
         <translation>Priprava na pisanje...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="962"/>
+        <location filename="../main.qml" line="1158"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
         <translation>VSI obstoječi podatki na &apos;%1&apos; bodo izbrisani.&lt;br&gt;A ste prepričani, da želite nadaljevati?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="973"/>
+        <location filename="../main.qml" line="1173"/>
         <source>Update available</source>
         <translation>Posodobitev na voljo</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="974"/>
+        <location filename="../main.qml" line="1174"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
         <translation>Na voljo je nova verzija tega programa. &lt;br&gt;Želite obiskati spletno stran za prenos?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
-        <translation>Napaka prenosa seznama OS iz interneta</translation>
+        <translation type="vanished">Napaka prenosa seznama OS iz interneta</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
+        <location filename="../main.qml" line="1225"/>
         <source>Writing... %1%</source>
         <translation>Pišem...%1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1061"/>
+        <location filename="../main.qml" line="1248"/>
         <source>Verifying... %1%</source>
         <translation>Preverjam... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1068"/>
+        <location filename="../main.qml" line="1255"/>
         <source>Preparing to write... (%1)</source>
         <translation>Priprava na zapisovanje... (%1)</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1084"/>
+        <location filename="../main.qml" line="1275"/>
         <source>Error</source>
         <translation>Napaka</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1091"/>
+        <location filename="../main.qml" line="1282"/>
         <source>Write Successful</source>
         <translation>Zapisovanje uspešno</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
+        <location filename="../main.qml" line="1283"/>
         <source>Erase</source>
         <translation>Odstrani</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1093"/>
+        <location filename="../main.qml" line="1284"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; je pobrisan&lt;br&gt;&lt;br&gt;Sedaj lahko odstranite SD kartico iz čitalca oz iztaknete USB disk</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1100"/>
+        <location filename="../main.qml" line="1291"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; je zapisan na &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;Sedaj lahko odstranite SD kartico iz čitalca oz iztaknete USB disk</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1202"/>
+        <location filename="../main.qml" line="1441"/>
         <source>Error parsing os_list.json</source>
         <translation>Napaka procesiranja os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="573"/>
         <source>Format card as FAT32</source>
-        <translation>Formatiraj disk v FAT32</translation>
+        <translation type="vanished">Formatiraj disk v FAT32</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="582"/>
         <source>Use custom</source>
-        <translation>Uporabi drugo</translation>
+        <translation type="vanished">Uporabi drugo</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="583"/>
         <source>Select a custom .img from your computer</source>
-        <translation>Izberite drug .img iz vašega računalnika</translation>
+        <translation type="vanished">Izberite drug .img iz vašega računalnika</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1391"/>
+        <location filename="../main.qml" line="1690"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Najprej prikopite USB disk, ki vsebuje slike diskov.&lt;br&gt;Slike diskov se morajo nahajati v korenski mapi USB diska.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1407"/>
+        <location filename="../main.qml" line="1706"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>SD kartica je zaščitena pred pisanjem.&lt;br&gt;Premaknite stikalo zaklepanja, na levi strani kartice in poizkusite znova.</translation>
     </message>

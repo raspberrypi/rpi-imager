@@ -217,27 +217,47 @@
 <context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="248"/>
+        <location filename="../imagewriter.cpp" line="260"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>La capacidad de almacenamiento no es lo suficientemente grande.&lt;br&gt;Necesita ser de al menos %1 GB.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="254"/>
+        <location filename="../imagewriter.cpp" line="266"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>El archivo de entrada no es una imagen de disco válida.&lt;br&gt;El tamaño del archivo %1 bytes no es múltiplo de 512 bytes.</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="442"/>
+        <location filename="../imagewriter.cpp" line="603"/>
+        <source>Erase</source>
+        <translation type="unfinished">Borrar</translation>
+    </message>
+    <message>
+        <location filename="../imagewriter.cpp" line="604"/>
+        <source>Format card as FAT32</source>
+        <translation type="unfinished">Formatear tarjeta como FAT32</translation>
+    </message>
+    <message>
+        <location filename="../imagewriter.cpp" line="610"/>
+        <source>Use custom</source>
+        <translation type="unfinished">Usar personalizado</translation>
+    </message>
+    <message>
+        <location filename="../imagewriter.cpp" line="611"/>
+        <source>Select a custom .img from your computer</source>
+        <translation type="unfinished">Seleccione un .img personalizado de su ordenador</translation>
+    </message>
+    <message>
+        <location filename="../imagewriter.cpp" line="661"/>
         <source>Downloading and writing image</source>
         <translation>Descargando y escribiendo imagen</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="575"/>
+        <location filename="../imagewriter.cpp" line="794"/>
         <source>Select image</source>
         <translation>Seleccionar imagen</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="896"/>
+        <location filename="../imagewriter.cpp" line="1186"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
         <translation>¿Desea rellenar previamente la contraseña wifi desde el llavero del sistema?</translation>
     </message>
@@ -263,17 +283,17 @@
         <translation>NO</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="109"/>
+        <location filename="../MsgPopup.qml" line="107"/>
         <source>YES</source>
         <translation>SÍ</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="120"/>
+        <location filename="../MsgPopup.qml" line="116"/>
         <source>CONTINUE</source>
         <translation>CONTINUAR</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="130"/>
+        <location filename="../MsgPopup.qml" line="124"/>
         <source>QUIT</source>
         <translation>SALIR</translation>
     </message>
@@ -286,138 +306,135 @@
         <translation>Personalización del SO</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation>Opciones de personalización del SO</translation>
+        <translation type="vanished">Opciones de personalización del SO</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="57"/>
         <source>for this session only</source>
-        <translation>solo para esta sesión</translation>
+        <translation type="vanished">solo para esta sesión</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="58"/>
         <source>to always use</source>
-        <translation>para usar siempre</translation>
+        <translation type="vanished">para usar siempre</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="71"/>
+        <location filename="../OptionsPopup.qml" line="62"/>
         <source>General</source>
         <translation>General</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="79"/>
+        <location filename="../OptionsPopup.qml" line="70"/>
         <source>Services</source>
         <translation>Servicios</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="82"/>
+        <location filename="../OptionsPopup.qml" line="73"/>
         <source>Options</source>
         <translation>Opciones</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="98"/>
+        <location filename="../OptionsPopup.qml" line="89"/>
         <source>Set hostname:</source>
         <translation>Establecer nombre de anfitrión:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="120"/>
+        <location filename="../OptionsPopup.qml" line="111"/>
         <source>Set username and password</source>
         <translation>Establecer nombre de usuario y contraseña</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="142"/>
+        <location filename="../OptionsPopup.qml" line="133"/>
         <source>Username:</source>
         <translation>Nombre de usuario:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="158"/>
-        <location filename="../OptionsPopup.qml" line="219"/>
+        <location filename="../OptionsPopup.qml" line="149"/>
+        <location filename="../OptionsPopup.qml" line="210"/>
         <source>Password:</source>
         <translation>Contraseña:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="186"/>
+        <location filename="../OptionsPopup.qml" line="177"/>
         <source>Configure wireless LAN</source>
         <translation>Configurar LAN inalámbrica</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="205"/>
+        <location filename="../OptionsPopup.qml" line="196"/>
         <source>SSID:</source>
         <translation>SSID:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="238"/>
+        <location filename="../OptionsPopup.qml" line="229"/>
         <source>Show password</source>
         <translation>Mostrar contraseña</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="244"/>
+        <location filename="../OptionsPopup.qml" line="235"/>
         <source>Hidden SSID</source>
         <translation>SSID oculta</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="250"/>
+        <location filename="../OptionsPopup.qml" line="241"/>
         <source>Wireless LAN country:</source>
         <translation>País de LAN inalámbrica:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="261"/>
+        <location filename="../OptionsPopup.qml" line="252"/>
         <source>Set locale settings</source>
         <translation>Establecer ajustes regionales</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="271"/>
+        <location filename="../OptionsPopup.qml" line="262"/>
         <source>Time zone:</source>
         <translation>Zona horaria:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="281"/>
+        <location filename="../OptionsPopup.qml" line="272"/>
         <source>Keyboard layout:</source>
         <translation>Distribución del teclado:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="298"/>
+        <location filename="../OptionsPopup.qml" line="289"/>
         <source>Enable SSH</source>
         <translation>Activar SSH</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="317"/>
+        <location filename="../OptionsPopup.qml" line="308"/>
         <source>Use password authentication</source>
         <translation>Usar autenticación por contraseña</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="327"/>
+        <location filename="../OptionsPopup.qml" line="318"/>
         <source>Allow public-key authentication only</source>
         <translation>Permitir solo la autenticación de clave pública</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="345"/>
+        <location filename="../OptionsPopup.qml" line="336"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
         <translation>Establecer authorized_keys para &apos;%1&apos;:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="357"/>
+        <location filename="../OptionsPopup.qml" line="348"/>
         <source>RUN SSH-KEYGEN</source>
         <translation>EJECUTAR SSH-KEYGEN</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="375"/>
+        <location filename="../OptionsPopup.qml" line="366"/>
         <source>Play sound when finished</source>
         <translation>Reproducir sonido al finalizar</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="379"/>
+        <location filename="../OptionsPopup.qml" line="370"/>
         <source>Eject media when finished</source>
         <translation>Expulsar soporte al finalizar</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="383"/>
+        <location filename="../OptionsPopup.qml" line="374"/>
         <source>Enable telemetry</source>
         <translation>Activar telemetría</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="397"/>
+        <location filename="../OptionsPopup.qml" line="388"/>
         <source>SAVE</source>
         <translation>GUARDAR</translation>
     </message>
@@ -447,22 +464,22 @@
         <translation>¿Desea aplicar los ajustes de personalización del SO?</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="97"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="134"/>
         <source>NO</source>
         <translation>NO</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="107"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="115"/>
         <source>NO, CLEAR SETTINGS</source>
         <translation>NO, BORRAR AJUSTES</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="117"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="125"/>
         <source>YES</source>
         <translation>SÍ</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="127"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="102"/>
         <source>EDIT SETTINGS</source>
         <translation>EDITAR AJUSTES</translation>
     </message>
@@ -475,277 +492,275 @@
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="114"/>
-        <location filename="../main.qml" line="467"/>
+        <location filename="../main.qml" line="119"/>
+        <location filename="../main.qml" line="471"/>
         <source>Raspberry Pi Device</source>
         <translation>Dispositivo Raspberry Pi</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="126"/>
+        <location filename="../main.qml" line="131"/>
         <source>CHOOSE DEVICE</source>
         <translation>ELEGIR DISPOSITIVO</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="138"/>
+        <location filename="../main.qml" line="143"/>
         <source>Select this button to choose your target Raspberry Pi</source>
         <translation>Seleccione este botón para elegir su Raspberry Pi objetivo</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="97"/>
-        <location filename="../main.qml" line="413"/>
+        <location filename="../main.qml" line="157"/>
+        <location filename="../main.qml" line="574"/>
         <source>Operating System</source>
         <translation>Sistema operativo</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="109"/>
+        <location filename="../main.qml" line="168"/>
+        <location filename="../main.qml" line="1616"/>
         <source>CHOOSE OS</source>
         <translation>ELEGIR SO</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="121"/>
+        <location filename="../main.qml" line="180"/>
         <source>Select this button to change the operating system</source>
         <translation>Seleccione este botón para cambiar el sistema operativo</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="133"/>
-        <location filename="../main.qml" line="780"/>
+        <location filename="../main.qml" line="194"/>
+        <location filename="../main.qml" line="971"/>
         <source>Storage</source>
         <translation>Almacenamiento</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="145"/>
-        <location filename="../main.qml" line="1108"/>
+        <location filename="../main.qml" line="205"/>
+        <location filename="../main.qml" line="1299"/>
         <source>CHOOSE STORAGE</source>
         <translation>ELEGIR ALMACENAMIENTO</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="171"/>
         <source>WRITE</source>
-        <translation>ESCRIBIR</translation>
+        <translation type="vanished">ESCRIBIR</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="155"/>
+        <location filename="../main.qml" line="219"/>
         <source>Select this button to change the destination storage device</source>
         <translation>Seleccione este botón para cambiar el dispositivo de almacenamiento de destino</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="216"/>
+        <location filename="../main.qml" line="265"/>
         <source>CANCEL WRITE</source>
         <translation>CANCELAR ESCRITURA</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="219"/>
-        <location filename="../main.qml" line="1035"/>
+        <location filename="../main.qml" line="268"/>
+        <location filename="../main.qml" line="1222"/>
         <source>Cancelling...</source>
         <translation>Cancelando...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="227"/>
+        <location filename="../main.qml" line="280"/>
         <source>CANCEL VERIFY</source>
         <translation>CANCELAR VERIFICACIÓN</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="230"/>
-        <location filename="../main.qml" line="1058"/>
-        <location filename="../main.qml" line="1127"/>
+        <location filename="../main.qml" line="283"/>
+        <location filename="../main.qml" line="1245"/>
+        <location filename="../main.qml" line="1318"/>
         <source>Finalizing...</source>
         <translation>Finalizando...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="288"/>
+        <location filename="../main.qml" line="292"/>
         <source>Next</source>
         <translation>Siguiente</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="175"/>
+        <location filename="../main.qml" line="298"/>
         <source>Select this button to start writing the image</source>
         <translation>Seleccione este botón para empezar a escribir la imagen</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="245"/>
         <source>Select this button to access advanced settings</source>
-        <translation>Seleccione este botón para acceder a los ajustes avanzados</translation>
+        <translation type="vanished">Seleccione este botón para acceder a los ajustes avanzados</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="259"/>
+        <location filename="../main.qml" line="320"/>
         <source>Using custom repository: %1</source>
         <translation>Usando repositorio personalizado: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="268"/>
+        <location filename="../main.qml" line="329"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
         <translation>Navegación por teclado: &lt;tab&gt; navegar al botón siguiente &lt;space&gt; pulsar botón/seleccionar elemento &lt;arrow up/down&gt; subir/bajar en listas</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="289"/>
+        <location filename="../main.qml" line="350"/>
         <source>Language: </source>
         <translation>Idioma: </translation>
     </message>
     <message>
-        <location filename="../main.qml" line="312"/>
+        <location filename="../main.qml" line="373"/>
         <source>Keyboard: </source>
         <translation>Teclado: </translation>
     </message>
     <message>
-        <location filename="../main.qml" line="437"/>
         <source>Pi model:</source>
-        <translation>Modelo Pi:</translation>
+        <translation type="vanished">Modelo Pi:</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="448"/>
+        <location filename="../main.qml" line="490"/>
         <source>[ All ]</source>
         <translation>[ Todos ]</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="528"/>
+        <location filename="../main.qml" line="641"/>
         <source>Back</source>
         <translation>Volver</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="529"/>
+        <location filename="../main.qml" line="642"/>
         <source>Go back to main menu</source>
         <translation>Volver al menú principal</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="695"/>
+        <location filename="../main.qml" line="884"/>
         <source>Released: %1</source>
         <translation>Publicado: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="705"/>
+        <location filename="../main.qml" line="894"/>
         <source>Cached on your computer</source>
         <translation>En caché en su ordenador</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="707"/>
+        <location filename="../main.qml" line="896"/>
         <source>Local file</source>
         <translation>Archivo local</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="708"/>
+        <location filename="../main.qml" line="898"/>
         <source>Online - %1 GB download</source>
         <translation>En línea - %1 GB descarga</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="833"/>
-        <location filename="../main.qml" line="885"/>
-        <location filename="../main.qml" line="891"/>
+        <location filename="../main.qml" line="899"/>
+        <source>Online - %1 MB download</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../main.qml" line="1024"/>
+        <location filename="../main.qml" line="1076"/>
+        <location filename="../main.qml" line="1082"/>
         <source>Mounted as %1</source>
         <translation>Montado como %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="887"/>
+        <location filename="../main.qml" line="1078"/>
         <source>[WRITE PROTECTED]</source>
         <translation>[PROTEGIDO CONTRA ESCRITURA]</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="929"/>
+        <location filename="../main.qml" line="1123"/>
         <source>Are you sure you want to quit?</source>
         <translation>¿Está seguro de que quiere salir?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="930"/>
+        <location filename="../main.qml" line="1124"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
         <translation>Raspberry Pi Imager sigue ocupado.&lt;br&gt;¿Está seguro de que quiere salir?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="941"/>
+        <location filename="../main.qml" line="1135"/>
         <source>Warning</source>
         <translation>Advertencia</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="949"/>
+        <location filename="../main.qml" line="1144"/>
         <source>Preparing to write...</source>
         <translation>Preparando para escribir...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="962"/>
+        <location filename="../main.qml" line="1158"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
         <translation>Se borrarán todos los datos existentes en &apos;%1&apos;.&lt;br&gt;¿Está seguro de que desea continuar?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="973"/>
+        <location filename="../main.qml" line="1173"/>
         <source>Update available</source>
         <translation>Actualización disponible</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="974"/>
+        <location filename="../main.qml" line="1174"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
         <translation>Hay una versión más reciente de Imager disponible.&lt;br&gt;¿Desea visitar el sitio web para descargarla?</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1017"/>
         <source>Error downloading OS list from Internet</source>
-        <translation>Error al descargar la lista de SO de Internet</translation>
+        <translation type="vanished">Error al descargar la lista de SO de Internet</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1038"/>
+        <location filename="../main.qml" line="1225"/>
         <source>Writing... %1%</source>
         <translation>Escribiendo... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1061"/>
+        <location filename="../main.qml" line="1248"/>
         <source>Verifying... %1%</source>
         <translation>Verificando... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1068"/>
+        <location filename="../main.qml" line="1255"/>
         <source>Preparing to write... (%1)</source>
         <translation>Preparando para escribir... (%1)</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1084"/>
+        <location filename="../main.qml" line="1275"/>
         <source>Error</source>
         <translation>Error</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1091"/>
+        <location filename="../main.qml" line="1282"/>
         <source>Write Successful</source>
         <translation>Escritura exitosa</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="572"/>
-        <location filename="../main.qml" line="1092"/>
+        <location filename="../main.qml" line="1283"/>
         <source>Erase</source>
         <translation>Borrar</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1093"/>
+        <location filename="../main.qml" line="1284"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; se ha borrado&lt;br&gt;&lt;br&gt;Ya puede retirar la tarjeta SD del lector</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1100"/>
+        <location filename="../main.qml" line="1291"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; se ha escrito en &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;Ya puede retirar la tarjeta SD del lector</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1202"/>
+        <location filename="../main.qml" line="1441"/>
         <source>Error parsing os_list.json</source>
         <translation>Error al parsear os_list.json</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="573"/>
         <source>Format card as FAT32</source>
-        <translation>Formatear tarjeta como FAT32</translation>
+        <translation type="vanished">Formatear tarjeta como FAT32</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="582"/>
         <source>Use custom</source>
-        <translation>Usar personalizado</translation>
+        <translation type="vanished">Usar personalizado</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="583"/>
         <source>Select a custom .img from your computer</source>
-        <translation>Seleccione un .img personalizado de su ordenador</translation>
+        <translation type="vanished">Seleccione un .img personalizado de su ordenador</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1391"/>
+        <location filename="../main.qml" line="1690"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation>Conecte primero una memoria USB que contenga imágenes.&lt;br&gt;Las imágenes deben estar ubicadas en la carpeta raíz de la memoria USB.</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1407"/>
+        <location filename="../main.qml" line="1706"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
         <translation>La tarjeta SD está protegida contra escritura.&lt;br&gt;Pulse hacia arriba el interruptor de bloqueo situado en el lado izquierdo de la tarjeta y vuelva a intentarlo.</translation>
     </message>
