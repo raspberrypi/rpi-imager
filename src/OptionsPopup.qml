@@ -98,6 +98,7 @@ Window {
                                     enabled: chkHostname.checked
                                     text: "raspberrypi"
                                     selectByMouse: true
+                                    maximumLength: 253
                                     validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
                                 }
                                 Text {
@@ -139,6 +140,7 @@ Window {
                                         Layout.minimumWidth: 200
                                         selectByMouse: true
                                         property bool indicateError: false
+                                        maximumLength: 31
 
                                         onTextEdited: {
                                             indicateError = false
