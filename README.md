@@ -5,6 +5,10 @@ Raspberry Pi Imaging Utility
 - Download the latest version for Windows, macOS and Ubuntu from the [Raspberry Pi downloads page](https://www.raspberrypi.com/software/).
 - To install on Raspberry Pi OS, use `sudo apt update && sudo apt install rpi-imager`.
 
+# How to use Raspberry Pi Imager
+
+Please see our [official documentation](https://www.raspberrypi.com/documentation/computers/getting-started.html#raspberry-pi-imager).
+
 ## License
 
 The main code of the Imaging Utility is made available under the terms of the Apache license.
