@@ -153,19 +153,26 @@ Window {
                                     }
                                     TextField {
                                         id: fieldUserPassword
-                                        echoMode: TextInput.Password
+                                        echoMode: TextInput.PasswordEchoOnEdit
                                         Layout.minimumWidth: 200
                                         selectByMouse: true
                                         property bool alreadyCrypted: false
                                         property bool indicateError: false
 
-                                        onTextEdited: {
+                                        Keys.onPressed: (event)=> {
                                             if (alreadyCrypted) {
                                                 /* User is trying to edit saved
                                                    (crypted) password, clear field */
                                                 alreadyCrypted = false
                                                 clear()
                                             }
+
+                                            // Do not mark the event as accepted, so that it may
+                                            // propagate down to the underlying TextField.
+                                            event.accepted = false
+                                        }
+
+                                        onTextEdited: {
                                             if (indicateError) {
                                                 indicateError = false
                                             }
