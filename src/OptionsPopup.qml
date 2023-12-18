@@ -153,7 +153,8 @@ Window {
                                     }
                                     TextField {
                                         id: fieldUserPassword
-                                        echoMode: TextInput.PasswordEchoOnEdit
+                                        echoMode: TextInput.Password
+                                        passwordMaskDelay: 2000 //ms
                                         Layout.minimumWidth: 200
                                         selectByMouse: true
                                         property bool alreadyCrypted: false
