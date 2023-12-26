@@ -412,7 +412,9 @@ void DownloadThread::run()
     /* Deal with badly configured HTTP servers that terminate the connection quickly
        if connections stalls for some seconds while kernel commits buffers to slow SD card.
        And also reconnect if we detect from our end that transfer stalled for more than one minute */
-    while (ret == CURLE_PARTIAL_FILE || ret == CURLE_OPERATION_TIMEDOUT || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset) )
+    while (ret == CURLE_PARTIAL_FILE || ret == CURLE_OPERATION_TIMEDOUT
+           || (ret == CURLE_HTTP2_STREAM && _lastDlNow != _lastFailureOffset)
+           || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset) )
     {
         time_t t = time(NULL);
         qDebug() << "HTTP connection lost. Time:" << t;
