@@ -30,23 +30,23 @@
   <launchable type="desktop-id">rpi-imager.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <image>http://downloads.raspberrypi.org/imager/IMAGING-UTILITY-MAIN.png</image>
+      <image>http://downloads.raspberrypi.com/imager/IMAGING-UTILITY-MAIN.png</image>
       <caption>Main window</caption>
     </screenshot>
     <screenshot>
-      <image>http://downloads.raspberrypi.org/imager/IMAGING-UTILITY-OS.png</image>
+      <image>http://downloads.raspberrypi.com/imager/IMAGING-UTILITY-OS.png</image>
       <caption>Choose OS</caption>
     </screenshot>
     <screenshot>
-      <image>http://downloads.raspberrypi.org/imager/IMAGING-UTILITY-SD.png</image>
+      <image>http://downloads.raspberrypi.com/imager/IMAGING-UTILITY-SD.png</image>
       <caption>Choose SD</caption>
     </screenshot>
     <screenshot>
-      <image>http://downloads.raspberrypi.org/imager/IMAGING-UTILITY-WRITE.png</image>
+      <image>http://downloads.raspberrypi.com/imager/IMAGING-UTILITY-WRITE.png</image>
       <caption>Write in progress</caption>
     </screenshot>
     <screenshot>
-      <image>http://downloads.raspberrypi.org/imager/IMAGING-UTILITY-DONE.png</image>
+      <image>http://downloads.raspberrypi.com/imager/IMAGING-UTILITY-DONE.png</image>
       <caption>Write done</caption>
     </screenshot>
   </screenshots>
