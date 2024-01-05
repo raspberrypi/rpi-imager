@@ -1,3 +1,12 @@
+rpi-imager (1.8.5) unstable; urgency=medium
+
+  * Downloader: Fixed #767, which caused terminated downloads
+                            when connections stalled for >60s
+  * Branding: Update the URL, application name to match branding
+              guidelines.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Wed, 10 Jan 2024 16:00:00 +0200
+
 rpi-imager (1.8.4) unstable; urgency=medium
 
   * OS customisation: Fixed #531, which caused password entry
