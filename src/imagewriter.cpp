@@ -61,7 +61,7 @@ ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
       _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
       _embeddedMode(false), _online(false), _customCacheFile(false), _trans(nullptr),
-      _networkManager(this)
+      _networkManager(this), _settings("Raspberry Pi", "Imager", nullptr)
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
