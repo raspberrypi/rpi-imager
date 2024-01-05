@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Imager
+Name=Raspberry Pi Imager
 Comment=Raspberry Pi Imager
 Icon=rpi-imager
 Exec=rpi-imager %F
