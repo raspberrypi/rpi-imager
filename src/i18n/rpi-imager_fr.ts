@@ -319,12 +319,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation de l&apos;OS</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="52"/>
         <source>OS customization options</source>
-        <translation type="unfinished"></translation>
+        <translation>Options de personnalisation de l&apos;OS</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="57"/>
@@ -475,12 +475,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
+        <translation>Utiliser la personnalisation de l&apos;OS&#xa0;?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="87"/>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Voulez-vous appliquer les réglages de personnalisation de l&apos;OS&#xa0;?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="97"/>
