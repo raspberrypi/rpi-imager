@@ -10,7 +10,14 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#ifdef Q_OS_LINUX
 #include <linux/wireless.h>
+#endif
+#ifdef Q_OS_BSD4
+#include <net/if.h>
+#include <net80211/ieee80211.h>
+#include <net80211/ieee80211_ioctl.h>
+#endif
 
 #ifndef QT_NO_DBUS
 #include <QDBusMetaType>
@@ -46,6 +53,7 @@ QByteArray NetworkManagerApi::getSSID()
     return ssid;
 }
 
+#if defined(Q_OS_LINUX)
 QByteArray NetworkManagerApi::_getSSIDofInterface(const QByteArray &iface)
 {
     char ssid[IW_ESSID_MAX_SIZE+1] = {0};
@@ -63,6 +71,30 @@ QByteArray NetworkManagerApi::_getSSIDofInterface(const QByteArray &iface)
 
     return QByteArray(ssid);
 }
+#elif defined(SIOCG80211NWID)
+QByteArray NetworkManagerApi::_getSSIDofInterface(const QByteArray &iface)
+{
+    QByteArray ssid;
+    struct ieee80211_nwid nwid = {0};
+    struct ifreq ifr = {0};
+    int s = ::socket(AF_INET, SOCK_DGRAM, 0);
+
+    if (s == -1)
+        return QByteArray();
+
+    strncpy(ifr.ifr_name, iface.data(), sizeof(ifr.ifr_name));
+    ifr.ifr_data = &nwid;
+    if (::ioctl(s, SIOCG80211NWID, &ifr) == 0)
+        ssid = QByteArray(nwid.i_nwid, nwid.i_len);
+    ::close(s);
+    return ssid;
+}
+#else
+QByteArray NetworkManagerApi::_getSSIDofInterface(const QByteArray &iface)
+{
+    return QByteArray();
+}
+#endif
 
 QByteArray NetworkManagerApi::getPSK()
 {
