@@ -13,6 +13,8 @@ set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},5,0")
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
 add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+#add_compile_options("-fsanitize=address")
+#add_link_options("-fsanitize=address")
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h drivelistmodelpollthread.h driveformatthread.h powersaveblocker.h cli.h
@@ -149,19 +151,6 @@ endif()
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOMOC ON)
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTORCC ON)
-
-if (NOT WIN32)
-    # Enable link time optimization if available
-    include(CheckIPOSupported)
-    check_ipo_supported(RESULT iposupported OUTPUT ipoerror)
-
-    if(iposupported)
-        message("Enabled LTO")
-        set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-    else()
-        message(STATUS "LTO not supported: <${ipoerror}>")
-    endif()
-endif()
 
 if(ENABLE_TELEMETRY)
     add_definitions(-DTELEMETRY_ENABLED_DEFAULT=true)
