@@ -159,6 +159,7 @@ signals:
     void networkOnline();
     void preparationStatusUpdate(QVariant msg);
     void osListPrepared();
+    void networkInfo(QVariant msg);
 
 protected slots:
 
@@ -176,6 +177,7 @@ protected slots:
     void onTimeSyncReply(QNetworkReply *reply);
     void onPreparationStatusUpdate(QString msg);
     void handleNetworkRequestFinished(QNetworkReply *data);
+    void onSTPdetected();
 
 private:
     // Recursively walk all the entries with subitems and, for any which

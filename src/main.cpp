@@ -347,6 +347,7 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(finalizing()), qmlwindow, SLOT(onFinalizing()));
     qmlwindow->connect(&imageWriter, SIGNAL(networkOnline()), qmlwindow, SLOT(fetchOSlist()));
     qmlwindow->connect(&imageWriter, SIGNAL(osListPrepared()), qmlwindow, SLOT(onOsListPrepared()));
+    qmlwindow->connect(&imageWriter, SIGNAL(networkInfo(QVariant)), qmlwindow, SLOT(onNetworkInfo(QVariant)));
 
 #ifndef QT_NO_WIDGETS
     /* Set window position */
@@ -375,7 +376,8 @@ int main(int argc, char *argv[])
     qmlwindow->setProperty("y", y);
 #endif
 
-    imageWriter.beginOSListFetch();
+    if (imageWriter.isOnline())
+        imageWriter.beginOSListFetch();
 
     int rc = app.exec();
 

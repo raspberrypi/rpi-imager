@@ -321,6 +321,16 @@ ApplicationWindow {
                 }
 
                 Text {
+                    id: networkInfo
+                    Layout.columnSpan: 3
+                    color: "#ffffff"
+                    font.pixelSize: 18
+                    font.family: roboto.name
+                    visible: imageWriter.isEmbeddedMode()
+                    text: qsTr("Network not ready yet")
+                }
+
+                Text {
                     Layout.columnSpan: 3
                     color: "#ffffff"
                     font.pixelSize: 18
@@ -1314,6 +1324,10 @@ ApplicationWindow {
 
     function onFinalizing() {
         progressText.text = qsTr("Finalizing...")
+    }
+
+    function onNetworkInfo(msg) {
+        networkInfo.text = msg
     }
 
     function shuffle(arr) {

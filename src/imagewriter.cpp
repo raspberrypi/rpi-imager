@@ -37,6 +37,8 @@
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
 #include <QApplication>
+#else
+#include <QtPlatformHeaders/QEglFSFunctions>
 #endif
 #ifdef Q_OS_DARWIN
 #include <QMessageBox>
@@ -49,8 +51,8 @@
 #include <QProcessEnvironment>
 #endif
 
-#ifdef QT_NO_WIDGETS
-#include <QtPlatformHeaders/QEglFSFunctions>
+#ifdef Q_OS_LINUX
+#include "linux/stpanalyzer.h"
 #endif
 
 namespace {
@@ -75,6 +77,7 @@ ImageWriter::ImageWriter(QObject *parent)
         platform = "cli";
     }
 
+#ifdef Q_OS_LINUX
     if (platform == "eglfs" || platform == "linuxfb")
     {
         _embeddedMode = true;
@@ -98,7 +101,12 @@ ImageWriter::ImageWriter(QObject *parent)
                 }
             }
         }
+
+        StpAnalyzer *stpAnalyzer = new StpAnalyzer(5, this);
+        connect(stpAnalyzer, SIGNAL(detected()), SLOT(onSTPdetected()));
+        stpAnalyzer->startListening("eth0");
     }
+#endif
 
 #ifdef Q_OS_WIN
     _taskbarButton = nullptr;
@@ -923,7 +931,7 @@ void ImageWriter::pollNetwork()
         if (!a.isLoopback() && a.scopeId().isEmpty())
         {
             /* Not a loopback or IPv6 link-local address, so online */
-            qDebug() << "IP:" << a;
+            emit networkInfo(QString("IP: %1").arg(a.toString()));
             _online = true;
             break;
         }
@@ -961,11 +969,12 @@ void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
         };
         ::settimeofday(&tv, NULL);
 
+        beginOSListFetch();
         emit networkOnline();
     }
     else
     {
-        qDebug() << "Error synchronizing time. Trying again in 3 seconds";
+        emit networkInfo(tr("Error synchronizing time. Trying again in 3 seconds"));
         QTimer::singleShot(3000, this, SLOT(syncTime()));
     }
 
@@ -973,6 +982,11 @@ void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
 #else
     Q_UNUSED(reply)
 #endif
+}
+
+void ImageWriter::onSTPdetected()
+{
+    emit networkInfo(tr("STP is enabled on your Ethernet switch. Getting IP will take long time."));
 }
 
 bool ImageWriter::isEmbeddedMode()
