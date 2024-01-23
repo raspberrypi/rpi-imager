@@ -89,6 +89,33 @@ make
 sudo make install
 ```
 
+### Arch/Manjaro Linux
+
+#### Get dependencies
+
+Install the build dependencies:
+
+```
+sudo pacman -S git gcc make cmake libarchive curl openssl qt5-base qt5-quickcontrols2 qt5-svg qt5-tools qt5-x11extras xz
+```
+
+#### Get the source
+
+```
+git clone --depth 1 https://github.com/raspberrypi/rpi-imager
+```
+
+#### Build and install the software
+
+```
+cd rpi-imager
+mkdir -p build
+cd build
+cmake ../src
+make
+sudo make install
+```
+
 ### Windows
 
 #### Get dependencies
