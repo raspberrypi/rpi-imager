@@ -27,7 +27,7 @@
       download the file again.
     </p>
   </description>
-  <launchable type="desktop-id">rpi-imager.desktop</launchable>
+  <launchable type="desktop-id">org.raspberrypi.rpi-imager.desktop</launchable>
   <screenshots>
     <screenshot type="default">
       <image>http://downloads.raspberrypi.org/imager/IMAGING-UTILITY-MAIN.png</image>
