@@ -1113,7 +1113,7 @@ bool ImageWriter::hasSshKeyGen()
 #ifdef Q_OS_WIN
     return QFile::exists(_sshKeyGen());
 #else
-    return true;
+    return !_embeddedMode;
 #endif
 }
 
