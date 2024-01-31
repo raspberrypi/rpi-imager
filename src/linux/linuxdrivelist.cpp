@@ -78,7 +78,7 @@ namespace Drivelist
             // Hot fix for newer lsblk version on Arch based linux distributions.
             // See issue #610
             // Only tested with laptop's internal sd card reader.
-            if (!d.isVirtual && subsystems.contains("mmc")) {
+            if (!d.isVirtual && (subsystems.contains("mmc") || subsystems.contains("scsi:usb")) ) {
                 d.isVirtual = subsystems.contains("block"); //< lsblk will output something like "block:mmc:mmc_host:pci" for key "subsystems".
             }
 
