@@ -998,6 +998,16 @@ ApplicationWindow {
                     height: window.height-100
                     boundsBehavior: Flickable.StopAtBounds
                     highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+
+                    Label {
+                        anchors.fill: parent
+                        horizontalAlignment: Qt.AlignHCenter
+                        verticalAlignment: Qt.AlignVCenter
+                        visible: parent.count == 0
+                        text: qsTr("No storage devices found")
+                        font.bold: true
+                    }
+
                     ScrollBar.vertical: ScrollBar {
                         width: 10
                         policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
