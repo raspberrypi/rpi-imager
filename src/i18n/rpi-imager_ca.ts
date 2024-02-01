@@ -513,6 +513,11 @@
         <translation>Emmagatzematge</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="1007"/>
+        <source>No storage devices found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../main.qml" line="145"/>
         <location filename="../main.qml" line="1108"/>
         <source>CHOOSE STORAGE</source>
