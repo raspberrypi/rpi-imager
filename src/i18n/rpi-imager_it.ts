@@ -508,7 +508,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../main.qml" line="1007"/>
         <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
+        <translation>Nessun dispositivo archiviazione trovato</translation>
     </message>
     <message>
         <location filename="../main.qml" line="145"/>
