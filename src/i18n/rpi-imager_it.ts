@@ -236,12 +236,12 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../imagewriter.cpp" line="962"/>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore durante la sincronizzazione dell&apos;ora, riprova tra 3 secondi</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="974"/>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation type="unfinished"></translation>
+        <translation>STP è abilitato sullo switch Ethernet. Ottenere l&apos;IP richiederà molto tempo.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="1185"/>
@@ -516,7 +516,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../main.qml" line="330"/>
         <source>Network not ready yet</source>
-        <translation type="unfinished"></translation>
+        <translation>Rete non ancora pronta</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1007"/>
