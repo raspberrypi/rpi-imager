@@ -608,15 +608,15 @@ QByteArray ImageWriter::getFilteredOSlist() {
     }
 
     reference_os_list_array.append(QJsonObject({
-            {"name",  tr("Erase")},
-            {"description", tr("Format card as FAT32")},
+            {"name", QApplication::translate("main", "Erase")},
+            {"description", QApplication::translate("main", "Format card as FAT32")},
             {"icon", "icons/erase.png"},
             {"url", "internal://format"},
         }));
 
     reference_os_list_array.append(QJsonObject({
-            {"name",  tr("Use custom")},
-            {"description", tr("Select a custom .img from your computer")},
+            {"name", QApplication::translate("main", "Use custom")},
+            {"description", QApplication::translate("main", "Select a custom .img from your computer")},
             {"icon", "icons/use_custom.png"},
             {"url", ""},
         }));
@@ -1377,6 +1377,9 @@ void ImageWriter::replaceTranslator(QTranslator *trans)
     {
         _engine->retranslate();
     }
+
+    // Regenerate the OS list, because it has some localised items
+    emit osListPrepared();
 }
 
 QString ImageWriter::detectPiKeyboard()
