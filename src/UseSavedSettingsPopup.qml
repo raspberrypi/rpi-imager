@@ -121,6 +121,14 @@ Popup {
             }
 
             ImButtonRed {
+                text: qsTr("NO")
+                onClicked: {
+                    msgpopup.close()
+                    msgpopup.no()
+                }
+            }
+
+            ImButtonRed {
                 id: yesButton
                 text: qsTr("YES")
                 onClicked: {
@@ -128,14 +136,6 @@ Popup {
                     msgpopup.yes()
                 }
                 enabled: hasSavedSettings
-            }
-
-            ImButtonRed {
-                text: qsTr("NO")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.no()
-                }
             }
 
             Text { text: " " }
