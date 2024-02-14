@@ -141,6 +141,7 @@ Window {
                                         selectByMouse: true
                                         property bool indicateError: false
                                         maximumLength: 31
+                                        validator: RegularExpressionValidator { regularExpression: /^[a-z][a-z0-9-]{0,30}$/ }
 
                                         onTextEdited: {
                                             indicateError = false
