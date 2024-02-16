@@ -56,15 +56,3 @@ body:
       default: 0
     validations:
       required: true
-  - type: checkboxes
-    id: declarations
-    attributes:
-      label: Declarations
-      description: Please confirm you have done all of the following before continuing your report
-      options:
-        - label: I have searched the open feature requests on the Raspberry Pi Imager issue tracker, and I have not found a request matching my suggestion
-          required: true
-        - label: I understand that feature requests may be asked to demonstrate their expected impact to justify the cost of implementation
-          required: true
-        - label: I understand that abusive conduct in this feature request is grounds for the issue to be closed without any resolution
-          required: true
