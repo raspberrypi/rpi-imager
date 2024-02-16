@@ -3,7 +3,7 @@ description: Thanks for the report!
 title: "[BUG]: "
 labels: ["bug", "triage"]
 projects: []
-assignees:
+assignees: []
 body:
   - type: markdown
     attributes:
