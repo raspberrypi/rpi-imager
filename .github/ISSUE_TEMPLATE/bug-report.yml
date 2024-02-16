@@ -44,6 +44,8 @@ body:
         - Debian and derivatives (eg Ubuntu)
         - Other Linux environment
         - Other non-Linux environment
+    validations:
+      required: true
   - type: input
     id: host-os-version
     attributes:
@@ -72,6 +74,8 @@ body:
         - Raspberry Pi 3B, 3A+, 3B+, and Compute Module 3, 3+
         - Raspberry Pi Zero, Zero W, Zero WH
         - Raspberry Pi A, B, A+, B+, and Compute Module 1
+    validations:
+      required: true
   - type: dropdown
     id: storage-device
     attributes:
@@ -86,6 +90,8 @@ body:
         - USB Pen Drive
         - USB SSD
         - Other
+    validations:
+      required: true
   - type: checkboxes
     id: terms
     attributes:
