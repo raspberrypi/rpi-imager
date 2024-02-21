@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2019, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -17,6 +17,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -60,12 +62,10 @@
 
 /* ------------------------------------------------------------------ */
 
+#ifdef ENABLE_IPV6
 /* Return the scope of the given address. */
 unsigned int Curl_ipv6_scope(const struct sockaddr *sa)
 {
-#ifndef ENABLE_IPV6
-  (void) sa;
-#else
   if(sa->sa_family == AF_INET6) {
     const struct sockaddr_in6 * sa6 = (const struct sockaddr_in6 *)(void *) sa;
     const unsigned char *b = sa6->sin6_addr.s6_addr;
@@ -88,37 +88,35 @@ unsigned int Curl_ipv6_scope(const struct sockaddr *sa)
       break;
     }
   }
-#endif
-
   return IPV6_SCOPE_GLOBAL;
 }
-
+#endif
 
 #if defined(HAVE_GETIFADDRS)
 
-if2ip_result_t Curl_if2ip(int af, unsigned int remote_scope,
-                          unsigned int local_scope_id, const char *interf,
+if2ip_result_t Curl_if2ip(int af,
+#ifdef ENABLE_IPV6
+                          unsigned int remote_scope,
+                          unsigned int local_scope_id,
+#endif
+                          const char *interf,
                           char *buf, int buf_size)
 {
   struct ifaddrs *iface, *head;
   if2ip_result_t res = IF2IP_NOT_FOUND;
 
-#ifndef ENABLE_IPV6
-  (void) remote_scope;
-#endif
-
-#if !defined(HAVE_SOCKADDR_IN6_SIN6_SCOPE_ID) || \
-    !defined(ENABLE_IPV6)
+#if defined(ENABLE_IPV6) && \
+    !defined(HAVE_SOCKADDR_IN6_SIN6_SCOPE_ID)
   (void) local_scope_id;
 #endif
 
   if(getifaddrs(&head) >= 0) {
     for(iface = head; iface != NULL; iface = iface->ifa_next) {
-      if(iface->ifa_addr != NULL) {
+      if(iface->ifa_addr) {
         if(iface->ifa_addr->sa_family == af) {
           if(strcasecompare(iface->ifa_name, interf)) {
             void *addr;
-            char *ip;
+            const char *ip;
             char scope[12] = "";
             char ipstr[64];
 #ifdef ENABLE_IPV6
@@ -129,11 +127,11 @@ if2ip_result_t Curl_if2ip(int af, unsigned int remote_scope,
               unsigned int ifscope = Curl_ipv6_scope(iface->ifa_addr);
 
               if(ifscope != remote_scope) {
-                /* We are interested only in interface addresses whose
-                   scope matches the remote address we want to
-                   connect to: global for global, link-local for
-                   link-local, etc... */
-                if(res == IF2IP_NOT_FOUND) res = IF2IP_AF_NOT_SUPPORTED;
+                /* We are interested only in interface addresses whose scope
+                   matches the remote address we want to connect to: global
+                   for global, link-local for link-local, etc... */
+                if(res == IF2IP_NOT_FOUND)
+                  res = IF2IP_AF_NOT_SUPPORTED;
                 continue;
               }
 
@@ -153,15 +151,15 @@ if2ip_result_t Curl_if2ip(int af, unsigned int remote_scope,
               }
 
               if(scopeid)
-                  msnprintf(scope, sizeof(scope), "%%%u", scopeid);
+                msnprintf(scope, sizeof(scope), "%%%u", scopeid);
 #endif
             }
             else
 #endif
               addr =
-                  &((struct sockaddr_in *)(void *)iface->ifa_addr)->sin_addr;
+                &((struct sockaddr_in *)(void *)iface->ifa_addr)->sin_addr;
             res = IF2IP_FOUND;
-            ip = (char *) Curl_inet_ntop(af, addr, ipstr, sizeof(ipstr));
+            ip = Curl_inet_ntop(af, addr, ipstr, sizeof(ipstr));
             msnprintf(buf, buf_size, "%s%s", ip, scope);
             break;
           }
@@ -181,8 +179,12 @@ if2ip_result_t Curl_if2ip(int af, unsigned int remote_scope,
 
 #elif defined(HAVE_IOCTL_SIOCGIFADDR)
 
-if2ip_result_t Curl_if2ip(int af, unsigned int remote_scope,
-                          unsigned int local_scope_id, const char *interf,
+if2ip_result_t Curl_if2ip(int af,
+#ifdef ENABLE_IPV6
+                          unsigned int remote_scope,
+                          unsigned int local_scope_id,
+#endif
+                          const char *interf,
                           char *buf, int buf_size)
 {
   struct ifreq req;
@@ -190,9 +192,12 @@ if2ip_result_t Curl_if2ip(int af, unsigned int remote_scope,
   struct sockaddr_in *s;
   curl_socket_t dummy;
   size_t len;
+  const char *r;
 
+#ifdef ENABLE_IPV6
   (void)remote_scope;
   (void)local_scope_id;
+#endif
 
   if(!interf || (af != AF_INET))
     return IF2IP_NOT_FOUND;
@@ -219,21 +224,29 @@ if2ip_result_t Curl_if2ip(int af, unsigned int remote_scope,
 
   s = (struct sockaddr_in *)(void *)&req.ifr_addr;
   memcpy(&in, &s->sin_addr, sizeof(in));
-  Curl_inet_ntop(s->sin_family, &in, buf, buf_size);
+  r = Curl_inet_ntop(s->sin_family, &in, buf, buf_size);
 
   sclose(dummy);
+  if(!r)
+    return IF2IP_NOT_FOUND;
   return IF2IP_FOUND;
 }
 
 #else
 
-if2ip_result_t Curl_if2ip(int af, unsigned int remote_scope,
-                          unsigned int local_scope_id, const char *interf,
+if2ip_result_t Curl_if2ip(int af,
+#ifdef ENABLE_IPV6
+                          unsigned int remote_scope,
+                          unsigned int local_scope_id,
+#endif
+                          const char *interf,
                           char *buf, int buf_size)
 {
     (void) af;
+#ifdef ENABLE_IPV6
     (void) remote_scope;
     (void) local_scope_id;
+#endif
     (void) interf;
     (void) buf;
     (void) buf_size;

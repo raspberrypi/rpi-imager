@@ -26,7 +26,7 @@
   if (self) {
     _disks = [[NSMutableArray alloc] init];
     [self populateDisksBlocking];
-    [_disks sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+    [(NSMutableArray *)_disks sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
   }
 
   return self;

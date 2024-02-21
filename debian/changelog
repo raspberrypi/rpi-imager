@@ -1,3 +1,104 @@
+rpi-imager (1.8.5) unstable; urgency=medium
+
+  * Retry downloads on HTTP2 errors.
+  * Rename .desktop file to match DBus name, as some GNOME
+    desktop environments expect it that way.
+  * Disable Link Time Optimization as precaution against hard to
+    trace bugs.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Sat, 20 Jan 2024 16:36:11 +0100
+
+rpi-imager (1.8.4) unstable; urgency=medium
+
+  * OS customisation: Fixed #531, which caused password entry
+                      to drop the first character
+  * OS customisation: Impose character limits on usernames &
+                      hostnames
+  * i18n: Added Polish translation
+  * i18n: Updated Catalan, Japanese translations
+  * cli: Fixed local file passing via --repo
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Fri, 22 Dec 2023 16:00:00 +0200
+
+rpi-imager (1.8.3) unstable; urgency=medium
+
+  * Home: Fixed "No filtering" option
+  * OS customisation: Fixed no-customisation flow
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 16 Nov 2023 14:00:00 +0200
+
+rpi-imager (1.8.2) unstable; urgency=medium
+
+  * Home: Device filtering reworked to download OS list eagerly
+  * OS List: Fixed 'Recommended' tag annotation
+  * i18n: Added zh-TW Traditional Chinese translation
+  * i18n: Updated Korean, German, Ukranian, translations
+  * build: Linux: Fix libdrm dependency requirement on non-embedded
+                  build.
+  * Commmon: Disable QML caching entirely
+  * OS customisation: Allow use if only cloudinit payload available
+  * OS customisation: Allow empty PSK for 'Open' WiFi networks.
+  * OS List: Use ImageList v4 URL
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Wed, 15 Nov 2023 20:16:16 +0200
+
+rpi-imager (1.8.1) unstable; urgency=medium
+
+  * Hide empty categories when filtering
+  * i8n: Updates German translation
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 19 Oct 2023 20:16:16 +0200
+
+rpi-imager (1.8.0) unstable; urgency=medium
+
+  * Advanced options: Rename to OS customization
+  * OS customization: change to tabbed UI
+  * OS customization: make SSH public key field a textarea
+  * OS customization: add convenience button to run ssh-keygen
+  * OS customization: Enforce choice as part of write flow
+  * OS customization: Fixes for state consistency across UI
+  * Home: Add mechanism for selecting Raspberry Pi device
+  * Shared: Multiple keyboard focus fixes
+  * i18n: Adds Spanish/Ukrainian translations
+  * i18n: Updates French, Catalan, Italian, German, Spanish, Russian,
+          Japanese translations
+  * i18n: Use en_US as refernce string, and make en_GB a translation
+  * Workaround for ArchLinux's lsblk labeling internal SD card readers
+    (mmcblk0) as non-removable storage.
+  * Allow drag-dropping image files to Imager.
+  * Local .xz files: parse uncompressed size for better progress reports.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Wed, 18 Oct 2023 18:00:00 +0200
+
+rpi-imager (1.7.5) unstable; urgency=medium
+
+  * Bump version number to match bug fix release for Windows.
+    (No actual changes from 1.7.4.1 for Linux)
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Mon, 22 May 2023 18:53:22 +0200
+
+rpi-imager (1.7.4.1) unstable; urgency=medium
+
+  * Advanced settings: fix creating files on FAT partition that are
+    an exact multiple of cluster size.
+  * Do you want to apply saved settings window: offer 'no' option,
+    without clearing settings.
+  * Eject storage properly on Linux.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Thu, 18 May 2023 15:05:28 +0200 
+
+rpi-imager (1.7.4) unstable; urgency=medium
+
+  * Advanced settings: fix escaping single quotes
+  * Advanced settings: default to using username of logged-in user
+  * Now uses a different method to edit files on the FAT partition
+    to apply advanced settings. Imager now understands the FAT16/FAT32
+    file system format and can edit files by itself using the raw
+    disk device, without having to rely on the operating system
+    to mount the partition first.
+
+ -- Floris Bos <bos@je-eigen-domein.nl>  Sun, 20 Nov 2022 17:30:20 +0100
+
 rpi-imager (1.7.3) unstable; urgency=medium
 
   * Linux: use GnuTLS instead of OpenSSL for computing SHA256

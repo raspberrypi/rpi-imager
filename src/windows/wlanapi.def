@@ -1,0 +1,9 @@
+LIBRARY wlanapi
+EXPORTS
+WlanCloseHandle@8
+WlanEnumInterfaces@12
+WlanFreeMemory@4
+WlanGetProfile@28
+WlanGetProfileList@16
+WlanOpenHandle@16
+WlanQueryInterface@28

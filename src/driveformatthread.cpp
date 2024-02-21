@@ -48,7 +48,7 @@ void DriveFormatThread::run()
                 "select partition 1\r\n"
                 "set id=0e\r\n"
                 "assign\r\n";
-        proc.start("diskpart");
+        proc.start("diskpart", QStringList());
         proc.waitForStarted();
         proc.write(diskpartCmds);
         proc.closeWriteChannel();

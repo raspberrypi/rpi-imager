@@ -6,6 +6,11 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#include <memory>
+
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QNetworkAccessManager>
 #include <QObject>
 #include <QTimer>
 #include <QUrl>
@@ -74,6 +79,18 @@ public:
     /* Set custom repository */
     Q_INVOKABLE void setCustomOsListUrl(const QUrl &url);
 
+    /* Get the cached OS list. This may be empty if network connectivity is not available. */
+    Q_INVOKABLE QByteArray getFilteredOSlist();
+
+    /** Begin the asynchronous fetch of the OS lists, and associated sublists. */
+    Q_INVOKABLE void beginOSListFetch();
+
+    /** Set the HW filter, for a filtered view of the OS list */
+    Q_INVOKABLE void setHWFilterList(const QByteArray &json, const bool &inclusive);
+
+    /* Set custom cache file */
+    void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
+
     /* Utility function to open OS file dialog */
     Q_INVOKABLE void openFileDialog();
 
@@ -95,12 +112,15 @@ public:
 
     /* Functions to collect information from computer running imager to make image customization easier */
     Q_INVOKABLE QString getDefaultPubKey();
+    Q_INVOKABLE bool hasPubKey();
+    Q_INVOKABLE bool hasSshKeyGen();
+    Q_INVOKABLE void generatePubKey();
     Q_INVOKABLE QString getTimezone();
     Q_INVOKABLE QStringList getTimezoneList();
     Q_INVOKABLE QStringList getCountryList();
     Q_INVOKABLE QStringList getKeymapLayoutList();
     Q_INVOKABLE QString getSSID();
-    Q_INVOKABLE QString getPSK(const QString &ssid);
+    Q_INVOKABLE QString getPSK();
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
@@ -117,6 +137,7 @@ public:
     Q_INVOKABLE QStringList getTranslations();
     Q_INVOKABLE QString getCurrentLanguage();
     Q_INVOKABLE QString getCurrentKeyboard();
+    Q_INVOKABLE QString getCurrentUser();
     Q_INVOKABLE void changeLanguage(const QString &newLanguageName);
     Q_INVOKABLE void changeKeyboard(const QString &newKeymapLayout);
     Q_INVOKABLE bool customRepo();
@@ -137,6 +158,8 @@ signals:
     void finalizing();
     void networkOnline();
     void preparationStatusUpdate(QVariant msg);
+    void osListPrepared();
+    void networkInfo(QVariant msg);
 
 protected slots:
 
@@ -153,6 +176,17 @@ protected slots:
     void onFinalizing();
     void onTimeSyncReply(QNetworkReply *reply);
     void onPreparationStatusUpdate(QString msg);
+    void handleNetworkRequestFinished(QNetworkReply *data);
+    void onSTPdetected();
+
+private:
+    // Recursively walk all the entries with subitems and, for any which
+    // refer to an external JSON list, fetch the list and put it in place.
+    void fillSubLists(QJsonArray &topLevel);
+    QNetworkAccessManager _networkManager;
+    QJsonDocument _completeOsList;
+    QJsonArray _deviceFilter;
+    bool _deviceFilterIsInclusive;
 
 protected:
     QUrl _src, _repo;
@@ -167,12 +201,18 @@ protected:
     bool _verifyEnabled, _multipleFilesInZip, _cachingEnabled, _embeddedMode, _online;
     QSettings _settings;
     QMap<QString,QString> _translations;
+    bool _customCacheFile;
     QTranslator *_trans;
 #ifdef Q_OS_WIN
     QWinTaskbarButton *_taskbarButton;
 #endif
 
     void _parseCompressedFile();
+    void _parseXZFile();
+    QString _pubKeyFileName();
+    QString _privKeyFileName();
+    QString _sshKeyDir();
+    QString _sshKeyGen();
 };
 
 #endif // IMAGEWRITER_H

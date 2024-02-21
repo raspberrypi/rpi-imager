@@ -57,6 +57,15 @@ int Cli::main()
     parser.addOption(writeSystemDrive);
     QCommandLineOption sha256Option("sha256", "Expected hash", "sha256", "");
     parser.addOption(sha256Option);
+    QCommandLineOption cacheFileOption("cache-file", "Custom cache file (requires setting sha256 as well)", "cache-file", "");
+    parser.addOption(cacheFileOption);
+    QCommandLineOption firstRunScriptOption("first-run-script", "Add firstrun.sh to image", "first-run-script", "");
+    parser.addOption(firstRunScriptOption);
+    QCommandLineOption userdataOption("cloudinit-userdata", "Add cloud-init user-data file to image", "cloudinit-userdata", "");
+    parser.addOption(userdataOption);
+    QCommandLineOption networkconfigOption("cloudinit-networkconfig", "Add cloud-init network-config file to image", "cloudinit-networkconfig", "");
+    parser.addOption(networkconfigOption);
+
     QCommandLineOption debugOption("debug", "Output debug messages to console");
     parser.addOption(debugOption);
     QCommandLineOption quietOption("quiet", "Only write to console on error");
@@ -69,7 +78,7 @@ int Cli::main()
     const QStringList args = parser.positionalArguments();
     if (args.count() != 2)
     {
-        std::cerr << "Usage: --cli [--disable-verify] [--sha256 <expected hash>] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
+        std::cerr << "Usage: --cli [--disable-verify] [--sha256 <expected hash> [--cache-file <cache file>]] [--first-run-script <script>] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
         return 1;
     }
 
@@ -78,10 +87,17 @@ int Cli::main()
         qInstallMessageHandler(devnullMsgHandler);
     }
     _quiet = parser.isSet(quietOption);
+    QByteArray initFormat = (parser.value(userdataOption).isEmpty()
+                             && parser.value(networkconfigOption).isEmpty() ) ? "systemd" : "cloudinit";
 
     if (args[0].startsWith("http:", Qt::CaseInsensitive) || args[0].startsWith("https:", Qt::CaseInsensitive))
     {
-        _imageWriter->setSrc(args[0], 0, 0, parser.value(sha256Option).toLatin1() );
+        _imageWriter->setSrc(args[0], 0, 0, parser.value(sha256Option).toLatin1(), false, "", "", initFormat);
+
+        if (!parser.value(cacheFileOption).isEmpty())
+        {
+            _imageWriter->setCustomCacheFile(parser.value(cacheFileOption), parser.value(sha256Option).toLatin1() );
+        }
     }
     else
     {
@@ -89,7 +105,7 @@ int Cli::main()
 
         if (fi.isFile())
         {
-            _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value(sha256Option).toLatin1() );
+            _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value(sha256Option).toLatin1(), false, "", "", initFormat);
         }
         else if (!fi.exists())
         {
@@ -138,6 +154,69 @@ int Cli::main()
             std::cerr << std::endl << "Or use --enable-writing-system-drives to overrule." << std::endl;
             return 1;
         }
+    }
+
+    if (!parser.value(userdataOption).isEmpty())
+    {
+        QByteArray userData, networkConfig;
+        QFile f(parser.value(userdataOption));
+
+        if (!f.exists())
+        {
+            std::cerr << "Error: user-data file does not exists" << std::endl;
+            return 1;
+        }
+        if (f.open(f.ReadOnly))
+        {
+            userData = f.readAll();
+            f.close();
+        }
+        else
+        {
+            std::cerr << "Error: opening user-data file" << std::endl;
+            return 1;
+        }
+
+        f.setFileName(parser.value(networkconfigOption));
+        if (!f.exists())
+        {
+            std::cerr << "Error: network-config file does not exists" << std::endl;
+            return 1;
+        }
+        if (f.open(f.ReadOnly))
+        {
+            networkConfig = f.readAll();
+            f.close();
+        }
+        else
+        {
+            std::cerr << "Error: opening network-config file" << std::endl;
+            return 1;
+        }
+
+        _imageWriter->setImageCustomization("", "", "", userData, networkConfig);
+    }
+    else if (!parser.value(firstRunScriptOption).isEmpty())
+    {
+        QByteArray firstRunScript;
+        QFile f(parser.value(firstRunScriptOption));
+        if (!f.exists())
+        {
+            std::cerr << "Error: firstrun script does not exists" << std::endl;
+            return 1;
+        }
+        if (f.open(f.ReadOnly))
+        {
+            firstRunScript = f.readAll();
+            f.close();
+        }
+        else
+        {
+            std::cerr << "Error: opening firstrun script" << std::endl;
+            return 1;
+        }
+
+        _imageWriter->setImageCustomization("", "", firstRunScript, "", "");
     }
 
     _imageWriter->setDst(args[1]);

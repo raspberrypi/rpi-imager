@@ -5,6 +5,10 @@ Raspberry Pi Imaging Utility
 - Download the latest version for Windows, macOS and Ubuntu from the [Raspberry Pi downloads page](https://www.raspberrypi.com/software/).
 - To install on Raspberry Pi OS, use `sudo apt update && sudo apt install rpi-imager`.
 
+# How to use Raspberry Pi Imager
+
+Please see our [official documentation](https://www.raspberrypi.com/documentation/computers/getting-started.html#raspberry-pi-imager).
+
 ## License
 
 The main code of the Imaging Utility is made available under the terms of the Apache license.
@@ -20,7 +24,7 @@ For the embedded (netboot) build see also "embedded/legal-info" for more informa
 Install the build dependencies:
 
 ```
-sudo apt install --no-install-recommends build-essential devscripts debhelper cmake git libarchive-dev libcurl4-gnutls-dev \
+sudo apt install --no-install-recommends build-essential devscripts debhelper cmake git libarchive-dev libcurl4-gnutls-dev liblzma-dev \
     qtbase5-dev qtbase5-dev-tools qtdeclarative5-dev libqt5svg5-dev qttools5-dev libgnutls28-dev \
     qml-module-qtquick2 qml-module-qtquick-controls2 qml-module-qtquick-layouts qml-module-qtquick-templates2 qml-module-qtquick-window2 qml-module-qtgraphicaleffects
 ```
@@ -65,7 +69,7 @@ If udisks2 is not functional on your Linux distribution, you can alternatively s
 Install the build dependencies:
 
 ```
-sudo yum install git gcc gcc-c++ make cmake libarchive-devel libcurl-devel openssl-devel qt5-qtbase-devel qt5-qtquickcontrols2-devel qt5-qtsvg-devel qt5-linguist
+sudo yum install git gcc gcc-c++ make cmake libarchive-devel libcurl-devel lzma-sdk-devel openssl-devel qt5-qtbase-devel qt5-qtquickcontrols2-devel qt5-qtsvg-devel qt5-linguist xz-devel
 ```
 
 #### Get the source
@@ -112,7 +116,7 @@ Building can be done manually using the command-line, using "cmake", "make", etc
 
 Note: the CMake integration in Qt Creator is a bit flaky at times. If you made any custom changes to the CMakeLists.txt file and it subsequently gets in an endless loop where it never finishes the "configures" stage while re-processing the file, delete "build_rpi-imager_someversion" directory and try again.
 
-### Mac OS X
+### macOS
 
 #### Get dependencies
 
@@ -197,8 +201,8 @@ On macOS, disable it by editing the property list for the application:
 defaults write org.raspberrypi.Imager.plist telemetry -bool NO
 ```
 
-### Advanced options
+### OS Customization
 
-When using the app, press <kbd>CTRL</kbd> + <kbd>SHIFT</kbd> + <kbd>X</kbd> to reveal the **Advanced options** dialog.
+When using the app, press <kbd>CTRL</kbd> + <kbd>SHIFT</kbd> + <kbd>X</kbd> to reveal the **OS Customization** dialog.
 
 In here, you can specify several things you would otherwise set in the boot configuration files. For example, you can enable SSH, set the Wi-Fi login, and specify your locale settings for the system image.

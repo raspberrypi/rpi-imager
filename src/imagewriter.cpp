@@ -3,16 +3,18 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#include "downloadextractthread.h"
 #include "imagewriter.h"
 #include "drivelistitem.h"
-#include "downloadextractthread.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/sha256crypt/sha256crypt.h"
 #include "driveformatthread.h"
 #include "localfileextractthread.h"
 #include "downloadstatstelemetry.h"
+#include "wlancredentials.h"
 #include <archive.h>
 #include <archive_entry.h>
+#include <lzma.h>
 #include <random>
 #include <QFileInfo>
 #include <QQmlApplicationEngine>
@@ -35,38 +37,33 @@
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
 #include <QApplication>
+#else
+#include <QtPlatformHeaders/QEglFSFunctions>
 #endif
 #ifdef Q_OS_DARWIN
 #include <QMessageBox>
-#include <security/security.h>
 #endif
 
 #ifdef Q_OS_WIN
 #include <windows.h>
-#include <winioctl.h>
-#include <wlanapi.h>
-#ifndef WLAN_PROFILE_GET_PLAINTEXT_KEY
-#define WLAN_PROFILE_GET_PLAINTEXT_KEY 4
-#endif
-
 #include <QWinTaskbarButton>
 #include <QWinTaskbarProgress>
-#endif
-
-#ifdef QT_NO_WIDGETS
-#include <QtPlatformHeaders/QEglFSFunctions>
+#include <QProcessEnvironment>
 #endif
 
 #ifdef Q_OS_LINUX
-#ifndef QT_NO_DBUS
-#include "linux/networkmanagerapi.h"
+#include "linux/stpanalyzer.h"
 #endif
-#endif
+
+namespace {
+    constexpr uint MAX_SUBITEMS_DEPTH = 16;
+} // namespace anonymous
 
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
       _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
-      _embeddedMode(false), _online(false), _trans(nullptr)
+      _embeddedMode(false), _online(false), _customCacheFile(false), _trans(nullptr),
+      _networkManager(this)
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
@@ -80,6 +77,7 @@ ImageWriter::ImageWriter(QObject *parent)
         platform = "cli";
     }
 
+#ifdef Q_OS_LINUX
     if (platform == "eglfs" || platform == "linuxfb")
     {
         _embeddedMode = true;
@@ -103,7 +101,12 @@ ImageWriter::ImageWriter(QObject *parent)
                 }
             }
         }
+
+        StpAnalyzer *stpAnalyzer = new StpAnalyzer(5, this);
+        connect(stpAnalyzer, SIGNAL(detected()), SLOT(onSTPdetected()));
+        stpAnalyzer->startListening("eth0");
     }
+#endif
 
 #ifdef Q_OS_WIN
     _taskbarButton = nullptr;
@@ -177,6 +180,9 @@ ImageWriter::ImageWriter(QObject *parent)
         }
     }
     //_currentKeyboard = "us";
+
+    // Centralised network manager, for fetching OS lists
+    connect(&_networkManager, SIGNAL(finished(QNetworkReply *)), this, SLOT(handleNetworkRequestFinished(QNetworkReply *)));
 }
 
 ImageWriter::~ImageWriter()
@@ -253,6 +259,8 @@ void ImageWriter::startWrite()
             _extrLen = _downloadLen;
         else if (lowercaseurl.endsWith(".zip"))
             _parseCompressedFile();
+        else if (lowercaseurl.endsWith(".xz"))
+            _parseXZFile();
     }
 
     if (_devLen && _extrLen > _devLen)
@@ -349,8 +357,11 @@ void ImageWriter::startWrite()
 
 void ImageWriter::onCacheFileUpdated(QByteArray sha256)
 {
-    _settings.setValue("caching/lastDownloadSHA256", sha256);
-    _settings.sync();
+    if (!_customCacheFile)
+    {
+        _settings.setValue("caching/lastDownloadSHA256", sha256);
+        _settings.sync();
+    }
     _cachedFileHash = sha256;
     qDebug() << "Done writing cache file";
 }
@@ -419,6 +430,221 @@ bool ImageWriter::isVersionNewer(const QString &version)
 void ImageWriter::setCustomOsListUrl(const QUrl &url)
 {
     _repo = url;
+}
+
+namespace {
+    QJsonArray findAndInsertJsonResult(QJsonArray parent_list, QJsonArray incomingBody, QUrl referenceUrl, uint8_t count = 0) {
+        if (count > MAX_SUBITEMS_DEPTH) {
+            qDebug() << "Aborting insertion of subitems, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
+            return {};
+        }
+
+        QJsonArray returnArray = {};
+
+        for (auto ositem : parent_list) {
+            auto ositemObject = ositem.toObject();
+
+            if (ositemObject.contains("subitems")) {
+                // Recurse!
+                ositemObject["subitems"] = findAndInsertJsonResult(ositemObject["subitems"].toArray(), incomingBody, referenceUrl, count++);
+            } else if (ositemObject.contains("subitems_url")) {
+                if ( !ositemObject["subitems_url"].toString().compare(referenceUrl.toString())) {
+                    ositemObject.insert("subitems", incomingBody);
+                    ositemObject.remove("subitems_url");
+                }
+            }
+
+            returnArray += ositemObject;
+        }
+
+        return returnArray;
+    }
+
+    void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager &manager, uint8_t count = 0) {
+        if (count > MAX_SUBITEMS_DEPTH) {
+            qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
+            return;
+        }
+
+        for (auto entry : incoming) {
+            auto entryObject = entry.toObject();
+            if (entryObject.contains("subitems")) {
+                // No need to handle a return - this isn't processing a list, it's searching and queuing downloads.
+                findAndQueueUnresolvedSubitemsJson(entryObject["subitems"].toArray(), manager, count++);
+            } else if (entryObject.contains("subitems_url")) {
+                auto url = entryObject["subitems_url"].toString();
+                auto request = QNetworkRequest(url);
+                request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                        QNetworkRequest::NoLessSafeRedirectPolicy);
+                manager.get(request);
+            }
+        }
+    }
+} // namespace anonymous
+
+
+void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive) {
+    QJsonDocument json_document = QJsonDocument::fromJson(json);
+    _deviceFilter = json_document.array();
+    _deviceFilterIsInclusive = inclusive;
+}
+
+void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
+    // Defer deletion
+    data->deleteLater();
+
+    if (data->error() == QNetworkReply::NoError) {
+        auto httpStatusCode = data->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+        if (httpStatusCode >= 200 && httpStatusCode < 300 || httpStatusCode == 0) {
+            auto response_object = QJsonDocument::fromJson(data->readAll()).object();
+
+            if (response_object.contains("os_list")) {
+                // Step 1: Insert the items into the canonical JSON document.
+                //         It doesn't matter that these may still contain subitems_url items
+                //         As these will be fixed up as the subitems_url instances are blinked in
+                if (_completeOsList.isEmpty()) {
+                    _completeOsList = QJsonDocument(response_object);
+                } else {
+                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url());
+                    auto imager_meta = _completeOsList["imager"].toObject();
+                    _completeOsList = QJsonDocument(QJsonObject({
+                        {"imager", imager_meta},
+                        {"os_list", new_list}
+                    }));
+                }
+
+                findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager);
+                emit osListPrepared();
+            } else {
+                qDebug() << "Incorrectly formatted OS list at: " << data->url();
+            }
+        } else if (httpStatusCode >= 300 && httpStatusCode < 400) {
+            // We should _never_ enter this branch. All requests are set to follow redirections
+            // at their call sites - so the only way you got here was a logic defect.
+            auto request = QNetworkRequest(data->url());
+
+            request.setAttribute(QNetworkRequest::RedirectionTargetAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+
+            data->manager()->get(request);
+
+            // maintain manager
+            return;
+        } else if (httpStatusCode >= 400 && httpStatusCode < 600) {
+            // HTTP Error
+            qDebug() << "Failed to fetch URL [" << data->url() << "], got: " << httpStatusCode;
+        } else {
+            // Completely unknown error, worth logging separately
+            qDebug() << "Failed to fetch URL [" << data->url() << "], got unknown response code: " << httpStatusCode;
+        }
+    } else {
+        // QT Error.
+        qDebug() << "Unrecognised QT error: " << data->error() << ", explainer: " << data->errorString();
+    }
+}
+
+namespace {
+    QJsonArray filterOsListWithHWTags(QJsonArray incoming_os_list, QJsonArray hw_filter, const bool inclusive, uint8_t count = 0) {
+        if (count > MAX_SUBITEMS_DEPTH) {
+            qDebug() << "Aborting insertion of subitems, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
+            return {};
+        }
+
+        QJsonArray returnArray = {};
+
+        for (auto ositem : incoming_os_list) {
+            auto ositemObject = ositem.toObject();
+
+            if (ositemObject.contains("subitems")) {
+                // Recurse!
+                ositemObject["subitems"] = filterOsListWithHWTags(ositemObject["subitems"].toArray(), hw_filter, inclusive, count++);
+                if (ositemObject["subitems"].toArray().count() > 0) {
+                    returnArray += ositemObject;
+                }
+            } else {
+                // Filter this one!
+                if (ositemObject.contains("devices")) {
+                    auto keep = false;
+                    auto ositem_devices = ositemObject["devices"].toArray();
+
+                    for (auto compat_device : ositem_devices) {
+                        if (hw_filter.contains(compat_device.toString())) {
+                            keep = true;
+                            break;
+                        }
+                    }
+
+                    if (keep) {
+                        returnArray.append(ositem);
+                    }
+                } else {
+                    // No devices tags, so work out if we're exclusive or inclusive filtering!
+                    if (inclusive) {
+                        returnArray.append(ositem);
+                    }
+                }
+            }
+        }
+
+        return returnArray;
+    }
+} // namespace anonymous
+
+QByteArray ImageWriter::getFilteredOSlist() {
+    QJsonArray reference_os_list_array = {};
+    QJsonObject reference_imager_metadata = {};
+    {
+        if (!_completeOsList.isEmpty()) {
+            if (!_deviceFilter.isEmpty()) {
+                reference_os_list_array = filterOsListWithHWTags(_completeOsList.object()["os_list"].toArray(), _deviceFilter, _deviceFilterIsInclusive);
+            } else {
+                // The device filter can be an empty array when a device filter has not been selected, or has explicitly been selected as
+                // "no filtering". In that case, avoid walking the tree and use the unfiltered list.
+                reference_os_list_array = _completeOsList.object()["os_list"].toArray();
+            }
+
+            reference_imager_metadata = _completeOsList.object()["imager"].toObject();
+        }
+    }
+
+    reference_os_list_array.append(QJsonObject({
+            {"name", QApplication::translate("main", "Erase")},
+            {"description", QApplication::translate("main", "Format card as FAT32")},
+            {"icon", "icons/erase.png"},
+            {"url", "internal://format"},
+        }));
+
+    reference_os_list_array.append(QJsonObject({
+            {"name", QApplication::translate("main", "Use custom")},
+            {"description", QApplication::translate("main", "Select a custom .img from your computer")},
+            {"icon", "icons/use_custom.png"},
+            {"url", ""},
+        }));
+
+    return QJsonDocument(
+        QJsonObject({
+            {"imager", reference_imager_metadata},
+            {"os_list", reference_os_list_array},
+        }
+    )).toJson();
+}
+
+void ImageWriter::beginOSListFetch() {
+    QNetworkRequest request = QNetworkRequest(constantOsListUrl());
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+    
+    // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
+    // a complete cached OS list.
+   _networkManager.get(request);
+}
+
+void ImageWriter::setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256)
+{
+    _cacheFileName = cacheFile;
+    _cachedFileHash = QFile::exists(cacheFile) ? sha256 : "";
+    _customCacheFile = true;
+    _cachingEnabled = true;
 }
 
 /* Start polling the list of available drives */
@@ -648,6 +874,47 @@ void ImageWriter::_parseCompressedFile()
     qDebug() << "Parsed .zip file containing" << numFiles << "files, uncompressed size:" << _extrLen;
 }
 
+void ImageWriter::_parseXZFile()
+{
+    QFile f(_src.toLocalFile());
+    lzma_stream_flags opts = { 0 };
+    _extrLen = 0;
+
+    if (f.size() > LZMA_STREAM_HEADER_SIZE && f.open(f.ReadOnly))
+    {
+        f.seek(f.size()-LZMA_STREAM_HEADER_SIZE);
+        QByteArray footer = f.read(LZMA_STREAM_HEADER_SIZE);
+        lzma_ret ret = lzma_stream_footer_decode(&opts, (const uint8_t *) footer.constData());
+
+        if (ret == LZMA_OK && opts.backward_size < 1000000 && opts.backward_size < f.size()-LZMA_STREAM_HEADER_SIZE)
+        {
+            f.seek(f.size()-LZMA_STREAM_HEADER_SIZE-opts.backward_size);
+            QByteArray buf = f.read(opts.backward_size+LZMA_STREAM_HEADER_SIZE);
+            lzma_index *idx;
+            uint64_t memlimit = UINT64_MAX;
+            size_t pos = 0;
+
+            ret = lzma_index_buffer_decode(&idx, &memlimit, NULL, (const uint8_t *) buf.constData(), &pos, buf.size());
+            if (ret == LZMA_OK)
+            {
+                _extrLen = lzma_index_uncompressed_size(idx);
+                qDebug() << "Parsed .xz file. Uncompressed size:" << _extrLen;
+            }
+            else
+            {
+                qDebug() << "Unable to parse index of .xz file";
+            }
+            lzma_index_end(idx, NULL);
+        }
+        else
+        {
+            qDebug() << "Unable to parse footer of .xz file";
+        }
+
+        f.close();
+    }
+}
+
 bool ImageWriter::isOnline()
 {
     return _online || !_embeddedMode;
@@ -664,7 +931,7 @@ void ImageWriter::pollNetwork()
         if (!a.isLoopback() && a.scopeId().isEmpty())
         {
             /* Not a loopback or IPv6 link-local address, so online */
-            qDebug() << "IP:" << a;
+            emit networkInfo(QString("IP: %1").arg(a.toString()));
             _online = true;
             break;
         }
@@ -702,11 +969,12 @@ void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
         };
         ::settimeofday(&tv, NULL);
 
+        beginOSListFetch();
         emit networkOnline();
     }
     else
     {
-        qDebug() << "Error synchronizing time. Trying again in 3 seconds";
+        emit networkInfo(tr("Error synchronizing time. Trying again in 3 seconds"));
         QTimer::singleShot(3000, this, SLOT(syncTime()));
     }
 
@@ -714,6 +982,11 @@ void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
 #else
     Q_UNUSED(reply)
 #endif
+}
+
+void ImageWriter::onSTPdetected()
+{
+    emit networkInfo(tr("STP is enabled on your Ethernet switch. Getting IP will take long time."));
 }
 
 bool ImageWriter::isEmbeddedMode()
@@ -791,10 +1064,25 @@ QByteArray ImageWriter::getUsbSourceOSlist()
 #endif
 }
 
+QString ImageWriter::_sshKeyDir()
+{
+    return QDir::homePath()+"/.ssh";
+}
+
+QString ImageWriter::_pubKeyFileName()
+{
+    return _sshKeyDir()+"/id_rsa.pub";
+}
+
+QString ImageWriter::_privKeyFileName()
+{
+    return _sshKeyDir()+"/id_rsa";
+}
+
 QString ImageWriter::getDefaultPubKey()
 {
     QByteArray pubkey;
-    QFile pubfile(QDir::homePath()+"/.ssh/id_rsa.pub");
+    QFile pubfile(_pubKeyFileName());
 
     if (pubfile.exists() && pubfile.open(QFile::ReadOnly))
     {
@@ -803,6 +1091,53 @@ QString ImageWriter::getDefaultPubKey()
     }
 
     return pubkey;
+}
+
+bool ImageWriter::hasPubKey()
+{
+    return QFile::exists(_pubKeyFileName());
+}
+
+QString ImageWriter::_sshKeyGen()
+{
+#ifdef Q_OS_WIN
+    QString windir = QProcessEnvironment::systemEnvironment().value("windir");
+    return QDir::fromNativeSeparators(windir+"\\SysNative\\OpenSSH\\ssh-keygen.exe");
+#else
+    return "ssh-keygen";
+#endif
+}
+
+bool ImageWriter::hasSshKeyGen()
+{
+#ifdef Q_OS_WIN
+    return QFile::exists(_sshKeyGen());
+#else
+    return !_embeddedMode;
+#endif
+}
+
+void ImageWriter::generatePubKey()
+{
+    if (!hasPubKey() && !QFile::exists(_privKeyFileName()))
+    {
+        QDir dir;
+        QProcess proc;
+        QString progName = _sshKeyGen();
+        QStringList args;
+        args << "-t" << "rsa" << "-f" << _privKeyFileName() << "-N" << "";
+
+        if (!dir.exists(_sshKeyDir()))
+        {
+            qDebug() << "Creating" << _sshKeyDir();
+            dir.mkdir(_sshKeyDir());
+        }
+
+        qDebug() << "Executing:" << progName << args;
+        proc.start(progName, args);
+        proc.waitForFinished();
+        qDebug() << proc.readAll();
+    }
 }
 
 QString ImageWriter::getTimezone()
@@ -852,154 +1187,23 @@ QStringList ImageWriter::getKeymapLayoutList()
 
 QString ImageWriter::getSSID()
 {
-    /* Qt used to have proper bearer management that was able to provide a list of
-       SSIDs, but since they retired it, resort to calling platform specific tools for now.
-       Minimal implementation that only gets the currently connected SSID */
-
-    QString program, regexpstr, ssid;
-    QStringList args;
-    QProcess proc;
-
-#ifdef Q_OS_WIN
-    program = "netsh";
-    args << "wlan" << "show" << "interfaces";
-    regexpstr = "[ \t]+SSID[ \t]*: (.+)";
-#else
-#ifdef Q_OS_DARWIN
-    program = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport";
-    args << "-I";
-    regexpstr = "[ \t]+SSID: (.+)";
-#else
-    program = "iwgetid";
-    args << "-r";
-#endif
-#endif
-
-    proc.start(program, args);
-    if (proc.waitForStarted(2000) && proc.waitForFinished(2000))
-    {
-        if (regexpstr.isEmpty())
-        {
-            ssid = proc.readAll().trimmed();
-        }
-        else
-        {
-            QRegularExpression rx(regexpstr);
-            const QList<QByteArray> outputlines = proc.readAll().replace('\r', "").split('\n');
-
-            for (const QByteArray &line : outputlines) {
-                QRegularExpressionMatch match = rx.match(line);
-                if (match.hasMatch())
-                {
-                    ssid = match.captured(1);
-                    break;
-                }
-            }
-        }
-    }
-
-    return ssid;
+    return WlanCredentials::instance()->getSSID();
 }
 
-QString ImageWriter::getPSK(const QString &ssid)
+QString ImageWriter::getPSK()
 {
-#ifdef Q_OS_WIN
-    /* Windows allows retrieving wifi PSK */
-    HANDLE h;
-    DWORD ret = 0;
-    DWORD supportedVersion = 0;
-    DWORD clientVersion = 2;
-    QString psk;
-
-    if (WlanOpenHandle(clientVersion, NULL, &supportedVersion, &h) != ERROR_SUCCESS)
-        return QString();
-
-    PWLAN_INTERFACE_INFO_LIST ifList = NULL;
-
-    if (WlanEnumInterfaces(h, NULL, &ifList) == ERROR_SUCCESS)
-    {
-        for (int i=0; i < ifList->dwNumberOfItems; i++)
-        {
-            PWLAN_PROFILE_INFO_LIST profileList = NULL;
-
-            if (WlanGetProfileList(h, &ifList->InterfaceInfo[i].InterfaceGuid,
-                                   NULL, &profileList) == ERROR_SUCCESS)
-            {
-                for (int j=0; j < profileList->dwNumberOfItems; j++)
-                {
-                    QString s = QString::fromWCharArray(profileList->ProfileInfo[j].strProfileName);
-                    qDebug() << "Enumerating wifi profiles, SSID found:" << s << " looking for:" << ssid;
-
-                    if (s == ssid) {
-                        DWORD flags = WLAN_PROFILE_GET_PLAINTEXT_KEY;
-                        DWORD access = 0;
-                        DWORD ret = 0;
-                        LPWSTR xmlstr = NULL;
-
-                        if ( (ret = WlanGetProfile(h, &ifList->InterfaceInfo[i].InterfaceGuid, profileList->ProfileInfo[j].strProfileName,
-                                          NULL, &xmlstr, &flags, &access)) == ERROR_SUCCESS && xmlstr)
-                        {
-                            QString xml = QString::fromWCharArray(xmlstr);
-                            qDebug() << "XML wifi profile:" << xml;
-                            QRegularExpression rx("<keyMaterial>(.+)</keyMaterial>");
-                            QRegularExpressionMatch match = rx.match(xml);
-
-                            if (match.hasMatch()) {
-                                psk = match.captured(1);
-                            }
-
-                            WlanFreeMemory(xmlstr);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (profileList) {
-                WlanFreeMemory(profileList);
-            }
-        }
-    }
-
-    if (ifList)
-        WlanFreeMemory(ifList);
-    WlanCloseHandle(h, NULL);
-
-    return psk;
-
-#else
 #ifdef Q_OS_DARWIN
-    SecKeychainRef keychainRef;
-    QString psk;
-    QByteArray ssidAscii = ssid.toLatin1();
-
+    /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
+     * Ask if user wants to obtain the wlan password first to make sure this is desired and
+     * to provide the user with context. */
     if (QMessageBox::question(nullptr, "",
-                          tr("Would you like to prefill the wifi password from the system keychain?")) == QMessageBox::Yes)
+                          tr("Would you like to prefill the wifi password from the system keychain?")) != QMessageBox::Yes)
     {
-        if (SecKeychainOpen("/Library/Keychains/System.keychain", &keychainRef) == errSecSuccess)
-        {
-            UInt32 resultLen;
-            void *result;
-            if (SecKeychainFindGenericPassword(keychainRef, 0, NULL, ssidAscii.length(), ssidAscii.constData(), &resultLen, &result, NULL) == errSecSuccess)
-            {
-                psk = QByteArray((char *) result, resultLen);
-                SecKeychainItemFreeContent(NULL, result);
-            }
-            CFRelease(keychainRef);
-        }
+        return QString();
     }
+#endif
 
-    return psk;
-#else
-#ifndef QT_NO_DBUS
-    NetworkManagerApi nm;
-    return nm.getPSK();
-#else
-    Q_UNUSED(ssid)
-    return QString();
-#endif
-#endif
-#endif
+    return WlanCredentials::instance()->getPSK();
 }
 
 bool ImageWriter::getBoolSetting(const QString &key)
@@ -1064,6 +1268,7 @@ void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)
         _settings.setValue(key, map.value(key));
     }
     _settings.endGroup();
+    _settings.sync();
 }
 
 QVariantMap ImageWriter::getSavedCustomizationSettings()
@@ -1085,10 +1290,12 @@ void ImageWriter::clearSavedCustomizationSettings()
     _settings.beginGroup("imagecustomization");
     _settings.remove("");
     _settings.endGroup();
+    _settings.sync();
 }
 
 bool ImageWriter::hasSavedCustomizationSettings()
 {
+    _settings.sync();
     _settings.beginGroup("imagecustomization");
     bool result = !_settings.childKeys().isEmpty();
     _settings.endGroup();
@@ -1170,6 +1377,9 @@ void ImageWriter::replaceTranslator(QTranslator *trans)
     {
         _engine->retranslate();
     }
+
+    // Regenerate the OS list, because it has some localised items
+    emit osListPrepared();
 }
 
 QString ImageWriter::detectPiKeyboard()
@@ -1230,6 +1440,26 @@ QString ImageWriter::detectPiKeyboard()
     }
 
     return QString();
+}
+
+QString ImageWriter::getCurrentUser()
+{
+    QString user = qgetenv("USER");
+
+    if (user.isEmpty())
+        user = qgetenv("USERNAME");
+
+    user = user.toLower();
+    if (user.contains(" "))
+    {
+        auto names = user.split(" ");
+        user = names.first();
+    }
+
+    if (user.isEmpty() || user == "root")
+        user = "pi";
+
+    return user;
 }
 
 bool ImageWriter::hasMouse()

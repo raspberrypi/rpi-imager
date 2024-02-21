@@ -7,11 +7,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2016, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -19,6 +19,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -47,11 +49,11 @@ extern int Curl_getaddrinfo_a(const char *nodename,
                               struct addrinfo **res);
 #define getaddrinfo             Curl_getaddrinfo_a
 
-
+/* Note socklen_t must be used as this is declared before curl_socklen_t */
 extern int Curl_getnameinfo_a(const struct sockaddr *sa,
-                              curl_socklen_t salen,
-                              char *nodename, curl_socklen_t nodenamelen,
-                              char *servname, curl_socklen_t servnamelen,
+                              socklen_t salen,
+                              char *nodename, socklen_t nodenamelen,
+                              char *servname, socklen_t servnamelen,
                               int flags);
 #define getnameinfo             Curl_getnameinfo_a
 
@@ -200,17 +202,21 @@ extern OM_uint32 Curl_gss_delete_sec_context_a(OM_uint32 * minor_status,
 /* Some socket functions must be wrapped to process textual addresses
    like AF_UNIX. */
 
-extern int Curl_os400_connect(int sd, struct sockaddr * destaddr, int addrlen);
-extern int Curl_os400_bind(int sd, struct sockaddr * localaddr, int addrlen);
+extern int Curl_os400_connect(int sd, struct sockaddr *destaddr, int addrlen);
+extern int Curl_os400_bind(int sd, struct sockaddr *localaddr, int addrlen);
 extern int Curl_os400_sendto(int sd, char *buffer, int buflen, int flags,
-                             struct sockaddr * dstaddr, int addrlen);
+                             const struct sockaddr *dstaddr, int addrlen);
 extern int Curl_os400_recvfrom(int sd, char *buffer, int buflen, int flags,
                                struct sockaddr *fromaddr, int *addrlen);
+extern int Curl_os400_getpeername(int sd, struct sockaddr *addr, int *addrlen);
+extern int Curl_os400_getsockname(int sd, struct sockaddr *addr, int *addrlen);
 
 #define connect                 Curl_os400_connect
 #define bind                    Curl_os400_bind
 #define sendto                  Curl_os400_sendto
 #define recvfrom                Curl_os400_recvfrom
+#define getpeername             Curl_os400_getpeername
+#define getsockname             Curl_os400_getsockname
 
 #ifdef HAVE_LIBZ
 #define zlibVersion             Curl_os400_zlibVersion

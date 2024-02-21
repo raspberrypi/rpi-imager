@@ -22,6 +22,11 @@
 #include <QSettings>
 #include <QFont>
 #include <QFontDatabase>
+#ifdef QT_NO_WIDGETS
+#include <xf86drm.h>
+#include <xf86drmMode.h>
+#include <QDir>
+#endif
 #ifndef QT_NO_WIDGETS
 #include <QtWidgets/QApplication>
 #endif
@@ -44,6 +49,84 @@ static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QStri
 }
 #endif
 
+#ifdef QT_NO_WIDGETS
+/* Embedded: deal with Pi having multiple DRI devices when vc4-kms (instead of fkms) is used */
+bool handleDri()
+{
+    QByteArray driDev;
+    QDir driDir("/dev/dri");
+    QStringList entries = driDir.entryList(QDir::System, QDir::Name);
+
+    for (const QString &fn : entries)
+    {
+        QFile f("/dev/dri/"+fn);
+        if (f.open(f.ReadWrite))
+        {
+            drmModeResPtr resources = drmModeGetResources(f.handle());
+            if (resources)
+            {
+                driDev = "/dev/dri/"+fn.toLatin1();
+                cerr << "Using " << driDev << endl;
+
+                /* Get current resolution to calculate scaling factor while we are at it */
+                for (int i=0; i<resources->count_connectors; i++)
+                {
+                    drmModeConnectorPtr connector = drmModeGetConnector(f.handle(), resources->connectors[i]);
+                    if (connector)
+                    {
+                        if (connector->connection != DRM_MODE_DISCONNECTED)
+                        {
+                            drmModeEncoderPtr encoder = drmModeGetEncoder(f.handle(), connector->encoder_id);
+                            if (encoder)
+                            {
+                                drmModeModeInfo crtcMode = {0};
+                                drmModeCrtcPtr crtc = drmModeGetCrtc(f.handle(), encoder->crtc_id);
+                                if (crtc)
+                                {
+                                    if (crtc->mode_valid)
+                                    {
+                                        cerr << "Current mode: connector " << i << " crtc_id " << crtc->crtc_id << " width: " << crtc->width << "px height: " << crtc->height << "px" << endl;
+                                        /*if (crtc->height > 720)
+                                        {
+                                            qputenv("QT_SCALE_FACTOR", QByteArray::number(crtc->height / 720.0, 'f', 2));
+                                        }*/
+
+                                        break;
+                                    }
+                                    drmModeFreeCrtc(crtc);
+                                }
+                                drmModeFreeEncoder(encoder);
+                            }
+                        }
+                        drmModeFreeConnector(connector);
+                    }
+                }
+
+                drmModeFreeResources(resources);
+            }
+            f.close();
+        }
+        else
+        {
+            cerr << "Error opening /dev/dri/"+fn << endl;
+        }
+    }
+
+    if (driDev.isEmpty())
+    {
+        cerr << "No capable /dev/dri device found" << endl;
+        return false;
+    }
+    QFile f("/tmp/qt-kms-config.json");
+    f.open(f.WriteOnly);
+    f.write("{ \"device\": \""+driDev+"\", \"hwcursor\": false }\n");
+    f.close();
+    qputenv("QT_QPA_EGLFS_KMS_CONFIG", "/tmp/qt-kms-config.json");
+
+    return true;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
     for (int i = 1; i < argc; i++)
@@ -57,19 +140,23 @@ int main(int argc, char *argv[])
     }
 
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+
+    /** QtQuick on QT5 exhibits spurious disk cache failures that cannot be
+     * resolved by a user in a trivial manner (they have to delete the cache manually).
+     * 
+     * This flag can potentially noticeably increase the start time of the application, however
+     * between this and a hard-to-detect spurious failure affecting Linux, macOS and Windows,
+     * this trade is the one most likely to result in a good experience for the widest group
+     * of users.
+     */
+    qputenv("QML_DISABLE_DISK_CACHE", "true");
 #ifdef Q_OS_WIN
     // prefer ANGLE (DirectX) over desktop OpenGL
     QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
 #endif
 #ifdef QT_NO_WIDGETS
-    {
-        QGuiApplication tmp(argc, argv);
-        int h = QGuiApplication::primaryScreen()->geometry().height();
-        if (h > 720)
-        {
-            qputenv("QT_SCALE_FACTOR", QByteArray::number(h / 720.0, 'f', 2));
-        }
-    }
+    if ( !handleDri() )
+        return 1;
 
     QGuiApplication app(argc, argv);
 
@@ -259,6 +346,8 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(cancelled()), qmlwindow, SLOT(onCancelled()));
     qmlwindow->connect(&imageWriter, SIGNAL(finalizing()), qmlwindow, SLOT(onFinalizing()));
     qmlwindow->connect(&imageWriter, SIGNAL(networkOnline()), qmlwindow, SLOT(fetchOSlist()));
+    qmlwindow->connect(&imageWriter, SIGNAL(osListPrepared()), qmlwindow, SLOT(onOsListPrepared()));
+    qmlwindow->connect(&imageWriter, SIGNAL(networkInfo(QVariant)), qmlwindow, SLOT(onNetworkInfo(QVariant)));
 
 #ifndef QT_NO_WIDGETS
     /* Set window position */
@@ -286,6 +375,9 @@ int main(int argc, char *argv[])
     qmlwindow->setProperty("x", x);
     qmlwindow->setProperty("y", y);
 #endif
+
+    if (imageWriter.isOnline())
+        imageWriter.beginOSListFetch();
 
     int rc = app.exec();
 

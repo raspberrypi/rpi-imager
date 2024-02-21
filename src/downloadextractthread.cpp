@@ -167,8 +167,7 @@ void DownloadExtractThread::extractImageRun()
                 {
                     if (!_cancelled)
                     {
-                        DownloadThread::cancelDownload();
-                        emit error(tr("Error writing to storage"));
+                        _onWriteError();
                     }
                     archive_read_free(a);
                     return;

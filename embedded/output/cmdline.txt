@@ -1,1 +1,1 @@
-quiet console=ttyAMA0,115200 console=tty1 debugconsole
+quiet console=tty1 console=serial0,115200 debugconsole

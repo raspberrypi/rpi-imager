@@ -15,11 +15,9 @@ ApplicationWindow {
     visible: true
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
-    height: imageWriter.isEmbeddedMode() ? -1 : 420
+    height: imageWriter.isEmbeddedMode() ? -1 : 450
     minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
-    //maximumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
-    //maximumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
 
@@ -57,40 +55,100 @@ ApplicationWindow {
         spacing: 0
 
         Rectangle {
-            implicitHeight: window.height/2
+            id: logoContainer
+            implicitHeight: window.height/4
 
             Image {
                 id: image
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+                source: "icons/logo_sxs_imager.png"
+
+                // Specify the maximum size of the image
+                width: window.width * 0.45
+                height: window.height / 3
+
+                // Within the image's specified size rectangle, resize the
+                // image to fit within the rectangle while keeping its aspect
+                // ratio the same.  Preserving the aspect ratio implies some
+                // extra padding between the Image's extend and the actual
+                // image content: align left so all this padding is on the
+                // right.
                 fillMode: Image.PreserveAspectFit
-                source: "icons/logo_stacked_imager.png"
-                width: window.width
-                height: window.height/2
+                horizontalAlignment: Image.AlignLeft
+
+                // Keep the left side of the image 40 pixels from the left
+                // edge
+                anchors.left: logoContainer.left
+                anchors.leftMargin: 40
+
+                // Equal padding above and below the image
+                anchors.top: logoContainer.top
+                anchors.bottom: logoContainer.bottom
+                anchors.topMargin: window.height / 25
+                anchors.bottomMargin: window.height / 25
             }
         }
 
         Rectangle {
-            color: "#c31c4a"
+            color: "#cd2355"
             implicitWidth: window.width
-            implicitHeight: window.height/2
+            implicitHeight: window.height * (1 - 1/4)
 
             GridLayout {
                 id: gridLayout
-                rowSpacing: 25
+                rowSpacing: 15
 
                 anchors.fill: parent
                 anchors.topMargin: 25
                 anchors.rightMargin: 50
                 anchors.leftMargin: 50
 
-                rows: 6
+                rows: 5
                 columns: 3
-                columnSpacing: 25
+                columnSpacing: 15
 
                 ColumnLayout {
-                    id: columnLayout
+                    id: columnLayout0
                     spacing: 0
+                    Layout.row: 0
+                    Layout.column: 0
+                    Layout.fillWidth: true
+
+                    Text {
+                        id: text0
+                        color: "#ffffff"
+                        text: qsTr("Raspberry Pi Device")
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 17
+                        Layout.preferredWidth: 100
+                        font.pixelSize: 12
+                        font.family: robotoBold.name
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    ImButton {
+                        id: hwbutton
+                        text: qsTr("CHOOSE DEVICE")
+                        spacing: 0
+                        padding: 0
+                        bottomPadding: 0
+                        topPadding: 0
+                        Layout.minimumHeight: 40
+                        Layout.fillWidth: true
+                        onClicked: {
+                            hwpopup.open()
+                            hwlist.forceActiveFocus()
+                        }
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
+                        Accessible.description: qsTr("Select this button to choose your target Raspberry Pi")
+                    }
+                }
+
+                ColumnLayout {
+                    id: columnLayout1
+                    spacing: 0
+                    Layout.row: 0
+                    Layout.column: 1
                     Layout.fillWidth: true
 
                     Text {
@@ -99,7 +157,6 @@ ApplicationWindow {
                         text: qsTr("Operating System")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
                         font.pixelSize: 12
                         font.family: robotoBold.name
                         font.bold: true
@@ -119,7 +176,7 @@ ApplicationWindow {
                             ospopup.open()
                             osswipeview.currentItem.forceActiveFocus()
                         }
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to change the operating system")
                     }
                 }
@@ -127,6 +184,8 @@ ApplicationWindow {
                 ColumnLayout {
                     id: columnLayout2
                     spacing: 0
+                    Layout.row: 0
+                    Layout.column: 2
                     Layout.fillWidth: true
 
                     Text {
@@ -135,7 +194,6 @@ ApplicationWindow {
                         text: qsTr("Storage")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
                         font.pixelSize: 12
                         font.family: robotoBold.name
                         font.bold: true
@@ -145,55 +203,29 @@ ApplicationWindow {
                     ImButton {
                         id: dstbutton
                         text: qsTr("CHOOSE STORAGE")
+                        spacing: 0
+                        padding: 0
+                        bottomPadding: 0
+                        topPadding: 0
                         Layout.minimumHeight: 40
-                        Layout.preferredWidth: 100
+                        Layout.preferredWidth: 200
                         Layout.fillWidth: true
                         onClicked: {
                             imageWriter.startDriveListPolling()
                             dstpopup.open()
                             dstlist.forceActiveFocus()
                         }
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to change the destination storage device")
                     }
                 }
 
                 ColumnLayout {
+                    id: columnLayoutProgress
                     spacing: 0
-                    Layout.fillWidth: true
-
-                    Text {
-                        text: " "
-                        Layout.preferredHeight: 17
-                        Layout.preferredWidth: 100
-                    }
-
-                    ImButton {
-                        id: writebutton
-                        text: qsTr("WRITE")
-                        Layout.minimumHeight: 40
-                        Layout.fillWidth: true
-                        Accessible.ignored: ospopup.visible || dstpopup.visible
-                        Accessible.description: qsTr("Select this button to start writing the image")
-                        enabled: false
-                        onClicked: {
-                            if (!imageWriter.readyToWrite()) {
-                                return
-                            }
-
-                            if (!optionspopup.initialized && imageWriter.imageSupportsCustomization() && imageWriter.hasSavedCustomizationSettings()) {
-                                usesavedsettingspopup.openPopup()
-                            } else {
-                                confirmwritepopup.askForConfirmation()
-                            }
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    id: columnLayout3
-                    Layout.columnSpan: 3
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                    Layout.row: 1
+                    Layout.column: 0
+                    Layout.columnSpan: 2
 
                     Text {
                         id: progressText
@@ -204,16 +236,31 @@ ApplicationWindow {
                         visible: false
                         horizontalAlignment: Text.AlignHCenter
                         Layout.fillWidth: true
+                        Layout.bottomMargin: 25
+                        padding: 5
                     }
 
                     ProgressBar {
+                        Layout.bottomMargin: 25
                         id: progressBar
                         Layout.fillWidth: true
                         visible: false
                         Material.background: "#d15d7d"
                     }
+                }
+
+                ColumnLayout {
+                    id: columnLayout3
+                    Layout.row: 1
+                    Layout.column: 2
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                    spacing: 0
 
                     ImButton {
+                        Layout.bottomMargin: 25
+                        Layout.minimumHeight: 40
+                        Layout.preferredWidth: 200
+                        padding: 5
                         id: cancelwritebutton
                         text: qsTr("CANCEL WRITE")
                         onClicked: {
@@ -225,6 +272,10 @@ ApplicationWindow {
                         visible: false
                     }
                     ImButton {
+                        Layout.bottomMargin: 25
+                        Layout.minimumHeight: 40
+                        Layout.preferredWidth: 200
+                        padding: 5
                         id: cancelverifybutton
                         text: qsTr("CANCEL VERIFY")
                         onClicked: {
@@ -237,17 +288,25 @@ ApplicationWindow {
                     }
 
                     ImButton {
+                        id: writebutton
+                        text: qsTr("Next")
                         Layout.bottomMargin: 25
-                        padding: 5
-                        id: customizebutton
+                        Layout.minimumHeight: 40
+                        Layout.preferredWidth: 200
+                        Layout.alignment: Qt.AlignRight
+                        Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
+                        Accessible.description: qsTr("Select this button to start writing the image")
+                        enabled: false
                         onClicked: {
-                            optionspopup.openPopup()
-                        }
-                        visible: false
-                        Accessible.description: qsTr("Select this button to access advanced settings")
-                        contentItem: Image {
-                            source: "icons/ic_cog_red.svg"
-                            fillMode: Image.PreserveAspectFit
+                            if (!imageWriter.readyToWrite()) {
+                                return
+                            }
+
+                            if (!optionspopup.visible && imageWriter.imageSupportsCustomization()) {
+                                usesavedsettingspopup.openPopup()
+                            } else {
+                                confirmwritepopup.askForConfirmation()
+                            }
                         }
                     }
                 }
@@ -262,6 +321,16 @@ ApplicationWindow {
                 }
 
                 Text {
+                    id: networkInfo
+                    Layout.columnSpan: 3
+                    color: "#ffffff"
+                    font.pixelSize: 18
+                    font.family: roboto.name
+                    visible: imageWriter.isEmbeddedMode()
+                    text: qsTr("Network not ready yet")
+                }
+
+                Text {
                     Layout.columnSpan: 3
                     color: "#ffffff"
                     font.pixelSize: 18
@@ -270,65 +339,67 @@ ApplicationWindow {
                     text: qsTr("Keyboard navigation: <tab> navigate to next button <space> press button/select item <arrow up/down> go up/down in lists")
                 }
 
-                RowLayout {
-                    id: langbar
+                Rectangle {
+                    id: langbarRect
                     Layout.columnSpan: 3
                     Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
                     Layout.bottomMargin: 5
-                    spacing: 10
                     visible: imageWriter.isEmbeddedMode()
+                    implicitWidth: langbar.width
+                    implicitHeight: langbar.height
+                    color: "#ffffe3"
+                    radius: 5
 
-                    Rectangle {
-                        anchors.fill: langbar
-                        color: "#ffffe3"
-                        radius: 5
-                    }
+                    RowLayout {
+                        id: langbar
+                        spacing: 10
 
-                    Text {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        text: qsTr("Language: ")
-                        Layout.leftMargin: 30
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    ComboBox {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        model: imageWriter.getTranslations()
-                        Layout.preferredWidth: 200
-                        currentIndex: -1
-                        Component.onCompleted: {
-                            currentIndex = find(imageWriter.getCurrentLanguage())
+                        Text {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            text: qsTr("Language: ")
+                            Layout.leftMargin: 30
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
                         }
-                        onActivated: {
-                            imageWriter.changeLanguage(editText)
+                        ComboBox {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            model: imageWriter.getTranslations()
+                            Layout.preferredWidth: 200
+                            currentIndex: -1
+                            Component.onCompleted: {
+                                currentIndex = find(imageWriter.getCurrentLanguage())
+                            }
+                            onActivated: {
+                                imageWriter.changeLanguage(editText)
+                            }
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
                         }
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    Text {
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        text: qsTr("Keyboard: ")
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                    }
-                    ComboBox {
-                        enabled: imageWriter.isEmbeddedMode()
-                        font.pixelSize: 12
-                        font.family: roboto.name
-                        model: imageWriter.getKeymapLayoutList()
-                        currentIndex: -1
-                        Component.onCompleted: {
-                            currentIndex = find(imageWriter.getCurrentKeyboard())
+                        Text {
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            text: qsTr("Keyboard: ")
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
                         }
-                        onActivated: {
-                            imageWriter.changeKeyboard(editText)
+                        ComboBox {
+                            enabled: imageWriter.isEmbeddedMode()
+                            font.pixelSize: 12
+                            font.family: roboto.name
+                            model: imageWriter.getKeymapLayoutList()
+                            currentIndex: -1
+                            Component.onCompleted: {
+                                currentIndex = find(imageWriter.getCurrentKeyboard())
+                            }
+                            onActivated: {
+                                imageWriter.changeKeyboard(editText)
+                            }
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
+                            Layout.rightMargin: 30
                         }
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 10
-                        Layout.rightMargin: 30
                     }
                 }
 
@@ -338,8 +409,121 @@ ApplicationWindow {
                     sequences: ["Shift+Ctrl+L", "Shift+Meta+L"]
                     context: Qt.ApplicationShortcut
                     onActivated: {
-                        langbar.visible = true
+                        langbarRect.visible = true
                     }
+                }
+            }
+
+            DropArea {
+                anchors.fill: parent
+                onEntered: {
+                    if (drag.active && mimeData.hasUrls()) {
+                        drag.acceptProposedAction()
+                    }
+                }
+                onDropped: {
+                    if (drop.urls && drop.urls.length > 0) {
+                        onFileSelected(drop.urls[0].toString())
+                    }
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: hwpopup
+        x: 50
+        y: 25
+        width: parent.width-100
+        height: parent.height-50
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        property string hwselected: ""
+
+        // background of title
+        Rectangle {
+            color: "#f5f5f5"
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 35
+            width: parent.width
+        }
+        // line under title
+        Rectangle {
+            color: "#afafaf"
+            width: parent.width
+            y: 35
+            implicitHeight: 1
+        }
+
+        Text {
+            text: "X"
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: 25
+            anchors.topMargin: 10
+            font.family: roboto.name
+            font.bold: true
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    hwpopup.close()
+                }
+            }
+        }
+
+        ColumnLayout {
+            spacing: 10
+
+            Text {
+                text: qsTr("Raspberry Pi Device")
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                Layout.fillWidth: true
+                Layout.topMargin: 10
+                font.family: roboto.name
+                font.bold: true
+            }
+
+            Item {
+                clip: true
+                Layout.preferredWidth: hwlist.width
+                Layout.preferredHeight: hwlist.height
+
+                ListView {
+                    id: hwlist
+                    model: ListModel {
+                        id: deviceModel
+                        ListElement {
+                            name: qsTr("[ All ]")
+                            tags: "[]"
+                            icon: ""
+                            description: ""
+                            matching_type: "exclusive"
+                        }
+                    }
+                    currentIndex: -1
+                    delegate: hwdelegate
+                    width: window.width-100
+                    height: window.height-100
+                    boundsBehavior: Flickable.StopAtBounds
+                    highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+                    ScrollBar.vertical: ScrollBar {
+                        width: 10
+                        policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                    }
+                    Keys.onSpacePressed: {
+                        if (currentIndex != -1)
+                            selectHWitem(model.get(currentIndex))
+                    }
+                    Accessible.onPressAction: {
+                        if (currentIndex != -1)
+                            selectHWitem(model.get(currentIndex))
+                    }
+                    Keys.onEnterPressed: Keys.onSpacePressed(event)
+                    Keys.onReturnPressed: Keys.onSpacePressed(event)
                 }
             }
         }
@@ -388,6 +572,7 @@ ApplicationWindow {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     ospopup.close()
+                    osswipeview.decrementCurrentIndex()
                 }
             }
         }
@@ -437,6 +622,11 @@ ApplicationWindow {
                         }
                         Keys.onEnterPressed: Keys.onSpacePressed(event)
                         Keys.onReturnPressed: Keys.onSpacePressed(event)
+                        Keys.onRightPressed: {
+                            // Navigate into sublists but don't select an OS entry
+                            if (currentIndex != -1 && isOSsublist(model.get(currentIndex)))
+                                selectOSitem(model.get(currentIndex), true)
+                        }
                     }
                 }
             }
@@ -486,39 +676,115 @@ ApplicationWindow {
             }
             Keys.onEnterPressed: Keys.onSpacePressed(event)
             Keys.onReturnPressed: Keys.onSpacePressed(event)
+            Keys.onRightPressed: {
+                // Navigate into sublists but don't select an OS entry
+                if (currentIndex != -1 && isOSsublist(model.get(currentIndex)))
+                    selectOSitem(model.get(currentIndex), true)
+            }
+            Keys.onLeftPressed: {
+                osswipeview.decrementCurrentIndex()
+                ospopup.categorySelected = ""
+            }
         }
     }
 
     ListModel {
         id: osmodel
 
-        ListElement {
-            url: "internal://format"
-            icon: "icons/erase.png"
-            extract_size: 0
-            image_download_size: 0
-            extract_sha256: ""
-            contains_multiple_files: false
-            release_date: ""
-            subitems_url: ""
-            subitems_json: ""
-            name: qsTr("Erase")
-            description: qsTr("Format card as FAT32")
-            tooltip: ""
-            website: ""
-            init_format: ""
-        }
-
-        ListElement {
-            url: ""
-            icon: "icons/use_custom.png"
-            name: qsTr("Use custom")
-            description: qsTr("Select a custom .img from your computer")
-        }
-
         Component.onCompleted: {
             if (imageWriter.isOnline()) {
                 fetchOSlist();
+            }
+        }
+    }
+
+    Component {
+        id: hwdelegate
+
+        Item {
+            width: window.width-100
+            height: contentLayout.implicitHeight + 24
+            Accessible.name: name+".\n"+description
+
+            MouseArea {
+                id: hwMouseArea
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+
+                onEntered: {
+                    bgrect.mouseOver = true
+                }
+
+                onExited: {
+                    bgrect.mouseOver = false
+                }
+
+                onClicked: {
+                    selectHWitem(model)
+                }
+            }
+
+            Rectangle {
+               id: bgrect
+               anchors.fill: parent
+               color: "#f5f5f5"
+               visible: mouseOver && parent.ListView.view.currentIndex !== index
+               property bool mouseOver: false
+            }
+            Rectangle {
+               id: borderrect
+               implicitHeight: 1
+               implicitWidth: parent.width
+               color: "#dcdcdc"
+               y: parent.height
+            }
+
+            RowLayout {
+                id: contentLayout
+                anchors {
+                    left: parent.left
+                    top: parent.top
+                    right: parent.right
+                    margins: 12
+                }
+                spacing: 12
+
+                Image {
+                    source: typeof icon === "undefined" ? "" : icon
+                    Layout.preferredHeight: 64
+                    Layout.preferredWidth: 64
+                    sourceSize.width: 64
+                    sourceSize.height: 64
+                    fillMode: Image.PreserveAspectFit
+                    verticalAlignment: Image.AlignVCenter
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+
+                    Text {
+                        text: name
+                        elide: Text.ElideRight
+                        font.family: roboto.name
+                        font.bold: true
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        font.family: roboto.name
+                        text: description
+                        wrapMode: Text.WordWrap
+                        color: "#1a1a1a"
+                    }
+
+                    ToolTip {
+                        visible: hwMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
+                        delay: 1000
+                        text: typeof(tooltip) == "string" ? tooltip : ""
+                        clip: false
+                    }
+                }
             }
         }
     }
@@ -732,6 +998,16 @@ ApplicationWindow {
                     height: window.height-100
                     boundsBehavior: Flickable.StopAtBounds
                     highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+
+                    Label {
+                        anchors.fill: parent
+                        horizontalAlignment: Qt.AlignHCenter
+                        verticalAlignment: Qt.AlignVCenter
+                        visible: parent.count == 0
+                        text: qsTr("No storage devices found")
+                        font.bold: true
+                    }
+
                     ScrollBar.vertical: ScrollBar {
                         width: 10
                         policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
@@ -852,6 +1128,9 @@ ApplicationWindow {
 
     MsgPopup {
         id: msgpopup
+        onOpened: {
+            forceActiveFocus()
+        }
     }
 
     MsgPopup {
@@ -872,10 +1151,11 @@ ApplicationWindow {
         yesButton: true
         noButton: true
         title: qsTr("Warning")
+        modal: true
         onYes: {
-            langbar.visible = false
+            langbarRect.visible = false
+            writebutton.visible = false
             writebutton.enabled = false
-            customizebutton.visible = false
             cancelwritebutton.enabled = true
             cancelwritebutton.visible = true
             cancelverifybutton.enabled = true
@@ -886,6 +1166,7 @@ ApplicationWindow {
             progressBar.Material.accent = "#ffffff"
             osbutton.enabled = false
             dstbutton.enabled = false
+            hwbutton.enabled = false
             imageWriter.setVerifyEnabled(true)
             imageWriter.startWrite()
         }
@@ -894,6 +1175,10 @@ ApplicationWindow {
         {
             text = qsTr("All existing data on '%1' will be erased.<br>Are you sure you want to continue?").arg(dstbutton.text)
             openPopup()
+        }
+
+        onOpened: {
+            forceActiveFocus()
         }
     }
 
@@ -912,6 +1197,10 @@ ApplicationWindow {
 
     OptionsPopup {
         id: optionspopup
+        onSaveSettingsSignal: {
+            imageWriter.setSavedCustomizationSettings(settings)
+            usesavedsettingspopup.hasSavedSettings = true
+        }
     }
 
     UseSavedSettingsPopup {
@@ -922,35 +1211,21 @@ ApplicationWindow {
             confirmwritepopup.askForConfirmation()
         }
         onNo: {
+            imageWriter.setImageCustomization("", "", "", "", "")
+            confirmwritepopup.askForConfirmation()
+        }
+        onNoClearSettings: {
+            hasSavedSettings = false
+            optionspopup.clearCustomizationFields()
             imageWriter.clearSavedCustomizationSettings()
             confirmwritepopup.askForConfirmation()
         }
         onEditSettings: {
             optionspopup.openPopup()
         }
-    }
-
-    /* Utility functions */
-    function httpRequest(url, callback) {
-        var xhr = new XMLHttpRequest();
-        xhr.timeout = 5000
-        xhr.onreadystatechange = (function(x) {
-            return function() {
-                if (x.readyState === x.DONE)
-                {
-                    if (x.status === 200)
-                    {
-                        callback(x)
-                    }
-                    else
-                    {
-                        onError(qsTr("Error downloading OS list from Internet"))
-                    }
-                }
-            }
-        })(xhr)
-        xhr.open("GET", url)
-        xhr.send()
+        onCloseSettings: {
+            optionspopup.close()
+        }
     }
 
     /* Slots for signals imagewrite emits */
@@ -998,12 +1273,16 @@ ApplicationWindow {
         progressText.text = qsTr("Preparing to write... (%1)").arg(msg)
     }
 
+    function onOsListPrepared() {
+        fetchOSlist()
+    }
+
     function resetWriteButton() {
         progressText.visible = false
         progressBar.visible = false
-        customizebutton.visible = imageWriter.imageSupportsCustomization()
         osbutton.enabled = true
         dstbutton.enabled = true
+        hwbutton.enabled = true
         writebutton.visible = true
         writebutton.enabled = imageWriter.readyToWrite()
         cancelwritebutton.visible = false
@@ -1043,10 +1322,10 @@ ApplicationWindow {
         imageWriter.setSrc(file)
         osbutton.text = imageWriter.srcFileName()
         ospopup.close()
+        osswipeview.decrementCurrentIndex()
         if (imageWriter.readyToWrite()) {
             writebutton.enabled = true
         }
-        customizebutton.visible = imageWriter.imageSupportsCustomization()
     }
 
     function onCancelled() {
@@ -1055,6 +1334,10 @@ ApplicationWindow {
 
     function onFinalizing() {
         progressText.text = qsTr("Finalizing...")
+    }
+
+    function onNetworkInfo(msg) {
+        networkInfo.text = msg
     }
 
     function shuffle(arr) {
@@ -1080,40 +1363,122 @@ ApplicationWindow {
         }
     }
 
+    function filterItems(list, tags, matchingType)
+    {
+        if (!tags || !tags.length)
+            return
+
+        var i = list.length
+        while (i--) {
+            var entry = list[i]
+
+            if ("devices" in entry && entry["devices"].length) {
+                var foundTag = false
+
+                switch(matchingType) {
+                    case 0: /* exact matching */
+                    case 2: /* exact matching */
+                        for (var j in tags)
+                        {
+                            if (entry["devices"].includes(tags[j]))
+                            {
+                                foundTag = true
+                                break
+                            }
+                        }
+                        /* If there's no match, remove this item from the list. */
+                        if (!foundTag)
+                        {
+                            list.splice(i, 1)
+                            continue
+                        }
+                        break
+                    case 1: /* Exlusive by prefix matching */
+                    case 3: /* Inclusive by prefix matching */
+                        for (var deviceTypePrefix in tags) {
+                            for (var deviceSpec in entry["devices"]) {
+                                if (deviceSpec.startsWith(deviceTypePrefix)) {
+                                    foundTag = true
+                                    break
+                                }
+                            }
+                            /* Terminate outer loop early if we've already
+                             * decided it's a match
+                             */
+                            if (foundTag) {
+                                break
+                            }
+                        }
+                        /* If there's no match, remove this item from the list. */
+                        if (!foundTag)
+                        {
+                            list.splice(i, 1)
+                            continue
+                        }
+                        break
+                }
+            } else {
+                /* No device list attached? If we're in an exclusive mode that's bad news indeed. */
+                switch (matchingType) {
+                    case 0:
+                    case 1:
+                        if (!("subitems" in entry)) {
+                            /* If you're not carrying subitems, you're not going in. */
+                            list.splice(i, 1)
+                        }
+                        break
+                    case 2:
+                    case 3:
+                        /* Inclusive filtering. We're keeping this one. */
+                        break;
+                }
+            }
+
+            if ("subitems" in entry) {
+                filterItems(entry["subitems"], tags, hwTagMatchingType)
+
+                // If this sub-list has no items then hide it
+                if (entry["subitems"].length == 0) {
+                    list.splice(i, 1)
+                }
+            }
+        }
+    }
+
     function oslistFromJson(o) {
-        var oslist = false
+        var oslist_parsed = false
         var lang_country = Qt.locale().name
         if ("os_list_"+lang_country in o) {
-            oslist = o["os_list_"+lang_country]
+            oslist_parsed = o["os_list_"+lang_country]
         }
         else if (lang_country.includes("_")) {
             var lang = lang_country.substr(0, lang_country.indexOf("_"))
             if ("os_list_"+lang in o) {
-                oslist = o["os_list_"+lang]
+                oslist_parsed = o["os_list_"+lang]
             }
         }
 
-        if (!oslist) {
+        if (!oslist_parsed) {
             if (!"os_list" in o) {
                 onError(qsTr("Error parsing os_list.json"))
                 return false
             }
 
-            oslist = o["os_list"]
+            oslist_parsed = o["os_list"]
         }
 
-        checkForRandom(oslist)
+        checkForRandom(oslist_parsed)
 
         /* Flatten subitems to subitems_json */
-        for (var i in oslist) {
-            var entry = oslist[i];
+        for (var i in oslist_parsed) {
+            var entry = oslist_parsed[i];
             if ("subitems" in entry) {
                 entry["subitems_json"] = JSON.stringify(entry["subitems"])
                 delete entry["subitems"]
             }
         }
 
-        return oslist
+        return oslist_parsed
     }
 
     function selectNamedOS(name, collection)
@@ -1132,38 +1497,54 @@ ApplicationWindow {
     }
 
     function fetchOSlist() {
-        httpRequest(imageWriter.constantOsListUrl(), function (x) {
-            var o = JSON.parse(x.responseText)
-            var oslist = oslistFromJson(o)
-            if (oslist === false)
-                return
-            for (var i in oslist) {
-                osmodel.insert(osmodel.count-2, oslist[i])
+        var oslist_json = imageWriter.getFilteredOSlist();
+        var o = JSON.parse(oslist_json)
+        var oslist_parsed = oslistFromJson(o)
+        if (oslist_parsed === false)
+            return
+        osmodel.clear()
+        for (var i in oslist_parsed) {
+            osmodel.append(oslist_parsed[i])
+        }
+
+        if ("imager" in o) {
+            var imager = o["imager"]
+
+            if ("devices" in imager)
+            {
+                deviceModel.clear()
+                var devices = imager["devices"]
+                for (var j in devices)
+                {
+                    devices[j]["tags"] = JSON.stringify(devices[j]["tags"])
+                    deviceModel.append(devices[j])
+                    if ("default" in devices[j] && devices[j]["default"])
+                    {
+                        hwlist.currentIndex = deviceModel.count-1
+                    }
+                }
             }
 
-            if ("imager" in o) {
-                var imager = o["imager"]
-                if (imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
-                    if (!imageWriter.isEmbeddedMode() && imageWriter.isVersionNewer(imager["latest_version"])) {
-                        updatepopup.url = imager["url"]
-                        updatepopup.openPopup()
-                    }
-                }
-                if ("default_os" in imager) {
-                    selectNamedOS(imager["default_os"], osmodel)
-                }
-                if (imageWriter.isEmbeddedMode()) {
-                    if ("embedded_default_os" in imager) {
-                        selectNamedOS(imager["embedded_default_os"], osmodel)
-                    }
-                    if ("embedded_default_destination" in imager) {
-                        imageWriter.startDriveListPolling()
-                        setDefaultDest.drive = imager["embedded_default_destination"]
-                        setDefaultDest.start()
-                    }
+            if (imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
+                if (!imageWriter.isEmbeddedMode() && imageWriter.isVersionNewer(imager["latest_version"])) {
+                    updatepopup.url = imager["url"]
+                    updatepopup.openPopup()
                 }
             }
-        })
+            if ("default_os" in imager) {
+                selectNamedOS(imager["default_os"], osmodel)
+            }
+            if (imageWriter.isEmbeddedMode()) {
+                if ("embedded_default_os" in imager) {
+                    selectNamedOS(imager["embedded_default_os"], osmodel)
+                }
+                if ("embedded_default_destination" in imager) {
+                    imageWriter.startDriveListPolling()
+                    setDefaultDest.drive = imager["embedded_default_destination"]
+                    setDefaultDest.start()
+                }
+            }
+        }
     }
 
     Timer {
@@ -1206,6 +1587,78 @@ ApplicationWindow {
         return m
     }
 
+    function selectHWitem(hwmodel) {
+        /* Default is exclusive matching */
+        var inclusive = false
+
+        if (hwmodel.matching_type) {
+            switch (hwmodel.matching_type) {
+                case "exclusive":
+                    break;
+                case "inclusive":
+                    inclusive = true
+                    break;
+            }
+        }
+
+        imageWriter.setHWFilterList(hwmodel.tags, inclusive)
+
+        /* Reload list */
+        var oslist_json = imageWriter.getFilteredOSlist();
+        var o = JSON.parse(oslist_json)
+        var oslist_parsed = oslistFromJson(o)
+        if (oslist_parsed === false)
+            return
+
+        /* As we're filtering the OS list, we need to ensure we present a 'Recommended' OS.
+            * To do this, we exploit a convention of how we build the OS list. By convention,
+            * the preferred OS for a device is listed at the top level of the list, and is at the
+            * lowest index. So..
+            */
+        if (oslist_parsed.length != 0) {
+            var candidate = oslist_parsed[0]
+
+            if ("description" in candidate && !("subitems" in candidate)) {
+                candidate["description"] += " (Recommended)"
+            }
+        }
+
+        osmodel.clear()
+        for (var i in oslist_parsed) {
+            osmodel.append(oslist_parsed[i])
+        }
+
+        // When the HW device is changed, reset the OS selection otherwise
+        // you get a weird effect with the selection moving around in the list
+        // when the user next opens the OS list, and the user could still have
+        // an OS selected which isn't compatible with this HW device
+        oslist.currentIndex = -1
+        osswipeview.currentIndex = 0
+        imageWriter.setSrc("")
+        osbutton.text = qsTr("CHOOSE OS")
+        writebutton.enabled = false
+
+        hwbutton.text = hwmodel.name
+        hwpopup.close()
+    }
+
+    /// Is the item a sub-list or sub-sub-list in the OS selection model?
+    function isOSsublist(d) {
+        // Top level category
+        if (typeof(d.subitems_json) == "string" && d.subitems_json !== "") {
+            return true
+        }
+
+        // Sub-category
+        if (typeof(d.subitems_url) == "string" && d.subitems_url !== ""
+            && d.subitems_url !== "internal://back")
+        {
+            return true
+        }
+
+        return false
+    }
+
     function selectOSitem(d, selectFirstSubitem)
     {
         if (typeof(d.subitems_json) == "string" && d.subitems_json !== "") {
@@ -1234,19 +1687,7 @@ ApplicationWindow {
             }
             else
             {
-                ospopup.categorySelected = d.name
-                var suburl = d.subitems_url
-                var m = newSublist()
-
-                httpRequest(suburl, function (x) {
-                    var o = JSON.parse(x.responseText)
-                    var oslist = oslistFromJson(o)
-                    if (oslist === false)
-                        return
-                    for (var i in oslist) {
-                        m.append(oslist[i])
-                    }
-                })
+                console.log("Failure: Backend should have pre-flattened the JSON!");
 
                 osswipeview.itemAt(osswipeview.currentIndex+1).currentIndex = (selectFirstSubitem === true) ? 0 : -1
                 osswipeview.incrementCurrentIndex()
@@ -1259,9 +1700,9 @@ ApplicationWindow {
                 if (imageWriter.mountUsbSourceMedia()) {
                     var m = newSublist()
 
-                    var oslist = JSON.parse(imageWriter.getUsbSourceOSlist())
-                    for (var i in oslist) {
-                        m.append(oslist[i])
+                    var usboslist = JSON.parse(imageWriter.getUsbSourceOSlist())
+                    for (var i in usboslist) {
+                        m.append(usboslist[i])
                     }
                     osswipeview.itemAt(osswipeview.currentIndex+1).currentIndex = (selectFirstSubitem === true) ? 0 : -1
                     osswipeview.incrementCurrentIndex()
@@ -1275,10 +1716,10 @@ ApplicationWindow {
             imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
             osbutton.text = d.name
             ospopup.close()
+            osswipeview.decrementCurrentIndex()
             if (imageWriter.readyToWrite()) {
                 writebutton.enabled = true
             }
-            customizebutton.visible = imageWriter.imageSupportsCustomization()
         }
     }
 

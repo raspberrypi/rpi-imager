@@ -7,11 +7,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2018, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -19,6 +19,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -37,8 +39,12 @@
 #define CURL_VOLATILE volatile
 #endif
 
+#define CURL_GOOD_SHARE 0x7e117a1e
+#define GOOD_SHARE_HANDLE(x) ((x) && (x)->magic == CURL_GOOD_SHARE)
+
 /* this struct is libcurl-private, don't export details */
 struct Curl_share {
+  unsigned int magic; /* CURL_GOOD_SHARE */
   unsigned int specifier;
   CURL_VOLATILE unsigned int dirty;
 
@@ -46,17 +52,21 @@ struct Curl_share {
   curl_unlock_function unlockfunc;
   void *clientdata;
   struct conncache conn_cache;
-  struct curl_hash hostcache;
+  struct Curl_hash hostcache;
 #if !defined(CURL_DISABLE_HTTP) && !defined(CURL_DISABLE_COOKIES)
   struct CookieInfo *cookies;
 #endif
 #ifdef USE_LIBPSL
   struct PslCache psl;
 #endif
-
-  struct curl_ssl_session *sslsession;
+#ifndef CURL_DISABLE_HSTS
+  struct hsts *hsts;
+#endif
+#ifdef USE_SSL
+  struct Curl_ssl_session *sslsession;
   size_t max_ssl_sessions;
   long sessionage;
+#endif
 };
 
 CURLSHcode Curl_share_lock(struct Curl_easy *, curl_lock_data,

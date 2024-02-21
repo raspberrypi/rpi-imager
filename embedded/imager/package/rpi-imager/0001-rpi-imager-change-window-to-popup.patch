@@ -1,0 +1,50 @@
+diff --git src/OptionsPopup.qml src/OptionsPopup.qml
+index c333098..011d7d6 100644
+--- src/OptionsPopup.qml
++++ src/OptionsPopup.qml
+@@ -10,13 +10,19 @@ import QtQuick.Controls.Material 2.2
+ import QtQuick.Window 2.15
+ import "qmlcomponents"
+ 
+-Window {
++Popup {
+     id: popup
+     width: cl.implicitWidth+cl.spacing
+-    minimumWidth: width
+-    maximumWidth: width
+-    minimumHeight: 125
+-    height: Math.min(750, cl.implicitHeight)
++    /* Only in embedded version */
++    x: (parent.width-width)/2
++    y: 10
++    height: parent.height-20
++    property string title
++
++    function show() { open() }
++    function raise() { }
++    /*  */
++
+     title: qsTr("OS Customization")
+ 
+     property bool initialized: false
+diff --git src/main.qml src/main.qml
+index bd76442..f74300c 100644
+--- src/main.qml
++++ src/main.qml
+@@ -1195,6 +1195,16 @@ ApplicationWindow {
+             imageWriter.setSavedCustomizationSettings(settings)
+             usesavedsettingspopup.hasSavedSettings = true
+         }
++        onClosed: {
++            // When the options popup closes on embedded focus doesn't
++            // automatically return to the usesavedsettings msgpopup, so
++            // set the focus manually (but only if this msgpopup is actually
++            // open. It might not be, e.g. if the user opened settings via
++            // the keyboard shortcut).
++            if (usesavedsettingspopup.opened) {
++                usesavedsettingspopup.forceActiveFocus()
++            }
++        }
+     }
+ 
+     UseSavedSettingsPopup {

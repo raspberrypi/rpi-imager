@@ -6,17 +6,17 @@
  * Copyright (C) 2022 Raspberry Pi Ltd
  */
 
-#include <QObject>
+#include "wlancredentials.h"
 
-class NetworkManagerApi : public QObject
+class NetworkManagerApi : public WlanCredentials
 {
-    Q_OBJECT
 public:
-    explicit NetworkManagerApi(QObject *parent = nullptr);
-    QString getPSK();
+    NetworkManagerApi();
+    virtual QByteArray getSSID();
+    virtual QByteArray getPSK();
 
-signals:
-
+protected:
+    QByteArray _getSSIDofInterface(const QByteArray &iface);
 };
 
 #endif // NETWORKMANAGERAPI_H

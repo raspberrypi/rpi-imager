@@ -244,6 +244,40 @@ void UDisks2Api::unmountDrive(const QString &device)
     _unmountDrive(devpath);
 }
 
+void UDisks2Api::ejectDrive(const QString &device)
+{
+    QString devpath = _resolveDevice(device);
+    if (devpath.isEmpty())
+        return;
+
+    QDBusInterface blockdevice("org.freedesktop.UDisks2", devpath,
+                               "org.freedesktop.UDisks2.Block", QDBusConnection::systemBus());
+
+    bool hintAuto = blockdevice.property("HintAuto").toBool();
+    if (hintAuto)
+    {
+        qDebug() << "Deactivating auto-mount for" << device;
+        blockdevice.setProperty("HintAuto", false);
+    }
+
+    /* Force kernel to rescan partitions now. Otherwise it may still be doing it
+       while we are ejecting, resulting in read IO errors in dmesg */
+    QVariantMap rescanOptions;
+    blockdevice.call("Rescan", rescanOptions);
+
+    _unmountDrive(devpath);
+    QString drivepath = blockdevice.property("Drive").value<QDBusObjectPath>().path();
+
+    if (!drivepath.isEmpty() && drivepath != "/")
+    {
+        QDBusInterface drive("org.freedesktop.UDisks2", drivepath,
+                             "org.freedesktop.UDisks2.Drive", QDBusConnection::systemBus());
+        QVariantMap ejectOptions;
+        qDebug() << "Ejecting drive: " << drive.property("Id").toString();
+        drive.call("Eject", ejectOptions);
+    }
+}
+
 QByteArrayList UDisks2Api::mountPoints(const QString &partitionDevice)
 {
     QString devpath = _resolveDevice(partitionDevice);

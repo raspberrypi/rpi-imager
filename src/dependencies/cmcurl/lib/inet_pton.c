@@ -1,6 +1,6 @@
 /* This is from the BIND 4.9.4 release, modified to compile by itself */
 
-/* Copyright (c) 1996 by Internet Software Consortium.
+/* Copyright (c) Internet Software Consortium.
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,6 +14,8 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
  * ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
  * SOFTWARE.
+ *
+ * SPDX-License-Identifier: ISC
  */
 
 #include "curl_setup.h"
@@ -37,14 +39,21 @@
 #define INT16SZ          2
 
 /*
+ * If ENABLE_IPV6 is disabled, we still want to parse IPv6 addresses, so make
+ * sure we have _some_ value for AF_INET6 without polluting our fake value
+ * everywhere.
+ */
+#if !defined(ENABLE_IPV6) && !defined(AF_INET6)
+#define AF_INET6 (AF_INET + 1)
+#endif
+
+/*
  * WARNING: Don't even consider trying to compile this on a system where
  * sizeof(int) < 4.  sizeof(int) > 4 is fine; all the world's not a VAX.
  */
 
 static int      inet_pton4(const char *src, unsigned char *dst);
-#ifdef ENABLE_IPV6
 static int      inet_pton6(const char *src, unsigned char *dst);
-#endif
 
 /* int
  * inet_pton(af, src, dst)
@@ -68,10 +77,8 @@ Curl_inet_pton(int af, const char *src, void *dst)
   switch(af) {
   case AF_INET:
     return (inet_pton4(src, (unsigned char *)dst));
-#ifdef ENABLE_IPV6
   case AF_INET6:
     return (inet_pton6(src, (unsigned char *)dst));
-#endif
   default:
     errno = EAFNOSUPPORT;
     return (-1);
@@ -112,7 +119,7 @@ inet_pton4(const char *src, unsigned char *dst)
       if(val > 255)
         return (0);
       *tp = (unsigned char)val;
-      if(! saw_digit) {
+      if(!saw_digit) {
         if(++octets > 4)
           return (0);
         saw_digit = 1;
@@ -133,7 +140,6 @@ inet_pton4(const char *src, unsigned char *dst)
   return (1);
 }
 
-#ifdef ENABLE_IPV6
 /* int
  * inet_pton6(src, dst)
  *      convert presentation level address to network order binary form.
@@ -174,7 +180,7 @@ inet_pton6(const char *src, unsigned char *dst)
     pch = strchr((xdigits = xdigits_l), ch);
     if(!pch)
       pch = strchr((xdigits = xdigits_u), ch);
-    if(pch != NULL) {
+    if(pch) {
       val <<= 4;
       val |= (pch - xdigits);
       if(++saw_xdigit > 4)
@@ -211,7 +217,7 @@ inet_pton6(const char *src, unsigned char *dst)
     *tp++ = (unsigned char) ((val >> 8) & 0xff);
     *tp++ = (unsigned char) (val & 0xff);
   }
-  if(colonp != NULL) {
+  if(colonp) {
     /*
      * Since some memmove()'s erroneously fail to handle
      * overlapping regions, we'll do the shift by hand.
@@ -232,6 +238,5 @@ inet_pton6(const char *src, unsigned char *dst)
   memcpy(dst, tmp, IN6ADDRSZ);
   return (1);
 }
-#endif /* ENABLE_IPV6 */
 
 #endif /* HAVE_INET_PTON */

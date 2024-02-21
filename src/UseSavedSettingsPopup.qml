@@ -11,16 +11,21 @@ import "qmlcomponents"
 
 Popup {
     id: msgpopup
-    x: 75
+    x: (parent.width-width)/2
     y: (parent.height-height)/2
-    width: parent.width-150
+    width: Math.max(buttons.width+10, parent.width-150)
     height: msgpopupbody.implicitHeight+150
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    modal: true
+
+    property bool hasSavedSettings: false
 
     signal yes()
     signal no()
+    signal noClearSettings()
     signal editSettings()
+    signal closeSettings()
 
     // background of title
     Rectangle {
@@ -69,7 +74,7 @@ Popup {
             Layout.topMargin: 10
             font.family: roboto.name
             font.bold: true
-            text: qsTr("Warning: advanced settings set")
+            text: qsTr("Use OS customization?")
         }
 
         Text {
@@ -82,43 +87,55 @@ Popup {
             Layout.fillHeight: true
             Layout.leftMargin: 25
             Layout.topMargin: 25
+            Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
             Accessible.name: text.replace(/<\/?[^>]+(>|$)/g, "")
-            text: qsTr("Would you like to apply the image customization settings saved earlier?")
+            text: qsTr("Would you like to apply OS customization settings?")
         }
 
         RowLayout {
             Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
             Layout.bottomMargin: 10
             spacing: 20
+            id: buttons
 
-            ImButton {
+            ImButtonRed {
+                text: qsTr("EDIT SETTINGS")
+                onClicked: {
+                    // Don't close this dialog when "edit settings" is
+                    // clicked, as we don't want the user to fall back to the
+                    // start of the flow. After editing the settings we want
+                    // then to once again have the choice about whether to use
+                    // customisation or not.
+                    msgpopup.editSettings()
+                }
+            }
+
+            ImButtonRed {
+                id: noAndClearButton
                 text: qsTr("NO, CLEAR SETTINGS")
                 onClicked: {
                     msgpopup.close()
-                    msgpopup.no()
+                    msgpopup.noClearSettings()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
+                enabled: hasSavedSettings
             }
 
-            ImButton {
+            ImButtonRed {
+                id: yesButton
                 text: qsTr("YES")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.yes()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
+                enabled: hasSavedSettings
             }
 
-            ImButton {
-                text: qsTr("EDIT SETTINGS")
+            ImButtonRed {
+                text: qsTr("NO")
                 onClicked: {
                     msgpopup.close()
-                    msgpopup.editSettings()
+                    msgpopup.no()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
             Text { text: " " }
@@ -127,7 +144,20 @@ Popup {
 
     function openPopup() {
         open()
+        if (imageWriter.hasSavedCustomizationSettings()) {
+            /* HACK: Bizarrely, the button enabled characteristics are not re-evaluated on open.
+             * So, let's manually _force_ these buttons to be enabled */
+            hasSavedSettings = true
+        }
+
         // trigger screen reader to speak out message
         msgpopupbody.forceActiveFocus()
+    }
+
+    onClosed: {
+        // Close the advanced options window if this msgbox is dismissed,
+        // in order to prevent the user from starting writing while the
+        // advanced options window is open.
+        closeSettings()
     }
 }

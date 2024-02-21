@@ -3,22 +3,22 @@
  * Copyright (C) 2021 Raspberry Pi Ltd
  */
 
-import QtQuick 2.9
+import QtQuick 2.15
 import QtQuick.Controls 2.2
-import QtQuick.Layouts 1.0
+import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.2
+import QtQuick.Window 2.15
 import "qmlcomponents"
 
-Popup {
+Window {
     id: popup
-    //x: 62
-    x: (parent.width-width)/2
-    y: 10
-    //width: parent.width-125
-    width: popupbody.implicitWidth+60
-    height: parent.height-20
-    padding: 0
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    width: cl.implicitWidth+cl.spacing
+    minimumWidth: width
+    maximumWidth: width
+    minimumHeight: 125
+    height: Math.min(750, cl.implicitHeight)
+    title: qsTr("OS Customization")
+
     property bool initialized: false
     property bool hasSavedSettings: false
     property string config
@@ -29,54 +29,17 @@ Popup {
     property string cloudinitwrite
     property string cloudinitnetwork
 
-    // background of title
-    Rectangle {
-        color: "#f5f5f5"
-        anchors.right: parent.right
-        anchors.top: parent.top
-        height: 35
-        width: parent.width
-    }
-    // line under title
-    Rectangle {
-        color: "#afafaf"
-        width: parent.width
-        y: 35
-        implicitHeight: 1
-    }
-
-    Text {
-        id: msgx
-        text: "X"
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.rightMargin: 25
-        anchors.topMargin: 10
-        font.family: roboto.name
-        font.bold: true
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                popup.close()
-            }
-        }
-    }
+    signal saveSettingsSignal(var settings)
 
     ColumnLayout {
-        spacing: 20
+        id: cl
+        spacing: 10
         anchors.fill: parent
 
-        Text {
-            id: popupheader
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            Layout.fillWidth: true
-            Layout.topMargin: 10
-            font.family: roboto.name
-            font.bold: true
-            text: qsTr("Advanced options")
+        // Keys handlers can only be attached to Items. Window is not an
+        // Item, but ColumnLayout is, so put this handler here.
+        Keys.onEscapePressed: {
+            popup.close()
         }
 
         ScrollView {
@@ -88,304 +51,343 @@ Popup {
             Layout.leftMargin: 25
             Layout.topMargin: 10
             clip: true
-            ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+            //ScrollBar.vertical.policy: ScrollBar.AlwaysOn
 
-          ColumnLayout {
+            ColumnLayout {
+                TabBar {
+                    id: bar
+                    Layout.fillWidth: true
 
-            GroupBox {
-                title: qsTr("Image customization options")
-                label: RowLayout {
-                    Label {
-                        text: parent.parent.title
-                    }
-                    ComboBox {
-                        id: comboSaveSettings
-                        model: {
-                            [qsTr("for this session only"),
-                             qsTr("to always use")]
+                    TabButton {
+                        text: qsTr("General")
+                        onClicked: {
+                            if (chkSetUser.checked && !fieldUserPassword.length) {
+                                fieldUserPassword.forceActiveFocus()
+                            }
                         }
-                        Layout.minimumWidth: 250
-                        Layout.maximumHeight: 40
-                        enabled: !imageWriter.isEmbeddedMode()
+                    }
+                    TabButton {
+                        text: qsTr("Services")
+                    }
+                    TabButton {
+                        text: qsTr("Options")
                     }
                 }
 
-                ColumnLayout {
-                    spacing: -10
+                GroupBox {
+                    StackLayout {
+                        width: parent.width
+                        currentIndex: bar.currentIndex
 
-                    RowLayout {
-                        ImCheckBox {
-                            id: chkHostname
-                            text: qsTr("Set hostname:")
-                            onCheckedChanged: {
-                                if (checked) {
-                                    fieldHostname.forceActiveFocus()
+                        ColumnLayout {
+                            // General tab
+                            spacing: -10
+
+                            RowLayout {
+                                ImCheckBox {
+                                    id: chkHostname
+                                    text: qsTr("Set hostname:")
+                                    onCheckedChanged: {
+                                        if (checked) {
+                                            fieldHostname.forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                TextField {
+                                    id: fieldHostname
+                                    enabled: chkHostname.checked
+                                    text: "raspberrypi"
+                                    selectByMouse: true
+                                    maximumLength: 253
+                                    validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
+                                }
+                                Text {
+                                    text : ".local"
+                                    color: chkHostname.checked ? "black" : "grey"
                                 }
                             }
-                        }
-                        TextField {
-                            id: fieldHostname
-                            enabled: chkHostname.checked
-                            text: "raspberrypi"
-                            /* FIXME: use RegularExpressionValidator instead when moving to newer Qt version.
-                               It is not available in 5.12 that is still being used by Ubuntu 20 LTS though */
-                            validator: RegExpValidator { regExp: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
-                        }
-                        Text {
-                            text : ".local"
-                            color: chkHostname.checked ? "black" : "grey"
-                        }
-                    }
-                    ImCheckBox {
-                        id: chkSSH
-                        text: qsTr("Enable SSH")
-                        onCheckedChanged: {
-                            if (checked) {
-                                if (!radioPasswordAuthentication.checked && !radioPubKeyAuthentication.checked) {
-                                    radioPasswordAuthentication.checked = true
-                                }
-                                if (radioPasswordAuthentication.checked) {
-                                    chkSetUser.checked = true
-                                    if (!fieldUserPassword.length) {
+
+                            ImCheckBox {
+                                id: chkSetUser
+                                text: qsTr("Set username and password")
+                                onCheckedChanged: {
+                                    if (!checked && chkSSH.checked && radioPasswordAuthentication.checked) {
+                                        checked = true;
+                                    }
+                                    if (checked && !fieldUserPassword.length) {
                                         fieldUserPassword.forceActiveFocus()
                                     }
                                 }
                             }
-                        }
-                    }
-                    ColumnLayout {
-                        enabled: chkSSH.checked
-                        Layout.leftMargin: 40
-                        spacing: -10
 
-                        ImRadioButton {
-                            id: radioPasswordAuthentication
-                            text: qsTr("Use password authentication")
-                            onCheckedChanged: {
-                                if (checked) {
-                                    chkSetUser.checked = true
-                                    fieldUserPassword.forceActiveFocus()
-                                }
-                            }
-                        }
-                        ImRadioButton {
-                            id: radioPubKeyAuthentication
-                            text: qsTr("Allow public-key authentication only")
-                            onCheckedChanged: {
-                                if (checked) {
-                                    if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
-                                        chkSetUser.checked = false
+                            ColumnLayout {
+                                enabled: chkSetUser.checked
+                                Layout.leftMargin: 40
+                                spacing: -5
+
+                                GridLayout {
+                                    columns: 2
+                                    columnSpacing: 10
+                                    rowSpacing: -5
+
+                                    Text {
+                                        text: qsTr("Username:")
+                                        color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
                                     }
-                                    fieldPublicKey.forceActiveFocus()
-                                }
-                            }
-                        }
-                        GridLayout {
-                            Layout.leftMargin: 40
-                            columns: 2
-                            columnSpacing: 10
-                            rowSpacing: -5
-                            enabled: radioPubKeyAuthentication.checked
+                                    TextField {
+                                        id: fieldUserName
+                                        text: "pi"
+                                        Layout.minimumWidth: 200
+                                        selectByMouse: true
+                                        property bool indicateError: false
+                                        maximumLength: 31
+                                        validator: RegularExpressionValidator { regularExpression: /^[a-z][a-z0-9-]{0,30}$/ }
 
-                            Text {
-                                text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
-                                color: parent.enabled ? "black" : "grey"
-                            }
-                            TextField {
-                                id: fieldPublicKey
-                                Layout.minimumWidth: 200
-                            }
-                        }
-                    }
-
-                    ImCheckBox {
-                        id: chkSetUser
-                        text: qsTr("Set username and password")
-                        onCheckedChanged: {
-                            if (!checked && chkSSH.checked && radioPasswordAuthentication.checked) {
-                                checked = true;
-                            }
-                        }
-                    }
-
-                    ColumnLayout {
-                        enabled: chkSetUser.checked
-                        Layout.leftMargin: 40
-                        spacing: -5
-
-                        GridLayout {
-                            columns: 2
-                            columnSpacing: 10
-                            rowSpacing: -5
-
-                            Text {
-                                text: qsTr("Username:")
-                                color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
-                            }
-                            TextField {
-                                id: fieldUserName
-                                text: "pi"
-                                Layout.minimumWidth: 200
-                                property bool indicateError: false
-
-                                onTextEdited: {
-                                    indicateError = false
-                                }
-                            }
-
-                            Text {
-                                text: qsTr("Password:")
-                                color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
-                            }
-                            TextField {
-                                id: fieldUserPassword
-                                echoMode: TextInput.Password
-                                Layout.minimumWidth: 200
-                                property bool alreadyCrypted: false
-                                property bool indicateError: false
-
-                                onTextEdited: {
-                                    if (alreadyCrypted) {
-                                        /* User is trying to edit saved
-                                           (crypted) password, clear field */
-                                        alreadyCrypted = false
-                                        clear()
+                                        onTextEdited: {
+                                            indicateError = false
+                                        }
                                     }
-                                    if (indicateError) {
+
+                                    Text {
+                                        text: qsTr("Password:")
+                                        color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
+                                    }
+                                    TextField {
+                                        id: fieldUserPassword
+                                        echoMode: TextInput.Password
+                                        passwordMaskDelay: 2000 //ms
+                                        Layout.minimumWidth: 200
+                                        selectByMouse: true
+                                        property bool alreadyCrypted: false
+                                        property bool indicateError: false
+
+                                        Keys.onPressed: (event)=> {
+                                            if (alreadyCrypted) {
+                                                /* User is trying to edit saved
+                                                   (crypted) password, clear field */
+                                                alreadyCrypted = false
+                                                clear()
+                                            }
+
+                                            // Do not mark the event as accepted, so that it may
+                                            // propagate down to the underlying TextField.
+                                            event.accepted = false
+                                        }
+
+                                        onTextEdited: {
+                                            if (indicateError) {
+                                                indicateError = false
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            ImCheckBox {
+                                id: chkWifi
+                                text: qsTr("Configure wireless LAN")
+                                onCheckedChanged: {
+                                    if (checked) {
+                                        if (!fieldWifiSSID.length) {
+                                            fieldWifiSSID.forceActiveFocus()
+                                        } else if (!fieldWifiPassword.length) {
+                                            fieldWifiPassword.forceActiveFocus()
+                                        }
+                                    }
+                                }
+                            }
+                            GridLayout {
+                                enabled: chkWifi.checked
+                                Layout.leftMargin: 40
+                                columns: 2
+                                columnSpacing: 10
+                                rowSpacing: -5
+
+                                Text {
+                                    text: qsTr("SSID:")
+                                    color: parent.enabled ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
+                                }
+                                TextField {
+                                    id: fieldWifiSSID
+                                    Layout.minimumWidth: 200
+                                    selectByMouse: true
+                                    property bool indicateError: false
+                                    onTextEdited: {
                                         indicateError = false
                                     }
                                 }
-                            }
-                        }
-                    }
 
-                    ImCheckBox {
-                        id: chkWifi
-                        text: qsTr("Configure wireless LAN")
-                        onCheckedChanged: {
-                            if (checked) {
-                                if (!fieldWifiSSID.length) {
-                                    fieldWifiSSID.forceActiveFocus()
-                                } else if (!fieldWifiPassword.length) {
-                                    fieldWifiPassword.forceActiveFocus()
+                                Text {
+                                    text: qsTr("Password:")
+                                    color: parent.enabled ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
+                                }
+                                TextField {
+                                    id: fieldWifiPassword
+                                    Layout.minimumWidth: 200
+                                    selectByMouse: true
+                                    echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
+                                    property bool indicateError: false
+                                    onTextEdited: {
+                                        indicateError = false
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.columnSpan: 2
+
+                                    ImCheckBox {
+                                        id: chkShowPassword
+                                        text: qsTr("Show password")
+                                        checked: true
+                                    }
+                                    ImCheckBox {
+                                        id: chkWifiSSIDHidden
+                                        Layout.columnSpan: 2
+                                        text: qsTr("Hidden SSID")
+                                        checked: false
+                                    }
+                                }
+
+                                Text {
+                                    text: qsTr("Wireless LAN country:")
+                                    color: parent.enabled ? "black" : "grey"
+                                }
+                                ComboBox {
+                                    id: fieldWifiCountry
+                                    editable: true
+                                }
+                            }
+
+                            ImCheckBox {
+                                id: chkLocale
+                                text: qsTr("Set locale settings")
+                            }
+                            GridLayout {
+                                enabled: chkLocale.checked
+                                Layout.leftMargin: 40
+                                columns: 2
+                                columnSpacing: 10
+                                rowSpacing: -5
+
+                                Text {
+                                    text: qsTr("Time zone:")
+                                    color: parent.enabled ? "black" : "grey"
+                                }
+                                ComboBox {
+                                    id: fieldTimezone
+                                    editable: true
+                                    Layout.minimumWidth: 200
+                                }
+
+                                Text {
+                                    text: qsTr("Keyboard layout:")
+                                    color: parent.enabled ? "black" : "grey"
+                                }
+                                ComboBox {
+                                    id: fieldKeyboardLayout
+                                    editable: true
+                                    Layout.minimumWidth: 200
                                 }
                             }
                         }
-                    }
-                    GridLayout {
-                        enabled: chkWifi.checked
-                        Layout.leftMargin: 40
-                        columns: 2
-                        columnSpacing: 10
-                        rowSpacing: -5
 
-                        Text {
-                            text: qsTr("SSID:")
-                            color: parent.enabled ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
-                        }
-                        TextField {
-                            id: fieldWifiSSID
-                            Layout.minimumWidth: 200
-                            property bool indicateError: false
-                            onTextEdited: {
-                                indicateError = false
+                        ColumnLayout {
+                            // Remote access tab
+                            spacing: -10
+
+                            ImCheckBox {
+                                id: chkSSH
+                                text: qsTr("Enable SSH")
+                                onCheckedChanged: {
+                                    if (checked) {
+                                        if (!radioPasswordAuthentication.checked && !radioPubKeyAuthentication.checked) {
+                                            radioPasswordAuthentication.checked = true
+                                        }
+                                        if (radioPasswordAuthentication.checked) {
+                                            chkSetUser.checked = true
+                                        }
+                                    }
+                                }
+                            }
+                            ColumnLayout {
+                                enabled: chkSSH.checked
+                                Layout.leftMargin: 40
+                                spacing: -10
+
+                                ImRadioButton {
+                                    id: radioPasswordAuthentication
+                                    text: qsTr("Use password authentication")
+                                    onCheckedChanged: {
+                                        if (checked) {
+                                            chkSetUser.checked = true
+                                            //fieldUserPassword.forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                ImRadioButton {
+                                    id: radioPubKeyAuthentication
+                                    text: qsTr("Allow public-key authentication only")
+                                    onCheckedChanged: {
+                                        if (checked) {
+                                            if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
+                                                chkSetUser.checked = false
+                                            }
+                                            fieldPublicKey.forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                GridLayout {
+                                    Layout.leftMargin: 40
+                                    columns: 1
+                                    columnSpacing: 10
+                                    rowSpacing: -5
+                                    enabled: radioPubKeyAuthentication.checked
+
+                                    Text {
+                                        text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
+                                        color: parent.enabled ? "black" : "grey"
+                                        textFormat: Text.PlainText
+                                    }
+                                    TextArea {
+                                        id: fieldPublicKey
+                                        wrapMode: TextEdit.WrapAnywhere
+                                        Layout.minimumWidth: 400
+                                        selectByMouse: true
+                                    }
+
+                                    ImButton {
+                                        text: qsTr("RUN SSH-KEYGEN")
+                                        enabled: imageWriter.hasSshKeyGen() && !imageWriter.hasPubKey()
+                                        onClicked: {
+                                            enabled = false
+                                            imageWriter.generatePubKey()
+                                            fieldPublicKey.text = imageWriter.getDefaultPubKey()
+                                        }
+                                    }
+                                }
                             }
                         }
 
-                        ImCheckBox {
-                            id: chkWifiSSIDHidden
-                            Layout.columnSpan: 2
-                            text: qsTr("Hidden SSID")
-                            checked: false
-                        }
+                        ColumnLayout {
+                            // Options tab
+                            spacing: -10
 
-                        Text {
-                            text: qsTr("Password:")
-                            color: parent.enabled ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
-                        }
-                        TextField {
-                            id: fieldWifiPassword
-                            Layout.minimumWidth: 200
-                            echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
-                            property bool indicateError: false
-                            onTextEdited: {
-                                indicateError = false
+                            ImCheckBox {
+                                id: chkBeep
+                                text: qsTr("Play sound when finished")
                             }
-                        }
-
-                        ImCheckBox {
-                            id: chkShowPassword
-                            Layout.columnSpan: 2
-                            text: qsTr("Show password")
-                            checked: true
-                        }
-
-                        Text {
-                            text: qsTr("Wireless LAN country:")
-                            color: parent.enabled ? "black" : "grey"
-                        }
-                        ComboBox {
-                            id: fieldWifiCountry
-                            editable: true
-                        }
-                    }
-
-                    ImCheckBox {
-                        id: chkLocale
-                        text: qsTr("Set locale settings")
-                    }
-                    GridLayout {
-                        enabled: chkLocale.checked
-                        Layout.leftMargin: 40
-                        columns: 2
-                        columnSpacing: 10
-                        rowSpacing: -5
-
-                        Text {
-                            text: qsTr("Time zone:")
-                            color: parent.enabled ? "black" : "grey"
-                        }
-                        ComboBox {
-                            id: fieldTimezone
-                            editable: true
-                            Layout.minimumWidth: 200
-                        }
-
-                        Text {
-                            text: qsTr("Keyboard layout:")
-                            color: parent.enabled ? "black" : "grey"
-                        }
-                        ComboBox {
-                            id: fieldKeyboardLayout
-                            editable: true
-                            Layout.minimumWidth: 200
+                            ImCheckBox {
+                                id: chkEject
+                                text: qsTr("Eject media when finished")
+                            }
+                            ImCheckBox {
+                                id: chkTelemtry
+                                text: qsTr("Enable telemetry")
+                            }
                         }
                     }
                 }
             }
-
-            GroupBox {
-                title: qsTr("Persistent settings")
-                Layout.fillWidth: true
-
-                ColumnLayout {
-                    spacing: -10
-
-                    ImCheckBox {
-                        id: chkBeep
-                        text: qsTr("Play sound when finished")
-                    }
-                    ImCheckBox {
-                        id: chkEject
-                        text: qsTr("Eject media when finished")
-                    }
-                    ImCheckBox {
-                        id: chkTelemtry
-                        text: qsTr("Enable telemetry")
-                    }
-                }
-            }
-          }
         }
 
         RowLayout {
@@ -393,25 +395,32 @@ Popup {
             Layout.bottomMargin: 10
             spacing: 20
 
-            ImButton {
+            ImButtonRed {
                 text: qsTr("SAVE")
                 onClicked: {
                     if (chkSetUser.checked && fieldUserPassword.text.length == 0)
                     {
                         fieldUserPassword.indicateError = true
                         fieldUserPassword.forceActiveFocus()
+                        bar.currentIndex = 0
                         return
                     }
                     if (chkSetUser.checked && fieldUserName.text.length == 0)
                     {
                         fieldUserName.indicateError = true
                         fieldUserName.forceActiveFocus()
+                        bar.currentIndex = 0
                         return
                     }
 
                     if (chkWifi.checked)
                     {
-                        if (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64)
+                        // Valid Wi-Fi PSKs are:
+                        // - 0 characters (indicating an open network)
+                        // - 8-63 characters (passphrase)
+                        // - 64 characters (hashed passphrase, as hex)
+                        if (fieldWifiPassword.text.length > 0 &&
+                            (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64))
                         {
                             fieldWifiPassword.indicateError = true
                             fieldWifiPassword.forceActiveFocus()
@@ -423,6 +432,7 @@ Popup {
                         }
                         if (fieldWifiSSID.indicateError || fieldWifiPassword.indicateError)
                         {
+                            bar.currentIndex = 0
                             return
                         }
                     }
@@ -431,8 +441,6 @@ Popup {
                     saveSettings()
                     popup.close()
                 }
-                Material.foreground: activeFocus ? "#d1dcfb" : "#ffffff"
-                Material.background: "#c51a4a"
             }
 
             Text { text: " " }
@@ -450,7 +458,6 @@ Popup {
         fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
 
         if (Object.keys(settings).length) {
-            comboSaveSettings.currentIndex = 1
             hasSavedSettings = true
         }
         if ('hostname' in settings) {
@@ -477,7 +484,10 @@ Popup {
         if ('sshUserName' in settings) {
             fieldUserName.text = settings.sshUserName
             chkSetUser.checked = true
+        } else {
+            fieldUserName.text = imageWriter.getCurrentUser()
         }
+
         if ('wifiSSID' in settings) {
             fieldWifiSSID.text = settings.wifiSSID
             if ('wifiSSIDHidden' in settings && settings.wifiSSIDHidden) {
@@ -494,7 +504,7 @@ Popup {
             fieldWifiCountry.currentIndex = fieldWifiCountry.find("GB")
             fieldWifiSSID.text = imageWriter.getSSID()
             if (fieldWifiSSID.text.length) {
-                fieldWifiPassword.text = imageWriter.getPSK(fieldWifiSSID.text)
+                fieldWifiPassword.text = imageWriter.getPSK()
                 if (fieldWifiPassword.text.length) {
                     chkShowPassword.checked = false
                     if (Qt.platform.os == "osx") {
@@ -533,7 +543,7 @@ Popup {
                 /* Lacking an easy cross-platform to fetch keyboard layout
                    from host system, just default to "gb" for people in
                    UK time zone for now, and "us" for everyone else */
-                if (tz == "Europe/London") {
+                if (tz === "Europe/London") {
                     fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("gb")
                 } else {
                     fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")
@@ -554,9 +564,15 @@ Popup {
     function openPopup() {
         if (!initialized) {
             initialize()
+            if (imageWriter.hasSavedCustomizationSettings())
+            {
+                applySettings()
+            }
         }
 
-        open()
+        //open()
+        show()
+        raise()
         popupbody.forceActiveFocus()
     }
 
@@ -570,7 +586,7 @@ Popup {
         firstrun += s+"\n"
     }
     function escapeshellarg(arg) {
-        return "'"+arg.replace(/'/g, "\\'")+"'"
+        return "'"+arg.replace(/'/g, "'\"'\"'")+"'"
     }
     function addCloudInit(s) {
         cloudinit += s+"\n"
@@ -712,7 +728,11 @@ Popup {
                 wpaconfig += "\tscan_ssid=1\n"
             }
             wpaconfig += "\tssid=\""+fieldWifiSSID.text+"\"\n"
-            var cryptedPsk = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
+
+            const isPassphrase = fieldWifiPassword.text.length >= 8 &&
+                fieldWifiPassword.text.length < 64
+            var cryptedPsk = isPassphrase ? imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
+                                          : fieldWifiPassword.text
             wpaconfig += "\tpsk="+cryptedPsk+"\n"
             wpaconfig += "}\n"
 
@@ -745,10 +765,7 @@ Popup {
                 cloudinitnetwork += "        hidden: true\n"
             }
 
-            /* FIXME: setting wifi country code broken on Ubuntu
-               For unknown reasons udev does not trigger setregdomain automatically and as a result
-               our setting in /etc/default/crda is being ignored by Ubuntu. */
-            addCloudInitRun("sed -i 's/^\s*REGDOMAIN=\S*/REGDOMAIN="+fieldWifiCountry.editText+"/' /etc/default/crda || true")
+            addCmdline("cfg80211.ieee80211_regdom="+fieldWifiCountry.editText)
         }
         if (chkLocale.checked) {
             var kbdconfig = "XKBMODEL=\"pc105\"\n"
@@ -798,43 +815,90 @@ Popup {
 
     function saveSettings()
     {
-        if (comboSaveSettings.currentIndex == 1) {
-            hasSavedSettings = true
-            var settings = { };
-            if (chkHostname.checked && fieldHostname.length) {
-                settings.hostname = fieldHostname.text
-            }
-            if (chkSetUser.checked) {
-                settings.sshUserName = fieldUserName.text
-                settings.sshUserPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
-            }
+        var settings = { };
+        if (chkHostname.checked && fieldHostname.length) {
+            settings.hostname = fieldHostname.text
+        }
+        if (chkSetUser.checked) {
+            settings.sshUserName = fieldUserName.text
+            settings.sshUserPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
+        }
 
-            settings.sshEnabled = chkSSH.checked
-            if (chkSSH.checked && radioPubKeyAuthentication.checked) {
-                settings.sshAuthorizedKeys = fieldPublicKey.text
+        settings.sshEnabled = chkSSH.checked
+        if (chkSSH.checked && radioPubKeyAuthentication.checked) {
+            settings.sshAuthorizedKeys = fieldPublicKey.text
+        }
+        if (chkWifi.checked) {
+            settings.wifiSSID = fieldWifiSSID.text
+            if (chkWifiSSIDHidden.checked) {
+                settings.wifiSSIDHidden = true
             }
-            if (chkWifi.checked) {
-                settings.wifiSSID = fieldWifiSSID.text
-                if (chkWifiSSIDHidden.checked) {
-                    settings.wifiSSIDHidden = true
-                }
-                settings.wifiPassword = fieldWifiPassword.text.length == 64 ? fieldWifiPassword.text : imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
-                settings.wifiCountry = fieldWifiCountry.editText
-            }
-            if (chkLocale.checked) {
-                settings.timezone = fieldTimezone.editText
-                settings.keyboardLayout = fieldKeyboardLayout.editText
-            }
+            settings.wifiCountry = fieldWifiCountry.editText
 
-            imageWriter.setSavedCustomizationSettings(settings)
-
-        } else if (hasSavedSettings) {
-            imageWriter.clearSavedCustomizationSettings()
-            hasSavedSettings = false
+            const isPassphrase = fieldWifiPassword.text.length >= 8 &&
+                fieldWifiPassword.text.length < 64
+            var cryptedPsk = isPassphrase ? imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
+                                          : fieldWifiPassword.text
+            settings.wifiPassword = cryptedPsk
+        }
+        if (chkLocale.checked) {
+            settings.timezone = fieldTimezone.editText
+            settings.keyboardLayout = fieldKeyboardLayout.editText
         }
 
         imageWriter.setSetting("beep", chkBeep.checked)
         imageWriter.setSetting("eject", chkEject.checked)
         imageWriter.setSetting("telemetry", chkTelemtry.checked)
+
+        if (chkHostname.checked || chkSetUser.checked || chkSSH.checked || chkWifi.checked || chkLocale.checked) {
+            /* OS customization to be applied. */
+            hasSavedSettings = true
+            saveSettingsSignal(settings)
+        }
+    }
+
+    function clearCustomizationFields()
+    {
+        /* Bind copies of the lists */
+        fieldTimezone.model = imageWriter.getTimezoneList()
+        fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
+        fieldWifiCountry.model = imageWriter.getCountryList()
+
+        fieldHostname.text = "raspberrypi"
+        fieldUserName.text = imageWriter.getCurrentUser()
+        fieldUserPassword.clear()
+        radioPubKeyAuthentication.checked = false
+        radioPasswordAuthentication.checked = false
+        fieldPublicKey.clear()
+
+        /* Timezone Settings*/
+        fieldTimezone.currentIndex = fieldTimezone.find(imageWriter.getTimezone())
+        /* Lacking an easy cross-platform to fetch keyboard layout
+            from host system, just default to "gb" for people in
+            UK time zone for now, and "us" for everyone else */
+        if (imageWriter.getTimezone() === "Europe/London") {
+            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("gb")
+        } else {
+            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")
+        }
+
+        chkSetUser.checked = false
+        chkSSH.checked = false
+        chkLocale.checked = false
+        chkWifiSSIDHidden.checked = false
+        chkHostname.checked = false
+
+        /* WiFi Settings */
+        fieldWifiSSID.text = imageWriter.getSSID()
+        if (fieldWifiSSID.text.length) {
+            fieldWifiPassword.text = imageWriter.getPSK()
+            if (fieldWifiPassword.text.length) {
+                chkShowPassword.checked = false
+                if (Qt.platform.os == "osx") {
+                    /* User indicated wifi must be prefilled */
+                    chkWifi.checked = true
+                }
+            }
+        }
     }
 }

@@ -6,6 +6,10 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+
 #include <QString>
 #include <QThread>
 #include <QFile>
@@ -137,6 +141,7 @@ protected:
     virtual void run();
     virtual void _onDownloadSuccess();
     virtual void _onDownloadError(const QString &msg);
+    virtual void _onWriteError();
 
     void _hashData(const char *buf, size_t len);
     void _writeComplete();

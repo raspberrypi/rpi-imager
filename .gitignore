@@ -1,3 +1,12 @@
+build**
+.vscode
+obj-**
+debian/rpi-imager/**
+debian/.debhelper**
+debian/files
+debian/*.substvars
+debian/debhelper**
+
 # editor backups
 *.*swp*
 

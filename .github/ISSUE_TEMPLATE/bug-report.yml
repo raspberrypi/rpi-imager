@@ -1,0 +1,109 @@
+name: Bug Report
+description: Thanks for the report!
+title: "[BUG]: "
+labels: ["bug", "triage"]
+projects: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us, what did you expect to happen?
+      placeholder: Tell us what you see!
+      value: "A bug happened!"
+    validations:
+      required: true
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: What version of our software are you running?
+      options:
+        - 1.8.5 (Default)
+        - 1.8.4
+        - 1.8.3
+        - 1.8.2
+        - 1.8.1
+        - < 1.8.0
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: host-os
+    attributes:
+      label: What host operating system were you using?
+      multiple: false
+      options:
+        - Windows
+        - macOS
+        - Debian and derivatives (eg Ubuntu)
+        - Other Linux environment
+        - Other non-Linux environment
+    validations:
+      required: true
+  - type: input
+    id: host-os-version
+    attributes:
+      label: Host OS Version
+      description: What version of your host OS were you using?
+      placeholder: ex 11H2, 10.4, Catalina, 22.04
+    validations:
+      required: true
+  - type: input
+    id: target-os-version
+    attributes:
+      label: Selected OS
+      description: Which OS did you select to write? (For custom images, just write 'Custom')
+      placeholder: ex Raspberry Pi OS Bookworm 64-bit, Ubuntu 23.10, LibreELEC 
+    validations:
+      required: true
+  - type: dropdown
+    id: raspberry-pi-device
+    attributes:
+      label: Which Raspberry Pi Device are you using?
+      multiple: false
+      options:
+        - Raspberry Pi 5
+        - Raspberry Pi 4B, 400, and Compute Modules 4, 4S
+        - Raspberry Pi Zero 2 W
+        - Raspberry Pi 3B, 3A+, 3B+, and Compute Module 3, 3+
+        - Raspberry Pi Zero, Zero W, Zero WH
+        - Raspberry Pi A, B, A+, B+, and Compute Module 1
+    validations:
+      required: true
+  - type: dropdown
+    id: storage-device
+    attributes:
+      label: What kind of storage device are you using?
+      multiple: false
+      options:
+        - microSD Card in an internal reader
+        - microSD Card in a USB reader
+        - Integrated eMMC
+        - NVMe SSD via Raspberry Pi M.2 HAT+
+        - NVMe SSD via Third-party PCIe attachment
+        - USB Pen Drive
+        - USB SSD
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: OS Customisation
+      description: Were you using OS Customisation when you enountered the bug?
+      options:
+        - label: Yes, I was using OS Customisation when the bug occurred.
+          required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
+

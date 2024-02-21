@@ -3,10 +3,11 @@
 set -e
 
 BUILDROOT=buildroot
-BUILDROOT_TAR=buildroot-20220122.tar.bz2
+BUILDROOT_TAR=buildroot-20231002.tar.bz2
 
 if [ ! -e $BUILDROOT ]; then
     tar xjf $BUILDROOT_TAR
+    patch -p0 < buildroot-mesa3d-pi5.patch
 fi
 
 if [ ! -e $BUILDROOT/.config ]; then
@@ -24,7 +25,7 @@ make -C $BUILDROOT BR2_EXTERNAL="$PWD/imager"
 #
 
 # Copy Linux kernel and initramfs
-cp $BUILDROOT/output/images/rootfs.cpio.zst $BUILDROOT/output/images/zImage output
+cp $BUILDROOT/output/images/rootfs.cpio.zst $BUILDROOT/output/images/Image.gz output
 # Raspberry Pi firmware files
 cp $BUILDROOT/output/images/rpi-firmware/start4.elf output
 cp $BUILDROOT/output/images/rpi-firmware/fixup4.dat output
@@ -36,10 +37,13 @@ touch output/bootcode.bin
 mkdir -p output/overlays
 
 mv -f output/dwc2-overlay.dtb output/overlays/dwc2.dtbo
-mv -f output/vc4-fkms-v3d-pi4-overlay.dtb output/overlays/vc4-fkms-v3d-pi4.dtbo
+mv -f output/vc4-kms-v3d-pi5-overlay.dtb output/overlays/vc4-kms-v3d-pi5.dtbo
 mv -f output/vc4-kms-v3d-pi4-overlay.dtb output/overlays/vc4-kms-v3d-pi4.dtbo
 mv -f output/disable-bt-overlay.dtb output/overlays/disable-bt.dtbo
 mv -f output/disable-wifi-overlay.dtb output/overlays/disable-wifi.dtbo
+mv -f output/disable-bt-pi5-overlay.dtb output/overlays/disable-bt-pi5.dtbo
+mv -f output/disable-wifi-pi5-overlay.dtb output/overlays/disable-wifi-pi5.dtbo
+mv -f output/overlay_map.dtb output/overlays/overlay_map.dtb
 
 echo
 echo Build complete. Files are in output folder.

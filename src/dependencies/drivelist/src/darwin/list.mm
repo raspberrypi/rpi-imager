@@ -21,6 +21,9 @@
 #import "REDiskList.h"
 #import <Cocoa/Cocoa.h>
 #import <DiskArbitration/DiskArbitration.h>
+#import <IOKit/IOKitLib.h>
+#import <IOKit/storage/IOMedia.h>
+#import <IOKit/IOBSD.h>
 
 namespace Drivelist {
   bool IsDiskPartition(NSString *disk) {
@@ -52,6 +55,55 @@ namespace Drivelist {
 
   NSNumber *DictionaryGetNumber(CFDictionaryRef dict, const void *key) {
     return (NSNumber*)CFDictionaryGetValue(dict, key);
+  }
+
+  std::string GetParentOfAPFS(const char *diskBsdName) {
+      /* Inspired by: https://opensource.apple.com/source/bless/bless-152/libbless/APFS/BLAPFSUtilities.c.auto.html
+         Simplified, assumes APFS only has a single physical drive */
+      std::string result;
+      kern_return_t kret;
+      io_iterator_t psIter;
+      CFTypeRef data;
+      NSString *s;
+      io_service_t parent, p = IOServiceGetMatchingService(kIOMasterPortDefault, IOBSDNameMatching(kIOMasterPortDefault, 0, diskBsdName));
+
+      if (p)
+      {
+          /* Go three levels up in hierarchy */
+          for (int i=0; i<3; i++)
+          {
+              kret = IORegistryEntryGetParentEntry(p, kIOServicePlane, &parent);
+              IOObjectRelease(p);
+              if (kret)
+              {
+                  /* Error. Return empty string */
+                  return result;
+              }
+              p = parent;
+          }
+
+          IORegistryEntryGetParentIterator(p, kIOServicePlane, &psIter);
+          parent = IOIteratorNext(psIter);
+          if (parent)
+          {
+              if (IOObjectConformsTo(parent, kIOMediaClass))
+              {
+                  data = IORegistryEntryCreateCFProperty(parent, CFSTR(kIOBSDNameKey), kCFAllocatorDefault, 0);
+
+                  if (data && CFGetTypeID(data) == CFStringGetTypeID())
+                  {
+                      s = (NSString *) data;
+                      result = std::string([s UTF8String]);
+                      CFRelease(data);
+                  }
+              }
+              IOObjectRelease(parent);
+          }
+          IOObjectRelease(psIter);
+          IOObjectRelease(p);
+      }
+
+      return result;
   }
 
   DeviceDescriptor CreateDeviceDescriptorFromDiskDescription(std::string diskBsdName, CFDictionaryRef diskDescription) {
@@ -126,6 +178,13 @@ namespace Drivelist {
       }
 
       DeviceDescriptor device = CreateDeviceDescriptorFromDiskDescription(diskBsdNameStr, diskDescription);
+
+      if (device.description == "AppleAPFSMedia")
+      {
+          device.isVirtual = true;
+          device.parentDevice = GetParentOfAPFS(diskBsdNameStr.c_str());
+      }
+
       deviceList.push_back(device);
 
       CFRelease(diskDescription);
@@ -158,6 +217,20 @@ namespace Drivelist {
 
       std::string partitionBsdName = std::string(bsdnameChar);
       std::string diskBsdName = partitionBsdName.substr(0, partitionBsdName.find("s", 5));
+      std::string childDevice;
+
+      /* Check if it concerns APFS volume first, and if so attribute mountpoints to parent device instead */
+      for(std::vector<int>::size_type i = 0; i != deviceList.size(); i++) {
+        DeviceDescriptor *dd = &deviceList[i];
+
+        if (dd->device == "/dev/" + diskBsdName) {
+            if (!dd->parentDevice.empty()) {
+                childDevice = diskBsdName;
+                diskBsdName = dd->parentDevice;
+            }
+            break;
+        }
+      }
 
       for(std::vector<int>::size_type i = 0; i != deviceList.size(); i++) {
         DeviceDescriptor *dd = &deviceList[i];
@@ -165,6 +238,9 @@ namespace Drivelist {
         if (dd->device == "/dev/" + diskBsdName) {
           dd->mountpoints.push_back([[path path] UTF8String]);
           dd->mountpointLabels.push_back([volumeName UTF8String]);
+          if (!childDevice.empty()) {
+              dd->childDevices.push_back("/dev/"+childDevice);
+          }
           break;
         }
       }
