@@ -1320,6 +1320,7 @@ ApplicationWindow {
 
     function onFileSelected(file) {
         imageWriter.setSrc(file)
+        imageWriter.disableImageCustomization()
         osbutton.text = imageWriter.srcFileName()
         ospopup.close()
         osswipeview.decrementCurrentIndex()

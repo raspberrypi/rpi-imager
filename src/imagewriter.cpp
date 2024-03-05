@@ -1293,6 +1293,10 @@ void ImageWriter::clearSavedCustomizationSettings()
     _settings.sync();
 }
 
+void ImageWriter::disableImageCustomization() {
+    _initFormat.clear();
+}
+
 bool ImageWriter::hasSavedCustomizationSettings()
 {
     _settings.sync();

@@ -124,6 +124,7 @@ public:
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE void disableImageCustomization();
     Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork);
     Q_INVOKABLE void setSavedCustomizationSettings(const QVariantMap &map);
     Q_INVOKABLE QVariantMap getSavedCustomizationSettings();
