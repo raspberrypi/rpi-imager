@@ -275,12 +275,12 @@
     <message>
         <location filename="../imagewriter.cpp" line="962"/>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur de synchronisation de l&apos;heure. Nouvelle tentative dans 3 secondes</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="974"/>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le protocole STP est activé sur votre commutateur Ethernet. L&apos;obtention de l&apos;adresse IP prendra beaucoup de temps.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="1185"/>
@@ -559,12 +559,12 @@
     <message>
         <location filename="../main.qml" line="330"/>
         <source>Network not ready yet</source>
-        <translation type="unfinished"></translation>
+        <translation>Le réseau n&apos;est pas encore prêt</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1007"/>
         <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun périphérique de stockage trouvé</translation>
     </message>
     <message>
         <location filename="../main.qml" line="205"/>
