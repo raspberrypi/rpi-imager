@@ -8,6 +8,7 @@ import QtQuick.Window 2.2
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
+import QtGraphicalEffects 1.0
 import "qmlcomponents"
 
 ApplicationWindow {
@@ -19,7 +20,7 @@ ApplicationWindow {
     minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
-    title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
+    title: qsTr("Unraid Imager v%1").arg(imageWriter.constantVersion())
 
     FontLoader {id: roboto;      source: "fonts/Roboto-Regular.ttf"}
     FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}
@@ -56,11 +57,11 @@ ApplicationWindow {
 
         Rectangle {
             id: logoContainer
-            implicitHeight: window.height/4
+            implicitHeight: window.height/6
 
             Image {
                 id: image
-                source: "icons/logo_sxs_imager.png"
+                source: "icons/UN-logotype-gradient.svg"
 
                 // Specify the maximum size of the image
                 width: window.width * 0.45
@@ -78,7 +79,7 @@ ApplicationWindow {
                 // Keep the left side of the image 40 pixels from the left
                 // edge
                 anchors.left: logoContainer.left
-                anchors.leftMargin: 40
+                anchors.leftMargin: 10
 
                 // Equal padding above and below the image
                 anchors.top: logoContainer.top
@@ -89,9 +90,9 @@ ApplicationWindow {
         }
 
         Rectangle {
-            color: "#cd2355"
+            color: UnColors.darkGray
             implicitWidth: window.width
-            implicitHeight: window.height * (1 - 1/4)
+            implicitHeight: window.height * (1 - 1/6)
 
             GridLayout {
                 id: gridLayout
@@ -115,7 +116,7 @@ ApplicationWindow {
 
                     Text {
                         id: text0
-                        color: "#ffffff"
+                        color: "white"
                         text: qsTr("Raspberry Pi Device")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
@@ -153,7 +154,7 @@ ApplicationWindow {
 
                     Text {
                         id: text1
-                        color: "#ffffff"
+                        color: "white"
                         text: qsTr("Operating System")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
@@ -190,7 +191,7 @@ ApplicationWindow {
 
                     Text {
                         id: text2
-                        color: "#ffffff"
+                        color: "white"
                         text: qsTr("Storage")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
@@ -245,7 +246,6 @@ ApplicationWindow {
                         id: progressBar
                         Layout.fillWidth: true
                         visible: false
-                        Material.background: "#d15d7d"
                     }
                 }
 
@@ -313,7 +313,7 @@ ApplicationWindow {
 
                 Text {
                     Layout.columnSpan: 3
-                    color: "#ffffff"
+                    color: "white"
                     font.pixelSize: 18
                     font.family: roboto.name
                     visible: imageWriter.isEmbeddedMode() && imageWriter.customRepo()
@@ -323,7 +323,7 @@ ApplicationWindow {
                 Text {
                     id: networkInfo
                     Layout.columnSpan: 3
-                    color: "#ffffff"
+                    color: "white"
                     font.pixelSize: 18
                     font.family: roboto.name
                     visible: imageWriter.isEmbeddedMode()
@@ -332,7 +332,7 @@ ApplicationWindow {
 
                 Text {
                     Layout.columnSpan: 3
-                    color: "#ffffff"
+                    color: "white"
                     font.pixelSize: 18
                     font.family: roboto.name
                     visible: !imageWriter.hasMouse()
@@ -347,7 +347,10 @@ ApplicationWindow {
                     visible: imageWriter.isEmbeddedMode()
                     implicitWidth: langbar.width
                     implicitHeight: langbar.height
-                    color: "#ffffe3"
+                    color: UnColors.mediumGray
+                    Material.theme: Material.Dark
+                    Material.background: UnColors.darkGray
+                    Material.accent: UnColors.orange
                     radius: 5
 
                     RowLayout {
@@ -361,8 +364,10 @@ ApplicationWindow {
                             Layout.leftMargin: 30
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
+                            color: "white"
                         }
                         ComboBox {
+                            id: languageselector
                             font.pixelSize: 12
                             font.family: roboto.name
                             model: imageWriter.getTranslations()
@@ -376,6 +381,28 @@ ApplicationWindow {
                             }
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
+                            popup: Popup {
+                                y: languageselector.height - 1
+                                width: languageselector.width
+                                implicitHeight: contentItem.implicitHeight
+                                padding: 1
+                                Material.theme: Material.Dark
+                                Material.accent: UnColors.orange
+
+                                contentItem: ListView {
+                                    clip: true
+                                    implicitHeight: contentHeight
+                                    model: languageselector.popup.visible ? languageselector.delegateModel : null
+                                    currentIndex: languageselector.highlightedIndex
+
+                                    ScrollIndicator.vertical: ScrollIndicator { }
+                                }
+
+                                background: Rectangle {
+                                    color: UnColors.darkGray
+                                    radius: 2
+                                }
+                            }
                         }
                         Text {
                             font.pixelSize: 12
@@ -383,6 +410,7 @@ ApplicationWindow {
                             text: qsTr("Keyboard: ")
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
+                            color: "white"
                         }
                         ComboBox {
                             enabled: imageWriter.isEmbeddedMode()
@@ -399,6 +427,28 @@ ApplicationWindow {
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
                             Layout.rightMargin: 30
+                            popup: Popup {
+                                y: languageselector.height - 1
+                                width: languageselector.width
+                                implicitHeight: contentItem.implicitHeight
+                                padding: 1
+                                Material.theme: Material.Dark
+                                Material.accent: UnColors.orange
+
+                                contentItem: ListView {
+                                    clip: true
+                                    implicitHeight: contentHeight
+                                    model: languageselector.popup.visible ? languageselector.delegateModel : null
+                                    currentIndex: languageselector.highlightedIndex
+
+                                    ScrollIndicator.vertical: ScrollIndicator { }
+                                }
+
+                                background: Rectangle {
+                                    color: UnColors.darkGray
+                                    radius: 2
+                                }
+                            }
                         }
                     }
                 }
@@ -439,10 +489,15 @@ ApplicationWindow {
         padding: 0
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         property string hwselected: ""
+        
+        background: Rectangle {
+            color: UnColors.darkGray
+            border.color: UnColors.mediumGray
+        }
 
         // background of title
         Rectangle {
-            color: "#f5f5f5"
+            color: UnColors.mediumGray
             anchors.right: parent.right
             anchors.top: parent.top
             height: 35
@@ -450,13 +505,14 @@ ApplicationWindow {
         }
         // line under title
         Rectangle {
-            color: "#afafaf"
+            color: UnColors.mediumGray
             width: parent.width
             y: 35
             implicitHeight: 1
         }
 
         Text {
+            color: "white"
             text: "X"
             anchors.right: parent.right
             anchors.top: parent.top
@@ -478,6 +534,7 @@ ApplicationWindow {
             spacing: 10
 
             Text {
+                color: "white"
                 text: qsTr("Raspberry Pi Device")
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -541,10 +598,15 @@ ApplicationWindow {
         padding: 0
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         property string categorySelected : ""
+        
+        background: Rectangle {
+            color: UnColors.darkGray
+            border.color: UnColors.mediumGray
+        }
 
         // background of title
         Rectangle {
-            color: "#f5f5f5"
+            color: UnColors.mediumGray
             anchors.right: parent.right
             anchors.top: parent.top
             height: 35
@@ -552,7 +614,7 @@ ApplicationWindow {
         }
         // line under title
         Rectangle {
-            color: "#afafaf"
+            color: UnColors.mediumGray
             width: parent.width
             y: 35
             implicitHeight: 1
@@ -560,6 +622,7 @@ ApplicationWindow {
 
         Text {
             text: "X"
+            color: "white"
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.rightMargin: 25
@@ -582,6 +645,7 @@ ApplicationWindow {
 
             Text {
                 text: qsTr("Operating System")
+                color: "white"
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 Layout.fillWidth: true
@@ -728,15 +792,16 @@ ApplicationWindow {
             Rectangle {
                id: bgrect
                anchors.fill: parent
-               color: "#f5f5f5"
+               color: mouseOver ? UnColors.orange : UnColors.darkGray
                visible: mouseOver && parent.ListView.view.currentIndex !== index
                property bool mouseOver: false
+               border.color: UnColors.mediumGray
             }
             Rectangle {
                id: borderrect
                implicitHeight: 1
                implicitWidth: parent.width
-               color: "#dcdcdc"
+               color: UnColors.mediumGray
                y: parent.height
             }
 
@@ -751,6 +816,7 @@ ApplicationWindow {
                 spacing: 12
 
                 Image {
+                    id: iconimage
                     source: typeof icon === "undefined" ? "" : icon
                     Layout.preferredHeight: 64
                     Layout.preferredWidth: 64
@@ -760,6 +826,11 @@ ApplicationWindow {
                     verticalAlignment: Image.AlignVCenter
                     Layout.alignment: Qt.AlignVCenter
                 }
+                ColorOverlay {
+                    anchors.fill: iconimage
+                    source: iconimage
+                    color: bgrect.mouseOver ? UnColors.darkGray : UnColors.orange
+                }
                 ColumnLayout {
                     Layout.fillWidth: true
 
@@ -768,6 +839,7 @@ ApplicationWindow {
                         elide: Text.ElideRight
                         font.family: roboto.name
                         font.bold: true
+                        color: bgrect.mouseOver ? UnColors.darkGray : "white"
                     }
 
                     Text {
@@ -775,7 +847,7 @@ ApplicationWindow {
                         font.family: roboto.name
                         text: description
                         wrapMode: Text.WordWrap
-                        color: "#1a1a1a"
+                        color: bgrect.mouseOver ? UnColors.darkGray : "white"
                     }
 
                     ToolTip {
@@ -819,15 +891,16 @@ ApplicationWindow {
             Rectangle {
                id: bgrect
                anchors.fill: parent
-               color: "#f5f5f5"
+               color: mouseOver ? UnColors.orange : UnColors.darkGray
                visible: mouseOver && parent.ListView.view.currentIndex !== index
                property bool mouseOver: false
+               border.color: UnColors.mediumGray
             }
             Rectangle {
                id: borderrect
                implicitHeight: 1
                implicitWidth: parent.width
-               color: "#dcdcdc"
+               color: UnColors.mediumGray
                y: parent.height
             }
 
@@ -842,6 +915,7 @@ ApplicationWindow {
                 spacing: 12
 
                 Image {
+                    id: iconimage
                     source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
                     Layout.preferredHeight: 40
                     Layout.preferredWidth: 40
@@ -850,6 +924,11 @@ ApplicationWindow {
                     fillMode: Image.PreserveAspectFit
                     verticalAlignment: Image.AlignVCenter
                     Layout.alignment: Qt.AlignVCenter
+                }
+                ColorOverlay {
+                    anchors.fill: iconimage
+                    source: iconimage
+                    color: bgrect.mouseOver ? UnColors.darkGray : UnColors.orange
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -861,6 +940,7 @@ ApplicationWindow {
                             elide: Text.ElideRight
                             font.family: roboto.name
                             font.bold: true
+                            color: bgrect.mouseOver ? UnColors.darkGray : "white"
                         }
                         Image {
                             source: "icons/ic_info_16px.png"
@@ -882,13 +962,13 @@ ApplicationWindow {
                         font.family: roboto.name
                         text: description
                         wrapMode: Text.WordWrap
-                        color: "#1a1a1a"
+                        color: bgrect.mouseOver ? UnColors.darkGray : "white"
                     }
 
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        color: "#646464"
+                        color: bgrect.mouseOver ? UnColors.darkGray : "white"
                         font.weight: Font.Light
                         visible: typeof(release_date) == "string" && release_date
                         text: qsTr("Released: %1").arg(release_date)
@@ -896,7 +976,7 @@ ApplicationWindow {
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        color: "#646464"
+                        color: bgrect.mouseOver ? UnColors.darkGray : "white"
                         font.weight: Font.Light
                         visible: typeof(url) == "string" && url != "" && url != "internal://format"
                         text: !url ? "" :
@@ -938,9 +1018,14 @@ ApplicationWindow {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         onClosed: imageWriter.stopDriveListPolling()
 
+        background: Rectangle {
+            color: UnColors.darkGray
+            border.color: UnColors.mediumGray
+        }
+
         // background of title
         Rectangle {
-            color: "#f5f5f5"
+            color: UnColors.mediumGray
             anchors.right: parent.right
             anchors.top: parent.top
             height: 35
@@ -948,7 +1033,7 @@ ApplicationWindow {
         }
         // line under title
         Rectangle {
-            color: "#afafaf"
+            color: UnColors.mediumGray
             width: parent.width
             y: 35
             implicitHeight: 1
@@ -956,6 +1041,7 @@ ApplicationWindow {
 
         Text {
             text: "X"
+            color: "white"
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.rightMargin: 25
@@ -977,6 +1063,7 @@ ApplicationWindow {
 
             Text {
                 text: qsTr("Storage")
+                color: "white"
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 Layout.fillWidth: true
@@ -1050,16 +1137,17 @@ ApplicationWindow {
             Rectangle {
                id: dstbgrect
                anchors.fill: parent
-               color: "#f5f5f5"
+               color: mouseOver ? UnColors.orange : UnColors.darkGray
                visible: mouseOver && parent.ListView.view.currentIndex !== index
                property bool mouseOver: false
+               border.color: UnColors.mediumGray
 
             }
             Rectangle {
                id: dstborderrect
                implicitHeight: 1
                implicitWidth: parent.width
-               color: "#dcdcdc"
+               color: UnColors.mediumGray
                y: parent.height
             }
 
@@ -1070,7 +1158,8 @@ ApplicationWindow {
                     width: 64
 
                     Image {
-                        source: isUsb ? "icons/ic_usb_40px.svg" : isScsi ? "icons/ic_storage_40px.svg" : "icons/ic_sd_storage_40px.svg"
+                        id: iconimage
+                        source: isUsb ? (dstbgrect.mouseOver ? "icons/ic_usb_40px.svg" : "icons/ic_usb_40px_orange.svg") : isScsi ? (dstbgrect.mouseOver ? "icons/ic_storage_40px.svg" : "icons/ic_storage_40px_orange.svg") : (dstbgrect.mouseOver ? "icons/ic_sd_storage_40px.svg" : "icons/ic_sd_storage_40px_orange.svg")
                         verticalAlignment: Image.AlignVCenter
                         height: parent.parent.parent.height
                         fillMode: Image.Pad
@@ -1088,8 +1177,7 @@ ApplicationWindow {
                             var sizeStr = (size/1000000000).toFixed(1)+" GB";
                             var txt;
                             if (isReadOnly) {
-                                txt = "<p><font size='4' color='grey'>"+description+" - "+sizeStr+"</font></p>"
-                                txt += "<font color='grey'>"
+                                txt = "<p><font size='4'>"+description+" - "+sizeStr+"</font></p>"
                                 if (mountpoints.length > 0) {
                                     txt += qsTr("Mounted as %1").arg(mountpoints.join(", "))+" "
                                 }
@@ -1097,11 +1185,12 @@ ApplicationWindow {
                             } else {
                                 txt = "<p><font size='4'>"+description+" - "+sizeStr+"</font></p>"
                                 if (mountpoints.length > 0) {
-                                    txt += "<font color='grey'>"+qsTr("Mounted as %1").arg(mountpoints.join(", "))+"</font>"
+                                    txt += qsTr("Mounted as %1").arg(mountpoints.join(", "))+"</font>"
                                 }
                             }
                             return txt;
                         }
+                        color: dstbgrect.mouseOver ? UnColors.darkGray : "white"
                     }
                 }
             }
@@ -1163,7 +1252,7 @@ ApplicationWindow {
             progressText.visible = true
             progressBar.visible = true
             progressBar.indeterminate = true
-            progressBar.Material.accent = "#ffffff"
+            progressBar.Material.accent = UnColors.orange
             osbutton.enabled = false
             dstbutton.enabled = false
             hwbutton.enabled = false
@@ -1264,7 +1353,7 @@ ApplicationWindow {
                 return
 
             progressText.text = qsTr("Verifying... %1%").arg(Math.floor(newPos*100))
-            progressBar.Material.accent = "#6cc04a"
+            progressBar.Material.accent = UnColors.orange
             progressBar.value = newPos
         }
     }

@@ -18,6 +18,11 @@ Window {
     minimumHeight: 125
     height: Math.min(750, cl.implicitHeight)
     title: qsTr("OS Customization")
+    
+    color: UnColors.darkGray
+    Material.theme: Material.Dark
+    Material.background: UnColors.darkGray
+    Material.accent: UnColors.orange
 
     property bool initialized: false
     property bool hasSavedSettings: false
@@ -57,7 +62,6 @@ Window {
                 TabBar {
                     id: bar
                     Layout.fillWidth: true
-
                     TabButton {
                         text: qsTr("General")
                         onClicked: {
@@ -103,7 +107,8 @@ Window {
                                 }
                                 Text {
                                     text : ".local"
-                                    color: chkHostname.checked ? "black" : "grey"
+                                    opacity: chkHostname.checked ? 1.0 : 0.3
+                                    color: "white"
                                 }
                             }
 
@@ -132,7 +137,8 @@ Window {
 
                                     Text {
                                         text: qsTr("Username:")
-                                        color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                                        opacity: parent.enabled ? 1.0 : 0.3
+                                        color: fieldUserName.indicateError ? "red" : "white"
                                     }
                                     TextField {
                                         id: fieldUserName
@@ -150,7 +156,8 @@ Window {
 
                                     Text {
                                         text: qsTr("Password:")
-                                        color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
+                                        opacity: parent.enabled ? 1.0 : 0.3
+                                        color: fieldUserPassword.indicateError ? "red" : "white"
                                     }
                                     TextField {
                                         id: fieldUserPassword
@@ -205,7 +212,8 @@ Window {
 
                                 Text {
                                     text: qsTr("SSID:")
-                                    color: parent.enabled ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
+                                    opacity: parent.enabled ? 1.0 : 0.3
+                                    color: fieldWifiSSID.indicateError ? "red" : "white"
                                 }
                                 TextField {
                                     id: fieldWifiSSID
@@ -219,7 +227,8 @@ Window {
 
                                 Text {
                                     text: qsTr("Password:")
-                                    color: parent.enabled ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
+                                    opacity: parent.enabled ? 1.0 : 0.3
+                                    color: fieldWifiPassword.indicateError ? "red" : "white"
                                 }
                                 TextField {
                                     id: fieldWifiPassword
@@ -250,7 +259,8 @@ Window {
 
                                 Text {
                                     text: qsTr("Wireless LAN country:")
-                                    color: parent.enabled ? "black" : "grey"
+                                    opacity: parent.enabled ? 1.0 : 0.3
+                                    color: "white"
                                 }
                                 ComboBox {
                                     id: fieldWifiCountry
@@ -271,7 +281,8 @@ Window {
 
                                 Text {
                                     text: qsTr("Time zone:")
-                                    color: parent.enabled ? "black" : "grey"
+                                    opacity: parent.enabled ? 1.0 : 0.3
+                                    color: "white"
                                 }
                                 ComboBox {
                                     id: fieldTimezone
@@ -281,7 +292,8 @@ Window {
 
                                 Text {
                                     text: qsTr("Keyboard layout:")
-                                    color: parent.enabled ? "black" : "grey"
+                                    opacity: parent.enabled ? 1.0 : 0.3
+                                    color: "white"
                                 }
                                 ComboBox {
                                     id: fieldKeyboardLayout
@@ -345,7 +357,8 @@ Window {
 
                                     Text {
                                         text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
-                                        color: parent.enabled ? "black" : "grey"
+                                        opacity: parent.enabled ? 1.0 : 0.3
+                                        color: "white"
                                         textFormat: Text.PlainText
                                     }
                                     TextArea {
@@ -395,7 +408,7 @@ Window {
             Layout.bottomMargin: 10
             spacing: 20
 
-            ImButtonRed {
+            ImButton {
                 text: qsTr("SAVE")
                 onClicked: {
                     if (chkSetUser.checked && fieldUserPassword.text.length == 0)

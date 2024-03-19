@@ -10,8 +10,25 @@ import QtQuick.Controls.Material 2.2
 
 Button {
     font.family: roboto.name
-    Material.background: activeFocus ? "#d1dcfb" : "#ffffff"
-    Material.foreground: "#cd2355"
+    font.bold: true
+    background: Rectangle {
+        implicitWidth: 100
+        implicitHeight: 40
+        opacity: enabled ? 1.0 : 0.3
+        color: parent.hovered ? UnColors.orange : UnColors.darkGray
+        border.color: UnColors.orange
+        border.width: 1
+        radius: 25
+    }
+    contentItem: Text {
+        text: parent.text
+        font: parent.font
+        opacity: enabled ? 1.0 : 0.3
+        color: parent.hovered ? UnColors.darkGray : "white"
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
+        elide: Text.ElideRight
+    }
     Accessible.onPressAction: clicked()
     Keys.onEnterPressed: clicked()
     Keys.onReturnPressed: clicked()

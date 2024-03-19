@@ -9,8 +9,11 @@
         <file>icons/ic_chevron_left_40px.svg</file>
         <file>icons/ic_chevron_right_40px.svg</file>
         <file>icons/ic_sd_storage_40px.svg</file>
+        <file>icons/ic_sd_storage_40px_orange.svg</file>
         <file>icons/ic_storage_40px.svg</file>
+        <file>icons/ic_storage_40px_orange.svg</file>
         <file>icons/ic_usb_40px.svg</file>
+        <file>icons/ic_usb_40px_orange.svg</file>
         <file>MsgPopup.qml</file>
         <file>icons/use_custom.png</file>
         <file>icons/erase.png</file>
@@ -31,12 +34,12 @@
         <file>icons/cat_home_automation.png</file>
         <file>icons/cat_language_specific_operating_systems.png</file>
         <file>icons/cat_3d_printing.png</file>
-        <file>icons/logo_stacked_imager.png</file>
-        <file>icons/logo_sxs_imager.png</file>
+        <file>icons/UN-logotype-gradient.svg</file>
         <file>qmlcomponents/ImButton.qml</file>
-        <file>qmlcomponents/ImButtonRed.qml</file>
         <file>qmlcomponents/ImCheckBox.qml</file>
         <file>qmlcomponents/ImRadioButton.qml</file>
         <file>icons/cat_digital_signage.png</file>
+        <file>qmlcomponents/UnColors.qml</file>
+        <file>qmlcomponents/qmldir</file>
     </qresource>
 </RCC>

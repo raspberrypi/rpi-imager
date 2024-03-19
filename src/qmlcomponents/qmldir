@@ -1,0 +1,2 @@
+module CustomColors
+singleton UnColors UnColors.qml 

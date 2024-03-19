@@ -26,10 +26,15 @@ Popup {
     property bool noButton: false
     signal yes()
     signal no()
+    
+    background: Rectangle {
+        color: UnColors.darkGray
+        border.color: UnColors.mediumGray
+    }
 
     // background of title
     Rectangle {
-        color: "#f5f5f5"
+        color: UnColors.mediumGray
         anchors.right: parent.right
         anchors.top: parent.top
         height: 35
@@ -37,7 +42,7 @@ Popup {
     }
     // line under title
     Rectangle {
-        color: "#afafaf"
+        color: UnColors.mediumGray
         width: parent.width
         y: 35
         implicitHeight: 1
@@ -46,6 +51,7 @@ Popup {
     Text {
         id: msgx
         text: "X"
+        color: "white"
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.rightMargin: 25
@@ -74,6 +80,7 @@ Popup {
             Layout.topMargin: 10
             font.family: roboto.name
             font.bold: true
+            color: "white"
         }
 
         Text {
@@ -87,6 +94,7 @@ Popup {
             Layout.leftMargin: 25
             Layout.topMargin: 25
             Accessible.name: text.replace(/<\/?[^>]+(>|$)/g, "")
+            color: "white"
         }
 
         RowLayout {
@@ -94,7 +102,7 @@ Popup {
             Layout.bottomMargin: 10
             spacing: 20
 
-            ImButtonRed {
+            ImButton {
                 text: qsTr("NO")
                 onClicked: {
                     msgpopup.close()
@@ -103,7 +111,7 @@ Popup {
                 visible: msgpopup.noButton
             }
 
-            ImButtonRed {
+            ImButton {
                 text: qsTr("YES")
                 onClicked: {
                     msgpopup.close()
@@ -112,7 +120,7 @@ Popup {
                 visible: msgpopup.yesButton
             }
 
-            ImButtonRed {
+            ImButton {
                 text: qsTr("CONTINUE")
                 onClicked: {
                     msgpopup.close()
@@ -120,7 +128,7 @@ Popup {
                 visible: msgpopup.continueButton
             }
 
-            ImButtonRed {
+            ImButton {
                 text: qsTr("QUIT")
                 onClicked: {
                     Qt.quit()
