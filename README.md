@@ -23,7 +23,7 @@ For the embedded (netboot) build see also "embedded/legal-info" for more informa
 
 Install the build dependencies:
 
-```
+```sh
 sudo apt install --no-install-recommends build-essential devscripts debhelper cmake git libarchive-dev libcurl4-gnutls-dev liblzma-dev \
     qtbase5-dev qtbase5-dev-tools qtdeclarative5-dev libqt5svg5-dev qttools5-dev libgnutls28-dev \
     qml-module-qtquick2 qml-module-qtquick-controls2 qml-module-qtquick-layouts qml-module-qtquick-templates2 qml-module-qtquick-window2 qml-module-qtgraphicaleffects
@@ -31,7 +31,7 @@ sudo apt install --no-install-recommends build-essential devscripts debhelper cm
 
 #### Get the source
 
-```
+```sh
 git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 ```
 
@@ -39,13 +39,13 @@ git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 
 If building on a device with limited memory (e.g. 1 GB Pi), disable parallel build or it may run out of memory:
 
-```
+```sh
 export DEB_BUILD_OPTIONS="parallel=1"
 ```
 
 #### Build the Debian package
 
-```
+```sh
 cd rpi-imager
 debuild -uc -us
 ```
@@ -53,7 +53,7 @@ debuild -uc -us
 debuild will compile everything, create a .deb package and put it in the parent directory.
 Can install it with apt:
 
-```
+```sh
 cd ..
 sudo apt install ./rpi-imager*.deb
 ```
@@ -68,19 +68,19 @@ If udisks2 is not functional on your Linux distribution, you can alternatively s
 
 Install the build dependencies:
 
-```
+```sh
 sudo yum install git gcc gcc-c++ make cmake libarchive-devel libcurl-devel lzma-sdk-devel openssl-devel qt5-qtbase-devel qt5-qtquickcontrols2-devel qt5-qtsvg-devel qt5-linguist xz-devel
 ```
 
 #### Get the source
 
-```
+```sh
 git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 ```
 
 #### Build and install the software
 
-```
+```sh
 cd rpi-imager
 mkdir -p build
 cd build
@@ -135,7 +135,7 @@ During installation, choose a Qt 5.x edition and CMake.
 
 E.g.:
 
-```
+```sh
 cd build-rpi-imager-Desktop_Qt_5_14_1_clang_64bit-Release/
 codesign --deep --force --verify --verbose --sign "YOUR KEYID" --options runtime rpi-imager.app
 mv rpi-imager.app "Raspberry Pi Imager.app"
@@ -153,7 +153,7 @@ To build:
 - You must be running a Linux system, and have the buildroot dependencies installed as listed in the buildroot manual: https://buildroot.org/downloads/manual/manual.html#requirement
 - Run:
 
-```
+```sh
 cd rpi-imager/embedded
 ./build.sh
 ```
@@ -184,7 +184,7 @@ The last 1,500 requests to the service are logged for one week before expiring a
 
 On Windows, you can opt out of telemetry by disabling it in the Registry:
 
-```
+```powershell
 reg add "HKCU\Software\Raspberry Pi\Imager" /v telemetry /t REG_DWORD /d 0
 ```
 
@@ -197,7 +197,7 @@ telemetry=false
 
 On macOS, disable it by editing the property list for the application:
 
-```
+```sh
 defaults write org.raspberrypi.Imager.plist telemetry -bool NO
 ```
 
