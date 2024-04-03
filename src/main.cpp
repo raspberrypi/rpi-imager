@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
         }
         else if (args[i] == "--help")
         {
-            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--disable-telemetry] [<image file to write>]" << endl;
+            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] " << /*"[--disable-telemetry]" <<*/ "[<image file to write>]" << endl;
             cerr << "-OR- " << args[0] << " --cli [--disable-verify] [--sha256 <expected hash>] [--debug] [--quiet] <image file to write> <destination drive device>" << endl;
             return 0;
         }
@@ -274,6 +274,7 @@ int main(int argc, char *argv[])
             cerr << "Repository: " << imageWriter.constantOsListUrl().toString() << endl;
             return 0;
         }
+        /*
         else if (args[i] == "--disable-telemetry")
         {
             cerr << "Disabled telemetry" << endl;
@@ -286,11 +287,16 @@ int main(int argc, char *argv[])
             settings.remove("telemetry");
             settings.sync();
         }
+        */
         else
         {
             cerr << "Ignoring unknown argument: " << args[i] << endl;
         }
     }
+
+    // for now, make sure telemetry is always disabled
+    settings.setValue("telemetry", false);
+    settings.sync();
 
     QTranslator *translator = new QTranslator;
     if (customQm.isEmpty())

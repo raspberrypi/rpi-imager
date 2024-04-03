@@ -393,10 +393,12 @@ Window {
                                 id: chkEject
                                 text: qsTr("Eject media when finished")
                             }
+                            /*
                             ImCheckBox {
                                 id: chkTelemtry
                                 text: qsTr("Enable telemetry")
                             }
+                            */
                         }
                     }
                 }
@@ -462,7 +464,7 @@ Window {
 
     function initialize() {
         chkBeep.checked = imageWriter.getBoolSetting("beep")
-        chkTelemtry.checked = imageWriter.getBoolSetting("telemetry")
+        // chkTelemtry.checked = imageWriter.getBoolSetting("telemetry")
         chkEject.checked = imageWriter.getBoolSetting("eject")
         var settings = imageWriter.getSavedCustomizationSettings()
         fieldTimezone.model = imageWriter.getTimezoneList()
@@ -861,7 +863,7 @@ Window {
 
         imageWriter.setSetting("beep", chkBeep.checked)
         imageWriter.setSetting("eject", chkEject.checked)
-        imageWriter.setSetting("telemetry", chkTelemtry.checked)
+        imageWriter.setSetting("telemetry", false) // chkTelemtry.checked)
 
         if (chkHostname.checked || chkSetUser.checked || chkSSH.checked || chkWifi.checked || chkLocale.checked) {
             /* OS customization to be applied. */
