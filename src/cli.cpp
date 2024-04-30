@@ -213,6 +213,7 @@ int Cli::main()
 
     _imageWriter->setDst(args[1]);
     _imageWriter->setVerifyEnabled(!parser.isSet("disable-verify"));
+    _imageWriter->setSetting("eject", !parser.isSet("disable-eject"));
 
     /* Run startWrite() in event loop (otherwise calling _app->exit() on error does not work) */
     QTimer::singleShot(1, _imageWriter, &ImageWriter::startWrite);
