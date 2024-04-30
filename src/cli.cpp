@@ -49,27 +49,19 @@ Cli::~Cli()
 int Cli::main()
 {
     QCommandLineParser parser;
-    QCommandLineOption cli("cli");
-    parser.addOption(cli);
-    QCommandLineOption disableVerify("disable-verify", "Disable verification");
-    parser.addOption(disableVerify);
-    QCommandLineOption writeSystemDrive("enable-writing-system-drives", "Only use this if you know what you are doing");
-    parser.addOption(writeSystemDrive);
-    QCommandLineOption sha256Option("sha256", "Expected hash", "sha256", "");
-    parser.addOption(sha256Option);
-    QCommandLineOption cacheFileOption("cache-file", "Custom cache file (requires setting sha256 as well)", "cache-file", "");
-    parser.addOption(cacheFileOption);
-    QCommandLineOption firstRunScriptOption("first-run-script", "Add firstrun.sh to image", "first-run-script", "");
-    parser.addOption(firstRunScriptOption);
-    QCommandLineOption userdataOption("cloudinit-userdata", "Add cloud-init user-data file to image", "cloudinit-userdata", "");
-    parser.addOption(userdataOption);
-    QCommandLineOption networkconfigOption("cloudinit-networkconfig", "Add cloud-init network-config file to image", "cloudinit-networkconfig", "");
-    parser.addOption(networkconfigOption);
-
-    QCommandLineOption debugOption("debug", "Output debug messages to console");
-    parser.addOption(debugOption);
-    QCommandLineOption quietOption("quiet", "Only write to console on error");
-    parser.addOption(quietOption);
+    parser.addOptions({
+        {"cli", ""},
+        {"disable-verify", "Disable verification"},
+        {"enable-writing-system-drives", "Only use this if you know what you are doing"},
+        {"sha256", "Expected hash", "sha256", ""},
+        {"cache-file", "Custom cache file (requires setting sha256 as well)", "cache-file", ""},
+        {"first-run-script", "Add firstrun.sh to image", "first-run-script", ""},
+        {"cloudinit-userdata", "Add cloud-init user-data file to image", "cloudinit-userdata", ""},
+        {"cloudinit-networkconfig", "Add cloud-init network-config file to image", "cloudinit-networkconfig", ""},
+        {"disable-eject", "Disable automatic ejection of storage media after verification"},
+        {"debug", "Output debug messages to console"},
+        {"quiet", "Only write to console on error"},
+    });
 
     parser.addPositionalArgument("src", "Image file/URL");
     parser.addPositionalArgument("dst", "Destination device");
@@ -78,25 +70,25 @@ int Cli::main()
     const QStringList args = parser.positionalArguments();
     if (args.count() != 2)
     {
-        std::cerr << "Usage: --cli [--disable-verify] [--sha256 <expected hash> [--cache-file <cache file>]] [--first-run-script <script>] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
+        std::cerr << "Usage: --cli [--disable-verify] [--disable-eject] [--sha256 <expected hash> [--cache-file <cache file>]] [--first-run-script <script>] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
         return 1;
     }
 
-    if (!parser.isSet(debugOption))
+    if (!parser.isSet("debug"))
     {
         qInstallMessageHandler(devnullMsgHandler);
     }
-    _quiet = parser.isSet(quietOption);
-    QByteArray initFormat = (parser.value(userdataOption).isEmpty()
-                             && parser.value(networkconfigOption).isEmpty() ) ? "systemd" : "cloudinit";
+    _quiet = parser.isSet("quiet");
+    QByteArray initFormat = (parser.value("cloudinit-userdata").isEmpty()
+                             && parser.value("cloudinit-networkconfig").isEmpty() ) ? "systemd" : "cloudinit";
 
     if (args[0].startsWith("http:", Qt::CaseInsensitive) || args[0].startsWith("https:", Qt::CaseInsensitive))
     {
-        _imageWriter->setSrc(args[0], 0, 0, parser.value(sha256Option).toLatin1(), false, "", "", initFormat);
+        _imageWriter->setSrc(args[0], 0, 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
 
-        if (!parser.value(cacheFileOption).isEmpty())
+        if (!parser.value("cache-file").isEmpty())
         {
-            _imageWriter->setCustomCacheFile(parser.value(cacheFileOption), parser.value(sha256Option).toLatin1() );
+            _imageWriter->setCustomCacheFile(parser.value("cache-file"), parser.value("sha256").toLatin1() );
         }
     }
     else
@@ -105,7 +97,7 @@ int Cli::main()
 
         if (fi.isFile())
         {
-            _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value(sha256Option).toLatin1(), false, "", "", initFormat);
+            _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
         }
         else if (!fi.exists())
         {
@@ -119,7 +111,7 @@ int Cli::main()
         }
     }
 
-    if (parser.isSet(writeSystemDrive))
+    if (parser.isSet("enable-writing-system-drives"))
     {
         std::cerr << "WARNING: writing to system drives is enabled." << std::endl;
     }
@@ -156,10 +148,10 @@ int Cli::main()
         }
     }
 
-    if (!parser.value(userdataOption).isEmpty())
+    if (!parser.value("cloudinit-userdata").isEmpty())
     {
         QByteArray userData, networkConfig;
-        QFile f(parser.value(userdataOption));
+        QFile f(parser.value("cloudinit-userdata"));
 
         if (!f.exists())
         {
@@ -177,7 +169,7 @@ int Cli::main()
             return 1;
         }
 
-        f.setFileName(parser.value(networkconfigOption));
+        f.setFileName(parser.value("cloudinit-networkconfig"));
         if (!f.exists())
         {
             std::cerr << "Error: network-config file does not exists" << std::endl;
@@ -196,10 +188,10 @@ int Cli::main()
 
         _imageWriter->setImageCustomization("", "", "", userData, networkConfig);
     }
-    else if (!parser.value(firstRunScriptOption).isEmpty())
+    else if (!parser.value("first-run-script").isEmpty())
     {
         QByteArray firstRunScript;
-        QFile f(parser.value(firstRunScriptOption));
+        QFile f(parser.value("first-run-script"));
         if (!f.exists())
         {
             std::cerr << "Error: firstrun script does not exists" << std::endl;
@@ -220,7 +212,7 @@ int Cli::main()
     }
 
     _imageWriter->setDst(args[1]);
-    _imageWriter->setVerifyEnabled(!parser.isSet(disableVerify));
+    _imageWriter->setVerifyEnabled(!parser.isSet("disable-verify"));
 
     /* Run startWrite() in event loop (otherwise calling _app->exit() on error does not work) */
     QTimer::singleShot(1, _imageWriter, &ImageWriter::startWrite);
