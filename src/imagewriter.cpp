@@ -608,15 +608,15 @@ QByteArray ImageWriter::getFilteredOSlist() {
     }
 
     reference_os_list_array.append(QJsonObject({
-            {"name", QApplication::translate("main", "Erase")},
-            {"description", QApplication::translate("main", "Format card as FAT32")},
+            {"name", QCoreApplication::translate("main", "Erase")},
+            {"description", QCoreApplication::translate("main", "Format card as FAT32")},
             {"icon", "icons/erase.png"},
             {"url", "internal://format"},
         }));
 
     reference_os_list_array.append(QJsonObject({
-            {"name", QApplication::translate("main", "Use custom")},
-            {"description", QApplication::translate("main", "Select a custom .img from your computer")},
+            {"name", QCoreApplication::translate("main", "Use custom")},
+            {"description", QCoreApplication::translate("main", "Select a custom .img from your computer")},
             {"icon", "icons/use_custom.png"},
             {"url", ""},
         }));
