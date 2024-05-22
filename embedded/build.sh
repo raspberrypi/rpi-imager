@@ -2,22 +2,21 @@
 
 set -e
 
-BUILDROOT=buildroot
-BUILDROOT_TAR=buildroot-20231002.tar.bz2
+BUILDROOT=buildroot-2024.02.2
+BUILDROOT_TAR=buildroot-2024.02.2.tar.gz
 
-if [ ! -e $BUILDROOT ]; then
-    tar xjf $BUILDROOT_TAR
-    patch -p0 < buildroot-mesa3d-pi5.patch
+if [ ! -e "${BUILDROOT}" ]; then
+    tar xvf "${BUILDROOT_TAR}"
 fi
 
-if [ ! -e $BUILDROOT/.config ]; then
-    make -C $BUILDROOT BR2_EXTERNAL="$PWD/imager" rpi-imager_defconfig
+if [ ! -e "${BUILDROOT}/.config" ]; then
+    make -C "${BUILDROOT}" BR2_EXTERNAL="${PWD}/imager" rpi-imager_defconfig
 fi
 
 #
 # Build everything
 #
-make -C $BUILDROOT BR2_EXTERNAL="$PWD/imager"
+make -C "${BUILDROOT}" BR2_EXTERNAL="$PWD/imager"
 
 #
 # Copy the files we are interested in from buildroot's "output/images" directory
@@ -25,11 +24,11 @@ make -C $BUILDROOT BR2_EXTERNAL="$PWD/imager"
 #
 
 # Copy Linux kernel and initramfs
-cp $BUILDROOT/output/images/rootfs.cpio.zst $BUILDROOT/output/images/Image.gz output
+cp "${BUILDROOT}/output/images/rootfs.cpio.zst" "${BUILDROOT}/output/images/Image.gz" output
 # Raspberry Pi firmware files
-cp $BUILDROOT/output/images/rpi-firmware/start4.elf output
-cp $BUILDROOT/output/images/rpi-firmware/fixup4.dat output
-cp $BUILDROOT/output/images/*.dtb output
+cp "${BUILDROOT}/output/images/rpi-firmware/start4.elf" output
+cp "${BUILDROOT}/output/images/rpi-firmware/fixup4.dat" output
+cp "${BUILDROOT}/output/images/*.dtb" output
 
 # Not used by Pi 4, but need to be present to make usbboot think it is a valid directory
 touch output/bootcode.bin
