@@ -28,21 +28,20 @@ cp "${BUILDROOT}/output/images/rootfs.cpio.zst" "${BUILDROOT}/output/images/Imag
 # Raspberry Pi firmware files
 cp "${BUILDROOT}/output/images/rpi-firmware/start4.elf" output
 cp "${BUILDROOT}/output/images/rpi-firmware/fixup4.dat" output
-cp "${BUILDROOT}/output/images/*.dtb" output
 
 # Not used by Pi 4, but need to be present to make usbboot think it is a valid directory
 touch output/bootcode.bin
 
 mkdir -p output/overlays
 
-mv -f output/dwc2-overlay.dtb output/overlays/dwc2.dtbo
-mv -f output/vc4-kms-v3d-pi5-overlay.dtb output/overlays/vc4-kms-v3d-pi5.dtbo
-mv -f output/vc4-kms-v3d-pi4-overlay.dtb output/overlays/vc4-kms-v3d-pi4.dtbo
-mv -f output/disable-bt-overlay.dtb output/overlays/disable-bt.dtbo
-mv -f output/disable-wifi-overlay.dtb output/overlays/disable-wifi.dtbo
-mv -f output/disable-bt-pi5-overlay.dtb output/overlays/disable-bt-pi5.dtbo
-mv -f output/disable-wifi-pi5-overlay.dtb output/overlays/disable-wifi-pi5.dtbo
-mv -f output/overlay_map.dtb output/overlays/overlay_map.dtb
+cp ${BUILDROOT}/output/images/dwc2-overlay.dtb output/overlays/dwc2.dtbo
+cp ${BUILDROOT}/output/images/vc4-kms-v3d-pi5-overlay.dtb output/overlays/vc4-kms-v3d-pi5.dtbo
+cp ${BUILDROOT}/output/images/vc4-kms-v3d-pi4-overlay.dtb output/overlays/vc4-kms-v3d-pi4.dtbo
+cp ${BUILDROOT}/output/images/disable-bt-overlay.dtb output/overlays/disable-bt.dtbo
+cp ${BUILDROOT}/output/images/disable-wifi-overlay.dtb output/overlays/disable-wifi.dtbo
+cp ${BUILDROOT}/output/images/disable-bt-pi5-overlay.dtb output/overlays/disable-bt-pi5.dtbo
+cp ${BUILDROOT}/output/images/disable-wifi-pi5-overlay.dtb output/overlays/disable-wifi-pi5.dtbo
+cp ${BUILDROOT}/output/images/overlay_map.dtb output/overlays/overlay_map.dtb
 
 echo
 echo Build complete. Files are in output folder.
