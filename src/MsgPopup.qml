@@ -95,21 +95,21 @@ Popup {
             spacing: 20
 
             ImButtonRed {
-                text: qsTr("NO")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.no()
-                }
-                visible: msgpopup.noButton
-            }
-
-            ImButtonRed {
                 text: qsTr("YES")
                 onClicked: {
                     msgpopup.close()
                     msgpopup.yes()
                 }
                 visible: msgpopup.yesButton
+            }
+
+            ImButtonRed {
+                text: qsTr("NO")
+                onClicked: {
+                    msgpopup.close()
+                    msgpopup.no()
+                }
+                visible: msgpopup.noButton
             }
 
             ImButtonRed {
