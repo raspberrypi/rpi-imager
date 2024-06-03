@@ -48,7 +48,7 @@ namespace Drivelist
         std::vector<DeviceDescriptor> deviceList;
 
         QProcess p;
-        QStringList args = { "--bytes", "--json", "--paths", "--output-all" };
+        QStringList args = { "--bytes", "--json", "--paths", "--output-all", "--exclude", "7" };
         p.start("lsblk", args);
         p.waitForFinished(2000);
         QByteArray output = p.readAll();
