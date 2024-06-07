@@ -50,7 +50,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="213"/>
         <source>Authentication cancelled</source>
-        <translation>认证已取消</translation>
+        <translation>验证已取消</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="216"/>
@@ -60,7 +60,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="217"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>请检查，在隐私设置中是否允许树莓派镜像烧录器（Raspberry Pi Imager）访问“可移动卷”（位于“文件和文件夹”下），或为其授予“完整磁盘访问权限”。</translation>
+        <translation>请检查，在隐私设置中是否允许树莓派镜像烧录器（Raspberry Pi Imager）访问“可移除的宗卷”（位于“文件和文件夹”下），或为其授予“完全磁盘访问权限”。</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="239"/>
@@ -70,7 +70,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="281"/>
         <source>discarding existing data on drive</source>
-        <translation>清除已有数据</translation>
+        <translation>清除存储设备上的已有数据</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="301"/>
@@ -137,7 +137,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="828"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>从存储设备读取数据时发生错误。&lt;br&gt;SD 卡可能已损坏。</translation>
+        <translation>读取存储设备时发生错误。&lt;br&gt;SD 卡可能已损坏。</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="847"/>
@@ -245,7 +245,7 @@
     <message>
         <location filename="../imagewriter.cpp" line="1185"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation>您想要通过系统钥匙串预填 WiFi 密码吗？</translation>
+        <translation>您想要通过系统钥匙串访问自动填充 WiFi 密码吗？</translation>
     </message>
 </context>
 <context>
@@ -253,7 +253,7 @@
     <message>
         <location filename="../localfileextractthread.cpp" line="34"/>
         <source>opening image file</source>
-        <translation>打开镜像</translation>
+        <translation>打开镜像文件</translation>
     </message>
     <message>
         <location filename="../localfileextractthread.cpp" line="39"/>
@@ -304,7 +304,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="73"/>
         <source>Options</source>
-        <translation>选项</translation>
+        <translation>可选配置</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="89"/>
@@ -319,7 +319,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="134"/>
         <source>Username:</source>
-        <translation>用户名</translation>
+        <translation>用户名：</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="151"/>
@@ -330,12 +330,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="187"/>
         <source>Configure wireless LAN</source>
-        <translation>配置 WiFi</translation>
+        <translation>配置 WLAN</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="206"/>
         <source>SSID:</source>
-        <translation>WIFI 名（SSID）：</translation>
+        <translation>网络名称：</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="239"/>
@@ -345,12 +345,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="245"/>
         <source>Hidden SSID</source>
-        <translation>隐藏的 WIFI 名（Hidden SSID）</translation>
+        <translation>隐藏的网络</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="251"/>
         <source>Wireless LAN country:</source>
-        <translation>WIFI 国家/地区：</translation>
+        <translation>WLAN 区域：</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="262"/>
@@ -400,7 +400,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="380"/>
         <source>Eject media when finished</source>
-        <translation>在完成后弹出磁盘</translation>
+        <translation>在完成后卸载磁盘</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="384"/>
@@ -441,7 +441,7 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="115"/>
         <source>NO, CLEAR SETTINGS</source>
-        <translation>否，将清空所有设置</translation>
+        <translation>否，并清空所有设置</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="125"/>
@@ -475,7 +475,7 @@
     <message>
         <location filename="../main.qml" line="143"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation>选择您的树莓派型号</translation>
+        <translation>点击此处选择您的树莓派型号</translation>
     </message>
     <message>
         <location filename="../main.qml" line="157"/>
@@ -492,7 +492,7 @@
     <message>
         <location filename="../main.qml" line="180"/>
         <source>Select this button to change the operating system</source>
-        <translation>更改操作系统</translation>
+        <translation>点击此处更改操作系统</translation>
     </message>
     <message>
         <location filename="../main.qml" line="194"/>
@@ -519,7 +519,7 @@
     <message>
         <location filename="../main.qml" line="219"/>
         <source>Select this button to change the destination storage device</source>
-        <translation>更改所选存储设备</translation>
+        <translation>点击此处更改所选存储设备</translation>
     </message>
     <message>
         <location filename="../main.qml" line="265"/>
@@ -552,7 +552,7 @@
     <message>
         <location filename="../main.qml" line="298"/>
         <source>Select this button to start writing the image</source>
-        <translation>开始写入</translation>
+        <translation>点击此处开始写入</translation>
     </message>
     <message>
         <location filename="../main.qml" line="320"/>
@@ -587,7 +587,7 @@
     <message>
         <location filename="../main.qml" line="652"/>
         <source>Go back to main menu</source>
-        <translation>回到主页</translation>
+        <translation>回到主菜单</translation>
     </message>
     <message>
         <location filename="../main.qml" line="894"/>
@@ -614,7 +614,7 @@
         <location filename="../main.qml" line="1094"/>
         <location filename="../main.qml" line="1100"/>
         <source>Mounted as %1</source>
-        <translation>挂载为：%1</translation>
+        <translation>已挂载为：%1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1096"/>
@@ -624,7 +624,7 @@
     <message>
         <location filename="../main.qml" line="1141"/>
         <source>Are you sure you want to quit?</source>
-        <translation>确定要退出吗？</translation>
+        <translation>您确定要退出吗？</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1142"/>
@@ -644,7 +644,7 @@
     <message>
         <location filename="../main.qml" line="1176"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>&apos;%1&apos; 上的所有数据都将被删除。&lt;br&gt;是否继续？</translation>
+        <translation>&apos;%1&apos; 上的已有数据都将被删除。&lt;br&gt;是否继续？</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1191"/>
@@ -715,12 +715,12 @@
     <message>
         <location filename="../imagewriter.cpp" line="604"/>
         <source>Select a custom .img from your computer</source>
-        <translation>选择已有 .img 文件</translation>
+        <translation>选择本地已有的 .img 文件</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1712"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation>请先连接一个包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根文件夹下。</translation>
+        <translation>请先连接一个包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根路径下。</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1728"/>
