@@ -85,7 +85,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="319"/>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>镜像写入失败&lt;br&gt;SD 卡可能已损坏。</translation>
+        <translation>在对设备尾部清零时写入错误&lt;br&gt;SD 卡标称的容量错误（可能是扩容卡）。</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="408"/>
@@ -182,7 +182,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="146"/>
         <source>Error formatting (through udisks2)</source>
-        <translation>格式化错误</translation>
+        <translation>格式化时发生错误</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="174"/>
@@ -355,7 +355,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="262"/>
         <source>Set locale settings</source>
-        <translation>语言设置</translation>
+        <translation>本地化设置</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="272"/>
@@ -380,7 +380,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="328"/>
         <source>Allow public-key authentication only</source>
-        <translation>只允许使用公匙登录</translation>
+        <translation>仅使用公匙登录</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="346"/>
@@ -395,12 +395,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="376"/>
         <source>Play sound when finished</source>
-        <translation>完成后播放提示音</translation>
+        <translation>在完成后播放提示音</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="380"/>
         <source>Eject media when finished</source>
-        <translation>完成后弹出磁盘</translation>
+        <translation>在完成后弹出磁盘</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="384"/>
@@ -441,7 +441,7 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="115"/>
         <source>NO, CLEAR SETTINGS</source>
-        <translation>清空所有设置</translation>
+        <translation>否，将清空所有设置</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="125"/>
@@ -562,7 +562,7 @@
     <message>
         <location filename="../main.qml" line="339"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
-        <translation>键盘导航：&lt;tab&gt; 切换选项：&lt;space&gt; 确认/选择后使用 &lt;arrow up/down&gt; 可在列表中上下移动</translation>
+        <translation>键盘导航：&lt;tab&gt; 切换选项 &lt;space&gt; 确认/选择后使用 &lt;arrow up/down&gt; 可在列表中上下移动</translation>
     </message>
     <message>
         <location filename="../main.qml" line="360"/>
@@ -669,7 +669,7 @@
     <message>
         <location filename="../main.qml" line="1273"/>
         <source>Preparing to write... (%1)</source>
-        <translation>正在写入…… (%1)</translation>
+        <translation>准备写入…… (%1)</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1293"/>
@@ -679,7 +679,7 @@
     <message>
         <location filename="../main.qml" line="1300"/>
         <source>Write Successful</source>
-        <translation>写入成功</translation>
+        <translation>烧录成功</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1301"/>
@@ -690,12 +690,12 @@
     <message>
         <location filename="../main.qml" line="1302"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1 &lt;/ b&gt;已格式化&lt;br&gt; &lt;br&gt;您现在可以从读卡器上取下 SD 卡了</translation>
+        <translation>&lt;b&gt;%1 &lt;/ b&gt; 已成功格式化&lt;br&gt; &lt;br&gt;您现在可以从读卡器上取下 SD 卡了</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1309"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; 已经成功烧录至 &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;上，您现在可以从读卡器上取下 SD 卡了</translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; 已成功烧录至 &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;，您现在可以从读卡器上取下 SD 卡了</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1463"/>
@@ -715,12 +715,12 @@
     <message>
         <location filename="../imagewriter.cpp" line="604"/>
         <source>Select a custom .img from your computer</source>
-        <translation>选择已有 .img 文件进行写入</translation>
+        <translation>选择已有 .img 文件</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1712"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation>要连接包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根文件夹下。</translation>
+        <translation>请先连接一个包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根文件夹下。</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1728"/>
