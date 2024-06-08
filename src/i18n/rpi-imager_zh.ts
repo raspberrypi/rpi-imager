@@ -12,7 +12,7 @@
     <message>
         <location filename="../downloadextractthread.cpp" line="261"/>
         <source>Error mounting FAT32 partition</source>
-        <translation>FAT32 分区挂载错误</translation>
+        <translation>挂载 FAT32 分区时发生错误</translation>
     </message>
     <message>
         <location filename="../downloadextractthread.cpp" line="281"/>
@@ -60,7 +60,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="217"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>请检查，在隐私设置中是否允许树莓派镜像烧录器（Raspberry Pi Imager）访问“可移除的宗卷”（位于“文件和文件夹”下），或为其授予“完全磁盘访问权限”。</translation>
+        <translation>请检查，在隐私设置中是否允许树莓派启动盘制作工具（Raspberry Pi Imager）访问“可移除的宗卷”（位于“文件和文件夹”下），或为其授予“完全磁盘访问权限”。</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="239"/>
@@ -459,7 +459,7 @@
     <message>
         <location filename="../main.qml" line="22"/>
         <source>Raspberry Pi Imager v%1</source>
-        <translation>树莓派镜像烧录器 v%1</translation>
+        <translation>树莓派启动盘制作工具 v%1</translation>
     </message>
     <message>
         <location filename="../main.qml" line="119"/>
@@ -629,7 +629,7 @@
     <message>
         <location filename="../main.qml" line="1142"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>树莓派镜像烧录器还未完成任务。&lt;br&gt;您确定要退出吗？</translation>
+        <translation>树莓派启动盘制作工具还未完成任务。&lt;br&gt;您确定要退出吗？</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1153"/>
@@ -654,7 +654,7 @@
     <message>
         <location filename="../main.qml" line="1192"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation>检测到新版树莓派镜像烧录器。&lt;br&gt; 是否转到网页进行下载？</translation>
+        <translation>检测到新版树莓派启动盘制作工具。&lt;br&gt; 是否转到网页进行下载？</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1243"/>
@@ -679,7 +679,7 @@
     <message>
         <location filename="../main.qml" line="1300"/>
         <source>Write Successful</source>
-        <translation>烧录成功</translation>
+        <translation>写入成功</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1301"/>
@@ -695,7 +695,7 @@
     <message>
         <location filename="../main.qml" line="1309"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; 已成功烧录至 &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;，您现在可以从读卡器上取下 SD 卡了</translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; 已成功写入至 &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;，您现在可以从读卡器上取下 SD 卡了</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1463"/>
