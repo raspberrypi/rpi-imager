@@ -380,12 +380,12 @@
     <message>
         <location filename="../OptionsPopup.qml" line="328"/>
         <source>Allow public-key authentication only</source>
-        <translation>仅使用公匙登录</translation>
+        <translation>仅使用公钥登录</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="346"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>为用户 “%1” 设置登录密匙：</translation>
+        <translation>为用户 “%1” 设置 authorized_keys：</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="358"/>
