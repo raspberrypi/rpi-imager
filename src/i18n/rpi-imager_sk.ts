@@ -34,12 +34,12 @@
     <message>
         <location filename="../downloadthread.cpp" line="118"/>
         <source>unmounting drive</source>
-        <translation type="unfinished"></translation>
+        <translation>odpájam jednotku</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="138"/>
         <source>opening drive</source>
-        <translation>otváram disk</translation>
+        <translation>otváram jednotku</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="166"/>
@@ -74,12 +74,12 @@
     <message>
         <location filename="../downloadthread.cpp" line="281"/>
         <source>discarding existing data on drive</source>
-        <translation>odstraňujem existujúce údaje z disku</translation>
+        <translation>odstraňujem existujúce údaje na jednotke</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="301"/>
         <source>zeroing out first and last MB of drive</source>
-        <translation>prepisujem prvý a posledny megabajt disku</translation>
+        <translation>prepisujem prvý a posledný megabajt na jednotke</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="307"/>
@@ -212,7 +212,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="104"/>
         <source>Error determining new drive letter</source>
-        <translation>Chyba pri zisťovaní písmena nového disku</translation>
+        <translation>Chyba pri zisťovaní písmena novej jednotky</translation>
     </message>
     <message>
         <location filename="../driveformatthread.cpp" line="109"/>
@@ -275,12 +275,12 @@
     <message>
         <location filename="../imagewriter.cpp" line="962"/>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>Chyba pri synchronizácii času. Vyskúšam to znova o 3 sekundy</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="974"/>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation type="unfinished"></translation>
+        <translation>Na vašom sieťovom prepínači je povolený protokol STP. Získanie IP bude trvať dlhý čas.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="1185"/>
@@ -329,7 +329,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
+        <translation>Úpravy OS</translation>
     </message>
     <message>
         <source>for this session only</source>
@@ -342,17 +342,17 @@
     <message>
         <location filename="../OptionsPopup.qml" line="62"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>Všeobecné</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="70"/>
         <source>Services</source>
-        <translation type="unfinished"></translation>
+        <translation>Služby</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="73"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Možnosti</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="89"/>
@@ -438,7 +438,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="358"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
+        <translation>SPUSTIŤ SSH-KEYGEN</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="376"/>
@@ -494,17 +494,17 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="77"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
+        <translation>Použiť úpravy OS?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="92"/>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Chceli by ste použiť nastavenia, ktoré upravujú operačný systém?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="134"/>
         <source>NO</source>
-        <translation type="unfinished">NIE</translation>
+        <translation>NIE</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="115"/>
@@ -533,17 +533,17 @@
         <location filename="../main.qml" line="119"/>
         <location filename="../main.qml" line="481"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Zariadenie Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="131"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>VYBERTE ZARIADENIE</translation>
     </message>
     <message>
         <location filename="../main.qml" line="143"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Vyberte toto tlačidlo pre výber cieľového Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="157"/>
@@ -609,7 +609,7 @@
     <message>
         <location filename="../main.qml" line="292"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>Ďalej</translation>
     </message>
     <message>
         <location filename="../main.qml" line="298"/>
@@ -628,7 +628,7 @@
     <message>
         <location filename="../main.qml" line="330"/>
         <source>Network not ready yet</source>
-        <translation type="unfinished"></translation>
+        <translation>Sieť ešte nie je pripravená</translation>
     </message>
     <message>
         <location filename="../main.qml" line="339"/>
@@ -648,7 +648,7 @@
     <message>
         <location filename="../main.qml" line="500"/>
         <source>[ All ]</source>
-        <translation type="unfinished"></translation>
+        <translation>[ Všetky ]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="651"/>
@@ -683,7 +683,7 @@
     <message>
         <location filename="../main.qml" line="1007"/>
         <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
+        <translation>Nenašli sa žiadne úložné zariadenia</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1042"/>
