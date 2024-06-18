@@ -2,7 +2,9 @@
 Type=Application
 Version=1.0
 Name=Imager
+Name[zh_CN]=树莓派启动盘制作工具
 Comment=Raspberry Pi Imager
+Comment[zh_CN]=树莓派启动盘制作工具
 Icon=rpi-imager
 Exec=rpi-imager %F
 Categories=Utility

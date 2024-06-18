@@ -787,8 +787,9 @@ Window {
             addFirstRun("fi")
 
             addCloudInit("timezone: "+fieldTimezone.editText)
-            addCloudInitRun("localectl set-x11-keymap \""+fieldKeyboardLayout.editText+"\" pc105")
-            addCloudInitRun("setupcon -k --force || true")
+            addCloudInit("keyboard:")
+            addCloudInit("  model: pc105")
+            addCloudInit("  layout: \"" + fieldKeyboardLayout.editText + "\"")
         }
 
         if (firstrun.length) {
