@@ -2,8 +2,8 @@
 
 set -e
 
-BUILDROOT=buildroot-2024.02.2
-BUILDROOT_TAR=buildroot-2024.02.2.tar.gz
+BUILDROOT=buildroot-2024.02.3
+BUILDROOT_TAR=buildroot-2024.02.3.tar.gz
 
 if [ ! -e "${BUILDROOT}" ]; then
     tar xvf "${BUILDROOT_TAR}"
@@ -32,9 +32,13 @@ cp "${BUILDROOT}/output/images/rpi-firmware/fixup4.dat" output
 # Not used by Pi 4, but need to be present to make usbboot think it is a valid directory
 touch output/bootcode.bin
 
+cp ${BUILDROOT}/output/images/bcm2711*.dtb output/
+cp ${BUILDROOT}/output/images/bcm2712*.dtb output/
+
 mkdir -p output/overlays
 
 cp ${BUILDROOT}/output/images/dwc2-overlay.dtb output/overlays/dwc2.dtbo
+cp ${BUILDROOT}/output/images/bcm2712d0-overlay.dtb output/overlays/bcm2712d0.dtbo
 cp ${BUILDROOT}/output/images/vc4-kms-v3d-pi5-overlay.dtb output/overlays/vc4-kms-v3d-pi5.dtbo
 cp ${BUILDROOT}/output/images/vc4-kms-v3d-pi4-overlay.dtb output/overlays/vc4-kms-v3d-pi4.dtbo
 cp ${BUILDROOT}/output/images/disable-bt-overlay.dtb output/overlays/disable-bt.dtbo
