@@ -253,7 +253,7 @@ BR2_BINUTILS_EXTRA_CONFIG_OPTIONS=""
 # BR2_GCC_VERSION_11_X is not set
 # BR2_GCC_VERSION_12_X is not set
 BR2_GCC_VERSION_13_X=y
-BR2_GCC_VERSION="13.2.0"
+BR2_GCC_VERSION="13.3.0"
 BR2_EXTRA_GCC_CONFIG_OPTIONS=""
 BR2_TOOLCHAIN_BUILDROOT_CXX=y
 # BR2_TOOLCHAIN_BUILDROOT_FORTRAN is not set
@@ -541,7 +541,7 @@ BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
 # BR2_LINUX_KERNEL_CUSTOM_GIT is not set
 # BR2_LINUX_KERNEL_CUSTOM_HG is not set
 # BR2_LINUX_KERNEL_CUSTOM_SVN is not set
-BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,573f8fd)/linux-573f8fd.tar.gz"
+BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,c1432b4)/linux-c1432b4.tar.gz"
 BR2_LINUX_KERNEL_VERSION="custom"
 BR2_LINUX_KERNEL_PATCH=""
 # BR2_LINUX_KERNEL_USE_DEFCONFIG is not set
@@ -562,7 +562,7 @@ BR2_LINUX_KERNEL_IMAGEGZ=y
 BR2_LINUX_KERNEL_ZSTD=y
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
 # BR2_LINUX_KERNEL_DTB_IS_SELF_BUILT is not set
-BR2_LINUX_KERNEL_INTREE_DTS_NAME="broadcom/bcm2711-rpi-4-b broadcom/bcm2711-rpi-400 broadcom/bcm2711-rpi-cm4 broadcom/bcm2712-rpi-5-b overlays/overlay_map overlays/dwc2-overlay overlays/vc4-kms-v3d-pi4-overlay overlays/vc4-kms-v3d-pi5-overlay overlays/disable-bt-overlay overlays/disable-wifi-overlay overlays/disable-bt-pi5-overlay overlays/disable-wifi-pi5-overlay"
+BR2_LINUX_KERNEL_INTREE_DTS_NAME="broadcom/bcm2711-rpi-4-b broadcom/bcm2711-rpi-400 broadcom/bcm2711-rpi-cm4 broadcom/bcm2712-rpi-5-b broadcom/bcm2712d0-rpi-5-b broadcom/bcm2712-rpi-cm5-cm5io broadcom/bcm2712-rpi-cm5-cm4io overlays/overlay_map overlays/dwc2-overlay overlays/vc4-kms-v3d-pi4-overlay overlays/vc4-kms-v3d-pi5-overlay overlays/disable-bt-overlay overlays/disable-wifi-overlay overlays/disable-bt-pi5-overlay overlays/disable-wifi-pi5-overlay overlays/bcm2712d0-overlay"
 BR2_LINUX_KERNEL_CUSTOM_DTS_PATH=""
 # BR2_LINUX_KERNEL_DTB_KEEP_DIRNAME is not set
 # BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT is not set
