@@ -7,7 +7,7 @@ BUILDROOT_TAR=buildroot-2024.02.3.tar.gz
 
 if [ ! -e "${BUILDROOT}" ]; then
     tar xvf "${BUILDROOT_TAR}"
-    patch -p0 < buildroot-mesa3d.patch
+    pushd ${BUILDROOT} && patch -p0 < buildroot-mesa3d.patch && popd
 fi
 
 if [ ! -e "${BUILDROOT}/.config" ]; then
