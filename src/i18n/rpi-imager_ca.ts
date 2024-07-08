@@ -24,10 +24,6 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>S&apos;ha produït un error en canviar al directori «%1»</translation>
     </message>
-    <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">S&apos;ha produït un error en escriure a l&apos;emmagatzematge</translation>
-    </message>
 </context>
 <context>
     <name>DownloadThread</name>
@@ -239,12 +235,12 @@
     <message>
         <location filename="../imagewriter.cpp" line="962"/>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produït un error en sincronitzar l&apos;hora. Torneu-ho a provar en 3 segons.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="974"/>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation type="unfinished"></translation>
+        <translation>El commutador d&apos;Ethernet té l&apos;STP activat. L&apos;obtenció de la IP pot trigar molt.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="1185"/>
@@ -293,30 +289,22 @@
     <message>
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>for this session only</source>
-        <translation type="vanished">per a aquesta sessió només</translation>
-    </message>
-    <message>
-        <source>to always use</source>
-        <translation type="vanished">per utilitzar sempre</translation>
+        <translation>Personalització del SO</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="62"/>
         <source>General</source>
-        <translation type="unfinished"></translation>
+        <translation>General</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="70"/>
         <source>Services</source>
-        <translation type="unfinished"></translation>
+        <translation>Serveis</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="73"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Opcions</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="89"/>
@@ -402,7 +390,7 @@
     <message>
         <location filename="../OptionsPopup.qml" line="358"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished"></translation>
+        <translation>EXECUTA SSH-KEYGEN</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="376"/>
@@ -424,10 +412,6 @@
         <source>SAVE</source>
         <translation>DESA</translation>
     </message>
-    <message>
-        <source>Persistent settings</source>
-        <translation type="vanished">Configuració persistent</translation>
-    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -442,12 +426,12 @@
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="77"/>
         <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
+        <translation>Voleu personalitzar el SO?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="92"/>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Voleu aplicar la configuració personalitzada del SO?</translation>
     </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="134"/>
@@ -481,17 +465,17 @@
         <location filename="../main.qml" line="119"/>
         <location filename="../main.qml" line="481"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Placa Raspberry Pi</translation>
     </message>
     <message>
         <location filename="../main.qml" line="131"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished"></translation>
+        <translation>TRIA LA PLACA</translation>
     </message>
     <message>
         <location filename="../main.qml" line="143"/>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Seleccioneu aquest botó per a escollir la placa Raspberry Pi objectiu</translation>
     </message>
     <message>
         <location filename="../main.qml" line="157"/>
@@ -503,7 +487,7 @@
         <location filename="../main.qml" line="168"/>
         <location filename="../main.qml" line="1638"/>
         <source>CHOOSE OS</source>
-        <translation>ESCULL SO</translation>
+        <translation>TRIA EL SO</translation>
     </message>
     <message>
         <location filename="../main.qml" line="180"/>
@@ -519,22 +503,18 @@
     <message>
         <location filename="../main.qml" line="330"/>
         <source>Network not ready yet</source>
-        <translation type="unfinished"></translation>
+        <translation>La xarxa encara no és a punt</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1007"/>
         <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
+        <translation>No s&apos;han trobat dispositius d&apos;emmagatzematge</translation>
     </message>
     <message>
         <location filename="../main.qml" line="205"/>
         <location filename="../main.qml" line="1317"/>
         <source>CHOOSE STORAGE</source>
-        <translation>ESCULL L&apos;EMMAGATZEMATGE</translation>
-    </message>
-    <message>
-        <source>WRITE</source>
-        <translation type="vanished">ESCRIU</translation>
+        <translation>TRIA L&apos;EMMAGATZEMATGE</translation>
     </message>
     <message>
         <location filename="../main.qml" line="219"/>
@@ -567,16 +547,12 @@
     <message>
         <location filename="../main.qml" line="292"/>
         <source>Next</source>
-        <translation type="unfinished"></translation>
+        <translation>Següent</translation>
     </message>
     <message>
         <location filename="../main.qml" line="298"/>
         <source>Select this button to start writing the image</source>
         <translation>Seleccioneu aquest botó per a començar l&apos;escriptura de la imatge</translation>
-    </message>
-    <message>
-        <source>Select this button to access advanced settings</source>
-        <translation type="vanished">Seleccioneu aquest botó per accedir a la configuració avançada</translation>
     </message>
     <message>
         <location filename="../main.qml" line="320"/>
@@ -601,7 +577,7 @@
     <message>
         <location filename="../main.qml" line="500"/>
         <source>[ All ]</source>
-        <translation type="unfinished"></translation>
+        <translation>[ TOT ]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="651"/>
@@ -648,12 +624,12 @@
     <message>
         <location filename="../main.qml" line="1141"/>
         <source>Are you sure you want to quit?</source>
-        <translation>N&apos;esteu segur que voleu sortir?</translation>
+        <translation>Esteu segur que en voleu sortir?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1142"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>El Raspberry Pi Imager està ocupat.&lt;br&gt;N&apos;esteu segur que voleu sortir?</translation>
+        <translation>El Raspberry Pi Imager està ocupat.&lt;br&gt;Esteu segur que en voleu sortir?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1153"/>
@@ -679,10 +655,6 @@
         <location filename="../main.qml" line="1192"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
         <translation>Hi ha una nova versió de l&apos;Imager disponible.&lt;br&gt;Voleu visitar el lloc web per baixar-la?</translation>
-    </message>
-    <message>
-        <source>Error downloading OS list from Internet</source>
-        <translation type="vanished">S&apos;ha produït un error en baixar la llista dels SO d&apos;internet</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1243"/>
