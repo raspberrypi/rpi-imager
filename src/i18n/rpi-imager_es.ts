@@ -24,10 +24,6 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Error cambiando al directorio &apos;%1&apos;</translation>
     </message>
-    <message>
-        <source>Error writing to storage</source>
-        <translation type="vanished">Error escribiendo en la memoria</translation>
-    </message>
 </context>
 <context>
     <name>DownloadThread</name>
@@ -239,12 +235,12 @@
     <message>
         <location filename="../imagewriter.cpp" line="962"/>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>Error sincronizando la hora. Vuelva a intentarlo en 3 segundos</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="974"/>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation type="unfinished"></translation>
+        <translation>El comutador de Ethernet tiene el STP activado. La obtención de la IP puede tardar mucho.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="1185"/>
@@ -294,18 +290,6 @@
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
         <translation>Personalización del SO</translation>
-    </message>
-    <message>
-        <source>OS customization options</source>
-        <translation type="vanished">Opciones de personalización del SO</translation>
-    </message>
-    <message>
-        <source>for this session only</source>
-        <translation type="vanished">solo para esta sesión</translation>
-    </message>
-    <message>
-        <source>to always use</source>
-        <translation type="vanished">para usar siempre</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="62"/>
@@ -428,10 +412,6 @@
         <source>SAVE</source>
         <translation>GUARDAR</translation>
     </message>
-    <message>
-        <source>Persistent settings</source>
-        <translation type="vanished">Ajustes persistentes</translation>
-    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -523,22 +503,18 @@
     <message>
         <location filename="../main.qml" line="330"/>
         <source>Network not ready yet</source>
-        <translation type="unfinished"></translation>
+        <translation>La red aún no está lista</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1007"/>
         <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
+        <translation>No se han encontrado dispositivos de almacenamiento</translation>
     </message>
     <message>
         <location filename="../main.qml" line="205"/>
         <location filename="../main.qml" line="1317"/>
         <source>CHOOSE STORAGE</source>
         <translation>ELEGIR ALMACENAMIENTO</translation>
-    </message>
-    <message>
-        <source>WRITE</source>
-        <translation type="vanished">ESCRIBIR</translation>
     </message>
     <message>
         <location filename="../main.qml" line="219"/>
@@ -579,10 +555,6 @@
         <translation>Seleccione este botón para empezar a escribir la imagen</translation>
     </message>
     <message>
-        <source>Select this button to access advanced settings</source>
-        <translation type="vanished">Seleccione este botón para acceder a los ajustes avanzados</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="320"/>
         <source>Using custom repository: %1</source>
         <translation>Usando repositorio personalizado: %1</translation>
@@ -601,10 +573,6 @@
         <location filename="../main.qml" line="383"/>
         <source>Keyboard: </source>
         <translation>Teclado: </translation>
-    </message>
-    <message>
-        <source>Pi model:</source>
-        <translation type="vanished">Modelo Pi:</translation>
     </message>
     <message>
         <location filename="../main.qml" line="500"/>
@@ -639,7 +607,7 @@
     <message>
         <location filename="../main.qml" line="907"/>
         <source>Online - %1 GB download</source>
-        <translation>En línea - %1 GB descarga</translation>
+        <translation>En línea - descarga de %1 GB</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1042"/>
@@ -687,10 +655,6 @@
         <location filename="../main.qml" line="1192"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
         <translation>Hay una versión más reciente de Imager disponible.&lt;br&gt;¿Desea visitar el sitio web para descargarla?</translation>
-    </message>
-    <message>
-        <source>Error downloading OS list from Internet</source>
-        <translation type="vanished">Error al descargar la lista de SO de Internet</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1243"/>
