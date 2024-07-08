@@ -508,7 +508,7 @@
     <message>
         <location filename="../main.qml" line="1007"/>
         <source>No storage devices found</source>
-        <translation>No s&apos;han trobat dispositius d&apos;emmagatzematge</translation>
+        <translation>No s&apos;ha trobat cap dispositiu d&apos;emmagatzematge</translation>
     </message>
     <message>
         <location filename="../main.qml" line="205"/>
