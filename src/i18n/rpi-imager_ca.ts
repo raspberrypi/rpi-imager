@@ -644,7 +644,7 @@
     <message>
         <location filename="../main.qml" line="1176"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>Totes les dades existents a «%1» s&apos;esborraran.&lt;br&gt;Segur que voleu continuar?</translation>
+        <translation>Totes les dades existents a «%1» s&apos;esborraran.&lt;br&gt;Esteu segur que voleu continuar?</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1191"/>
