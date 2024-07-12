@@ -201,8 +201,8 @@ if (WIN32)
     # Bundled zstd
     set(ZSTD_BUILD_PROGRAMS OFF)
     set(ZSTD_BUILD_SHARED OFF)
-    add_subdirectory(dependencies/zstd-1.5.4/build/cmake)
-    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.4/lib CACHE PATH "zstd include dir")
+    add_subdirectory(dependencies/zstd-1.5.6/build/cmake)
+    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.6/lib CACHE PATH "zstd include dir")
     set(ZSTD_LIBRARY libzstd_static)
 
     # Bundled libarchive
@@ -295,8 +295,8 @@ elseif(APPLE)
     # Bundled zstd
     set(ZSTD_BUILD_PROGRAMS OFF)
     set(ZSTD_BUILD_SHARED OFF)
-    add_subdirectory(dependencies/zstd-1.5.4/build/cmake)
-    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.4/lib)
+    add_subdirectory(dependencies/zstd-1.5.6/build/cmake)
+    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.6/lib)
     set(ZSTD_LIBRARY libzstd_static)
 
     # Bundled libarchive
