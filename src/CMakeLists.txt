@@ -180,9 +180,9 @@ if (WIN32)
     find_package(OpenSSL REQUIRED)
 
     # Bundled zlib
-    add_subdirectory(dependencies/zlib-1.2.13)
+    add_subdirectory(dependencies/zlib-1.3.1)
     set(ZLIB_LIBRARY zlibstatic)
-    set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib-1.2.13 CACHE PATH "zlib include dir")
+    set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
 
     # Bundled libcurl
     set(CMAKE_CURL_INCLUDES)
