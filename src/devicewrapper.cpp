@@ -166,7 +166,7 @@ DeviceWrapperFatPartition *DeviceWrapper::fatPartition(int nr)
     struct gpt_partition gptpart;
     pread((char *) &gpt, sizeof(gpt), 512);
 
-    if (!strcmp("EFI PART", gpt.Signature) && gpt.MyLBA == 1)
+    if (!strncmp("EFI PART", gpt.Signature, 8) && gpt.MyLBA == 1)
     {
         qDebug() << "Using GPT partition table";
         if (nr > gpt.NumberOfPartitionEntries)
