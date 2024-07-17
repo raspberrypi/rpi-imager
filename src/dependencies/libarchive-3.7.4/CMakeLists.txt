@@ -98,9 +98,9 @@ SET(CMAKE_REQUIRED_INCLUDES)
 SET(CMAKE_REQUIRED_LIBRARIES)
 SET(CMAKE_REQUIRED_FLAGS)
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  OPTION(ENABLE_WERROR "Treat warnings as errors - default is ON for Debug, OFF otherwise." ON)
+  OPTION(ARCHIVE_ENABLE_WERROR "Treat warnings as errors - default is ON for Debug, OFF otherwise." ON)
 else ()
-  OPTION(ENABLE_WERROR "Treat warnings as errors - default is ON for Debug, OFF otherwise." OFF)
+  OPTION(ARCHIVE_ENABLE_WERROR "Treat warnings as errors - default is ON for Debug, OFF otherwise." OFF)
 endif ()
 
 # Especially for early development, we want to be a little
@@ -112,7 +112,7 @@ IF (CMAKE_C_COMPILER_ID MATCHES "^GNU$" OR
   #################################################################
   # Set compile flags for all build types.
   SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wformat -Wformat-security")
-  if (ENABLE_WERROR)
+  if (ARCHIVE_ENABLE_WERROR)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
   endif ()
   #################################################################
@@ -151,7 +151,7 @@ IF (CMAKE_C_COMPILER_ID MATCHES "^XL$")
   #################################################################
   # Set compile flags for all build types.
   SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -qflag=e:e -qformat=sec")
-  if (ENABLE_WERROR)
+  if (ARCHIVE_ENABLE_WERROR)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -qhalt=w")
   endif ()
   #################################################################
@@ -162,7 +162,7 @@ IF (CMAKE_C_COMPILER_ID MATCHES "^XL$")
   SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -qinfo=pro:use")
 ENDIF(CMAKE_C_COMPILER_ID MATCHES "^XL$")
 IF (MSVC)
-  if (ENABLE_WERROR)
+  if (ARCHIVE_ENABLE_WERROR)
     # /WX option is the same as gcc's -Werror option.
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
   endif ()
@@ -207,58 +207,58 @@ ENDIF (MSVC)
 # Enable CTest/CDash support
 include(CTest)
 
-option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+option(ARCHIVE_BUILD_SHARED_LIBS "Build shared libraries" ON)
 
-OPTION(ENABLE_MBEDTLS "Enable use of mbed TLS" OFF)
-OPTION(ENABLE_NETTLE "Enable use of Nettle" OFF)
-OPTION(ENABLE_OPENSSL "Enable use of OpenSSL" ON)
-OPTION(ENABLE_LIBB2 "Enable the use of the system LIBB2 library if found" ON)
-OPTION(ENABLE_LZ4 "Enable the use of the system LZ4 library if found" ON)
-OPTION(ENABLE_LZO "Enable the use of the system LZO library if found" OFF)
-OPTION(ENABLE_LZMA "Enable the use of the system LZMA library if found" ON)
-OPTION(ENABLE_ZSTD "Enable the use of the system zstd library if found" ON)
+OPTION(ARCHIVE_ENABLE_MBEDTLS "Enable use of mbed TLS" OFF)
+OPTION(ARCHIVE_ENABLE_NETTLE "Enable use of Nettle" OFF)
+OPTION(ARCHIVE_ENABLE_OPENSSL "Enable use of OpenSSL" ON)
+OPTION(ARCHIVE_ENABLE_LIBB2 "Enable the use of the system LIBB2 library if found" ON)
+OPTION(ARCHIVE_ENABLE_LZ4 "Enable the use of the system LZ4 library if found" ON)
+OPTION(ARCHIVE_ENABLE_LZO "Enable the use of the system LZO library if found" OFF)
+OPTION(ARCHIVE_ENABLE_LZMA "Enable the use of the system LZMA library if found" ON)
+OPTION(ARCHIVE_ENABLE_ZSTD "Enable the use of the system zstd library if found" ON)
 
-OPTION(ENABLE_ZLIB "Enable the use of the system ZLIB library if found" ON)
-OPTION(ENABLE_BZip2 "Enable the use of the system BZip2 library if found" ON)
-OPTION(ENABLE_LIBXML2 "Enable the use of the system libxml2 library if found" ON)
-OPTION(ENABLE_EXPAT "Enable the use of the system EXPAT library if found" ON)
-OPTION(ENABLE_PCREPOSIX "Enable the use of the system PCREPOSIX library if found" ON)
-OPTION(ENABLE_PCRE2POSIX "Enable the use of the system PCRE2POSIX library if found" ON)
-OPTION(ENABLE_LIBGCC "Enable the use of the system LibGCC library if found" ON)
+OPTION(ARCHIVE_ENABLE_ZLIB "Enable the use of the system ZLIB library if found" ON)
+OPTION(ARCHIVE_ENABLE_BZip2 "Enable the use of the system BZip2 library if found" ON)
+OPTION(ARCHIVE_ENABLE_LIBXML2 "Enable the use of the system libxml2 library if found" ON)
+OPTION(ARCHIVE_ENABLE_EXPAT "Enable the use of the system EXPAT library if found" ON)
+OPTION(ARCHIVE_ENABLE_PCREPOSIX "Enable the use of the system PCREPOSIX library if found" ON)
+OPTION(ARCHIVE_ENABLE_PCRE2POSIX "Enable the use of the system PCRE2POSIX library if found" ON)
+OPTION(ARCHIVE_ENABLE_LIBGCC "Enable the use of the system LibGCC library if found" ON)
 # CNG is used for encrypt/decrypt Zip archives on Windows.
-OPTION(ENABLE_CNG "Enable the use of CNG(Crypto Next Generation)" ON)
+OPTION(ARCHIVE_ENABLE_CNG "Enable the use of CNG(Crypto Next Generation)" ON)
 
-OPTION(ENABLE_TAR "Enable tar building" ON)
-OPTION(ENABLE_TAR_SHARED "Enable dynamic build of tar" FALSE)
-OPTION(ENABLE_CPIO "Enable cpio building" ON)
-OPTION(ENABLE_CPIO_SHARED "Enable dynamic build of cpio" FALSE)
-OPTION(ENABLE_CAT "Enable cat building" ON)
-OPTION(ENABLE_CAT_SHARED "Enable dynamic build of cat" FALSE)
+OPTION(ARCHIVE_ENABLE_TAR "Enable tar building" ON)
+OPTION(ARCHIVE_ENABLE_TAR_SHARED "Enable dynamic build of tar" FALSE)
+OPTION(ARCHIVE_ENABLE_CPIO "Enable cpio building" ON)
+OPTION(ARCHIVE_ENABLE_CPIO_SHARED "Enable dynamic build of cpio" FALSE)
+OPTION(ARCHIVE_ENABLE_CAT "Enable cat building" ON)
+OPTION(ARCHIVE_ENABLE_CAT_SHARED "Enable dynamic build of cat" FALSE)
 IF(WIN32 AND NOT CYGWIN)
-	SET(ENABLE_UNZIP FALSE)
-	SET(ENABLE_UNZIP_SHARED FALSE)
+        SET(ARCHIVE_ENABLE_UNZIP FALSE)
+        SET(ARCHIVE_ENABLE_UNZIP_SHARED FALSE)
 ELSE()
-	OPTION(ENABLE_UNZIP "Enable unzip building" ON)
-	OPTION(ENABLE_UNZIP_SHARED "Enable dynamic build of unzip" FALSE)
+        OPTION(ARCHIVE_ENABLE_UNZIP "Enable unzip building" ON)
+        OPTION(ARCHIVE_ENABLE_UNZIP_SHARED "Enable dynamic build of unzip" FALSE)
 ENDIF()
-OPTION(ENABLE_XATTR "Enable extended attribute support" ON)
-OPTION(ENABLE_ACL "Enable ACL support" ON)
-OPTION(ENABLE_ICONV "Enable iconv support" ON)
-OPTION(ENABLE_TEST "Enable unit and regression tests" ON)
-OPTION(ENABLE_COVERAGE "Enable code coverage (GCC only, automatically sets ENABLE_TEST to ON)" FALSE)
-OPTION(ENABLE_INSTALL "Enable installing of libraries" ON)
+OPTION(ARCHIVE_ENABLE_XATTR "Enable extended attribute support" ON)
+OPTION(ARCHIVE_ENABLE_ACL "Enable ACL support" ON)
+OPTION(ARCHIVE_ENABLE_ICONV "Enable iconv support" ON)
+OPTION(ARCHIVE_ENABLE_TEST "Enable unit and regression tests" ON)
+OPTION(ARCHIVE_ENABLE_COVERAGE "Enable code coverage (GCC only, automatically sets ENABLE_TEST to ON)" FALSE)
+OPTION(ARCHIVE_ENABLE_INSTALL "Enable installing of libraries" ON)
 
-SET(POSIX_REGEX_LIB "AUTO" CACHE STRING "Choose what library should provide POSIX regular expression support")
-SET(ENABLE_SAFESEH "AUTO" CACHE STRING "Enable use of /SAFESEH linker flag (MSVC only)")
+SET(ARCHIVE_POSIX_REGEX_LIB "AUTO" CACHE STRING "Choose what library should provide POSIX regular expression support")
+SET(ARCHIVE_ENABLE_SAFESEH "AUTO" CACHE STRING "Enable use of /SAFESEH linker flag (MSVC only)")
 SET(WINDOWS_VERSION "WIN10" CACHE STRING "Set Windows version to use (Windows only)")
 
-IF(ENABLE_COVERAGE)
+IF(ARCHIVE_ENABLE_COVERAGE)
 	include(LibarchiveCodeCoverage)
-ENDIF(ENABLE_COVERAGE)
+ENDIF(ARCHIVE_ENABLE_COVERAGE)
 
-IF(ENABLE_TEST)
+IF(ARCHIVE_ENABLE_TEST)
 	ENABLE_TESTING()
-ENDIF(ENABLE_TEST)
+ENDIF(ARCHIVE_ENABLE_TEST)
 
 IF(WIN32)
   IF(WINDOWS_VERSION STREQUAL "WIN10")
@@ -298,17 +298,17 @@ IF(WIN32)
 ENDIF(WIN32)
 
 IF(MSVC)
-  IF(ENABLE_SAFESEH STREQUAL "YES")
+  IF(ARCHIVE_ENABLE_SAFESEH STREQUAL "YES")
     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SAFESEH")
     SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /SAFESEH")
     SET(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /SAFESEH")
     SET(ENV{LDFLAGS} "$ENV{LDFLAGS} /SAFESEH")
-  ELSEIF(ENABLE_SAFESEH STREQUAL "NO")
+  ELSEIF(ARCHIVE_ENABLE_SAFESEH STREQUAL "NO")
     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SAFESEH:NO")
     SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /SAFESEH:NO")
     SET(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /SAFESEH:NO")
     SET(ENV{LDFLAGS} "$ENV{LDFLAGS} /SAFESEH:NO")
-  ENDIF(ENABLE_SAFESEH STREQUAL "YES")
+  ENDIF(ARCHIVE_ENABLE_SAFESEH STREQUAL "YES")
 ENDIF(MSVC)
 
 IF("${CMAKE_C_PLATFORM_ID}" MATCHES "^(HP-UX)$")
@@ -442,8 +442,8 @@ SET(ADDITIONAL_LIBS "")
 #
 # Find ZLIB
 #
-IF(ENABLE_ZLIB)
-  FIND_PACKAGE(ZLIB)
+IF(ARCHIVE_ENABLE_ZLIB)
+  # FIND_PACKAGE(ZLIB)
 ELSE()
   SET(ZLIB_FOUND FALSE) # Override cached value
 ENDIF()
@@ -481,7 +481,7 @@ MARK_AS_ADVANCED(CLEAR ZLIB_LIBRARY)
 #
 # Find BZip2
 #
-IF(ENABLE_BZip2)
+IF(ARCHIVE_ENABLE_BZip2)
   FIND_PACKAGE(BZip2)
 ELSE()
   SET(BZIP2_FOUND FALSE) # Override cached value
@@ -510,8 +510,8 @@ MARK_AS_ADVANCED(CLEAR BZIP2_LIBRARIES)
 #
 # Find LZMA
 #
-IF(ENABLE_LZMA)
-  FIND_PACKAGE(LibLZMA)
+IF(ARCHIVE_ENABLE_LZMA)
+  #FIND_PACKAGE(LibLZMA)
 ELSE()
   SET(LIBLZMA_FOUND FALSE) # Override cached value
 ENDIF()
@@ -547,7 +547,7 @@ MARK_AS_ADVANCED(CLEAR LIBLZMA_LIBRARY)
 #
 # Find LZO2
 #
-IF(ENABLE_LZO)
+IF(ARCHIVE_ENABLE_LZO)
   IF (LZO2_INCLUDE_DIR)
     # Already in cache, be silent
     SET(LZO2_FIND_QUIETLY TRUE)
@@ -557,9 +557,9 @@ IF(ENABLE_LZO)
   FIND_LIBRARY(LZO2_LIBRARY NAMES lzo2 liblzo2)
   INCLUDE(FindPackageHandleStandardArgs)
   FIND_PACKAGE_HANDLE_STANDARD_ARGS(LZO2 DEFAULT_MSG LZO2_LIBRARY LZO2_INCLUDE_DIR)
-ELSE(ENABLE_LZO)
+ELSE(ARCHIVE_ENABLE_LZO)
   SET(LZO2_FOUND FALSE) # Override cached value
-ENDIF(ENABLE_LZO)
+ENDIF(ARCHIVE_ENABLE_LZO)
 IF(LZO2_FOUND)
   SET(HAVE_LIBLZO2 1)
   SET(HAVE_LZO_LZOCONF_H 1)
@@ -575,7 +575,7 @@ MARK_AS_ADVANCED(CLEAR LZO2_LIBRARY)
 #
 # Find libb2
 #
-IF(ENABLE_LIBB2)
+IF(ARCHIVE_ENABLE_LIBB2)
   IF (LIBB2_INCLUDE_DIR)
     # Already in cache, be silent
     SET(LIBB2_FIND_QUIETLY TRUE)
@@ -585,9 +585,9 @@ IF(ENABLE_LIBB2)
   FIND_LIBRARY(LIBB2_LIBRARY NAMES b2 libb2)
   INCLUDE(FindPackageHandleStandardArgs)
   FIND_PACKAGE_HANDLE_STANDARD_ARGS(LIBB2 DEFAULT_MSG LIBB2_LIBRARY LIBB2_INCLUDE_DIR)
-ELSE(ENABLE_LIBB2)
+ELSE(ARCHIVE_ENABLE_LIBB2)
   SET(LIBB2_FOUND FALSE) # Override cached value
-ENDIF(ENABLE_LIBB2)
+ENDIF(ARCHIVE_ENABLE_LIBB2)
 IF(LIBB2_FOUND)
   SET(HAVE_LIBB2 1)
   SET(HAVE_BLAKE2_H 1)
@@ -605,7 +605,7 @@ ENDIF(LIBB2_FOUND)
 #
 # Find LZ4
 #
-IF(ENABLE_LZ4)
+IF(ARCHIVE_ENABLE_LZ4)
   IF (LZ4_INCLUDE_DIR)
     # Already in cache, be silent
     SET(LZ4_FIND_QUIETLY TRUE)
@@ -615,9 +615,9 @@ IF(ENABLE_LZ4)
   FIND_LIBRARY(LZ4_LIBRARY NAMES lz4 liblz4)
   INCLUDE(FindPackageHandleStandardArgs)
   FIND_PACKAGE_HANDLE_STANDARD_ARGS(LZ4 DEFAULT_MSG LZ4_LIBRARY LZ4_INCLUDE_DIR)
-ELSE(ENABLE_LZ4)
+ELSE(ARCHIVE_ENABLE_LZ4)
   SET(LZ4_FOUND FALSE) # Override cached value
-ENDIF(ENABLE_LZ4)
+ENDIF(ARCHIVE_ENABLE_LZ4)
 IF(LZ4_FOUND)
   SET(HAVE_LIBLZ4 1)
   SET(HAVE_LZ4_H 1)
@@ -636,7 +636,7 @@ MARK_AS_ADVANCED(CLEAR LZ4_LIBRARY)
 #
 # Find Zstd
 #
-IF(ENABLE_ZSTD)
+IF(ARCHIVE_ENABLE_ZSTD)
   IF (ZSTD_INCLUDE_DIR)
     # Already in cache, be silent
     SET(ZSTD_FIND_QUIETLY TRUE)
@@ -651,9 +651,9 @@ IF(ENABLE_ZSTD)
   FIND_LIBRARY(ZSTD_LIBRARY NAMES zstd libzstd HINTS ${PC_ZSTD_LIBDIR} ${PC_ZSTD_LIBRARY_DIRS})
   INCLUDE(FindPackageHandleStandardArgs)
   FIND_PACKAGE_HANDLE_STANDARD_ARGS(ZSTD DEFAULT_MSG ZSTD_LIBRARY ZSTD_INCLUDE_DIR)
-ELSE(ENABLE_ZSTD)
+ELSE(ARCHIVE_ENABLE_ZSTD)
   SET(ZSTD_FOUND FALSE) # Override cached value
-ENDIF(ENABLE_ZSTD)
+ENDIF(ARCHIVE_ENABLE_ZSTD)
 IF(ZSTD_FOUND)
   SET(HAVE_ZSTD_H 1)
   INCLUDE_DIRECTORIES(${ZSTD_INCLUDE_DIR})
@@ -762,14 +762,14 @@ LA_CHECK_INCLUDE_FILE("utime.h" HAVE_UTIME_H)
 LA_CHECK_INCLUDE_FILE("wchar.h" HAVE_WCHAR_H)
 LA_CHECK_INCLUDE_FILE("wctype.h" HAVE_WCTYPE_H)
 LA_CHECK_INCLUDE_FILE("windows.h" HAVE_WINDOWS_H)
-IF(ENABLE_CNG)
+IF(ARCHIVE_ENABLE_CNG)
   LA_CHECK_INCLUDE_FILE("bcrypt.h" HAVE_BCRYPT_H)
   IF(HAVE_BCRYPT_H)
     LIST(APPEND ADDITIONAL_LIBS "bcrypt")
   ENDIF(HAVE_BCRYPT_H)
-ELSE(ENABLE_CNG)
+ELSE(ARCHIVE_ENABLE_CNG)
   UNSET(HAVE_BCRYPT_H CACHE)
-ENDIF(ENABLE_CNG)
+ENDIF(ARCHIVE_ENABLE_CNG)
 # Following files need windows.h, so we should test it after windows.h test.
 LA_CHECK_INCLUDE_FILE("wincrypt.h" HAVE_WINCRYPT_H)
 LA_CHECK_INCLUDE_FILE("winioctl.h" HAVE_WINIOCTL_H)
@@ -792,7 +792,7 @@ CHECK_C_SOURCE_COMPILES(
 #
 # Find mbed TLS
 #
-IF(ENABLE_MBEDTLS)
+IF(ARCHIVE_ENABLE_MBEDTLS)
   FIND_PACKAGE(MbedTLS)
   IF(MBEDTLS_FOUND)
     SET(HAVE_LIBMBEDCRYPTO 1)
@@ -807,12 +807,12 @@ IF(ENABLE_MBEDTLS)
   ENDIF(MBEDTLS_FOUND)
   MARK_AS_ADVANCED(CLEAR MBEDTLS_INCLUDE_DIRS)
   MARK_AS_ADVANCED(CLEAR MBEDCRYPTO_LIBRARY)
-ENDIF(ENABLE_MBEDTLS)
+ENDIF(ARCHIVE_ENABLE_MBEDTLS)
 
 #
 # Find Nettle
 #
-IF(ENABLE_NETTLE)
+IF(ARCHIVE_ENABLE_NETTLE)
   FIND_PACKAGE(Nettle)
   IF(NETTLE_FOUND)
     SET(HAVE_LIBNETTLE 1)
@@ -830,13 +830,13 @@ IF(ENABLE_NETTLE)
   ENDIF(NETTLE_FOUND)
   MARK_AS_ADVANCED(CLEAR NETTLE_INCLUDE_DIR)
   MARK_AS_ADVANCED(CLEAR NETTLE_LIBRARIES)
-ENDIF(ENABLE_NETTLE)
+ENDIF(ARCHIVE_ENABLE_NETTLE)
 
 #
 # Find OpenSSL
 # (Except on Mac, where OpenSSL is deprecated.)
 #
-IF(ENABLE_OPENSSL AND NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")
+IF(ARCHIVE_ENABLE_OPENSSL AND NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")
   FIND_PACKAGE(OpenSSL)
   IF(OPENSSL_FOUND)
     SET(HAVE_LIBCRYPTO 1)
@@ -1098,7 +1098,7 @@ MACRO(CHECK_ICONV LIB TRY_ICONV_CONST)
   ENDIF(NOT HAVE_ICONV)
 ENDMACRO(CHECK_ICONV TRY_ICONV_CONST)
 
-IF(ENABLE_ICONV)
+IF(ARCHIVE_ENABLE_ICONV)
   CMAKE_PUSH_CHECK_STATE()	# Save the state of the variables
   FIND_PATH(ICONV_INCLUDE_DIR iconv.h)
   IF(ICONV_INCLUDE_DIR)
@@ -1175,7 +1175,7 @@ IF(ENABLE_ICONV)
     ENDIF(LIBCHARSET_PATH)
   ENDIF(LIBICONV_PATH)
   CMAKE_POP_CHECK_STATE()	# Restore the state of the variables
-ELSE(ENABLE_ICONV)
+ELSE(ARCHIVE_ENABLE_ICONV)
   # Make sure ICONV variables are not in CACHE after ENABLE_ICONV disabled
   # (once enabled).
   UNSET(HAVE_LOCALE_CHARSET CACHE)
@@ -1190,12 +1190,12 @@ ELSE(ENABLE_ICONV)
   UNSET(LIBICONV_STATIC CACHE)
   UNSET(LIBCHARSET_DLL CACHE)
   UNSET(LIBCHARSET_STATIC CACHE)
-ENDIF(ENABLE_ICONV)
+ENDIF(ARCHIVE_ENABLE_ICONV)
 
 #
 # Find Libxml2
 #
-IF(ENABLE_LIBXML2 AND HAVE_ICONV)
+IF(ARCHIVE_ENABLE_LIBXML2 AND HAVE_ICONV)
   FIND_PACKAGE(LibXml2)
 ELSE()
   SET(LIBXML2_FOUND FALSE)
@@ -1224,7 +1224,7 @@ ELSE(LIBXML2_FOUND)
   #
   # Find Expat
   #
-  IF(ENABLE_EXPAT)
+  IF(ARCHIVE_ENABLE_EXPAT)
     FIND_PACKAGE(EXPAT)
   ELSE()
     SET(EXPAT_FOUND FALSE)
@@ -1298,13 +1298,13 @@ IF(NOT FOUND_POSIX_REGEX_LIB AND POSIX_REGEX_LIB MATCHES "^(AUTO|LIBPCREPOSIX)$"
   #
   # If requested, try finding library for PCREPOSIX
   #
-  IF(ENABLE_LIBGCC)
+  IF(ARCHIVE_ENABLE_LIBGCC)
     FIND_PACKAGE(LIBGCC)
   ELSE()
     MESSAGE(FATAL_ERROR "libgcc not found.")
     SET(LIBGCC_FOUND FALSE) # Override cached value
   ENDIF()
-  IF(ENABLE_PCREPOSIX)
+  IF(ARCHIVE_ENABLE_PCREPOSIX)
     FIND_PACKAGE(PCREPOSIX)
   ELSE()
     SET(PCREPOSIX_FOUND FALSE) # Override cached value
@@ -1360,13 +1360,13 @@ IF(NOT FOUND_POSIX_REGEX_LIB AND POSIX_REGEX_LIB MATCHES "^(AUTO|LIBPCRE2POSIX)$
   #
   # If requested, try finding library for PCRE2POSIX
   #
-  IF(ENABLE_LIBGCC)
+  IF(ARCHIVE_ENABLE_LIBGCC)
     FIND_PACKAGE(LIBGCC)
   ELSE()
     MESSAGE(FATAL_ERROR "libgcc not found.")
     SET(LIBGCC_FOUND FALSE) # Override cached value
   ENDIF()
-  IF(ENABLE_PCRE2POSIX)
+  IF(ARCHIVE_ENABLE_PCRE2POSIX)
     FIND_PACKAGE(PCRE2POSIX)
   ELSE()
     SET(PCRE2POSIX_FOUND FALSE) # Override cached value
@@ -1783,7 +1783,7 @@ CHECK_FILE_OFFSET_BITS()
 #
 # Check for Extended Attribute libraries, headers, and functions
 #
-IF(ENABLE_XATTR)
+IF(ARCHIVE_ENABLE_XATTR)
   CHECK_LIBRARY_EXISTS(attr "setxattr" "" HAVE_LIBATTR)
   IF(HAVE_LIBATTR)
     SET(CMAKE_REQUIRED_LIBRARIES "attr")
@@ -1883,12 +1883,12 @@ IF(ENABLE_XATTR)
   ELSE()
     MESSAGE(STATUS "Extended attributes support: none")
   ENDIF()
-ELSE(ENABLE_XATTR)
+ELSE(ARCHIVE_ENABLE_XATTR)
   SET(ARCHIVE_XATTR_DARWIN FALSE)
   SET(ARCHIVE_XATTR_FREEBSD FALSE)
   SET(ARCHIVE_XATTR_LINUX FALSE)
   SET(ARCHIVE_XATTR_AIX FALSE)
-ENDIF(ENABLE_XATTR)
+ENDIF(ARCHIVE_ENABLE_XATTR)
 
 #
 # Check for ACL libraries, headers, and functions
@@ -1898,7 +1898,7 @@ ENDIF(ENABLE_XATTR)
 # platforms.  Worse, some systems have completely non-POSIX acl functions,
 # which makes the following checks rather more complex than I would like.
 #
-IF(ENABLE_ACL)
+IF(ARCHIVE_ENABLE_ACL)
   # Solaris and derivates ACLs
   CHECK_FUNCTION_EXISTS(acl HAVE_ACL)
   CHECK_FUNCTION_EXISTS(facl HAVE_FACL)
@@ -2096,7 +2096,7 @@ int main(void) { return ACL_SYNCHRONIZE; }" HAVE_DECL_ACL_SYNCHRONIZE)
     MESSAGE(STATUS "ACL support: none")
   ENDIF()
 
-ELSE(ENABLE_ACL)
+ELSE(ARCHIVE_ENABLE_ACL)
   # If someone runs cmake, then disables ACL support, we need
   # to forcibly override the cached values for these.
   SET(ARCHIVE_ACL_DARWIN FALSE)
@@ -2105,7 +2105,7 @@ ELSE(ENABLE_ACL)
   SET(ARCHIVE_ACL_LIBACL FALSE)
   SET(ARCHIVE_ACL_SUNOS FALSE)
   SET(ARCHIVE_ACL_SUNOS_NFS4 FALSE)
-ENDIF(ENABLE_ACL)
+ENDIF(ARCHIVE_ENABLE_ACL)
 
 #
 # Check MD5/RMD160/SHA support
@@ -2174,9 +2174,9 @@ IF(APPLE)
   ADD_DEFINITIONS(-Wno-deprecated-declarations)
 ENDIF(APPLE)
 
-IF(ENABLE_TEST)
+IF(ARCHIVE_ENABLE_TEST)
   ADD_CUSTOM_TARGET(run_all_tests)
-ENDIF(ENABLE_TEST)
+ENDIF(ARCHIVE_ENABLE_TEST)
 
 add_subdirectory(libarchive)
 add_subdirectory(cat)
