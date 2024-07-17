@@ -442,90 +442,88 @@ ApplicationWindow {
 
         // background of title
         Rectangle {
+            id: hwpopup_title_background
             color: "#f5f5f5"
-            anchors.right: parent.right
+            anchors.left: parent.left
             anchors.top: parent.top
             height: 35
             width: parent.width
-        }
-        // line under title
-        Rectangle {
-            color: "#afafaf"
-            width: parent.width
-            y: 35
-            implicitHeight: 1
-        }
-
-        Text {
-            text: "X"
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: roboto.name
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    hwpopup.close()
-                }
-            }
-        }
-
-        ColumnLayout {
-            spacing: 10
 
             Text {
                 text: qsTr("Raspberry Pi Device")
                 horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                Layout.fillWidth: true
-                Layout.topMargin: 10
+                anchors.fill: parent
+                anchors.topMargin: 10
                 font.family: roboto.name
                 font.bold: true
             }
 
-            Item {
-                clip: true
-                Layout.preferredWidth: hwlist.width
-                Layout.preferredHeight: hwlist.height
+            Text {
+                text: "X"
+                Layout.alignment: Qt.AlignRight
+                horizontalAlignment: Text.AlignRight
+                verticalAlignment: Text.AlignVCenter
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.rightMargin: 25
+                anchors.topMargin: 10
+                font.family: roboto.name
+                font.bold: true
 
-                ListView {
-                    id: hwlist
-                    model: ListModel {
-                        id: deviceModel
-                        ListElement {
-                            name: qsTr("[ All ]")
-                            tags: "[]"
-                            icon: ""
-                            description: ""
-                            matching_type: "exclusive"
-                        }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        hwpopup.close()
                     }
-                    currentIndex: -1
-                    delegate: hwdelegate
-                    width: window.width-100
-                    height: window.height-100
-                    boundsBehavior: Flickable.StopAtBounds
-                    highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
-                    ScrollBar.vertical: ScrollBar {
-                        width: 10
-                        policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-                    }
-                    Keys.onSpacePressed: {
-                        if (currentIndex != -1)
-                            selectHWitem(model.get(currentIndex))
-                    }
-                    Accessible.onPressAction: {
-                        if (currentIndex != -1)
-                            selectHWitem(model.get(currentIndex))
-                    }
-                    Keys.onEnterPressed: Keys.onSpacePressed(event)
-                    Keys.onReturnPressed: Keys.onSpacePressed(event)
                 }
             }
+        }
+        // line under title
+        Rectangle {
+            id: hwpopup_title_separator
+            color: "#afafaf"
+            width: parent.width
+            anchors.top: hwpopup_title_background.bottom
+            height: 1
+        }
+
+        ListView {
+            id: hwlist
+            clip: true
+            model: ListModel {
+                id: deviceModel
+                ListElement {
+                    name: qsTr("[ All ]")
+                    tags: "[]"
+                    icon: ""
+                    description: ""
+                    matching_type: "exclusive"
+                }
+            }
+            currentIndex: -1
+            delegate: hwdelegate
+            anchors.top: hwpopup_title_separator.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            boundsBehavior: Flickable.StopAtBounds
+            highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+            ScrollBar.vertical: ScrollBar {
+                anchors.right: parent.right
+                width: 10
+                policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+            }
+            Keys.onSpacePressed: {
+                if (currentIndex != -1)
+                    selectHWitem(model.get(currentIndex))
+            }
+            Accessible.onPressAction: {
+                if (currentIndex != -1)
+                    selectHWitem(model.get(currentIndex))
+            }
+            Keys.onEnterPressed: Keys.onSpacePressed(event)
+            Keys.onReturnPressed: Keys.onSpacePressed(event)
         }
     }
 
@@ -544,90 +542,92 @@ ApplicationWindow {
 
         // background of title
         Rectangle {
+            id: ospopup_title_background
             color: "#f5f5f5"
-            anchors.right: parent.right
+            anchors.left: parent.left
             anchors.top: parent.top
             height: 35
             width: parent.width
-        }
-        // line under title
-        Rectangle {
-            color: "#afafaf"
-            width: parent.width
-            y: 35
-            implicitHeight: 1
-        }
-
-        Text {
-            text: "X"
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: roboto.name
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    ospopup.close()
-                    osswipeview.decrementCurrentIndex()
-                }
-            }
-        }
-
-        ColumnLayout {
-            spacing: 10
 
             Text {
                 text: qsTr("Operating System")
                 horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                Layout.fillWidth: true
-                Layout.topMargin: 10
+                anchors.fill: parent
+                anchors.topMargin: 10
                 font.family: roboto.name
                 font.bold: true
             }
 
-            Item {
-                clip: true
-                Layout.preferredWidth: oslist.width
-                Layout.preferredHeight: oslist.height
+            Text {
+                text: "X"
+                Layout.alignment: Qt.AlignRight
+                horizontalAlignment: Text.AlignRight
+                verticalAlignment: Text.AlignVCenter
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.rightMargin: 25
+                anchors.topMargin: 10
+                font.family: roboto.name
+                font.bold: true
 
-                SwipeView {
-                    id: osswipeview
-                    interactive: false
-
-                    ListView {
-                        id: oslist
-                        model: osmodel
-                        currentIndex: -1
-                        delegate: osdelegate
-                        width: window.width-100
-                        height: window.height-100
-                        boundsBehavior: Flickable.StopAtBounds
-                        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
-                        ScrollBar.vertical: ScrollBar {
-                            width: 10
-                            policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-                        }
-                        Keys.onSpacePressed: {
-                            if (currentIndex != -1)
-                                selectOSitem(model.get(currentIndex), true)
-                        }
-                        Accessible.onPressAction: {
-                            if (currentIndex != -1)
-                                selectOSitem(model.get(currentIndex), true)
-                        }
-                        Keys.onEnterPressed: Keys.onSpacePressed(event)
-                        Keys.onReturnPressed: Keys.onSpacePressed(event)
-                        Keys.onRightPressed: {
-                            // Navigate into sublists but don't select an OS entry
-                            if (currentIndex != -1 && isOSsublist(model.get(currentIndex)))
-                                selectOSitem(model.get(currentIndex), true)
-                        }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        ospopup.close()
+                        osswipeview.decrementCurrentIndex()
                     }
+                }
+            }
+        }
+        // line under title
+        Rectangle {
+            id: ospopup_title_separator
+            color: "#afafaf"
+            width: parent.width
+            anchors.top: ospopup_title_background.bottom
+            height: 1
+        }
+
+        SwipeView {
+            anchors.top: ospopup_title_separator.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            id: osswipeview
+            interactive: false
+            clip: true
+
+            ListView {
+                id: oslist
+                model: osmodel
+                currentIndex: -1
+                delegate: osdelegate
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                width: ospopup.width
+                boundsBehavior: Flickable.StopAtBounds
+                highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+                ScrollBar.vertical: ScrollBar {
+                    anchors.right: parent.right
+                    width: 10
+                    policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                }
+                Keys.onSpacePressed: {
+                    if (currentIndex != -1)
+                        selectOSitem(model.get(currentIndex), true)
+                }
+                Accessible.onPressAction: {
+                    if (currentIndex != -1)
+                        selectOSitem(model.get(currentIndex), true)
+                }
+                Keys.onEnterPressed: Keys.onSpacePressed(event)
+                Keys.onReturnPressed: Keys.onSpacePressed(event)
+                Keys.onRightPressed: {
+                    // Navigate into sublists but don't select an OS entry
+                    if (currentIndex != -1 && isOSsublist(model.get(currentIndex)))
+                        selectOSitem(model.get(currentIndex), true)
                 }
             }
         }
@@ -658,8 +658,7 @@ ApplicationWindow {
 
             currentIndex: -1
             delegate: osdelegate
-            width: window.width-100
-            height: window.height-100
+
             boundsBehavior: Flickable.StopAtBounds
             highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
             ScrollBar.vertical: ScrollBar {
@@ -726,18 +725,18 @@ ApplicationWindow {
             }
 
             Rectangle {
-               id: bgrect
-               anchors.fill: parent
-               color: "#f5f5f5"
-               visible: mouseOver && parent.ListView.view.currentIndex !== index
-               property bool mouseOver: false
+                id: bgrect
+                anchors.fill: parent
+                color: "#f5f5f5"
+                visible: mouseOver && parent.ListView.view.currentIndex !== index
+                property bool mouseOver: false
             }
             Rectangle {
-               id: borderrect
-               implicitHeight: 1
-               implicitWidth: parent.width
-               color: "#dcdcdc"
-               y: parent.height
+                id: borderrect
+                implicitHeight: 1
+                implicitWidth: parent.width
+                color: "#dcdcdc"
+                y: parent.height
             }
 
             RowLayout {
@@ -817,18 +816,18 @@ ApplicationWindow {
             }
 
             Rectangle {
-               id: bgrect
-               anchors.fill: parent
-               color: "#f5f5f5"
-               visible: mouseOver && parent.ListView.view.currentIndex !== index
-               property bool mouseOver: false
+                id: bgrect
+                anchors.fill: parent
+                color: "#f5f5f5"
+                visible: mouseOver && parent.ListView.view.currentIndex !== index
+                property bool mouseOver: false
             }
             Rectangle {
-               id: borderrect
-               implicitHeight: 1
-               implicitWidth: parent.width
-               color: "#dcdcdc"
-               y: parent.height
+                id: borderrect
+                implicitHeight: 1
+                implicitWidth: parent.width
+                color: "#dcdcdc"
+                y: parent.height
             }
 
             RowLayout {
@@ -900,11 +899,11 @@ ApplicationWindow {
                         font.weight: Font.Light
                         visible: typeof(url) == "string" && url != "" && url != "internal://format"
                         text: !url ? "" :
-                              typeof(extract_sha256) != "undefined" && imageWriter.isCached(url,extract_sha256)
-                                ? qsTr("Cached on your computer")
-                                : url.startsWith("file://")
-                                  ? qsTr("Local file")
-                                  : qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1))
+                                     typeof(extract_sha256) != "undefined" && imageWriter.isCached(url,extract_sha256)
+                                     ? qsTr("Cached on your computer")
+                                     : url.startsWith("file://")
+                                       ? qsTr("Local file")
+                                       : qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1))
                     }
 
                     ToolTip {
@@ -940,93 +939,90 @@ ApplicationWindow {
 
         // background of title
         Rectangle {
+            id: dstpopup_title_background
             color: "#f5f5f5"
-            anchors.right: parent.right
+            anchors.left: parent.left
             anchors.top: parent.top
             height: 35
             width: parent.width
-        }
-        // line under title
-        Rectangle {
-            color: "#afafaf"
-            width: parent.width
-            y: 35
-            implicitHeight: 1
-        }
-
-        Text {
-            text: "X"
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: roboto.name
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    dstpopup.close()
-                }
-            }
-        }
-
-        ColumnLayout {
-            spacing: 10
 
             Text {
                 text: qsTr("Storage")
                 horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                Layout.fillWidth: true
-                Layout.topMargin: 10
+                anchors.fill: parent
+                anchors.topMargin: 10
                 font.family: roboto.name
                 font.bold: true
             }
 
-            Item {
-                clip: true
-                Layout.preferredWidth: dstlist.width
-                Layout.preferredHeight: dstlist.height
+            Text {
+                text: "X"
+                Layout.alignment: Qt.AlignRight
+                horizontalAlignment: Text.AlignRight
+                verticalAlignment: Text.AlignVCenter
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.rightMargin: 25
+                anchors.topMargin: 10
+                font.family: roboto.name
+                font.bold: true
 
-                ListView {
-                    id: dstlist
-                    model: driveListModel
-                    delegate: dstdelegate
-                    width: window.width-100
-                    height: window.height-100
-                    boundsBehavior: Flickable.StopAtBounds
-                    highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
-
-                    Label {
-                        anchors.fill: parent
-                        horizontalAlignment: Qt.AlignHCenter
-                        verticalAlignment: Qt.AlignVCenter
-                        visible: parent.count == 0
-                        text: qsTr("No storage devices found")
-                        font.bold: true
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        dstpopup.close()
                     }
-
-                    ScrollBar.vertical: ScrollBar {
-                        width: 10
-                        policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-                    }
-
-                    Keys.onSpacePressed: {
-                        if (currentIndex == -1)
-                            return
-                        selectDstItem(currentItem)
-                    }
-                    Accessible.onPressAction: {
-                        if (currentIndex == -1)
-                            return
-                        selectDstItem(currentItem)
-                    }
-                    Keys.onEnterPressed: Keys.onSpacePressed(event)
-                    Keys.onReturnPressed: Keys.onSpacePressed(event)
                 }
             }
+        }
+        // line under title
+        Rectangle {
+            id: dstpopup_title_separator
+            color: "#afafaf"
+            width: parent.width
+            anchors.top: dstpopup_title_background.bottom
+            height: 1
+        }
+        ListView {
+            id: dstlist
+            model: driveListModel
+            delegate: dstdelegate
+
+            anchors.top: dstpopup_title_separator.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            boundsBehavior: Flickable.StopAtBounds
+            highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+            clip: true
+
+            Label {
+                anchors.fill: parent
+                horizontalAlignment: Qt.AlignHCenter
+                verticalAlignment: Qt.AlignVCenter
+                visible: parent.count == 0
+                text: qsTr("No storage devices found")
+                font.bold: true
+            }
+
+            ScrollBar.vertical: ScrollBar {
+                width: 10
+                policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+            }
+
+            Keys.onSpacePressed: {
+                if (currentIndex == -1)
+                    return
+                selectDstItem(currentItem)
+            }
+            Accessible.onPressAction: {
+                if (currentIndex == -1)
+                    return
+                selectDstItem(currentItem)
+            }
+            Keys.onEnterPressed: Keys.onSpacePressed(event)
+            Keys.onReturnPressed: Keys.onSpacePressed(event)
         }
     }
 
@@ -1034,8 +1030,10 @@ ApplicationWindow {
         id: dstdelegate
 
         Item {
-            width: window.width-100
-            height: 60
+            anchors.left: parent.left
+            anchors.right: parent.right
+            Layout.topMargin: 1
+            height: 61
             Accessible.name: {
                 var txt = description+" - "+(size/1000000000).toFixed(1)+" gigabytes"
                 if (mountpoints.length > 0) {
@@ -1048,62 +1046,76 @@ ApplicationWindow {
             property string size: model.size
 
             Rectangle {
-               id: dstbgrect
-               anchors.fill: parent
-               color: "#f5f5f5"
-               visible: mouseOver && parent.ListView.view.currentIndex !== index
-               property bool mouseOver: false
+                id: dstbgrect
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 60
 
-            }
-            Rectangle {
-               id: dstborderrect
-               implicitHeight: 1
-               implicitWidth: parent.width
-               color: "#dcdcdc"
-               y: parent.height
-            }
+                color: mouseOver ? "#f5f5f5" : "#ffffff"
+                property bool mouseOver: false
 
-            Row {
-                leftPadding: 25
+                RowLayout {
+                    anchors.fill: parent
 
-                Column {
-                    width: 64
+                    Item {
+                        width: 25
+                    }
 
                     Image {
+                        id: dstitem_image
                         source: isUsb ? "icons/ic_usb_40px.svg" : isScsi ? "icons/ic_storage_40px.svg" : "icons/ic_sd_storage_40px.svg"
                         verticalAlignment: Image.AlignVCenter
-                        height: parent.parent.parent.height
                         fillMode: Image.Pad
+                        width: 64
+                        height: 60
                     }
-                }
-                Column {
-                    width: parent.parent.width-64
 
-                    Text {
-                        textFormat: Text.StyledText
-                        height: parent.parent.parent.height
-                        verticalAlignment: Text.AlignVCenter
-                        font.family: roboto.name
-                        text: {
-                            var sizeStr = (size/1000000000).toFixed(1)+" GB";
-                            var txt;
-                            if (isReadOnly) {
-                                txt = "<p><font size='4' color='grey'>"+description+" - "+sizeStr+"</font></p>"
-                                txt += "<font color='grey'>"
-                                if (mountpoints.length > 0) {
-                                    txt += qsTr("Mounted as %1").arg(mountpoints.join(", "))+" "
-                                }
-                                txt += qsTr("[WRITE PROTECTED]")+"</font>"
-                            } else {
-                                txt = "<p><font size='4'>"+description+" - "+sizeStr+"</font></p>"
-                                if (mountpoints.length > 0) {
-                                    txt += "<font color='grey'>"+qsTr("Mounted as %1").arg(mountpoints.join(", "))+"</font>"
-                                }
+                    Item {
+                        width: 25
+                    }
+
+                    ColumnLayout {
+                        Text {
+                            textFormat: Text.StyledText
+                            verticalAlignment: Text.AlignVCenter
+                            Layout.fillWidth: true
+                            font.family: roboto.name
+                            font.pointSize: 16
+                            color: isReadOnly ? "grey" : "";
+                            text: {
+                                var sizeStr = (size/1000000000).toFixed(1)+ " " + qsTr("GB");
+                                return description + " - " + sizeStr;
                             }
-                            return txt;
+
+                        }
+                        Text {
+                            textFormat: Text.StyledText
+                            height: parent.height
+                            verticalAlignment: Text.AlignVCenter
+                            Layout.fillWidth: true
+                            font.family: roboto.name
+                            font.pointSize: 12
+                            color: "grey"
+                            text: {
+                                var txt= qsTr("Mounted as %1").arg(mountpoints.join(", "));
+                                if (isReadOnly) {
+                                    txt += " " + qsTr("[WRITE PROTECTED]")
+                                }
+                                return txt;
+                            }
                         }
                     }
                 }
+
+            }
+            Rectangle {
+                id: dstborderrect
+                anchors.top: dstbgrect.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 1
+                color: "#dcdcdc"
             }
 
             MouseArea {
@@ -1196,6 +1208,8 @@ ApplicationWindow {
     }
 
     OptionsPopup {
+        minimumWidth: 450
+        minimumHeight: 400
         id: optionspopup
         onSaveSettingsSignal: {
             imageWriter.setSavedCustomizationSettings(settings)
@@ -1376,61 +1390,61 @@ ApplicationWindow {
                 var foundTag = false
 
                 switch(matchingType) {
-                    case 0: /* exact matching */
-                    case 2: /* exact matching */
-                        for (var j in tags)
+                case 0: /* exact matching */
+                case 2: /* exact matching */
+                    for (var j in tags)
+                    {
+                        if (entry["devices"].includes(tags[j]))
                         {
-                            if (entry["devices"].includes(tags[j]))
-                            {
+                            foundTag = true
+                            break
+                        }
+                    }
+                    /* If there's no match, remove this item from the list. */
+                    if (!foundTag)
+                    {
+                        list.splice(i, 1)
+                        continue
+                    }
+                    break
+                case 1: /* Exlusive by prefix matching */
+                case 3: /* Inclusive by prefix matching */
+                    for (var deviceTypePrefix in tags) {
+                        for (var deviceSpec in entry["devices"]) {
+                            if (deviceSpec.startsWith(deviceTypePrefix)) {
                                 foundTag = true
                                 break
                             }
                         }
-                        /* If there's no match, remove this item from the list. */
-                        if (!foundTag)
-                        {
-                            list.splice(i, 1)
-                            continue
-                        }
-                        break
-                    case 1: /* Exlusive by prefix matching */
-                    case 3: /* Inclusive by prefix matching */
-                        for (var deviceTypePrefix in tags) {
-                            for (var deviceSpec in entry["devices"]) {
-                                if (deviceSpec.startsWith(deviceTypePrefix)) {
-                                    foundTag = true
-                                    break
-                                }
-                            }
-                            /* Terminate outer loop early if we've already
+                        /* Terminate outer loop early if we've already
                              * decided it's a match
                              */
-                            if (foundTag) {
-                                break
-                            }
+                        if (foundTag) {
+                            break
                         }
-                        /* If there's no match, remove this item from the list. */
-                        if (!foundTag)
-                        {
-                            list.splice(i, 1)
-                            continue
-                        }
-                        break
+                    }
+                    /* If there's no match, remove this item from the list. */
+                    if (!foundTag)
+                    {
+                        list.splice(i, 1)
+                        continue
+                    }
+                    break
                 }
             } else {
                 /* No device list attached? If we're in an exclusive mode that's bad news indeed. */
                 switch (matchingType) {
-                    case 0:
-                    case 1:
-                        if (!("subitems" in entry)) {
-                            /* If you're not carrying subitems, you're not going in. */
-                            list.splice(i, 1)
-                        }
-                        break
-                    case 2:
-                    case 3:
-                        /* Inclusive filtering. We're keeping this one. */
-                        break;
+                case 0:
+                case 1:
+                    if (!("subitems" in entry)) {
+                        /* If you're not carrying subitems, you're not going in. */
+                        list.splice(i, 1)
+                    }
+                    break
+                case 2:
+                case 3:
+                    /* Inclusive filtering. We're keeping this one. */
+                    break;
                 }
             }
 
@@ -1559,11 +1573,11 @@ ApplicationWindow {
                    fetch data by numeric role number */
                 if (driveListModel.data(driveListModel.index(i,0), 0x101) === drive) {
                     selectDstItem({
-                        device: drive,
-                        description: driveListModel.data(driveListModel.index(i,0), 0x102),
-                        size: driveListModel.data(driveListModel.index(i,0), 0x103),
-                        readonly: false
-                    })
+                                      device: drive,
+                                      description: driveListModel.data(driveListModel.index(i,0), 0x102),
+                                      size: driveListModel.data(driveListModel.index(i,0), 0x103),
+                                      readonly: false
+                                  })
                     break
                 }
             }
@@ -1593,11 +1607,11 @@ ApplicationWindow {
 
         if (hwmodel.matching_type) {
             switch (hwmodel.matching_type) {
-                case "exclusive":
-                    break;
-                case "inclusive":
-                    inclusive = true
-                    break;
+            case "exclusive":
+                break;
+            case "inclusive":
+                inclusive = true
+                break;
             }
         }
 
@@ -1655,7 +1669,7 @@ ApplicationWindow {
 
         // Sub-category
         if (typeof(d.subitems_url) == "string" && d.subitems_url !== ""
-            && d.subitems_url !== "internal://back")
+                && d.subitems_url !== "internal://back")
         {
             return true
         }
