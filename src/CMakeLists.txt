@@ -191,12 +191,12 @@ if (WIN32)
     set(CURL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/cmcurl/include)
 
     # Bundled liblzma
-    add_subdirectory(dependencies/cmliblzma)
+    add_subdirectory(dependencies/xz-5.6.2)
     set(LIBLZMA_HAS_AUTO_DECODER 1)
     set(LIBLZMA_HAS_EASY_ENCODER 1)
     set(LIBLZMA_HAS_LZMA_PRESET 1)
-    set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/cmliblzma/liblzma/api)
-    set(LIBLZMA_LIBRARY cmliblzma)
+    set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/xz-5.6.2/liblzma/api)
+    set(LIBLZMA_LIBRARY liblzma)
 
     # Bundled zstd
     set(ZSTD_BUILD_PROGRAMS OFF)
@@ -285,12 +285,12 @@ elseif(APPLE)
     find_package(CURL REQUIRED)
 
     # Bundled liblzma
-    add_subdirectory(dependencies/cmliblzma)
+    add_subdirectory(dependencies/xz-5.6.2)
     set(LIBLZMA_HAS_AUTO_DECODER 1)
     set(LIBLZMA_HAS_EASY_ENCODER 1)
     set(LIBLZMA_HAS_LZMA_PRESET 1)
-    set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/cmliblzma/liblzma/api)
-    set(LIBLZMA_LIBRARY cmliblzma)
+    set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/xz-5.6.2/liblzma/api)
+    set(LIBLZMA_LIBRARY liblzma)
 
     # Bundled zstd
     set(ZSTD_BUILD_PROGRAMS OFF)
