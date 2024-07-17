@@ -134,7 +134,7 @@ uint32_t DeviceWrapperFatPartition::allocateCluster(uint32_t previousCluster)
 void DeviceWrapperFatPartition::setFAT16(uint16_t cluster, uint16_t value)
 {
     /* Modify all FATs (usually 2) */
-    for (auto fatStart : qAsConst(_fatStartOffset))
+    for (auto fatStart : std::as_const(_fatStartOffset))
     {
         seek(fatStart + cluster * 2);
         write((char *) &value, 2);
@@ -146,7 +146,7 @@ void DeviceWrapperFatPartition::setFAT32(uint32_t cluster, uint32_t value)
     uint32_t prev_value, reserved_bits;
 
     /* Modify all FATs (usually 2) */
-    for (auto fatStart : qAsConst(_fatStartOffset))
+    for (auto fatStart : std::as_const(_fatStartOffset))
     {
         /* Spec (p. 16) mentions we must preserve high 4 bits of FAT32 FAT entry when modifiying */
         seek(fatStart + cluster * 4);
@@ -234,7 +234,7 @@ QByteArray DeviceWrapperFatPartition::readFile(const QString &filename)
     uint32_t len = entry.DIR_FileSize, pos = 0;
     QByteArray result(len, 0);
 
-    for (uint32_t cluster : qAsConst(clusterList))
+    for (uint32_t cluster : std::as_const(clusterList))
     {
         seekCluster(cluster);
         read(result.data()+pos, qMin(_bytesPerCluster, len-pos));
@@ -311,7 +311,7 @@ void DeviceWrapperFatPartition::writeFile(const QString &filename, const QByteAr
     //qDebug() << "First cluster:" << firstCluster << "Clusters:" << clusterList;
 
     /* Write file data */
-    for (uint32_t cluster : qAsConst(clusterList))
+    for (uint32_t cluster : std::as_const(clusterList))
     {
         seekCluster(cluster);
         write(contents.data()+pos, qMin((qsizetype)_bytesPerCluster, (qsizetype)(contents.length()-pos)));

@@ -921,7 +921,7 @@ bool DownloadThread::_customizeImage()
             configItems.removeAll("");
             QByteArray config = fat->readFile("config.txt");
 
-            for (const QByteArray& item : qAsConst(configItems))
+            for (const QByteArray& item : std::as_const(configItems))
             {
                 if (config.contains("#"+item)) {
                     /* Uncomment existing line */
