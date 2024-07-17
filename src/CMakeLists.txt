@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (C) 2020 Raspberry Pi Ltd
+# Copyright (C) 2020-2024 Raspberry Pi Ltd
 
 cmake_minimum_required(VERSION 3.9.4)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
@@ -17,6 +17,123 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 #add_compile_options("-fsanitize=address")
 #add_link_options("-fsanitize=address")
 
+## Preferentially build the bundled code. Full vendoring is to follow in a later version.
+
+# Bundled liblzma
+set(XZ_MICROLZMA_DECODER OFF)
+set(XZ_MICROLZMA_ENCODER OFF)
+set(XZ_LZIP_DECODER OFF)
+set(XZ_ENABLE_SANDBOX OFF)
+set(XZ_BUILD_SHARED_LIBS OFF)
+set(XZ_ENABLE_DOXYGEN OFF)
+set(XZ_DECODERS
+    lzma1
+    lzma2
+    delta
+)
+set(XZ_ENCODERS "")
+set(CREATE_LZMA_SYMLINKS OFF)
+set(CREATE_XZ_SYMLINKS OFF)
+add_subdirectory(dependencies/xz-5.6.2)
+set(LIBLZMA_FOUND true)
+set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/xz-5.6.2/src/liblzma/api FORCE)
+set(LIBLZMA_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/xz-5.6.2/src/liblzma/api FORCE)
+set(LIBLZMA_LIBRARY ${CMAKE_BINARY_DIR}/dependencies/xz-5.6.2/liblzma.a)
+set(LIBLZMA_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/xz-5.6.2/liblzma.a)
+
+# Bundled zstd
+set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_DICTBUILDER OFF CACHE BOOL "" FORCE)
+add_subdirectory(dependencies/zstd-1.5.6/build/cmake)
+set(Zstd_FOUND true)
+set(ZSTD_FOUND true)
+set(Zstd_VERSION "1.5.6")
+set(ZSTD_VERSION "1.5.6")
+set(Zstd_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.6/lib)
+set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.6/lib)
+set(Zstd_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.6/lib)
+set(ZSTD_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.6/lib)
+set(Zstd_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/zstd-1.5.6/build/cmake/lib/libzstd.a)
+set(ZSTD_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/zstd-1.5.6/build/cmake/lib/libzstd.a)
+
+#message(FATAL_ERROR "Cmake binary dir: " ${CMAKE_BINARY_DIR})
+
+# Bundled zlib
+set(ZLIB_BUILD_EXAMPLES OFF)
+add_subdirectory(dependencies/zlib-1.3.1)
+set(ZLIB_FOUND TRUE)
+set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
+set(ZLIB_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
+set(ZLIB_LIBRARY ${CMAKE_BINARY_DIR}/dependencies/zlib-1.3.1/libz.a)
+set(ZLIB_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/zlib-1.3.1/libz.a)
+
+# Bundled libarchive
+set(ARCHIVE_ENABLE_WERROR OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_INSTALL OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_TEST OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_CNG OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_MBEDTLS OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_NETTLE OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_OPENSSL OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_BZip2 OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_LZ4 OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_LZO OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_LIBB2 OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_LIBXML2 OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_EXPAT OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_PCREPOSIX OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_PCRE2POSIX OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_LIBGCC OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_TAR OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_CPIO OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_CAT OFF CACHE BOOL "")
+set(ARCHIVE_BUILD_SHARED_LIBS OFF CACHE BOOL "")
+add_subdirectory(dependencies/libarchive-3.7.4)
+set(LibArchive_FOUND true)
+set(LibArchive_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/libarchive-3.7.4/libarchive/libarchive.a)
+set(LibArchive_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/libarchive-3.7.4/libarchive)
+
+# Bundled libcurl
+set(CMAKE_CURL_INCLUDES)
+set(BUILD_STATIC_CURL true)
+set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
+set(ENABLE_CURL_MANUAL OFF CACHE BOOL "" FORCE)
+set(CURL_DISABLE_ALTSVC ON)
+set(CURL_DISABLE_KERBEROS_AUTH ON)
+set(CURL_DISABLE_DICT ON)
+set(CURL_DISABLE_DISABLE_FORM_API ON)
+set(CURL_DISABLE_FTP ON)
+set(CURL_DISABLE_GOPHER ON)
+set(CURL_DISABLE_IMAP ON)
+set(CURL_DISABLE_LDAP ON)
+set(CURL_DISABLE_LDAPS ON)
+set(CURL_DISABLE_MQTT ON)
+set(CURL_DISABLE_NETRC ON)
+set(CURL_DISABLE_POP3 ON)
+set(CURL_DISABLE_RTSP ON)
+set(CURL_DISABLE_SMTP ON)
+set(CURL_DISABLE_TELNET ON)
+set(CURL_DISABLE_TFTP ON)
+set(CURL_ZSTD ON)
+set(CURL_ENABLE_EXPORT_TARGET OFF CACHE BOOL "" FORCE)
+if (APPLE)
+    set(CURL_USE_SECTRANSP ON)
+else()
+    if (WIN32)
+        set(CURL_USE_SCHANNEL ON)
+    else ()
+        set(CURL_USE_OPENSSL ON)
+    endif(WIN32)
+endif(APPLE)
+
+add_subdirectory(dependencies/curl-8.8.0)
+set(CURL_FOUND true)
+set(CURL_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/curl-8.8.0/lib/libcurl-d.a)
+set(CURL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/curl-8.8.0/include)
+set(CURL_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/curl-8.8.0/include)
+
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h drivelistmodelpollthread.h driveformatthread.h powersaveblocker.h cli.h
     devicewrapper.h devicewrapperblockcacheentry.h devicewrapperpartition.h devicewrapperstructs.h devicewrapperfatpartition.h wlancredentials.h
@@ -31,14 +148,6 @@ if (APPLE)
     enable_language(OBJC C)
 elseif (UNIX)
     set(DEPENDENCIES dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp linux/networkmanagerapi.h linux/networkmanagerapi.cpp linux/stpanalyzer.h linux/stpanalyzer.cpp)
-    find_package(ZLIB)
-    if(ZLIB_FOUND)
-        set(EXTRALIBS ${EXTRALIBS} ZLIB::ZLIB)
-    endif()
-    find_package(LibLZMA)
-    if(LIBLZMA_FOUND)
-        set(EXTRALIBS ${EXTRALIBS} LibLZMA::LibLZMA)
-    endif()
     find_package(GnuTLS)
     if (GnuTLS_FOUND)
         set(DEPENDENCIES ${DEPENDENCIES} acceleratedcryptographichash_gnutls.cpp)
@@ -94,23 +203,14 @@ set(SOURCES "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp")
 
-find_package(Qt5 5.14 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
-if (Qt5_FOUND)
-    set(QT Qt5)
+find_package(Qt6 6.7 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
+if (Qt6_FOUND)
+    set(QT Qt6)
     if (APPLE)
         set(CMAKE_OSX_DEPLOYMENT_TARGET "11" CACHE STRING "" FORCE)
     endif()
 else()
-    find_package(Qt6 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
-    if (Qt6_FOUND)
-        set(QT Qt6)
-        if (APPLE)
-            set(CMAKE_OSX_DEPLOYMENT_TARGET "11" CACHE STRING "" FORCE)
-            set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
-        endif()
-    else()
-        message( FATAL_ERROR "Missing suitable Qt library (must be at least version 5.14)" )
-    endif()
+    message(FATAL_ERROR "Missing suitable Qt library (must be at least version 6.7)" )
 endif()
 
 if (${QT}Widgets_FOUND)
@@ -134,12 +234,8 @@ set(TRANSLATIONS i18n/rpi-imager_en.ts i18n/rpi-imager_nl.ts i18n/rpi-imager_zh.
     i18n/rpi-imager_ca.ts i18n/rpi-imager_sl.ts i18n/rpi-imager_ko.ts i18n/rpi-imager_ja.ts
     i18n/rpi-imager_ru.ts i18n/rpi-imager_es.ts i18n/rpi-imager_uk.ts i18n/rpi-imager_zh-TW.ts
     i18n/rpi-imager_pl.ts)
-#qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TRANSLATIONS})
-if (Qt5_FOUND)
-    qt5_add_translation(QM_FILES ${TRANSLATIONS})
-else()
-    qt_add_translation(QM_FILES  ${TRANSLATIONS})
-endif()
+#qt6_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TRANSLATIONS})
+qt_add_translation(QM_FILES  ${TRANSLATIONS})
 configure_file(i18n/translations.qrc "${CMAKE_CURRENT_BINARY_DIR}" COPYONLY)
 set(SOURCES ${SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/translations.qrc ${QM_FILES})
 
@@ -152,6 +248,7 @@ endif()
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOMOC ON)
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTORCC ON)
+set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOUIC ON)
 
 if(ENABLE_TELEMETRY)
     add_definitions(-DTELEMETRY_ENABLED_DEFAULT=true)
@@ -178,43 +275,6 @@ if (WIN32)
     add_definitions(-DWINVER=0x0601 -D_WIN32_WINNT=0x0601)
 
     find_package(OpenSSL REQUIRED)
-
-    # Bundled zlib
-    add_subdirectory(dependencies/zlib-1.3.1)
-    set(ZLIB_LIBRARY zlibstatic)
-    set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
-
-    # Bundled libcurl
-    set(CMAKE_CURL_INCLUDES)
-    set(CURL_LIBRARIES cmcurl)
-    add_subdirectory(dependencies/cmcurl)
-    set(CURL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/cmcurl/include)
-
-    # Bundled liblzma
-    add_subdirectory(dependencies/xz-5.6.2)
-    set(LIBLZMA_HAS_AUTO_DECODER 1)
-    set(LIBLZMA_HAS_EASY_ENCODER 1)
-    set(LIBLZMA_HAS_LZMA_PRESET 1)
-    set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/xz-5.6.2/liblzma/api)
-    set(LIBLZMA_LIBRARY liblzma)
-
-    # Bundled zstd
-    set(ZSTD_BUILD_PROGRAMS OFF)
-    set(ZSTD_BUILD_SHARED OFF)
-    add_subdirectory(dependencies/zstd-1.5.6/build/cmake)
-    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.6/lib CACHE PATH "zstd include dir")
-    set(ZSTD_LIBRARY libzstd_static)
-
-    # Bundled libarchive
-    set(ENABLE_TEST OFF CACHE BOOL "")
-    set(ENABLE_TAR OFF CACHE BOOL "")
-    set(ENABLE_CPIO OFF CACHE BOOL "")
-    set(ENABLE_CAT OFF CACHE BOOL "")
-    add_subdirectory(dependencies/libarchive-3.7.4)
-    # Disable shared libarchive (we only want static)
-    set_target_properties(archive PROPERTIES EXCLUDE_FROM_ALL 1)
-    set(LibArchive_LIBRARIES archive_static)
-    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.7.4/libarchive)
 
     # Bundled fat32format
     add_subdirectory(dependencies/fat32format)
@@ -281,41 +341,13 @@ if (WIN32)
             "${CMAKE_BINARY_DIR}/deploy/imageformats/qgif.dll")
 
 elseif(APPLE)
-    find_package(ZLIB REQUIRED)
-    find_package(CURL REQUIRED)
-
-    # Bundled liblzma
-    add_subdirectory(dependencies/xz-5.6.2)
-    set(LIBLZMA_HAS_AUTO_DECODER 1)
-    set(LIBLZMA_HAS_EASY_ENCODER 1)
-    set(LIBLZMA_HAS_LZMA_PRESET 1)
-    set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/xz-5.6.2/liblzma/api)
-    set(LIBLZMA_LIBRARY liblzma)
-
-    # Bundled zstd
-    set(ZSTD_BUILD_PROGRAMS OFF)
-    set(ZSTD_BUILD_SHARED OFF)
-    add_subdirectory(dependencies/zstd-1.5.6/build/cmake)
-    set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zstd-1.5.6/lib)
-    set(ZSTD_LIBRARY libzstd_static)
-
-    # Bundled libarchive
-    set(ENABLE_TEST OFF CACHE BOOL "")
-    set(ENABLE_TAR OFF CACHE BOOL "")
-    set(ENABLE_CPIO OFF CACHE BOOL "")
-    set(ENABLE_CAT OFF CACHE BOOL "")
-    add_subdirectory(dependencies/libarchive-3.7.4)
-    # Disable shared libarchive (we only want static)
-    set_target_properties(archive PROPERTIES EXCLUDE_FROM_ALL 1)
-    set(LibArchive_LIBRARIES archive_static)
-    set(LibArchive_INCLUDE_DIR dependencies/libarchive-3.7.4/libarchive)
-
     find_library(Cocoa Cocoa)
     find_library(CoreFoundation CoreFoundation)
     find_library(DiskArbitration DiskArbitration)
     find_library(Security Security)
     find_library(IOKit IOKit)
-    set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} ${IOKit})
+    find_library(SystemConfiguration SystemConfiguration)
+    set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} ${IOKit} ${SystemConfiguration} iconv)
     set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in)
 
     find_program(MACDEPLOYQT "macdeployqt" PATHS "${${QT}_DIR}/../../../bin")
@@ -328,9 +360,7 @@ elseif(APPLE)
         COMMAND "${MACDEPLOYQT}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}")
 
 else()
-    find_package(CURL 7.32.0 REQUIRED)
-    find_package(LibArchive 3.7.4 REQUIRED)
-
+    # UNIX, Linux systems
     if (NOT CMAKE_CROSSCOMPILING)
         find_program(LSBLK "lsblk")
         if (NOT LSBLK)
@@ -354,5 +384,5 @@ else()
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
 
-include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIR} ${LIBDRM_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${ZSTD_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES} ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
