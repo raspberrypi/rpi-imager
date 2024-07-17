@@ -152,6 +152,16 @@ int main(int argc, char *argv[])
      * of users.
      */
     qputenv("QML_DISABLE_DISK_CACHE", "true");
+
+#if QT_VERSION > QT_VERSION_CHECK(6, 5, 0)
+    // In version 6.5, Qt implemented Google Material Design 3,
+    // which renders fairly radically differently to Material Design 2.
+    // Of particular note is the 'Normal' vs 'Dense' variant choice,
+    // where 'Dense' is recommended for Desktops and environments with pointers.
+    // See https://www.qt.io/blog/material-3-changes-in-qt-quick-controls
+    qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
+#endif
+
 #ifdef Q_OS_WIN
     // prefer ANGLE (DirectX) over desktop OpenGL
     QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
