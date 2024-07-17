@@ -139,7 +139,9 @@ int main(int argc, char *argv[])
         }
     }
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+#endif
 
     /** QtQuick on QT5 exhibits spurious disk cache failures that cannot be
      * resolved by a user in a trivial manner (they have to delete the cache manually).
