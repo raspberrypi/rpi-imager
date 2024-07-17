@@ -48,7 +48,8 @@ Window {
             //Layout.maximumWidth: popup.width-30
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: 25
+            Layout.leftMargin: 10
+            Layout.rightMargin: 10
             Layout.topMargin: 10
             clip: true
             //ScrollBar.vertical.policy: ScrollBar.AlwaysOn
@@ -81,7 +82,6 @@ Window {
 
                         ColumnLayout {
                             // General tab
-                            spacing: -10
 
                             RowLayout {
                                 ImCheckBox {
@@ -93,6 +93,10 @@ Window {
                                         }
                                     }
                                 }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
+                                }
                                 TextField {
                                     id: fieldHostname
                                     enabled: chkHostname.checked
@@ -100,6 +104,7 @@ Window {
                                     selectByMouse: true
                                     maximumLength: 253
                                     validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
+                                    Layout.minimumWidth: 200
                                 }
                                 Text {
                                     text : ".local"
@@ -120,64 +125,67 @@ Window {
                                 }
                             }
 
-                            ColumnLayout {
-                                enabled: chkSetUser.checked
-                                Layout.leftMargin: 40
-                                spacing: -5
+                            RowLayout {
+                                Text {
+                                    text: qsTr("Username:")
+                                    color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                                    Layout.leftMargin: 40
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
+                                }
+                                TextField {
+                                    id: fieldUserName
+                                    enabled: chkSetUser.checked
+                                    text: "pi"
+                                    Layout.minimumWidth: 200
+                                    selectByMouse: true
+                                    property bool indicateError: false
+                                    maximumLength: 31
+                                    validator: RegularExpressionValidator { regularExpression: /^[a-z][a-z0-9-]{0,30}$/ }
 
-                                GridLayout {
-                                    columns: 2
-                                    columnSpacing: 10
-                                    rowSpacing: -5
-
-                                    Text {
-                                        text: qsTr("Username:")
-                                        color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                                    onTextEdited: {
+                                        indicateError = false
                                     }
-                                    TextField {
-                                        id: fieldUserName
-                                        text: "pi"
-                                        Layout.minimumWidth: 200
-                                        selectByMouse: true
-                                        property bool indicateError: false
-                                        maximumLength: 31
-                                        validator: RegularExpressionValidator { regularExpression: /^[a-z][a-z0-9-]{0,30}$/ }
+                                }
+                            }
+                            RowLayout {
+                                Text {
+                                    text: qsTr("Password:")
+                                    color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
+                                    Layout.leftMargin: 40
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
+                                }
+                                TextField {
+                                    id: fieldUserPassword
+                                    enabled: chkSetUser.checked
+                                    echoMode: TextInput.Password
+                                    passwordMaskDelay: 2000 //ms
+                                    Layout.minimumWidth: 200
+                                    selectByMouse: true
+                                    property bool alreadyCrypted: false
+                                    property bool indicateError: false
 
-                                        onTextEdited: {
+                                    Keys.onPressed: (event)=> {
+                                        if (alreadyCrypted) {
+                                            /* User is trying to edit saved
+                                               (crypted) password, clear field */
+                                            alreadyCrypted = false
+                                            clear()
+                                        }
+
+                                        // Do not mark the event as accepted, so that it may
+                                        // propagate down to the underlying TextField.
+                                        event.accepted = false
+                                    }
+
+                                    onTextEdited: {
+                                        if (indicateError) {
                                             indicateError = false
-                                        }
-                                    }
-
-                                    Text {
-                                        text: qsTr("Password:")
-                                        color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
-                                    }
-                                    TextField {
-                                        id: fieldUserPassword
-                                        echoMode: TextInput.Password
-                                        passwordMaskDelay: 2000 //ms
-                                        Layout.minimumWidth: 200
-                                        selectByMouse: true
-                                        property bool alreadyCrypted: false
-                                        property bool indicateError: false
-
-                                        Keys.onPressed: (event)=> {
-                                            if (alreadyCrypted) {
-                                                /* User is trying to edit saved
-                                                   (crypted) password, clear field */
-                                                alreadyCrypted = false
-                                                clear()
-                                            }
-
-                                            // Do not mark the event as accepted, so that it may
-                                            // propagate down to the underlying TextField.
-                                            event.accepted = false
-                                        }
-
-                                        onTextEdited: {
-                                            if (indicateError) {
-                                                indicateError = false
-                                            }
                                         }
                                     }
                                 }
@@ -196,19 +204,21 @@ Window {
                                     }
                                 }
                             }
-                            GridLayout {
-                                enabled: chkWifi.checked
-                                Layout.leftMargin: 40
-                                columns: 2
-                                columnSpacing: 10
-                                rowSpacing: -5
 
+                            RowLayout {
                                 Text {
                                     text: qsTr("SSID:")
-                                    color: parent.enabled ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
+                                    color: chkWifi.checked ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
+                                    Layout.leftMargin: 40
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
                                 }
                                 TextField {
                                     id: fieldWifiSSID
+                                    // placeholderText: qsTr("SSID")
+                                    enabled: chkWifi.checked
                                     Layout.minimumWidth: 200
                                     selectByMouse: true
                                     property bool indicateError: false
@@ -216,13 +226,20 @@ Window {
                                         indicateError = false
                                     }
                                 }
-
+                            }
+                            RowLayout {
                                 Text {
                                     text: qsTr("Password:")
-                                    color: parent.enabled ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
+                                    color: chkWifi.checked ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
+                                    Layout.leftMargin: 40
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
                                 }
                                 TextField {
                                     id: fieldWifiPassword
+                                    enabled: chkWifi.checked
                                     Layout.minimumWidth: 200
                                     selectByMouse: true
                                     echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
@@ -231,29 +248,48 @@ Window {
                                         indicateError = false
                                     }
                                 }
+                            }
 
-                                RowLayout {
-                                    Layout.columnSpan: 2
-
-                                    ImCheckBox {
-                                        id: chkShowPassword
-                                        text: qsTr("Show password")
-                                        checked: true
-                                    }
-                                    ImCheckBox {
-                                        id: chkWifiSSIDHidden
-                                        Layout.columnSpan: 2
-                                        text: qsTr("Hidden SSID")
-                                        checked: false
-                                    }
+                            RowLayout {
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
                                 }
+                                ImCheckBox {
+                                    id: chkShowPassword
+                                    enabled: chkWifi.checked
+                                    text: qsTr("Show password")
+                                    checked: true
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
+                                }
+                                ImCheckBox {
+                                    id: chkWifiSSIDHidden
+                                    enabled: chkWifi.checked
+                                    Layout.columnSpan: 2
+                                    text: qsTr("Hidden SSID")
+                                    checked: false
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
+                                }
+                            }
 
+                            RowLayout {
                                 Text {
                                     text: qsTr("Wireless LAN country:")
-                                    color: parent.enabled ? "black" : "grey"
+                                    color: chkWifi.checked ? "black" : "grey"
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
                                 }
                                 ComboBox {
                                     id: fieldWifiCountry
+                                    enabled: chkWifi.checked
                                     editable: true
                                 }
                             }
@@ -262,28 +298,36 @@ Window {
                                 id: chkLocale
                                 text: qsTr("Set locale settings")
                             }
-                            GridLayout {
-                                enabled: chkLocale.checked
-                                Layout.leftMargin: 40
-                                columns: 2
-                                columnSpacing: 10
-                                rowSpacing: -5
-
+                            RowLayout {
                                 Text {
                                     text: qsTr("Time zone:")
-                                    color: parent.enabled ? "black" : "grey"
+                                    color: chkLocale.checked ? "black" : "grey"
+                                    Layout.leftMargin: 40
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
                                 }
                                 ComboBox {
+                                    enabled: chkLocale.checked
                                     id: fieldTimezone
                                     editable: true
                                     Layout.minimumWidth: 200
                                 }
+                            }
 
+                            RowLayout {
                                 Text {
                                     text: qsTr("Keyboard layout:")
-                                    color: parent.enabled ? "black" : "grey"
+                                    color: chkLocale.checked ? "black" : "grey"
+                                    Layout.leftMargin: 40
+                                }
+                                // Spacer item
+                                Item {
+                                    Layout.fillWidth: true
                                 }
                                 ComboBox {
+                                    enabled: chkLocale.checked
                                     id: fieldKeyboardLayout
                                     editable: true
                                     Layout.minimumWidth: 200
@@ -293,7 +337,6 @@ Window {
 
                         ColumnLayout {
                             // Remote access tab
-                            spacing: -10
 
                             ImCheckBox {
                                 id: chkSSH
@@ -309,68 +352,61 @@ Window {
                                     }
                                 }
                             }
-                            ColumnLayout {
+
+                            ImRadioButton {
+                                id: radioPasswordAuthentication
                                 enabled: chkSSH.checked
+                                text: qsTr("Use password authentication")
+                                onCheckedChanged: {
+                                    if (checked) {
+                                        chkSetUser.checked = true
+                                        //fieldUserPassword.forceActiveFocus()
+                                    }
+                                }
+                            }
+                            ImRadioButton {
+                                id: radioPubKeyAuthentication
+                                enabled: chkSSH.checked
+                                text: qsTr("Allow public-key authentication only")
+                                onCheckedChanged: {
+                                    if (checked) {
+                                        if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
+                                            chkSetUser.checked = false
+                                        }
+                                        fieldPublicKey.forceActiveFocus()
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
+                                color: radioPubKeyAuthentication.checked ? "black" : "grey"
+                                textFormat: Text.PlainText
                                 Layout.leftMargin: 40
-                                spacing: -10
+                            }
+                            TextArea {
+                                id: fieldPublicKey
+                                enabled: radioPubKeyAuthentication.checked
+                                wrapMode: TextEdit.WrapAnywhere
+                                Layout.minimumWidth: 400
+                                Layout.leftMargin: 40
+                                selectByMouse: true
+                            }
 
-                                ImRadioButton {
-                                    id: radioPasswordAuthentication
-                                    text: qsTr("Use password authentication")
-                                    onCheckedChanged: {
-                                        if (checked) {
-                                            chkSetUser.checked = true
-                                            //fieldUserPassword.forceActiveFocus()
-                                        }
-                                    }
-                                }
-                                ImRadioButton {
-                                    id: radioPubKeyAuthentication
-                                    text: qsTr("Allow public-key authentication only")
-                                    onCheckedChanged: {
-                                        if (checked) {
-                                            if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
-                                                chkSetUser.checked = false
-                                            }
-                                            fieldPublicKey.forceActiveFocus()
-                                        }
-                                    }
-                                }
-                                GridLayout {
-                                    Layout.leftMargin: 40
-                                    columns: 1
-                                    columnSpacing: 10
-                                    rowSpacing: -5
-                                    enabled: radioPubKeyAuthentication.checked
-
-                                    Text {
-                                        text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
-                                        color: parent.enabled ? "black" : "grey"
-                                        textFormat: Text.PlainText
-                                    }
-                                    TextArea {
-                                        id: fieldPublicKey
-                                        wrapMode: TextEdit.WrapAnywhere
-                                        Layout.minimumWidth: 400
-                                        selectByMouse: true
-                                    }
-
-                                    ImButton {
-                                        text: qsTr("RUN SSH-KEYGEN")
-                                        enabled: imageWriter.hasSshKeyGen() && !imageWriter.hasPubKey()
-                                        onClicked: {
-                                            enabled = false
-                                            imageWriter.generatePubKey()
-                                            fieldPublicKey.text = imageWriter.getDefaultPubKey()
-                                        }
-                                    }
+                            ImButton {
+                                text: qsTr("RUN SSH-KEYGEN")
+                                Layout.leftMargin: 40
+                                enabled: imageWriter.hasSshKeyGen() && !imageWriter.hasPubKey()
+                                onClicked: {
+                                    enabled = false
+                                    imageWriter.generatePubKey()
+                                    fieldPublicKey.text = imageWriter.getDefaultPubKey()
                                 }
                             }
                         }
 
                         ColumnLayout {
                             // Options tab
-                            spacing: -10
 
                             ImCheckBox {
                                 id: chkBeep
