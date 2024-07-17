@@ -271,8 +271,8 @@ endif()
 
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)
-    # Target Windows 7 (needed for drivelist module)
-    add_definitions(-DWINVER=0x0601 -D_WIN32_WINNT=0x0601)
+    # Target Windows 10, in line with Qt requirements
+    add_definitions(-DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DNTDDI_VERION=0x0A000000)
 
     find_package(OpenSSL REQUIRED)
 
