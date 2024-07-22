@@ -99,6 +99,7 @@ set(LibArchive_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/libarchive-3.7
 set(CMAKE_CURL_INCLUDES)
 set(BUILD_STATIC_CURL true)
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
+set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
 set(ENABLE_CURL_MANUAL OFF CACHE BOOL "" FORCE)
 set(CURL_DISABLE_ALTSVC ON)
 set(CURL_DISABLE_KERBEROS_AUTH ON)
@@ -119,12 +120,17 @@ set(CURL_DISABLE_TFTP ON)
 set(CURL_ZSTD ON)
 set(CURL_ENABLE_EXPORT_TARGET OFF CACHE BOOL "" FORCE)
 if (APPLE)
+    # TODO: SecureTransport is a deprecated API in macOS, supporting
+    #       only up to TLS v1.2. cURL has not implemented the replacement,
+    #       Network.framework, and so we will need to select an alternative.
+    #       Best recommendation: Libressl, as used by Apple in the curl binary
+    #       on macOS.
     set(CURL_USE_SECTRANSP ON)
 else()
     if (WIN32)
         set(CURL_USE_SCHANNEL ON)
     else ()
-        set(CURL_USE_OPENSSL ON)
+        set(CURL_USE_GNUTLS ON)
     endif(WIN32)
 endif(APPLE)
 
@@ -149,6 +155,7 @@ if (APPLE)
     enable_language(OBJC C)
 elseif (UNIX)
     set(DEPENDENCIES dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp linux/networkmanagerapi.h linux/networkmanagerapi.cpp linux/stpanalyzer.h linux/stpanalyzer.cpp)
+    set(EXTRALIBS ${EXTRALIBS} idn2 nettle)
     find_package(GnuTLS)
     if (GnuTLS_FOUND)
         set(DEPENDENCIES ${DEPENDENCIES} acceleratedcryptographichash_gnutls.cpp)
@@ -386,4 +393,4 @@ else()
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${ZSTD_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES} ${CURL_LIBRARIES}${CURL_POSTFIX} ${LibArchive_LIBRARIES} ${OPENSSL_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES}${CURL_POSTFIX} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES} ${OPENSSL_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
