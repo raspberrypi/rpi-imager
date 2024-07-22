@@ -1,4 +1,6 @@
-build**
+/build**
+src/build/*
+src/build/**
 .vscode
 obj-**
 debian/rpi-imager/**
