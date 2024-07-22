@@ -74,7 +74,7 @@ Window {
         anchors.bottom: buttonsRow.top
 
         clip: true
-        //ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+        ScrollBar.vertical.policy: ScrollBar.AlwaysOn
 
         StackLayout {
             id: optionsStack
