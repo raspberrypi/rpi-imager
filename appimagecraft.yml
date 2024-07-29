@@ -16,7 +16,7 @@ build:
 scripts:
   post_build:
     - |
-      sed -i 's|Name=Imager|Name=Raspberry Pi Imager|' AppDir/usr/share/applications/rpi-imager.desktop
+      sed -i 's|Name=Imager|Name=Raspberry Pi Imager|' AppDir/usr/share/applications/org.raspberrypi.rpi-imager.desktop
 
 appimage:
   linuxdeploy:
