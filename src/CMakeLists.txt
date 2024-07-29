@@ -38,8 +38,8 @@ add_subdirectory(dependencies/xz-5.6.2)
 set(LIBLZMA_FOUND true)
 set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/xz-5.6.2/src/liblzma/api FORCE)
 set(LIBLZMA_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/xz-5.6.2/src/liblzma/api FORCE)
-set(LIBLZMA_LIBRARY ${CMAKE_BINARY_DIR}/dependencies/xz-5.6.2/liblzma.a)
-set(LIBLZMA_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/xz-5.6.2/liblzma.a)
+set(LIBLZMA_LIBRARY liblzma)
+set(LIBLZMA_LIBRARIES liblzma)
 
 # Bundled zstd
 set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
@@ -55,10 +55,8 @@ set(Zstd_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
 set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
 set(Zstd_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
 set(ZSTD_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
-set(Zstd_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/zstd-1.5.6/build/cmake/lib/libzstd.a)
-set(ZSTD_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/zstd-1.5.6/build/cmake/lib/libzstd.a)
-
-#message(FATAL_ERROR "Cmake binary dir: " ${CMAKE_BINARY_DIR})
+set(Zstd_LIBRARIES libzstd_static)
+set(ZSTD_LIBRARIES libzstd_static)
 
 # Bundled zlib
 set(ZLIB_BUILD_EXAMPLES OFF)
@@ -66,8 +64,8 @@ add_subdirectory(dependencies/zlib-1.3.1)
 set(ZLIB_FOUND TRUE)
 set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
 set(ZLIB_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
-set(ZLIB_LIBRARY ${CMAKE_BINARY_DIR}/dependencies/zlib-1.3.1/libz.a)
-set(ZLIB_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/zlib-1.3.1/libz.a)
+set(ZLIB_LIBRARY zlibstatic)
+set(ZLIB_LIBRARIES zlibstatic)
 
 # Bundled libarchive
 set(ARCHIVE_ENABLE_WERROR OFF CACHE BOOL "")
@@ -92,7 +90,7 @@ set(ARCHIVE_ENABLE_CAT OFF CACHE BOOL "")
 set(ARCHIVE_BUILD_SHARED_LIBS OFF CACHE BOOL "")
 add_subdirectory(dependencies/libarchive-3.7.4)
 set(LibArchive_FOUND true)
-set(LibArchive_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/libarchive-3.7.4/libarchive/libarchive.a)
+set(LibArchive_LIBRARIES archive_static)
 set(LibArchive_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/libarchive-3.7.4/libarchive)
 
 # Bundled libcurl
@@ -137,7 +135,7 @@ endif(APPLE)
 add_subdirectory(dependencies/curl-8.8.0)
 set(CURL_FOUND true)
 set(CURL_POSTFIX "$<$<CONFIG:Debug>:-d>${CMAKE_STATIC_LIBRARY_SUFFIX}")
-set(CURL_LIBRARIES ${CMAKE_BINARY_DIR}/dependencies/curl-8.8.0/lib/${LIBCURL_OUTPUT_NAME})
+set(CURL_LIBRARIES libcurl_static)
 set(CURL_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/curl-8.8.0/include)
 set(CURL_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/curl-8.8.0/include)
 
@@ -393,4 +391,4 @@ else()
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES}${CURL_POSTFIX} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES} ${OPENSSL_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES} ${OPENSSL_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
