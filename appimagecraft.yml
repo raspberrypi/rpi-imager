@@ -24,3 +24,6 @@ appimage:
       - qt
     raw_environment:
       QML_SOURCES_PATHS: "\"$PROJECT_ROOT\"/src/qmlcomponents/"
+    environment:
+      EXTRA_PLATFORM_PLUGINS: "libqwayland-egl.so;libqwayland-generic.so"
+      EXTRA_QT_PLUGINS: "waylandcompositor"
