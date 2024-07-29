@@ -7,6 +7,11 @@ project:
 build:
   cmake:
     source_dir: src/
+    # You should also set your Qt6_ROOT here, like so:
+    # extra_variables:
+    #  - Qt6_ROOT=
+  environment:
+    BUILD_TYPE: MinSizeRel
 
 scripts:
   post_build:
