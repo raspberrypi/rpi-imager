@@ -147,26 +147,43 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
 # Add dependencies
 if (APPLE)
     set_source_files_properties("icons/rpi-imager.icns" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-    set(DEPENDENCIES acceleratedcryptographichash.cpp mac/macfile.cpp mac/macfile.h dependencies/mountutils/src/darwin/functions.cpp
-        mac/macwlancredentials.h mac/macwlancredentials.cpp
-        dependencies/drivelist/src/darwin/list.mm dependencies/drivelist/src/darwin/REDiskList.m icons/rpi-imager.icns)
+    set(PLATFORM_SOURCES
+        mac/acceleratedcryptographichash_commoncrypto.cpp
+        mac/macfile.cpp
+        mac/macfile.h
+        dependencies/mountutils/src/darwin/functions.cpp
+        mac/macwlancredentials.h
+        mac/macwlancredentials.cpp
+        dependencies/drivelist/src/darwin/list.mm
+        dependencies/drivelist/src/darwin/REDiskList.m
+    )
+    set(DEPENDENCIES  icons/rpi-imager.icns)
     enable_language(OBJC C)
 elseif (UNIX)
-    set(DEPENDENCIES dependencies/mountutils/src/linux/functions.cpp linux/linuxdrivelist.cpp linux/networkmanagerapi.h linux/networkmanagerapi.cpp linux/stpanalyzer.h linux/stpanalyzer.cpp)
-    set(EXTRALIBS ${EXTRALIBS} idn2 nettle)
-    find_package(GnuTLS)
-    if (GnuTLS_FOUND)
-        set(DEPENDENCIES ${DEPENDENCIES} acceleratedcryptographichash_gnutls.cpp)
-        set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS)
-        add_definitions(-DHAVE_GNUTLS)
-    else()
-        find_package(OpenSSL REQUIRED)
-        set(DEPENDENCIES ${DEPENDENCIES} acceleratedcryptographichash.cpp)
-    endif()
+    find_package(GnuTLS REQUIRED)
+    set(PLATFORM_SOURCES
+        dependencies/mountutils/src/linux/functions.cpp
+        linux/linuxdrivelist.cpp
+        linux/networkmanagerapi.h
+        linux/networkmanagerapi.cpp
+        linux/stpanalyzer.h
+        linux/stpanalyzer.cpp
+        linux/acceleratedcryptographichash_gnutls.cpp
+    )
+    set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
+    set(DEPENDENCIES "")
+    add_definitions(-DHAVE_GNUTLS)
 elseif (WIN32)
-    set(DEPENDENCIES acceleratedcryptographichash.cpp dependencies/mountutils/src/windows/functions.cpp dependencies/drivelist/src/windows/list.cpp
-        windows/winfile.cpp windows/winfile.h windows/winwlancredentials.h windows/winwlancredentials.cpp
-        windows/rpi-imager.rc wlanapi_delayed.lib)
+    set(PLATFORM_SOURCES
+        windows/acceleratedcryptographichash_cng.cpp
+        dependencies/mountutils/src/windows/functions.cpp
+        dependencies/drivelist/src/windows/list.cpp
+        windows/winfile.cpp
+        windows/winfile.h
+        windows/winwlancredentials.h
+        windows/winwlancredentials.cpp
+    )
+    set(DEPENDENCIES windows/rpi-imager.rc wlanapi_delayed.lib)
     set(EXTRALIBS setupapi ${CMAKE_CURRENT_BINARY_DIR}/wlanapi_delayed.lib)
     add_custom_command(
         OUTPUT wlanapi_delayed.lib
@@ -204,7 +221,7 @@ if( IS_BIG_ENDIAN )
     message( FATAL_ERROR "We currently only support 'little endian' CPU architectures" )
 endif( IS_BIG_ENDIAN )
 
-set(SOURCES "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
+set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp")
