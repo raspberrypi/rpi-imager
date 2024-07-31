@@ -40,7 +40,7 @@ HANDLE CreateVolumeHandleFromDevicePath(LPCTSTR devicePath, DWORD flags) {
 
 HANDLE CreateVolumeHandleFromDriveLetter(TCHAR driveLetter, DWORD flags) {
   TCHAR devicePath[8];
-  sprintf_s(devicePath, TEXT("\\\\.\\%c:"), driveLetter);
+  swprintf_s(devicePath, 8, TEXT("\\\\.\\%c:"), driveLetter);
   return CreateVolumeHandleFromDevicePath(devicePath, flags);
 }
 
@@ -65,7 +65,7 @@ ULONG GetDeviceNumberFromVolumeHandle(HANDLE volume) {
 
 BOOL IsDriveFixed(TCHAR driveLetter) {
   TCHAR rootName[5];
-  sprintf_s(rootName, TEXT("%c:\\"), driveLetter);
+  swprintf_s(rootName, 5, TEXT("%c:\\"), driveLetter);
   return GetDriveType(rootName) == DRIVE_FIXED;
 }
 
@@ -407,7 +407,7 @@ MOUNTUTILS_RESULT EjectDriveLetter(TCHAR driveLetter) {
 
 BOOL IsDriveEjectable(TCHAR driveLetter) {
   TCHAR devicePath[8];
-  sprintf_s(devicePath, "%c:\\", driveLetter);
+  swprintf_s(devicePath, 8, "%c:\\", driveLetter);
 
   MountUtilsLog("Checking whether drive is ejectable: "
       + std::string(1, driveLetter));
