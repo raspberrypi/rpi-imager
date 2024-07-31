@@ -186,7 +186,7 @@ elseif (WIN32)
         windows/winwlancredentials.cpp
     )
     set(DEPENDENCIES windows/rpi-imager.rc wlanapi_delayed.lib)
-    set(EXTRALIBS setupapi ${CMAKE_CURRENT_BINARY_DIR}/wlanapi_delayed.lib)
+    set(EXTRALIBS setupapi ${CMAKE_CURRENT_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll)
     add_custom_command(
         OUTPUT wlanapi_delayed.lib
         COMMAND ${CMAKE_DLLTOOL} --input-def "${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def"
@@ -338,12 +338,6 @@ if (WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy
             "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe" "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe"
             "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
-            "${CMAKE_BINARY_DIR}/deploy")
-
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-            "${${QT}_DIR}/../../../bin/libssl-1_1.dll" "${${QT}_DIR}/../../../bin/libcrypto-1_1.dll"
             "${CMAKE_BINARY_DIR}/deploy")
 
     configure_file(
