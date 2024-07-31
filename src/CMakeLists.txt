@@ -299,8 +299,6 @@ if (WIN32)
     # Target Windows 10, in line with Qt requirements
     add_definitions(-DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DNTDDI_VERION=0x0A000000)
 
-    find_package(OpenSSL REQUIRED)
-
     # Bundled fat32format
     add_subdirectory(dependencies/fat32format)
     add_dependencies(${PROJECT_NAME} fat32format)
