@@ -9,8 +9,8 @@
 
 #include <CommonCrypto/CommonDigest.h>
 
-struct AcceleratedCryptographicHash::Impl {
-    explicit Impl(QCryptographicHash::Algorithm algo) {
+struct AcceleratedCryptographicHash::impl {
+    explicit impl(QCryptographicHash::Algorithm algo) {
         if (method != QCryptographicHash::Sha256)
             throw std::runtime_error("Only sha256 implemented");
 

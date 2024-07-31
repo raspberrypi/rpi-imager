@@ -14,8 +14,8 @@
 
 #define STATUS_UNSUCCESSFUL         ((NTSTATUS)0xC0000001L)
 
-struct AcceleratedCryptographicHash::Impl {
-    explicit Impl(QCryptographicHash::Algorithm algo) {
+struct AcceleratedCryptographicHash::impl {
+    explicit impl(QCryptographicHash::Algorithm algo) {
         if (method != QCryptographicHash::Sha256)
             throw std::runtime_error("Only sha256 implemented");
 
@@ -89,7 +89,7 @@ struct AcceleratedCryptographicHash::Impl {
         }
     }
 
-    ~Impl() {
+    ~impl() {
         cleanup()
     }
 
