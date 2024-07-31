@@ -23,7 +23,6 @@
 class QQmlApplicationEngine;
 class DownloadThread;
 class QNetworkReply;
-class QWinTaskbarButton;
 class QTranslator;
 
 class ImageWriter : public QObject
@@ -203,9 +202,6 @@ protected:
     QMap<QString,QString> _translations;
     bool _customCacheFile;
     QTranslator *_trans;
-#ifdef Q_OS_WIN
-    QWinTaskbarButton *_taskbarButton;
-#endif
 
     void _parseCompressedFile();
     void _parseXZFile();
