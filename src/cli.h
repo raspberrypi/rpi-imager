@@ -13,7 +13,7 @@ class Cli : public QObject
 public:
     explicit Cli(int &argc, char *argv[]);
     virtual ~Cli();
-    int main();
+    int run();
 
 protected:
     QCoreApplication *_app;

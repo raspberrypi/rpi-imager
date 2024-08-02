@@ -46,7 +46,7 @@ Cli::~Cli()
     delete _app;
 }
 
-int Cli::main()
+int Cli::run()
 {
     QCommandLineParser parser;
     parser.addOptions({

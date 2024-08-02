@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
         {
             /* CLI mode */
             Cli cli(argc, argv);
-            return cli.main();
+            return cli.run();
         }
     }
 
