@@ -17,6 +17,9 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 #add_compile_options("-fsanitize=address")
 #add_link_options("-fsanitize=address")
 
+# You _must_ set your Qt6 root for the build to progress.
+set(Qt6_ROOT "/opt/Qt/6.7.2/gcc_arm64" CACHE PATH "Your Qt6 root path")
+
 ## Preferentially build the bundled code. Full vendoring is to follow in a later version.
 
 # Bundled liblzma
