@@ -20,6 +20,10 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # You _must_ set your Qt6 root for the build to progress.
 set(Qt6_ROOT "/opt/Qt/6.7.2/gcc_arm64" CACHE PATH "Your Qt6 root path")
 
+if (WIN32)
+    set(MINGW64_ROOT "" CACHE PATH "Your MinGW64 root path, likely provided by QtCreator")
+endif()
+
 ## Preferentially build the bundled code. Full vendoring is to follow in a later version.
 
 # Bundled liblzma
@@ -347,6 +351,14 @@ if (WIN32)
         "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in"
         "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi"
         @ONLY)
+
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${MINGW64_ROOT}/bin/libgcc_s_seh-1.dll"
+            "${MINGW64_ROOT}/bin/libstdc++-6.dll"
+            "${MINGW64_ROOT}/bin/libwinpthread-1.dll"
+            "${CMAKE_BINARY_DIR}/deploy")
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
