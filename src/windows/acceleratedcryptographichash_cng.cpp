@@ -29,7 +29,8 @@ struct AcceleratedCryptographicHash::impl {
                                                     0)))
         {
             qDebug() << "BCryptOpenAlgorithmProvider returned Error " << status;
-            goto Cleanup;
+            cleanup();
+            return;
         }
 
         //calculate the size of the buffer to hold the hash object
@@ -42,7 +43,8 @@ struct AcceleratedCryptographicHash::impl {
                                             0)))
         {
             qDebug() <<  "BCryptGetProperty returned Error " << status;
-            goto Cleanup;
+            cleanup();
+            return;
         }
 
         //allocate the hash object on the heap
@@ -50,7 +52,8 @@ struct AcceleratedCryptographicHash::impl {
         if(NULL == pbHashObject)
         {
             qDebug() <<  "memory allocation failed";
-            goto Cleanup;
+            cleanup();
+            return;
         }
 
     //calculate the length of the hash
@@ -63,7 +66,8 @@ struct AcceleratedCryptographicHash::impl {
                                             0)))
         {
             qDebug() << "BCryptGetProperty returned Error " << status;
-            goto Cleanup;
+            cleanup();
+            return;
         }
 
         //allocate the hash buffer on the heap
@@ -92,7 +96,7 @@ struct AcceleratedCryptographicHash::impl {
     }
 
     ~impl() {
-        cleanup()
+        cleanup();
     }
 
     void cleanup() {
@@ -127,7 +131,8 @@ struct AcceleratedCryptographicHash::impl {
                                             0)))
         {
             qDebug() << "BCryptHashData returned Error " << status;
-            goto Cleanup;
+            cleanup();
+            return;
         }
     }
 
@@ -145,7 +150,7 @@ struct AcceleratedCryptographicHash::impl {
                                             0)))
         {
             qDebug() << "BCryptFinishHash returned Error " << status;
-            cleanup()
+            cleanup();
             return {};
         } else {
             // No cleanup required, as the dtor of this class will do so.
