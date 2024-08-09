@@ -11,7 +11,7 @@
 
 struct AcceleratedCryptographicHash::impl {
     explicit impl(QCryptographicHash::Algorithm algo) {
-        if (method != QCryptographicHash::Sha256)
+        if (algo != QCryptographicHash::Sha256)
             throw std::runtime_error("Only sha256 implemented");
 
         CC_SHA256_Init(&_sha256);
