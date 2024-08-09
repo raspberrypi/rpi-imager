@@ -192,15 +192,8 @@ elseif (WIN32)
         windows/winwlancredentials.h
         windows/winwlancredentials.cpp
     )
-    set(DEPENDENCIES windows/rpi-imager.rc wlanapi_delayed.lib)
-    set(EXTRALIBS setupapi ${CMAKE_CURRENT_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll)
-    add_custom_command(
-        OUTPUT wlanapi_delayed.lib
-        COMMAND ${CMAKE_DLLTOOL} --input-def "${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def"
-                --output-delaylib "wlanapi_delayed.lib" --dllname "wlanapi.dll"
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def
-        VERBATIM
-    )
+    set(DEPENDENCIES windows/rpi-imager.rc)
+    set(EXTRALIBS setupapi wlanapi Bcrypt.dll)
 endif()
 
 include_directories(BEFORE .)
@@ -362,7 +355,7 @@ if (WIN32)
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND "${WINDEPLOYQT}" --no-translations --no-webkit2 --no-opengl-sw --angle --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/rpi-imager.exe")
+        COMMAND "${WINDEPLOYQT}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/rpi-imager.exe")
 
     # Remove excess files
     add_custom_command(TARGET ${PROJECT_NAME}
