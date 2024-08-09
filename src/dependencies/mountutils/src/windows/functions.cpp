@@ -407,7 +407,7 @@ MOUNTUTILS_RESULT EjectDriveLetter(TCHAR driveLetter) {
 
 BOOL IsDriveEjectable(TCHAR driveLetter) {
   TCHAR devicePath[8];
-  swprintf_s(devicePath, 8, "%c:\\", driveLetter);
+  swprintf_s(devicePath, 8, TEXT("%c:\\"), driveLetter);
 
   MountUtilsLog("Checking whether drive is ejectable: "
       + std::string(1, driveLetter));
