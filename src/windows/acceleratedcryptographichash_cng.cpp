@@ -149,7 +149,7 @@ struct AcceleratedCryptographicHash::impl {
             return {};
         } else {
             // No cleanup required, as the dtor of this class will do so.
-            auto returnArray = QByteArray(pbHash, cbHash);
+            auto returnArray = QByteArray(reinterpret_cast<char *>(pbHash), cbHash);
             return returnArray;
         }
     }
