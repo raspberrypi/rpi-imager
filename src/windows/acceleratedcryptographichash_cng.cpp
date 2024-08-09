@@ -5,6 +5,8 @@
  * Copyright (C) 2024 Raspberry Pi Ltd
  */
 
+#include <QDebug>
+
 #include "acceleratedcryptographichash.h"
 
 #include <windows.h>
