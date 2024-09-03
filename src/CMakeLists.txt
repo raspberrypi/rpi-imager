@@ -395,7 +395,7 @@ elseif(APPLE)
             # Sign, but don't notarize
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
-                COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -codesign="${IMAGER_SIGNING_IDENTITY}" -dmg)
+                COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -sign-for-notarization="${IMAGER_SIGNING_IDENTITY}" -dmg)
         else()
             message(FATAL_ERROR "Signing requested, but no signing identity provided")
         endif(IMAGER_SIGNING_IDENTITY)
