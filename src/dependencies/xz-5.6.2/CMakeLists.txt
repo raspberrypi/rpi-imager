@@ -1131,20 +1131,20 @@ tuklib_add_definition_if(liblzma HAVE_CPUID_H)
 # immintrin.h:
 check_include_file(immintrin.h HAVE_IMMINTRIN_H)
 if(HAVE_IMMINTRIN_H)
-    target_compile_definitions(liblzma PRIVATE HAVE_IMMINTRIN_H)
+    # target_compile_definitions(liblzma PRIVATE HAVE_IMMINTRIN_H)
 
-    # SSE2 intrinsics:
-    check_c_source_compiles("
-            #include <immintrin.h>
-            int main(void)
-            {
-                __m128i x = { 0 };
-                _mm_movemask_epi8(x);
-                return 0;
-            }
-        "
-        HAVE__MM_MOVEMASK_EPI8)
-    tuklib_add_definition_if(liblzma HAVE__MM_MOVEMASK_EPI8)
+    # # SSE2 intrinsics:
+    # check_c_source_compiles("
+    #         #include <immintrin.h>
+    #         int main(void)
+    #         {
+    #             __m128i x = { 0 };
+    #             _mm_movemask_epi8(x);
+    #             return 0;
+    #         }
+    #     "
+    #     HAVE__MM_MOVEMASK_EPI8)
+    # tuklib_add_definition_if(liblzma HAVE__MM_MOVEMASK_EPI8)
 
     # CLMUL intrinsic:
     option(XZ_ALLOW_CLMUL_CRC "Allow carryless multiplication for CRC \
