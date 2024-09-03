@@ -54,13 +54,20 @@ Window {
                 if (chkSetUser.checked && !fieldUserPassword.length) {
                     fieldUserPassword.forceActiveFocus()
                 }
+                popupbody.scrollPosition = 0
             }
         }
         TabButton {
             text: qsTr("Services")
+            onClicked: {
+                popupbody.scrollPosition = 0
+            }
         }
         TabButton {
             text: qsTr("Options")
+            onClicked: {
+                popupbody.scrollPosition = 0
+            }
         }
     }
 
@@ -73,8 +80,11 @@ Window {
         anchors.top: bar.bottom
         anchors.bottom: buttonsRow.top
 
+        property double scrollPosition
+
         clip: true
         ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+        ScrollBar.vertical.position: scrollPosition
 
         StackLayout {
             id: optionsStack
