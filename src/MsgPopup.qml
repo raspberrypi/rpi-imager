@@ -16,7 +16,7 @@ Popup {
     width: 550
     height: msgpopupbody.implicitHeight+150
     padding: 0
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    closePolicy: Popup.CloseOnEscape
     modal: true
 
     property alias title: msgpopupheader.text
