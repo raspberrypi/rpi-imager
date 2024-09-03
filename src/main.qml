@@ -437,7 +437,7 @@ ApplicationWindow {
         width: parent.width-100
         height: parent.height-50
         padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        closePolicy: Popup.CloseOnEscape
         property string hwselected: ""
 
         // background of title
@@ -537,7 +537,7 @@ ApplicationWindow {
         width: parent.width-100
         height: parent.height-50
         padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        closePolicy: Popup.CloseOnEscape
         property string categorySelected : ""
 
         // background of title
@@ -934,7 +934,7 @@ ApplicationWindow {
         width: parent.width-100
         height: parent.height-50
         padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        closePolicy: Popup.CloseOnEscape
         onClosed: imageWriter.stopDriveListPolling()
 
         // background of title
