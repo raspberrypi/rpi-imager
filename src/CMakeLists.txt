@@ -29,10 +29,6 @@ endif()
 if (APPLE)
     set(IMAGER_SIGNED_APP OFF CACHE BOOL "Perform singing of the Imager .app as part of the build")
     set(IMAGER_SIGNING_IDENTITY "" CACHE STRING "The Developer Identity to use for signing.")
-    set(IMAGER_NOTARIZED_APP OFF CACHE BOOL "Perform notarization of the Imager .dmg for distribution outside of the App Store")
-    set(IMAGER_NOTARIZING_EMAIL "" CACHE STRING "The e-mail address to notarized the .dmg with")
-    set(IMAGER_NOTARIZING_APP_PASSWORD "" STRING "The application-specific Apple Password for notarizing the .dmg")
-    set(IMAGER_NOTARIZING_TEAM_ID "" CACHE STRING "The team identity to use for notarizing")
 endif(APPLE)
 
 ## Preferentially build the bundled code. Full vendoring is to follow in a later version.
@@ -386,35 +382,30 @@ elseif(APPLE)
     set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} ${IOKit} ${SystemConfiguration} iconv)
     set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in)
 
-    find_program(MACDEPLOYQT "macdeployqt" PATHS "${${QT}_DIR}/../../../bin")
-    if (NOT MACDEPLOYQT)
+    find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt6_ROOT}/bin")
+    if (NOT MACDEPLOYQT_EXECUTABLE)
         message(FATAL_ERROR "Unable to locate macdeployqt")
     endif()
 
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND "${MACDEPLOYQT}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}")
-
     if(IMAGER_SIGNED_APP)
         if(IMAGER_SIGNING_IDENTITY)
+            # Sign, but don't notarize
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
-                COMMAND codesign --deep --digest-algorithm=sha1,sha256 --force --verify --verbose --sign "${IMAGER_SIGNING_IDENTITY}" --options runtime "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app")
-            if(IMAGER_NOTARIZED_APP)
-                add_custom_command(TARGET ${PROJECT_NAME}
-                    POST_BUILD
-                    COMMAND create-dmg "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app")
-                add_custom_command(TARGET ${PROJECT_NAME}
-                    POST_BUILD
-                    COMMAND xcrun altool --notarize-app -t osx -f "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg" --primary-bundle-id="org.raspberrypi.imagingutility" -u "${IMAGER_NOTARIZING_EMAIL}" -p "${IMAGER_NOTARIZING_APP_PASSWORD}" -itc_provider "${IMAGER_NOTARIZING_TEAM_ID}")
-                add_custom_command(TARGET ${PROJECT_NAME}
-                    POST_BUILD
-                    COMMAND xcrun stapler staple "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg")
-            endif(IMAGER_NOTARIZED_APP)
+                COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -codesign="${IMAGER_SIGNING_IDENTITY}" -dmg)
         else()
             message(FATAL_ERROR "Signing requested, but no signing identity provided")
         endif(IMAGER_SIGNING_IDENTITY)
+    else()
+        # Unsigned application
+        add_custom_command(TARGET ${PROJECT_NAME}
+            POST_BUILD
+            COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite -no-strip -dmg)
     endif(IMAGER_SIGNED_APP)
+
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND "mv" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-${IMAGER_VERSION_STR}.dmg")
 
 else()
     # UNIX, Linux systems
