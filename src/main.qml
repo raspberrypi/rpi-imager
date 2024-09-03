@@ -237,7 +237,6 @@ ApplicationWindow {
                         horizontalAlignment: Text.AlignHCenter
                         Layout.fillWidth: true
                         Layout.bottomMargin: 25
-                        padding: 5
                     }
 
                     ProgressBar {
