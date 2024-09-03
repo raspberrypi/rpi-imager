@@ -33,6 +33,9 @@ endif(APPLE)
 
 ## Preferentially build the bundled code. Full vendoring is to follow in a later version.
 
+# Bundled code will occasionally use identical options - eg, BUILD_TESTING.
+set(BUILD_TESTING OFF)
+
 # Bundled liblzma
 set(XZ_MICROLZMA_DECODER OFF)
 set(XZ_MICROLZMA_ENCODER OFF)
