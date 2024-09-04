@@ -398,29 +398,32 @@ elseif(APPLE)
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
                 COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_custom_command(TARGET ${PROJECT_NAME}
+                POST_BUILD
+                COMMAND mv "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app")
             # Sign the .app.
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
-                COMMAND codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app")
+                COMMAND codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app")
 
             # Create the .dmg for distribution
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
-                COMMAND hdiutil create -volname "Raspberry Pi Imager" -srcfolder "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -ov -format UDBZ "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg")
+                COMMAND hdiutil create -volname "Raspberry Pi Imager" -srcfolder "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app" -ov -format UDBZ "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
 
             # Sign the .dmg for distribution, but do not initialise notarisation
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
-                COMMAND codesign -f --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg")
+                COMMAND codesign -f --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
 
             if(IMAGER_NOTARIZE_APP)
                 if(IMAGER_NOTARIZE_KEYCHAIN_PROFILE)
                     add_custom_command(TARGET ${PROJECT_NAME}
                         POST_BUILD
-                        COMMAND xcrun notarytool submit "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg" --wait --keychain-profile "${IMAGER_NOTARIZE_KEYCHAIN_PROFILE}")
+                        COMMAND xcrun notarytool submit "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg" --wait --keychain-profile "${IMAGER_NOTARIZE_KEYCHAIN_PROFILE}")
                     add_custom_command(TARGET ${PROJECT_NAME}
                         POST_BUILD
-                        COMMAND xcrun stapler staple "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg")
+                        COMMAND xcrun stapler staple "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
                 else()
                     message(FATAL_ERROR "Notarization requested, but no keychain profile is supplied")
                 endif(IMAGER_NOTARIZE_KEYCHAIN_PROFILE)
@@ -433,12 +436,12 @@ elseif(APPLE)
         # Unsigned application
         add_custom_command(TARGET ${PROJECT_NAME}
             POST_BUILD
-            COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite -no-strip -dmg)
+            COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite -no-strip -dmg)
     endif(IMAGER_SIGNED_APP)
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND "mv" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-${IMAGER_VERSION_STR}.dmg")
+        COMMAND "mv" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager-${IMAGER_VERSION_STR}.dmg")
 
 else()
     # UNIX, Linux systems
