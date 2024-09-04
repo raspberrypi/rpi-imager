@@ -29,6 +29,8 @@ endif()
 if (APPLE)
     set(IMAGER_SIGNED_APP OFF CACHE BOOL "Perform singing of the Imager .app as part of the build")
     set(IMAGER_SIGNING_IDENTITY "" CACHE STRING "The Developer Identity to use for signing.")
+    set(IMAGER_NOTARIZE_APP OFF CACHE BOOL "Perform notarization of the Imager .dmg as part of the build")
+    set(IMAGER_NOTARIZE_KEYCHAIN_PROFILE "" CACHE STRING "The name of the Keychain item containing your notarization credentials")
 endif(APPLE)
 
 ## Preferentially build the bundled code. Full vendoring is to follow in a later version.
@@ -392,10 +394,38 @@ elseif(APPLE)
 
     if(IMAGER_SIGNED_APP)
         if(IMAGER_SIGNING_IDENTITY)
-            # Sign, but don't notarize
+            # Create the .app, leveraging macdeployqt's knowledge of Qt libraries and configuration files
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
-                COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -sign-for-notarization="${IMAGER_SIGNING_IDENTITY}" -dmg)
+                COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}")
+            # Sign the .app.
+            add_custom_command(TARGET ${PROJECT_NAME}
+                POST_BUILD
+                COMMAND codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app")
+
+            # Create the .dmg for distribution
+            add_custom_command(TARGET ${PROJECT_NAME}
+                POST_BUILD
+                COMMAND hdiutil create -volname "Raspberry Pi Imager" -srcfolder "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -ov -format UDBZ "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg")
+
+            # Sign the .dmg for distribution, but do not initialise notarisation
+            add_custom_command(TARGET ${PROJECT_NAME}
+                POST_BUILD
+                COMMAND codesign -f --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg")
+
+            if(IMAGER_NOTARIZE_APP)
+                if(IMAGER_NOTARIZE_KEYCHAIN_PROFILE)
+                    add_custom_command(TARGET ${PROJECT_NAME}
+                        POST_BUILD
+                        COMMAND xcrun notarytool submit "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg" --wait --keychain-profile "${IMAGER_NOTARIZE_KEYCHAIN_PROFILE}")
+                    add_custom_command(TARGET ${PROJECT_NAME}
+                        POST_BUILD
+                        COMMAND xcrun stapler staple "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dmg")
+                else()
+                    message(FATAL_ERROR "Notarization requested, but no keychain profile is supplied")
+                endif(IMAGER_NOTARIZE_KEYCHAIN_PROFILE)
+
+            endif(IMAGER_NOTARIZE_APP)
         else()
             message(FATAL_ERROR "Signing requested, but no signing identity provided")
         endif(IMAGER_SIGNING_IDENTITY)
