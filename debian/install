@@ -1,0 +1,6 @@
+rpi-imager.AppImage /usr/bin/
+
+debian/rpi-imager.png /usr/share/icons/hicolor/128x128/apps/
+
+debian/*.desktop /usr/share/applications/
+debian/*.metainfo.xml /usr/share/metainfo/

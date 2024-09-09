@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Version=1.0
+Version=1.9.0
 Name=Raspberry Pi Imager
 Name[zh_CN]=树莓派启动盘制作工具
 Comment=Raspberry Pi Imager
 Comment[zh_CN]=树莓派启动盘制作工具
 Icon=rpi-imager
-Exec=rpi-imager %F
+Exec=/usr/bin/rpi-imager.AppImage %F
 Categories=Utility
 StartupNotify=false

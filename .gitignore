@@ -9,8 +9,10 @@ debian/files
 debian/*.substvars
 debian/debhelper**
 .DS_Store
+*.DS_Store
 # editor backups
 *.*swp*
 
 # AppImage related
 *.AppImage*
+*.appimagecraft*

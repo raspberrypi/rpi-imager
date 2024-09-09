@@ -1,18 +1,14 @@
 Source: rpi-imager
 Section: admin
 Priority: optional
-Maintainer: Floris Bos <bos@je-eigen-domein.nl>
-Build-Depends: debhelper (>= 10), cmake, libarchive-dev, liblzma-dev, libcurl4-gnutls-dev | libcurl4-openssl-dev,
- qtbase5-dev, qtbase5-dev-tools, qtdeclarative5-dev, libqt5svg5-dev, qttools5-dev, libgnutls28-dev,
- qml-module-qtquick2, qml-module-qtquick-controls2, qml-module-qtquick-layouts, qml-module-qtquick-templates2, qml-module-qtquick-window2, qml-module-qtgraphicaleffects
+Maintainer: Tom Dewey <tom.dewey@raspberrypi.com>
+Build-Depends: debhelper (>= 10), cmake, libgnutls28-dev
 Standards-Version: 4.1.2
-Homepage: https://www.raspberrypi.org/
+Homepage: https://www.raspberrypi.com/software
 
 Package: rpi-imager
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, 
- qml-module-qtquick2, qml-module-qtquick-controls2, qml-module-qtquick-layouts, qml-module-qtquick-templates2, qml-module-qtquick-window2, qml-module-qtgraphicaleffects,
- dosfstools, fdisk 
+Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse
 Recommends: udisks2
-Description: Raspberry Pi imaging utility
- Graphical user-interface to write disk images and format SD cards.
+Description: Raspberry Pi Imaging utility
+ A user-friendly tool for creating bootable media for Raspberry Pi Devices.

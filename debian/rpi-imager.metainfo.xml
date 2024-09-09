@@ -4,7 +4,7 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <name>Raspberry Pi Imager</name>
-  <summary>Raspberry Pi imaging utility</summary>
+  <summary>Raspberry Pi Imaging utility</summary>
   <description>
     <p>
       Raspberry Pi Imager downloads a .JSON file from the Raspberry Pi
@@ -52,10 +52,10 @@
   </screenshots>
   <url type="homepage">https://github.com/raspberrypi/rpi-imager</url>
   <provides>
-    <binary>rpi-imager</binary>
+    <binary>rpi-imager.AppImage</binary>
   </provides>
   <releases>
-    <release version="@IMAGER_VERSION_STR@" />
+    <release version="1.9.0" />
   </releases>
   <content_rating type="oars-1.1">
     <content_attribute id="social-info">moderate</content_attribute>

@@ -2,7 +2,7 @@ version: 1
 
 project:
   name: org.raspberrypi.rpi-imager
-  version_command: git describe --tags
+  version: 1.9.0
 
 build:
   cmake:
@@ -12,11 +12,6 @@ build:
     #  - Qt6_ROOT=
   environment:
     BUILD_TYPE: MinSizeRel
-
-scripts:
-  post_build:
-    - |
-      sed -i 's|Name=Imager|Name=Raspberry Pi Imager|' AppDir/usr/share/applications/org.raspberrypi.rpi-imager.desktop
 
 appimage:
   linuxdeploy:
