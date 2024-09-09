@@ -457,15 +457,10 @@ else()
         endif()
     endif()
 
-    configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/linux/rpi-imager.metainfo.xml.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.metainfo.xml"
-        @ONLY)
-
-    install(TARGETS rpi-imager DESTINATION bin)
-    install(FILES icons/rpi-imager.png DESTINATION share/icons/hicolor/128x128/apps)
-    install(FILES linux/org.raspberrypi.rpi-imager.desktop DESTINATION share/applications)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.metainfo.xml" DESTINATION share/metainfo)
+    install(TARGETS ${PROJECT_NAME} DESTINATION bin)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/rpi-imager.png" DESTINATION share/icons/hicolor/128x128/apps)
+    install(FILES "linux/org.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})

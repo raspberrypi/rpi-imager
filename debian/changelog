@@ -1,3 +1,17 @@
+rpi-imager (1.9.0) unstable; urgency=medium
+
+  * ui: Upgrade to Qt6.7, bringing new controls to everything
+  * packaging: Migrate to AppImage-first distribution
+  * packaging: Sign with new Raspberry Pi Ltd key
+  * host deps: Ubuntu 22.04+, macOS 11+, Windows 10+
+  * Popups: Removed click-outside closing behaviour
+  * Selection Windows: Fixed layouts to fill the windows
+  * build: Dependencies have been vendored for consistency
+  * build: Require non-package-manager version of Qt
+  * security: Use platform crypto, SSL libraries where possible
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Wed, 4 Sep 2024 18:57:00 +0000
+
 rpi-imager (1.8.5) unstable; urgency=medium
 
   * Retry downloads on HTTP2 errors.
