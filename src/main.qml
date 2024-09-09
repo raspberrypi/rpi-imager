@@ -1619,7 +1619,9 @@ ApplicationWindow {
             var candidate = oslist_parsed[0]
 
             if ("description" in candidate && !("subitems" in candidate)) {
-                candidate["description"] += " (Recommended)"
+                if (!candidate["description"].includes("(Recommended)")) {
+                    candidate["description"] += " (Recommended)"
+                }
             }
         }
 
