@@ -24,6 +24,7 @@
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTimeZone>
+#include <QLocale>
 #include <QWindow>
 #include <QGuiApplication>
 #include <QNetworkInterface>
@@ -1157,6 +1158,20 @@ QStringList ImageWriter::getTimezoneList()
 
     return timezones;
 }
+
+QStringList ImageWriter::getLocaleList()
+{
+  QStringList locales;
+  QFile f(":/locales.txt");
+  if ( f.open(f.ReadOnly) )
+  {
+    locales = QString(f.readAll()).split('\n');
+    f.close();
+  }
+
+  return locales;
+}
+
 
 QStringList ImageWriter::getCountryList()
 {

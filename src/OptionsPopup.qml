@@ -270,6 +270,16 @@ Window {
                                 rowSpacing: -5
 
                                 Text {
+                                    text: qsTr("Locale:")
+                                    color: parent.enabled ? "black" : "grey"
+                                }
+                                ComboBox {
+                                    id: fieldLocale
+                                    editable: true
+                                    Layout.minimumWidth: 300
+                                }
+
+                                Text {
                                     text: qsTr("Time zone:")
                                     color: parent.enabled ? "black" : "grey"
                                 }
@@ -453,6 +463,7 @@ Window {
         chkEject.checked = imageWriter.getBoolSetting("eject")
         var settings = imageWriter.getSavedCustomizationSettings()
         fieldTimezone.model = imageWriter.getTimezoneList()
+        fieldLocale.model = imageWriter.getLocaleList()
         fieldPublicKey.text = imageWriter.getDefaultPubKey()
         fieldWifiCountry.model = imageWriter.getCountryList()
         fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
@@ -538,17 +549,17 @@ Window {
             {
                 fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find(imageWriter.getCurrentKeyboard())
             }
-            else
-            {
-                /* Lacking an easy cross-platform to fetch keyboard layout
-                   from host system, just default to "gb" for people in
-                   UK time zone for now, and "us" for everyone else */
-                if (tz === "Europe/London") {
-                    fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("gb")
-                } else {
-                    fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")
-                }
+            else {
+                keyboardLayoutFromTimezone(tz)
             }
+        }
+        if ('locale' in settings) {
+            fieldLocale.currentIndex = fieldLocale.find(settings.locale)
+            if (fieldLocale.currentIndex === -1) {
+                fieldLocale.editText = settings.locale
+            }
+        } else {
+            localeFromTimezone(tz)
         }
 
         if (imageWriter.isEmbeddedMode()) {
@@ -559,6 +570,29 @@ Window {
         }
 
         initialized = true
+    }
+
+    function keyboardLayoutFromTimezone(tz) {
+        /* Lacking an easy cross-platform to fetch keyboard layout
+           from host system, just default to "gb" for people in
+           UK time zone for now, fr for FR timezone, and "us" for everyone else */
+        if (tz === "Europe/London") {
+            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("gb")
+        } else if (tz === "Europe/Paris") {
+            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("fr")
+        } else {
+            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")
+        }
+    }
+
+    function localeFromTimezone(tz) {
+        if (tz === "Europe/London") {
+            fieldLocale.currentIndex = fieldLocale.find("en_GB.UTF-8 (English - GB)")
+        } else if (tz === "Europe/Paris") {
+            fieldLocale.currentIndex = fieldLocale.find("fr_FR.UTF-8 (Français - France)")
+        } else {
+            fieldLocale.currentIndex = fieldLocale.find("en_US.UTF-8 (English - USA)")
+        }
     }
 
     function openPopup() {
@@ -786,10 +820,14 @@ Window {
             addFirstRun("   dpkg-reconfigure -f noninteractive keyboard-configuration")
             addFirstRun("fi")
 
+            var locale = fieldLocale.editText.split(" ")[0]
+            addFirstRun("localectl set-locale LANG=" + locale + " LC_ALL=" + locale +" LANGUAGE=" + locale)
+
             addCloudInit("timezone: "+fieldTimezone.editText)
             addCloudInit("keyboard:")
             addCloudInit("  model: pc105")
             addCloudInit("  layout: \"" + fieldKeyboardLayout.editText + "\"")
+            addCloudInit("locale: " + locale)
         }
 
         if (firstrun.length) {
@@ -843,6 +881,7 @@ Window {
             settings.wifiPassword = cryptedPsk
         }
         if (chkLocale.checked) {
+            settings.locale = fieldLocale.editText
             settings.timezone = fieldTimezone.editText
             settings.keyboardLayout = fieldKeyboardLayout.editText
         }
@@ -862,6 +901,7 @@ Window {
     {
         /* Bind copies of the lists */
         fieldTimezone.model = imageWriter.getTimezoneList()
+        fieldLocale.model = imageWriter.getLocaleList()
         fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
         fieldWifiCountry.model = imageWriter.getCountryList()
 
@@ -874,14 +914,9 @@ Window {
 
         /* Timezone Settings*/
         fieldTimezone.currentIndex = fieldTimezone.find(imageWriter.getTimezone())
-        /* Lacking an easy cross-platform to fetch keyboard layout
-            from host system, just default to "gb" for people in
-            UK time zone for now, and "us" for everyone else */
-        if (imageWriter.getTimezone() === "Europe/London") {
-            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("gb")
-        } else {
-            fieldKeyboardLayout.currentIndex = fieldKeyboardLayout.find("us")
-        }
+
+        keyboardLayoutFromTimezone(imageWriter.getTimezone())
+        localeFromTimezone(imageWriter.getTimezone())
 
         chkSetUser.checked = false
         chkSSH.checked = false
