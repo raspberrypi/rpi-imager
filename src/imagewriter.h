@@ -117,6 +117,7 @@ public:
     Q_INVOKABLE void generatePubKey();
     Q_INVOKABLE QString getTimezone();
     Q_INVOKABLE QStringList getTimezoneList();
+    Q_INVOKABLE QStringList getLocaleList();
     Q_INVOKABLE QStringList getCountryList();
     Q_INVOKABLE QStringList getKeymapLayoutList();
     Q_INVOKABLE QString getSSID();

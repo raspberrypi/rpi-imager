@@ -24,6 +24,7 @@
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTimeZone>
+#include <QLocale>
 #include <QWindow>
 #include <QGuiApplication>
 #include <QNetworkInterface>
@@ -1158,6 +1159,20 @@ QStringList ImageWriter::getTimezoneList()
     return timezones;
 }
 
+QStringList ImageWriter::getLocaleList()
+{
+  QStringList locales;
+  QFile f(":/locales.txt");
+  if ( f.open(f.ReadOnly) )
+  {
+    locales = QString(f.readAll()).split('\n');
+    f.close();
+  }
+
+  return locales;
+}
+
+
 QStringList ImageWriter::getCountryList()
 {
     QStringList countries;
@@ -1235,7 +1250,7 @@ void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArr
 
     qDebug() << "Custom config.txt entries:" << config;
     qDebug() << "Custom cmdline.txt entries:" << cmdline;
-    qDebug() << "Custom firstuse.sh:" << firstrun;
+    qDebug() << "Custom firstrun.sh:" << firstrun;
     qDebug() << "Cloudinit:" << cloudinit;
 }
 
