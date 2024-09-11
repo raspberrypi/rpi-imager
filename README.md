@@ -13,11 +13,11 @@ Please see our [official documentation](https://www.raspberrypi.com/documentatio
 
 ## Contributing
 
-### Raspberry Pi OS/Debian/Ubuntu Linux
+### Linux
 
 #### Get dependencies
 
-- Install the build dependencies:
+- Install the build dependencies (Debian used as an example):
 
 ```
 sudo apt install --no-install-recommends build-essential cmake git libgnutls28-dev
@@ -32,36 +32,36 @@ sudo apt install --no-install-recommends build-essential cmake git libgnutls28-d
 git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 ```
 
-#### Build the Debian package
+#### Build the AppImage
+
+Modify appimagecraft.yml:
+
+- First, you _must_ set Qt6_ROOT (as a extra_variables item under build/cmake) to the root of your Qt6 installation
+- Second, you _must_ set QMAKE (as a raw_environment variable of the linuxdeploy plugin) to the full path of qmake inside that Qt6 installation.
 
 ```
 cd rpi-imager
-debuild -uc -us
+export LD_LIBRARY_PATH=${your_Qt6_install_path}/lib
+./${your_platform_appimagecraft_AppImage_name}
 ```
 
-debuild will compile everything, create a .deb package and put it in the parent directory.
-Can install it with apt:
+Now mark the AppImage as executable, and run it:
 
 ```
-cd ..
-sudo apt install ./rpi-imager*.deb
+chmod +x ./Raspberry_Pi_Imager-*.AppImage
+./Raspberry_Pi_Imager-*.AppImage
 ```
-
-It should create an icon in the start menu under "Utilities" or "Accessories".
-The imaging utility will normally be run as regular user, and will call udisks2 over DBus to perform privileged operations like opening the disk device for writing.
-If udisks2 is not functional on your Linux distribution, you can alternatively start it as "root" with sudo and similar tools.
 
 ### Windows
 
 #### Get dependencies
 
 - Get the Qt online installer from: https://www.qt.io/download-open-source
-During installation, choose Qt 6.7 with Mingw32 32-bit toolchain, CMake and Qt Creator.
+During installation, choose Qt 6.7 with Mingw64 64-bit toolchain, CMake and Qt Creator.
 
 - For building the installer, get Nullsoft scriptable install system: https://nsis.sourceforge.io/Download
 
-- It is assumed you already have a proper code signing certificate, and signtool.exe from the Windows SDK installed.
-If NOT and are you only compiling for your own personal use, comment out all lines mentioning signtool from CMakelists.txt and the .nsi installer script.
+- It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
 
 #### Building
 
@@ -80,28 +80,19 @@ Building Raspberry Pi Imager on Windows is best done with the Qt Creator GUI.
 
 - Get the Qt online installer from: https://www.qt.io/download-open-source
 During installation, choose Qt 6.7, CMake and Qt Creator.
-- For creating a .DMG for distribution you can use an utility like: https://github.com/sindresorhus/create-dmg
-- It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store. (Privileged apps are not allowed in the Mac store)
+- It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store.
 
 #### Building
 
 - Download source .zip from github and extract it to a folder on disk
-- Start Qt Creator (may need to start "finder" navigate to home folder using the "Go" menu, and find Qt folder to start it manually as it may not have created icon in Applications), and open src/CMakeLists.txt
+- Start Qt Creator and open src/CMakeLists.txt
 - Menu "Build" -> "Build all"
 - Result will be in build_rpi-imager_someversion
-- For distribution to others: code sign the .app, create a DMG, code sign the DMG, submit it for notarization to Apple and staple the notarization ticket to the DMG.
-
-E.g.:
-
-```
-cd build-rpi-imager-Desktop_Qt_6_7_2_clang_64bit-Release/
-codesign --deep --force --verify --verbose --sign "YOUR KEYID" --options runtime rpi-imager.app
-mv rpi-imager.app "Raspberry Pi Imager.app"
-create-dmg Raspberry\ Pi\ Imager.app
-mv Raspberry\ Pi\ Imager\ .dmg imager.dmg
-xcrun altool --notarize-app -t osx -f imager.dmg --primary-bundle-id="org.raspberrypi.imagingutility" -u YOUR-EMAIL-ADDRESS -p YOUR-APP-SPECIFIC-APPLE-PASSWORD -itc_provider TEAM-ID-IF-APPLICABLE
-xcrun stapler staple imager.dmg
-```
+- For distribution to others:
+    - Use the IMAGER_SIGNED_APP flag to enable Application signing
+    - Use the IMAGER_SIGNING_IDENTITY string to specify the Developer ID certificate Common Name
+    - Use the IMAGER_NOTARIZE_APP flag to enable notarization as part of the build
+    - Use the IMAGER_NOTARIZE_KEYCHAIN_PROFILE string to specify the name of the keychain item containing your Apple ID credentials for notarizing.
 
 ### Linux embedded (netboot) build
 
