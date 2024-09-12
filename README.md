@@ -19,7 +19,7 @@ Please see our [official documentation](https://www.raspberrypi.com/documentatio
 
 - Install the build dependencies (Debian used as an example):
 
-```
+```sh
 sudo apt install --no-install-recommends build-essential cmake git libgnutls28-dev
 ```
 
@@ -28,7 +28,7 @@ sudo apt install --no-install-recommends build-essential cmake git libgnutls28-d
 
 #### Get the source
 
-```
+```sh
 git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 ```
 
@@ -39,7 +39,7 @@ Modify appimagecraft.yml:
 - First, you _must_ set Qt6_ROOT (as a extra_variables item under build/cmake) to the root of your Qt6 installation
 - Second, you _must_ set QMAKE (as a raw_environment variable of the linuxdeploy plugin) to the full path of qmake inside that Qt6 installation.
 
-```
+```sh
 cd rpi-imager
 export LD_LIBRARY_PATH=${your_Qt6_install_path}/lib
 ./${your_platform_appimagecraft_AppImage_name}
@@ -47,7 +47,7 @@ export LD_LIBRARY_PATH=${your_Qt6_install_path}/lib
 
 Now mark the AppImage as executable, and run it:
 
-```
+```sh
 chmod +x ./Raspberry_Pi_Imager-*.AppImage
 ./Raspberry_Pi_Imager-*.AppImage
 ```
@@ -102,7 +102,7 @@ To build:
 - You must be running a Linux system, and have the buildroot dependencies installed as listed in the buildroot manual: https://buildroot.org/downloads/manual/manual.html#requirement
 - Run:
 
-```
+```sh
 cd rpi-imager/embedded
 ./build.sh
 ```
@@ -128,7 +128,7 @@ The last 1,500 requests to the service are logged for one week before expiring a
 
 On Windows, you can opt out of telemetry by disabling it in the Registry:
 
-```
+```pwsh
 reg add "HKCU\Software\Raspberry Pi\Imager" /v telemetry /t REG_DWORD /d 0
 ```
 
@@ -141,7 +141,7 @@ telemetry=false
 
 On macOS, disable it by editing the property list for the application:
 
-```
+```sh
 defaults write org.raspberrypi.Imager.plist telemetry -bool NO
 ```
 
