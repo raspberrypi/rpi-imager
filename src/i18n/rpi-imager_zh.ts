@@ -207,7 +207,7 @@
     <message>
         <location filename="../driveformatthread.cpp" line="225"/>
         <source>Formatting not implemented for this platform</source>
-        <translation>暂不支持在平台上进行格式化</translation>
+        <translation>暂不支持在该平台上进行格式化</translation>
     </message>
 </context>
 <context>
@@ -597,7 +597,7 @@
     <message>
         <location filename="../main.qml" line="904"/>
         <source>Cached on your computer</source>
-        <translation>缓存到本地磁盘</translation>
+        <translation>已缓存到本地磁盘</translation>
     </message>
     <message>
         <location filename="../main.qml" line="906"/>
@@ -705,7 +705,7 @@
     <message>
         <location filename="../imagewriter.cpp" line="597"/>
         <source>Format card as FAT32</source>
-        <translation>将 SD 卡格式化为 FAT32</translation>
+        <translation>把 SD 卡格式化为 FAT32</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="603"/>
@@ -720,12 +720,12 @@
     <message>
         <location filename="../main.qml" line="1712"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation>请先连接一个包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根路径下。</translation>
+        <translation>请先接入一款包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根路径下。</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1728"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation>SD 卡写保护。&lt;br&gt;尝试向上推动 SD 卡左侧的锁定开关，然后重试。</translation>
+        <translation>SD 卡写保护。&lt;br&gt;清尝试向上推动 SD 卡左侧的锁定开关，然后再试一次。</translation>
     </message>
 </context>
 </TS>
