@@ -725,7 +725,7 @@
     <message>
         <location filename="../main.qml" line="1728"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation>SD 卡写保护。&lt;br&gt;清尝试向上推动 SD 卡左侧的锁定开关，然后再试一次。</translation>
+        <translation>SD 卡写保护。&lt;br&gt;请尝试向上推动 SD 卡左侧的锁定开关，然后再试一次。</translation>
     </message>
 </context>
 </TS>
