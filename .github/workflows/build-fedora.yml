@@ -1,0 +1,48 @@
+name: Build Fedora
+
+on:
+  push:
+    branches: [ "qml" ]
+  pull_request:
+    branches: [ "qml" ]
+
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    name: Fedora ${{ matrix.fedora_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora_version: [ '40', '41', '42' ]
+    container: fedora:${{ matrix.fedora_version }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # After Fedora 40 the containers no longer have 'lsblk'
+    - name: Ensure lsblk installed
+      run : sudo dnf install -y util-linux
+
+    - name: Install dependencies
+      # On Fedora, rather than use install-qt-action, install the Qt6 packages from Fedora
+      run: sudo dnf install -y gnutls-devel qt6-qtbase-devel qt6-qtsvg-devel qt6-qtquick3d-devel qt6-qttools-devel qt6-qtquickcontrols2-devel libcurl-devel libarchive-devel libzstd-devel zlib-devel lzma-sdk-devel libdrm-devel
+
+    - name: Configure CMake
+      run: |
+        cmake --version
+        cmake -S src/ -B build/ -Wdev -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+    - name: CMake Build ${{env.BUILD_TYPE}}
+      run: cmake --build build --target all --config ${{env.BUILD_TYPE}} -- -j4
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: rpi-imager-fedora-${{ matrix.fedora_version }}.zip
+        if-no-files-found: 'error'
+        path: |
+          build/rpi-imager
+          build/*.qm

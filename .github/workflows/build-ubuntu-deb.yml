@@ -6,17 +6,62 @@ on:
   pull_request:
     branches: [ "qml" ]
 
+env:
+  BUILD_TYPE: Release
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Ubuntu ${{ matrix.ubuntu_version }}
+    runs-on: ubuntu-${{ matrix.ubuntu_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version: [ '20.04', '22.04', 'latest' ]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
-      run: sudo apt install -y --no-install-recommends build-essential devscripts debhelper cmake git libarchive-dev libcurl4-gnutls-dev
-           qtbase5-dev qtbase5-dev-tools qtdeclarative5-dev libqt5svg5-dev qttools5-dev libgnutls28-dev
-           qml-module-qtquick2 qml-module-qtquick-controls2 qml-module-qtquick-layouts qml-module-qtquick-templates2 qml-module-qtquick-window2 qml-module-qtgraphicaleffects
+      run: |
+        sudo apt update -y
+        sudo apt install -y --no-install-recommends devscripts debhelper cmake libarchive-dev libcurl4-gnutls-dev libgnutls28-dev
 
-    - name: Build
-      run: debuild -uc -us
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.7.*'
+        host: 'linux'
+        target: 'desktop'
+        arch: 'linux_gcc_64'
+        tools: 'tools_qtcreator tools_cmake'
+
+    - name: Configure Qt6_ROOT
+      # The Qt6_ROOT variable can be set based on the install-qt-action
+      run: echo "Qt6_ROOT=$QT_ROOT_DIR" >> $GITHUB_ENV
+
+# No longer need qt libs from Ubuntu Repo but if we did QT6 will be:
+# qt6-base-dev qt6-base-dev-tools qt6-declarative-dev libqt6svg6-dev qt6-tools-dev linguist-qt6 qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-templates qml6-module-qtquick-window
+
+    - name: Cmake Build
+      run: |
+        cmake --version
+        cmake -S src/ -B build/ -Wdev -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+    - name: CMake Build ${{env.BUILD_TYPE}}
+      run: cmake --build build --target all --config ${{env.BUILD_TYPE}} -- -j4
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: rpi-imager-ubuntu-${{ matrix.ubuntu_version }}.zip
+        if-no-files-found: 'error'
+        path: |
+          build/rpi-imager
+          build/*.qm
+
+#    - name: Configure LD_LIBRARY_PATH
+#      run: |
+#        echo "LD_LIBRARY_PATH=$QT_ROOT_DIR/lib" >> $GITHUB_ENV
+#
+#    - name: build Debian package
+#      run: |
+#        debuild -uc -us

@@ -7,28 +7,52 @@ on:
     branches: [ "qml" ]
 
 env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
 
 jobs:
   build:
-    runs-on: macos-latest
-
-    defaults:
-      run:
-        working-directory: src
+    # macos-latest is currently macos-14-arm64
+    name: macOS ${{ matrix.os_version }}
+    runs-on: macos-${{ matrix.os_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os_version: '12', arch: 'x86_64' } # macos-12 can only target x86_64
+          - { os_version: '13', arch: 'x86_64' } # macos-13 can do a universal build targeting x86_64 and/or arm64
+          - { os_version: '14', arch: 'arm64' }  # macos-14 is an m1 cpu and can only target arm64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.7.*'
+        host: 'mac'
+        target: 'desktop'
+        arch: 'clang_64'
+        tools: 'tools_qtcreator tools_cmake'
 
+    - name: Configure Qt6_ROOT
+      # The CMakeLists file requires Qt6_ROOT to be set for Mac builds to find macdeployqt
+      run: echo "Qt6_ROOT=$QT_ROOT_DIR" >> $GITHUB_ENV
+  
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      run: |
+        cmake --version
+        cmake -S src/ -B ${{github.workspace}}/build -Wdev -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_OSX_ARCHITECTURES=${{matrix.arch}}
 
-    - name: Build
+    - name: CMake Build ${{env.BUILD_TYPE}}
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      run: cmake --build . --config ${{env.BUILD_TYPE}}
+      working-directory: ${{github.workspace}}/build
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: rpi-imager-osx-${{ matrix.os_version }}.zip
+        if-no-files-found: 'error'
+        path: |
+          build/*.dmg

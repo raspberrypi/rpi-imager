@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2020-2024 Raspberry Pi Ltd
 
-cmake_minimum_required(VERSION 3.15)
+# To build for Apple platforms you need to set cmake_minimum_required() to 3.21.1 or newer
+# see: https://doc.qt.io/qt-6/macos-deployment.html#using-cmake
+cmake_minimum_required(VERSION 3.21.1)
+
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
 OPTION (DRIVELIST_FILTER_SYSTEM_DRIVES "Filter System drives from displayed drives" ON)
@@ -418,13 +421,17 @@ elseif(APPLE)
     set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} ${IOKit} ${SystemConfiguration} iconv)
     set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in)
 
+    message(STATUS "Looking for macdeployqt")
     find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt6_ROOT}/bin")
     if (NOT MACDEPLOYQT_EXECUTABLE)
         message(FATAL_ERROR "Unable to locate macdeployqt")
+    else()
+        message(STATUS "Found macdeployqt in ${Qt6_ROOT}/bin")
     endif()
 
     if(IMAGER_SIGNED_APP)
         if(IMAGER_SIGNING_IDENTITY)
+            message(STATUS "Signing identity found")
             # Create the .app, leveraging macdeployqt's knowledge of Qt libraries and configuration files
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
@@ -438,11 +445,13 @@ elseif(APPLE)
                 COMMAND codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app")
 
             # Create the .dmg for distribution
+            message(STATUS "Creating .dmg file...")
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
                 COMMAND hdiutil create -volname "Raspberry Pi Imager" -srcfolder "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app" -ov -format UDBZ "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
 
             # Sign the .dmg for distribution, but do not initialise notarisation
+            message(STATUS "Signing .dmg file...")
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
                 COMMAND codesign -f --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
@@ -465,9 +474,18 @@ elseif(APPLE)
         endif(IMAGER_SIGNING_IDENTITY)
     else()
         # Unsigned application
+        message(STATUS "App will be unsigned")
         add_custom_command(TARGET ${PROJECT_NAME}
             POST_BUILD
-            COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite -no-strip -dmg)
+            COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite -no-strip -dmg)
+        # Rename .app file
+        add_custom_command(TARGET ${PROJECT_NAME}
+            POST_BUILD
+            COMMAND mv "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app")
+        message(STATUS "Creating .dmg file...")
+        add_custom_command(TARGET ${PROJECT_NAME}
+            POST_BUILD
+            COMMAND hdiutil create -volname "Raspberry Pi Imager" -srcfolder "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app" -ov -format UDBZ "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
     endif(IMAGER_SIGNED_APP)
 
     add_custom_command(TARGET ${PROJECT_NAME}
