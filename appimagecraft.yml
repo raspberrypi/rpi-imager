@@ -2,7 +2,7 @@ version: 1
 
 project:
   name: org.raspberrypi.rpi-imager
-  version: 1.9.0
+  version: 1.9.1
 
 build:
   cmake:
