@@ -42,6 +42,9 @@ public:
     /* Enable/disable verification */
     Q_INVOKABLE void setVerifyEnabled(bool verify);
 
+    /* Enable/disable USB Ethernet Gadget mode config */
+    Q_INVOKABLE void setEtherGadgetEnabled(bool etherGadget);
+
     /* Returns true if src and dst are set */
     Q_INVOKABLE bool readyToWrite();
 

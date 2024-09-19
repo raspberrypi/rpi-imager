@@ -963,6 +963,7 @@ Window {
             addCmdline("cfg80211.ieee80211_regdom="+fieldWifiCountry.editText)
         }
         if (chkUSBEther.checked) {
+            // keep parity with cli.cpp
             addConfig("dtoverlay=dwc2,dr_mode=peripheral")
 
             enableEtherGadget = true;

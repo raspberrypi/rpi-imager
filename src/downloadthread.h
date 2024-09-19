@@ -104,6 +104,11 @@ public:
     void setVerifyEnabled(bool verify);
 
     /*
+     * Enable/disable USB Ethernet Gadget mode config
+     */
+    void setEtherGadgetEnabled(bool etherGadget);
+
+    /*
      * Enable disk cache
      */
     void setCacheFile(const QString &filename, qint64 filesize = 0);
