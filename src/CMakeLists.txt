@@ -38,6 +38,7 @@ endif(APPLE)
 # Bundled code will occasionally use identical options - eg, BUILD_TESTING.
 set(BUILD_TESTING OFF)
 set(BUILD_STATIC_LIBS ON)
+set(BUILD_SHARED_LIBS OFF)
 
 # Bundled liblzma
 set(XZ_MICROLZMA_DECODER OFF)
