@@ -167,6 +167,8 @@ if(NOT MSVC)
     endif()
 endif()
 
+OPTION(XZ_INSTALL OFF "Enable xz Install directives")
+
 # On Apple OSes, don't build executables as bundles:
 set(CMAKE_MACOSX_BUNDLE OFF)
 
@@ -1378,6 +1380,7 @@ configure_file(src/liblzma/liblzma.pc.in liblzma.pc
 
 # Install the library binary. The INCLUDES specifies the include path that
 # is exported for other projects to use but it doesn't install any files.
+if (XZ_INSTALL)
 install(TARGETS liblzma EXPORT liblzmaTargets
         RUNTIME  DESTINATION "${CMAKE_INSTALL_BINDIR}"
                  COMPONENT liblzma_Runtime
@@ -1416,7 +1419,7 @@ if(NOT MSVC)
             DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
             COMPONENT liblzma_Development)
 endif()
-
+endif(XZ_INSTALL)
 
 #############################################################################
 # Helper functions for installing files
@@ -1427,13 +1430,15 @@ endif()
 # The target file should exist because on Cygwin and MSYS2 symlink creation
 # can fail under certain conditions if the target doesn't exist.
 function(my_install_symlinks COMPONENT DIR TARGET_NAME LINK_SUFFIX LINK_NAMES)
-    install(CODE "set(D \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${DIR}\")
-                 foreach(L ${LINK_NAMES})
-                     file(CREATE_LINK \"${TARGET_NAME}\"
-                                      \"\${D}/\${L}${LINK_SUFFIX}\"
-                                      SYMBOLIC)
-                 endforeach()"
-            COMPONENT "${COMPONENT}")
+    if (XZ_INSTALL)
+        install(CODE "set(D \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${DIR}\")
+                    foreach(L ${LINK_NAMES})
+                        file(CREATE_LINK \"${TARGET_NAME}\"
+                                        \"\${D}/\${L}${LINK_SUFFIX}\"
+                                        SYMBOLIC)
+                    endforeach()"
+                COMPONENT "${COMPONENT}")
+    endif(XZ_INSTALL)
 endfunction()
 
 # Installs a man page file of a given language ("" for the untranslated file)
@@ -1451,10 +1456,11 @@ function(my_install_man_lang COMPONENT SRC_FILE MAN_LANG LINK_NAMES)
 
     # Installing the file must be done before creating the symlinks
     # due to Cygwin and MSYS2.
-    install(FILES "${SRC_FILE}"
-            DESTINATION "${CMAKE_INSTALL_MANDIR}/${MAN_LANG}/man${MAN_SECTION}"
-            COMPONENT "${COMPONENT}")
-
+    if(XZ_INSTALL)
+        install(FILES "${SRC_FILE}"
+                DESTINATION "${CMAKE_INSTALL_MANDIR}/${MAN_LANG}/man${MAN_SECTION}"
+                COMPONENT "${COMPONENT}")
+    endif(XZ_INSTALL)
     # Get the basename of the file to be used as the symlink target.
     get_filename_component(BASENAME "${SRC_FILE}" NAME)
 
@@ -1593,10 +1599,11 @@ if(XZ_HAVE_DECODERS AND (NOT MSVC OR MSVC_VERSION GREATER_EQUAL 1900))
         endif()
 
         tuklib_progname("${XZDEC}")
-
-        install(TARGETS "${XZDEC}"
-                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-                        COMPONENT "${XZDEC}_Runtime")
+        if (XZ_INSTALL)
+            install(TARGETS "${XZDEC}"
+                    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+                            COMPONENT "${XZDEC}_Runtime")
+        endif(XZ_INSTALL)
     endforeach()
 
     # This is the only build-time difference with lzmadec.
@@ -1657,10 +1664,11 @@ if(XZ_HAVE_DECODERS AND (NOT MSVC OR MSVC_VERSION GREATER_EQUAL 1900))
     #     )
     # endif()
 
-    install(TARGETS lzmainfo
-            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-                    COMPONENT lzmainfo_Runtime)
-
+    if (XZ_INSTALL)
+        install(TARGETS lzmainfo
+                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+                        COMPONENT lzmainfo_Runtime)
+    endif(XZ_INSTALL)
     if(UNIX)
         my_install_man(lzmainfo_Documentation src/lzmainfo/lzmainfo.1 "")
     endif()
@@ -1866,9 +1874,11 @@ if(NOT MSVC OR MSVC_VERSION GREATER_EQUAL 1900)
     # Our installation order must be such that when a symbolic link is created
     # its target must already exists. There is no race condition for parallel
     # builds because the generated cmake_install.cmake executes serially.
-    install(TARGETS xz
-            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-                    COMPONENT xz_Runtime)
+    if (XZ_INSTALL)
+        install(TARGETS xz
+                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+                        COMPONENT xz_Runtime)
+    endif(XZ_INSTALL)
 
     if(UNIX)
         option(CREATE_XZ_SYMLINKS "Create unxz and xzcat symlinks" ON)
@@ -1949,9 +1959,11 @@ if(UNIX)
                @ONLY
                NEWLINE_STYLE LF)
 
-        install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/${S}"
-                DESTINATION "${CMAKE_INSTALL_BINDIR}"
-                COMPONENT scripts_Runtime)
+        if (XZ_INSTALL)
+            install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/${S}"
+                    DESTINATION "${CMAKE_INSTALL_BINDIR}"
+                    COMPONENT scripts_Runtime)
+        endif(XZ_INSTALL)
     endforeach()
 
     # file(CHMOD ...) would need CMake 3.19 so use execute_process instead.
@@ -2010,15 +2022,19 @@ if(UNIX)
             DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/doc/api/index.html"
         )
 
-        install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/doc/api"
-                DESTINATION "${CMAKE_INSTALL_DOCDIR}"
-                COMPONENT liblzma_Documentation)
+        if (XZ_INSTALL)
+            install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/doc/api"
+                    DESTINATION "${CMAKE_INSTALL_DOCDIR}"
+                    COMPONENT liblzma_Documentation)
+        endif(XZ_INSTALL)
     endif()
 endif()
 
-install(DIRECTORY doc/examples
-        DESTINATION "${CMAKE_INSTALL_DOCDIR}"
-        COMPONENT liblzma_Documentation)
+if (XZ_INSTALL)
+    install(DIRECTORY doc/examples
+            DESTINATION "${CMAKE_INSTALL_DOCDIR}"
+            COMPONENT liblzma_Documentation)
+endif(XZ_INSTALL)
 
 # GPLv2 applies to the scripts. If GNU getopt_long is used then
 # LGPLv2.1 applies to the command line tools but, using the
