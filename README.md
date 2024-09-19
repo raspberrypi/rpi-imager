@@ -5,11 +5,9 @@ Raspberry Pi Imaging Utility
 - To install on Raspberry Pi OS, use `sudo apt update && sudo apt install rpi-imager`.
 - Download the latest version for Windows, macOS and Ubuntu from the [Raspberry Pi downloads page](https://www.raspberrypi.com/software/).
 
-# How to use Raspberry Pi Imager
+## How to use Raspberry Pi Imager
 
 Please see our [official documentation](https://www.raspberrypi.com/documentation/computers/getting-started.html#raspberry-pi-imager).
-
-
 
 ## Contributing
 
@@ -36,13 +34,15 @@ git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 
 Modify appimagecraft.yml:
 
-- First, you _must_ set Qt6_ROOT (as a extra_variables item under build/cmake) to the root of your Qt6 installation
-- Second, you _must_ set QMAKE (as a raw_environment variable of the linuxdeploy plugin) to the full path of qmake inside that Qt6 installation.
+- First, you _must_ set Qt6_ROOT (as a extra_variables item under build/cmake) to the root of your Qt6 installation. eg: `/opt/Qt/6.7.2/gcc_arm64/`
+- Second, you _must_ set QMAKE (as a raw_environment variable of the linuxdeploy plugin) to the full path of qmake inside that Qt6 installation. eg: `/opt/Qt/6.7.2./gcc_arm64/bin/qmake`
+
+Now, use AppImageCraft to build your AppImage:
 
 ```sh
 cd rpi-imager
 export LD_LIBRARY_PATH=${your_Qt6_install_path}/lib
-./${your_platform_appimagecraft_AppImage_name}
+./${your_platform_appimagecraft}.AppImage
 ```
 
 Now mark the AppImage as executable, and run it:
@@ -69,6 +69,7 @@ Building Raspberry Pi Imager on Windows is best done with the Qt Creator GUI.
 
 - Download source .zip from github and extract it to a folder on disk
 - Open src/CMakeLists.txt in Qt Creator.
+- Use Qt Creator to set the MINGW64_ROOT CMake variable to your MingGW64 installation path, eg `C:\Qt\Tools\mingw64`
 - For builds you distribute to others, make sure you choose "Release" in the toolchain settings and not the Debug configuration.
 - Menu "Build" -> "Build all"
 - Result will be in build_rpi-imager_someversion
@@ -86,13 +87,14 @@ During installation, choose Qt 6.7, CMake and Qt Creator.
 
 - Download source .zip from github and extract it to a folder on disk
 - Start Qt Creator and open src/CMakeLists.txt
+- Use Qt Creator to set the Qt6_ROOT CMake variable to your Qt6 installation path, eg `/opt/Qt6/6.7.2/gcc_arm64`
 - Menu "Build" -> "Build all"
 - Result will be in build_rpi-imager_someversion
 - For distribution to others:
-    - Use the IMAGER_SIGNED_APP flag to enable Application signing
-    - Use the IMAGER_SIGNING_IDENTITY string to specify the Developer ID certificate Common Name
-    - Use the IMAGER_NOTARIZE_APP flag to enable notarization as part of the build
-    - Use the IMAGER_NOTARIZE_KEYCHAIN_PROFILE string to specify the name of the keychain item containing your Apple ID credentials for notarizing.
+  - Use the IMAGER_SIGNED_APP flag to enable Application signing
+  - Use the IMAGER_SIGNING_IDENTITY string to specify the Developer ID certificate Common Name
+  - Use the IMAGER_NOTARIZE_APP flag to enable notarization as part of the build
+  - Use the IMAGER_NOTARIZE_KEYCHAIN_PROFILE string to specify the name of the keychain item containing your Apple ID credentials for notarizing.
 
 ### Linux embedded (netboot) build
 
