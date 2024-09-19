@@ -1635,7 +1635,7 @@ ApplicationWindow {
             }
         }
 
-        imageWriter.setHWFilterList(hwmodel.tags, inclusive)
+        imageWriter.setHWFilterList(hwmodel.tags, inclusive, hwmodel.name.toLowerCase().includes("zero"))
 
         /* Reload list */
         var oslist_json = imageWriter.getFilteredOSlist();

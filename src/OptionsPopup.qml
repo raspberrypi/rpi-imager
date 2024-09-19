@@ -35,6 +35,7 @@ Window {
     property string cloudinitrun
     property string cloudinitwrite
     property string cloudinitnetwork
+    property bool deviceUsbOtgSupport
     property bool enableEtherGadget
 
     signal saveSettingsSignal(var settings)
@@ -380,6 +381,7 @@ Window {
                     ImCheckBox {
                         id: chkUSBEther
                         text: qsTr("Enable USB Ethernet Gadget")
+                        enabled: deviceUsbOtgSupport
                     }
 
                     ImCheckBox {
@@ -750,6 +752,18 @@ Window {
             }
         }
 
+        var hwFilterList = imageWriter.getHWFilterList()
+        var hwFilterIsModelZero = imageWriter.getHWFilterIsModelZero()
+
+        if (hwFilterList) {
+            var targetTags = ["pi5-64bit", "pi4-64bit", "pi5-32bit", "pi4-32bit"]
+            deviceUsbOtgSupport = targetTags.some(tag => hwFilterList.includes(tag)) || hwFilterIsModelZero
+            if (!deviceUsbOtgSupport) {
+                // make sure it isn't disabled and selected
+                chkUSBEther = false;
+            }
+        }
+
         //open()
         show()
         raise()
@@ -950,35 +964,14 @@ Window {
         }
         if (chkUSBEther.checked) {
             addConfig("dtoverlay=dwc2,dr_mode=peripheral")
-            // only required if no conf is used to load modules
-            // g_ether must not be loaded when using manual config
-            // with sh script
-            addCmdline("modules-load=dwc2,g_ether")
-            // TODO: generate mac addresses if there are issues with DHCP
-            //addCmdline("g_ether.dev_addr=8A:89:6a:8d:14:22")
-            //addCmdline("g_ether.host_addr=6A:89:6a:8d:14:22")
-            addCmdline("g_ether.idVendor=0x04b3")
-            addCmdline("g_ether.idProduct=0x4010")
-            addCmdline("g_ether.iManufacturer=\"Raspberry Pi\"")
-            addCmdline("g_ether.bcdDevice=0x0100")
-            addCmdline("g_ether.iProduct=\"USB Ethernet Gadget\"")
-            // TODO: maybe set device serial
-            //addCmdline("g_ether.iSerialNumber=8c1aceb07269b131")
 
             enableEtherGadget = true;
 
-            // manual config with this script requires not to load g_ether
-            //addFirstRun("mv /boot/firmware/etherSet.sh /usr/sbin/configure-usb-ether-gadget-once")
-            //addFirstRun("chmod +x /usr/sbin/configure-usb-ether-gadget-once")
-            //addFirstRun("mv /boot/firmware/sysdEth.srv /etc/systemd/system/usb-ether-gadget-once.service")
-            //addFirstRun("mkdir -p /etc/systemd/system/usb-gadget.target.wants")
-            //addFirstRun("ln -s /etc/systemd/system/usb-ether-gadget-once.service /etc/systemd/system/usb-gadget.target.wants/usb-ether-gadget-once.service")
-            addFirstRun("mv /boot/firmware/10usb.net /etc/systemd/network/10-usb.network\n")
-            // enable stuff
-            //addFirstRun("systemctl daemon-reload")
-            //addFirstRun("systemctl enable usb-ether-gadget-once.service")
-            //addFirstRun("systemctl start usb-ether-gadget-once.service\n")
-            // enable networkd as I don't have NetworkManager config
+            addFirstRun("\nmv /boot/firmware/10usb.net /etc/systemd/network/10-usb.network")
+            addFirstRun("mv /boot/firmware/geth.cnf /etc/modprobe.d/g_ether.conf")
+            addFirstRun("mv /boot/firmware/gemod.cnf /etc/modules-load.d/usb-ether-gadget.conf\n")
+            addFirstRun("SERIAL=$(grep Serial /proc/cpuinfo | awk '{print $3}')")
+            addFirstRun("sed -i \"s/<serial>/$SERIAL/g\" /etc/modprobe.d/g_ether.conf")
             addFirstRun("systemctl enable systemd-networkd\n")
         }
 

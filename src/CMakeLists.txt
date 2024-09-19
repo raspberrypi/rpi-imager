@@ -289,7 +289,8 @@ if (WIN32)
     add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS} ${DEPENDENCIES}
         extraFiles.qrc)
 else()
-    add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${DEPENDENCIES})
+    add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${DEPENDENCIES}
+        extraFiles.qrc)
 endif()
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOMOC ON)
