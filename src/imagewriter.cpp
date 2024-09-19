@@ -725,6 +725,12 @@ void ImageWriter::setVerifyEnabled(bool verify)
         _thread->setVerifyEnabled(verify);
 }
 
+void ImageWriter::setEtherGadgetEnabled(bool etherGadget) {
+    _enableEtherGadget = etherGadget;
+    if (_thread)
+        _thread->setEtherGadgetEnabled(etherGadget);
+}
+
 /* Relay events from download thread to QML */
 void ImageWriter::onSuccess()
 {
@@ -1210,7 +1216,7 @@ void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArr
     qDebug() << "Custom cmdline.txt entries:" << cmdline;
     qDebug() << "Custom firstuse.sh:" << firstrun;
     qDebug() << "Cloudinit:" << cloudinit;
-    qDebug() << "Enable USB Ethernet gadget:" << enableEtherGadget;
+    qDebug() << "Enable USB Ethernet Gadget mode:" << enableEtherGadget;
 }
 
 QString ImageWriter::crypt(const QByteArray &password)

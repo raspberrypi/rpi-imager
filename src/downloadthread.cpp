@@ -855,6 +855,10 @@ void DownloadThread::setVerifyEnabled(bool verify)
     _verifyEnabled = verify;
 }
 
+void DownloadThread::setEtherGadgetEnabled(bool etherGadget) {
+    _enableEtherGadget = etherGadget;
+}
+
 bool DownloadThread::isImage()
 {
     return true;

@@ -58,11 +58,14 @@ int Cli::run()
         {"first-run-script", "Add firstrun.sh to image", "first-run-script", ""},
         {"cloudinit-userdata", "Add cloud-init user-data file to image", "cloudinit-userdata", ""},
         {"cloudinit-networkconfig", "Add cloud-init network-config file to image", "cloudinit-networkconfig", ""},
+        {"usb-ether-gadget", "Enable USB Ethernet Gadget mode"},
         {"disable-eject", "Disable automatic ejection of storage media after verification"},
         {"debug", "Output debug messages to console"},
         {"quiet", "Only write to console on error"},
     });
 
+    parser.addVersionOption();
+    parser.addHelpOption();
     parser.addPositionalArgument("src", "Image file/URL");
     parser.addPositionalArgument("dst", "Destination device");
     parser.process(*_app);
@@ -70,7 +73,7 @@ int Cli::run()
     const QStringList args = parser.positionalArguments();
     if (args.count() != 2)
     {
-        std::cerr << "Usage: --cli [--disable-verify] [--disable-eject] [--sha256 <expected hash> [--cache-file <cache file>]] [--first-run-script <script>] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
+        std::cerr << "Usage: --cli [--disable-verify] [--disable-eject] [--sha256 <expected hash> [--cache-file <cache file>]] [--first-run-script <script>] [--usb-ether-gadget] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
         return 1;
     }
 
@@ -148,6 +151,21 @@ int Cli::run()
         }
     }
 
+    bool isEtherGadgetEnabled = parser.isSet("usb-ether-gadget");
+    QString firstRunScriptAddition = "";
+    QString configTxt = "";
+    if (isEtherGadgetEnabled) {
+        // setup config and first run script addition - keep parity with OptionsPopup.qml
+        configTxt += "dtoverlay=dwc2,dr_mode=peripheral\n";
+
+        firstRunScriptAddition += "\nmv /boot/firmware/10usb.net /etc/systemd/network/10-usb.network\n";
+        firstRunScriptAddition += "mv /boot/firmware/geth.cnf /etc/modprobe.d/g_ether.conf\n";
+        firstRunScriptAddition += "mv /boot/firmware/gemod.cnf /etc/modules-load.d/usb-ether-gadget.conf\n\n";
+        firstRunScriptAddition += "SERIAL=$(grep Serial /proc/cpuinfo | awk '{print $3}')\n";
+        firstRunScriptAddition += "sed -i \"s/<serial>/$SERIAL/g\" /etc/modprobe.d/g_ether.conf\n";
+        firstRunScriptAddition += "systemctl enable systemd-networkd\n";
+    }
+
     if (!parser.value("cloudinit-userdata").isEmpty())
     {
         QByteArray userData, networkConfig;
@@ -186,7 +204,7 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomization("", "", "", userData, networkConfig, false);
+        _imageWriter->setImageCustomization(configTxt.toUtf8(), "", firstRunScriptAddition.toUtf8(), userData, networkConfig, isEtherGadgetEnabled);
     }
     else if (!parser.value("first-run-script").isEmpty())
     {
@@ -208,11 +226,15 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomization("", "", firstRunScript, "", "", false);
+        _imageWriter->setImageCustomization(configTxt.toUtf8(), "", firstRunScript.append(firstRunScriptAddition.toUtf8()), "", "", isEtherGadgetEnabled);
+    }
+    else if (!firstRunScriptAddition.isEmpty() || !configTxt.isEmpty()) {
+        _imageWriter->setImageCustomization(configTxt.toUtf8(), "", firstRunScriptAddition.toUtf8(), "", "", isEtherGadgetEnabled);
     }
 
     _imageWriter->setDst(args[1]);
     _imageWriter->setVerifyEnabled(!parser.isSet("disable-verify"));
+    _imageWriter->setEtherGadgetEnabled(isEtherGadgetEnabled);
     _imageWriter->setSetting("eject", !parser.isSet("disable-eject"));
 
     /* Run startWrite() in event loop (otherwise calling _app->exit() on error does not work) */
