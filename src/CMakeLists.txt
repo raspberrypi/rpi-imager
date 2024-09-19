@@ -37,6 +37,7 @@ endif(APPLE)
 
 # Bundled code will occasionally use identical options - eg, BUILD_TESTING.
 set(BUILD_TESTING OFF)
+set(BUILD_STATIC_LIBS ON)
 
 # Bundled liblzma
 set(XZ_MICROLZMA_DECODER OFF)
@@ -79,6 +80,7 @@ set(ZSTD_LIBRARIES libzstd_static)
 
 # Bundled zlib
 set(ZLIB_BUILD_EXAMPLES OFF)
+set(SKIP_INSTALL_ALL ON)
 add_subdirectory(dependencies/zlib-1.3.1)
 set(ZLIB_FOUND TRUE)
 set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
@@ -136,6 +138,7 @@ set(CURL_DISABLE_TELNET ON)
 set(CURL_DISABLE_TFTP ON)
 set(CURL_ZSTD ON)
 set(CURL_ENABLE_EXPORT_TARGET OFF CACHE BOOL "" FORCE)
+set(CURL_DISABLE_INSTALL ON)
 if (APPLE)
     # TODO: SecureTransport is a deprecated API in macOS, supporting
     #       only up to TLS v1.2. cURL has not implemented the replacement,
@@ -496,3 +499,5 @@ endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+
+
