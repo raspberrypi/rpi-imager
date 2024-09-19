@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file>extraFiles/10-usb.network</file>
+        <file>extraFiles/configure-usb-ether-gadget-once.sh</file>
+        <file>extraFiles/usb-ether-gadget-once.service</file>
+    </qresource>
+</RCC>

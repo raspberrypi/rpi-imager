@@ -34,6 +34,7 @@ Window {
     property string cloudinitrun
     property string cloudinitwrite
     property string cloudinitnetwork
+    property bool enableEtherGadget
 
     signal saveSettingsSignal(var settings)
 
@@ -354,6 +355,11 @@ Window {
 
             ColumnLayout {
                 // Remote access tab
+
+                ImCheckBox {
+                    id: chkUSBEther
+                    text: qsTr("Enable USB Ethernet Gadget")
+                }
 
                 ImCheckBox {
                     id: chkSSH
@@ -826,6 +832,40 @@ Window {
 
             addCmdline("cfg80211.ieee80211_regdom="+fieldWifiCountry.editText)
         }
+        if (chkUSBEther.checked) {
+            addConfig("dtoverlay=dwc2,dr_mode=peripheral")
+            // only required if no conf is used to load modules
+            // g_ether must not be loaded when using manual config
+            // with sh script
+            addCmdline("modules-load=dwc2,g_ether")
+            // TODO: generate mac addresses if there are issues with DHCP
+            //addCmdline("g_ether.dev_addr=8A:89:6a:8d:14:22")
+            //addCmdline("g_ether.host_addr=6A:89:6a:8d:14:22")
+            addCmdline("g_ether.idVendor=0x04b3")
+            addCmdline("g_ether.idProduct=0x4010")
+            addCmdline("g_ether.iManufacturer=\"Raspberry Pi\"")
+            addCmdline("g_ether.bcdDevice=0x0100")
+            addCmdline("g_ether.iProduct=\"USB Ethernet Gadget\"")
+            // TODO: maybe set device serial
+            //addCmdline("g_ether.iSerialNumber=8c1aceb07269b131")
+
+            enableEtherGadget = true;
+
+            // manual config with this script requires not to load g_ether
+            //addFirstRun("mv /boot/firmware/etherSet.sh /usr/sbin/configure-usb-ether-gadget-once")
+            //addFirstRun("chmod +x /usr/sbin/configure-usb-ether-gadget-once")
+            //addFirstRun("mv /boot/firmware/sysdEth.srv /etc/systemd/system/usb-ether-gadget-once.service")
+            //addFirstRun("mkdir -p /etc/systemd/system/usb-gadget.target.wants")
+            //addFirstRun("ln -s /etc/systemd/system/usb-ether-gadget-once.service /etc/systemd/system/usb-gadget.target.wants/usb-ether-gadget-once.service")
+            addFirstRun("mv /boot/firmware/10usb.net /etc/systemd/network/10-usb.network\n")
+            // enable stuff
+            //addFirstRun("systemctl daemon-reload")
+            //addFirstRun("systemctl enable usb-ether-gadget-once.service")
+            //addFirstRun("systemctl start usb-ether-gadget-once.service\n")
+            // enable networkd as I don't have NetworkManager config
+            addFirstRun("systemctl enable systemd-networkd\n")
+        }
+
         if (chkLocale.checked) {
             var kbdconfig = "XKBMODEL=\"pc105\"\n"
             kbdconfig += "XKBLAYOUT=\""+fieldKeyboardLayout.editText+"\"\n"
@@ -870,7 +910,7 @@ Window {
             addCloudInit("runcmd:\n"+cloudinitrun+"\n")
         }
 
-        imageWriter.setImageCustomization(config, cmdline, firstrun, cloudinit, cloudinitnetwork)
+        imageWriter.setImageCustomization(config, cmdline, firstrun, cloudinit, cloudinitnetwork, enableEtherGadget)
     }
 
     function saveSettings()

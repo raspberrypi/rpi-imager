@@ -1,0 +1,33 @@
+[Match]
+Name=usb*
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+# Configure Subnet for USB Ethernet Gadget
+# - IP Range: 10.12.194.1 to 10.12.194.14
+# - Total IPs: 16
+# - Usable IPs: 14
+# - Network Address: 10.12.194.0
+# - Broadcast Address: 10.12.194.15
+# - Subnet Mask: 255.255.255.240 (/28)
+# | 10 - private 
+# | 12 - 2012 founding of Raspberry Pi Ltd. 
+# | 194 - address of Raspberry Pi Ltd. in the Science Park, Cambridge
+# | 1 - first device
+# TODO: maybe only static hostname to not conflict when multiple devices are connected
+# to the same computer
+Address=10.12.194.1/28
+DHCPServer=yes
+
+[DHCPServer]
+# Configure DHCP settings
+PoolSize=16                  # Number of IP addresses available for lease
+DefaultLeaseTimeSec=60       # Default lease time for DHCP clients
+MaxLeaseTimeSec=60           # Maximum lease time for DHCP clients
+
+# Network isolation settings (no internet)
+EmitDNS=no                   # Do not provide DNS information
+EmitNTP=no                   # Do not provide NTP information
+EmitRouter=no                # Do not provide router information

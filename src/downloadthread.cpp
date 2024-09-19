@@ -885,7 +885,7 @@ qint64 DownloadThread::_sectorsWritten()
     return -1;
 }
 
-void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudInitNetwork, const QByteArray &initFormat)
+void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudInitNetwork, const QByteArray &initFormat, const bool enableEtherGadget)
 {
     _config = config;
     _cmdline = cmdline;
@@ -893,6 +893,7 @@ void DownloadThread::setImageCustomization(const QByteArray &config, const QByte
     _cloudinit = cloudinit;
     _cloudinitNetwork = cloudInitNetwork;
     _initFormat = initFormat;
+    _enableEtherGadget = enableEtherGadget;
 }
 
 bool DownloadThread::_customizeImage()
@@ -972,6 +973,25 @@ bool DownloadThread::_customizeImage()
         {
             fat->writeFile("firstrun.sh", _firstrun);
             _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";
+        }
+
+        if (_enableEtherGadget) {
+            // load files from disk and write
+            QByteArray networkConfig = _fileGetContentsTrimmed("://extraFiles/10-usb.network");
+            fat->writeFile("10usb.net", networkConfig);
+            // little optimization for memory constraint systems - add if more files are loaded in this scope
+            //networkConfig.clear();
+
+            // only needed for manual config without g_ether
+            //QByteArray script = _fileGetContentsTrimmed("://extraFiles/configure-usb-ether-gadget-once.sh");
+            //fat->writeFile("etherSet.sh", script);
+            // little optimization for memory constraint systems - add if more files are loaded in this scope
+            //script.clear();
+
+            //QByteArray serviceFile = _fileGetContentsTrimmed("://extraFiles/usb-ether-gadget-once.service");
+            //fat->writeFile("sysdEth.srv", serviceFile);
+            // not needed anymore, because auto cleanup after out of scope
+            //serviceFile.clear();
         }
 
         if (!_cloudinit.isEmpty() && _initFormat == "cloudinit")
