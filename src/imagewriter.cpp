@@ -477,10 +477,23 @@ namespace {
 } // namespace anonymous
 
 
-void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive) {
+void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive, const bool &isModelZero) {
     QJsonDocument json_document = QJsonDocument::fromJson(json);
     _deviceFilter = json_document.array();
     _deviceFilterIsInclusive = inclusive;
+    _isModelZero = isModelZero;
+}
+
+QJsonArray ImageWriter::getHWFilterList() {
+    return _deviceFilter;
+}
+
+bool ImageWriter::getHWFilterListInclusive() {
+    return _deviceFilterIsInclusive;
+}
+
+bool ImageWriter::getHWFilterIsModelZero() {
+    return _isModelZero;
 }
 
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {

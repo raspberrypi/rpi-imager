@@ -979,19 +979,19 @@ bool DownloadThread::_customizeImage()
             // load files from disk and write
             QByteArray networkConfig = _fileGetContentsTrimmed("://extraFiles/10-usb.network");
             fat->writeFile("10usb.net", networkConfig);
-            // little optimization for memory constraint systems - add if more files are loaded in this scope
-            //networkConfig.clear();
+            // little optimization for memory constraint systems
+            networkConfig.clear();
 
             // only needed for manual config without g_ether
-            //QByteArray script = _fileGetContentsTrimmed("://extraFiles/configure-usb-ether-gadget-once.sh");
-            //fat->writeFile("etherSet.sh", script);
-            // little optimization for memory constraint systems - add if more files are loaded in this scope
-            //script.clear();
+            QByteArray modprobeConf = _fileGetContentsTrimmed("://extraFiles/g_ether.conf");
+            fat->writeFile("geth.cnf", modprobeConf);
+            // little optimization for memory constraint systems
+            modprobeConf.clear();
 
-            //QByteArray serviceFile = _fileGetContentsTrimmed("://extraFiles/usb-ether-gadget-once.service");
-            //fat->writeFile("sysdEth.srv", serviceFile);
+            QByteArray modulesConf = _fileGetContentsTrimmed("://extraFiles/usb-ether-gadget.conf");
+            fat->writeFile("gemod.cnf", modulesConf);
             // not needed anymore, because auto cleanup after out of scope
-            //serviceFile.clear();
+            //modulesConf.clear();
         }
 
         if (!_cloudinit.isEmpty() && _initFormat == "cloudinit")

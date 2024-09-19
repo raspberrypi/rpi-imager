@@ -85,7 +85,16 @@ public:
     Q_INVOKABLE void beginOSListFetch();
 
     /** Set the HW filter, for a filtered view of the OS list */
-    Q_INVOKABLE void setHWFilterList(const QByteArray &json, const bool &inclusive);
+    Q_INVOKABLE void setHWFilterList(const QByteArray &json, const bool &inclusive, const bool &isModelZero);
+
+    /* Get the HW filter list */
+    Q_INVOKABLE QJsonArray getHWFilterList();
+
+    /* Get if the HW filter is in inclusive mode */
+    Q_INVOKABLE bool getHWFilterListInclusive();
+
+    /* Get if HW filter tags are from a Pi Zero model */
+    Q_INVOKABLE bool getHWFilterIsModelZero();
 
     /* Set custom cache file */
     void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
@@ -122,8 +131,8 @@ public:
     Q_INVOKABLE QString getPSK();
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
-    Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);//, const QVariantList
-    Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork,  const bool enableEtherGadget);
+    Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const bool enableEtherGadget);
     Q_INVOKABLE void setSavedCustomizationSettings(const QVariantMap &map);
     Q_INVOKABLE QVariantMap getSavedCustomizationSettings();
     Q_INVOKABLE void clearSavedCustomizationSettings();
@@ -186,6 +195,8 @@ private:
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter;
     bool _deviceFilterIsInclusive;
+    /* As there is no distinction between normal pi models and zeros (in the tags), this flag can be used to differenciate */
+    bool _isModelZero;
 
 protected:
     QUrl _src, _repo;
