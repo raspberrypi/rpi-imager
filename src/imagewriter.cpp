@@ -510,11 +510,21 @@ namespace {
 } // namespace anonymous
 
 
-void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive, const bool &isModelZero) {
+void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive) {
     QJsonDocument json_document = QJsonDocument::fromJson(json);
     _deviceFilter = json_document.array();
     _deviceFilterIsInclusive = inclusive;
-    _isModelZero = isModelZero;
+}
+
+void ImageWriter::setHWSupportedFeaturesList(const QByteArray &json) {
+    QJsonDocument json_document = QJsonDocument::fromJson(json);
+    // TODO: maybe also clear the sw supported features as in the UI the OS is unselected when this changes
+    _hwSupportedFeatures = json_document.array();
+}
+
+void ImageWriter::setSWSupportedFeaturesList(const QByteArray &json) {
+    QJsonDocument json_document = QJsonDocument::fromJson(json);
+    _swSupportedFeatures = json_document.array();
 }
 
 QJsonArray ImageWriter::getHWFilterList() {
@@ -525,8 +535,16 @@ bool ImageWriter::getHWFilterListInclusive() {
     return _deviceFilterIsInclusive;
 }
 
-bool ImageWriter::getHWFilterIsModelZero() {
-    return _isModelZero;
+bool ImageWriter::andSupportedFeatures(const QString &feature) {
+    return this->checkHWFeatureSupport(feature) && this->checkSWFeatureSupport(feature);
+}
+
+bool ImageWriter::checkHWFeatureSupport(const QString &feature) {
+    return _hwSupportedFeatures.contains(feature.toLower());
+}
+
+bool ImageWriter::checkSWFeatureSupport(const QString &feature) {
+    return _swSupportedFeatures.contains(feature.toLower());
 }
 
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {

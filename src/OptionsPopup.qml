@@ -35,7 +35,7 @@ Window {
     property string cloudinitrun
     property string cloudinitwrite
     property string cloudinitnetwork
-    property bool deviceUsbOtgSupport
+    property bool deviceUsbOtgSupport: false
     property bool enableEtherGadget
 
     signal saveSettingsSignal(var settings)
@@ -752,16 +752,12 @@ Window {
             }
         }
 
-        var hwFilterList = imageWriter.getHWFilterList()
-        var hwFilterIsModelZero = imageWriter.getHWFilterIsModelZero()
-
-        if (hwFilterList) {
-            var targetTags = ["pi5-64bit", "pi4-64bit", "pi5-32bit", "pi4-32bit"]
-            deviceUsbOtgSupport = targetTags.some(tag => hwFilterList.includes(tag)) || hwFilterIsModelZero
-            if (!deviceUsbOtgSupport) {
-                // make sure it isn't disabled and selected
-                chkUSBEther = false;
-            }
+        if (imageWriter.andSupportedFeatures("ether_gadget")) {
+            deviceUsbOtgSupport = true
+        } else {
+            deviceUsbOtgSupport = false
+            // make sure it isn't disabled and selected
+            chkUSBEther.checked = false
         }
 
         //open()
