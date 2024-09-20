@@ -498,6 +498,7 @@ ApplicationWindow {
                     icon: ""
                     description: ""
                     matching_type: "exclusive"
+                    supported_features: "[]"
                 }
             }
             currentIndex: -1
@@ -1488,6 +1489,9 @@ ApplicationWindow {
             if ("subitems" in entry) {
                 entry["subitems_json"] = JSON.stringify(entry["subitems"])
                 delete entry["subitems"]
+            } else if ("supportedFeatures" in entry) {
+                entry["supported_features_json"] = JSON.stringify(entry["supportedFeatures"])
+                delete entry["supportedFeatures"]
             }
         }
 
@@ -1530,6 +1534,8 @@ ApplicationWindow {
                 for (var j in devices)
                 {
                     devices[j]["tags"] = JSON.stringify(devices[j]["tags"])
+                    devices[j]["supported_features"] = JSON.stringify(devices[j]["supportedFeatures"])
+                    delete devices[j]["supportedFeatures"];
                     deviceModel.append(devices[j])
                     if ("default" in devices[j] && devices[j]["default"])
                     {
@@ -1614,7 +1620,8 @@ ApplicationWindow {
             }
         }
 
-        imageWriter.setHWFilterList(hwmodel.tags, inclusive, hwmodel.name.toLowerCase().includes("zero"))
+        imageWriter.setHWFilterList(hwmodel.tags, inclusive)
+        imageWriter.setHWSupportedFeaturesList(hwmodel.supported_features);
 
         /* Reload list */
         var oslist_json = imageWriter.getFilteredOSlist();
@@ -1731,6 +1738,7 @@ ApplicationWindow {
             }
         } else {
             imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
+            imageWriter.setSWSupportedFeaturesList(d.supported_features_json);
             osbutton.text = d.name
             ospopup.close()
             osswipeview.decrementCurrentIndex()

@@ -88,7 +88,13 @@ public:
     Q_INVOKABLE void beginOSListFetch();
 
     /** Set the HW filter, for a filtered view of the OS list */
-    Q_INVOKABLE void setHWFilterList(const QByteArray &json, const bool &inclusive, const bool &isModelZero);
+    Q_INVOKABLE void setHWFilterList(const QByteArray &json, const bool &inclusive);
+
+    /* Set the features supported by the hardware, for a filtered view of options that require certain features beeing supported by the hardware. */
+    Q_INVOKABLE void setHWSupportedFeaturesList(const QByteArray &json);
+
+    /* Set the features supported by the hardware, for a filtered view of options that require certain features beeing supported by the software. */
+    Q_INVOKABLE void setSWSupportedFeaturesList(const QByteArray &json);
 
     /* Get the HW filter list */
     Q_INVOKABLE QJsonArray getHWFilterList();
@@ -96,8 +102,14 @@ public:
     /* Get if the HW filter is in inclusive mode */
     Q_INVOKABLE bool getHWFilterListInclusive();
 
-    /* Get if HW filter tags are from a Pi Zero model */
-    Q_INVOKABLE bool getHWFilterIsModelZero();
+    /* Get if both hard and software support a certain feature */
+    Q_INVOKABLE bool andSupportedFeatures(const QString &feature);
+
+    /* Check if the hardware supports a certain feature. */
+    Q_INVOKABLE bool checkHWFeatureSupport(const QString &feature);
+
+    /* Check if the software supports a certain feature. */
+    Q_INVOKABLE bool checkSWFeatureSupport(const QString &feature);
 
     /* Set custom cache file */
     void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
@@ -196,10 +208,8 @@ private:
     void fillSubLists(QJsonArray &topLevel);
     QNetworkAccessManager _networkManager;
     QJsonDocument _completeOsList;
-    QJsonArray _deviceFilter;
+    QJsonArray _deviceFilter, _hwSupportedFeatures, _swSupportedFeatures;
     bool _deviceFilterIsInclusive;
-    /* As there is no distinction between normal pi models and zeros (in the tags), this flag can be used to differentiate */
-    bool _isModelZero;
 
 protected:
     QUrl _src, _repo;
