@@ -58,7 +58,7 @@ int Cli::run()
         {"first-run-script", "Add firstrun.sh to image", "first-run-script", ""},
         {"cloudinit-userdata", "Add cloud-init user-data file to image", "cloudinit-userdata", ""},
         {"cloudinit-networkconfig", "Add cloud-init network-config file to image", "cloudinit-networkconfig", ""},
-        {"usb-ether-gadget", "Enable USB Ethernet Gadget mode"},
+        {"usb-ether-gadget", "Enable USB Ethernet Gadget mode (does not support --first-run-script)"},
         {"disable-eject", "Disable automatic ejection of storage media after verification"},
         {"debug", "Output debug messages to console"},
         {"quiet", "Only write to console on error"},
@@ -152,19 +152,6 @@ int Cli::run()
     }
 
     bool isEtherGadgetEnabled = parser.isSet("usb-ether-gadget");
-    QString firstRunScriptAddition = "";
-    QString configTxt = "";
-    if (isEtherGadgetEnabled) {
-        // setup config and first run script addition - keep parity with OptionsPopup.qml
-        configTxt += "dtoverlay=dwc2,dr_mode=peripheral\n";
-
-        firstRunScriptAddition += "\nmv /boot/firmware/10usb.net /etc/systemd/network/10-usb.network\n";
-        firstRunScriptAddition += "mv /boot/firmware/geth.cnf /etc/modprobe.d/g_ether.conf\n";
-        firstRunScriptAddition += "mv /boot/firmware/gemod.cnf /etc/modules-load.d/usb-ether-gadget.conf\n\n";
-        firstRunScriptAddition += "SERIAL=$(grep Serial /proc/cpuinfo | awk '{print $3}')\n";
-        firstRunScriptAddition += "sed -i \"s/<serial>/$SERIAL/g\" /etc/modprobe.d/g_ether.conf\n";
-        firstRunScriptAddition += "systemctl enable systemd-networkd\n";
-    }
 
     if (!parser.value("cloudinit-userdata").isEmpty())
     {
@@ -204,10 +191,15 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomization(configTxt.toUtf8(), "", firstRunScriptAddition.toUtf8(), userData, networkConfig, isEtherGadgetEnabled);
+        _imageWriter->setImageCustomization("", "", "", userData, networkConfig, false, isEtherGadgetEnabled);
     }
     else if (!parser.value("first-run-script").isEmpty())
     {
+        if (isEtherGadgetEnabled) {
+            std::cerr << "Error: the --usb-ether-gadget option is not supported when --first-run-script is used.";
+            return 1;
+        }
+
         QByteArray firstRunScript;
         QFile f(parser.value("first-run-script"));
         if (!f.exists())
@@ -226,10 +218,7 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomization(configTxt.toUtf8(), "", firstRunScript.append(firstRunScriptAddition.toUtf8()), "", "", isEtherGadgetEnabled);
-    }
-    else if (!firstRunScriptAddition.isEmpty() || !configTxt.isEmpty()) {
-        _imageWriter->setImageCustomization(configTxt.toUtf8(), "", firstRunScriptAddition.toUtf8(), "", "", isEtherGadgetEnabled);
+        _imageWriter->setImageCustomization("", "", firstRunScript, "", "", true, isEtherGadgetEnabled);
     }
 
     _imageWriter->setDst(args[1]);

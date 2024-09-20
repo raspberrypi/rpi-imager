@@ -885,17 +885,6 @@ Window {
             addCloudInit("  layout: \"" + fieldKeyboardLayout.editText + "\"")
         }
 
-        if (firstrun.length) {
-            firstrun = "#!/bin/bash\n\n"+"set +e\n\n"+firstrun
-            addFirstRun("rm -f /boot/firstrun.sh")
-            addFirstRun("sed -i 's| systemd.run.*||g' /boot/cmdline.txt")
-            addFirstRun("exit 0")
-            /* using systemd.run_success_action=none does not seem to have desired effect
-               systemd then stays at "reached target kernel command line", so use reboot instead */
-            //addCmdline("systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target")
-            // cmdline changing moved to DownloadThread::_customizeImage()
-        }
-
         if (cloudinitwrite !== "") {
             addCloudInit("write_files:\n"+cloudinitwrite+"\n")
         }
@@ -904,7 +893,7 @@ Window {
             addCloudInit("runcmd:\n"+cloudinitrun+"\n")
         }
 
-        imageWriter.setImageCustomization(config, cmdline, firstrun, cloudinit, cloudinitnetwork, enableEtherGadget)
+        imageWriter.setImageCustomization(config, cmdline, firstrun, cloudinit, cloudinitnetwork, false, enableEtherGadget)
     }
 
     function saveSettings()
