@@ -121,7 +121,7 @@ public:
     /*
      * Enable image customization
      */
-    void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const bool enableEtherGadget);
+    void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const bool userDefinedFirstRun, const bool enableEtherGadget);
 
     /*
      * Thread safe download progress query functions
@@ -176,7 +176,7 @@ protected:
     std::uint64_t _lastFailureOffset;
     qint64 _sectorsStart;
     QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash, _config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
-    bool _enableEtherGadget;
+    bool _userDefinedFirstRun, _enableEtherGadget;
     char *_firstBlock;
     size_t _firstBlockSize;
     static QByteArray _proxy;
