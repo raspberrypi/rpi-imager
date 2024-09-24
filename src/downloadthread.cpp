@@ -992,11 +992,17 @@ bool DownloadThread::_customizeImage()
             // little optimization for memory constrained systems
             modulesConf.clear();
 
+            QByteArray controllScript = _fileGetContentsTrimmed("://extraFiles/rpi-usb-ether-gadget.sh");
+            fat->writeFile("uethc.sh", controllScript);
+            controllScript.clear();
+
             // add config.txt change - \n prefix to also work if user defined config doesn't end with a LF
             _config.append("\ndtoverlay=dwc2,dr_mode=peripheral\n");
-            _firstrun.append("\nmv /boot/firmware/10usb.net /etc/systemd/network/10-usb.network\n\n");
+            _firstrun.append("\nmv /boot/firmware/10usb.net /etc/systemd/network/10-usb.network\n");
             _firstrun.append("mv /boot/firmware/geth.cnf /etc/modprobe.d/g_ether.conf\n");
-            _firstrun.append("mv /boot/firmware/gemod.cnf /etc/modules-load.d/usb-ether-gadget.conf\n\n");
+            _firstrun.append("mv /boot/firmware/gemod.cnf /etc/modules-load.d/usb-ether-gadget.conf\n");
+            _firstrun.append("mv /boot/firmware/uethc.sh /usr/bin/rpi-usb-ether-gadget\n");
+            _firstrun.append("chmod +x /usr/bin/rpi-usb-ether-gadget\n\n");
             _firstrun.append("SERIAL=$(grep Serial /proc/cpuinfo | awk '{print $3}')\n");
             _firstrun.append("sed -i \"s/<serial>/$SERIAL/g\" /etc/modprobe.d/g_ether.conf\n");
             _firstrun.append("systemctl enable systemd-networkd\n\n");

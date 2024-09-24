@@ -752,7 +752,7 @@ Window {
             }
         }
 
-        if (imageWriter.andSupportedFeatures("ether_gadget")) {
+        if (imageWriter.andCapabilities("usb_otg")) {
             deviceUsbOtgSupport = true
         } else {
             deviceUsbOtgSupport = false

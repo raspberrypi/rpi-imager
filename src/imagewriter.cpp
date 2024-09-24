@@ -516,15 +516,15 @@ void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive)
     _deviceFilterIsInclusive = inclusive;
 }
 
-void ImageWriter::setHWSupportedFeaturesList(const QByteArray &json) {
+void ImageWriter::setHWCapabilitiesList(const QByteArray &json) {
     QJsonDocument json_document = QJsonDocument::fromJson(json);
-    // TODO: maybe also clear the sw supported features as in the UI the OS is unselected when this changes
-    _hwSupportedFeatures = json_document.array();
+    // TODO: maybe also clear the sw capabilities as in the UI the OS is unselected when this changes
+    _hwCapabilities = json_document.array();
 }
 
-void ImageWriter::setSWSupportedFeaturesList(const QByteArray &json) {
+void ImageWriter::setSWCapabilitiesList(const QByteArray &json) {
     QJsonDocument json_document = QJsonDocument::fromJson(json);
-    _swSupportedFeatures = json_document.array();
+    _swCapabilities = json_document.array();
 }
 
 QJsonArray ImageWriter::getHWFilterList() {
@@ -535,16 +535,16 @@ bool ImageWriter::getHWFilterListInclusive() {
     return _deviceFilterIsInclusive;
 }
 
-bool ImageWriter::andSupportedFeatures(const QString &feature) {
-    return this->checkHWFeatureSupport(feature) && this->checkSWFeatureSupport(feature);
+bool ImageWriter::andCapabilities(const QString &cap) {
+    return this->checkHWCapability(cap) && this->checkSWCapability(cap);
 }
 
-bool ImageWriter::checkHWFeatureSupport(const QString &feature) {
-    return _hwSupportedFeatures.contains(feature.toLower());
+bool ImageWriter::checkHWCapability(const QString &cap) {
+    return _hwCapabilities.contains(cap.toLower());
 }
 
-bool ImageWriter::checkSWFeatureSupport(const QString &feature) {
-    return _swSupportedFeatures.contains(feature.toLower());
+bool ImageWriter::checkSWCapability(const QString &cap) {
+    return _swCapabilities.contains(cap.toLower());
 }
 
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {

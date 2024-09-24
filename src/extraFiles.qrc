@@ -3,5 +3,6 @@
         <file>extraFiles/10-usb.network</file>
         <file>extraFiles/g_ether.conf</file>
         <file>extraFiles/usb-ether-gadget.conf</file>
+        <file>extraFiles/rpi-usb-ether-gadget.sh</file>
     </qresource>
 </RCC>
