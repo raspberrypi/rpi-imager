@@ -90,11 +90,11 @@ public:
     /** Set the HW filter, for a filtered view of the OS list */
     Q_INVOKABLE void setHWFilterList(const QByteArray &json, const bool &inclusive);
 
-    /* Set the features supported by the hardware, for a filtered view of options that require certain features beeing supported by the hardware. */
-    Q_INVOKABLE void setHWSupportedFeaturesList(const QByteArray &json);
+    /* Set the capabilities supported by the hardware, for a filtered view of options that require the hardware to have certain capabilities. */
+    Q_INVOKABLE void setHWCapabilitiesList(const QByteArray &json);
 
-    /* Set the features supported by the hardware, for a filtered view of options that require certain features beeing supported by the software. */
-    Q_INVOKABLE void setSWSupportedFeaturesList(const QByteArray &json);
+    /* Set the capabilities supported by the hardware, for a filtered view of options that require the software to have certain capabilities. */
+    Q_INVOKABLE void setSWCapabilitiesList(const QByteArray &json);
 
     /* Get the HW filter list */
     Q_INVOKABLE QJsonArray getHWFilterList();
@@ -103,13 +103,13 @@ public:
     Q_INVOKABLE bool getHWFilterListInclusive();
 
     /* Get if both hard and software support a certain feature */
-    Q_INVOKABLE bool andSupportedFeatures(const QString &feature);
+    Q_INVOKABLE bool andCapabilities(const QString &cap);
 
     /* Check if the hardware supports a certain feature. */
-    Q_INVOKABLE bool checkHWFeatureSupport(const QString &feature);
+    Q_INVOKABLE bool checkHWCapability(const QString &cap);
 
     /* Check if the software supports a certain feature. */
-    Q_INVOKABLE bool checkSWFeatureSupport(const QString &feature);
+    Q_INVOKABLE bool checkSWCapability(const QString &cap);
 
     /* Set custom cache file */
     void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
@@ -208,7 +208,7 @@ private:
     void fillSubLists(QJsonArray &topLevel);
     QNetworkAccessManager _networkManager;
     QJsonDocument _completeOsList;
-    QJsonArray _deviceFilter, _hwSupportedFeatures, _swSupportedFeatures;
+    QJsonArray _deviceFilter, _hwCapabilities, _swCapabilities;
     bool _deviceFilterIsInclusive;
 
 protected:
