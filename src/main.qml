@@ -498,7 +498,7 @@ ApplicationWindow {
                     icon: ""
                     description: ""
                     matching_type: "exclusive"
-                    supported_features: "[]"
+                    capabilities: "[]"
                 }
             }
             currentIndex: -1
@@ -653,6 +653,7 @@ ApplicationWindow {
                     tooltip: ""
                     website: ""
                     init_format: ""
+                    capabilities: "[]"
                 }
             }
 
@@ -1489,7 +1490,8 @@ ApplicationWindow {
             if ("subitems" in entry) {
                 entry["subitems_json"] = JSON.stringify(entry["subitems"])
                 delete entry["subitems"]
-            } else if ("capabilities" in entry) {
+            }
+            if ("capabilities" in entry) {
                 entry["capabilities"] = JSON.stringify(entry["capabilities"])
             }
         }
@@ -1695,6 +1697,10 @@ ApplicationWindow {
                     entry["subitems_json"] = JSON.stringify(entry["subitems"])
                     delete entry["subitems"]
                 }
+                if ("capabilities" in entry) {
+                    entry["capabilities"] = JSON.stringify(entry["capabilities"])
+                }
+
                 m.append(entry)
             }
 
