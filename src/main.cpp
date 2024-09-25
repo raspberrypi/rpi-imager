@@ -276,13 +276,13 @@ int main(int argc, char *argv[])
         }
         else if (args[i] == "--help")
         {
-            cerr << args[0] << " [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--disable-telemetry] [<image file to write>]" << endl;
-            cerr << "-OR- " << args[0] << " --cli [--disable-verify] [--sha256 <expected hash>] [--debug] [--quiet] <image file to write> <destination drive device>" << endl;
+            cerr << "rpi-imager [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--disable-telemetry] [<image file to write>]" << endl;
+            cerr << "-OR- rpi-imager --cli [--disable-verify] [--sha256 <expected hash>] [--debug] [--quiet] <image file to write> <destination drive device>" << endl;
             return 0;
         }
         else if (args[i] == "--version")
         {
-            cerr << args[0] << " version " << imageWriter.constantVersion() << endl;
+            cerr << "rpi-imager version " << imageWriter.constantVersion() << endl;
             cerr << "Repository: " << imageWriter.constantOsListUrl().toString() << endl;
             return 0;
         }
