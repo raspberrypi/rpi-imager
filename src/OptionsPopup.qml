@@ -752,7 +752,7 @@ Window {
             }
         }
 
-        if (imageWriter.andCapabilities("usb_otg")) {
+        if (imageWriter.checkHWAndSWCapability("usb_otg")) {
             deviceUsbOtgSupport = true
         } else {
             deviceUsbOtgSupport = false

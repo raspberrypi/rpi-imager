@@ -102,8 +102,8 @@ public:
     /* Get if the HW filter is in inclusive mode */
     Q_INVOKABLE bool getHWFilterListInclusive();
 
-    /* Get if both hard and software support a certain feature */
-    Q_INVOKABLE bool andCapabilities(const QString &cap);
+    /* Get if both hard and software support a certain feature. If no differentSWCap is provided it will check for cap support in SW and HW lists. */
+    Q_INVOKABLE bool checkHWAndSWCapability(const QString &cap, const QString &differentSWCap = "");
 
     /* Check if the hardware supports a certain feature. */
     Q_INVOKABLE bool checkHWCapability(const QString &cap);
