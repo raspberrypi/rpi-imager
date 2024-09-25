@@ -52,7 +52,7 @@
   </screenshots>
   <url type="homepage">https://github.com/raspberrypi/rpi-imager</url>
   <provides>
-    <binary>rpi-imager.AppImage</binary>
+    <binary>rpi-imager</binary>
   </provides>
   <releases>
     <release version="1.9.0" />
