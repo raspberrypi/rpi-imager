@@ -502,8 +502,8 @@ bool ImageWriter::getHWFilterListInclusive() {
     return _deviceFilterIsInclusive;
 }
 
-bool ImageWriter::andCapabilities(const QString &cap) {
-    return this->checkHWCapability(cap) && this->checkSWCapability(cap);
+bool ImageWriter::checkHWAndSWCapability(const QString &cap, const QString &differentSWCap) {
+    return this->checkHWCapability(cap) && this->checkSWCapability(differentSWCap.isEmpty() ? cap : differentSWCap);
 }
 
 bool ImageWriter::checkHWCapability(const QString &cap) {
