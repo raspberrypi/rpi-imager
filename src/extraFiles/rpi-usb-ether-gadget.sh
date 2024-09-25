@@ -36,13 +36,13 @@ fi
 #rm /etc/modprobe.d/g_ether.conf
 
 if [ "$TURN_ON" = false ]; then
-    echo "Turning \e[31moff\e[0m USB Ethernet Gadget mode"
+    echo -e "Turning \e[31moff\e[0m USB Ethernet Gadget mode"
     rm -f /etc/modules-load.d/usb-ether-gadget.conf
     sed -i '/dtoverlay=dwc2,dr_mode=peripheral/d' /boot/firmware/config.txt
 else
-    echo "Turning \e[32mon\e[0m USB Ethernet Gadget mode"
-    echo "dwc2\ng_ether\n" > /etc/modules-load.d/usb-ether-gadget.conf
-    echo "\ndtoverlay=dwc2,dr_mode=peripheral\n" >> /boot/firmware/config.txt
+    echo -e "Turning \e[32mon\e[0m USB Ethernet Gadget mode"
+    echo -e "dwc2\ng_ether\n" > /etc/modules-load.d/usb-ether-gadget.conf
+    echo -e "\ndtoverlay=dwc2,dr_mode=peripheral\n" >> /boot/firmware/config.txt
 fi
 
 echo "Reboot to apply changes"
