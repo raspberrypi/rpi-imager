@@ -1,0 +1,3 @@
+tar-ignore = "release.appimagecraft.yml"
+tar-ignore = "*.AppImage"
+tar-ignore = "ci"

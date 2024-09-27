@@ -6,6 +6,6 @@ Name[zh_CN]=树莓派启动盘制作工具
 Comment=Raspberry Pi Imager
 Comment[zh_CN]=树莓派启动盘制作工具
 Icon=rpi-imager
-Exec=/usr/bin/rpi-imager.AppImage %F
+Exec=/usr/bin/rpi-imager %F
 Categories=Utility
 StartupNotify=false

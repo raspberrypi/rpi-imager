@@ -7,8 +7,8 @@ Standards-Version: 4.1.2
 Homepage: https://www.raspberrypi.com/software
 
 Package: rpi-imager
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse
+Architecture: arm64
+Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2
 Recommends: udisks2
 Description: Raspberry Pi Imaging utility
  A user-friendly tool for creating bootable media for Raspberry Pi Devices.

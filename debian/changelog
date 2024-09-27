@@ -1,3 +1,15 @@
+rpi-imager (1.9.1) unstable; urgency=medium
+
+  * i18n: German, Taiwanese, Catalan, Spanish, Slovak
+    translations updated
+  * i18n: Added Hebrew translation
+  * qml: OS Customisation: Allow mouse selection in
+    comboboxes
+  * qml: MessagePopup: Constrain text, align to the center
+  * packaging: debian: Ignore AppImages and ci scripts
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Wed, 18 Sep 2024 18:57:00 +0000
+
 rpi-imager (1.9.0) unstable; urgency=medium
 
   * ui: Upgrade to Qt6.7, bringing new controls to everything

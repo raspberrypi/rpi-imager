@@ -1,5 +1,5 @@
 #!/bin/sh
 
-if [ ! -x /usr/bin/rpi-imager.AppImage ]; then
-    chmod +x /usr/bin/rpi-imager.AppImage
+if [ ! -x /usr/bin/rpi-imager ]; then
+    chmod +x /usr/bin/rpi-imager
 fi

@@ -308,6 +308,7 @@ Window {
                     }
                     ComboBox {
                         id: fieldWifiCountry
+                        selectTextByMouse: true
                         enabled: chkWifi.checked
                         editable: true
                     }
@@ -329,6 +330,7 @@ Window {
                     }
                     ComboBox {
                         enabled: chkLocale.checked
+                        selectTextByMouse: true
                         id: fieldTimezone
                         editable: true
                         Layout.minimumWidth: 200
@@ -347,6 +349,7 @@ Window {
                     }
                     ComboBox {
                         enabled: chkLocale.checked
+                        selectTextByMouse: true
                         id: fieldKeyboardLayout
                         editable: true
                         Layout.minimumWidth: 200

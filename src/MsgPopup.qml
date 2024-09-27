@@ -60,7 +60,6 @@ Popup {
 
             MouseArea {
                 anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     msgpopup.close()
                 }
@@ -90,10 +89,13 @@ Popup {
             textFormat: Text.StyledText
             font.family: roboto.name
             Layout.fillHeight: true
-            Layout.leftMargin: 25
-            Layout.rightMargin: 25
-            Layout.topMargin: 25
+            Layout.fillWidth: true
+            Layout.leftMargin: 10
+            Layout.rightMargin: 10
+            Layout.topMargin: 10
             Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
             Accessible.name: text.replace(/<\/?[^>]+(>|$)/g, "")
         }
 

@@ -37,6 +37,8 @@ endif(APPLE)
 
 # Bundled code will occasionally use identical options - eg, BUILD_TESTING.
 set(BUILD_TESTING OFF)
+set(BUILD_STATIC_LIBS ON)
+set(BUILD_SHARED_LIBS OFF)
 
 # Bundled liblzma
 set(XZ_MICROLZMA_DECODER OFF)
@@ -79,6 +81,7 @@ set(ZSTD_LIBRARIES libzstd_static)
 
 # Bundled zlib
 set(ZLIB_BUILD_EXAMPLES OFF)
+set(SKIP_INSTALL_ALL ON)
 add_subdirectory(dependencies/zlib-1.3.1)
 set(ZLIB_FOUND TRUE)
 set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
@@ -114,7 +117,6 @@ set(LibArchive_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/libarchive-3.7
 
 # Bundled libcurl
 set(CMAKE_CURL_INCLUDES)
-set(BUILD_STATIC_CURL true)
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
 set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
 set(ENABLE_CURL_MANUAL OFF CACHE BOOL "" FORCE)
@@ -136,6 +138,7 @@ set(CURL_DISABLE_TELNET ON)
 set(CURL_DISABLE_TFTP ON)
 set(CURL_ZSTD ON)
 set(CURL_ENABLE_EXPORT_TARGET OFF CACHE BOOL "" FORCE)
+set(CURL_DISABLE_INSTALL ON)
 if (APPLE)
     # TODO: SecureTransport is a deprecated API in macOS, supporting
     #       only up to TLS v1.2. cURL has not implemented the replacement,
