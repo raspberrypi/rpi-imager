@@ -5,9 +5,11 @@ src/build/**
 obj-**
 debian/rpi-imager/**
 debian/.debhelper**
+debian/*.debhelper**
 debian/files
 debian/*.substvars
 debian/debhelper**
+debian/tmp
 .DS_Store
 *.DS_Store
 # editor backups
