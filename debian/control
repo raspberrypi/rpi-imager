@@ -2,13 +2,13 @@ Source: rpi-imager
 Section: admin
 Priority: optional
 Maintainer: Tom Dewey <tom.dewey@raspberrypi.com>
-Build-Depends: debhelper (>= 10), cmake, libgnutls28-dev
+Build-Depends: debhelper (>= 10), cmake, libgnutls28-dev, dh-exec
 Standards-Version: 4.1.2
 Homepage: https://www.raspberrypi.com/software
 
 Package: rpi-imager
 Architecture: arm64
-Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2
+Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38)
 Recommends: udisks2
 Description: Raspberry Pi Imaging utility
  A user-friendly tool for creating bootable media for Raspberry Pi Devices.
