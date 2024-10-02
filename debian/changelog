@@ -1,4 +1,4 @@
-rpi-imager (1.9.1) unstable; urgency=medium
+rpi-imager (1.9.2) unstable; urgency=medium
 
   * Drive List: Expose only physical devices - not volumes
   * i18n: German, Taiwanese, Catalan, Spanish, Slovak
