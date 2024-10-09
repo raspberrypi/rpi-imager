@@ -6,9 +6,6 @@ export DH_VERBOSE = 1
 %:
 	dh $@
 
-.PHONY: override_dh_usrlocal
-override_dh_usrlocal:
-
 .PHONY: override_dh_strip 
 override_dh_strip: 
-	dh_strip --exclude=AppImage
+	dh_strip --exclude=AppImage --exclude=rpi-imager
