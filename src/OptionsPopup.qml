@@ -824,21 +824,35 @@ Window {
             addCloudInit("")
         }
 
+        var isRpiosCloudInit = imageWriter.checkSWCapability("rpios_cloudinit");
+
         if (chkSSH.checked || chkSetUser.checked) {
             // First user may not be called 'pi' on all distributions, so look username up
             addFirstRun("FIRSTUSER=`getent passwd 1000 | cut -d: -f1`");
             addFirstRun("FIRSTUSERHOME=`getent passwd 1000 | cut -d: -f6`")
 
-            addCloudInit("users:")
-            addCloudInit("- name: "+fieldUserName.text)
-            addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo")
-            addCloudInit("  shell: /bin/bash")
-
             var cryptedPassword;
             if (chkSetUser.checked) {
                 cryptedPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
-                addCloudInit("  lock_passwd: false")
-                addCloudInit("  passwd: "+cryptedPassword)
+            }
+
+            if (isRpiosCloudInit && cryptedPassword) {
+                addCloudInit("rpi_userconf:")
+                addCloudInit("  password: " + cryptedPassword)
+                addCloudInit("  user: " + fieldUserName.text)
+                addCloudInit("")
+            }
+
+            addCloudInit("users:")
+            addCloudInit("- name: " + fieldUserName.text)
+            if (!isRpiosCloudInit) {
+                addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo")
+                addCloudInit("  shell: /bin/bash")
+
+                if (chkSetUser.checked) {
+                    addCloudInit("  lock_passwd: false")
+                    addCloudInit("  passwd: "+cryptedPassword)
+                }
             }
 
             if (chkSSH.checked && radioPubKeyAuthentication.checked) {
@@ -872,7 +886,12 @@ Window {
                         addCloudInit("    - "+pk)
                     }
                 }
-                addCloudInit("  sudo: ALL=(ALL) NOPASSWD:ALL")
+                if (!isRpiosCloudInit) {
+                    addCloudInit("  sudo: ALL=(ALL) NOPASSWD:ALL")
+                } else {
+                    addCloudInit("\nrpi_interfaces:")
+                    addCloudInit("  ssh: true")
+                }
             }
             addCloudInit("")
 
@@ -908,6 +927,14 @@ Window {
                 addFirstRun("fi")
             }
             addCloudInit("")
+
+            /*if (chkSetUser.checked) {
+                addCloudInit("final_message: \"Setup wizard has been skiped.\"")
+                addCloudInit("power_state:")
+                addCloudInit("  mode: reboot")
+                addCloudInit("  message: Rebooting machine")
+                addCloudInit("")
+            }*/
         }
         if (chkWifi.checked) {
             var wpaconfig = "country="+fieldWifiCountry.editText+"\n"
@@ -943,17 +970,18 @@ Window {
             addFirstRun("fi")
 
 
-            cloudinitnetwork  = "version: 2\n"
-            cloudinitnetwork += "wifis:\n"
-            cloudinitnetwork += "  renderer: networkd\n"
-            cloudinitnetwork += "  wlan0:\n"
-            cloudinitnetwork += "    dhcp4: true\n"
-            cloudinitnetwork += "    optional: true\n"
-            cloudinitnetwork += "    access-points:\n"
-            cloudinitnetwork += "      \""+fieldWifiSSID.text+"\":\n"
-            cloudinitnetwork += "        password: \""+cryptedPsk+"\"\n"
+            cloudinitnetwork  = "network:\n"
+            cloudinitnetwork += "  version: 2\n"
+            cloudinitnetwork += "  renderer: " + (isRpiosCloudInit ? "NetworkManager" : "networkd") + "\n"
+            cloudinitnetwork += "  wifis:\n"
+            cloudinitnetwork += "    wlan0:\n"
+            cloudinitnetwork += "      dhcp4: true\n"
+            cloudinitnetwork += "      optional: true\n"
+            cloudinitnetwork += "      access-points:\n"
+            cloudinitnetwork += "        \""+fieldWifiSSID.text+"\":\n"
+            cloudinitnetwork += "          password: \""+cryptedPsk+"\"\n"
             if (chkWifiSSIDHidden.checked) {
-                cloudinitnetwork += "        hidden: true\n"
+                cloudinitnetwork += "          hidden: true\n"
             }
 
             addCmdline("cfg80211.ieee80211_regdom="+fieldWifiCountry.editText)
