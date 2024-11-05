@@ -17,6 +17,6 @@
         "pi2-32bit"
       ],
       "init_format": "systemd"
-    },
+    }
   ]
 }
