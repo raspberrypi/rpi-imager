@@ -404,15 +404,14 @@ Window {
                     // textFormat: Text.PlainText
                     Layout.leftMargin: 40
                 }
-                TextArea {
+                TextField {
                     id: fieldPublicKey
                     enabled: radioPubKeyAuthentication.checked
-                    textFormat: TextEdit.PlainText
                     wrapMode: TextEdit.WrapAnywhere
                     Layout.fillWidth: true
                     Layout.minimumWidth: 350
                     Layout.leftMargin: 40
-                    selectByMouse: true
+                    validator: RegularExpressionValidator { regularExpression: /^ssh-(ed25519|rsa|dss|ecdsa) AAAA(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{4})( [^@]+@[^@]+)?/ }
                 }
 
                 ImButton {
