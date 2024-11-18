@@ -111,10 +111,10 @@ set(ARCHIVE_ENABLE_TAR OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_CPIO OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_CAT OFF CACHE BOOL "")
 set(ARCHIVE_BUILD_SHARED_LIBS OFF CACHE BOOL "")
-add_subdirectory(dependencies/libarchive-3.7.4)
+add_subdirectory(dependencies/libarchive-3.7.7)
 set(LibArchive_FOUND true)
 set(LibArchive_LIBRARIES archive_static)
-set(LibArchive_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/libarchive-3.7.4/libarchive)
+set(LibArchive_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/libarchive-3.7.7/libarchive)
 
 # Bundled libcurl
 set(CMAKE_CURL_INCLUDES)

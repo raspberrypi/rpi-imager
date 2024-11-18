@@ -1,0 +1,52 @@
+4mARCHIVE_WRITE_DATA24m(3)	 Library Functions Manual     4mARCHIVE_WRITE_DATA24m(3)
+
+1mNAME0m
+       archive_write_data,  archive_write_data_block  — functions for creating
+       archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mla_ssize_t0m
+       1marchive_write_data22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mvoid24m 4m*24m, 4msize_t24m);
+
+       4mla_ssize_t0m
+       1marchive_write_data_block22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mvoid24m 4m*24m,  4msize_t24m	 4msize24m,
+	   4mint64_t24m 4moffset24m);
+
+1mDESCRIPTION0m
+       1marchive_write_data22m()
+	       Write data corresponding to the header just written.
+
+       1marchive_write_data_block22m()
+	       Write  data  corresponding to the header just written.  This is
+	       like 1marchive_write_data22m() except that it performs a seek on the
+	       file being written to the specified offset before  writing  the
+	       data.   This is useful when restoring sparse files from archive
+	       formats that support sparse files.   Returns  number  of	 bytes
+	       written or -1 on error.	(Note: This is currently not supported
+	       for archive_write handles, only for archive_write_disk handles.
+
+1mRETURN VALUES0m
+       This  function returns the number of bytes actually written, or a nega‐
+       tive error code on error.
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mBUGS0m
+       In  libarchive 3.x, this function sometimes returns zero on success in‐
+       stead of returning the number of bytes written.	Specifically, this oc‐
+       curs when writing to  an	 4marchive_write_disk24m  handle.   Clients  should
+       treat  any  value less than zero as an error and consider any non-nega‐
+       tive value as success.
+
+1mSEE ALSO0m
+       4mtar24m(1),  4marchive_write_finish_entry24m(3),   4marchive_write_set_options24m(3),
+       4mlibarchive24m(3), 4mcpio24m(5), 4mmtree24m(5), 4mtar24m(5)
+
+Debian			       February 28, 2017	 4mARCHIVE_WRITE_DATA24m(3)

@@ -1,0 +1,35 @@
+4mARCHIVE_WRITE_SET_PASSPH24m(3) Library Functions Manua4mARCHIVE_WRITE_SET_PASSPH24m(3)
+
+1mNAME0m
+       archive_write_set_passphrase,  archive_write_set_passphrase_callback  —
+       functions for writing encrypted archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_write_set_passphrase22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mchar24m 4m*passphrase24m);
+
+       4mint0m
+       1marchive_write_set_passphrase_callback22m(4mstruct24m 4marchive24m 4m*24m,
+	   4mvoid24m 4m*client_data24m, 4marchive_passphrase_callback24m 4m*24m);
+
+1mDESCRIPTION0m
+       1marchive_write_set_passphrase22m()
+	       Set  a  passphrase  for	writing	 an  encrypted	archive.    If
+	       4mpassphrase24m	is NULL or empty, this function will do nothing and
+	       1mARCHIVE_FAILED 22mwill be returned.  Otherwise, 1mARCHIVE_OK 22mwill be
+	       returned.
+
+       1marchive_write_set_passphrase_callback22m()
+	       Register a callback function that will  be  invoked  to	get  a
+	       passphrase  for encryption if the passphrase was not set by the
+	       1marchive_write_set_passphrase22m() function.
+
+1mSEE ALSO0m
+       4mtar24m(1), 4marchive_write24m(3), 4marchive_write_set_options24m(3), 4mlibarchive24m(3)
+
+Debian			      September 21, 2014mARCHIVE_WRITE_SET_PASSPHRASE24m(3)

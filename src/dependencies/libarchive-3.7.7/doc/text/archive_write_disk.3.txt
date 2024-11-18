@@ -1,0 +1,243 @@
+4mARCHIVE_WRITE_DISK24m(3)	 Library Functions Manual     4mARCHIVE_WRITE_DISK24m(3)
+
+1mNAME0m
+       archive_write_disk_new,		       archive_write_disk_set_options,
+       archive_write_disk_set_skip_file,  archive_write_disk_set_group_lookup,
+       archive_write_disk_set_standard_lookup,
+       archive_write_disk_set_user_lookup  — functions for creating objects on
+       disk
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mstruct24m 4marchive24m 4m*0m
+       1marchive_write_disk_new22m(4mvoid24m);
+
+       4mint0m
+       1marchive_write_disk_set_options22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m 4mflags24m);
+
+       4mint0m
+       1marchive_write_disk_set_skip_file22m(4mstruct24m 4marchive24m 4m*24m, 4mdev_t24m, 4mino_t24m);
+
+       4mint0m
+       1marchive_write_disk_set_group_lookup22m(4mstruct24m 4marchive24m 4m*24m,	   4mvoid24m 4m*24m,
+	   4mgid_t24m 4m(*)(void24m 4m*,24m 4mconst24m 4mchar24m 4m*gname,24m 4mgid_t24m 4mgid)24m,
+	   4mvoid24m 4m(*cleanup)(void24m 4m*)24m);
+
+       4mint0m
+       1marchive_write_disk_set_standard_lookup22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_disk_set_user_lookup22m(4mstruct24m 4marchive24m 4m*24m,		   4mvoid24m 4m*24m,
+	   4muid_t24m 4m(*)(void24m 4m*,24m 4mconst24m 4mchar24m 4m*uname,24m 4muid_t24m 4muid)24m,
+	   4mvoid24m 4m(*cleanup)(void24m 4m*)24m);
+
+1mDESCRIPTION0m
+       These functions provide a complete API for  creating  objects  on  disk
+       from  struct  archive_entry descriptions.  They are most naturally used
+       when extracting objects from an archive using the 1marchive_read22m() inter‐
+       face.  The general process is to read struct archive_entry objects from
+       an archive, then write those objects to a struct archive object created
+       using the 1marchive_write_disk22m() family functions.  This interface is de‐
+       liberately very similar to the 1marchive_write22m() interface used to  write
+       objects to a streaming archive.
+
+       1marchive_write_disk_new22m()
+	       Allocates  and initializes a struct archive object suitable for
+	       writing objects to disk.
+
+       1marchive_write_disk_set_skip_file22m()
+	       Records the device and inode numbers of a file that should  not
+	       be  overwritten.	  This is typically used to ensure that an ex‐
+	       traction process does not overwrite the archive from which  ob‐
+	       jects  are being read.  This capability is technically unneces‐
+	       sary but can be a significant performance optimization in prac‐
+	       tice.
+
+       1marchive_write_disk_set_options22m()
+	       The options field consists of a bitwise OR of one  or  more  of
+	       the following values:
+	       1mARCHIVE_EXTRACT_ACL0m
+		       Attempt	to  restore Access Control Lists.  By default,
+		       extended ACLs are ignored.
+	       1mARCHIVE_EXTRACT_CLEAR_NOCHANGE_FFLAGS0m
+		       Before removing a file system object prior to replacing
+		       it, clear platform-specific file flags which might pre‐
+		       vent its removal.
+	       1mARCHIVE_EXTRACT_FFLAGS0m
+		       Attempt to restore file attributes  (file  flags).   By
+		       default,	 file  attributes  are ignored.	 See 4mchattr24m(1)
+		       (Linux) or 4mchflags24m(1) (FreeBSD, Mac OS X) for more	in‐
+		       formation on file attributes.
+	       1mARCHIVE_EXTRACT_MAC_METADATA0m
+		       Mac OS X specific.  Restore metadata using 4mcopyfile24m(3).
+		       By default, 4mcopyfile24m(3) metadata is ignored.
+	       1mARCHIVE_EXTRACT_NO_OVERWRITE0m
+		       Existing files on disk will not be overwritten.	By de‐
+		       fault,  existing	 regular files are truncated and over‐
+		       written; existing directories will have	their  permis‐
+		       sions  updated; other pre-existing objects are unlinked
+		       and recreated from scratch.
+	       1mARCHIVE_EXTRACT_OWNER0m
+		       The user and group IDs should be set  on	 the  restored
+		       file.   By  default, the user and group IDs are not re‐
+		       stored.
+	       1mARCHIVE_EXTRACT_PERM0m
+		       Full permissions	 (including  SGID,  SUID,  and	sticky
+		       bits)  should be restored exactly as specified, without
+		       obeying the current umask.  Note	 that  SUID  and  SGID
+		       bits  can  only be restored if the user and group ID of
+		       the    object	on    disk    are     correct.	    If
+		       1mARCHIVE_EXTRACT_OWNER	22mis  not specified, then SUID and
+		       SGID bits will only be restored if the default user and
+		       group IDs of newly-created objects on  disk  happen  to
+		       match  those  specified	in  the archive entry.	By de‐
+		       fault, only basic permissions are restored,  and	 umask
+		       is obeyed.
+	       1mARCHIVE_EXTRACT_SAFE_WRITES0m
+		       Extract	files  atomically,  by first creating a unique
+		       temporary file and then renaming	 it  to	 its  required
+		       destination name.  This avoids a race where an applica‐
+		       tion  might  see a partial file (or no file) during ex‐
+		       traction.
+	       1mARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS0m
+		       Refuse to extract an absolute path.  The default is  to
+		       not refuse such paths.
+	       1mARCHIVE_EXTRACT_SECURE_NODOTDOT0m
+		       Refuse  to  extract  a  path that contains a 4m..24m element
+		       anywhere within it.  The default is to not refuse  such
+		       paths.	Note  that  paths ending in 4m..24m always cause an
+		       error, regardless of this flag.
+	       1mARCHIVE_EXTRACT_SECURE_SYMLINKS0m
+		       Refuse to extract any object whose final location would
+		       be altered by a symlink on disk.	 This is  intended  to
+		       help  guard  against  a	variety	 of mischief caused by
+		       archives that (deliberately or otherwise) extract files
+		       outside of the current directory.  The default  is  not
+		       to  perform  this  check.  If 1mARCHIVE_EXTRACT_UNLINK 22mis
+		       specified together with this option, the	 library  will
+		       remove any intermediate symlinks it finds and return an
+		       error only if such symlink could not be removed.
+	       1mARCHIVE_EXTRACT_SPARSE0m
+		       Scan  data  for blocks of NUL bytes and try to recreate
+		       them with holes.	 This results in sparse	 files,	 inde‐
+		       pendent	of whether the archive format supports or uses
+		       them.
+	       1mARCHIVE_EXTRACT_TIME0m
+		       The timestamps (mtime, ctime, and atime) should be  re‐
+		       stored.	 By  default,  they  are  ignored.   Note that
+		       restoring of atime is not currently supported.
+	       1mARCHIVE_EXTRACT_UNLINK0m
+		       Existing files on disk will be unlinked before any  at‐
+		       tempt to create them.  In some cases, this can prove to
+		       be  a significant performance improvement.  By default,
+		       existing files are truncated  and  rewritten,  but  the
+		       file  is not recreated.	In particular, the default be‐
+		       havior does not break existing hard links.
+	       1mARCHIVE_EXTRACT_XATTR0m
+		       Attempt to restore extended file	 attributes.   By  de‐
+		       fault,	they   are  ignored.   See  4mxattr24m(7)  (Linux),
+		       4mxattr24m(2) (Mac OS X),  or  4mgetextattr24m(8)  (FreeBSD)  for
+		       more information on extended file attributes.
+
+       1marchive_write_disk_set_group_lookup22m(),
+	       1marchive_write_disk_set_user_lookup22m()
+	       The  struct  archive_entry  objects  contain both names and ids
+	       that can be used to identify users and groups.  These names and
+	       ids describe the ownership of the file itself and  also	appear
+	       in ACL lists.  By default, the library uses the ids and ignores
+	       the  names,  but this can be overridden by registering user and
+	       group lookup functions.	To register, you must provide a lookup
+	       function which accepts both a name and id and returns  a	 suit‐
+	       able  id.   You	may also provide a void * pointer to a private
+	       data structure and a  cleanup  function	for  that  data.   The
+	       cleanup function will be invoked when the struct archive object
+	       is destroyed.
+
+       1marchive_write_disk_set_standard_lookup22m()
+	       This  convenience  function installs a standard set of user and
+	       group lookup functions.	These functions	 use  4mgetpwnam24m(3)	and
+	       4mgetgrnam24m(3)	 to  convert names to ids, defaulting to the ids if
+	       the names cannot be looked up.  These functions also  implement
+	       a  simple  memory  cache	 to  reduce  the  number  of  calls to
+	       4mgetpwnam24m(3) and 4mgetgrnam24m(3).
+       More information about the 4mstruct24m 4marchive24m object and the overall design
+       of the library can be found in the  4mlibarchive24m(3)  overview.   Many	 of
+       these functions are also documented under 4marchive_write24m(3).
+
+1mRETURN VALUES0m
+       Most  functions	return 1mARCHIVE_OK 22m(zero) on success, or one of several
+       non-zero	 error	codes  for  errors.   Specific	error  codes  include:
+       1mARCHIVE_RETRY	 22mfor	  operations   that   might   succeed  if  retried,
+       1mARCHIVE_WARN 22mfor unusual conditions that do not prevent further  opera‐
+       tions,  and 1mARCHIVE_FATAL 22mfor serious errors that make remaining opera‐
+       tions impossible.
+
+       1marchive_write_disk_new22m() returns a pointer to a newly-allocated  struct
+       archive object.
+
+       1marchive_write_data22m()  returns  a  count of the number of bytes actually
+       written, or 1m-1 22mon error.
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1), 4marchive_read24m(3), 4marchive_write24m(3), 4mlibarchive24m(3)
+
+1mHISTORY0m
+       The   1mlibarchive   22mlibrary	 first	 appeared   in	FreeBSD	 5.3.	The
+       1marchive_write_disk 22minterface was added to 1mlibarchive 2.0 22mand first  ap‐
+       peared in FreeBSD 6.3.
+
+1mAUTHORS0m
+       The 1mlibarchive 22mlibrary was written by Tim Kientzle <kientzle@acm.org>.
+
+1mBUGS0m
+       Directories are actually extracted in two distinct phases.  Directories
+       are  created  during  1marchive_write_header22m(), but final permissions are
+       not set until 1marchive_write_close22m().  This separation is  necessary	 to
+       correctly handle borderline cases such as a non-writable directory con‐
+       taining files, but can cause unexpected results.	 In particular, direc‐
+       tory  permissions  are  not fully restored until the archive is closed.
+       If you use 4mchdir24m(2) to change the current directory	 between  calls	 to
+       1marchive_read_extract22m()  or before calling 1marchive_read_close22m(), you may
+       confuse the permission-setting logic with  the  result  that  directory
+       permissions are restored incorrectly.
+
+       The  library  attempts  to  create  objects  with filenames longer than
+       1mPATH_MAX 22mby creating prefixes of the full path and changing the current
+       directory.  Currently, this logic is limited in scope; the  fixup  pass
+       does not work correctly for such objects and the symlink security check
+       option disables the support for very long pathnames.
+
+       Restoring  the  path  4maa/../bb24m does create each intermediate directory.
+       In particular, the directory 4maa24m is created as well as the final  object
+       4mbb24m.	 In theory, this can be exploited to create an entire directory hi‐
+       erarchy	with  a	 single request.  Of course, this does not work if the
+       1mARCHIVE_EXTRACT_NODOTDOT 22moption is specified.
+
+       Implicit directories are always created obeying the current umask.  Ex‐
+       plicit  objects	are  created  obeying	the   current	umask	unless
+       1mARCHIVE_EXTRACT_PERM  22mis specified, in which case they current umask is
+       ignored.
+
+       SGID and SUID bits are restored only if	the  correct  user  and	 group
+       could  be  set.	If 1mARCHIVE_EXTRACT_OWNER 22mis not specified, then no at‐
+       tempt is made to set the ownership.  In this case, SGID and  SUID  bits
+       are  restored  only if the user and group of the final object happen to
+       match those specified in the entry.
+
+       The “standard” user-id and group-id lookup functions are	 not  the  de‐
+       faults  because 4mgetgrnam24m(3) and 4mgetpwnam24m(3) are sometimes too large for
+       particular applications.	 The current design allows the application au‐
+       thor to use a more compact implementation when appropriate.
+
+       There should be a corresponding 1marchive_read_disk 22minterface that  walks
+       a directory hierarchy and returns archive entry objects.
+
+Debian			       January 19, 2020		 4mARCHIVE_WRITE_DISK24m(3)

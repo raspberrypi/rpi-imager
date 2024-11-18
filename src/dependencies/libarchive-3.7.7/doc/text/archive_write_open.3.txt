@@ -1,0 +1,156 @@
+4mARCHIVE_WRITE_OPEN24m(3)	 Library Functions Manual     4mARCHIVE_WRITE_OPEN24m(3)
+
+1mNAME0m
+       archive_write_open,     archive_write_open2,	archive_write_open_fd,
+       archive_write_open_FILE,			  archive_write_open_filename,
+       archive_write_open_memory — functions for creating archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_write_open22m(4mstruct24m 4marchive24m 4m*24m,			4mvoid24m 4m*client_data24m,
+	   4marchive_open_callback24m 4m*24m,		       4marchive_write_callback24m 4m*24m,
+	   4marchive_close_callback24m 4m*24m);
+
+       4mint0m
+       1marchive_write_open222m(4mstruct24m 4marchive24m 4m*24m,		4mvoid24m 4m*client_data24m,
+	   4marchive_open_callback24m 4m*24m,		       4marchive_write_callback24m 4m*24m,
+	   4marchive_close_callback24m 4m*24m, 4marchive_free_callback24m 4m*24m);
+
+       4mint0m
+       1marchive_write_open_fd22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m 4mfd24m);
+
+       4mint0m
+       1marchive_write_open_FILE22m(4mstruct24m 4marchive24m 4m*24m, 4mFILE24m 4m*file24m);
+
+       4mint0m
+       1marchive_write_open_filename22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mchar24m 4m*filename24m);
+
+       4mint0m
+       1marchive_write_open_memory22m(4mstruct24m 4marchive24m 4m*24m,		     4mvoid24m 4m*buffer24m,
+	   4msize_t24m 4mbufferSize24m, 4msize_t24m 4m*outUsed24m);
+
+1mDESCRIPTION0m
+       1marchive_write_open22m()
+	       Freeze the settings, open the archive, and prepare for  writing
+	       entries.	 This is the most generic form of this function, which
+	       accepts	pointers to three callback functions which will be in‐
+	       voked  by  the  compression  layer  to  write  the  constructed
+	       archive.	 This does not alter the default archive padding.
+
+       1marchive_write_open222m()
+	       Same  as	 1marchive_write_open22m()  with  an additional fourth free
+	       callback.   This	   function    should	 be    preferred    to
+	       1marchive_write_open22m().
+
+       1marchive_write_open_fd22m()
+	       A  convenience form of 1marchive_write_open22m() that accepts a file
+	       descriptor.  The 1marchive_write_open_fd22m() function is  safe	for
+	       use with tape drives or other block-oriented devices.
+
+       1marchive_write_open_FILE22m()
+	       A  convenience form of 1marchive_write_open22m() that accepts a 4mFILE0m
+	       4m*24m pointer.	Note that 1marchive_write_open_FILE22m() is not safe for
+	       writing to tape drives or other devices	that  require  correct
+	       blocking.
+
+       1marchive_write_open_file22m()
+	       A deprecated synonym for 1marchive_write_open_filename22m().
+
+       1marchive_write_open_filename22m()
+	       A convenience form of 1marchive_write_open22m() that accepts a file‐
+	       name.   A  NULL	argument  indicates  that the output should be
+	       written to standard output; an argument of “-” will open a file
+	       with    that    name.	 If    you    have     not     invoked
+	       1marchive_write_set_bytes_in_last_block22m(),		       then
+	       1marchive_write_open_filename22m()  will	  adjust   the	 last-block
+	       padding	depending  on  the  file:  it will enable padding when
+	       writing to standard output or to a character  or	 block	device
+	       node, it will disable padding otherwise.	 You can override this
+	       by  manually  invoking  1marchive_write_set_bytes_in_last_block22m()
+	       before	     calling	    1marchive_write_open222m().		The
+	       1marchive_write_open_filename22m()  function  is	 safe  for use with
+	       tape drives or other block-oriented devices.
+
+       1marchive_write_open_memory22m()
+	       A convenience form  of  1marchive_write_open222m()  that	 accepts  a
+	       pointer	to  a  block  of memory that will receive the archive.
+	       The final 4msize_t24m 4m*24m argument points to a variable that	will  be
+	       updated	after  each write to reflect how much of the buffer is
+	       currently in use.  You should be careful to  ensure  that  this
+	       variable	 remains  allocated until after the archive is closed.
+	       This function will disable padding unless you have specifically
+	       set the block size.
+       More information about the 4mstruct24m 4marchive24m object and the overall design
+       of the library can be found in the 4mlibarchive24m(3) overview.
+
+       Note that the convenience forms above vary in how they block  the  out‐
+       put.   See  4marchive_write_blocksize24m(3) if you need to control the block
+       size used for writes or the end-of-file padding behavior.
+
+1mCLIENT CALLBACKS0m
+       To use this library, you will need  to  define  and  register  callback
+       functions  that will be invoked to write data to the resulting archive.
+       These functions are registered by calling 1marchive_write_open222m():
+
+	     4mtypedef24m  4mint24m   1marchive_open_callback22m(4mstruct24m   4marchive24m   4m*24m,	4mvoid0m
+	     4m*client_data24m)
+
+       The open callback is invoked by 1marchive_write_open22m().  It should return
+       1mARCHIVE_OK  22mif  the	 underlying  file  or  data  source is successfully
+       opened.	If the open fails, it should call 1marchive_set_error22m() to  reg‐
+       ister  an error code and message and return 1mARCHIVE_FATAL22m.	Please note
+       that if open fails, close is not called and resources must be freed in‐
+       side the open callback or with the free callback.
+
+	     4mtypedef24m    4mla_ssize_t24m	1marchive_write_callback22m(4mstruct24m 4marchive24m 4m*24m,
+	     4mvoid24m 4m*client_data24m, 4mconst24m 4mvoid24m 4m*buffer24m, 4msize_t24m 4mlength24m)
+
+       The  write  callback is invoked whenever the library needs to write raw
+       bytes to the archive.  For correct blocking, each  call	to  the	 write
+       callback	 function should translate into a single 4mwrite24m(2) system call.
+       This is especially critical when writing archives to tape  drives.   On
+       success,	 the write callback should return the number of bytes actually
+       written.	 On error, the callback should invoke  1marchive_set_error22m()	 to
+       register an error code and message and return -1.
+
+	     4mtypedef24m   4mint24m   1marchive_close_callback22m(4mstruct24m	 4marchive24m  4m*24m,	4mvoid0m
+	     4m*client_data24m)
+
+       The close callback is invoked by archive_close when  the	 archive  pro‐
+       cessing	is complete. If the open callback fails, the close callback is
+       not invoked.  The callback should return	 1mARCHIVE_OK  22mon  success.	 On
+       failure,	 the callback should invoke 1marchive_set_error22m() to register an
+       error code and message and return 1mARCHIVE_FATAL22m.
+
+	     4mtypedef24m  4mint24m   1marchive_free_callback22m(4mstruct24m   4marchive24m   4m*24m,	4mvoid0m
+	     4m*client_data24m)
+
+       The  free  callback is always invoked on archive_free.  The return code
+       of this callback is not processed.
+
+       Note that if the client-provided write callback function returns a non-
+       zero value, that error will be propagated back to  the  caller  through
+       whatever	 API  function	resulted  in  that  call,  which  may  include
+       1marchive_write_header22m(),  1marchive_write_data22m(),	  1marchive_write_close22m(),
+       1marchive_write_finish22m(),  or	 1marchive_write_free22m().  The client callback
+       can call 1marchive_set_error22m() to provide values that	 can  then  be	re‐
+       trieved by 1marchive_errno22m() and 1marchive_error_string22m().
+
+1mRETURN VALUES0m
+       These functions return 1mARCHIVE_OK 22mon success, or 1mARCHIVE_FATAL22m.
+
+1mERRORS0m
+       Detailed	 error	codes  and textual descriptions are available from the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1),	     4marchive_write24m(3),	     4marchive_write_blocksize24m(3),
+       4marchive_write_filter24m(3), 4marchive_write_format24m(3), 4marchive_write_new24m(3),
+       4marchive_write_set_options24m(3), 4mlibarchive24m(3), 4mcpio24m(5), 4mmtree24m(5), 4mtar24m(5)
+
+Debian			       November 12, 2020	 4mARCHIVE_WRITE_OPEN24m(3)

@@ -1,0 +1,124 @@
+4mARCHIVE_READ_FILTER24m(3)	 Library Functions Manual    4mARCHIVE_READ_FILTER24m(3)
+
+1mNAME0m
+       archive_read_support_filter_all,	    archive_read_support_filter_bzip2,
+       archive_read_support_filter_compress, archive_read_support_filter_gzip,
+       archive_read_support_filter_lz4,	     archive_read_support_filter_lzma,
+       archive_read_support_filter_none,      archive_read_support_filter_rpm,
+       archive_read_support_filter_uu,	       archive_read_support_filter_xz,
+       archive_read_support_filter_zstd,  archive_read_support_filter_program,
+       archive_read_support_filter_program_signature — functions  for  reading
+       streaming archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_read_support_filter_all22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_by_code22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m);
+
+       4mint0m
+       1marchive_read_support_filter_bzip222m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_compress22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_grzip22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_gzip22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_lrzip22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_lz422m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_lzma22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_lzop22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_none22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_rpm22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_uu22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_xz22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_zstd22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_support_filter_program22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mchar24m 4m*cmd24m);
+
+       4mint0m
+       1marchive_read_support_filter_program_signature22m(4mstruct24m 4marchive24m 4m*24m,
+	   4mconst24m 4mchar24m 4m*cmd24m, 4mconst24m 4mvoid24m 4m*signature24m, 4msize_t24m 4msignature_length24m);
+
+1mDESCRIPTION0m
+       1marchive_read_support_filter_bzip222m(),
+	       1marchive_read_support_filter_compress22m(),
+	       1marchive_read_support_filter_grzip22m(),
+	       1marchive_read_support_filter_gzip22m(),
+	       1marchive_read_support_filter_lrzip22m(),
+	       1marchive_read_support_filter_lz422m(),
+	       1marchive_read_support_filter_lzma22m(),
+	       1marchive_read_support_filter_lzop22m(),
+	       1marchive_read_support_filter_none22m(),
+	       1marchive_read_support_filter_rpm22m(),
+	       1marchive_read_support_filter_uu22m(),
+	       1marchive_read_support_filter_xz22m(),
+	       1marchive_read_support_filter_zstd22m(),
+	       Enables	auto-detection	code and decompression support for the
+	       specified compression.  These functions may fall back on exter‐
+	       nal programs if an appropriate library  was  not	 available  at
+	       build time.  Decompression using an external program is usually
+	       slower  than  decompression  through  built-in libraries.  Note
+	       that “none” is always enabled by default.
+       1marchive_read_support_filter_all22m()
+	       Enables all available decompression filters.
+       1marchive_read_support_filter_by_code22m()
+	       Enables a single filter specified by  the  filter  code.	  This
+	       function	 does  not work with 1mARCHIVE_FILTER_PROGRAM22m.  Note: In
+	       statically-linked executables, this will cause your program  to
+	       include support for every filter.  If executable size is a con‐
+	       cern, you may wish to avoid using this function.
+       1marchive_read_support_filter_program22m()
+	       Data is fed through the specified external program before being
+	       dearchived.  Note that this disables automatic detection of the
+	       compression  format,  so	 it  makes no sense to specify this in
+	       conjunction with any other decompression option.
+       1marchive_read_support_filter_program_signature22m()
+	       This feeds data through the specified external program but only
+	       if the initial bytes of the data match the specified  signature
+	       value.
+
+1mRETURN VALUES0m
+       These  functions	 return	 1mARCHIVE_OK  22mif  the compression is fully sup‐
+       ported, 1mARCHIVE_WARN 22mif the compression is supported  only	through	 an
+       external program.
+
+       1marchive_read_support_filter_none22m() always succeeds.
+
+1mERRORS0m
+       Detailed	 error	codes  and textual descriptions are available from the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4marchive_read24m(3),	 4marchive_read_data24m(3),	 4marchive_read_format24m(3),
+       4marchive_read_format24m(3), 4mlibarchive24m(3)
+
+Debian				 June 9, 2020		4mARCHIVE_READ_FILTER24m(3)

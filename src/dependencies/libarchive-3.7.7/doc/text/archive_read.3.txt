@@ -1,0 +1,158 @@
+4mARCHIVE_READ24m(3)		 Library Functions Manual	    4mARCHIVE_READ24m(3)
+
+1mNAME0m
+       archive_read — functions for reading streaming archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+1mDESCRIPTION0m
+       These  functions provide a complete API for reading streaming archives.
+       The general process is to first create the struct archive  object,  set
+       options,	 initialize  the  reader, iterate over the archive headers and
+       associated data, then close the archive and release all resources.
+
+   1mCreate archive object0m
+       See 4marchive_read_new24m(3).
+
+       To read an archive, you must first obtain an initialized struct archive
+       object from 1marchive_read_new22m().
+
+   1mEnable filters and formats0m
+       See 4marchive_read_filter24m(3) and 4marchive_read_format24m(3).
+
+       You can then modify this object for the	desired	 operations  with  the
+       various	1marchive_read_set_XXX22m()  and  1marchive_read_support_XXX22m()  func‐
+       tions.	In  particular,	 you   will   need   to	  invoke   appropriate
+       1marchive_read_support_XXX22m()	functions  to enable the corresponding com‐
+       pression and format support.  Note that these latter functions  perform
+       two  distinct  operations: they cause the corresponding support code to
+       be linked into your program, and they enable the corresponding auto-de‐
+       tect code.  Unless you have specific constraints,  you  will  generally
+       want	 to	 invoke	     1marchive_read_support_filter_all22m()	and
+       1marchive_read_support_format_all22m() to enable auto-detect for all formats
+       and compression types currently supported by the library.
+
+   1mSet options0m
+       See 4marchive_read_set_options24m(3).
+
+   1mOpen archive0m
+       See 4marchive_read_open24m(3).
+
+       Once  you  have	prepared  the  struct	archive	  object,   you	  call
+       1marchive_read_open22m()	 to  actually  open  the archive and prepare it for
+       reading.	 There are several variants of this function; the  most	 basic
+       expects	you  to provide pointers to several functions that can provide
+       blocks of bytes from the archive.  There are convenience forms that al‐
+       low you to specify a filename, file descriptor, 4mFILE24m  4m*24m  object,  or  a
+       block  of  memory  from	which to read the archive data.	 Note that the
+       core library makes no assumptions about the size of  the	 blocks	 read;
+       callback	 functions are free to read whatever block size is most appro‐
+       priate for the medium.
+
+   1mConsume archive0m
+       See	 4marchive_read_header24m(3),	    4marchive_read_data24m(3)	     and
+       4marchive_read_extract24m(3).
+
+       Each archive entry consists of a header followed by a certain amount of
+       data.   You can obtain the next header with 1marchive_read_next_header22m(),
+       which returns a pointer to an struct archive_entry structure  with  in‐
+       formation about the current archive element.  If the entry is a regular
+       file,  then  the header will be followed by the file data.  You can use
+       1marchive_read_data22m() (which works much like the 4mread24m(2) system call)  to
+       read  this  data	 from  the archive, or 1marchive_read_data_block22m() which
+       provides a slightly more efficient interface.  You may  prefer  to  use
+       the higher-level 1marchive_read_data_skip22m(), which reads and discards the
+       data for this entry, 1marchive_read_data_into_fd22m(), which copies the data
+       to  the	provided  file	descriptor,  or	 1marchive_read_extract22m(), which
+       recreates the specified entry on disk and copies data from the archive.
+       In  particular,	note  that  1marchive_read_extract22m()	 uses  the   struct
+       archive_entry  structure that you provide it, which may differ from the
+       entry just read from the archive.   In  particular,  many  applications
+       will want to override the pathname, file permissions, or ownership.
+
+   1mRelease resources0m
+       See 4marchive_read_free24m(3).
+
+       Once  you  have finished reading data from the archive, you should call
+       1marchive_read_close22m()    to	  close	   the	  archive,    then     call
+       1marchive_read_free22m()	 to release all resources, including all memory al‐
+       located by the library.
+
+1mEXAMPLES0m
+       The following illustrates basic usage of the library.  In this example,
+       the callback functions are simply wrappers around the standard 4mopen24m(2),
+       4mread24m(2), and 4mclose24m(2) system calls.
+
+	     void
+	     list_archive(const char *name)
+	     {
+	       struct mydata *mydata;
+	       struct archive *a;
+	       struct archive_entry *entry;
+
+	       mydata = malloc(sizeof(struct mydata));
+	       a = archive_read_new();
+	       mydata->name = name;
+	       archive_read_support_filter_all(a);
+	       archive_read_support_format_all(a);
+	       archive_read_open(a, mydata, myopen, myread, myclose);
+	       while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+		 printf("%s\n",archive_entry_pathname(entry));
+		 archive_read_data_skip(a);
+	       }
+	       archive_read_free(a);
+	       free(mydata);
+	     }
+
+	     la_ssize_t
+	     myread(struct archive *a, void *client_data, const void **buff)
+	     {
+	       struct mydata *mydata = client_data;
+
+	       *buff = mydata->buff;
+	       return (read(mydata->fd, mydata->buff, 10240));
+	     }
+
+	     int
+	     myopen(struct archive *a, void *client_data)
+	     {
+	       struct mydata *mydata = client_data;
+
+	       mydata->fd = open(mydata->name, O_RDONLY);
+	       return (mydata->fd >= 0 ? ARCHIVE_OK : ARCHIVE_FATAL);
+	     }
+
+	     int
+	     myclose(struct archive *a, void *client_data)
+	     {
+	       struct mydata *mydata = client_data;
+
+	       if (mydata->fd > 0)
+		 close(mydata->fd);
+	       return (ARCHIVE_OK);
+	     }
+
+1mSEE ALSO0m
+       4mtar24m(1),	    4marchive_read_data24m(3),		4marchive_read_extract24m(3),
+       4marchive_read_filter24m(3), 4marchive_read_format24m(3), 4marchive_read_header24m(3),
+       4marchive_read_new24m(3), 4marchive_read_open24m(3), 4marchive_read_set_options24m(3),
+       4marchive_util24m(3), 4mlibarchive24m(3), 4mtar24m(5)
+
+1mHISTORY0m
+       The 1mlibarchive 22mlibrary first appeared in FreeBSD 5.3.
+
+1mAUTHORS0m
+       The 1mlibarchive 22mlibrary was written by Tim Kientzle <kientzle@acm.org>.
+
+1mBUGS0m
+       Many  traditional  archiver  programs  treat empty files as valid empty
+       archives.  For example, many implementations of 4mtar24m(1) allow you to ap‐
+       pend entries to an empty file.  Of course, it is impossible  to	deter‐
+       mine  the  format  of an empty file by inspecting the contents, so this
+       library treats empty files as having a special “empty” format.
+
+Debian			       February 2, 2012		       4mARCHIVE_READ24m(3)

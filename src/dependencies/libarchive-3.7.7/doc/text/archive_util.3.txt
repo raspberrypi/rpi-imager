@@ -1,0 +1,150 @@
+4mARCHIVE_UTIL24m(3)		 Library Functions Manual	    4mARCHIVE_UTIL24m(3)
+
+1mNAME0m
+       archive_clear_error,   archive_compression,   archive_compression_name,
+       archive_copy_error,	  archive_errno,	 archive_error_string,
+       archive_file_count,	archive_filter_code,	 archive_filter_count,
+       archive_filter_name,	   archive_format,	  archive_format_name,
+       archive_position, archive_set_error — libarchive utility functions
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mvoid0m
+       1marchive_clear_error22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_compression22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_compression_name22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mvoid0m
+       1marchive_copy_error22m(4mstruct24m 4marchive24m 4m*24m, 4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_errno22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_error_string22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_file_count22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_filter_code22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m);
+
+       4mint0m
+       1marchive_filter_count22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_filter_name22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m);
+
+       4mint0m
+       1marchive_format22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_format_name22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint64_t0m
+       1marchive_position22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m);
+
+       4mvoid0m
+       1marchive_set_error22m(4mstruct24m 4marchive24m 4m*24m,	 4mint24m 4merror_code24m,  4mconst24m 4mchar24m 4m*fmt24m,
+	   4m...24m);
+
+1mDESCRIPTION0m
+       These functions provide access to various information about the	struct
+       archive object used in the 4mlibarchive24m(3) library.
+       1marchive_clear_error22m()
+	       Clears  any  error  information left over from a previous call.
+	       Not generally used in client code.
+       1marchive_compression22m()
+	       Synonym for 1marchive_filter_code22m(4ma24m, 4m024m).
+       1marchive_compression_name22m()
+	       Synonym for 1marchive_filter_name22m(4ma24m, 4m024m).
+       1marchive_copy_error22m()
+	       Copies error information from one archive to another.
+       1marchive_errno22m()
+	       Returns a numeric error code (see 4merrno24m(2)) indicating the rea‐
+	       son for the most recent error return.  Note that this  can  not
+	       be  reliably  used to detect whether an error has occurred.  It
+	       should be used only after another libarchive function  has  re‐
+	       turned an error status.
+       1marchive_error_string22m()
+	       Returns	a textual error message suitable for display.  The er‐
+	       ror message here is usually more specific  than	that  obtained
+	       from passing the result of 1marchive_errno22m() to 4mstrerror24m(3).
+       1marchive_file_count22m()
+	       Returns	a  count  of  the  number  of  files processed by this
+	       archive	object.	  The  count  is  incremented  by   calls   to
+	       4marchive_write_header24m(3) or 4marchive_read_next_header24m(3).
+       1marchive_filter_code22m()
+	       Returns	a  numeric code identifying the indicated filter.  See
+	       1marchive_filter_count22m() for details of the numbering.
+       1marchive_filter_count22m()
+	       Returns the number of filters in	 the  current  pipeline.   For
+	       read  archive handles, these filters are added automatically by
+	       the automatic format detection.	 For  write  archive  handles,
+	       these   filters	 are   added   by   calls   to	 the   various
+	       1marchive_write_add_filter_XXX22m() functions.  Filters in  the	re‐
+	       sulting	pipeline  are  numbered so that filter 0 is the filter
+	       closest to the format handler.	As  a  convenience,  functions
+	       that expect a filter number will accept -1 as a synonym for the
+	       highest-numbered filter.
+
+	       For  example,  when  reading  a	uuencoded gzipped tar archive,
+	       there are three filters: filter 0 is the gunzip filter,	filter
+	       1  is  the  uudecode  filter, and filter 2 is the pseudo-filter
+	       that wraps the archive read functions.  In this case,  request‐
+	       ing   1marchive_position22m(4ma24m,   4m-124m)	would	be   a	 synonym  for
+	       1marchive_position22m(4ma24m, 4m224m) which would return the number  of	bytes
+	       currently  read	from the archive, while 1marchive_position22m(4ma24m, 4m124m)
+	       would  return  the  number  of  bytes  after  uudecoding,   and
+	       1marchive_position22m(4ma24m,  4m024m)  would return the number of bytes after
+	       decompression.
+       1marchive_filter_name22m()
+	       Returns a textual name identifying the indicated	 filter.   See
+	       1marchive_filter_count22m() for details of the numbering.
+       1marchive_format22m()
+	       Returns	a  numeric  code  indicating the format of the current
+	       archive entry.  This value is  set  by  a  successful  call  to
+	       1marchive_read_next_header22m().	  Note	that  it is common for this
+	       value to change from  entry  to	entry.	 For  example,	a  tar
+	       archive	might have several entries that utilize GNU tar exten‐
+	       sions and several entries that do not.  These entries will have
+	       different format codes.
+       1marchive_format_name22m()
+	       A textual description of the format of the current entry.
+       1marchive_position22m()
+	       Returns the number of bytes read from or written to  the	 indi‐
+	       cated  filter.	In  particular, 1marchive_position22m(4ma24m, 4m024m) returns
+	       the number of bytes read or  written  by	 the  format  handler,
+	       while  1marchive_position22m(4ma24m, 4m-124m) returns the number of bytes read
+	       or written to the archive.  See 1marchive_filter_count22m() for	de‐
+	       tails of the numbering here.
+       1marchive_set_error22m()
+	       Sets  the numeric error code and error description that will be
+	       returned by 1marchive_errno22m() and  1marchive_error_string22m().   This
+	       function should be used within I/O callbacks to set system-spe‐
+	       cific  error  codes  and error descriptions.  This function ac‐
+	       cepts a printf-like format string and arguments.	 However,  you
+	       should be careful to use only the following printf format spec‐
+	       ifiers:	“%c”,  “%d”, “%jd”, “%jo”, “%ju”, “%jx”, “%ld”, “%lo”,
+	       “%lu”, “%lx”, “%o”, “%u”, “%s”, “%x”, “%%”.  Field-width speci‐
+	       fiers and other printf features are not uniformly supported and
+	       should not be used.
+
+1mSEE ALSO0m
+       4marchive_read24m(3), 4marchive_write24m(3), 4mlibarchive24m(3), 4mprintf24m(3)
+
+1mHISTORY0m
+       The 1mlibarchive 22mlibrary first appeared in FreeBSD 5.3.
+
+1mAUTHORS0m
+       The 1mlibarchive 22mlibrary was written by Tim Kientzle <kientzle@acm.org>.
+
+Debian			       February 2, 2012		       4mARCHIVE_UTIL24m(3)

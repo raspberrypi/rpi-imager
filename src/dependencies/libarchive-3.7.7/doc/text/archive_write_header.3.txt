@@ -1,0 +1,35 @@
+4mARCHIVE_WRITE_HEADER24m(3)	 Library Functions Manual   4mARCHIVE_WRITE_HEADER24m(3)
+
+1mNAME0m
+       archive_write_header — functions for creating archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_write_header22m(4mstruct24m 4marchive24m 4m*24m, 4mstruct24m 4marchive_entry24m 4m*24m);
+
+1mDESCRIPTION0m
+       Build  and  write  a  header  using  the	 data  in  the provided struct
+       archive_entry structure.	 See 4marchive_entry24m(3) for information on  cre‐
+       ating and populating struct archive_entry objects.
+
+1mRETURN VALUES0m
+       This function returns 1mARCHIVE_OK 22mon success, or one of the following on
+       error:  1mARCHIVE_RETRY	22mfor	operations  that  might succeed if retried,
+       1mARCHIVE_WARN 22mfor unusual conditions that do not prevent further  opera‐
+       tions,  and 1mARCHIVE_FATAL 22mfor serious errors that make remaining opera‐
+       tions impossible.
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1), 4marchive_write_set_options24m(3), 4mlibarchive24m(3), 4mcpio24m(5), 4mmtree24m(5),
+       4mtar24m(5)
+
+Debian			       February 2, 2012	       4mARCHIVE_WRITE_HEADER24m(3)

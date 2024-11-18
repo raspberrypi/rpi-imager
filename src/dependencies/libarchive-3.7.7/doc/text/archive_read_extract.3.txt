@@ -1,0 +1,74 @@
+4mARCHIVE_READ_EXTRACT24m(3)	 Library Functions Manual   4mARCHIVE_READ_EXTRACT24m(3)
+
+1mNAME0m
+       archive_read_extract,				archive_read_extract2,
+       archive_read_extract_set_progress_callback  —  functions	 for   reading
+       streaming archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_read_extract22m(4mstruct24m 4marchive24m 4m*24m,	   4mstruct24m 4marchive_entry24m 4m*24m,
+	   4mint24m 4mflags24m);
+
+       4mint0m
+       1marchive_read_extract222m(4mstruct24m 4marchive24m 4m*src24m,	   4mstruct24m 4marchive_entry24m 4m*24m,
+	   4mstruct24m 4marchive24m 4m*dest24m);
+
+       4mvoid0m
+       1marchive_read_extract_set_progress_callback22m(4mstruct24m 4marchive24m 4m*24m,
+	   4mvoid24m 4m(*func)(void24m 4m*)24m, 4mvoid24m 4m*user_data24m);
+
+1mDESCRIPTION0m
+       1marchive_read_extract22m(), 1marchive_read_extract_set_skip_file22m()
+	       A   convenience	 function   that   wraps   the	 corresponding
+	       4marchive_write_disk24m(3)   interfaces.	   The	 first	 call	 to
+	       1marchive_read_extract22m()   creates   a   restore   object   using
+	       4marchive_write_disk_new24m(3)					and
+	       4marchive_write_disk_set_standard_lookup24m(3),	then  transparently
+	       invokes			    4marchive_write_disk_set_options24m(3),
+	       4marchive_write_header24m(3),	   4marchive_write_data24m(3),	     and
+	       4marchive_write_finish_entry24m(3) to create the entry on  disk	and
+	       copy  data into it.  The 4mflags24m argument is passed unmodified to
+	       4marchive_write_disk_set_options24m(3).
+       1marchive_read_extract222m()
+	       This is another version of 1marchive_read_extract22m()  that  allows
+	       you  to	provide	 your own restore object.  In particular, this
+	       allows you to override  the  standard  lookup  functions	 using
+	       4marchive_write_disk_set_group_lookup24m(3),			and
+	       4marchive_write_disk_set_user_lookup24m(3).	   Note	       that
+	       1marchive_read_extract222m()  does  not accept a 4mflags24m argument; you
+	       should use 1marchive_write_disk_set_options22m() to set the  restore
+	       options yourself.
+       1marchive_read_extract_set_progress_callback22m()
+	       Sets  a pointer to a user-defined callback that can be used for
+	       updating progress displays  during  extraction.	 The  progress
+	       function will be invoked during the extraction of large regular
+	       files.	The progress function will be invoked with the pointer
+	       provided to this call.  Generally, the data pointed  to	should
+	       include a reference to the archive object and the archive_entry
+	       object  so  that	 various  statistics  can be retrieved for the
+	       progress display.
+
+1mRETURN VALUES0m
+       Most functions return zero on success, non-zero on error.  The possible
+       return	codes	include:   1mARCHIVE_OK	  22m(the   operation	succeeded),
+       1mARCHIVE_WARN  22m(the operation succeeded but a non-critical error was en‐
+       countered), 1mARCHIVE_EOF 22m(end-of-archive was encountered), 1mARCHIVE_RETRY0m
+       (the operation failed but can be retried), and 1mARCHIVE_FATAL 22m(there was
+       a fatal error; the archive should be closed immediately).
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1),  4marchive_read24m(3), 4marchive_read_data24m(3), 4marchive_read_filter24m(3),
+       4marchive_read_format24m(3),			      4marchive_read_open24m(3),
+       4marchive_read_set_options24m(3), 4marchive_util24m(3), 4mlibarchive24m(3), 4mtar24m(5)
+
+Debian			       February 2, 2012	       4mARCHIVE_READ_EXTRACT24m(3)

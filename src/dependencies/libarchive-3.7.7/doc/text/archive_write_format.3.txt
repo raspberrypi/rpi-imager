@@ -1,0 +1,161 @@
+4mARCHIVE_WRITE_FORMAT24m(3)	 Library Functions Manual   4mARCHIVE_WRITE_FORMAT24m(3)
+
+1mNAME0m
+       archive_write_set_format,		archive_write_set_format_7zip,
+       archive_write_set_format_ar,	      archive_write_set_format_ar_bsd,
+       archive_write_set_format_ar_svr4,     archive_write_set_format_by_name,
+       archive_write_set_format_cpio,	    archive_write_set_format_cpio_bin,
+       archive_write_set_format_cpio_newc,  archive_write_set_format_cpio_odc,
+       archive_write_set_format_cpio_pwb,
+       archive_write_set_format_filter_by_ext,
+       archive_write_set_format_filter_by_ext_def,
+       archive_write_set_format_gnutar,	     archive_write_set_format_iso9660,
+       archive_write_set_format_mtree, archive_write_set_format_mtree_classic,
+       archive_write_set_format_mtree_default,	 archive_write_set_format_pax,
+       archive_write_set_format_pax_restricted,	 archive_write_set_format_raw,
+       archive_write_set_format_shar,	   archive_write_set_format_shar_dump,
+       archive_write_set_format_ustar,	       archive_write_set_format_v7tar,
+       archive_write_set_format_warc,		 archive_write_set_format_xar,
+       archive_write_set_format_zip — functions for creating archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_write_set_format22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m 4mcode24m);
+
+       4mint0m
+       1marchive_write_set_format_7zip22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_ar22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_ar_bsd22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_ar_svr422m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_by_name22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mchar24m 4m*name24m);
+
+       4mint0m
+       1marchive_write_set_format_cpio22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_cpio_bin22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_cpio_newc22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_cpio_odc22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_cpio_pwb22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_filter_by_ext22m(4mstruct24m	      4marchive24m	   4m*24m,
+	   4mconst24m 4mchar24m 4m*filename24m);
+
+       4mint0m
+       1marchive_write_set_format_filter_by_ext_def22m(4mstruct24m	 4marchive24m	   4m*24m,
+	   4mconst24m 4mchar24m 4m*filename24m, 4mconst24m 4mchar24m 4m*def_ext24m);
+
+       4mint0m
+       1marchive_write_set_format_gnutar22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_iso966022m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_mtree22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_pax22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_pax_restricted22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_raw22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_shar22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_shar_dump22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_ustar22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_v7tar22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_warc22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_xar22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_set_format_zip22m(4mstruct24m 4marchive24m 4m*24m);
+
+1mDESCRIPTION0m
+       These functions set the format that will be used for the archive.
+
+       The library can write a variety of common archive formats.
+
+       1marchive_write_set_format22m()
+	       Sets the format based on the format code (see 4marchive.h24m for the
+	       full list of format codes).  In particular, this can be used in
+	       conjunction with 1marchive_format22m() to create a new archive  with
+	       the same format as an existing archive.
+
+       1marchive_write_set_format_by_name22m()
+	       Sets the corresponding format based on the common name.
+
+       1marchive_write_set_format_filter_by_ext22m()
+	       1marchive_write_set_format_filter_by_ext_def22m()
+	       Sets  both  filters  and	 format	 based on the output filename.
+	       Supported extensions: .7z, .zip, .jar, .cpio,  .iso,  .a,  .ar,
+	       .tar, .tgz, .tar.gz, .tar.bz2, .tar.xz
+
+       1marchive_write_set_format_7zip22m()	  1marchive_write_set_format_ar_bsd22m()
+	       1marchive_write_set_format_ar_svr422m()
+	       1marchive_write_set_format_cpio22m()
+	       1marchive_write_set_format_cpio_bin22m()
+	       1marchive_write_set_format_cpio_newc22m()
+	       1marchive_write_set_format_cpio_odc22m()
+	       1marchive_write_set_format_cpio_pwb22m()
+	       1marchive_write_set_format_gnutar22m()
+	       1marchive_write_set_format_iso966022m()
+	       1marchive_write_set_format_mtree22m()
+	       1marchive_write_set_format_mtree_classic22m()
+	       1marchive_write_set_format_pax22m()
+	       1marchive_write_set_format_pax_restricted22m()
+	       1marchive_write_set_format_raw22m()  1marchive_write_set_format_shar22m()
+	       1marchive_write_set_format_shar_dump22m()
+	       1marchive_write_set_format_ustar22m()
+	       1marchive_write_set_format_v7tar22m()
+	       1marchive_write_set_format_warc22m()  1marchive_write_set_format_xar22m()
+	       1marchive_write_set_format_zip22m()
+	       Set the format as specified.  More details on the formats  sup‐
+	       ported  by libarchive can be found in the 4mlibarchive-formats24m(5)
+	       manual page.
+
+1mRETURN VALUES0m
+       These functions return 1mARCHIVE_OK 22mon success, or 1mARCHIVE_FATAL22m.
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1),  4marchive_write24m(3), 4marchive_write_set_options24m(3), 4mlibarchive24m(3),
+       4mcpio24m(5), 4mlibarchive-formats24m(5), 4mmtree24m(5), 4mtar24m(5)
+
+Debian			       February 14, 2013       4mARCHIVE_WRITE_FORMAT24m(3)
