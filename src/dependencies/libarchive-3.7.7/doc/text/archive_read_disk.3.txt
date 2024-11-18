@@ -1,0 +1,325 @@
+4mARCHIVE_READ_DISK24m(3)	 Library Functions Manual      4mARCHIVE_READ_DISK24m(3)
+
+1mNAME0m
+       archive_read_disk_new,			       archive_read_disk_open,
+       archive_read_disk_open_w,	       archive_read_disk_set_behavior,
+       archive_read_disk_set_symlink_logical,
+       archive_read_disk_set_symlink_physical,
+       archive_read_disk_set_symlink_hybrid,
+       archive_read_disk_entry_from_file,	      archive_read_disk_gname,
+       archive_read_disk_uname,		   archive_read_disk_set_uname_lookup,
+       archive_read_disk_set_gname_lookup,
+       archive_read_disk_set_standard_lookup,	    archive_read_disk_descend,
+       archive_read_disk_can_descend,	 archive_read_disk_current_filesystem,
+       archive_read_disk_current_filesystem_is_synthetic,
+       archive_read_disk_current_filesystem_is_remote,
+       archive_read_disk_set_matching,
+       archive_read_disk_set_metadata_filter_callback, — functions for reading
+       objects from disk
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mstruct24m 4marchive24m 4m*0m
+       1marchive_read_disk_new22m(4mvoid24m);
+
+       4mint0m
+       1marchive_read_disk_open22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mchar24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_open_w22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mwchar_t24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_set_behavior22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m);
+
+       4mint0m
+       1marchive_read_disk_set_symlink_logical22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_set_symlink_physical22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_set_symlink_hybrid22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_read_disk_gname22m(4mstruct24m 4marchive24m 4m*24m, 4mgid_t24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_read_disk_uname22m(4mstruct24m 4marchive24m 4m*24m, 4muid_t24m);
+
+       4mint0m
+       1marchive_read_disk_set_gname_lookup22m(4mstruct24m 4marchive24m 4m*24m,		   4mvoid24m 4m*24m,
+	   4mconst24m 4mchar24m 4m*(*lookup)(void24m 4m*,24m 4mgid_t)24m, 4mvoid24m 4m(*cleanup)(void24m 4m*)24m);
+
+       4mint0m
+       1marchive_read_disk_set_uname_lookup22m(4mstruct24m 4marchive24m 4m*24m,		   4mvoid24m 4m*24m,
+	   4mconst24m 4mchar24m 4m*(*lookup)(void24m 4m*,24m 4muid_t)24m, 4mvoid24m 4m(*cleanup)(void24m 4m*)24m);
+
+       4mint0m
+       1marchive_read_disk_set_standard_lookup22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_entry_from_file22m(4mstruct24m 4marchive24m 4m*24m,
+	   4mstruct24m 4marchive_entry24m 4m*24m, 4mint24m 4mfd24m, 4mconst24m 4mstruct24m 4mstat24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_descend22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_can_descend22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_current_filesystem22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_current_filesystem_is_synthetic22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_current_filesystem_is_remote22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_set_matching22m(4mstruct24m 4marchive24m 4m*24m,	 4mstruct24m 4marchive24m 4m*24m,
+	   4mvoid24m 4m(*excluded_func)(struct24m 4marchive24m 4m*,24m 4mvoid24m 4m*,24m 4mstruct24m 4marchive24m 4mentry24m 4m*)24m,
+	   4mvoid24m 4m*24m);
+
+       4mint0m
+       1marchive_read_disk_set_metadata_filter_callback22m(4mstruct24m 4marchive24m 4m*24m,
+	   4mint24m 4m(*metadata_filter_func)(struct24m 4marchive24m 4m*,24m 4mvoid*,24m 4mstruct24m 4marchive_entry24m 4m*)24m,
+	   4mvoid24m 4m*24m);
+
+1mDESCRIPTION0m
+       These functions provide an API for reading information about objects on
+       disk.  In particular, they provide an interface for  populating	struct
+       archive_entry objects.
+
+       1marchive_read_disk_new22m()
+	       Allocates  and initializes a struct archive object suitable for
+	       reading object information from disk.
+
+       1marchive_read_disk_open22m()
+	       Opens the file or directory from the given  path	 and  prepares
+	       the struct archive to read it from disk.
+
+       1marchive_read_disk_open_w22m()
+	       Opens the file or directory from the given path as a wide char‐
+	       acter  string  and  prepares the struct archive to read it from
+	       disk.
+
+       1marchive_read_disk_set_behavior22m()
+	       Configures various behavior options when reading	 entries  from
+	       disk.   The flags field consists of a bitwise OR of one or more
+	       of the following values:
+	       1mARCHIVE_READDISK_HONOR_NODUMP0m
+		       Skip files and directories with	the  nodump  file  at‐
+		       tribute	(file  flag) set.  By default, the nodump file
+		       attribute is ignored.
+	       1mARCHIVE_READDISK_MAC_COPYFILE0m
+		       Mac OS X specific.  Read metadata  (ACLs	 and  extended
+		       attributes)  with 4mcopyfile24m(3).  By default, metadata is
+		       read using 4mcopyfile24m(3).
+	       1mARCHIVE_READDISK_NO_ACL0m
+		       Do not read Access Control Lists.  By default, ACLs are
+		       read from disk.
+	       1mARCHIVE_READDISK_NO_FFLAGS0m
+		       Do not read file attributes (file flags).  By  default,
+		       file  attributes	 are  read  from  disk.	 See 4mchattr24m(1)
+		       (Linux) or 4mchflags24m(1) (FreeBSD, Mac OS X) for more	in‐
+		       formation on file attributes.
+	       1mARCHIVE_READDISK_NO_TRAVERSE_MOUNTS0m
+		       Do not traverse mount points.  By default, mount points
+		       are traversed.
+	       1mARCHIVE_READDISK_NO_XATTR0m
+		       Do  not read extended file attributes (xattrs).	By de‐
+		       fault, extended file attributes	are  read  from	 disk.
+		       See   4mxattr24m(7)   (Linux),	4mxattr24m(2)  (Mac  OS	 X),  or
+		       4mgetextattr24m(8) (FreeBSD) for	 more  information  on	ex‐
+		       tended file attributes.
+	       1mARCHIVE_READDISK_RESTORE_ATIME0m
+		       Restore	access	time  of traversed files.  By default,
+		       access time of traversed files is not restored.
+	       1mARCHIVE_READDISK_NO_SPARSE0m
+		       Do not  read  sparse  file  information.	  By  default,
+		       sparse file information is read from disk.
+
+       1marchive_read_disk_set_symlink_logical22m(),
+	       1marchive_read_disk_set_symlink_physical22m(),
+	       1marchive_read_disk_set_symlink_hybrid22m()
+	       This  sets  the	mode  used  for	 handling symbolic links.  The
+	       “logical” mode follows all symbolic links.  The “physical” mode
+	       does not follow any symbolic links.   The  “hybrid”  mode  cur‐
+	       rently behaves identically to the “logical” mode.
+
+       1marchive_read_disk_gname22m(), 1marchive_read_disk_uname22m()
+	       Returns	a user or group name given a gid or uid value.	By de‐
+	       fault, these always return a NULL string.
+
+       1marchive_read_disk_set_gname_lookup22m(),
+	       1marchive_read_disk_set_uname_lookup22m()
+	       These allow you to override the functions  used	for  user  and
+	       group name lookups.  You may also provide a void * pointer to a
+	       private	data  structure	 and a cleanup function for that data.
+	       The cleanup function will be invoked when  the  struct  archive
+	       object  is  destroyed  or  when new lookup functions are regis‐
+	       tered.
+
+       1marchive_read_disk_set_standard_lookup22m()
+	       This convenience function installs a standard set of  user  and
+	       group  name  lookup functions.  These functions use 4mgetpwuid24m(3)
+	       and 4mgetgrgid24m(3) to convert ids to names, defaulting to NULL	 if
+	       the  names cannot be looked up.	These functions also implement
+	       a simple	 memory	 cache	to  reduce  the	 number	 of  calls  to
+	       4mgetpwuid24m(3) and 4mgetgrgid24m(3).
+
+       1marchive_read_disk_entry_from_file22m()
+	       Populates  a struct archive_entry object with information about
+	       a particular file.  The archive_entry object must have  already
+	       been  created with 4marchive_entry_new24m(3) and at least one of the
+	       source path or path fields must already be set.	(If  both  are
+	       set, the source path will be used.)
+
+	       Information  is	read  from  disk  using the path name from the
+	       struct archive_entry object.  If a file descriptor is provided,
+	       some information will be obtained using that  file  descriptor,
+	       on platforms that support the appropriate system calls.
+
+	       If  a  pointer  to  a struct stat is provided, information from
+	       that structure will be used instead of reading  from  the  disk
+	       where  appropriate.   This  can provide performance benefits in
+	       scenarios where struct stat information has already  been  read
+	       from  the  disk as a side effect of some other operation.  (For
+	       example, directory traversal libraries often provide  this  in‐
+	       formation.)
+
+	       Where  necessary,  user and group ids are converted to user and
+	       group names using  the  currently-registered  lookup  functions
+	       above.	This  affects the file ownership fields and ACL values
+	       in the struct archive_entry object.
+
+       1marchive_read_disk_descend22m()
+	       If the current entry can be descended, this function will  mark
+	       the  directory  as the next entry for 4marchive_read_header24m(3) to
+	       visit.
+
+       1marchive_read_disk_can_descend22m()
+	       Returns 1 if the current entry is an unvisited directory and  0
+	       otherwise.
+
+       1marchive_read_disk_current_filesystem22m()
+	       Returns	the index of the most recent filesystem entry that has
+	       been visited through archive_read_disk
+
+       1marchive_read_disk_current_filesystem_is_synthetic22m()
+	       Returns 1 if the current filesystem is  a  virtual  filesystem.
+	       Returns	0  if the current filesystem is not a virtual filesys‐
+	       tem. Returns -1 if it is unknown.
+
+       1marchive_read_disk_current_filesystem_is_remote22m()
+	       Returns 1 if the current filesystem is a remote filesystem. Re‐
+	       turns 0 if the current filesystem is not a  remote  filesystem.
+	       Returns -1 if it is unknown.
+
+       1marchive_read_disk_set_matching22m()
+	       Allows  the  caller  to set struct archive *_ma to compare each
+	       entry during 4marchive_read_header24m(3) calls. If matched based	 on
+	       calls		  to		  archive_match_path_excluded,
+	       archive_match_time_excluded,  or	 archive_match_owner_excluded,
+	       then  the callback function specified by the _excluded_func pa‐
+	       rameter will execute. This function will receive data  provided
+	       to the fourth parameter, void *_client_data.
+
+       1marchive_read_disk_set_metadata_filter_callback22m()
+	       Allows  the  caller  to set a callback function during calls to
+	       4marchive_read_header24m(3) to filter out metadata for  each  entry.
+	       The callback function receives the struct archive object, void*
+	       custom filter data, and the struct archive_entry.  If the call‐
+	       back  function returns an error, ARCHIVE_RETRY will be returned
+	       and the entry will not be further processed.
+       More information about the 4mstruct24m 4marchive24m object and the overall design
+       of the library can be found in the 4mlibarchive24m(3) overview.
+
+1mEXAMPLES0m
+       The following illustrates basic usage of the library by showing how  to
+       use it to copy an item on disk into an archive.
+
+	     void
+	     file_to_archive(struct archive *a, const char *name)
+	     {
+	       char buff[8192];
+	       size_t bytes_read;
+	       struct archive *ard;
+	       struct archive_entry *entry;
+	       int fd;
+
+	       ard = archive_read_disk_new();
+	       archive_read_disk_set_standard_lookup(ard);
+	       entry = archive_entry_new();
+	       fd = open(name, O_RDONLY);
+	       if (fd < 0)
+		  return;
+	       archive_entry_copy_pathname(entry, name);
+	       archive_read_disk_entry_from_file(ard, entry, fd, NULL);
+	       archive_write_header(a, entry);
+	       while ((bytes_read = read(fd, buff, sizeof(buff))) > 0)
+		 archive_write_data(a, buff, bytes_read);
+	       archive_write_finish_entry(a);
+	       archive_read_free(ard);
+	       archive_entry_free(entry);
+	     }
+
+1mRETURN VALUES0m
+       Most  functions	return 1mARCHIVE_OK 22m(zero) on success, or one of several
+       negative	 error	codes  for  errors.   Specific	error  codes  include:
+       1mARCHIVE_RETRY	 22mfor	  operations   that   might   succeed  if  retried,
+       1mARCHIVE_WARN 22mfor unusual conditions that do not prevent further  opera‐
+       tions,  and 1mARCHIVE_FATAL 22mfor serious errors that make remaining opera‐
+       tions impossible.
+
+       1marchive_read_disk_new22m() returns a pointer to a  newly-allocated  struct
+       archive object or NULL if the allocation failed for any reason.
+
+       1marchive_read_disk_gname22m()  and  1marchive_read_disk_uname22m()  return const
+       char * pointers to the textual name or NULL if the  lookup  failed  for
+       any  reason.   The returned pointer points to internal storage that may
+       be reused on the next call to either of these functions; callers should
+       copy the string if they need to continue accessing it.
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1),	4marchive_read24m(3),	  4marchive_util24m(3),	    4marchive_write24m(3),
+       4marchive_write_disk24m(3), 4mlibarchive24m(3)
+
+1mHISTORY0m
+       The  1mlibarchive  22mlibrary  first   appeared	 in   FreeBSD	5.3.	The
+       1marchive_read_disk  22minterface  was added to 1mlibarchive 2.6 22mand first ap‐
+       peared in FreeBSD 8.0.
+
+1mAUTHORS0m
+       The    1mlibarchive    22mlibrary    was	   written    by    Tim	   Kientzle
+       <kientzle@FreeBSD.org>.
+
+1mBUGS0m
+       The  “standard”	user  name and group name lookup functions are not the
+       defaults because 4mgetgrgid24m(3) and 4mgetpwuid24m(3) are  sometimes  too  large
+       for particular applications.  The current design allows the application
+       author to use a more compact implementation when appropriate.
+
+       The     full	list	 of	metadata    read    from    disk    by
+       1marchive_read_disk_entry_from_file22m() is necessarily system-dependent.
+
+       The 1marchive_read_disk_entry_from_file22m() function reads as much informa‐
+       tion as it can from disk.  Some method should be provided to limit this
+       so that clients who do not need ACLs, for instance, can avoid the extra
+       work needed to look up such information.
+
+       This API should provide a set of methods for walking a directory	 tree.
+       That  would make it a direct parallel of the 4marchive_read24m(3) API.  When
+       such methods are implemented, the “hybrid” symbolic link mode will make
+       sense.
+
+Debian				 April 3, 2017		  4mARCHIVE_READ_DISK24m(3)

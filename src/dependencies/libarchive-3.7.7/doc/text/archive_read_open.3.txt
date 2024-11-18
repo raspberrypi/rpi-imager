@@ -1,0 +1,130 @@
+4mARCHIVE_READ_OPEN24m(3)	 Library Functions Manual      4mARCHIVE_READ_OPEN24m(3)
+
+1mNAME0m
+       archive_read_open,	archive_read_open2,	 archive_read_open_fd,
+       archive_read_open_FILE,			   archive_read_open_filename,
+       archive_read_open_memory — functions for reading streaming archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_read_open22m(4mstruct24m 4marchive24m 4m*24m,			4mvoid24m 4m*client_data24m,
+	   4marchive_open_callback24m 4m*24m,			4marchive_read_callback24m 4m*24m,
+	   4marchive_close_callback24m 4m*24m);
+
+       4mint0m
+       1marchive_read_open222m(4mstruct24m 4marchive24m 4m*24m,			4mvoid24m 4m*client_data24m,
+	   4marchive_open_callback24m 4m*24m,			4marchive_read_callback24m 4m*24m,
+	   4marchive_skip_callback24m 4m*24m, 4marchive_close_callback24m 4m*24m);
+
+       4mint0m
+       1marchive_read_open_FILE22m(4mstruct24m 4marchive24m 4m*24m, 4mFILE24m 4m*file24m);
+
+       4mint0m
+       1marchive_read_open_fd22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m 4mfd24m, 4msize_t24m 4mblock_size24m);
+
+       4mint0m
+       1marchive_read_open_filename22m(4mstruct24m 4marchive24m 4m*24m,	     4mconst24m 4mchar24m 4m*filename24m,
+	   4msize_t24m 4mblock_size24m);
+
+       4mint0m
+       1marchive_read_open_memory22m(4mstruct24m   4marchive24m	  4m*24m,   4mconst24m	 4mvoid24m    4m*buff24m,
+	   4msize_t24m 4msize24m);
+
+1mDESCRIPTION0m
+       1marchive_read_open22m()
+	       The same as 1marchive_read_open222m(), except that the skip callback
+	       is assumed to be NULL.
+       1marchive_read_open222m()
+	       Freeze  the settings, open the archive, and prepare for reading
+	       entries.	 This is the most generic version of this call,	 which
+	       accepts four callback functions.	 Most clients will want to use
+	       1marchive_read_open_filename22m(),	  1marchive_read_open_FILE22m(),
+	       1marchive_read_open_fd22m(), or 1marchive_read_open_memory22m()	instead.
+	       The library invokes the client-provided functions to obtain raw
+	       bytes from the archive.
+       1marchive_read_open_FILE22m()
+	       Like  1marchive_read_open22m(),	except	that  it  accepts  a 4mFILE24m 4m*0m
+	       pointer.	 This function should not be used with tape drives  or
+	       other devices that require strict I/O blocking.
+       1marchive_read_open_fd22m()
+	       Like  1marchive_read_open22m(),	except	that  it accepts a file de‐
+	       scriptor and block size rather than a set of function pointers.
+	       Note that the file descriptor will not be automatically	closed
+	       at  end-of-archive.   This  function  is safe for use with tape
+	       drives or other blocked devices.
+       1marchive_read_open_file22m()
+	       This is a deprecated synonym for 1marchive_read_open_filename22m().
+       1marchive_read_open_filename22m()
+	       Like 1marchive_read_open22m(), except that it accepts a simple file‐
+	       name and a block size.  A NULL filename represents standard in‐
+	       put.  This function is safe for use with tape drives  or	 other
+	       blocked devices.
+       1marchive_read_open_memory22m()
+	       Like  1marchive_read_open22m(), except that it accepts a pointer and
+	       size of a block of memory containing the archive data.
+
+       A complete description of the struct archive and	 struct	 archive_entry
+       objects can be found in the overview manual page for 4mlibarchive24m(3).
+
+1mCLIENT CALLBACKS0m
+       The callback functions must match the following prototypes:
+
+	     4mtypedef24m     4mla_ssize_t24m	 1marchive_read_callback22m(4mstruct24m 4marchive24m 4m*24m,
+	     4mvoid24m 4m*client_data24m, 4mconst24m 4mvoid24m 4m**buffer24m)
+
+	     4mtypedef24m    4mla_int64_t24m	 1marchive_skip_callback22m(4mstruct24m 4marchive24m 4m*24m,
+	     4mvoid24m 4m*client_data24m, 4moff_t24m 4mrequest24m)
+
+	     4mtypedef24m   4mint24m   1marchive_open_callback22m(4mstruct24m	4marchive24m   4m*24m,	4mvoid0m
+	     4m*client_data24m)
+
+	     4mtypedef24m  4mint24m  1marchive_close_callback22m(4mstruct24m   4marchive24m   4m*24m,	4mvoid0m
+	     4m*client_data24m)
+
+       The  open  callback  is	invoked	 by  1marchive_open22m().  It should return
+       1mARCHIVE_OK 22mif the  underlying  file	 or  data  source  is  successfully
+       opened.	 If the open fails, it should call 1marchive_set_error22m() to reg‐
+       ister an error code and message and return 1mARCHIVE_FATAL22m.
+
+       The read callback is invoked whenever the library  requires  raw	 bytes
+       from  the  archive.   The read callback should read data into a buffer,
+       set the 1mconst void **buffer 22margument to point to  the  available  data,
+       and  return a count of the number of bytes available.  The library will
+       invoke the read callback again only after it has	 consumed  this	 data.
+       The  library  imposes no constraints on the size of the data blocks re‐
+       turned.	On end-of-file, the read callback should return zero.  On  er‐
+       ror, the read callback should invoke 1marchive_set_error22m() to register an
+       error code and message and return -1.
+
+       The  skip  callback is invoked when the library wants to ignore a block
+       of data.	 The return value is the number	 of  bytes  actually  skipped,
+       which  may  differ from the request.  If the callback cannot skip data,
+       it should return zero.  If the skip callback is not provided (the func‐
+       tion pointer is NULL ), the library will invoke the read	 function  in‐
+       stead  and simply discard the result.  A skip callback can provide sig‐
+       nificant performance gains when reading uncompressed archives from slow
+       disk drives or other media that can skip quickly.
+
+       The close callback is invoked by archive_close when  the	 archive  pro‐
+       cessing is complete.  The callback should return 1mARCHIVE_OK 22mon success.
+       On  failure, the callback should invoke 1marchive_set_error22m() to register
+       an error code and message and return 1mARCHIVE_FATAL22m.
+
+1mRETURN VALUES0m
+       These functions return 1mARCHIVE_OK 22mon success, or 1mARCHIVE_FATAL22m.
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1),  4marchive_read24m(3), 4marchive_read_data24m(3), 4marchive_read_filter24m(3),
+       4marchive_read_format24m(3),  4marchive_read_set_options24m(3),	4marchive_util24m(3),
+       4mlibarchive24m(3), 4mtar24m(5)
+
+Debian			       February 2, 2012		  4mARCHIVE_READ_OPEN24m(3)

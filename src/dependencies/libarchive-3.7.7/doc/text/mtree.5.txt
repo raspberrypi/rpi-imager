@@ -1,0 +1,186 @@
+4mMTREE24m(5)			   File Formats Manual			   4mMTREE24m(5)
+
+1mNAME0m
+       mtree — format of mtree dir hierarchy files
+
+1mDESCRIPTION0m
+       The  1mmtree  22mformat	is  a textual format that describes a collection of
+       filesystem objects.  Such files are typically used to create or	verify
+       directory hierarchies.
+
+   1mGeneral Format0m
+       An 1mmtree 22mfile consists of a series of lines, each providing information
+       about  a	 single	 filesystem  object.  Leading whitespace is always ig‐
+       nored.
+
+       When encoding file or pathnames, any backslash character	 or  character
+       outside of the 95 printable ASCII characters must be encoded as a back‐
+       slash  followed	by  three octal digits.	 When reading mtree files, any
+       appearance of a backslash followed by three octal digits should be con‐
+       verted into the corresponding character.
+
+       Each line is interpreted independently as one of the following types:
+
+       Blank	   Blank lines are ignored.
+
+       Comment	   Lines beginning with 1m# 22mare ignored.
+
+       Special	   Lines beginning with 1m/ 22mare special commands that  influence
+		   the interpretation of later lines.
+
+       Relative	   If the first whitespace-delimited word has no 1m/ 22mcharacters,
+		   it  is  the	name  of a file in the current directory.  Any
+		   relative entry that describes a directory changes the  cur‐
+		   rent directory.
+
+       dot-dot	   As  a  special  case, a relative entry with the filename 4m..0m
+		   changes the current directory to the parent directory.  Op‐
+		   tions on dot-dot entries are always ignored.
+
+       Full	   If the first whitespace-delimited word has  a  1m/  22mcharacter
+		   after  the  first  character,  it is the pathname of a file
+		   relative to the starting directory.	There can be  multiple
+		   full entries describing the same file.
+
+       Some tools that process 1mmtree 22mfiles may require that multiple lines de‐
+       scribing	 the  same  file occur consecutively.  It is not permitted for
+       the same file to be mentioned using both a relative  and	 a  full  file
+       specification.
+
+   1mSpecial commands0m
+       Two special commands are currently defined:
+
+       1m/set	     22mThis  command  defines	default values for one or more key‐
+		   words.  It is followed on the same  line  by	 one  or  more
+		   whitespace-separated	 keyword  definitions.	 These defini‐
+		   tions apply to all following files that do  not  specify  a
+		   value for that keyword.
+
+       1m/unset	     22mThis  command  removes	any default value set by a previous
+		   1m/set 22mcommand.  It is followed on the same line	by  one	 or
+		   more keywords separated by whitespace.
+
+   1mKeywords0m
+       After  the  filename, a full or relative entry consists of zero or more
+       whitespace-separated keyword definitions.  Each	such  definition  con‐
+       sists  of  a key from the following list immediately followed by an '='
+       sign and a value.  Software programs reading mtree  files  should  warn
+       about unrecognized keywords.
+
+       Currently supported keywords are as follows:
+
+       1mcksum	     22mThe checksum of the file using the default algorithm speci‐
+		   fied by the 4mcksum24m(1) utility.
+
+       1mdevice	     22mThe  device number for 1mblock 22mor 1mchar 22mfile types.  The value
+		   must be one of the following forms:
+
+		   4mformat24m,4mmajor24m,4mminor24m[,4msubunit24m]
+			 A device  with	 4mmajor24m,  4mminor24m  and  optional	 4msubunit0m
+			 fields.   Their  meaning  is specified by the operat‐
+			 ing's system 4mformat24m.  See below for valid formats.
+
+		   4mnumber0m
+			 Opaque number (as stored on the file system).
+
+		   The following values for  4mformat24m  are  recognized:  1mnative22m,
+		   1m386bsd22m,	 1m4bsd22m,  1mbsdos22m,  1mfreebsd22m,	 1mhpux22m, 1misc22m, 1mlinux22m, 1mnetbsd22m,
+		   1mosf122m, 1msco22m, 1msolaris22m, 1msunos22m, 1msvr322m, 1msvr422m, and 1multrix22m.
+
+		   See 4mmknod24m(8) for more details.
+
+       1mcontents    22mThe full pathname of a file that holds the contents of this
+		   file.
+
+       1mflags	     22mThe file flags as a symbolic name.  See 4mchflags24m(1) for  in‐
+		   formation  on  these	 names.	 If no flags are to be set the
+		   string “none” may be used to override the current default.
+
+       1mgid	     22mThe file group as a numeric value.
+
+       1mgname	     22mThe file group as a symbolic name.
+
+       1mignore	     22mIgnore any file hierarchy below this file.
+
+       1minode	     22mThe inode number.
+
+       1mlink	     22mThe target of the symbolic link when type=link.
+
+       1mmd5	     22mThe MD5 message digest of the file.
+
+       1mmd5digest   22mA synonym for 1mmd522m.
+
+       1mmode	     22mThe current file's permissions as a numeric (octal) or sym‐
+		   bolic value.
+
+       1mnlink	     22mThe number of hard links the file is expected to have.
+
+       1mnochange    22mMake sure this file or directory exists but  otherwise	ig‐
+		   nore all attributes.
+
+       1moptional    22mThe  file is optional; do not complain about the file if it
+		   is not in the file hierarchy.
+
+       1mresdevice   22mThe “resident” device number of the file, e.g.	the  ID	 of
+		   the	device that contains the file.	Its format is the same
+		   as the one for 1mdevice22m.
+
+       1mripemd160digest0m
+		   The RIPEMD160 message digest of the file.
+
+       1mrmd160	     22mA synonym for 1mripemd160digest22m.
+
+       1mrmd160digest0m
+		   A synonym for 1mripemd160digest22m.
+
+       1msha1	     22mThe FIPS 160-1 (“SHA-1”) message digest of the file.
+
+       1msha1digest  22mA synonym for 1msha122m.
+
+       1msha256	     22mThe FIPS 180-2 (“SHA-256”) message digest of the file.
+
+       1msha256digest0m
+		   A synonym for 1msha25622m.
+
+       1msha384	     22mThe FIPS 180-2 (“SHA-384”) message digest of the file.
+
+       1msha384digest0m
+		   A synonym for 1msha38422m.
+
+       1msha512	     22mThe FIPS 180-2 (“SHA-512”) message digest of the file.
+
+       1msha512digest0m
+		   A synonym for 1msha51222m.
+
+       1msize	     22mThe size, in bytes, of the file.
+
+       1mtime	     22mThe last modification time of the file.
+
+       1mtype	     22mThe type of the file; may be set to any one of the  follow‐
+		   ing:
+
+		   1mblock	 22mblock special device
+		   1mchar	 22mcharacter special device
+		   1mdir	 22mdirectory
+		   1mfifo	 22mfifo
+		   1mfile	 22mregular file
+		   1mlink	 22msymbolic link
+		   1msocket	 22msocket
+
+       1muid	     22mThe file owner as a numeric value.
+
+       1muname	     22mThe file owner as a symbolic name.
+
+1mSEE ALSO0m
+       4mcksum24m(1), 4mfind24m(1), 4mmtree24m(8)
+
+1mHISTORY0m
+       The  1mmtree  22mutility appeared in 4.3BSD-Reno.  The MD5 digest capability
+       was added in FreeBSD 2.1, in response to the widespread use of programs
+       which can spoof 4mcksum24m(1).  The SHA-1 and RIPEMD160 digests	were  added
+       in  FreeBSD  4.0,  as  new attacks have demonstrated weaknesses in MD5.
+       The SHA-256 digest was added in FreeBSD 6.0.  Support  for  file	 flags
+       was added in FreeBSD 4.0, and mostly comes from NetBSD.	The “full” en‐
+       try format was added by NetBSD.
+
+Debian			       September 4, 2013		      4mMTREE24m(5)

@@ -1,0 +1,35 @@
+4mARCHIVE_READ_ADD_PASSPHR24m(3) Library Functions Manua4mARCHIVE_READ_ADD_PASSPHR24m(3)
+
+1mNAME0m
+       archive_read_add_passphrase,   archive_read_set_passphrase_callback   —
+       functions for reading encrypted archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_read_add_passphrase22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mchar24m 4m*passphrase24m);
+
+       4mint0m
+       1marchive_read_set_passphrase_callback22m(4mstruct24m 4marchive24m 4m*24m,
+	   4mvoid24m 4m*client_data24m, 4marchive_passphrase_callback24m 4m*24m);
+
+1mDESCRIPTION0m
+       1marchive_read_add_passphrase22m()
+	       Register passphrases for reading	 an  encryption	 archive.   If
+	       4mpassphrase24m	is NULL or empty, this function will do nothing and
+	       1mARCHIVE_FAILED 22mwill be returned.  Otherwise, 1mARCHIVE_OK 22mwill be
+	       returned.
+
+       1marchive_read_set_passphrase_callback22m()
+	       Register a callback function that will  be  invoked  to	get  a
+	       passphrase for decryption after trying all the passphrases reg‐
+	       istered by the 1marchive_read_add_passphrase22m() function failed.
+
+1mSEE ALSO0m
+       4mtar24m(1), 4marchive_read24m(3), 4marchive_read_set_options24m(3), 4mlibarchive24m(3)
+
+Debian			      September 14, 20144mARCHIVE_READ_ADD_PASSPHRASE24m(3)

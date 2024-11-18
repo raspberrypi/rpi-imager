@@ -1,0 +1,58 @@
+4mARCHIVE_WRITE_FREE24m(3)	 Library Functions Manual     4mARCHIVE_WRITE_FREE24m(3)
+
+1mNAME0m
+       archive_write_fail,	archive_write_close,	 archive_write_finish,
+       archive_write_free — functions for creating archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mint0m
+       1marchive_write_fail22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_close22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_finish22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_write_free22m(4mstruct24m 4marchive24m 4m*24m);
+
+1mDESCRIPTION0m
+       1marchive_write_fail22m()
+	       Always returns 1mARCHIVE_FATAL22m.  This marks the archive object as
+	       being unusable; after calling this function, the only call that
+	       can succeed is 1marchive_write_free22m() to release  the	 resources.
+	       This  can  be  used to speed recovery when the archive creation
+	       must be aborted.	 Note that the created archive is likely to be
+	       malformed in this case;
+
+       1marchive_write_close22m()
+	       Complete the archive and invoke the close callback.
+
+       1marchive_write_finish22m()
+	       This is a deprecated synonym for 1marchive_write_free22m().
+
+       1marchive_write_free22m()
+	       Invokes 1marchive_write_close22m() if necessary, then  releases	all
+	       resources.     If   you	 need	detailed   information	 about
+	       1marchive_write_close22m() failures, you should be careful  to  call
+	       it  separately,	as  you	 cannot obtain error information after
+	       1marchive_write_free22m() returns.
+
+1mRETURN VALUES0m
+       These functions return 1mARCHIVE_OK 22mon success, or 1mARCHIVE_FATAL22m.
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1), 4marchive_write_set_options24m(3), 4mlibarchive24m(3), 4mcpio24m(5), 4mmtree24m(5),
+       4mtar24m(5)
+
+Debian			       February 2, 2012		 4mARCHIVE_WRITE_FREE24m(3)

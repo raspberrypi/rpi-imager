@@ -1,0 +1,36 @@
+4mARCHIVE_ENTRY_MISC24m(3)	 Library Functions Manual     4mARCHIVE_ENTRY_MISC24m(3)
+
+1mNAME0m
+       archive_entry_symlink_type,  archive_entry_set_symlink_type — miscella‐
+       neous functions for manipulating properties of archive_entry
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive_entry.h>0m
+
+       4mint0m
+       1marchive_entry_symlink_type22m(4mstruct24m 4marchive_entry24m 4m*a24m);
+
+       4mvoid0m
+       1marchive_entry_set_symlink_type22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mint24m);
+
+1mDESCRIPTION0m
+       The function  1marchive_entry_symlink_type22m()	returns	 and  the  function
+       1marchive_entry_set_symlink_type22m()  sets  the	 type  of the symbolic link
+       stored in an archive entry.  These functions have  special  meaning  on
+       operating  systems  that support multiple symbolic link types (e.g. Mi‐
+       crosoft Windows).
+
+       Supported values are:
+       AE_SYMLINK_TYPE_UNDEFINED  Symbolic link target	type  is  not  defined
+				  (default on unix systems)
+       AE_SYMLINK_TYPE_FILE	  Symbolic link points to a file
+       AE_SYMLINK_TYPE_DIRECTORY  Symbolic link points to a directory
+
+1mSEE ALSO0m
+       4marchive_entry24m(3),	  4marchive_entry_paths24m(3),	  4marchive_entry_stat24m(3),
+       4mlibarchive24m(3)
+
+Debian				April 15, 2019		 4mARCHIVE_ENTRY_MISC24m(3)

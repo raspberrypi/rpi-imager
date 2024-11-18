@@ -1,0 +1,74 @@
+4mARCHIVE_READ_DATA24m(3)	 Library Functions Manual      4mARCHIVE_READ_DATA24m(3)
+
+1mNAME0m
+       archive_read_data,   archive_read_data_block,   archive_read_data_skip,
+       archive_read_data_into_fd — functions for reading streaming archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mla_ssize_t0m
+       1marchive_read_data22m(4mstruct24m 4marchive24m 4m*24m, 4mvoid24m 4m*buff24m, 4msize_t24m 4mlen24m);
+
+       4mint0m
+       1marchive_read_data_block22m(4mstruct24m 4marchive24m 4m*24m,		4mconst24m 4mvoid24m 4m**buff24m,
+	   4msize_t24m 4m*len24m, 4moff_t24m 4m*offset24m);
+
+       4mint0m
+       1marchive_read_data_skip22m(4mstruct24m 4marchive24m 4m*24m);
+
+       4mint0m
+       1marchive_read_data_into_fd22m(4mstruct24m 4marchive24m 4m*24m, 4mint24m 4mfd24m);
+
+1mDESCRIPTION0m
+       1marchive_read_data22m()
+	       Read  data  associated  with the header just read.  Internally,
+	       this    is    a	   convenience	   function	that	 calls
+	       1marchive_read_data_block22m() and fills any gaps with nulls so that
+	       callers see a single continuous stream of data.
+       1marchive_read_data_block22m()
+	       Return the next available block of data for this entry.	Unlike
+	       1marchive_read_data22m(),   the	1marchive_read_data_block22m()	function
+	       avoids copying data and allows you to correctly	handle	sparse
+	       files, as supported by some archive formats.  The library guar‐
+	       antees  that  offsets  will  increase  and that blocks will not
+	       overlap.	 Note that the blocks returned from this function  can
+	       be  much larger than the block size read from disk, due to com‐
+	       pression and internal buffer optimizations.
+       1marchive_read_data_skip22m()
+	       A    convenience	    function	 that	  repeatedly	 calls
+	       1marchive_read_data_block22m()  to  skip	 all  of  the data for this
+	       archive entry.  Note that this function	is  invoked  automati‐
+	       cally  by 1marchive_read_next_header222m() if the previous entry was
+	       not completely consumed.
+       1marchive_read_data_into_fd22m()
+	       A    convenience	    function	 that	  repeatedly	 calls
+	       1marchive_read_data_block22m()  to copy the entire entry to the pro‐
+	       vided file descriptor.
+
+1mRETURN VALUES0m
+       Most functions return zero on success, non-zero on error.  The possible
+       return	codes	include:   1mARCHIVE_OK	  22m(the   operation	succeeded),
+       1mARCHIVE_WARN  22m(the operation succeeded but a non-critical error was en‐
+       countered), 1mARCHIVE_EOF 22m(end-of-archive was encountered), 1mARCHIVE_RETRY0m
+       (the operation failed but can be retried), and 1mARCHIVE_FATAL 22m(there was
+       a fatal error; the archive should be closed immediately).
+
+       1marchive_read_data22m() returns a count of bytes actually read or  zero	 at
+       the   end   of	the  entry.   On  error,  a  value  of	1mARCHIVE_FATAL22m,
+       1mARCHIVE_WARN22m, or 1mARCHIVE_RETRY 22mis returned.
+
+1mERRORS0m
+       Detailed error codes and textual descriptions are  available  from  the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1),	       4marchive_read24m(3),		4marchive_read_extract24m(3),
+       4marchive_read_filter24m(3), 4marchive_read_format24m(3), 4marchive_read_header24m(3),
+       4marchive_read_open24m(3),   4marchive_read_set_options24m(3),	4marchive_util24m(3),
+       4mlibarchive24m(3), 4mtar24m(5)
+
+Debian			       February 2, 2012		  4mARCHIVE_READ_DATA24m(3)

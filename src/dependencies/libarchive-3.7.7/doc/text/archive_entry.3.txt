@@ -1,0 +1,92 @@
+4mARCHIVE_ENTRY24m(3)		 Library Functions Manual	   4mARCHIVE_ENTRY24m(3)
+
+1mNAME0m
+       archive_entry_clear,	 archive_entry_clone,	   archive_entry_free,
+       archive_entry_new — functions for managing archive entry descriptions
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive_entry.h>0m
+
+       4mstruct24m 4marchive_entry24m 4m*0m
+       1marchive_entry_clear22m(4mstruct24m 4marchive_entry24m 4m*24m);
+
+       4mstruct24m 4marchive_entry24m 4m*0m
+       1marchive_entry_clone22m(4mstruct24m 4marchive_entry24m 4m*24m);
+
+       4mvoid0m
+       1marchive_entry_free22m(4mstruct24m 4marchive_entry24m 4m*24m);
+
+       4mstruct24m 4marchive_entry24m 4m*0m
+       1marchive_entry_new22m(4mvoid24m);
+
+1mDESCRIPTION0m
+       These functions create and manipulate data objects that	represent  en‐
+       tries  within an archive.  You can think of a struct archive_entry as a
+       heavy-duty version of struct stat: it includes everything  from	struct
+       stat  plus  associated  pathname,  textual  group  and user names, etc.
+       These objects are used by 4mlibarchive24m(3) to represent the metadata asso‐
+       ciated with a particular entry in an archive.
+
+   1mCreate and Destroy0m
+       There are functions to allocate, destroy, clear, and copy 4marchive_entry0m
+       objects:
+       1marchive_entry_clear22m()
+	       Erases the object, resetting all internal fields	 to  the  same
+	       state as a newly-created object.	 This is provided to allow you
+	       to quickly recycle objects without thrashing the heap.
+       1marchive_entry_clone22m()
+	       A deep copy operation; all text fields are duplicated.
+       1marchive_entry_free22m()
+	       Releases the struct archive_entry object.
+       1marchive_entry_new22m()
+	       Allocate and return a blank struct archive_entry object.
+
+   1mFunction groups0m
+       Due to high number of functions, the accessor functions can be found in
+       man pages grouped by the purpose.
+
+       4marchive_entry_acl24m(3)    Access Control List manipulation
+
+       4marchive_entry_paths24m(3)  Path name manipulation
+
+       4marchive_entry_perms24m(3)  User, group and mode manipulation
+
+       4marchive_entry_stat24m(3)   Functions  not  in the other groups and copying
+			       to/from 4mstruct24m 4mstat24m.
+
+       4marchive_entry_time24m(3)   Time field manipulation
+
+       Most of the functions set or read entries in an object.	Such functions
+       have one of the following forms:
+       1marchive_entry_set_XXXX22m()
+	       Stores the provided data in the	object.	  In  particular,  for
+	       strings, the pointer is stored, not the referenced string.
+       1marchive_entry_copy_XXXX22m()
+	       As  above,  except  that the referenced data is copied into the
+	       object.
+       1marchive_entry_XXXX22m()
+	       Returns the specified data.  In the case of strings,  a	const-
+	       qualified pointer to the string is returned.
+       String  data can be set or accessed as wide character strings or normal
+       4mchar24m strings.  The functions that use wide character strings  are  suf‐
+       fixed  with  1m_w22m.   Note that these are different representations of the
+       same data: For example, if you store a narrow string and read the  cor‐
+       responding  wide	 string, the object will transparently convert formats
+       using the current locale.  Similarly, if you store a  wide  string  and
+       then  store  a narrow string for the same data, the previously-set wide
+       string will be discarded in favor of the new data.
+
+1mSEE ALSO0m
+       4marchive_entry_acl24m(3),  4marchive_entry_paths24m(3),	 4marchive_entry_perms24m(3),
+       4marchive_entry_time24m(3), 4mlibarchive24m(3)
+
+1mHISTORY0m
+       The 1mlibarchive 22mlibrary first appeared in FreeBSD 5.3.
+
+1mAUTHORS0m
+       The 1mlibarchive 22mlibrary was written by Tim Kientzle <kientzle@acm.org>.
+
+Debian			       February 2, 2012		      4mARCHIVE_ENTRY24m(3)

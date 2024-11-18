@@ -1,0 +1,27 @@
+4mARCHIVE_READ_NEW24m(3)	 Library Functions Manual	4mARCHIVE_READ_NEW24m(3)
+
+1mNAME0m
+       archive_read_new — functions for reading streaming archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive.h>0m
+
+       4mstruct24m 4marchive24m 4m*0m
+       1marchive_read_new22m(4mvoid24m);
+
+1mDESCRIPTION0m
+       Allocates  and initializes a struct archive object suitable for reading
+       from an archive.	 NULL is returned on error.
+
+       A complete description of the struct archive object can be found in the
+       overview manual page for 4mlibarchive24m(3).
+
+1mSEE ALSO0m
+       4mtar24m(1),	     4marchive_read_data24m(3),		 4marchive_read_filter24m(3),
+       4marchive_read_format24m(3),  4marchive_read_set_options24m(3),	4marchive_util24m(3),
+       4mlibarchive24m(3), 4mtar24m(5)
+
+Debian			       February 2, 2012		   4mARCHIVE_READ_NEW24m(3)

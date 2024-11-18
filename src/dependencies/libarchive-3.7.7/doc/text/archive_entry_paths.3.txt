@@ -1,0 +1,139 @@
+4mARCHIVE_ENTRY_PATHS24m(3)	 Library Functions Manual    4mARCHIVE_ENTRY_PATHS24m(3)
+
+1mNAME0m
+       archive_entry_hardlink,			     archive_entry_hardlink_w,
+       archive_entry_set_hardlink,		  archive_entry_copy_hardlink,
+       archive_entry_copy_hardlink_w,	   archive_entry_update_hardlink_utf8,
+       archive_entry_set_link,			      archive_entry_copy_link,
+       archive_entry_copy_link_w,	       archive_entry_update_link_utf8,
+       archive_entry_pathname,			     archive_entry_pathname_w,
+       archive_entry_set_pathname,		  archive_entry_copy_pathname,
+       archive_entry_copy_pathname_w,	   archive_entry_update_pathname_utf8,
+       archive_entry_sourcepath,		archive_entry_copy_sourcepath,
+       archive_entry_symlink,			      archive_entry_symlink_w,
+       archive_entry_set_symlink,		   archive_entry_copy_symlink,
+       archive_entry_copy_symlink_w, archive_entry_update_symlink_utf8 — func‐
+       tions for manipulating path names in archive entry descriptions
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       1m#include <archive_entry.h>0m
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_entry_hardlink22m(4mstruct24m 4marchive_entry24m 4m*a24m);
+
+       4mconst24m 4mwchar_t24m 4m*0m
+       1marchive_entry_hardlink_w22m(4mstruct24m 4marchive_entry24m 4m*a24m);
+
+       4mvoid0m
+       1marchive_entry_set_hardlink22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_copy_hardlink22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_copy_hardlink_w22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m,  4mwchar_t24m,
+	   4m*path"24m);
+
+       4mint0m
+       1marchive_entry_update_hardlink_utf822m(4mstruct24m	 4marchive_entry24m	  4m*a24m,
+	   4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_set_link22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_copy_link22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_copy_link_w22m(4mstruct24m	    4marchive_entry24m		  4m*a24m,
+	   4mconst24m 4mwchar_t24m 4m*path24m);
+
+       4mint0m
+       1marchive_entry_update_link_utf822m(4mstruct24m	       4marchive_entry24m	  4m*a24m,
+	   4mconst24m 4mchar24m 4m*path24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_entry_pathname22m(4mstruct24m 4marchive_entry24m 4m*a24m);
+
+       4mconst24m 4mwchar_t24m 4m*0m
+       1marchive_entry_pathname_w22m(4mstruct24m 4marchive_entry24m 4m*a24m);
+
+       4mvoid0m
+       1marchive_entry_set_pathname22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_copy_pathname22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_copy_pathname_w22m(4mstruct24m	      4marchive_entry24m	  4m*a24m,
+	   4mconst24m 4mwchar_t24m 4m*path24m);
+
+       4mint0m
+       1marchive_entry_update_pathname_utf822m(4mstruct24m	 4marchive_entry24m	  4m*a24m,
+	   4mconst24m 4mchar24m 4m*path24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_entry_sourcepath22m(4mstruct24m 4marchive_entry24m 4m*a24m);
+
+       4mvoid0m
+       1marchive_entry_copy_sourcepath22m(4mstruct24m	      4marchive_entry24m	  4m*a24m,
+	   4mconst24m 4mchar24m 4m*path24m);
+
+       4mconst24m 4mchar24m 4m*0m
+       1marchive_entry_symlink22m(4mstruct24m 4marchive_entry24m 4m*a24m);
+
+       4mconst24m 4mwchar_t24m 4m*0m
+       1marchive_entry_symlink_w22m(4mstruct24m 4marchive_entry24m 4m*a24m);
+
+       4mvoid0m
+       1marchive_entry_set_symlink22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_copy_symlink22m(4mstruct24m 4marchive_entry24m 4m*a24m, 4mconst24m 4mchar24m 4m*path24m);
+
+       4mvoid0m
+       1marchive_entry_copy_symlink_w22m(4mstruct24m	      4marchive_entry24m	  4m*a24m,
+	   4mconst24m 4mwchar_t24m 4m*path24m);
+
+       4mint0m
+       1marchive_entry_update_symlink_utf822m(4mstruct24m	4marchive_entry24m	  4m*a24m,
+	   4mconst24m 4mchar24m 4m*path24m);
+
+1mDESCRIPTION0m
+       Path names supported by 4marchive_entry24m(3):
+       hardlink	   Destination of the hardlink.
+       link	   Update  only.  For a symlink, update the destination.  Oth‐
+		   erwise, make the entry a hardlink and alter the destination
+		   for that.
+       pathname	   Path in the archive
+       sourcepath  Path on the disk for use by 4marchive_read_disk24m(3).
+       symlink	   Destination of the symbolic link.
+
+       Path names can be provided in one of three different ways:
+
+       char *	  Multibyte strings in the current locale.
+
+       wchar_t *  Wide character strings in the current locale.	 The  accessor
+		  functions are named 1mXXX_w22m().
+
+       UTF-8	  Unicode  strings  encoded  as	 UTF-8.	 These are convenience
+		  functions to update both the multibyte  and  wide  character
+		  strings at the same time.
+
+       The  sourcepath	is  a  pure  filesystem concept and never stored in an
+       archive directly.
+
+       For that reason, it is only available as multibyte  string.   The  link
+       path  is	 a  convenience function for conditionally setting hardlink or
+       symlink destination.  It doesn't	 have  a  corresponding	 get  accessor
+       function.
+
+       1marchive_entry_set_XXX22m() is an alias for 1marchive_entry_copy_XXX22m().
+
+1mSEE ALSO0m
+       4marchive_entry24m(3), 4mlibarchive24m(3)
+
+Debian			       February 2, 2012		4mARCHIVE_ENTRY_PATHS24m(3)

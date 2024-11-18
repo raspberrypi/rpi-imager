@@ -1,0 +1,160 @@
+4mLIBARCHIVE24m(3)		 Library Functions Manual	      4mLIBARCHIVE24m(3)
+
+1mNAME0m
+       libarchive — functions for reading and writing streaming archives
+
+1mOVERVIEW0m
+       The  1mlibarchive  22mlibrary  provides a flexible interface for reading and
+       writing archives in various formats such as tar and  cpio.   1mlibarchive0m
+       also  supports  reading	and  writing archives compressed using various
+       compression filters such as gzip and bzip2.  The library is  inherently
+       stream-oriented;	 readers serially iterate through the archive, writers
+       serially add things to the archive.  In particular, note that there  is
+       currently  no built-in support for random access nor for in-place modi‐
+       fication.
+
+       When reading an archive, the library automatically detects  the	format
+       and the compression.  The library currently has read support for:
+       1m•   22mold-style tar archives,
+       1m•   22mmost variants of the POSIX “ustar” format,
+       1m•   22mthe POSIX “pax interchange” format,
+       1m•   22mGNU-format tar archives,
+       1m•   22mmost common cpio archive formats,
+       1m•   22m7-Zip archives,
+       1m•   22mar archives (including GNU/SysV and BSD extensions),
+       1m•   22mMicrosoft CAB archives,
+       1m•   22mISO9660 CD images (including RockRidge and Joliet extensions),
+       1m•   22mLHA archives,
+       1m•   22mmtree file tree descriptions,
+       1m•   22mRAR and most RAR5 archives,
+       1m•   22mWARC archives,
+       1m•   22mXAR archives,
+       1m•   22mZip archives.
+       The library automatically detects archives compressed with 4mcompress24m(1),
+       4mbzip224m(1), 4mgrzip24m(1), 4mgzip24m(1), 4mlrzip24m(1), 4mlz424m(1), 4mlzip24m(1), 4mlzop24m(1), 4mxz24m(1),
+       or  4mzstd24m(1)	 and decompresses them transparently. Decompression of some
+       formats requires external decompressor utilities.  It can similarly de‐
+       tect and decode archives processed with 4muuencode24m(1) or  which  have	 an
+       4mrpm24m(1) header.
+
+       When writing an archive, you can specify the compression to be used and
+       the format to use.  The library can write
+       1m•   22mPOSIX-standard “ustar” archives,
+       1m•   22mPOSIX “pax interchange format” archives,
+       1m•   22mcpio archives,
+       1m•   22m7-Zip archives,
+       1m•   22mar archives,
+       1m•   22mtwo different variants of shar archives,
+       1m•   22mISO9660 CD images,
+       1m•   22mmtree file tree descriptions,
+       1m•   22mXAR archives,
+       1m•   22mZip archive.
+       Pax  interchange	 format is an extension of the tar archive format that
+       eliminates essentially all of the limitations of historic  tar  formats
+       in  a  standard fashion that is supported by POSIX-compliant 4mpax24m(1) im‐
+       plementations on many systems as well as several newer  implementations
+       of  4mtar24m(1).	  Note	that the default write format will suppress the pax
+       extended attributes for most entries; explicitly requesting pax	format
+       will enable those attributes for all entries.
+
+       The  read  and  write  APIs are accessed through the 1marchive_read_XXX22m()
+       functions and the 1marchive_write_XXX22m() functions, respectively, and	ei‐
+       ther can be used independently of the other.
+
+       The rest of this manual page provides an overview of the library opera‐
+       tion.   More detailed information can be found in the individual manual
+       pages for each API or utility function.
+
+1mREADING AN ARCHIVE0m
+       See 4marchive_read24m(3).
+
+1mWRITING AN ARCHIVE0m
+       See 4marchive_write24m(3).
+
+1mWRITING ENTRIES TO DISK0m
+       The 4marchive_write_disk24m(3) API allows you to write 4marchive_entry24m(3)  ob‐
+       jects  to  disk	using  the  same  API  used  by 4marchive_write24m(3).	The
+       4marchive_write_disk24m(3) API is used internally by 1marchive_read_extract22m();
+       using it directly can provide greater  control  over  how  entries  get
+       written to disk.	 This API also makes it possible to share code between
+       archive-to-archive copy and archive-to-disk extraction operations.
+
+1mREADING ENTRIES FROM DISK0m
+       The  4marchive_read_disk24m(3)  supports for populating 4marchive_entry24m(3) ob‐
+       jects from information in the filesystem.  This includes	 the  informa‐
+       tion  accessible from the 4mstat24m(2) system call as well as ACLs, extended
+       attributes, and other metadata.	The 4marchive_read_disk24m(3) API also sup‐
+       ports iterating over directory trees, which allows directories of files
+       to be read using an API compatible with the 4marchive_read24m(3) API.
+
+1mDESCRIPTION0m
+       Detailed descriptions of each function are provided by the  correspond‐
+       ing manual pages.
+
+       All  of	the  functions	utilize an opaque struct archive datatype that
+       provides access to the archive contents.
+
+       The struct archive_entry structure contains a complete description of a
+       single archive entry.  It uses an opaque interface that is fully	 docu‐
+       mented in 4marchive_entry24m(3).
+
+       Users  familiar	with  historic	formats should be aware that the newer
+       variants have eliminated most restrictions on  the  length  of  textual
+       fields.	 Clients  should  not  assume that filenames, link names, user
+       names, or group names are limited in length.  In particular, pax inter‐
+       change format can easily accommodate pathnames in  arbitrary  character
+       sets that exceed 4mPATH_MAX24m.
+
+1mRETURN VALUES0m
+       Most  functions return 1mARCHIVE_OK 22m(zero) on success, non-zero on error.
+       The return value indicates the general severity of the  error,  ranging
+       from 1mARCHIVE_WARN22m, which indicates a minor problem that should probably
+       be  reported  to	 the user, to 1mARCHIVE_FATAL22m, which indicates a serious
+       problem that will prevent any further operations on this	 archive.   On
+       error,  the  1marchive_errno22m() function can be used to retrieve a numeric
+       error code (see 4merrno24m(2)).	The 1marchive_error_string22m() returns	 a  tex‐
+       tual error message suitable for display.
+
+       1marchive_read_new22m()	and 1marchive_write_new22m() return pointers to an allo‐
+       cated and initialized struct archive object.
+
+       1marchive_read_data22m() and 1marchive_write_data22m() return a count of the num‐
+       ber of bytes actually read or written.  A value of zero	indicates  the
+       end  of	the data for this entry.  A negative value indicates an error,
+       in which case the 1marchive_errno22m() and 1marchive_error_string22m()  functions
+       can be used to obtain more information.
+
+1mENVIRONMENT0m
+       There  are  character set conversions within the 4marchive_entry24m(3) func‐
+       tions that are impacted by the currently-selected locale.
+
+1mSEE ALSO0m
+       4mtar24m(1),	4marchive_entry24m(3),	   4marchive_read24m(3),     4marchive_util24m(3),
+       4marchive_write24m(3), 4mtar24m(5)
+
+1mHISTORY0m
+       The 1mlibarchive 22mlibrary first appeared in FreeBSD 5.3.
+
+1mAUTHORS0m
+       The   1mlibarchive   22mlibrary	was  originally	 written  by  Tim  Kientzle
+       <kientzle@acm.org>.
+
+1mBUGS0m
+       Some archive formats support  information  that	is  not	 supported  by
+       struct archive_entry.  Such information cannot be fully archived or re‐
+       stored using this library.  This includes, for example, comments, char‐
+       acter sets, or the arbitrary key/value pairs that can appear in pax in‐
+       terchange format archives.
+
+       Conversely, of course, not all of the information that can be stored in
+       an struct archive_entry is supported by all formats.  For example, cpio
+       formats	do  not	 support nanosecond timestamps; old tar formats do not
+       support large device numbers.
+
+       The ISO9660 reader cannot yet read all ISO9660 images; it should	 learn
+       how to seek.
+
+       The AR writer requires the client program to use two passes, unlike all
+       other libarchive writers.
+
+Debian				March 18, 2012			 4mLIBARCHIVE24m(3)

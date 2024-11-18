@@ -1,0 +1,157 @@
+4mARCHIVE_READ_OPTIONS24m(3)	 Library Functions Manual   4mARCHIVE_READ_OPTIONS24m(3)
+
+1mNAME0m
+       archive_read_set_filter_option,	       archive_read_set_format_option,
+       archive_read_set_option, archive_read_set_options — functions  control‐
+       ling options for reading archives
+
+1mLIBRARY0m
+       Streaming Archive Library (libarchive, -larchive)
+
+1mSYNOPSIS0m
+       4mint0m
+       1marchive_read_set_filter_option22m(4mstruct24m 4marchive24m 4m*24m,    4mconst24m 4mchar24m 4m*module24m,
+	   4mconst24m 4mchar24m 4m*option24m, 4mconst24m 4mchar24m 4m*value24m);
+
+       4mint0m
+       1marchive_read_set_format_option22m(4mstruct24m 4marchive24m 4m*24m,    4mconst24m 4mchar24m 4m*module24m,
+	   4mconst24m 4mchar24m 4m*option24m, 4mconst24m 4mchar24m 4m*value24m);
+
+       4mint0m
+       1marchive_read_set_option22m(4mstruct24m 4marchive24m 4m*24m,	       4mconst24m 4mchar24m 4m*module24m,
+	   4mconst24m 4mchar24m 4m*option24m, 4mconst24m 4mchar24m 4m*value24m);
+
+       4mint0m
+       1marchive_read_set_options22m(4mstruct24m 4marchive24m 4m*24m, 4mconst24m 4mchar24m 4m*options24m);
+
+1mDESCRIPTION0m
+       These functions provide a way for libarchive clients to configure  spe‐
+       cific read modules.
+
+       1marchive_read_set_filter_option22m(), 1marchive_read_set_format_option22m()
+	       Specifies an option that will be passed to currently-registered
+	       filters (including decompression filters) or format readers.
+
+	       If  4moption24m	and  4mvalue24m	 are  both NULL, these functions will do
+	       nothing and 1mARCHIVE_OK 22mwill be returned.  If 4moption24m is NULL but
+	       4mvalue24m  is  not,   these   functions	  will	 do   nothing	and
+	       1mARCHIVE_FAILED 22mwill be returned.
+
+	       If 4mmodule24m is not NULL, 4moption24m and 4mvalue24m will be provided to the
+	       filter  or  reader named 4mmodule24m.  The return value will be that
+	       of the module.  If there is no such module, 1mARCHIVE_FAILED 22mwill
+	       be returned.
+
+	       If 4mmodule24m is NULL, 4moption24m and 4mvalue24m will be provided  to	every
+	       registered  module.   If any module returns 1mARCHIVE_FATAL22m, this
+	       value will be returned immediately.  Otherwise, 1mARCHIVE_OK 22mwill
+	       be  returned  if	  any	module	 accepts   the	 option,   and
+	       1mARCHIVE_FAILED 22min all other cases.
+
+       1marchive_read_set_option22m()
+	       Calls	       1marchive_read_set_format_option22m(),	       then
+	       1marchive_read_set_filter_option22m().  If either  function  returns
+	       1mARCHIVE_FATAL22m,  1mARCHIVE_FATAL  22mwill  be  returned  immediately.
+	       Otherwise, greater of the two values will be returned.
+
+       1marchive_read_set_options22m()
+	       4moptions24m is a comma-separated list of options.   If	4moptions24m  is
+	       NULL or empty, 1mARCHIVE_OK 22mwill be returned immediately.
+
+	       Calls  1marchive_read_set_option22m()  with each option in turn.	 If
+	       any  1marchive_read_set_option22m()  call   returns   1mARCHIVE_FATAL22m,
+	       1mARCHIVE_FATAL 22mwill be returned immediately.
+
+	       Individual options have one of the following forms:
+	       4moption=value0m
+		       The option/value pair will be provided to every module.
+		       Modules	that  do  not  accept an option with this name
+		       will ignore it.
+	       4moption24m  The option will be provided	 to  every  module  with  a
+		       value of “1”.
+	       4m!option0m
+		       The option will be provided to every module with a NULL
+		       value.
+	       4mmodule:option=value24m, 4mmodule:option24m, 4mmodule:!option0m
+		       As  above,  but the corresponding option and value will
+		       be provided only to modules whose name matches 4mmodule24m.
+
+1mOPTIONS0m
+       Format cab
+	       1mhdrcharset0m
+		       The value is used as a character set name that will  be
+		       used when translating file names.
+       Format cpio
+	       1mcompat-2x0m
+		       Libarchive 2.x incorrectly encoded Unicode filenames on
+		       some  platforms.	 This option mimics the libarchive 2.x
+		       filename handling so that such  archives	 can  be  read
+		       correctly.
+	       1mhdrcharset0m
+		       The  value is used as a character set name that will be
+		       used when translating file names.
+	       1mpwb	 22mWhen reading a binary CPIO archive, assume that  it	 is
+		       in  the	original PWB cpio format, and handle file mode
+		       bits accordingly.  The default is to assume v7 format.
+       Format iso9660
+	       1mjoliet	 22mSupport Joliet extensions.	Defaults  to  enabled,	use
+		       1m!joliet 22mto disable.
+	       1mrockridge0m
+		       Support RockRidge extensions.  Defaults to enabled, use
+		       1m!rockridge 22mto disable.
+       Format lha
+	       1mhdrcharset0m
+		       The  value is used as a character set name that will be
+		       used when translating file names.
+       Format mtree
+	       1mcheckfs0m
+		       Allow reading information missing from the  mtree  from
+		       the file system.	 Disabled by default.
+       Format rar
+	       1mhdrcharset0m
+		       The  value is used as a character set name that will be
+		       used when translating file names.
+       Format tar
+	       1mcompat-2x0m
+		       Libarchive 2.x incorrectly encoded Unicode filenames on
+		       some platforms.	This option mimics the libarchive  2.x
+		       filename	 handling  so  that  such archives can be read
+		       correctly.
+	       1mhdrcharset0m
+		       The value is used as a character set name that will  be
+		       used when translating file names.
+	       1mmac-ext0m
+		       Support	Mac OS metadata extension that records data in
+		       special files beginning with a period  and  underscore.
+		       Defaults	 to enabled on Mac OS, disabled on other plat‐
+		       forms.  Use 1m!mac-ext 22mto disable.
+	       1mread_concatenated_archives0m
+		       Ignore zeroed blocks in the archive, which occurs  when
+		       multiple	 tar archives have been concatenated together.
+		       Without this option, only the  contents	of  the	 first
+		       concatenated archive would be read.
+       Format zip
+	       1mcompat-2x0m
+		       Libarchive 2.x incorrectly encoded Unicode filenames on
+		       some  platforms.	 This option mimics the libarchive 2.x
+		       filename handling so that such  archives	 can  be  read
+		       correctly.
+	       1mhdrcharset0m
+		       The  value is used as a character set name that will be
+		       used when translating file names.
+	       1mignorecrc320m
+		       Skip the CRC32 check.  Mostly used for testing.
+	       1mmac-ext0m
+		       Support Mac OS metadata extension that records data  in
+		       special	files  beginning with a period and underscore.
+		       Defaults to enabled on Mac OS, disabled on other	 plat‐
+		       forms.  Use 1m!mac-ext 22mto disable.
+
+1mERRORS0m
+       Detailed	 error	codes  and textual descriptions are available from the
+       1marchive_errno22m() and 1marchive_error_string22m() functions.
+
+1mSEE ALSO0m
+       4mtar24m(1), 4marchive_read24m(3), 4marchive_write_set_options24m(3), 4mlibarchive24m(3)
+
+Debian			       January 31, 2020	       4mARCHIVE_READ_OPTIONS24m(3)
