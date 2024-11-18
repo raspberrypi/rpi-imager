@@ -424,7 +424,7 @@ Window {
                     Item {
                         id: publicKeyListViewContainer
                         Layout.leftMargin: 40
-                        Layout.rightMargin: 40
+                        Layout.rightMargin: 5
                         Layout.minimumHeight: 50
                         Layout.fillHeight: true
                         Layout.preferredWidth: popup.width - (20 + Layout.leftMargin + Layout.rightMargin)
@@ -628,11 +628,9 @@ Window {
             }
         }
         if ('sshAuthorizedKeys' in settings) {
-            console.log("sshAuthorizedKeys: " +JSON.stringify(settings.sshAuthorizedKeys))
             var possiblePublicKeys = settings.sshAuthorizedKeys.split('\n')
 
             for (const publicKey of possiblePublicKeys) {
-                console.log("possiblePublicKey: " + JSON.stringify(publicKey))
                 var pkitem = publicKey.trim()
                 if (pkitem) {
                     publicKeyModel.append({publicKeyField: pkitem})
@@ -1005,9 +1003,7 @@ Window {
         settings.sshEnabled = chkSSH.checked
         if (chkSSH.checked && radioPubKeyAuthentication.checked) {
             var publicKeysSerialised = ""
-            console.log("Public keys to store: " + publicKeyModel.count)
             for (var j=0; j<publicKeyModel.count; j++) {
-                console.log("saving publicKey: " + JSON.stringify(publicKeyModel.get(j)["publicKeyField"]))
                 var pkitem = publicKeyModel.get(j)["publicKeyField"].trim()
                 if (pkitem) {
                     publicKeysSerialised += pkitem +"\n"
