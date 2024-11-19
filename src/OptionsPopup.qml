@@ -8,12 +8,13 @@ import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
+import QtQml.Models
 import "qmlcomponents"
 
 Window {
     id: popup
-    width: Math.min(550, optionsStack.minimumWidth)
-    height: Math.min(420, optionsStack.minimumHeight)
+    width: 550
+    height: 420
 
     minimumWidth: width
     // Deliberately do not set a maximum width - if the user wants to resize, let them.
@@ -41,471 +42,561 @@ Window {
         popup.close()
     }
 
-    TabBar {
-        id: bar
+    ColumnLayout {
+        anchors {
+            top: parent.top
+            bottom: parent.bottom
+            left: parent.left
+            right: parent.right
+        }
+        spacing: 0
 
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
+        TabBar {
+            id: bar
+            Layout.fillWidth: true
 
-        TabButton {
-            text: qsTr("General")
-            onClicked: {
-                if (chkSetUser.checked && !fieldUserPassword.length) {
-                    fieldUserPassword.forceActiveFocus()
+            TabButton {
+                text: qsTr("General")
+                onClicked: {
+                    if (chkSetUser.checked && !fieldUserPassword.length) {
+                        fieldUserPassword.forceActiveFocus()
+                    }
+                    generalTab.scrollPosition = 0
                 }
-                popupbody.scrollPosition = 0
+            }
+            TabButton {
+                text: qsTr("Services")
+                onClicked: {
+                    remoteAccessTab.scrollPosition = 0
+                }
+            }
+            TabButton {
+                text: qsTr("Options")
+                onClicked: {
+                    optionsTab.scrollPosition = 0
+                }
             }
         }
-        TabButton {
-            text: qsTr("Services")
-            onClicked: {
-                popupbody.scrollPosition = 0
-            }
-        }
-        TabButton {
-            text: qsTr("Options")
-            onClicked: {
-                popupbody.scrollPosition = 0
-            }
-        }
-    }
-
-    ScrollView {
-        id: popupbody
-        font.family: roboto.name
-
-        anchors.right: parent.right
-        anchors.left: parent.left
-        anchors.top: bar.bottom
-        anchors.bottom: buttonsRow.top
-
-        property double scrollPosition
-
-        clip: true
-        ScrollBar.vertical.policy: ScrollBar.AlwaysOn
-        ScrollBar.vertical.position: scrollPosition
 
         StackLayout {
             id: optionsStack
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.left: parent.left
-            anchors.rightMargin: 10
-            anchors.leftMargin: 10
-
+            Layout.rightMargin: 10
+            Layout.leftMargin: 10
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             currentIndex: bar.currentIndex
 
-            ColumnLayout {
-                // General tab
+            ScrollView {
+                id: generalTab
+                font.family: roboto.name
 
-                RowLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                property double scrollPosition
+
+                // clip: true
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                ScrollBar.vertical.position: scrollPosition
+                scrollPosition: scrollPosition
+                ColumnLayout {
+                    // General tab
+
+                    RowLayout {
+                        ImCheckBox {
+                            id: chkHostname
+                            text: qsTr("Set hostname:")
+                            onCheckedChanged: {
+                                if (checked) {
+                                    fieldHostname.forceActiveFocus()
+                                }
+                            }
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        TextField {
+                            id: fieldHostname
+                            enabled: chkHostname.checked
+                            text: "raspberrypi"
+                            selectByMouse: true
+                            maximumLength: 253
+                            validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
+                            Layout.minimumWidth: 200
+                        }
+                        Text {
+                            text : ".local"
+                            color: chkHostname.checked ? "black" : "grey"
+                        }
+                    }
+
                     ImCheckBox {
-                        id: chkHostname
-                        text: qsTr("Set hostname:")
+                        id: chkSetUser
+                        text: qsTr("Set username and password")
                         onCheckedChanged: {
-                            if (checked) {
-                                fieldHostname.forceActiveFocus()
+                            if (!checked && chkSSH.checked && radioPasswordAuthentication.checked) {
+                                checked = true;
+                            }
+                            if (checked && !fieldUserPassword.length) {
+                                fieldUserPassword.forceActiveFocus()
                             }
                         }
                     }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    TextField {
-                        id: fieldHostname
-                        enabled: chkHostname.checked
-                        text: "raspberrypi"
-                        selectByMouse: true
-                        maximumLength: 253
-                        validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
-                        Layout.minimumWidth: 200
-                    }
-                    Text {
-                        text : ".local"
-                        color: chkHostname.checked ? "black" : "grey"
-                    }
-                }
 
-                ImCheckBox {
-                    id: chkSetUser
-                    text: qsTr("Set username and password")
-                    onCheckedChanged: {
-                        if (!checked && chkSSH.checked && radioPasswordAuthentication.checked) {
-                            checked = true;
+                    RowLayout {
+                        Text {
+                            text: qsTr("Username:")
+                            color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                            Layout.leftMargin: 40
                         }
-                        if (checked && !fieldUserPassword.length) {
-                            fieldUserPassword.forceActiveFocus()
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
                         }
-                    }
-                }
+                        TextField {
+                            id: fieldUserName
+                            enabled: chkSetUser.checked
+                            text: "pi"
+                            Layout.minimumWidth: 200
+                            selectByMouse: true
+                            property bool indicateError: false
+                            maximumLength: 31
+                            validator: RegularExpressionValidator { regularExpression: /^[a-z][a-z0-9-]{0,30}$/ }
 
-                RowLayout {
-                    Text {
-                        text: qsTr("Username:")
-                        color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
-                        Layout.leftMargin: 40
-                    }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    TextField {
-                        id: fieldUserName
-                        enabled: chkSetUser.checked
-                        text: "pi"
-                        Layout.minimumWidth: 200
-                        selectByMouse: true
-                        property bool indicateError: false
-                        maximumLength: 31
-                        validator: RegularExpressionValidator { regularExpression: /^[a-z][a-z0-9-]{0,30}$/ }
-
-                        onTextEdited: {
-                            indicateError = false
-                        }
-                    }
-                }
-                RowLayout {
-                    Text {
-                        text: qsTr("Password:")
-                        color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
-                        Layout.leftMargin: 40
-                    }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    TextField {
-                        id: fieldUserPassword
-                        enabled: chkSetUser.checked
-                        echoMode: TextInput.Password
-                        passwordMaskDelay: 2000 //ms
-                        Layout.minimumWidth: 200
-                        selectByMouse: true
-                        property bool alreadyCrypted: false
-                        property bool indicateError: false
-
-                        Keys.onPressed: (event)=> {
-                            if (alreadyCrypted) {
-                                /* User is trying to edit saved
-                                   (crypted) password, clear field */
-                                alreadyCrypted = false
-                                clear()
-                            }
-
-                            // Do not mark the event as accepted, so that it may
-                            // propagate down to the underlying TextField.
-                            event.accepted = false
-                        }
-
-                        onTextEdited: {
-                            if (indicateError) {
+                            onTextEdited: {
                                 indicateError = false
                             }
                         }
                     }
-                }
+                    RowLayout {
+                        Text {
+                            text: qsTr("Password:")
+                            color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
+                            Layout.leftMargin: 40
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        TextField {
+                            id: fieldUserPassword
+                            enabled: chkSetUser.checked
+                            echoMode: TextInput.Password
+                            passwordMaskDelay: 2000 //ms
+                            Layout.minimumWidth: 200
+                            selectByMouse: true
+                            property bool alreadyCrypted: false
+                            property bool indicateError: false
 
-                ImCheckBox {
-                    id: chkWifi
-                    text: qsTr("Configure wireless LAN")
-                    onCheckedChanged: {
-                        if (checked) {
-                            if (!fieldWifiSSID.length) {
-                                fieldWifiSSID.forceActiveFocus()
-                            } else if (!fieldWifiPassword.length) {
-                                fieldWifiPassword.forceActiveFocus()
+                            Keys.onPressed: (event)=> {
+                                if (alreadyCrypted) {
+                                    /* User is trying to edit saved
+                                       (crypted) password, clear field */
+                                    alreadyCrypted = false
+                                    clear()
+                                }
+
+                                // Do not mark the event as accepted, so that it may
+                                // propagate down to the underlying TextField.
+                                event.accepted = false
+                            }
+
+                            onTextEdited: {
+                                if (indicateError) {
+                                    indicateError = false
+                                }
                             }
                         }
                     }
-                }
 
-                RowLayout {
-                    Text {
-                        text: qsTr("SSID:")
-                        color: chkWifi.checked ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
-                        Layout.leftMargin: 40
-                    }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    TextField {
-                        id: fieldWifiSSID
-                        // placeholderText: qsTr("SSID")
-                        enabled: chkWifi.checked
-                        Layout.minimumWidth: 200
-                        selectByMouse: true
-                        property bool indicateError: false
-                        onTextEdited: {
-                            indicateError = false
+                    ImCheckBox {
+                        id: chkWifi
+                        text: qsTr("Configure wireless LAN")
+                        onCheckedChanged: {
+                            if (checked) {
+                                if (!fieldWifiSSID.length) {
+                                    fieldWifiSSID.forceActiveFocus()
+                                } else if (!fieldWifiPassword.length) {
+                                    fieldWifiPassword.forceActiveFocus()
+                                }
+                            }
                         }
                     }
-                }
-                RowLayout {
-                    Text {
-                        text: qsTr("Password:")
-                        color: chkWifi.checked ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
-                        Layout.leftMargin: 40
-                    }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    TextField {
-                        id: fieldWifiPassword
-                        enabled: chkWifi.checked
-                        Layout.minimumWidth: 200
-                        selectByMouse: true
-                        echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
-                        property bool indicateError: false
-                        onTextEdited: {
-                            indicateError = false
+
+                    RowLayout {
+                        Text {
+                            text: qsTr("SSID:")
+                            color: chkWifi.checked ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
+                            Layout.leftMargin: 40
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        TextField {
+                            id: fieldWifiSSID
+                            // placeholderText: qsTr("SSID")
+                            enabled: chkWifi.checked
+                            Layout.minimumWidth: 200
+                            selectByMouse: true
+                            property bool indicateError: false
+                            onTextEdited: {
+                                indicateError = false
+                            }
                         }
                     }
-                }
-
-                RowLayout {
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
+                    RowLayout {
+                        Text {
+                            text: qsTr("Password:")
+                            color: chkWifi.checked ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
+                            Layout.leftMargin: 40
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        TextField {
+                            id: fieldWifiPassword
+                            enabled: chkWifi.checked
+                            Layout.minimumWidth: 200
+                            selectByMouse: true
+                            echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
+                            property bool indicateError: false
+                            onTextEdited: {
+                                indicateError = false
+                            }
+                        }
                     }
+
+                    RowLayout {
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        ImCheckBox {
+                            id: chkShowPassword
+                            enabled: chkWifi.checked
+                            text: qsTr("Show password")
+                            checked: true
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        ImCheckBox {
+                            id: chkWifiSSIDHidden
+                            enabled: chkWifi.checked
+                            Layout.columnSpan: 2
+                            text: qsTr("Hidden SSID")
+                            checked: false
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    RowLayout {
+                        Text {
+                            text: qsTr("Wireless LAN country:")
+                            color: chkWifi.checked ? "black" : "grey"
+                            Layout.leftMargin: 40
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            id: fieldWifiCountry
+                            selectTextByMouse: true
+                            enabled: chkWifi.checked
+                            editable: true
+                        }
+                    }
+
                     ImCheckBox {
-                        id: chkShowPassword
-                        enabled: chkWifi.checked
-                        text: qsTr("Show password")
-                        checked: true
+                        id: chkLocale
+                        text: qsTr("Set locale settings")
                     }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
+                    RowLayout {
+                        Text {
+                            text: qsTr("Time zone:")
+                            color: chkLocale.checked ? "black" : "grey"
+                            Layout.leftMargin: 40
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            enabled: chkLocale.checked
+                            selectTextByMouse: true
+                            id: fieldTimezone
+                            editable: true
+                            Layout.minimumWidth: 200
+                        }
                     }
-                    ImCheckBox {
-                        id: chkWifiSSIDHidden
-                        enabled: chkWifi.checked
-                        Layout.columnSpan: 2
-                        text: qsTr("Hidden SSID")
-                        checked: false
-                    }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                }
 
-                RowLayout {
-                    Text {
-                        text: qsTr("Wireless LAN country:")
-                        color: chkWifi.checked ? "black" : "grey"
-                        Layout.leftMargin: 40
-                    }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    ComboBox {
-                        id: fieldWifiCountry
-                        selectTextByMouse: true
-                        enabled: chkWifi.checked
-                        editable: true
-                    }
-                }
-
-                ImCheckBox {
-                    id: chkLocale
-                    text: qsTr("Set locale settings")
-                }
-                RowLayout {
-                    Text {
-                        text: qsTr("Time zone:")
-                        color: chkLocale.checked ? "black" : "grey"
-                        Layout.leftMargin: 40
-                    }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    ComboBox {
-                        enabled: chkLocale.checked
-                        selectTextByMouse: true
-                        id: fieldTimezone
-                        editable: true
-                        Layout.minimumWidth: 200
-                    }
-                }
-
-                RowLayout {
-                    Text {
-                        text: qsTr("Keyboard layout:")
-                        color: chkLocale.checked ? "black" : "grey"
-                        Layout.leftMargin: 40
-                    }
-                    // Spacer item
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    ComboBox {
-                        enabled: chkLocale.checked
-                        selectTextByMouse: true
-                        id: fieldKeyboardLayout
-                        editable: true
-                        Layout.minimumWidth: 200
+                    RowLayout {
+                        Text {
+                            text: qsTr("Keyboard layout:")
+                            color: chkLocale.checked ? "black" : "grey"
+                            Layout.leftMargin: 40
+                        }
+                        // Spacer item
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            enabled: chkLocale.checked
+                            selectTextByMouse: true
+                            id: fieldKeyboardLayout
+                            editable: true
+                            Layout.minimumWidth: 200
+                        }
                     }
                 }
             }
 
-            ColumnLayout {
-                // Remote access tab
+            ScrollView {
+                id: remoteAccessTab
+                font.family: roboto.name
 
-                ImCheckBox {
-                    id: chkSSH
-                    text: qsTr("Enable SSH")
-                    onCheckedChanged: {
-                        if (checked) {
-                            if (!radioPasswordAuthentication.checked && !radioPubKeyAuthentication.checked) {
-                                radioPasswordAuthentication.checked = true
-                            }
-                            if (radioPasswordAuthentication.checked) {
-                                chkSetUser.checked = true
-                            }
-                        }
-                    }
-                }
+                Layout.fillWidth: true
+                Layout.fillHeight: true
 
-                ImRadioButton {
-                    id: radioPasswordAuthentication
-                    enabled: chkSSH.checked
-                    text: qsTr("Use password authentication")
-                    onCheckedChanged: {
-                        if (checked) {
-                            chkSetUser.checked = true
-                            //fieldUserPassword.forceActiveFocus()
-                        }
-                    }
-                }
-                ImRadioButton {
-                    id: radioPubKeyAuthentication
-                    enabled: chkSSH.checked
-                    text: qsTr("Allow public-key authentication only")
-                    onCheckedChanged: {
-                        if (checked) {
-                            if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
-                                chkSetUser.checked = false
-                            }
-                            fieldPublicKey.forceActiveFocus()
-                        }
-                    }
-                }
+                property double scrollPosition
 
-                Text {
-                    text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
-                    color: radioPubKeyAuthentication.checked ? "black" : "grey"
-                    // textFormat: Text.PlainText
-                    Layout.leftMargin: 40
-                }
-                TextArea {
-                    id: fieldPublicKey
-                    enabled: radioPubKeyAuthentication.checked
-                    textFormat: TextEdit.PlainText
-                    wrapMode: TextEdit.WrapAnywhere
+                // clip: true
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                ScrollBar.vertical.position: scrollPosition
+                scrollPosition: scrollPosition
+                ColumnLayout {
+                    // Remote access tab
                     Layout.fillWidth: true
-                    Layout.minimumWidth: 350
-                    Layout.leftMargin: 40
-                    selectByMouse: true
-                }
 
-                ImButton {
-                    text: qsTr("RUN SSH-KEYGEN")
-                    Layout.leftMargin: 40
-                    enabled: imageWriter.hasSshKeyGen() && !imageWriter.hasPubKey()
-                    onClicked: {
-                        enabled = false
-                        imageWriter.generatePubKey()
-                        fieldPublicKey.text = imageWriter.getDefaultPubKey()
+                    ImCheckBox {
+                        id: chkSSH
+                        text: qsTr("Enable SSH")
+                        onCheckedChanged: {
+                            if (checked) {
+                                if (!radioPasswordAuthentication.checked && !radioPubKeyAuthentication.checked) {
+                                    radioPasswordAuthentication.checked = true
+                                }
+                                if (radioPasswordAuthentication.checked) {
+                                    chkSetUser.checked = true
+                                }
+                            }
+                        }
+                    }
+
+                    ImRadioButton {
+                        id: radioPasswordAuthentication
+                        enabled: chkSSH.checked
+                        text: qsTr("Use password authentication")
+                        onCheckedChanged: {
+                            if (checked) {
+                                chkSetUser.checked = true
+                                //fieldUserPassword.forceActiveFocus()
+                            }
+                        }
+                    }
+                    ImRadioButton {
+                        id: radioPubKeyAuthentication
+                        enabled: chkSSH.checked
+                        text: qsTr("Allow public-key authentication only")
+                        onCheckedChanged: {
+                            if (checked) {
+                                if (chkSetUser.checked && fieldUserName.text == "pi" && fieldUserPassword.text.length == 0) {
+                                    chkSetUser.checked = false
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: qsTr("Set authorized_keys for '%1':").arg(fieldUserName.text)
+                        color: radioPubKeyAuthentication.checked ? "black" : "grey"
+                        // textFormat: Text.PlainText
+                        Layout.leftMargin: 40
+                    }
+                    Item {
+                        id: publicKeyListViewContainer
+                        Layout.leftMargin: 40
+                        Layout.rightMargin: 5
+                        Layout.minimumHeight: 50
+                        Layout.fillHeight: true
+                        Layout.preferredWidth: popup.width - (20 + Layout.leftMargin + Layout.rightMargin)
+
+                        ListView {
+                            id: publicKeyList
+                            model: ListModel {
+                                id: publicKeyModel
+
+                            }
+                            boundsBehavior: Flickable.StopAtBounds
+                            anchors.fill: parent
+                            spacing: 12
+                            clip: true
+
+                            delegate: RowLayout {
+                                id: publicKeyItem
+                                property int publicKeyModelIndex: index
+                                height: 50
+
+                                TextField {
+                                    id: contentField
+                                    enabled: radioPubKeyAuthentication.checked
+                                    validator: RegularExpressionValidator { regularExpression: /^ssh-(ed25519|rsa|dss|ecdsa) AAAA(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{4})( [A-Za-z0-9-\\\/]+@[A-Za-z0-9-\\\/]+)?/ }
+                                    text: model.publicKeyField
+                                    Layout.fillWidth: true
+                                    Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                                    implicitWidth: publicKeyList.width - (removePublicKeyItem.width + 20)
+
+                                    onEditingFinished: {
+                                           publicKeyModel.set(publicKeyModelIndex, {publicKeyField: contentField.text})
+                                       }
+                                }
+                                ImButton {
+                                    id: removePublicKeyItem
+                                    text: qsTr("Delete Key")
+                                    enabled: radioPubKeyAuthentication.checked
+                                    Layout.minimumWidth: 100
+                                    Layout.preferredWidth: 100
+                                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+
+                                    onClicked: {
+                                        if (publicKeyModelIndex != -1) {
+                                            publicKeyModel.remove(publicKeyModelIndex)
+                                            publicKeyListViewContainer.implicitHeight -= 50 + publicKeyList.spacing
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        ImButton {
+                            text: qsTr("RUN SSH-KEYGEN")
+                            Layout.leftMargin: 40
+                            enabled: imageWriter.hasSshKeyGen() && !imageWriter.hasPubKey()
+                            onClicked: {
+                                enabled = false
+                                imageWriter.generatePubKey()
+                                publicKeyModel.append({publicKeyField: imageWriter.getDefaultPubKey()})
+                            }
+                        }
+                        ImButton {
+                            text: qsTr("Add SSH Key")
+                            Layout.leftMargin: 40
+                            enabled: radioPubKeyAuthentication.checked
+                            onClicked: {
+                                publicKeyModel.append({publicKeyField: ""})
+                                if (publicKeyListViewContainer.implicitHeight) {
+                                    publicKeyListViewContainer.implicitHeight += 50 + publicKeyList.spacing
+                                } else {
+                                    publicKeyListViewContainer.implicitHeight += 100 + (publicKeyList.spacing)
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            ColumnLayout {
-                // Options tab
+            ScrollView {
+                id: optionsTab
+                font.family: roboto.name
 
-                ImCheckBox {
-                    id: chkBeep
-                    text: qsTr("Play sound when finished")
-                }
-                ImCheckBox {
-                    id: chkEject
-                    text: qsTr("Eject media when finished")
-                }
-                ImCheckBox {
-                    id: chkTelemtry
-                    text: qsTr("Enable telemetry")
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                property double scrollPosition
+
+                // clip: true
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                ScrollBar.vertical.position: scrollPosition
+                scrollPosition: scrollPosition
+
+                ColumnLayout {
+                    // Options tab
+
+                    ImCheckBox {
+                        id: chkBeep
+                        text: qsTr("Play sound when finished")
+                    }
+                    ImCheckBox {
+                        id: chkEject
+                        text: qsTr("Eject media when finished")
+                    }
+                    ImCheckBox {
+                        id: chkTelemtry
+                        text: qsTr("Enable telemetry")
+                    }
                 }
             }
         }
-    }
 
-    RowLayout {
-        id: buttonsRow
-        anchors.right: parent.right
-        anchors.left: parent.left
-        anchors.bottom: parent.bottom
-
-        Item {
+        RowLayout {
+            id: buttonsRow
             Layout.fillWidth: true
-        }
 
-        ImButtonRed {
-            text: qsTr("SAVE")
-            onClicked: {
-                if (chkSetUser.checked && fieldUserPassword.text.length == 0)
-                {
-                    fieldUserPassword.indicateError = true
-                    fieldUserPassword.forceActiveFocus()
-                    bar.currentIndex = 0
-                    return
-                }
-                if (chkSetUser.checked && fieldUserName.text.length == 0)
-                {
-                    fieldUserName.indicateError = true
-                    fieldUserName.forceActiveFocus()
-                    bar.currentIndex = 0
-                    return
-                }
+            Item {
+                Layout.fillWidth: true
+            }
 
-                if (chkWifi.checked)
-                {
-                    // Valid Wi-Fi PSKs are:
-                    // - 0 characters (indicating an open network)
-                    // - 8-63 characters (passphrase)
-                    // - 64 characters (hashed passphrase, as hex)
-                    if (fieldWifiPassword.text.length > 0 &&
-                        (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64))
+            ImButtonRed {
+                text: qsTr("SAVE")
+                onClicked: {
+                    if (chkSetUser.checked && fieldUserPassword.text.length == 0)
                     {
-                        fieldWifiPassword.indicateError = true
-                        fieldWifiPassword.forceActiveFocus()
-                    }
-                    if (fieldWifiSSID.text.length == 0)
-                    {
-                        fieldWifiSSID.indicateError = true
-                        fieldWifiSSID.forceActiveFocus()
-                    }
-                    if (fieldWifiSSID.indicateError || fieldWifiPassword.indicateError)
-                    {
+                        fieldUserPassword.indicateError = true
+                        fieldUserPassword.forceActiveFocus()
                         bar.currentIndex = 0
                         return
                     }
+                    if (chkSetUser.checked && fieldUserName.text.length == 0)
+                    {
+                        fieldUserName.indicateError = true
+                        fieldUserName.forceActiveFocus()
+                        bar.currentIndex = 0
+                        return
+                    }
+
+                    if (chkWifi.checked)
+                    {
+                        // Valid Wi-Fi PSKs are:
+                        // - 0 characters (indicating an open network)
+                        // - 8-63 characters (passphrase)
+                        // - 64 characters (hashed passphrase, as hex)
+                        if (fieldWifiPassword.text.length > 0 &&
+                            (fieldWifiPassword.text.length < 8 || fieldWifiPassword.text.length > 64))
+                        {
+                            fieldWifiPassword.indicateError = true
+                            fieldWifiPassword.forceActiveFocus()
+                        }
+                        if (fieldWifiSSID.text.length == 0)
+                        {
+                            fieldWifiSSID.indicateError = true
+                            fieldWifiSSID.forceActiveFocus()
+                        }
+                        if (fieldWifiSSID.indicateError || fieldWifiPassword.indicateError)
+                        {
+                            bar.currentIndex = 0
+                            return
+                        }
+                    }
+
+                    applySettings()
+                    saveSettings()
+                    popup.close()
                 }
-
-                applySettings()
-                saveSettings()
-                popup.close()
             }
-        }
 
-        Item {
-            Layout.fillWidth: true
+            Item {
+                Layout.fillWidth: true
+            }
         }
     }
 
@@ -515,7 +606,6 @@ Window {
         chkEject.checked = imageWriter.getBoolSetting("eject")
         var settings = imageWriter.getSavedCustomizationSettings()
         fieldTimezone.model = imageWriter.getTimezoneList()
-        fieldPublicKey.text = imageWriter.getDefaultPubKey()
         fieldWifiCountry.model = imageWriter.getCountryList()
         fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
 
@@ -538,9 +628,31 @@ Window {
             }
         }
         if ('sshAuthorizedKeys' in settings) {
-            fieldPublicKey.text = settings.sshAuthorizedKeys
+            var possiblePublicKeys = settings.sshAuthorizedKeys.split('\n')
+
+            for (const publicKey of possiblePublicKeys) {
+                var pkitem = publicKey.trim()
+                if (pkitem) {
+                    publicKeyModel.append({publicKeyField: pkitem})
+                }
+            }
+
             radioPubKeyAuthentication.checked = true
             chkSSH.checked = true
+        }
+        // Attempt to insert the default public key, but avoid clashes.
+        {
+            var insertDefaultKey = true
+            var defaultKey = imageWriter.getDefaultPubKey()
+            for (var i = 0; i<publicKeyModel.count; i++) {
+                if (publicKeyModel.get(i)["publicKeyField"] == defaultKey) {
+                    insertDefaultKey = false
+                    break;
+                }
+            }
+            if (insertDefaultKey) {
+                publicKeyModel.append({publicKeyField: defaultKey})
+            }
         }
 
         if ('sshUserName' in settings) {
@@ -635,7 +747,7 @@ Window {
         //open()
         show()
         raise()
-        popupbody.forceActiveFocus()
+        bar.forceActiveFocus()
     }
 
     function addCmdline(s) {
@@ -714,13 +826,14 @@ Window {
             }
 
             if (chkSSH.checked && radioPubKeyAuthentication.checked) {
-                var pubkey = fieldPublicKey.text
-                var pubkeyArr = pubkey.split("\n")
                 var pubkeySpaceSep = ''
-                for (var j=0; j<pubkeyArr.length; j++) {
-                    var pkitem = pubkeyArr[j].trim();
+                var pubKeyNewlineSep = ''
+
+                for (var j=0; j<publicKeyModel.count; j++) {
+                    var pkitem = publicKeyModel.get(j)["publicKeyField"];
                     if (pkitem) {
                         pubkeySpaceSep += ' '+escapeshellarg(pkitem)
+                        pubKeyNewlineSep += escapeshellarg(pkitem) + '\n'
                     }
                 }
 
@@ -728,7 +841,7 @@ Window {
                 addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom enable_ssh -k"+pubkeySpaceSep)
                 addFirstRun("else")
                 addFirstRun("   install -o \"$FIRSTUSER\" -m 700 -d \"$FIRSTUSERHOME/.ssh\"")
-                addFirstRun("   install -o \"$FIRSTUSER\" -m 600 <(printf \""+pubkey.replace(/\n/g, "\\n")+"\") \"$FIRSTUSERHOME/.ssh/authorized_keys\"")
+                addFirstRun("   install -o \"$FIRSTUSER\" -m 600 <(printf \""+pubKeyNewlineSep.replace(/\n/g, "\\n")+"\") \"$FIRSTUSERHOME/.ssh/authorized_keys\"")
                 addFirstRun("   echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config")
                 addFirstRun("   systemctl enable ssh")
                 addFirstRun("fi")
@@ -737,8 +850,8 @@ Window {
                     addCloudInit("  lock_passwd: true")
                 }
                 addCloudInit("  ssh_authorized_keys:")
-                for (var i=0; i<pubkeyArr.length; i++) {
-                    var pk = pubkeyArr[i].trim();
+                for (var i=0; i<publicKeyModel.count; i++) {
+                    var pk = publicKeyModel.get(i)["publicKeyField"].trim();
                     if (pk) {
                         addCloudInit("    - "+pk)
                     }
@@ -889,7 +1002,15 @@ Window {
 
         settings.sshEnabled = chkSSH.checked
         if (chkSSH.checked && radioPubKeyAuthentication.checked) {
-            settings.sshAuthorizedKeys = fieldPublicKey.text
+            var publicKeysSerialised = ""
+            for (var j=0; j<publicKeyModel.count; j++) {
+                var pkitem = publicKeyModel.get(j)["publicKeyField"].trim()
+                if (pkitem) {
+                    publicKeysSerialised += pkitem +"\n"
+                }
+            }
+
+            settings.sshAuthorizedKeys = publicKeysSerialised
         }
         if (chkWifi.checked) {
             settings.wifiSSID = fieldWifiSSID.text
@@ -932,7 +1053,7 @@ Window {
         fieldUserPassword.clear()
         radioPubKeyAuthentication.checked = false
         radioPasswordAuthentication.checked = false
-        fieldPublicKey.clear()
+        publicKeyModel.clear()
 
         /* Timezone Settings*/
         fieldTimezone.currentIndex = fieldTimezone.find(imageWriter.getTimezone())
