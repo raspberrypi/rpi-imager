@@ -4,7 +4,6 @@
 cmake_minimum_required(VERSION 3.15)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
-OPTION (DRIVELIST_FILTER_SYSTEM_DRIVES "Filter System drives from displayed drives" ON)
 
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectures to build for")
 
@@ -306,13 +305,6 @@ if(ENABLE_CHECK_VERSION)
     add_definitions(-DCHECK_VERSION_DEFAULT=true)
 else()
     add_definitions(-DCHECK_VERSION_DEFAULT=false)
-endif()
-
-if(DRIVELIST_FILTER_SYSTEM_DRIVES)
-   # Hide system drives from list
-   add_definitions(-DDRIVELIST_FILTER_SYSTEM_DRIVES=true)
-else()
-   add_definitions(-DDRIVELIST_FILTER_SYSTEM_DRIVES=false)
 endif()
 
 # Because dependencies are typically not available by default on Windows, build bundled code
