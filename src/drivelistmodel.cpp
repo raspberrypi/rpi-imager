@@ -19,6 +19,7 @@ DriveListModel::DriveListModel(QObject *parent)
         {isUsbRole, "isUsb"},
         {isScsiRole, "isScsi"},
         {isReadOnlyRole, "isReadOnly"},
+        {isSystemRole, "isSystem"},
         {mountpointsRole, "mountpoints"}
     };
 
@@ -52,7 +53,6 @@ QVariant DriveListModel::data(const QModelIndex &index, int role) const
 void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l)
 {
     bool changes = false;
-    bool filterSystemDrives = DRIVELIST_FILTER_SYSTEM_DRIVES;
     QSet<QString> drivesInNewList;
 
     for (auto &i: l)
@@ -64,11 +64,6 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
             mountpoints.append(QString::fromStdString(s));
         }
 
-        if (filterSystemDrives)
-        {
-            if (i.isSystem)
-                continue;
-        }
         // Should already be caught by isSystem variable, but just in case...
         if (mountpoints.contains("/") || mountpoints.contains("C://"))
             continue;
@@ -96,7 +91,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
                 changes = true;
             }
 
-            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, i.isReadOnly, mountpoints, this);
+            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, i.isReadOnly, i.isSystem, mountpoints, this);
         }
     }
 

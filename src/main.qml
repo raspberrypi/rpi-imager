@@ -991,7 +991,7 @@ ApplicationWindow {
             anchors.top: dstpopup_title_separator.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.bottom: parent.bottom
+            anchors.bottom: filterRow.top
             boundsBehavior: Flickable.StopAtBounds
             highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
             clip: true
@@ -1023,6 +1023,22 @@ ApplicationWindow {
             Keys.onEnterPressed: Keys.onSpacePressed(event)
             Keys.onReturnPressed: Keys.onSpacePressed(event)
         }
+        RowLayout {
+            id: filterRow
+            anchors {
+                bottom: parent.bottom
+                right: parent.right
+                left: parent.left
+            }
+            Item {
+                Layout.fillWidth: true
+            }
+            ImCheckBox {
+                id: filterSystemDrives
+                checked: true
+                text: qsTr("Exclude System Drives")
+            }
+        }
     }
 
     Component {
@@ -1053,6 +1069,7 @@ ApplicationWindow {
 
                 color: mouseOver ? "#f5f5f5" : "#ffffff"
                 property bool mouseOver: false
+                property bool unselectable: isSystem && filterSystemDrives.checked
 
                 RowLayout {
                     anchors.fill: parent
@@ -1081,7 +1098,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             font.family: roboto.name
                             font.pointSize: 16
-                            color: isReadOnly ? "grey" : "";
+                            color: (isReadOnly || unselectable) ? "grey" : "";
                             text: {
                                 var sizeStr = (size/1000000000).toFixed(1)+ " " + qsTr("GB");
                                 return description + " - " + sizeStr;
@@ -1099,7 +1116,9 @@ ApplicationWindow {
                             text: {
                                 var txt= qsTr("Mounted as %1").arg(mountpoints.join(", "));
                                 if (isReadOnly) {
-                                    txt += " " + qsTr("[WRITE PROTECTED]")
+                                    txt += " " + qsTr("[WRITE PROTECTED]");
+                                } else if (isSystem) {
+                                    text += " [" + qsTr("SYSTEM") + "]";
                                 }
                                 return txt;
                             }
@@ -1121,6 +1140,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
+                enabled: filterSystemDrives.checked
 
                 onEntered: {
                     dstbgrect.mouseOver = true
