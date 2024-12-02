@@ -1045,6 +1045,7 @@ ApplicationWindow {
         id: dstdelegate
 
         Item {
+            id: dstitem
             anchors.left: parent.left
             anchors.right: parent.right
             Layout.topMargin: 1
@@ -1059,6 +1060,7 @@ ApplicationWindow {
             property string description: model.description
             property string device: model.device
             property string size: model.size
+            property bool unselectable: (isSystem && filterSystemDrives.checked) || isReadOnly
 
             Rectangle {
                 id: dstbgrect
@@ -1069,7 +1071,6 @@ ApplicationWindow {
 
                 color: mouseOver ? "#f5f5f5" : "#ffffff"
                 property bool mouseOver: false
-                property bool unselectable: isSystem && filterSystemDrives.checked
 
                 RowLayout {
                     anchors.fill: parent
@@ -1099,6 +1100,7 @@ ApplicationWindow {
                             font.family: roboto.name
                             font.pointSize: 16
                             color: (isReadOnly || unselectable) ? "grey" : "";
+                            color: !dstitem.unselectable ? "" : "grey";
                             text: {
                                 var sizeStr = (size/1000000000).toFixed(1)+ " " + qsTr("GB");
                                 return description + " - " + sizeStr;
@@ -1113,6 +1115,7 @@ ApplicationWindow {
                             font.family: roboto.name
                             font.pointSize: 12
                             color: "grey"
+                            color: !dstitem.unselectable ? "" : "grey";
                             text: {
                                 var txt= qsTr("Mounted as %1").arg(mountpoints.join(", "));
                                 if (isReadOnly) {
@@ -1139,8 +1142,10 @@ ApplicationWindow {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
+                cursorShape: !dstitem.unselectable ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                 hoverEnabled: true
                 enabled: filterSystemDrives.checked
+                enabled: !dstitem.unselectable
 
                 onEntered: {
                     dstbgrect.mouseOver = true
