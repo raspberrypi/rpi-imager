@@ -1034,7 +1034,7 @@ ApplicationWindow {
             Layout.topMargin: 1
             height: 61
             Accessible.name: {
-                var txt = description+" - "+(size/1000000000).toFixed(1)+" gigabytes"
+                var txt = description+" - "+(size/1000000000).toFixed(1)+ " " + qsTr("gigabytes")
                 if (mountpoints.length > 0) {
                     txt += qsTr("Mounted as %1").arg(mountpoints.join(", "))
                 }
