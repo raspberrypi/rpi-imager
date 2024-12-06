@@ -102,7 +102,7 @@ ImageWriter::ImageWriter(QObject *parent)
                     "-maxdepth",
                     "3",
                     "-samefile",
-                    nvmem_blconfig_path
+                    "/sys/firmware/devicetree/base" + nvmem_blconfig_path
                 };
                 QProcess *findProcess = new QProcess(this);
                 connect(findProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
