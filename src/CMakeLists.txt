@@ -4,7 +4,6 @@
 cmake_minimum_required(VERSION 3.15)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
-OPTION (DRIVELIST_FILTER_SYSTEM_DRIVES "Filter System drives from displayed drives" ON)
 
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectures to build for")
 
@@ -25,6 +24,7 @@ set(Qt6_ROOT "/opt/Qt/6.7.2/gcc_arm64" CACHE PATH "Your Qt6 root path")
 
 if (WIN32)
     set(MINGW64_ROOT "" CACHE PATH "Your MinGW64 root path, likely provided by QtCreator")
+    set(IMAGER_SIGNED_APP OFF CACHE BOOL "Sign Imager and its installer as part of the build. Requires a valid Code Signing certificate.")
 endif()
 
 if (APPLE)
@@ -307,13 +307,6 @@ else()
     add_definitions(-DCHECK_VERSION_DEFAULT=false)
 endif()
 
-if(DRIVELIST_FILTER_SYSTEM_DRIVES)
-   # Hide system drives from list
-   add_definitions(-DDRIVELIST_FILTER_SYSTEM_DRIVES=true)
-else()
-   add_definitions(-DDRIVELIST_FILTER_SYSTEM_DRIVES=false)
-endif()
-
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)
     # Target Windows 10, in line with Qt requirements
@@ -328,6 +321,7 @@ if (WIN32)
         POST_BUILD
         COMMAND ${CMAKE_STRIP} "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
 
+    if (IMAGER_SIGNED_APP)
     # Borrowed from the 'mstdlib' project: Code signing
     # First, determine our build architecture
     if (CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -375,6 +369,8 @@ if (WIN32)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
         COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe")
+
+    endif(IMAGER_SIGNED_APP)
 
     # Windeploy
     find_program(WINDEPLOYQT "windeployqt.exe" PATHS "${Qt6_ROOT}/bin")

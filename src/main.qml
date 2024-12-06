@@ -991,7 +991,7 @@ ApplicationWindow {
             anchors.top: dstpopup_title_separator.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.bottom: parent.bottom
+            anchors.bottom: filterRow.top
             boundsBehavior: Flickable.StopAtBounds
             highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
             clip: true
@@ -1023,18 +1023,35 @@ ApplicationWindow {
             Keys.onEnterPressed: Keys.onSpacePressed(event)
             Keys.onReturnPressed: Keys.onSpacePressed(event)
         }
+        RowLayout {
+            id: filterRow
+            anchors {
+                bottom: parent.bottom
+                right: parent.right
+                left: parent.left
+            }
+            Item {
+                Layout.fillWidth: true
+            }
+            ImCheckBox {
+                id: filterSystemDrives
+                checked: true
+                text: qsTr("Exclude System Drives")
+            }
+        }
     }
 
     Component {
         id: dstdelegate
 
         Item {
+            id: dstitem
             anchors.left: parent.left
             anchors.right: parent.right
             Layout.topMargin: 1
             height: 61
             Accessible.name: {
-                var txt = description+" - "+(size/1000000000).toFixed(1)+" gigabytes"
+                var txt = description+" - "+(size/1000000000).toFixed(1)+ " " + qsTr("gigabytes")
                 if (mountpoints.length > 0) {
                     txt += qsTr("Mounted as %1").arg(mountpoints.join(", "))
                 }
@@ -1043,6 +1060,7 @@ ApplicationWindow {
             property string description: model.description
             property string device: model.device
             property string size: model.size
+            property bool unselectable: (isSystem && filterSystemDrives.checked) || isReadOnly
 
             Rectangle {
                 id: dstbgrect
@@ -1081,7 +1099,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             font.family: roboto.name
                             font.pointSize: 16
-                            color: isReadOnly ? "grey" : "";
+                            color: !dstitem.unselectable ? "" : "grey";
                             text: {
                                 var sizeStr = (size/1000000000).toFixed(1)+ " " + qsTr("GB");
                                 return description + " - " + sizeStr;
@@ -1095,11 +1113,13 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             font.family: roboto.name
                             font.pointSize: 12
-                            color: "grey"
+                            color: !dstitem.unselectable ? "" : "grey";
                             text: {
                                 var txt= qsTr("Mounted as %1").arg(mountpoints.join(", "));
                                 if (isReadOnly) {
-                                    txt += " " + qsTr("[WRITE PROTECTED]")
+                                    txt += " " + qsTr("[WRITE PROTECTED]");
+                                } else if (isSystem) {
+                                    text += " [" + qsTr("SYSTEM") + "]";
                                 }
                                 return txt;
                             }
@@ -1119,8 +1139,9 @@ ApplicationWindow {
 
             MouseArea {
                 anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
+                cursorShape: !dstitem.unselectable ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                 hoverEnabled: true
+                enabled: !dstitem.unselectable
 
                 onEntered: {
                     dstbgrect.mouseOver = true
