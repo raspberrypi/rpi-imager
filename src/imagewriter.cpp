@@ -85,17 +85,50 @@ ImageWriter::ImageWriter(QObject *parent)
         if (_currentKeyboard.isEmpty())
             _currentKeyboard = "us";
 
-        QFile f("/sys/bus/nvmem/devices/rmem0/nvmem");
-        if (f.exists() && f.open(f.ReadOnly))
         {
-            const QByteArrayList eepromSettings = f.readAll().split('\n');
+            QString nvmem_blconfig_path = {};
+            QFile f("/sys/firmware/devicetree/base/aliases/blconfig");
+            if (f.exists() && f.open(f.ReadOnly)) {
+                nvmem_blconfig_path = f.readAll();
+            }
             f.close();
-            for (const QByteArray &setting : eepromSettings)
-            {
-                if (setting.startsWith("IMAGER_REPO_URL="))
-                {
-                    _repo = setting.mid(16).trimmed();
-                    qDebug() << "Repository from EEPROM:" << _repo;
+
+            QString blconfig_link = {};
+            if (!nvmem_blconfig_path.isEmpty()) {
+                QString findCommand = "/usr/bin/find";
+                QStringList findArguments = {
+                    "-L",
+                    "/sys/bus/nvmem",
+                    "-maxdepth",
+                    "3",
+                    "-samefile",
+                    nvmem_blconfig_path
+                };
+                QProcess *findProcess = new QProcess(this);
+                connect(findProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+                    [&blconfig_link, &findProcess](int exitCode, QProcess::ExitStatus exitStatus) {
+                        blconfig_link = findProcess->readAllStandardOutput();
+                    });
+                findProcess->start();
+                findProcess->waitForFinished(); //Default timeout: 30s
+                delete findProcess;
+            }
+            if (!blconfig_link.isEmpty()) {
+                QDir blconfig_of_dir = QDir(blconfig_link);
+                if (blconfig_of_dir.cdUp()) {
+                    QFile blconfig_file = QFile(blconfig_of_dir.path() + QDir::separator() + "nvmem");
+                    if (blconfig_file.exists() && blconfig_file.open(blconfig_file.ReadOnly)) {
+                        const QByteArrayList eepromSettings = f.readAll().split('\n');
+                        blconfig_file.close();
+                        for (const QByteArray &setting : eepromSettings)
+                        {
+                            if (setting.startsWith("IMAGER_REPO_URL="))
+                            {
+                                _repo = setting.mid(16).trimmed();
+                                qDebug() << "Repository from EEPROM:" << _repo;
+                            }
+                        }
+                    }
                 }
             }
         }
