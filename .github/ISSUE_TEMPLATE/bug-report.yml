@@ -98,7 +98,7 @@ body:
     id: terms
     attributes:
       label: OS Customisation
-      description: Were you using OS Customisation when you enountered the bug?
+      description: Were you using OS Customisation when you encountered the bug?
       options:
         - label: Yes, I was using OS Customisation when the bug occurred.
           required: false
