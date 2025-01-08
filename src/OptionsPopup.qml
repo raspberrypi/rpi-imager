@@ -908,7 +908,11 @@ Window {
                 fieldWifiPassword.text.length < 64
             var cryptedPsk = isPassphrase ? imageWriter.pbkdf2(fieldWifiPassword.text, fieldWifiSSID.text)
                                           : fieldWifiPassword.text
-            wpaconfig += "\tpsk="+cryptedPsk+"\n"
+            if (cryptedPsk.length > 0) {
+                wpaconfig += "\tpsk="+cryptedPsk+"\n"
+            } else {
+                wpaconfig += "\tkey_mgmt=NONE\n"
+            }
             wpaconfig += "}\n"
 
             addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
@@ -934,8 +938,13 @@ Window {
             cloudinitnetwork += "    dhcp4: true\n"
             cloudinitnetwork += "    optional: true\n"
             cloudinitnetwork += "    access-points:\n"
-            cloudinitnetwork += "      \""+fieldWifiSSID.text+"\":\n"
-            cloudinitnetwork += "        password: \""+cryptedPsk+"\"\n"
+
+            if (cryptedPsk.length > 0) {
+                cloudinitnetwork += "      \""+fieldWifiSSID.text+"\":\n"
+                cloudinitnetwork += "        password: "+cryptedPsk+"\n"
+            } else {
+                cloudinitnetwork += "      \""+fieldWifiSSID.text+"\":{}\n"
+            }
             if (chkWifiSSIDHidden.checked) {
                 cloudinitnetwork += "        hidden: true\n"
             }
