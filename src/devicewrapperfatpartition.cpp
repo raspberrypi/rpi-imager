@@ -454,16 +454,15 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
             longEntry.LDIR_Type = 0;
 
             size_t start = (i-1) * 26;
-            memcpy(longEntry.LDIR_Name1, longFilenameStr+start, qMin(10U, lenBytes-start));
-            start += 10;
+            memcpy(longEntry.LDIR_Name1, longFilenameStr+start, qMin(lenBytes-start, sizeof(longEntry.LDIR_Name1)));
+            start += sizeof(longEntry.LDIR_Name1);
             if (start < lenBytes)
             {
-                memcpy(longEntry.LDIR_Name2, longFilenameStr+start, qMin(12U, lenBytes-start));
-                start += 12;
+                memcpy(longEntry.LDIR_Name2, longFilenameStr+start, qMin(lenBytes-start, sizeof(longEntry.LDIR_Name2)));
+                start += sizeof(longEntry.LDIR_Name2);
                 if (start < lenBytes)
                 {
-                    memcpy(longEntry.LDIR_Name3, longFilenameStr+start, qMin(4U, lenBytes-start));
-                    start += 4;
+                    memcpy(longEntry.LDIR_Name3, longFilenameStr+start, qMin(lenBytes-start, sizeof(longEntry.LDIR_Name3)));
                 }
             }
 
