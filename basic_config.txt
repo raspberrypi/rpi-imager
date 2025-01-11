@@ -1,0 +1,5 @@
+[pi]
+hostname=raspberrypi
+ssh_enable=true
+wifi_enable=true
+wifi_ssid=TheReverand24v
