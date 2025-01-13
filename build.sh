@@ -1,5 +1,30 @@
 #!/usr/bin/env bash
 
+setup_cloudstack_db() {
+	# from https://docs.cloudstack.apache.org/en/latest/installguide/management-server/#install-the-database-server
+ sudo cloudstack-setup-databases -h
+
+#-- Create the cloud and cloud_usage databases
+CREATE DATABASE `cloud`;
+CREATE DATABASE `cloud_usage`;
+
+#-- Create the cloud user
+CREATE USER cloud@`localhost` identified by '<password>';
+CREATE USER cloud@`%` identified by '<password>';
+
+#-- Grant all privileges to the cloud user on the databases
+GRANT ALL ON cloud.* to cloud@`localhost`;
+GRANT ALL ON cloud.* to cloud@`%`;
+
+GRANT ALL ON cloud_usage.* to cloud@`localhost`;
+GRANT ALL ON cloud_usage.* to cloud@`%`;
+
+#-- Grant process list privilege for all other databases
+GRANT process ON *.* TO cloud@`localhost`;
+GRANT process ON *.* TO cloud@`%`;
+}
+
+
 # ensure we're running via sudo
 if [ $(whoami) = "root" ]
 then
