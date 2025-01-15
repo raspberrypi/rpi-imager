@@ -116,6 +116,9 @@ echo 'auth_tcp = "none"' >> /etc/libvirt/libvirtd.conf
 echo "****** configure iptables ******"
 echo "doing nothing"
 
+echo "****** mysql defaults ******"
+cat /etc/mysql/debian.cnf
+
 # exit sudo
 exit
 
