@@ -70,6 +70,14 @@ default-authentication-plugin=mysql_native_password
 HereDoc
 }
 
+update_mysql_root() {
+USE mysql
+SELECT User, Host, plugin FROM mysql.user;
+UPDATE user SET plugin='mysql_native_password' WHERE User='root';
+COMMIT;
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'new_password';
+}
+
 if [ $(grep "ERROR_FOR_DIVISION_BY_ZERO" /etc/mysql/mysql.conf.d/mysqld.cnf) ]
 then
         echo "mysqld.cnf already updated"
