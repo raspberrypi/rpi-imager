@@ -1,0 +1,65 @@
+From f6bd285e468069aa953c1672a2d9e276c604d487 Mon Sep 17 00:00:00 2001
+From: Tom Dewey <tom.dewey@raspberrypi.com>
+Date: Thu, 16 Jan 2025 13:45:19 +0000
+Subject: [PATCH] embedded: OptionsWindow becomes a Popup
+
+---
+ src/OptionsPopup.qml | 12 +++++++++++-
+ src/main.qml         | 11 +++++++++++
+ 2 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/src/OptionsPopup.qml b/src/OptionsPopup.qml
+index 0ba94b0a..e5c20769 100644
+--- a/src/OptionsPopup.qml
++++ b/src/OptionsPopup.qml
+@@ -11,7 +11,7 @@ import QtQuick.Window 2.15
+ import QtQml.Models
+ import "qmlcomponents"
+ 
+-Window {
++Popup {
+     id: popup
+     width: 550
+     height: 420
+@@ -38,6 +38,16 @@ Window {
+ 
+     signal saveSettingsSignal(var settings)
+ 
++    /* Only in embedded version */
++    x: (parent.width-width)/2,
++    y: 10
++    height: parent.height-20
++    property string title
++
++    function show() { open() }
++    function raise() { }
++    /*  */
++
+     Keys.onEscapePressed: {
+         popup.close()
+     }
+diff --git a/src/main.qml b/src/main.qml
+index 63dd21a9..cee44a84 100644
+--- a/src/main.qml
++++ b/src/main.qml
+@@ -1235,6 +1235,17 @@ ApplicationWindow {
+             imageWriter.setSavedCustomizationSettings(settings)
+             usesavedsettingspopup.hasSavedSettings = true
+         }
++
++        onClosed: {
++            // When the options popup closes on embedded focus doesn't
++            // automatically return to the usesavedsettings msgpopup, so
++            // set the focus manually (but only if this msgpopup is actually
++            // open. It might not be, e.g. if the user opened settings via
++            // the keyboard shortcut).
++            if (usesavedsettingspopup.opened) {
++                usesavedsettingspopup.forceActiveFocus()
++            }
++        }
+     }
+ 
+     UseSavedSettingsPopup {
+-- 
+2.39.5 (Apple Git-154)
+
