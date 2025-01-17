@@ -105,8 +105,8 @@ apt-get install cloudstack-management cloudstack-usage
 # Stop the automatic start after install
 systemctl stop cloudstack-management cloudstack-usage
 
-echo "****** setup database ******"
-cloudstack-setup-databases cloud:cloud@localhost --deploy-as=root: -i 192.168.1.10
+echo "****** setup cloudstack database ******"
+cloudstack-setup-databases cloud:cloud@localhost --deploy-as=root: -i 192.168.0.154
 
 echo "****** kvm setup ******"
 apt-get install -y qemu-kvm cloudstack-agent
