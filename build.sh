@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
 
 setup_cloudstack_db() {
-	# from https://docs.cloudstack.apache.org/en/latest/installguide/management-server/#install-the-database-server
- sudo cloudstack-setup-databases -h
 
-#-- Create the cloud and cloud_usage databases
-CREATE DATABASE `cloud`;
-CREATE DATABASE `cloud_usage`;
+# from https://docs.cloudstack.apache.org/en/latest/installguide/management-server/#install-the-database-server
+cloudstack-setup-databases cloud:cloud@localhost --deploy-as=root: -i 192.168.0.154
 
-#-- Create the cloud user
-CREATE USER cloud@`localhost` identified by '<password>';
-CREATE USER cloud@`%` identified by '<password>';
+mysql -u root -p <password> -h localhost <<-HereDoc
+	#-- Create the cloud and cloud_usage databases
+	CREATE DATABASE `cloud`;
+	CREATE DATABASE `cloud_usage`;
 
-#-- Grant all privileges to the cloud user on the databases
-GRANT ALL ON cloud.* to cloud@`localhost`;
-GRANT ALL ON cloud.* to cloud@`%`;
-
-GRANT ALL ON cloud_usage.* to cloud@`localhost`;
-GRANT ALL ON cloud_usage.* to cloud@`%`;
-
-#-- Grant process list privilege for all other databases
-GRANT process ON *.* TO cloud@`localhost`;
-GRANT process ON *.* TO cloud@`%`;
+	#-- Create the cloud user
+	CREATE USER cloud@`localhost` identified by '<password>';
+	CREATE USER cloud@`%` identified by '<password>';
+	
+	#-- Grant all privileges to the cloud user on the databases
+	GRANT ALL ON cloud.* to cloud@`localhost`;
+	GRANT ALL ON cloud.* to cloud@`%`;
+	
+	GRANT ALL ON cloud_usage.* to cloud@`localhost`;
+	GRANT ALL ON cloud_usage.* to cloud@`%`;
+	
+	#-- Grant process list privilege for all other databases
+	GRANT process ON *.* TO cloud@`localhost`;
+	GRANT process ON *.* TO cloud@`%`;
+HereDoc
 }
 
 
@@ -37,7 +40,7 @@ fi
 
 
 # is this a raspberry pi 5?
-if [ $(uname -r) = "6.11.0-1004-raspi" ]
+if [ $(uname -r) = "6.11.0-1006-raspi" ]
         then
                 echo "OS version match"
         else
@@ -106,7 +109,7 @@ apt-get install cloudstack-management cloudstack-usage
 systemctl stop cloudstack-management cloudstack-usage
 
 echo "****** setup cloudstack database ******"
-cloudstack-setup-databases cloud:cloud@localhost --deploy-as=root: -i 192.168.0.154
+setup_cloudstack_db
 
 echo "****** kvm setup ******"
 apt-get install -y qemu-kvm cloudstack-agent
