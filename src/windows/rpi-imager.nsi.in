@@ -13,8 +13,9 @@
 !define MAIN_APP_EXE "rpi-imager.exe"
 !define INSTALL_TYPE "SetShellVarContext current"
 !define REG_ROOT "HKCU"
-!define REG_APP_PATH "Software\Microsoft\Windows\CurrentVersion\App Paths\${MAIN_APP_EXE}"
-!define UNINSTALL_PATH "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+!define REG_APP_PATH "Software\Microsoft\Windows\CurrentVersion\App Paths\${MAIN_APP_EXE}" /CURRENTUSER
+!define UNINSTALL_PATH "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" /CURRENTUSER
+
 
 # Window to close if running
 !define EXE_TO_TERMINATE "rpi-imager.exe"
@@ -30,15 +31,21 @@ VIAddVersionKey "FileVersion"  "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 
 ######################################################################
-
 SetCompressor LZMA
 Name "${APP_NAME}"
 Caption "${APP_NAME} ${VERSION}"
 OutFile "${INSTALLER_NAME}"
 BrandingText "${APP_NAME}"
 XPStyle on
+
+; Use HKEY_CURRENT_USER for registry entries to avoid requiring admin rights
+!define REG_ROOT "HKCU"  ; HKEY_CURRENT_USER
+!define REG_APP_PATH "Software\Microsoft\Windows\CurrentVersion\App Paths\${MAIN_APP_EXE}"
 InstallDirRegKey "${REG_ROOT}" "${REG_APP_PATH}" ""
-InstallDir "$PROGRAMFILES\Raspberry Pi Imager"
+
+; Default to a user-specific directory
+InstallDir "$LOCALAPPDATA\Raspberry Pi Imager"
+
 
 ######################################################################
 
