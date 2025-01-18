@@ -3,16 +3,17 @@
 setup_cloudstack_db() {
 
 # from https://docs.cloudstack.apache.org/en/latest/installguide/management-server/#install-the-database-server
-cloudstack-setup-databases cloud:cloud@localhost --deploy-as=root: -i 192.168.0.154
+# set root password: mysqld_safe --skip-grant-tables&
+cloudstack-setup-databases cloud:'4rtaxs'@localhost --deploy-as=root:'4rtaxs' -i 127.0.0.1
 
-mysql -u root -p <password> -h localhost <<-HereDoc
+mysql -u root -p '4rtaxes' -h localhost <<-HereDoc
 	#-- Create the cloud and cloud_usage databases
 	CREATE DATABASE `cloud`;
 	CREATE DATABASE `cloud_usage`;
 
 	#-- Create the cloud user
-	CREATE USER cloud@`localhost` identified by '<password>';
-	CREATE USER cloud@`%` identified by '<password>';
+	CREATE USER cloud@`localhost` identified by '4rtaxs';
+	CREATE USER cloud@`%` identified by '4rtaxs';
 	
 	#-- Grant all privileges to the cloud user on the databases
 	GRANT ALL ON cloud.* to cloud@`localhost`;
@@ -78,7 +79,7 @@ USE mysql
 SELECT User, Host, plugin FROM mysql.user;
 UPDATE user SET plugin='mysql_native_password' WHERE User='root';
 COMMIT;
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'new_password';
+ALTER USER 'root'@'localhost' IDENTIFIED BY '4rtaxs';
 }
 
 if [ $(grep "ERROR_FOR_DIVISION_BY_ZERO" /etc/mysql/mysql.conf.d/mysqld.cnf) ]
