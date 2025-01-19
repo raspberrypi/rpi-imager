@@ -55,7 +55,7 @@
     <message>
         <location filename="../downloadthread.cpp" line="216"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
-        <translation>執行 authopen 以獲取磁碟裝置 &apos;%1&apos; 存取權限時發生錯誤</translation>
+        <translation>執行 authopen 以取得磁碟裝置 &apos;%1&apos; 存取權限時發生錯誤</translation>
     </message>
     <message>
         <location filename="../downloadthread.cpp" line="217"/>
@@ -235,12 +235,12 @@
     <message>
         <location filename="../imagewriter.cpp" line="962"/>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>時間同步失敗。將在 3 秒後重試</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="974"/>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation type="unfinished"></translation>
+        <translation>您的網路交換器已啟用 STP 功能，取得 IP 位址需要較長時間</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="1185"/>
@@ -290,18 +290,6 @@
         <location filename="../OptionsPopup.qml" line="20"/>
         <source>OS Customization</source>
         <translation>作業系統客製化</translation>
-    </message>
-    <message>
-        <source>OS customization options</source>
-        <translation type="vanished">作業系統客製化選項</translation>
-    </message>
-    <message>
-        <source>for this session only</source>
-        <translation type="vanished">僅此工作階段</translation>
-    </message>
-    <message>
-        <source>to always use</source>
-        <translation type="vanished">總是使用</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="62"/>
@@ -515,22 +503,18 @@
     <message>
         <location filename="../main.qml" line="330"/>
         <source>Network not ready yet</source>
-        <translation type="unfinished"></translation>
+        <translation>網路尚未就緒</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1007"/>
         <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
+        <translation>找不到儲存裝置</translation>
     </message>
     <message>
         <location filename="../main.qml" line="205"/>
         <location filename="../main.qml" line="1317"/>
         <source>CHOOSE STORAGE</source>
         <translation>選擇儲存裝置</translation>
-    </message>
-    <message>
-        <source>WRITE</source>
-        <translation type="vanished">寫入</translation>
     </message>
     <message>
         <location filename="../main.qml" line="219"/>
@@ -571,10 +555,6 @@
         <translation>選擇此按鈕以開始寫入映像檔</translation>
     </message>
     <message>
-        <source>Select this button to access advanced settings</source>
-        <translation type="vanished">選擇此按鈕以存取進階設定</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="320"/>
         <source>Using custom repository: %1</source>
         <translation>使用自訂套件庫：%1</translation>
@@ -593,10 +573,6 @@
         <location filename="../main.qml" line="383"/>
         <source>Keyboard: </source>
         <translation>鍵盤：</translation>
-    </message>
-    <message>
-        <source>Pi model:</source>
-        <translation type="vanished">Pi 型號：</translation>
     </message>
     <message>
         <location filename="../main.qml" line="500"/>
@@ -679,10 +655,6 @@
         <location filename="../main.qml" line="1192"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
         <translation>有新版本的 Imager 可供下載。&lt;br&gt;您是否想前往網站進行下載？</translation>
-    </message>
-    <message>
-        <source>Error downloading OS list from Internet</source>
-        <translation type="vanished">從網路下載作業系統清單時發生錯誤</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1243"/>
