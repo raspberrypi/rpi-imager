@@ -836,23 +836,14 @@ Window {
                 cryptedPassword = fieldUserPassword.alreadyCrypted ? fieldUserPassword.text : imageWriter.crypt(fieldUserPassword.text)
             }
 
-            if (isRpiosCloudInit && cryptedPassword) {
-                addCloudInit("rpi_userconf:")
-                addCloudInit("  password: " + cryptedPassword)
-                addCloudInit("  user: " + fieldUserName.text)
-                addCloudInit("")
-            }
-
             addCloudInit("users:")
             addCloudInit("- name: " + fieldUserName.text)
-            if (!isRpiosCloudInit) {
-                addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo")
-                addCloudInit("  shell: /bin/bash")
+            addCloudInit("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo")
+            addCloudInit("  shell: /bin/bash")
 
-                if (chkSetUser.checked) {
-                    addCloudInit("  lock_passwd: false")
-                    addCloudInit("  passwd: "+cryptedPassword)
-                }
+            if (chkSetUser.checked) {
+                addCloudInit("  lock_passwd: false")
+                addCloudInit("  passwd: "+cryptedPassword)
             }
 
             if (chkSSH.checked && radioPubKeyAuthentication.checked) {
@@ -886,12 +877,7 @@ Window {
                         addCloudInit("    - "+pk)
                     }
                 }
-                if (!isRpiosCloudInit) {
-                    addCloudInit("  sudo: ALL=(ALL) NOPASSWD:ALL")
-                } else {
-                    addCloudInit("\nrpi_interfaces:")
-                    addCloudInit("  ssh: true")
-                }
+                addCloudInit("  sudo: ALL=(ALL) NOPASSWD:ALL")
             }
             addCloudInit("")
 
