@@ -9,138 +9,77 @@ import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
 import "qmlcomponents"
 
-Popup {
-    id: msgpopup
-    x: (parent.width-width)/2
-    y: (parent.height-height)/2
-    width: 550
+ImPopup {
+    id: root
+
     height: msgpopupbody.implicitHeight+150
-    padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    modal: true
 
     property bool hasSavedSettings: false
 
-    signal yes()
-    signal no()
     signal noClearSettings()
     signal editSettings()
     signal closeSettings()
 
-    // background of title
-    Rectangle {
-        id: msgpopup_title_background
-        color: "#f5f5f5"
-        anchors.left: parent.left
-        anchors.top: parent.top
-        height: 35
-        width: parent.width
+    // These children go into ImPopup's ColumnLayout
 
-        Text {
-            id: msgpopupheader
-            horizontalAlignment: Text.AlignHCenter
-            anchors.fill: parent
-            anchors.topMargin: 10
-            font.family: roboto.name
-            font.bold: true
-            text: qsTr("Use OS customization?")
-        }
-
-        Text {
-            text: "X"
-            Layout.alignment: Qt.AlignRight
-            horizontalAlignment: Text.AlignRight
-            verticalAlignment: Text.AlignVCenter
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: roboto.name
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    msgpopup.close()
-                }
-            }
-        }
-    }
-    // line under title
-    Rectangle {
-        id: msgpopup_title_separator
-        color: "#afafaf"
-        width: parent.width
-        anchors.top: msgpopup_title_background.bottom
-        height: 1
+    Text {
+        id: msgpopupbody
+        font.pointSize: 12
+        wrapMode: Text.Wrap
+        textFormat: Text.StyledText
+        font.family: roboto.name
+        Layout.fillHeight: true
+        Layout.leftMargin: 25
+        Layout.rightMargin: 25
+        Layout.topMargin: 25
+        Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
+        Accessible.name: text.replace(/<\/?[^>]+(>|$)/g, "")
+        text: qsTr("Would you like to apply OS customization settings?")
     }
 
-    ColumnLayout {
-        spacing: 20
-        anchors.top: msgpopup_title_separator.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
+    RowLayout {
+        Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
+        Layout.bottomMargin: 10
+        id: buttons
 
-        Text {
-            id: msgpopupbody
-            font.pointSize: 12
-            wrapMode: Text.Wrap
-            textFormat: Text.StyledText
-            font.family: roboto.name
-            Layout.fillHeight: true
-            Layout.leftMargin: 25
-            Layout.rightMargin: 25
-            Layout.topMargin: 25
-            Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
-            Accessible.name: text.replace(/<\/?[^>]+(>|$)/g, "")
-            text: qsTr("Would you like to apply OS customization settings?")
+        ImButtonRed {
+            text: qsTr("EDIT SETTINGS")
+            onClicked: {
+                // Don't close this dialog when "edit settings" is
+                // clicked, as we don't want the user to fall back to the
+                // start of the flow. After editing the settings we want
+                // then to once again have the choice about whether to use
+                // customisation or not.
+                root.editSettings()
+            }
         }
 
-        RowLayout {
-            Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
-            Layout.bottomMargin: 10
-            id: buttons
-
-            ImButtonRed {
-                text: qsTr("EDIT SETTINGS")
-                onClicked: {
-                    // Don't close this dialog when "edit settings" is
-                    // clicked, as we don't want the user to fall back to the
-                    // start of the flow. After editing the settings we want
-                    // then to once again have the choice about whether to use
-                    // customisation or not.
-                    msgpopup.editSettings()
-                }
+        ImButtonRed {
+            id: noAndClearButton
+            text: qsTr("NO, CLEAR SETTINGS")
+            onClicked: {
+                root.close()
+                root.noClearSettings()
             }
+            enabled: hasSavedSettings
+        }
 
-            ImButtonRed {
-                id: noAndClearButton
-                text: qsTr("NO, CLEAR SETTINGS")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.noClearSettings()
-                }
-                enabled: hasSavedSettings
+        ImButtonRed {
+            id: yesButton
+            text: qsTr("YES")
+            onClicked: {
+                root.close()
+                root.yes()
             }
+            enabled: hasSavedSettings
+        }
 
-            ImButtonRed {
-                id: yesButton
-                text: qsTr("YES")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.yes()
-                }
-                enabled: hasSavedSettings
-            }
-
-            ImButtonRed {
-                text: qsTr("NO")
-                onClicked: {
-                    msgpopup.close()
-                    msgpopup.no()
-                }
+        ImButtonRed {
+            text: qsTr("NO")
+            onClicked: {
+                root.close()
+                root.no()
             }
         }
     }
