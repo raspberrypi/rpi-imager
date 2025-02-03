@@ -62,7 +62,7 @@ ImPopup {
                 root.close()
                 root.noClearSettings()
             }
-            enabled: hasSavedSettings
+            enabled: root.hasSavedSettings
         }
 
         ImButtonRed {
@@ -72,7 +72,7 @@ ImPopup {
                 root.close()
                 root.yes()
             }
-            enabled: hasSavedSettings
+            enabled: root.hasSavedSettings
         }
 
         ImButtonRed {
