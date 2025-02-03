@@ -2,6 +2,8 @@
 src/build/*
 src/build/**
 .vscode
+compile_commands.json
+src/.cache/clangd
 obj-**
 debian/rpi-imager/**
 debian/.debhelper**
