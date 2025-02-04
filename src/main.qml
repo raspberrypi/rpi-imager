@@ -1076,7 +1076,7 @@ ApplicationWindow {
                     anchors.fill: parent
 
                     Item {
-                        width: 25
+                        Layout.preferredWidth: 25
                     }
 
                     Image {
@@ -1084,12 +1084,10 @@ ApplicationWindow {
                         source: isUsb ? "icons/ic_usb_40px.svg" : isScsi ? "icons/ic_storage_40px.svg" : "icons/ic_sd_storage_40px.svg"
                         verticalAlignment: Image.AlignVCenter
                         fillMode: Image.Pad
-                        width: 64
-                        height: 60
                     }
 
                     Item {
-                        width: 25
+                        Layout.preferredWidth: 25
                     }
 
                     ColumnLayout {
@@ -1108,7 +1106,6 @@ ApplicationWindow {
                         }
                         Text {
                             textFormat: Text.StyledText
-                            height: parent.height
                             verticalAlignment: Text.AlignVCenter
                             Layout.fillWidth: true
                             font.family: roboto.name
