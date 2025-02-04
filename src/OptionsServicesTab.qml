@@ -10,7 +10,7 @@ import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 import "qmlcomponents"
 
-ScrollView {
+OptionsTabBase {
     id: root
 
     property alias publicKeyModel: publicKeyModel
@@ -19,18 +19,6 @@ ScrollView {
     property alias radioPasswordAuthentication: radioPasswordAuthentication
     property alias radioPubKeyAuthentication: radioPubKeyAuthentication
 
-    property double scrollPosition
-
-    Layout.fillWidth: true
-    Layout.fillHeight: true
-    font.family: roboto.name
-
-
-
-    // clip: true
-    ScrollBar.vertical.policy: ScrollBar.AsNeeded
-    ScrollBar.vertical.position: scrollPosition
-    scrollPosition: scrollPosition
     required property ImCheckBox chkSetUser
     required property TextField fieldUserName
     required property TextField fieldUserPassword

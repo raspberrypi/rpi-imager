@@ -10,7 +10,7 @@ import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 import "qmlcomponents"
 
-ScrollView {
+OptionsTabBase {
     id: root
 
     property alias fieldHostname: fieldHostname
@@ -31,17 +31,6 @@ ScrollView {
     required property bool sshEnabled
     required property bool passwordAuthenticationEnabled
 
-    font.family: roboto.name
-
-    Layout.fillWidth: true
-    Layout.fillHeight: true
-
-    property double scrollPosition
-
-    // clip: true
-    ScrollBar.vertical.policy: ScrollBar.AsNeeded
-    ScrollBar.vertical.position: scrollPosition
-    scrollPosition: scrollPosition
     ColumnLayout {
         RowLayout {
             ImCheckBox {

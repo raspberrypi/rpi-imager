@@ -36,6 +36,7 @@
         <file>OptionsGeneralTab.qml</file>
         <file>OptionsServicesTab.qml</file>
         <file>OptionsMiscTab.qml</file>
+        <file>OptionsTabBase.qml</file>
         <file>qmlcomponents/ImButton.qml</file>
         <file>qmlcomponents/ImButtonRed.qml</file>
         <file>qmlcomponents/ImCheckBox.qml</file>
