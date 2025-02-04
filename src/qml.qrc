@@ -33,6 +33,9 @@
         <file>icons/cat_3d_printing.png</file>
         <file>icons/logo_stacked_imager.png</file>
         <file>icons/logo_sxs_imager.png</file>
+        <file>OptionsGeneralTab.qml</file>
+        <file>OptionsServicesTab.qml</file>
+        <file>OptionsMiscTab.qml</file>
         <file>qmlcomponents/ImButton.qml</file>
         <file>qmlcomponents/ImButtonRed.qml</file>
         <file>qmlcomponents/ImCheckBox.qml</file>
