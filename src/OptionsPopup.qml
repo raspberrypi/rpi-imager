@@ -155,8 +155,8 @@ Window {
                         }
                     }
 
-                    applySettings()
-                    saveSettings()
+                    popup.applySettings()
+                    popup.saveSettings()
                     popup.close()
                 }
             }
