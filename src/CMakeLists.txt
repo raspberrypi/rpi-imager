@@ -307,6 +307,40 @@ else()
     add_definitions(-DCHECK_VERSION_DEFAULT=false)
 endif()
 
+qt_policy(SET QTP0001 NEW)
+
+if (QT_KNOWN_POLICY_QTP0004)
+    qt_policy(SET QTP0004 NEW)
+endif()
+
+set(IMAGER_QML_FILES
+    main.qml
+    MsgPopup.qml
+    OptionsGeneralTab.qml
+    OptionsMiscTab.qml
+    OptionsPopup.qml
+    OptionsServicesTab.qml
+    OptionsTabBase.qml
+    Style.qml
+    UseSavedSettingsPopup.qml
+    qmlcomponents/ImButton.qml
+    qmlcomponents/ImButtonRed.qml
+    qmlcomponents/ImCheckBox.qml
+    qmlcomponents/ImPopup.qml
+    qmlcomponents/ImRadioButton.qml
+)
+
+qt_add_qml_module(${PROJECT_NAME}
+    URI RpiImager
+    VERSION 1.0
+    QML_FILES ${IMAGER_QML_FILES}
+    NO_CACHEGEN
+    OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RpiImager
+    DEPENDENCIES QtQuick
+    NO_PLUGIN
+    RESOURCE_PREFIX "/" # Puts the stuff into qrc:/RpiImager/
+)
+
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)
     # Target Windows 10, in line with Qt requirements

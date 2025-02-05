@@ -343,7 +343,7 @@ int main(int argc, char *argv[])
     engine.setNetworkAccessManagerFactory(&namf);
     engine.rootContext()->setContextProperty("imageWriter", &imageWriter);
     engine.rootContext()->setContextProperty("driveListModel", imageWriter.getDriveList());
-    engine.load(QUrl(QStringLiteral("qrc:/main.qml")));
+    engine.load(QUrl(QStringLiteral("qrc:/RpiImager/main.qml")));
 
     if (engine.rootObjects().isEmpty())
         return -1;

@@ -1,17 +1,26 @@
 <RCC>
+
+    <!-- Resources used by C++: -->
     <qresource prefix="/">
-        <file>main.qml</file>
+        <file>countries.txt</file>
+        <file>timezones.txt</file>
+        <file>keymap-layouts.txt</file>
+    </qresource>
+
+    <!-- Resources used by QML: -->
+    <qresource prefix="/RpiImager">
         <file>qtquickcontrols2.conf</file>
-        <file>icons/rpi-imager.ico</file>
+
         <file>fonts/Roboto-Bold.ttf</file>
         <file>fonts/Roboto-Light.ttf</file>
         <file>fonts/Roboto-Regular.ttf</file>
+
+        <file>icons/rpi-imager.ico</file>
         <file>icons/ic_chevron_left_40px.svg</file>
         <file>icons/ic_chevron_right_40px.svg</file>
         <file>icons/ic_sd_storage_40px.svg</file>
         <file>icons/ic_storage_40px.svg</file>
         <file>icons/ic_usb_40px.svg</file>
-        <file>MsgPopup.qml</file>
         <file>icons/use_custom.png</file>
         <file>icons/erase.png</file>
         <file>icons/cat_raspberry_pi_os.png</file>
@@ -20,28 +29,14 @@
         <file>icons/cat_misc_utility_images.png</file>
         <file>icons/cat_media_players.png</file>
         <file>icons/cat_emulation_and_games.png</file>
-        <file>OptionsPopup.qml</file>
-        <file>countries.txt</file>
-        <file>timezones.txt</file>
-        <file>UseSavedSettingsPopup.qml</file>
         <file>icons/ic_info_16px.png</file>
         <file>icons/ic_info_12px.png</file>
-        <file>keymap-layouts.txt</file>
         <file>icons/ic_cog_red.svg</file>
         <file>icons/cat_home_automation.png</file>
         <file>icons/cat_language_specific_operating_systems.png</file>
         <file>icons/cat_3d_printing.png</file>
         <file>icons/logo_stacked_imager.png</file>
         <file>icons/logo_sxs_imager.png</file>
-        <file>OptionsGeneralTab.qml</file>
-        <file>OptionsServicesTab.qml</file>
-        <file>OptionsMiscTab.qml</file>
-        <file>OptionsTabBase.qml</file>
-        <file>qmlcomponents/ImButton.qml</file>
-        <file>qmlcomponents/ImButtonRed.qml</file>
-        <file>qmlcomponents/ImCheckBox.qml</file>
-        <file>qmlcomponents/ImPopup.qml</file>
-        <file>qmlcomponents/ImRadioButton.qml</file>
         <file>icons/cat_digital_signage.png</file>
     </qresource>
 </RCC>
