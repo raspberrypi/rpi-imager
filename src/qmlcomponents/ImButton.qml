@@ -8,7 +8,7 @@ import QtQuick.Controls 2.2
 import QtQuick.Controls.Material 2.2
 
 Button {
-    font.family: roboto.name
+    font.family: Style.fontFamily
     font.capitalization: Font.AllUppercase
     Material.background: activeFocus ? "#d1dcfb" : "#ffffff"
     Material.foreground: "#cd2355"

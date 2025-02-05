@@ -28,7 +28,7 @@ ImPopup {
         font.pointSize: 12
         wrapMode: Text.Wrap
         textFormat: Text.StyledText
-        font.family: roboto.name
+        font.family: Style.fontFamily
         Layout.fillHeight: true
         Layout.fillWidth: true
         Layout.leftMargin: 10
@@ -77,7 +77,7 @@ ImPopup {
             onClicked: {
                 Qt.quit()
             }
-            font.family: roboto.name
+            font.family: Style.fontFamily
             visible: root.quitButton
         }
     }

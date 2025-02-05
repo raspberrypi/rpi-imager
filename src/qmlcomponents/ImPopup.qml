@@ -38,7 +38,7 @@ Popup {
             horizontalAlignment: Text.AlignHCenter
             anchors.fill: parent
             anchors.topMargin: 10
-            font.family: roboto.name
+            font.family: Style.fontFamily
             font.bold: true
         }
 
@@ -51,7 +51,7 @@ Popup {
             anchors.top: parent.top
             anchors.rightMargin: 25
             anchors.topMargin: 10
-            font.family: roboto.name
+            font.family: Style.fontFamily
             font.bold: true
 
             MouseArea {

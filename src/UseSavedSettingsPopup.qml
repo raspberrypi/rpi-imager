@@ -28,7 +28,7 @@ ImPopup {
         font.pointSize: 12
         wrapMode: Text.Wrap
         textFormat: Text.StyledText
-        font.family: roboto.name
+        font.family: Style.fontFamily
         Layout.fillHeight: true
         Layout.leftMargin: 25
         Layout.rightMargin: 25
