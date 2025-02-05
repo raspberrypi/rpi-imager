@@ -330,6 +330,8 @@ set(IMAGER_QML_FILES
     qmlcomponents/ImRadioButton.qml
 )
 
+set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 # C++ types exposed to QML
 set(IMAGER_QML_CPP_TYPES
     imagewriter.cpp

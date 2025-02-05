@@ -26,10 +26,6 @@ ApplicationWindow {
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
 
-    FontLoader {id: roboto;      source: "fonts/Roboto-Regular.ttf"}
-    FontLoader {id: robotoLight; source: "fonts/Roboto-Light.ttf"}
-    FontLoader {id: robotoBold;  source: "fonts/Roboto-Bold.ttf"}
-
     onClosing: {
         if (progressBar.visible) {
             close.accepted = false
@@ -126,7 +122,7 @@ ApplicationWindow {
                         Layout.preferredHeight: 17
                         Layout.preferredWidth: 100
                         font.pixelSize: 12
-                        font.family: robotoBold.name
+                        font.family: Style.fontFamilyBold
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -163,7 +159,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
                         font.pixelSize: 12
-                        font.family: robotoBold.name
+                        font.family: Style.fontFamilyBold
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -200,7 +196,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
                         font.pixelSize: 12
-                        font.family: robotoBold.name
+                        font.family: Style.fontFamilyBold
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -236,7 +232,7 @@ ApplicationWindow {
                         id: progressText
                         font.pointSize: 10
                         color: "white"
-                        font.family: robotoBold.name
+                        font.family: Style.fontFamilyBold
                         font.bold: true
                         visible: false
                         horizontalAlignment: Text.AlignHCenter
@@ -319,7 +315,7 @@ ApplicationWindow {
                     Layout.columnSpan: 3
                     color: "#ffffff"
                     font.pixelSize: 18
-                    font.family: roboto.name
+                    font.family: Style.fontFamily
                     visible: window.imageWriter.isEmbeddedMode() && window.imageWriter.customRepo()
                     text: qsTr("Using custom repository: %1").arg(window.imageWriter.constantOsListUrl())
                 }
@@ -329,7 +325,7 @@ ApplicationWindow {
                     Layout.columnSpan: 3
                     color: "#ffffff"
                     font.pixelSize: 18
-                    font.family: roboto.name
+                    font.family: Style.fontFamily
                     visible: window.imageWriter.isEmbeddedMode()
                     text: qsTr("Network not ready yet")
                 }
@@ -338,7 +334,7 @@ ApplicationWindow {
                     Layout.columnSpan: 3
                     color: "#ffffff"
                     font.pixelSize: 18
-                    font.family: roboto.name
+                    font.family: Style.fontFamily
                     visible: !window.imageWriter.hasMouse()
                     text: qsTr("Keyboard navigation: <tab> navigate to next button <space> press button/select item <arrow up/down> go up/down in lists")
                 }
@@ -360,7 +356,7 @@ ApplicationWindow {
 
                         Text {
                             font.pixelSize: 12
-                            font.family: roboto.name
+                            font.family: Style.fontFamily
                             text: qsTr("Language: ")
                             Layout.leftMargin: 30
                             Layout.topMargin: 10
@@ -368,7 +364,7 @@ ApplicationWindow {
                         }
                         ComboBox {
                             font.pixelSize: 12
-                            font.family: roboto.name
+                            font.family: Style.fontFamily
                             model: window.imageWriter.getTranslations()
                             Layout.preferredWidth: 200
                             currentIndex: -1
@@ -383,7 +379,7 @@ ApplicationWindow {
                         }
                         Text {
                             font.pixelSize: 12
-                            font.family: roboto.name
+                            font.family: Style.fontFamily
                             text: qsTr("Keyboard: ")
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
@@ -391,7 +387,7 @@ ApplicationWindow {
                         ComboBox {
                             enabled: window.imageWriter.isEmbeddedMode()
                             font.pixelSize: 12
-                            font.family: roboto.name
+                            font.family: Style.fontFamily
                             model: window.imageWriter.getKeymapLayoutList()
                             currentIndex: -1
                             Component.onCompleted: {
@@ -458,7 +454,7 @@ ApplicationWindow {
                 horizontalAlignment: Text.AlignHCenter
                 anchors.fill: parent
                 anchors.topMargin: 10
-                font.family: roboto.name
+                font.family: Style.fontFamily
                 font.bold: true
             }
 
@@ -471,7 +467,7 @@ ApplicationWindow {
                 anchors.top: parent.top
                 anchors.rightMargin: 25
                 anchors.topMargin: 10
-                font.family: roboto.name
+                font.family: Style.fontFamily
                 font.bold: true
 
                 MouseArea {
@@ -558,7 +554,7 @@ ApplicationWindow {
                 horizontalAlignment: Text.AlignHCenter
                 anchors.fill: parent
                 anchors.topMargin: 10
-                font.family: roboto.name
+                font.family: Style.fontFamily
                 font.bold: true
             }
 
@@ -571,7 +567,7 @@ ApplicationWindow {
                 anchors.top: parent.top
                 anchors.rightMargin: 25
                 anchors.topMargin: 10
-                font.family: roboto.name
+                font.family: Style.fontFamily
                 font.bold: true
 
                 MouseArea {
@@ -769,13 +765,13 @@ ApplicationWindow {
                     Text {
                         text: name
                         elide: Text.ElideRight
-                        font.family: roboto.name
+                        font.family: Style.fontFamily
                         font.bold: true
                     }
 
                     Text {
                         Layout.fillWidth: true
-                        font.family: roboto.name
+                        font.family: Style.fontFamily
                         text: description
                         wrapMode: Text.WordWrap
                         color: "#1a1a1a"
@@ -862,7 +858,7 @@ ApplicationWindow {
                         Text {
                             text: name
                             elide: Text.ElideRight
-                            font.family: roboto.name
+                            font.family: Style.fontFamily
                             font.bold: true
                         }
                         Image {
@@ -882,7 +878,7 @@ ApplicationWindow {
 
                     Text {
                         Layout.fillWidth: true
-                        font.family: roboto.name
+                        font.family: Style.fontFamily
                         text: description
                         wrapMode: Text.WordWrap
                         color: "#1a1a1a"
@@ -955,7 +951,7 @@ ApplicationWindow {
                 horizontalAlignment: Text.AlignHCenter
                 anchors.fill: parent
                 anchors.topMargin: 10
-                font.family: roboto.name
+                font.family: Style.fontFamily
                 font.bold: true
             }
 
@@ -968,7 +964,7 @@ ApplicationWindow {
                 anchors.top: parent.top
                 anchors.rightMargin: 25
                 anchors.topMargin: 10
-                font.family: roboto.name
+                font.family: Style.fontFamily
                 font.bold: true
 
                 MouseArea {
@@ -1100,7 +1096,7 @@ ApplicationWindow {
                             textFormat: Text.StyledText
                             verticalAlignment: Text.AlignVCenter
                             Layout.fillWidth: true
-                            font.family: roboto.name
+                            font.family: Style.fontFamily
                             font.pointSize: 16
                             color: !dstitem.unselectable ? "" : "grey";
                             text: {
@@ -1113,7 +1109,7 @@ ApplicationWindow {
                             textFormat: Text.StyledText
                             verticalAlignment: Text.AlignVCenter
                             Layout.fillWidth: true
-                            font.family: roboto.name
+                            font.family: Style.fontFamily
                             font.pointSize: 12
                             color: !dstitem.unselectable ? "" : "grey";
                             text: {

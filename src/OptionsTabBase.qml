@@ -12,7 +12,7 @@ ScrollView {
 
     property double scrollPosition
 
-    font.family: roboto.name
+    font.family: Style.fontFamily
     Layout.fillWidth: true
     Layout.fillHeight: true
 
