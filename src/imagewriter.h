@@ -16,6 +16,8 @@
 #include <QUrl>
 #include <QSettings>
 #include <QVariant>
+#include <QQmlEngine>
+#include <QNetworkReply>
 #include "config.h"
 #include "powersaveblocker.h"
 #include "drivelistmodel.h"
@@ -28,6 +30,8 @@ class QTranslator;
 class ImageWriter : public QObject
 {
     Q_OBJECT
+    QML_ELEMENT
+    QML_UNCREATABLE("Created by C++")
 public:
     explicit ImageWriter(QObject *parent = nullptr);
     virtual ~ImageWriter();
