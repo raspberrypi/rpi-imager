@@ -25,6 +25,8 @@ Window {
 
     title: qsTr("OS Customization")
 
+    modality: Qt.WindowModal
+
     property bool initialized: false
     property bool hasSavedSettings: false
     property string config
