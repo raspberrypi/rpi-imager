@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 
     /** QtQuick on QT5 exhibits spurious disk cache failures that cannot be
      * resolved by a user in a trivial manner (they have to delete the cache manually).
-     * 
+     *
      * This flag can potentially noticeably increase the start time of the application, however
      * between this and a hard-to-detect spurious failure affecting Linux, macOS and Windows,
      * this trade is the one most likely to result in a good experience for the widest group
@@ -341,8 +341,9 @@ int main(int argc, char *argv[])
         imageWriter.setSrc(url);
     imageWriter.setEngine(&engine);
     engine.setNetworkAccessManagerFactory(&namf);
-    engine.rootContext()->setContextProperty("imageWriter", &imageWriter);
-    engine.rootContext()->setContextProperty("driveListModel", imageWriter.getDriveList());
+
+    engine.setInitialProperties(QVariantMap{{"imageWriter", QVariant::fromValue(&imageWriter)},
+                                            {"driveListModel", QVariant::fromValue(imageWriter.getDriveList())}});
     engine.load(QUrl(QStringLiteral("qrc:/RpiImager/main.qml")));
 
     if (engine.rootObjects().isEmpty())

@@ -10,9 +10,14 @@ import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
 import "qmlcomponents"
 
+import RpiImager
+
 ApplicationWindow {
     id: window
     visible: true
+
+    required property ImageWriter imageWriter
+    required property DriveListModel driveListModel
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 450
@@ -165,7 +170,7 @@ ApplicationWindow {
 
                     ImButton {
                         id: osbutton
-                        text: imageWriter.srcFileName() === "" ? qsTr("CHOOSE OS") : imageWriter.srcFileName()
+                        text: window.imageWriter.srcFileName() === "" ? qsTr("CHOOSE OS") : window.imageWriter.srcFileName()
                         spacing: 0
                         padding: 0
                         bottomPadding: 0
@@ -211,7 +216,7 @@ ApplicationWindow {
                         Layout.preferredWidth: 200
                         Layout.fillWidth: true
                         onClicked: {
-                            imageWriter.startDriveListPolling()
+                            window.imageWriter.startDriveListPolling()
                             dstpopup.open()
                             dstlist.forceActiveFocus()
                         }
@@ -265,7 +270,7 @@ ApplicationWindow {
                         onClicked: {
                             enabled = false
                             progressText.text = qsTr("Cancelling...")
-                            imageWriter.cancelWrite()
+                            window.imageWriter.cancelWrite()
                         }
                         Layout.alignment: Qt.AlignRight
                         visible: false
@@ -280,7 +285,7 @@ ApplicationWindow {
                         onClicked: {
                             enabled = false
                             progressText.text = qsTr("Finalizing...")
-                            imageWriter.setVerifyEnabled(false)
+                            window.imageWriter.setVerifyEnabled(false)
                         }
                         Layout.alignment: Qt.AlignRight
                         visible: false
@@ -297,11 +302,11 @@ ApplicationWindow {
                         Accessible.description: qsTr("Select this button to start writing the image")
                         enabled: false
                         onClicked: {
-                            if (!imageWriter.readyToWrite()) {
+                            if (!window.imageWriter.readyToWrite()) {
                                 return
                             }
 
-                            if (!optionspopup.visible && imageWriter.imageSupportsCustomization()) {
+                            if (!optionspopup.visible && window.imageWriter.imageSupportsCustomization()) {
                                 usesavedsettingspopup.openPopup()
                             } else {
                                 confirmwritepopup.askForConfirmation()
@@ -315,8 +320,8 @@ ApplicationWindow {
                     color: "#ffffff"
                     font.pixelSize: 18
                     font.family: roboto.name
-                    visible: imageWriter.isEmbeddedMode() && imageWriter.customRepo()
-                    text: qsTr("Using custom repository: %1").arg(imageWriter.constantOsListUrl())
+                    visible: window.imageWriter.isEmbeddedMode() && window.imageWriter.customRepo()
+                    text: qsTr("Using custom repository: %1").arg(window.imageWriter.constantOsListUrl())
                 }
 
                 Text {
@@ -325,7 +330,7 @@ ApplicationWindow {
                     color: "#ffffff"
                     font.pixelSize: 18
                     font.family: roboto.name
-                    visible: imageWriter.isEmbeddedMode()
+                    visible: window.imageWriter.isEmbeddedMode()
                     text: qsTr("Network not ready yet")
                 }
 
@@ -334,7 +339,7 @@ ApplicationWindow {
                     color: "#ffffff"
                     font.pixelSize: 18
                     font.family: roboto.name
-                    visible: !imageWriter.hasMouse()
+                    visible: !window.imageWriter.hasMouse()
                     text: qsTr("Keyboard navigation: <tab> navigate to next button <space> press button/select item <arrow up/down> go up/down in lists")
                 }
 
@@ -343,7 +348,7 @@ ApplicationWindow {
                     Layout.columnSpan: 3
                     Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
                     Layout.bottomMargin: 5
-                    visible: imageWriter.isEmbeddedMode()
+                    visible: window.imageWriter.isEmbeddedMode()
                     implicitWidth: langbar.width
                     implicitHeight: langbar.height
                     color: "#ffffe3"
@@ -364,14 +369,14 @@ ApplicationWindow {
                         ComboBox {
                             font.pixelSize: 12
                             font.family: roboto.name
-                            model: imageWriter.getTranslations()
+                            model: window.imageWriter.getTranslations()
                             Layout.preferredWidth: 200
                             currentIndex: -1
                             Component.onCompleted: {
-                                currentIndex = find(imageWriter.getCurrentLanguage())
+                                currentIndex = find(window.imageWriter.getCurrentLanguage())
                             }
                             onActivated: {
-                                imageWriter.changeLanguage(editText)
+                                window.imageWriter.changeLanguage(editText)
                             }
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
@@ -384,16 +389,16 @@ ApplicationWindow {
                             Layout.bottomMargin: 10
                         }
                         ComboBox {
-                            enabled: imageWriter.isEmbeddedMode()
+                            enabled: window.imageWriter.isEmbeddedMode()
                             font.pixelSize: 12
                             font.family: roboto.name
-                            model: imageWriter.getKeymapLayoutList()
+                            model: window.imageWriter.getKeymapLayoutList()
                             currentIndex: -1
                             Component.onCompleted: {
-                                currentIndex = find(imageWriter.getCurrentKeyboard())
+                                currentIndex = find(window.imageWriter.getCurrentKeyboard())
                             }
                             onActivated: {
-                                imageWriter.changeKeyboard(editText)
+                                window.imageWriter.changeKeyboard(editText)
                             }
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
@@ -934,7 +939,7 @@ ApplicationWindow {
         height: parent.height-50
         padding: 0
         closePolicy: Popup.CloseOnEscape
-        onClosed: imageWriter.stopDriveListPolling()
+        onClosed: window.imageWriter.stopDriveListPolling()
 
         // background of title
         Rectangle {
@@ -985,7 +990,7 @@ ApplicationWindow {
         }
         ListView {
             id: dstlist
-            model: driveListModel
+            model: window.driveListModel
             delegate: dstdelegate
 
             anchors.top: dstpopup_title_separator.bottom
@@ -1196,8 +1201,8 @@ ApplicationWindow {
             osbutton.enabled = false
             dstbutton.enabled = false
             hwbutton.enabled = false
-            imageWriter.setVerifyEnabled(true)
-            imageWriter.startWrite()
+            window.imageWriter.setVerifyEnabled(true)
+            window.imageWriter.startWrite()
         }
 
         function askForConfirmation()
@@ -1229,7 +1234,7 @@ ApplicationWindow {
         minimumHeight: 400
         id: optionspopup
         onSaveSettingsSignal: {
-            imageWriter.setSavedCustomizationSettings(settings)
+            window.imageWriter.setSavedCustomizationSettings(settings)
             usesavedsettingspopup.hasSavedSettings = true
         }
     }
@@ -1242,13 +1247,13 @@ ApplicationWindow {
             confirmwritepopup.askForConfirmation()
         }
         onNo: {
-            imageWriter.setImageCustomization("", "", "", "", "")
+            window.imageWriter.setImageCustomization("", "", "", "", "")
             confirmwritepopup.askForConfirmation()
         }
         onNoClearSettings: {
             hasSavedSettings = false
             optionspopup.clearCustomizationFields()
-            imageWriter.clearSavedCustomizationSettings()
+            window.imageWriter.clearSavedCustomizationSettings()
             confirmwritepopup.askForConfirmation()
         }
         onEditSettings: {
@@ -1584,15 +1589,15 @@ ApplicationWindow {
         property string drive : ""
         interval: 100
         onTriggered: {
-            for (var i = 0; i < driveListModel.rowCount(); i++)
+            for (var i = 0; i < window.driveListModel.rowCount(); i++)
             {
                 /* FIXME: there should be a better way to iterate drivelist than
                    fetch data by numeric role number */
-                if (driveListModel.data(driveListModel.index(i,0), 0x101) === drive) {
+                if (window.driveListModel.data(window.driveListModel.index(i,0), 0x101) === drive) {
                     selectDstItem({
                                       device: drive,
-                                      description: driveListModel.data(driveListModel.index(i,0), 0x102),
-                                      size: driveListModel.data(driveListModel.index(i,0), 0x103),
+                                      description: window.driveListModel.data(window.driveListModel.index(i,0), 0x102),
+                                      size: window.driveListModel.data(window.driveListModel.index(i,0), 0x103),
                                       readonly: false
                                   })
                     break

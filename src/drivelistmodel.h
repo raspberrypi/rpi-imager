@@ -9,12 +9,15 @@
 #include <QAbstractItemModel>
 #include <QMap>
 #include <QHash>
+#include <QQmlEngine>
 #include "drivelistitem.h"
 #include "drivelistmodelpollthread.h"
 
 class DriveListModel : public QAbstractListModel
 {
     Q_OBJECT
+    QML_ELEMENT
+    QML_UNCREATABLE("Created by C++")
 public:
     DriveListModel(QObject *parent = nullptr);
     virtual int rowCount(const QModelIndex &) const;

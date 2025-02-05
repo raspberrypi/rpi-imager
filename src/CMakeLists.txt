@@ -243,7 +243,7 @@ if( IS_BIG_ENDIAN )
     message( FATAL_ERROR "We currently only support 'little endian' CPU architectures" )
 endif( IS_BIG_ENDIAN )
 
-set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "imagewriter.cpp" "networkaccessmanagerfactory.cpp"
+set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp")
@@ -330,10 +330,16 @@ set(IMAGER_QML_FILES
     qmlcomponents/ImRadioButton.qml
 )
 
+# C++ types exposed to QML
+set(IMAGER_QML_CPP_TYPES
+    imagewriter.cpp
+)
+
 qt_add_qml_module(${PROJECT_NAME}
     URI RpiImager
     VERSION 1.0
     QML_FILES ${IMAGER_QML_FILES}
+    SOURCES ${IMAGER_QML_CPP_TYPES}
     NO_CACHEGEN
     OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RpiImager
     DEPENDENCIES QtQuick
