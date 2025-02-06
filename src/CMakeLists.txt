@@ -328,6 +328,9 @@ set(IMAGER_QML_FILES
     qmlcomponents/ImCheckBox.qml
     qmlcomponents/ImPopup.qml
     qmlcomponents/ImRadioButton.qml
+    HwPopup.qml
+    OSPopup.qml
+    DstPopup.qml
 )
 
 set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
