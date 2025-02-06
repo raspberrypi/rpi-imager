@@ -9,69 +9,21 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 
-Popup {
+MainPopupBase {
     id: root
-    x: 50
-    y: 25
-    width: parent.width-100
-    height: parent.height-50
-    padding: 0
-    closePolicy: Popup.CloseOnEscape
+
     property string categorySelected : ""
     property alias oslist: oslist
     property alias osswipeview: osswipeview
 
-    // background of title
-    Rectangle {
-        id: ospopup_title_background
-        color: "#f5f5f5"
-        anchors.left: parent.left
-        anchors.top: parent.top
-        height: 35
-        width: parent.width
+    title: qsTr("Operating System")
 
-        Text {
-            text: qsTr("Operating System")
-            horizontalAlignment: Text.AlignHCenter
-            anchors.fill: parent
-            anchors.topMargin: 10
-            font.family: Style.fontFamily
-            font.bold: true
-        }
-
-        Text {
-            text: "X"
-            Layout.alignment: Qt.AlignRight
-            horizontalAlignment: Text.AlignRight
-            verticalAlignment: Text.AlignVCenter
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: Style.fontFamily
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    root.close()
-                    osswipeview.decrementCurrentIndex()
-                }
-            }
-        }
-    }
-    // line under title
-    Rectangle {
-        id: ospopup_title_separator
-        color: "#afafaf"
-        width: parent.width
-        anchors.top: ospopup_title_background.bottom
-        height: 1
+    onClosed: {
+        osswipeview.decrementCurrentIndex()
     }
 
     SwipeView {
-        anchors.top: ospopup_title_separator.bottom
+        anchors.top: root.title_separator.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
