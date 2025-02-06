@@ -332,6 +332,7 @@ set(IMAGER_QML_FILES
     HwPopup.qml
     OSPopup.qml
     DstPopup.qml
+    MainPopupListViewBase.qml
 )
 
 set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)

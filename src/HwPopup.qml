@@ -19,9 +19,10 @@ MainPopupBase {
     required property SwipeView osswipeview
     title: qsTr("Raspberry Pi Device")
 
-    ListView {
+    MainPopupListViewBase {
         id: hwlist
-        clip: true
+        anchors.right: parent.right
+
         model: ListModel {
             id: deviceModel
             ListElement {
@@ -35,16 +36,7 @@ MainPopupBase {
         currentIndex: -1
         delegate: hwdelegate
         anchors.top: root.title_separator.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        boundsBehavior: Flickable.StopAtBounds
-        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
-        ScrollBar.vertical: ScrollBar {
-            anchors.right: parent.right
-            width: 10
-            policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-        }
+
         Keys.onSpacePressed: {
             if (currentIndex != -1)
                 root.selectHWitem(model.get(currentIndex))
@@ -53,8 +45,6 @@ MainPopupBase {
             if (currentIndex != -1)
                 root.selectHWitem(model.get(currentIndex))
         }
-        Keys.onEnterPressed: Keys.onSpacePressed(event)
-        Keys.onReturnPressed: Keys.onSpacePressed(event)
     }
 
     Component {
