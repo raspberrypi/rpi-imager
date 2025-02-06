@@ -416,14 +416,14 @@ ApplicationWindow {
 
             DropArea {
                 anchors.fill: parent
-                onEntered: {
-                    if (drag.active && mimeData.hasUrls()) {
+                onEntered: (drag) => {
+                    if (Drag.active && drag.hasUrls) {
                         drag.acceptProposedAction()
                     }
                 }
-                onDropped: {
+                onDropped: (drop) => {
                     if (drop.urls && drop.urls.length > 0) {
-                        onFileSelected(drop.urls[0].toString())
+                        window.onFileSelected(drop.urls[0].toString())
                     }
                 }
             }
