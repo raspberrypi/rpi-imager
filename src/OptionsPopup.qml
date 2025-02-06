@@ -180,7 +180,7 @@ Window {
             hasSavedSettings = true
         }
         if ('hostname' in settings) {
-            fieldHostname.text = settings.hostname
+            generalTab.fieldHostname.text = settings.hostname
             generalTab.chkHostname.checked = true
         }
         if ('sshUserPassword' in settings) {
