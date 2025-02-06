@@ -9,67 +9,15 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 
-Popup {
+MainPopupBase {
     id: root
-    x: 50
-    y: 25
-    width: parent.width-100
-    height: parent.height-50
-    padding: 0
-    closePolicy: Popup.CloseOnEscape
+
     property string hwselected: ""
     property alias deviceModel: deviceModel
     property alias hwlist: hwlist
     required property ListView oslist
     required property SwipeView osswipeview
-
-    // background of title
-    Rectangle {
-        id: hwpopup_title_background
-        color: "#f5f5f5"
-        anchors.left: parent.left
-        anchors.top: parent.top
-        height: 35
-        width: parent.width
-
-        Text {
-            text: qsTr("Raspberry Pi Device")
-            horizontalAlignment: Text.AlignHCenter
-            anchors.fill: parent
-            anchors.topMargin: 10
-            font.family: Style.fontFamily
-            font.bold: true
-        }
-
-        Text {
-            text: "X"
-            Layout.alignment: Qt.AlignRight
-            horizontalAlignment: Text.AlignRight
-            verticalAlignment: Text.AlignVCenter
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: Style.fontFamily
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    root.close()
-                }
-            }
-        }
-    }
-    // line under title
-    Rectangle {
-        id: hwpopup_title_separator
-        color: "#afafaf"
-        width: parent.width
-        anchors.top: hwpopup_title_background.bottom
-        height: 1
-    }
+    title: qsTr("Raspberry Pi Device")
 
     ListView {
         id: hwlist
@@ -86,7 +34,7 @@ Popup {
         }
         currentIndex: -1
         delegate: hwdelegate
-        anchors.top: hwpopup_title_separator.bottom
+        anchors.top: root.title_separator.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
