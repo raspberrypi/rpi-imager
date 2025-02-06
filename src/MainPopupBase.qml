@@ -16,6 +16,7 @@ Popup {
     padding: 0
     closePolicy: Popup.CloseOnEscape
 
+    required property int windowWidth
     required property string title
     property alias title_separator: title_separator
 

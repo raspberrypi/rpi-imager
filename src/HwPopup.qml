@@ -3,11 +3,15 @@
  * Copyright (C) 2021 Raspberry Pi Ltd
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
+
+import RpiImager
 
 MainPopupBase {
     id: root
@@ -17,6 +21,8 @@ MainPopupBase {
     property alias hwlist: hwlist
     required property ListView oslist
     required property SwipeView osswipeview
+    required property ListModel osmodel
+
     title: qsTr("Raspberry Pi Device")
 
     MainPopupListViewBase {
@@ -51,7 +57,17 @@ MainPopupBase {
         id: hwdelegate
 
         Item {
-            width: window.width-100
+            id: delegateRoot
+            required property int index
+            required property string name
+            required property string description
+            required property string icon
+            required property QtObject modelData
+
+            // The code bellow mentions tooltip, but model doesn't have it
+            readonly property string tooltip: ""
+
+            width: root.windowWidth - 100
             height: contentLayout.implicitHeight + 24
             Accessible.name: name+".\n"+description
 
@@ -70,7 +86,7 @@ MainPopupBase {
                 }
 
                 onClicked: {
-                    selectHWitem(model)
+                    root.selectHWitem(delegateRoot.modelData)
                 }
             }
 
@@ -78,7 +94,7 @@ MainPopupBase {
                 id: bgrect
                 anchors.fill: parent
                 color: "#f5f5f5"
-                visible: mouseOver && parent.ListView.view.currentIndex !== index
+                visible: mouseOver && parent.ListView.view.currentIndex !== delegateRoot.index
                 property bool mouseOver: false
             }
             Rectangle {
@@ -100,7 +116,7 @@ MainPopupBase {
                 spacing: 12
 
                 Image {
-                    source: typeof icon === "undefined" ? "" : icon
+                    source: typeof icon === "undefined" ? "" : delegateRoot.icon
                     Layout.preferredHeight: 64
                     Layout.preferredWidth: 64
                     sourceSize.width: 64
@@ -113,7 +129,7 @@ MainPopupBase {
                     Layout.fillWidth: true
 
                     Text {
-                        text: name
+                        text: delegateRoot.name
                         elide: Text.ElideRight
                         font.family: Style.fontFamily
                         font.bold: true
@@ -122,15 +138,15 @@ MainPopupBase {
                     Text {
                         Layout.fillWidth: true
                         font.family: Style.fontFamily
-                        text: description
+                        text: delegateRoot.description
                         wrapMode: Text.WordWrap
                         color: "#1a1a1a"
                     }
 
                     ToolTip {
-                        visible: hwMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
+                        visible: hwMouseArea.containsMouse && typeof(tooltip) == "string" && delegateRoot.tooltip != ""
                         delay: 1000
-                        text: typeof(tooltip) == "string" ? tooltip : ""
+                        text: typeof(tooltip) == "string" ? delegateRoot.tooltip : ""
                         clip: false
                     }
                 }
@@ -178,9 +194,9 @@ MainPopupBase {
             }
         }
 
-        osmodel.clear()
+        root.osmodel.clear()
         for (var i in oslist_parsed) {
-            osmodel.append(oslist_parsed[i])
+            root.osmodel.append(oslist_parsed[i])
         }
 
         // When the HW device is changed, reset the OS selection otherwise

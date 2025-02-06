@@ -3,24 +3,30 @@
  * Copyright (C) 2021 Raspberry Pi Ltd
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 
+import RpiImager
+
 MainPopupBase {
     id: root
 
-    onClosed: window.imageWriter.stopDriveListPolling()
-
+    required property ImageWriter imageWriter
+    required property DriveListModel driveListModel
     property alias dstlist: dstlist
+
+    onClosed: imageWriter.stopDriveListPolling()
 
     title: qsTr("Storage")
 
     MainPopupListViewBase {
         id: dstlist
-        model: window.driveListModel
+        model: root.driveListModel
         delegate: dstdelegate
         anchors.top: root.title_separator.bottom
         anchors.right: parent.right
@@ -37,12 +43,12 @@ MainPopupBase {
         Keys.onSpacePressed: {
             if (currentIndex == -1)
                 return
-            selectDstItem(currentItem)
+            root.selectDstItem(currentItem)
         }
         Accessible.onPressAction: {
             if (currentIndex == -1)
                 return
-            selectDstItem(currentItem)
+            root.selectDstItem(currentItem)
         }
     }
 
@@ -68,6 +74,19 @@ MainPopupBase {
 
         Item {
             id: dstitem
+
+            required property string device
+            required property string description
+            required property string size
+            required property bool isUsb
+            required property bool isScsi
+            required property bool isReadOnly
+            required property bool isSystem
+            required property var mountpoints
+            required property QtObject modelData
+
+            readonly property bool unselectable: (isSystem && filterSystemDrives.checked) || isReadOnly
+
             anchors.left: parent.left
             anchors.right: parent.right
             Layout.topMargin: 1
@@ -79,10 +98,7 @@ MainPopupBase {
                 }
                 return txt;
             }
-            property string description: model.description
-            property string device: model.device
-            property string size: model.size
-            property bool unselectable: (isSystem && filterSystemDrives.checked) || isReadOnly
+
 
             Rectangle {
                 id: dstbgrect
@@ -103,7 +119,7 @@ MainPopupBase {
 
                     Image {
                         id: dstitem_image
-                        source: isUsb ? "icons/ic_usb_40px.svg" : isScsi ? "icons/ic_storage_40px.svg" : "icons/ic_sd_storage_40px.svg"
+                        source: dstitem.isUsb ? "icons/ic_usb_40px.svg" : dstitem.isScsi ? "icons/ic_storage_40px.svg" : "icons/ic_sd_storage_40px.svg"
                         verticalAlignment: Image.AlignVCenter
                         fillMode: Image.Pad
                     }
@@ -121,8 +137,8 @@ MainPopupBase {
                             font.pointSize: 16
                             color: !dstitem.unselectable ? "" : "grey";
                             text: {
-                                var sizeStr = (size/1000000000).toFixed(1)+ " " + qsTr("GB");
-                                return description + " - " + sizeStr;
+                                var sizeStr = (dstitem.size/1000000000).toFixed(1)+ " " + qsTr("GB");
+                                return dstitem.description + " - " + sizeStr;
                             }
 
                         }
@@ -134,10 +150,10 @@ MainPopupBase {
                             font.pointSize: 12
                             color: !dstitem.unselectable ? "" : "grey";
                             text: {
-                                var txt= qsTr("Mounted as %1").arg(mountpoints.join(", "));
-                                if (isReadOnly) {
+                                var txt= qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", "));
+                                if (dstitem.isReadOnly) {
                                     txt += " " + qsTr("[WRITE PROTECTED]");
-                                } else if (isSystem) {
+                                } else if (dstitem.isSystem) {
                                     text += " [" + qsTr("SYSTEM") + "]";
                                 }
                                 return txt;
@@ -171,7 +187,7 @@ MainPopupBase {
                 }
 
                 onClicked: {
-                    selectDstItem(model)
+                    root.selectDstItem(dstitem.modelData)
                 }
             }
         }

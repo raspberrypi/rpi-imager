@@ -3,6 +3,8 @@
  * Copyright (C) 2021 Raspberry Pi Ltd
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.15
@@ -15,6 +17,9 @@ MainPopupBase {
     property string categorySelected : ""
     property alias oslist: oslist
     property alias osswipeview: osswipeview
+    property alias osmodel: osmodel
+
+    required property ImageWriter imageWriter
 
     title: qsTr("Operating System")
 
@@ -56,10 +61,21 @@ MainPopupBase {
         }
     }
 
+    ListModel {
+        id: osmodel
+
+        Component.onCompleted: {
+            if (root.imageWriter.isOnline()) {
+                root.fetchOSlist();
+            }
+        }
+    }
+
     Component {
         id: suboslist
 
         ListView {
+            id: sublistview
             model: ListModel {
                 ListElement {
                     url: ""
@@ -86,26 +102,26 @@ MainPopupBase {
             highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
             ScrollBar.vertical: ScrollBar {
                 width: 10
-                policy: parent.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                policy: sublistview.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
             }
             Keys.onSpacePressed: {
                 if (currentIndex != -1)
-                    selectOSitem(model.get(currentIndex))
+                    root.selectOSitem(model.get(currentIndex))
             }
             Accessible.onPressAction: {
                 if (currentIndex != -1)
-                    selectOSitem(model.get(currentIndex))
+                    root.selectOSitem(model.get(currentIndex))
             }
-            Keys.onEnterPressed: Keys.onSpacePressed(event)
-            Keys.onReturnPressed: Keys.onSpacePressed(event)
+            Keys.onEnterPressed: (event) => { Keys.spacePressed(event) }
+            Keys.onReturnPressed: (event) => { Keys.spacePressed(event) }
             Keys.onRightPressed: {
                 // Navigate into sublists but don't select an OS entry
-                if (currentIndex != -1 && isOSsublist(model.get(currentIndex)))
-                    selectOSitem(model.get(currentIndex), true)
+                if (currentIndex != -1 && root.isOSsublist(model.get(currentIndex)))
+                    root.selectOSitem(model.get(currentIndex), true)
             }
             Keys.onLeftPressed: {
                 osswipeview.decrementCurrentIndex()
-                ospopup.categorySelected = ""
+                root.categorySelected = ""
             }
         }
     }
@@ -114,7 +130,23 @@ MainPopupBase {
         id: osdelegate
 
         Item {
-            width: window.width-100
+            id: delegateItem
+            required property int index
+            required property string name
+            required property string description
+            required property string icon
+            required property string release_date
+            required property string url
+            required property string subitems_json
+            required property string extract_sha256
+            required property QtObject model
+            required property int image_download_size // KDAB
+
+            property string website
+            property string tooltip
+            property string subitems_url
+
+            width: root.windowWidth - 100
             height: contentLayout.implicitHeight + 24
             Accessible.name: name+".\n"+description
 
@@ -133,7 +165,7 @@ MainPopupBase {
                 }
 
                 onClicked: {
-                    selectOSitem(model)
+                    root.selectOSitem(delegateItem.model)
                 }
             }
 
@@ -141,7 +173,7 @@ MainPopupBase {
                 id: bgrect
                 anchors.fill: parent
                 color: "#f5f5f5"
-                visible: mouseOver && parent.ListView.view.currentIndex !== index
+                visible: mouseOver && parent.ListView.view.currentIndex !== delegateItem.index
                 property bool mouseOver: false
             }
             Rectangle {
@@ -163,7 +195,7 @@ MainPopupBase {
                 spacing: 12
 
                 Image {
-                    source: icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": icon
+                    source: delegateItem.icon == "icons/ic_build_48px.svg" ? "icons/cat_misc_utility_images.png": delegateItem.icon
                     Layout.preferredHeight: 40
                     Layout.preferredWidth: 40
                     sourceSize.width: 40
@@ -178,7 +210,7 @@ MainPopupBase {
                     RowLayout {
                         spacing: 12
                         Text {
-                            text: name
+                            text: delegateItem.name
                             elide: Text.ElideRight
                             font.family: Style.fontFamily
                             font.bold: true
@@ -187,10 +219,10 @@ MainPopupBase {
                             source: "icons/ic_info_16px.png"
                             Layout.preferredHeight: 16
                             Layout.preferredWidth: 16
-                            visible: typeof(website) == "string" && website
+                            visible: typeof(website) == "string" && delegateItem.website
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: Qt.openUrlExternally(website)
+                                onClicked: Qt.openUrlExternally(delegateItem.website)
                             }
                         }
                         Item {
@@ -201,7 +233,7 @@ MainPopupBase {
                     Text {
                         Layout.fillWidth: true
                         font.family: Style.fontFamily
-                        text: description
+                        text: delegateItem.description
                         wrapMode: Text.WordWrap
                         color: "#1a1a1a"
                     }
@@ -211,33 +243,33 @@ MainPopupBase {
                         elide: Text.ElideRight
                         color: "#646464"
                         font.weight: Font.Light
-                        visible: typeof(release_date) == "string" && release_date
-                        text: qsTr("Released: %1").arg(release_date)
+                        visible: typeof(delegateItem.release_date) == "string" && delegateItem.release_date
+                        text: qsTr("Released: %1").arg(delegateItem.release_date)
                     }
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                         color: "#646464"
                         font.weight: Font.Light
-                        visible: typeof(url) == "string" && url != "" && url != "internal://format"
-                        text: !url ? "" :
-                                     typeof(extract_sha256) != "undefined" && imageWriter.isCached(url,extract_sha256)
+                        visible: typeof(delegateItem.url) == "string" && delegateItem.url != "" && delegateItem.url != "internal://format"
+                        text: !delegateItem.url ? "" :
+                                     typeof(delegateItem.extract_sha256) != "undefined" && root.imageWriter.isCached(delegateItem.url, delegateItem.extract_sha256)
                                      ? qsTr("Cached on your computer")
-                                     : url.startsWith("file://")
+                                     : delegateItem.url.startsWith("file://")
                                        ? qsTr("Local file")
-                                       : qsTr("Online - %1 GB download").arg((image_download_size/1073741824).toFixed(1))
+                                       : qsTr("Online - %1 GB download").arg((delegateItem.image_download_size/1073741824).toFixed(1))
                     }
 
                     ToolTip {
-                        visible: osMouseArea.containsMouse && typeof(tooltip) == "string" && tooltip != ""
+                        visible: osMouseArea.containsMouse && typeof(delegateItem.tooltip) == "string" && delegateItem.tooltip != ""
                         delay: 1000
-                        text: typeof(tooltip) == "string" ? tooltip : ""
+                        text: typeof(delegateItem.tooltip) == "string" ? delegateItem.tooltip : ""
                         clip: false
                     }
                 }
                 Image {
                     source: "icons/ic_chevron_right_40px.svg"
-                    visible: (typeof(subitems_json) == "string" && subitems_json != "") || (typeof(subitems_url) == "string" && subitems_url != "" && subitems_url != "internal://back")
+                    visible: (typeof(delegateItem.subitems_json) == "string" && delegateItem.subitems_json != "") || (typeof(delegateItem.subitems_url) == "string" && delegateItem.subitems_url != "" && delegateItem.subitems_url != "internal://back")
                     Layout.preferredHeight: 40
                     Layout.preferredWidth: 40
                     fillMode: Image.PreserveAspectFit
@@ -280,12 +312,12 @@ MainPopupBase {
 
             osswipeview.itemAt(osswipeview.currentIndex+1).currentIndex = (selectFirstSubitem === true) ? 0 : -1
             osswipeview.incrementCurrentIndex()
-            ospopup.categorySelected = d.name
+            root.categorySelected = d.name
         } else if (typeof(d.subitems_url) == "string" && d.subitems_url !== "") {
             if (d.subitems_url === "internal://back")
             {
                 osswipeview.decrementCurrentIndex()
-                ospopup.categorySelected = ""
+                root.categorySelected = ""
             }
             else
             {
@@ -295,14 +327,14 @@ MainPopupBase {
                 osswipeview.incrementCurrentIndex()
             }
         } else if (d.url === "") {
-            if (!imageWriter.isEmbeddedMode()) {
-                imageWriter.openFileDialog()
+            if (!root.imageWriter.isEmbeddedMode()) {
+                root.imageWriter.openFileDialog()
             }
             else {
-                if (imageWriter.mountUsbSourceMedia()) {
+                if (root.imageWriter.mountUsbSourceMedia()) {
                     var m = newSublist()
 
-                    var usboslist = JSON.parse(imageWriter.getUsbSourceOSlist())
+                    var usboslist = JSON.parse(root.imageWriter.getUsbSourceOSlist())
                     for (var i in usboslist) {
                         m.append(usboslist[i])
                     }
@@ -315,11 +347,11 @@ MainPopupBase {
                 }
             }
         } else {
-            imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, ospopup.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
+            root.imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, root.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
             osbutton.text = d.name
-            ospopup.close()
+            root.close()
             osswipeview.decrementCurrentIndex()
-            if (imageWriter.readyToWrite()) {
+            if (root.imageWriter.readyToWrite()) {
                 writebutton.enabled = true
             }
         }
@@ -357,5 +389,56 @@ MainPopupBase {
         }
 
         return false
+    }
+
+    function fetchOSlist() {
+        var oslist_json = root.imageWriter.getFilteredOSlist();
+        var o = JSON.parse(oslist_json)
+        var oslist_parsed = oslistFromJson(o)
+        if (oslist_parsed === false)
+            return
+        osmodel.clear()
+        for (var i in oslist_parsed) {
+            osmodel.append(oslist_parsed[i])
+        }
+
+        if ("imager" in o) {
+            var imager = o["imager"]
+
+            if ("devices" in imager)
+            {
+                hwpopup.deviceModel.clear()
+                var devices = imager["devices"]
+                for (var j in devices)
+                {
+                    devices[j]["tags"] = JSON.stringify(devices[j]["tags"])
+                    hwpopup.deviceModel.append(devices[j])
+                    if ("default" in devices[j] && devices[j]["default"])
+                    {
+                        hwpopup.hwlist.currentIndex = hwpopup.deviceModel.count-1
+                    }
+                }
+            }
+
+            if (root.imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
+                if (!root.imageWriter.isEmbeddedMode() && root.imageWriter.isVersionNewer(imager["latest_version"])) {
+                    updatepopup.url = imager["url"]
+                    updatepopup.openPopup()
+                }
+            }
+            if ("default_os" in imager) {
+                selectNamedOS(imager["default_os"], osmodel)
+            }
+            if (root.imageWriter.isEmbeddedMode()) {
+                if ("embedded_default_os" in imager) {
+                    selectNamedOS(imager["embedded_default_os"], osmodel)
+                }
+                if ("embedded_default_destination" in imager) {
+                    root.imageWriter.startDriveListPolling()
+                    setDefaultDest.drive = imager["embedded_default_destination"]
+                    setDefaultDest.start()
+                }
+            }
+        }
     }
 }
