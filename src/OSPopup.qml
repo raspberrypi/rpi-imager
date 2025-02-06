@@ -31,22 +31,14 @@ MainPopupBase {
         interactive: false
         clip: true
 
-        ListView {
+        MainPopupListViewBase {
             id: oslist
             model: osmodel
             currentIndex: -1
             delegate: osdelegate
             anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.bottom: parent.bottom
             width: root.width
-            boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
-            ScrollBar.vertical: ScrollBar {
-                anchors.right: parent.right
-                width: 10
-                policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-            }
+
             Keys.onSpacePressed: {
                 if (currentIndex != -1)
                     root.selectOSitem(model.get(currentIndex), true)
@@ -55,8 +47,7 @@ MainPopupBase {
                 if (currentIndex != -1)
                     root.selectOSitem(model.get(currentIndex), true)
             }
-            Keys.onEnterPressed: (event) => { Keys.spacePressed(event) }
-            Keys.onReturnPressed: (event) => { Keys.spacePressed(event) }
+
             Keys.onRightPressed: {
                 // Navigate into sublists but don't select an OS entry
                 if (currentIndex != -1 && root.isOSsublist(model.get(currentIndex)))

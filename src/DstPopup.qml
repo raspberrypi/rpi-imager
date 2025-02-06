@@ -18,18 +18,12 @@ MainPopupBase {
 
     title: qsTr("Storage")
 
-    ListView {
+    MainPopupListViewBase {
         id: dstlist
         model: window.driveListModel
         delegate: dstdelegate
-
         anchors.top: root.title_separator.bottom
-        anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: filterRow.top
-        boundsBehavior: Flickable.StopAtBounds
-        highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
-        clip: true
 
         Label {
             anchors.fill: parent
@@ -38,11 +32,6 @@ MainPopupBase {
             visible: parent.count == 0
             text: qsTr("No storage devices found")
             font.bold: true
-        }
-
-        ScrollBar.vertical: ScrollBar {
-            width: 10
-            policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
         }
 
         Keys.onSpacePressed: {
@@ -55,9 +44,8 @@ MainPopupBase {
                 return
             selectDstItem(currentItem)
         }
-        Keys.onEnterPressed: Keys.onSpacePressed(event)
-        Keys.onReturnPressed: Keys.onSpacePressed(event)
     }
+
     RowLayout {
         id: filterRow
         anchors {
