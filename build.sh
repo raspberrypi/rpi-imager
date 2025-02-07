@@ -74,6 +74,19 @@ apt-get install -y ntpdate sudo vim htop tar iotop bridge-utils cpu-checker mysq
 
 ntpdate time.nist.gov
 
+setup_sshd() {
+echo "****** setup_sshd() ******"
+echo "allow root login"
+sed -i -e 's/\#vnc_listen.*$/vnc_listen = "0.0.0.0"/g' /etc/libvirt/qemu.conf
+}
+
+update_sshd_config() {
+echo "****** update_sshd_config() ******"
+echo "allow root ssh"
+#PermitRootLogin prohibit-password
+sed -i -e 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/libvirt/qemu.conf
+}
+
 update_mysqld_cnf() {
 echo "****** update_mysqld_cnf ******"
 
@@ -163,6 +176,7 @@ echo LIBVIRTD_ARGS=\"--listen\" >> /etc/default/libvirtd
 echo 'listen_tls=0' >> /etc/libvirt/libvirtd.conf
 echo 'listen_tcp=1' >> /etc/libvirt/libvirtd.conf
 echo 'tcp_port = "16509"' >> /etc/libvirt/libvirtd.conf
+echo 'tls_port = "16514"' >> /etc/libvirt/libvirtd.conf
 echo 'mdns_adv = 0' >> /etc/libvirt/libvirtd.conf
 echo 'auth_tcp = "none"' >> /etc/libvirt/libvirtd.conf
 }
@@ -178,6 +192,12 @@ cat /etc/mysql/debian.cnf
 
 echo "****** mask libvirt ******"
 systemctl mask libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket libvirtd-tls.socket libvirtd-tcp.socket
+
+if [ $(grep "EDITOR" /root/.bashrc) ]
+then
+echo "export EDITOR=/usr/bin/vi" >> /root/.bashrc
+else :
+fi
 
 # exit sudo
 exit
