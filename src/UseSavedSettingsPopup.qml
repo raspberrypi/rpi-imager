@@ -9,12 +9,15 @@ import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
 import "qmlcomponents"
 
+import RpiImager
+
 ImPopup {
     id: root
 
     height: msgpopupbody.implicitHeight+150
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
+    required property ImageWriter imageWriter
     property bool hasSavedSettings: false
 
     signal noClearSettings()

@@ -10,6 +10,8 @@ import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 import "qmlcomponents"
 
+import RpiImager
+
 Window {
     id: popup
     width: 550
@@ -26,6 +28,8 @@ Window {
     title: qsTr("OS Customization")
 
     modality: Qt.WindowModal
+
+    required property ImageWriter imageWriter
 
     property bool initialized: false
     property bool hasSavedSettings: false
@@ -95,6 +99,7 @@ Window {
 
             OptionsServicesTab {
                 id: remoteAccessTab
+                imageWriter: popup.imageWriter
                 chkSetUser: generalTab.chkSetUser
                 fieldUserName: generalTab.fieldUserName
                 fieldUserPassword: generalTab.fieldUserPassword
@@ -615,7 +620,7 @@ Window {
         generalTab.fieldKeyboardLayout.model = imageWriter.getKeymapLayoutList()
         generalTab.fieldWifiCountry.model = imageWriter.getCountryList()
 
-        fieldHostname.text = "raspberrypi"
+        generalTab.fieldHostname.text = "raspberrypi"
         generalTab.fieldUserName.text = imageWriter.getCurrentUser()
         generalTab.fieldUserPassword.clear()
         remoteAccessTab.radioPubKeyAuthentication.checked = false

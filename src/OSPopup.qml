@@ -11,6 +11,8 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 
+import RpiImager
+
 MainPopupBase {
     id: root
 
@@ -364,7 +366,7 @@ MainPopupBase {
             osswipeview.addItem(newlist)
         }
 
-        var m = osswipeview.itemAt(osswipeview.currentIndex+1).model
+        var m = osswipeview.itemAt(osswipeview.currentIndex+1).model // qmllint disable missing-property
 
         if (m.count>1)
         {
@@ -394,7 +396,7 @@ MainPopupBase {
     function fetchOSlist() {
         var oslist_json = root.imageWriter.getFilteredOSlist();
         var o = JSON.parse(oslist_json)
-        var oslist_parsed = oslistFromJson(o)
+        var oslist_parsed = oslistFromJson(o) // qmllint disable unqualified
         if (oslist_parsed === false)
             return
         osmodel.clear()

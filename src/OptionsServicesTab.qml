@@ -3,12 +3,16 @@
  * Copyright (C) 2021 Raspberry Pi Ltd
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 import "qmlcomponents"
+
+import RpiImager
 
 OptionsTabBase {
     id: root
@@ -19,6 +23,7 @@ OptionsTabBase {
     property alias radioPasswordAuthentication: radioPasswordAuthentication
     property alias radioPubKeyAuthentication: radioPubKeyAuthentication
 
+    required property ImageWriter imageWriter
     required property ImCheckBox chkSetUser
     required property TextField fieldUserName
     required property TextField fieldUserPassword
@@ -77,7 +82,7 @@ OptionsTabBase {
             Layout.rightMargin: 5
             Layout.minimumHeight: 50
             Layout.fillHeight: true
-            Layout.preferredWidth: popup.width - (20 + Layout.leftMargin + Layout.rightMargin)
+            Layout.preferredWidth: root.width - (20 + Layout.leftMargin + Layout.rightMargin)
 
             ListView {
                 id: publicKeyList
@@ -92,33 +97,36 @@ OptionsTabBase {
 
                 delegate: RowLayout {
                     id: publicKeyItem
-                    property int publicKeyModelIndex: index
+                    required property int index
+                    readonly property int publicKeyModelIndex: index
+                    required property string publicKeyField
+
                     height: 50
 
                     TextField {
                         id: contentField
                         enabled: radioPubKeyAuthentication.checked
                         validator: RegularExpressionValidator { regularExpression: /^ssh-(ed25519|rsa|dss|ecdsa) AAAA(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{4})( [A-Za-z0-9-\\\/]+@[A-Za-z0-9-\\\/]+)?/ }
-                        text: model.publicKeyField
+                        text: publicKeyItem.publicKeyField
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
                         implicitWidth: publicKeyList.width - (removePublicKeyItem.width + 20)
 
                         onEditingFinished: {
-                                publicKeyModel.set(publicKeyModelIndex, {publicKeyField: contentField.text})
+                                publicKeyModel.set(publicKeyItem.publicKeyModelIndex, {publicKeyField: contentField.text})
                             }
                     }
                     ImButton {
                         id: removePublicKeyItem
                         text: qsTr("Delete Key")
-                        enabled: radioPubKeyAuthentication.checked
+                        enabled: root.radioPubKeyAuthentication.checked
                         Layout.minimumWidth: 100
                         Layout.preferredWidth: 100
                         Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
                         onClicked: {
-                            if (publicKeyModelIndex != -1) {
-                                publicKeyModel.remove(publicKeyModelIndex)
+                            if (publicKeyItem.publicKeyModelIndex != -1) {
+                                publicKeyModel.remove(publicKeyItem.publicKeyModelIndex)
                                 publicKeyListViewContainer.implicitHeight -= 50 + publicKeyList.spacing
                             }
                         }
@@ -131,11 +139,11 @@ OptionsTabBase {
             ImButton {
                 text: qsTr("RUN SSH-KEYGEN")
                 Layout.leftMargin: 40
-                enabled: imageWriter.hasSshKeyGen() && !imageWriter.hasPubKey()
+                enabled: root.imageWriter.hasSshKeyGen() && !root.imageWriter.hasPubKey()
                 onClicked: {
                     enabled = false
-                    imageWriter.generatePubKey()
-                    publicKeyModel.append({publicKeyField: imageWriter.getDefaultPubKey()})
+                    root.imageWriter.generatePubKey()
+                    publicKeyModel.append({publicKeyField: root.imageWriter.getDefaultPubKey()})
                 }
             }
             ImButton {
