@@ -8,6 +8,8 @@ import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import "qmlcomponents"
 
+import RpiImager
+
 OptionsTabBase {
     id: root
 

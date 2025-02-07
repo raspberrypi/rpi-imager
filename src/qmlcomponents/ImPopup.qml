@@ -8,6 +8,8 @@ import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.0
 import QtQuick.Controls.Material 2.2
 
+import RpiImager
+
 Popup {
     id: msgpopup
     x: (parent.width-width)/2

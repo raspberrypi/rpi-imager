@@ -521,9 +521,12 @@ ApplicationWindow {
     }
 
     OptionsPopup {
+        id: optionspopup
         minimumWidth: 450
         minimumHeight: 400
-        id: optionspopup
+
+        imageWriter: window.imageWriter
+
         onSaveSettingsSignal: (settings) => {
             window.imageWriter.setSavedCustomizationSettings(settings)
             usesavedsettingspopup.hasSavedSettings = true
@@ -532,6 +535,8 @@ ApplicationWindow {
 
     UseSavedSettingsPopup {
         id: usesavedsettingspopup
+        imageWriter: window.imageWriter
+
         onYes: {
             optionspopup.initialize()
             optionspopup.applySettings()

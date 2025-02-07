@@ -10,6 +10,8 @@ import QtQuick.Controls.Material 2.2
 import QtQuick.Window 2.15
 import "qmlcomponents"
 
+import RpiImager
+
 OptionsTabBase {
     id: root
 
