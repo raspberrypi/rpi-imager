@@ -43,8 +43,9 @@ Window {
 
     signal saveSettingsSignal(var settings)
 
-    Keys.onEscapePressed: {
-        popup.close()
+    Shortcut {
+        sequence: "Esc"
+        onActivated: popup.close()
     }
 
     ColumnLayout {
