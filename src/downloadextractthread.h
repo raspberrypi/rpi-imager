@@ -9,7 +9,7 @@
 #include "downloadthread.h"
 #include <deque>
 #include <condition_variable>
-#include <QtConcurrent/QtConcurrent>
+#include <QFuture>
 
 class _extractThreadClass;
 

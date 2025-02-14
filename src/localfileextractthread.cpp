@@ -6,6 +6,8 @@
 #include "localfileextractthread.h"
 #include "config.h"
 
+#include <QUrl>
+
 LocalFileExtractThread::LocalFileExtractThread(const QByteArray &url, const QByteArray &dst, const QByteArray &expectedHash, QObject *parent)
     : DownloadExtractThread(url, dst, expectedHash, parent)
 {

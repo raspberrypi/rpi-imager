@@ -21,7 +21,8 @@
 #include <QDebug>
 #include <QProcess>
 #include <QSettings>
-#include <QtConcurrent/QtConcurrent>
+#include <QFuture>
+#include <QtConcurrent/qtconcurrentrun.h>
 #include <QtNetwork/QNetworkProxy>
 
 #ifdef Q_OS_LINUX

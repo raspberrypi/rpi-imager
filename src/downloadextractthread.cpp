@@ -19,6 +19,7 @@
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QDebug>
+#include <QtConcurrent/qtconcurrentrun.h>
 
 using namespace std;
 

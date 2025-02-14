@@ -32,8 +32,10 @@
 #include <QNetworkReply>
 #include <QDateTime>
 #include <QDebug>
+#include <QJsonObject>
+#include <QTranslator>
+#include <QPasswordDigestor>
 #include <QVersionNumber>
-#include <QtNetwork>
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
 #include <QApplication>
