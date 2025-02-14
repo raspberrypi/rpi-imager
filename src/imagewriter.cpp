@@ -106,7 +106,7 @@ ImageWriter::ImageWriter(QObject *parent)
                 };
                 QProcess *findProcess = new QProcess(this);
                 connect(findProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                    [&blconfig_link, &findProcess](int exitCode, QProcess::ExitStatus exitStatus) {
+                    [&blconfig_link, &findProcess](int exitCode, QProcess::ExitStatus exitStatus) { // clazy:exclude=lambda-in-connect
                         blconfig_link = findProcess->readAllStandardOutput();
                     });
                 findProcess->start();
