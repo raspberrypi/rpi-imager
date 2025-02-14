@@ -46,8 +46,11 @@ QVariant DriveListModel::data(const QModelIndex &index, int role) const
     QByteArray propertyName = _rolenames.value(role);
     if (propertyName.isEmpty())
         return QVariant();
-    else
-        return _drivelist.values().at(row)->property(propertyName);
+    else {
+        auto it = _drivelist.cbegin();
+        std::advance(it, row);
+        return it.value()->property(propertyName);
+    }
 }
 
 void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l)
