@@ -1392,7 +1392,7 @@ QString ImageWriter::detectPiKeyboard()
     if (!typenr)
     {
         QDir dir("/dev/input/by-id");
-        QRegularExpression rx("RPI_Wired_Keyboard_([0-9]+)");
+        static QRegularExpression rx("RPI_Wired_Keyboard_([0-9]+)");
 
         const QStringList entries = dir.entryList(QDir::Files);
         for (const QString &fn : entries)

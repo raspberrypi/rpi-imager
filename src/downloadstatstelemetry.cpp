@@ -32,7 +32,7 @@ DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByt
     f.close();
 
     if (cpuinfo.contains("Raspberry Pi")) {
-        QRegularExpression rx("Revision[ \t]*: ([0-9a-f]+)");
+        static QRegularExpression rx("Revision[ \t]*: ([0-9a-f]+)");
         QRegularExpressionMatch m = rx.match(cpuinfo);
         if (m.hasMatch())
         {
