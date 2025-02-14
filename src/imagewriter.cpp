@@ -592,7 +592,7 @@ namespace {
                 // Filter this one!
                 if (ositemObject.contains("devices")) {
                     auto keep = false;
-                    auto ositem_devices = ositemObject["devices"].toArray();
+                    const auto ositem_devices = ositemObject["devices"].toArray();
 
                     for (auto compat_device : ositem_devices) {
                         if (hw_filter.contains(compat_device.toString())) {
