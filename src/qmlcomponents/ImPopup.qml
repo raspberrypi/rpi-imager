@@ -29,7 +29,7 @@ Popup {
     // background of title
     Rectangle {
         id: msgpopup_title_background
-        color: "#f5f5f5"
+        color: Style.titleBackgroundColor
         anchors.left: parent.left
         anchors.top: parent.top
         height: 35
@@ -53,7 +53,7 @@ Popup {
     // line under title
     Rectangle {
         id: msgpopup_title_separator
-        color: "#afafaf"
+        color: Style.titleSeparatorColor
         width: parent.width
         anchors.top: msgpopup_title_background.bottom
         height: 1

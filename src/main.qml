@@ -90,7 +90,7 @@ ApplicationWindow {
         }
 
         Rectangle {
-            color: "#cd2355"
+            color: Style.mainBackgroundColor
             implicitWidth: window.width
             implicitHeight: window.height * (1 - 1/4)
 
@@ -116,7 +116,7 @@ ApplicationWindow {
 
                     Text {
                         id: text0
-                        color: "#ffffff"
+                        color: Style.subtitleColor
                         text: qsTr("Raspberry Pi Device")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
@@ -154,7 +154,7 @@ ApplicationWindow {
 
                     Text {
                         id: text1
-                        color: "#ffffff"
+                        color: Style.subtitleColor
                         text: qsTr("Operating System")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
@@ -191,7 +191,7 @@ ApplicationWindow {
 
                     Text {
                         id: text2
-                        color: "#ffffff"
+                        color: Style.subtitleColor
                         text: qsTr("Storage")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 17
@@ -231,7 +231,7 @@ ApplicationWindow {
                     Text {
                         id: progressText
                         font.pointSize: 10
-                        color: "white"
+                        color: Style.progressBarTextColor
                         font.family: Style.fontFamilyBold
                         font.bold: true
                         visible: false
@@ -245,7 +245,7 @@ ApplicationWindow {
                         id: progressBar
                         Layout.fillWidth: true
                         visible: false
-                        Material.background: "#d15d7d"
+                        Material.background: Style.progressBarBackgroundColor
                     }
                 }
 
@@ -313,7 +313,7 @@ ApplicationWindow {
 
                 Text {
                     Layout.columnSpan: 3
-                    color: "#ffffff"
+                    color: Style.embeddedModeInfoTextColor
                     font.pixelSize: 18
                     font.family: Style.fontFamily
                     visible: window.imageWriter.isEmbeddedMode() && window.imageWriter.customRepo()
@@ -323,7 +323,7 @@ ApplicationWindow {
                 Text {
                     id: networkInfo
                     Layout.columnSpan: 3
-                    color: "#ffffff"
+                    color: Style.embeddedModeInfoTextColor
                     font.pixelSize: 18
                     font.family: Style.fontFamily
                     visible: window.imageWriter.isEmbeddedMode()
@@ -332,7 +332,7 @@ ApplicationWindow {
 
                 Text {
                     Layout.columnSpan: 3
-                    color: "#ffffff"
+                    color: Style.embeddedModeInfoTextColor
                     font.pixelSize: 18
                     font.family: Style.fontFamily
                     visible: !window.imageWriter.hasMouse()
@@ -347,7 +347,7 @@ ApplicationWindow {
                     visible: window.imageWriter.isEmbeddedMode()
                     implicitWidth: langbar.width
                     implicitHeight: langbar.height
-                    color: "#ffffe3"
+                    color: Style.lanbarBackgroundColor
                     radius: 5
 
                     RowLayout {
@@ -596,7 +596,7 @@ ApplicationWindow {
                 return
 
             progressText.text = qsTr("Verifying... %1%").arg(Math.floor(newPos*100))
-            progressBar.Material.accent = "#6cc04a"
+            progressBar.Material.accent = Style.progressBarVerifyForegroundColor
             progressBar.value = newPos
         }
     }

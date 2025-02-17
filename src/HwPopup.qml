@@ -93,7 +93,7 @@ MainPopupBase {
             Rectangle {
                 id: bgrect
                 anchors.fill: parent
-                color: "#f5f5f5"
+                color: Style.titleBackgroundColor
                 visible: mouseOver && parent.ListView.view.currentIndex !== delegateRoot.index
                 property bool mouseOver: false
             }
@@ -101,7 +101,7 @@ MainPopupBase {
                 id: borderrect
                 implicitHeight: 1
                 implicitWidth: parent.width
-                color: "#dcdcdc"
+                color: Style.popupBorderColor
                 y: parent.height
             }
 
@@ -140,7 +140,7 @@ MainPopupBase {
                         font.family: Style.fontFamily
                         text: delegateRoot.description
                         wrapMode: Text.WordWrap
-                        color: "#1a1a1a"
+                        color: Style.textDescriptionColor
                     }
 
                     ToolTip {

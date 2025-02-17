@@ -59,7 +59,7 @@ OptionsTabBase {
             }
             Text {
                 text : ".local"
-                color: chkHostname.checked ? "black" : "grey"
+                color: chkHostname.checked ? Style.formLabelColor : Style.formLabelColor
             }
         }
 
@@ -79,7 +79,7 @@ OptionsTabBase {
         RowLayout {
             Text {
                 text: qsTr("Username:")
-                color: parent.enabled ? (fieldUserName.indicateError ? "red" : "black") : "grey"
+                color: parent.enabled ? (fieldUserName.indicateError ? Style.formLabelErrorColor : Style.formLabelColor) : Style.formLabelColor
                 Layout.leftMargin: 40
             }
             // Spacer item
@@ -104,7 +104,7 @@ OptionsTabBase {
         RowLayout {
             Text {
                 text: qsTr("Password:")
-                color: parent.enabled ? (fieldUserPassword.indicateError ? "red" : "black") : "grey"
+                color: parent.enabled ? (fieldUserPassword.indicateError ? Style.formLabelErrorColor : Style.formLabelColor) : Style.formLabelColor
                 Layout.leftMargin: 40
             }
             // Spacer item
@@ -159,7 +159,7 @@ OptionsTabBase {
         RowLayout {
             Text {
                 text: qsTr("SSID:")
-                color: chkWifi.checked ? (fieldWifiSSID.indicateError ? "red" : "black") : "grey"
+                color: chkWifi.checked ? (fieldWifiSSID.indicateError ? Style.formLabelErrorColor : Style.formLabelColor) : Style.formLabelColor
                 Layout.leftMargin: 40
             }
             // Spacer item
@@ -181,7 +181,7 @@ OptionsTabBase {
         RowLayout {
             Text {
                 text: qsTr("Password:")
-                color: chkWifi.checked ? (fieldWifiPassword.indicateError ? "red" : "black") : "grey"
+                color: chkWifi.checked ? (fieldWifiPassword.indicateError ? Style.formLabelErrorColor : Style.formLabelColor) : Style.formLabelColor
                 Layout.leftMargin: 40
             }
             // Spacer item
@@ -232,7 +232,7 @@ OptionsTabBase {
         RowLayout {
             Text {
                 text: qsTr("Wireless LAN country:")
-                color: chkWifi.checked ? "black" : "grey"
+                color: chkWifi.checked ? Style.formLabelColor : Style.formLabelColor
                 Layout.leftMargin: 40
             }
             // Spacer item
@@ -254,7 +254,7 @@ OptionsTabBase {
         RowLayout {
             Text {
                 text: qsTr("Time zone:")
-                color: chkLocale.checked ? "black" : "grey"
+                color: chkLocale.checked ? Style.formLabelColor : Style.formLabelColor
                 Layout.leftMargin: 40
             }
             // Spacer item
@@ -273,7 +273,7 @@ OptionsTabBase {
         RowLayout {
             Text {
                 text: qsTr("Keyboard layout:")
-                color: chkLocale.checked ? "black" : "grey"
+                color: chkLocale.checked ? Style.formLabelColor : Style.formLabelColor
                 Layout.leftMargin: 40
             }
             // Spacer item
