@@ -3,9 +3,10 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 import QtQuick
-import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Material
+
+import RpiImager
 
 Popup {
     id: root
@@ -38,24 +39,9 @@ Popup {
             font.bold: true
         }
 
-        Text {
-            text: "X"
-            Layout.alignment: Qt.AlignRight
-            horizontalAlignment: Text.AlignRight
-            verticalAlignment: Text.AlignVCenter
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: Style.fontFamily
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    root.close()
-                }
+        ImCloseButton {
+            onClicked: {
+                root.close()
             }
         }
     }

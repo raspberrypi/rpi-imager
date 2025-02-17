@@ -44,25 +44,9 @@ Popup {
             font.bold: true
         }
 
-        Text {
-            text: "X"
-            Layout.alignment: Qt.AlignRight
-            horizontalAlignment: Text.AlignRight
-            verticalAlignment: Text.AlignVCenter
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: 25
-            anchors.topMargin: 10
-            font.family: Style.fontFamily
-            font.bold: true
-
-            MouseArea {
-                anchors.fill: parent
-                // KDAB: This was not present in MessagePopup
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    msgpopup.close()
-                }
+        ImCloseButton {
+            onClicked: {
+                msgpopup.close();
             }
         }
     }
