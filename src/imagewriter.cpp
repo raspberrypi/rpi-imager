@@ -15,6 +15,7 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include <lzma.h>
+#include <qjsondocument.h>
 #include <random>
 #include <QFileInfo>
 #include <QQmlApplicationEngine>
@@ -63,7 +64,8 @@ ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent), _repo(QUrl(QString(OSLIST_URL))), _dlnow(0), _verifynow(0),
       _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
       _embeddedMode(false), _online(false), _customCacheFile(false), _trans(nullptr),
-      _networkManager(this)
+      _networkManager(this),
+      _hwlist(HWListModel(*this)) // explicitly parented, so QML doesn't delete it
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
@@ -512,9 +514,8 @@ namespace {
 } // namespace anonymous
 
 
-void ImageWriter::setHWFilterList(const QByteArray &json, const bool &inclusive) {
-    QJsonDocument json_document = QJsonDocument::fromJson(json);
-    _deviceFilter = json_document.array();
+void ImageWriter::setHWFilterList(const QJsonArray &tags, const bool &inclusive) {
+    _deviceFilter = tags;
     _deviceFilterIsInclusive = inclusive;
 }
 
@@ -619,7 +620,12 @@ namespace {
     }
 } // namespace anonymous
 
-QByteArray ImageWriter::getFilteredOSlist() {
+QByteArray ImageWriter::getFilteredOSlist()
+{
+    return getFilteredOSlistDocument().toJson();
+}
+
+QJsonDocument ImageWriter::getFilteredOSlistDocument() {
     QJsonArray reference_os_list_array = {};
     QJsonObject reference_imager_metadata = {};
     {
@@ -655,14 +661,14 @@ QByteArray ImageWriter::getFilteredOSlist() {
             {"imager", reference_imager_metadata},
             {"os_list", reference_os_list_array},
         }
-    )).toJson();
+    ));
 }
 
 void ImageWriter::beginOSListFetch() {
     QNetworkRequest request = QNetworkRequest(constantOsListUrl());
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
-    
+
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
    _networkManager.get(request);
@@ -691,6 +697,11 @@ void ImageWriter::stopDriveListPolling()
 DriveListModel *ImageWriter::getDriveList()
 {
     return &_drivelist;
+}
+
+HWListModel *ImageWriter::getHWList()
+{
+    return &_hwlist;
 }
 
 void ImageWriter::startProgressPolling()

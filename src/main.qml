@@ -129,7 +129,7 @@ ApplicationWindow {
 
                     ImButton {
                         id: hwbutton
-                        text: qsTr("CHOOSE DEVICE")
+                        text: window.imageWriter.getHWList().currentName
                         spacing: 0
                         padding: 0
                         bottomPadding: 0
@@ -436,6 +436,7 @@ ApplicationWindow {
         osmodel: ospopup.osmodel
         osswipeview: ospopup.osswipeview
         windowWidth: window.width
+        imageWriter: window.imageWriter
     }
 
     OSPopup {

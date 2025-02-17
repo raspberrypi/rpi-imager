@@ -18,9 +18,12 @@
 #include <QVariant>
 #include <QQmlEngine>
 #include <QNetworkReply>
+#include <qjsonarray.h>
+#include <qjsondocument.h>
 #include "config.h"
 #include "powersaveblocker.h"
 #include "drivelistmodel.h"
+#include "hwlistmodel.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
@@ -64,8 +67,14 @@ public:
     /* Stop polling the list of available drives */
     Q_INVOKABLE void stopDriveListPolling();
 
-    /* Return list of available drives. Call startDriveListPolling() first */
+    /* Return list of available drives. Call startDriveListPolling() first
+       Note: If you mark this as Q_INVOKABLE, be sure to parent it to ImageWriter,
+       to prevent GC from deleting it.
+    */
     DriveListModel *getDriveList();
+
+    /* Return list of available devices. */
+    Q_INVOKABLE HWListModel *getHWList();
 
     /* Utility function to return filename part from URL */
     Q_INVOKABLE QString fileNameFromUrl(const QUrl &url);
@@ -85,11 +94,14 @@ public:
     /* Get the cached OS list. This may be empty if network connectivity is not available. */
     Q_INVOKABLE QByteArray getFilteredOSlist();
 
+    /* Overload which returns QJsonDocument */
+    Q_INVOKABLE QJsonDocument getFilteredOSlistDocument();
+
     /** Begin the asynchronous fetch of the OS lists, and associated sublists. */
     Q_INVOKABLE void beginOSListFetch();
 
     /** Set the HW filter, for a filtered view of the OS list */
-    Q_INVOKABLE void setHWFilterList(const QByteArray &json, const bool &inclusive);
+    Q_INVOKABLE void setHWFilterList(const QJsonArray &tags, const bool &inclusive);
 
     /* Set custom cache file */
     void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
@@ -197,6 +209,7 @@ protected:
     QByteArray _expectedHash, _cachedFileHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
+    HWListModel _hwlist;
     QQmlApplicationEngine *_engine;
     QTimer _polltimer, _networkchecktimer;
     PowerSaveBlocker _powersave;
