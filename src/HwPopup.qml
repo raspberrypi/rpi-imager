@@ -17,11 +17,12 @@ MainPopupBase {
     id: root
 
     property string hwselected: ""
-    property alias deviceModel: deviceModel
     property alias hwlist: hwlist
     required property ListView oslist
     required property SwipeView osswipeview
     required property ListModel osmodel
+    required property ImageWriter imageWriter
+    readonly property HWListModel deviceModel: imageWriter.getHWList()
 
     title: qsTr("Raspberry Pi Device")
 
@@ -29,27 +30,18 @@ MainPopupBase {
         id: hwlist
         anchors.right: parent.right
 
-        model: ListModel {
-            id: deviceModel
-            ListElement {
-                name: qsTr("[ All ]")
-                tags: "[]"
-                icon: ""
-                description: ""
-                matching_type: "exclusive"
-            }
-        }
-        currentIndex: -1
+        model: root.deviceModel
+        currentIndex: root.deviceModel.currentIndex
         delegate: hwdelegate
         anchors.top: root.title_separator.bottom
 
         Keys.onSpacePressed: {
             if (currentIndex != -1)
-                root.selectHWitem(model.get(currentIndex))
+                root.selectHWitem(currentIndex)
         }
         Accessible.onPressAction: {
             if (currentIndex != -1)
-                root.selectHWitem(model.get(currentIndex))
+                root.selectHWitem(currentIndex)
         }
     }
 
@@ -86,7 +78,7 @@ MainPopupBase {
                 }
 
                 onClicked: {
-                    root.selectHWitem(delegateRoot.modelData)
+                    root.selectHWitem(delegateRoot.index)
                 }
             }
 
@@ -154,26 +146,13 @@ MainPopupBase {
         }
     }
 
-    function selectHWitem(hwmodel) {
-        /* Default is exclusive matching */
-        var inclusive = false
-
-        if (hwmodel.matching_type) {
-            switch (hwmodel.matching_type) {
-            case "exclusive":
-                break;
-            case "inclusive":
-                inclusive = true
-                break;
-            }
-        }
-
-        imageWriter.setHWFilterList(hwmodel.tags, inclusive)
+    function selectHWitem(index) {
+        root.deviceModel.setSelectedIndex(index);
 
         /* Reload list */
-        var oslist_json = imageWriter.getFilteredOSlist();
+        var oslist_json = root.imageWriter.getFilteredOSlist();
         var o = JSON.parse(oslist_json)
-        var oslist_parsed = oslistFromJson(o)
+        var oslist_parsed = oslistFromJson(o) // qmllint disable unqualified
         if (oslist_parsed === false)
             return
 
@@ -209,7 +188,6 @@ MainPopupBase {
         osbutton.text = qsTr("CHOOSE OS")
         writebutton.enabled = false
 
-        hwbutton.text = hwmodel.name
         root.close()
     }
 }

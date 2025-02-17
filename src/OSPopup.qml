@@ -22,6 +22,7 @@ MainPopupBase {
     property alias osmodel: osmodel
 
     required property ImageWriter imageWriter
+    readonly property HWListModel hwmodel: root.imageWriter.getHWList()
 
     title: qsTr("Operating System")
 
@@ -404,23 +405,10 @@ MainPopupBase {
             osmodel.append(oslist_parsed[i])
         }
 
+        root.hwmodel.reload()
+
         if ("imager" in o) {
             var imager = o["imager"]
-
-            if ("devices" in imager)
-            {
-                hwpopup.deviceModel.clear()
-                var devices = imager["devices"]
-                for (var j in devices)
-                {
-                    devices[j]["tags"] = JSON.stringify(devices[j]["tags"])
-                    hwpopup.deviceModel.append(devices[j])
-                    if ("default" in devices[j] && devices[j]["default"])
-                    {
-                        hwpopup.hwlist.currentIndex = hwpopup.deviceModel.count-1
-                    }
-                }
-            }
 
             if (root.imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
                 if (!root.imageWriter.isEmbeddedMode() && root.imageWriter.isVersionNewer(imager["latest_version"])) {
