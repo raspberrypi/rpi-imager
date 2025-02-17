@@ -72,7 +72,7 @@ OptionsTabBase {
 
         Text {
             text: qsTr("Set authorized_keys for '%1':").arg(root.fieldUserName.text)
-            color: radioPubKeyAuthentication.checked ? "black" : "grey"
+            color: radioPubKeyAuthentication.checked ? Style.formLabelColor : Style.formLabelDisabledColor
             // textFormat: Text.PlainText
             Layout.leftMargin: 40
         }

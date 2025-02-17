@@ -6,6 +6,8 @@
 import QtQuick
 import QtQuick.Controls
 
+import RpiImager
+
 ListView {
     id: root
     clip: true
@@ -13,7 +15,7 @@ ListView {
     anchors.left: parent.left
     anchors.bottom: parent.bottom
     boundsBehavior: Flickable.StopAtBounds
-    highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+    highlight: Rectangle { color: Style.listViewHighlightColor; radius: 5 }
 
     ScrollBar.vertical: ScrollBar {
         width: 10

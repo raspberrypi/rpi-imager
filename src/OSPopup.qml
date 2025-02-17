@@ -101,7 +101,7 @@ MainPopupBase {
             delegate: osdelegate
 
             boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle { color: "lightsteelblue"; radius: 5 }
+            highlight: Rectangle { color: Style.listViewHighlightColor; radius: 5 }
             ScrollBar.vertical: ScrollBar {
                 width: 10
                 policy: sublistview.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
@@ -174,7 +174,7 @@ MainPopupBase {
             Rectangle {
                 id: bgrect
                 anchors.fill: parent
-                color: "#f5f5f5"
+                color: Style.titleBackgroundColor
                 visible: mouseOver && parent.ListView.view.currentIndex !== delegateItem.index
                 property bool mouseOver: false
             }
@@ -182,7 +182,7 @@ MainPopupBase {
                 id: borderrect
                 implicitHeight: 1
                 implicitWidth: parent.width
-                color: "#dcdcdc"
+                color: Style.popupBorderColor
                 y: parent.height
             }
 
@@ -237,13 +237,13 @@ MainPopupBase {
                         font.family: Style.fontFamily
                         text: delegateItem.description
                         wrapMode: Text.WordWrap
-                        color: "#1a1a1a"
+                        color: Style.textDescriptionColor
                     }
 
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        color: "#646464"
+                        color: Style.textMetadataColor
                         font.weight: Font.Light
                         visible: typeof(delegateItem.release_date) == "string" && delegateItem.release_date
                         text: qsTr("Released: %1").arg(delegateItem.release_date)
@@ -251,7 +251,7 @@ MainPopupBase {
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        color: "#646464"
+                        color: Style.textMetadataColor
                         font.weight: Font.Light
                         visible: typeof(delegateItem.url) == "string" && delegateItem.url != "" && delegateItem.url != "internal://format"
                         text: !delegateItem.url ? "" :

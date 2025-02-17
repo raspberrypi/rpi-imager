@@ -12,8 +12,8 @@ import RpiImager
 Button {
     font.family: Style.fontFamily
     font.capitalization: Font.AllUppercase
-    Material.background: activeFocus ? "#d1dcfb" : "#ffffff"
-    Material.foreground: "#cd2355"
+    Material.background: activeFocus ? Style.buttonFocusedBackgroundColor : Style.buttonBackgroundColor
+    Material.foreground: Style.buttonForegroundColor
     Material.roundedScale: Material.ExtraSmallScale
     Accessible.onPressAction: clicked()
     Keys.onEnterPressed: clicked()

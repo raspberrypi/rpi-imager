@@ -107,7 +107,7 @@ MainPopupBase {
                 anchors.right: parent.right
                 height: 60
 
-                color: mouseOver ? "#f5f5f5" : "#ffffff"
+                color: mouseOver ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
                 property bool mouseOver: false
 
                 RowLayout {
@@ -135,7 +135,7 @@ MainPopupBase {
                             Layout.fillWidth: true
                             font.family: Style.fontFamily
                             font.pointSize: 16
-                            color: !dstitem.unselectable ? "" : "grey";
+                            color: !dstitem.unselectable ? "" : Style.formLabelDisabledColor;
                             text: {
                                 var sizeStr = (dstitem.size/1000000000).toFixed(1)+ " " + qsTr("GB");
                                 return dstitem.description + " - " + sizeStr;
@@ -148,7 +148,7 @@ MainPopupBase {
                             Layout.fillWidth: true
                             font.family: Style.fontFamily
                             font.pointSize: 12
-                            color: !dstitem.unselectable ? "" : "grey";
+                            color: !dstitem.unselectable ? "" : Style.formLabelDisabledColor;
                             text: {
                                 var txt= qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", "));
                                 if (dstitem.isReadOnly) {
@@ -169,7 +169,7 @@ MainPopupBase {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 height: 1
-                color: "#dcdcdc"
+                color: Style.popupBorderColor
             }
 
             MouseArea {
