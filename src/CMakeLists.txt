@@ -173,6 +173,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
     devicewrapper.h devicewrapperblockcacheentry.h devicewrapperpartition.h devicewrapperstructs.h devicewrapperfatpartition.h wlancredentials.h
     downloadthread.h downloadextractthread.h localfileextractthread.h downloadstatstelemetry.h dependencies/mountutils/src/mountutils.hpp dependencies/sha256crypt/sha256crypt.h
     hwlistmodel.h
+    oslistmodel.h
 )
 
 # Add dependencies
@@ -346,6 +347,7 @@ set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set(IMAGER_QML_CPP_TYPES
     imagewriter.cpp
     hwlistmodel.cpp
+    oslistmodel.cpp
 )
 
 qt_add_qml_module(${PROJECT_NAME}

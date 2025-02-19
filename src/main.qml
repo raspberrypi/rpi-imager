@@ -171,6 +171,7 @@ ApplicationWindow {
                         padding: 0
                         bottomPadding: 0
                         topPadding: 0
+                        // text: window.imageWriter.getOSList().currentName TODO
                         Layout.minimumHeight: 40
                         Layout.fillWidth: true
                         onClicked: {
@@ -433,7 +434,6 @@ ApplicationWindow {
     HwPopup {
         id: hwpopup
         oslist: ospopup.oslist
-        osmodel: ospopup.osmodel
         osswipeview: ospopup.osswipeview
         windowWidth: window.width
         imageWriter: window.imageWriter
@@ -443,6 +443,7 @@ ApplicationWindow {
         id: ospopup
         windowWidth: window.width
         imageWriter: window.imageWriter
+        updatepopup: updatepopup
     }
 
     DstPopup {
@@ -673,29 +674,6 @@ ApplicationWindow {
         networkInfo.text = msg
     }
 
-    function shuffle(arr) {
-        for (var i = 0; i < arr.length - 1; i++) {
-            var j = i + Math.floor(Math.random() * (arr.length - i));
-
-            var t = arr[j];
-            arr[j] = arr[i];
-            arr[i] = t;
-        }
-    }
-
-    function checkForRandom(list) {
-        for (var i in list) {
-            var entry = list[i]
-
-            if ("subitems" in entry) {
-                checkForRandom(entry["subitems"])
-                if ("random" in entry && entry["random"]) {
-                    shuffle(entry["subitems"])
-                }
-            }
-        }
-    }
-
     function filterItems(list, tags, matchingType)
     {
         if (!tags || !tags.length)
@@ -776,42 +754,6 @@ ApplicationWindow {
                 }
             }
         }
-    }
-
-    function oslistFromJson(o) {
-        var oslist_parsed = false
-        var lang_country = Qt.locale().name
-        if ("os_list_"+lang_country in o) {
-            oslist_parsed = o["os_list_"+lang_country]
-        }
-        else if (lang_country.includes("_")) {
-            var lang = lang_country.substr(0, lang_country.indexOf("_"))
-            if ("os_list_"+lang in o) {
-                oslist_parsed = o["os_list_"+lang]
-            }
-        }
-
-        if (!oslist_parsed) {
-            if (!"os_list" in o) {
-                onError(qsTr("Error parsing os_list.json"))
-                return false
-            }
-
-            oslist_parsed = o["os_list"]
-        }
-
-        checkForRandom(oslist_parsed)
-
-        /* Flatten subitems to subitems_json */
-        for (var i in oslist_parsed) {
-            var entry = oslist_parsed[i];
-            if ("subitems" in entry) {
-                entry["subitems_json"] = JSON.stringify(entry["subitems"])
-                delete entry["subitems"]
-            }
-        }
-
-        return oslist_parsed
     }
 
     Timer {
