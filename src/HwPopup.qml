@@ -18,13 +18,11 @@ MainPopupBase {
 
     property alias hwlist: hwlist
 
-    // These two could go away if their 'currentIndex' used bindings instead of direct assignment
-    required property ListView oslist
-    required property SwipeView osswipeview
-
     required property ImageWriter imageWriter
     readonly property OSListModel osModel: imageWriter.getOSList()
     readonly property HWListModel deviceModel: imageWriter.getHWList()
+
+    signal deviceSelected
 
     title: qsTr("Raspberry Pi Device")
 
@@ -162,15 +160,7 @@ MainPopupBase {
             */
         root.osModel.markFirstAsRecommended()
 
-        // When the HW device is changed, reset the OS selection otherwise
-        // you get a weird effect with the selection moving around in the list
-        // when the user next opens the OS list, and the user could still have
-        // an OS selected which isn't compatible with this HW device
-        oslist.currentIndex = -1
-        osswipeview.currentIndex = 0
-        osbutton.text = qsTr("CHOOSE OS")
-        writebutton.enabled = false
-
+        root.deviceSelected()
         root.close()
     }
 }

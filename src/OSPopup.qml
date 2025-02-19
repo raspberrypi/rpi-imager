@@ -20,10 +20,11 @@ MainPopupBase {
     property alias oslist: oslist
     property alias osswipeview: osswipeview
 
-    required property MsgPopup updatepopup
     required property ImageWriter imageWriter
     readonly property HWListModel hwmodel: root.imageWriter.getHWList()
     readonly property OSListModel osmodel: root.imageWriter.getOSList()
+
+    signal updatePopupRequested(var url)
 
     title: qsTr("Operating System")
 
@@ -403,8 +404,7 @@ MainPopupBase {
 
             if (root.imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
                 if (!root.imageWriter.isEmbeddedMode() && root.imageWriter.isVersionNewer(imager["latest_version"])) {
-                    root.updatepopup.url = imager["url"]
-                    root.updatepopup.openPopup()
+                    root.updatePopupRequested(imager["url"])
                 }
             }
             if ("default_os" in imager) {
