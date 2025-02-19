@@ -19,10 +19,11 @@ MainPopupBase {
     property string categorySelected : ""
     property alias oslist: oslist
     property alias osswipeview: osswipeview
-    property alias osmodel: osmodel
 
+    required property MsgPopup updatepopup
     required property ImageWriter imageWriter
     readonly property HWListModel hwmodel: root.imageWriter.getHWList()
+    readonly property OSListModel osmodel: root.imageWriter.getOSList()
 
     title: qsTr("Operating System")
 
@@ -41,7 +42,7 @@ MainPopupBase {
 
         MainPopupListViewBase {
             id: oslist
-            model: osmodel
+            model: root.osmodel
             currentIndex: -1
             delegate: osdelegate
             anchors.top: parent.top
@@ -64,13 +65,9 @@ MainPopupBase {
         }
     }
 
-    ListModel {
-        id: osmodel
-
-        Component.onCompleted: {
-            if (root.imageWriter.isOnline()) {
-                root.fetchOSlist();
-            }
+    Component.onCompleted: {
+        if (root.imageWriter.isOnline()) {
+            root.fetchOSlist();
         }
     }
 
@@ -130,6 +127,7 @@ MainPopupBase {
     }
 
     Component {
+        // delegate is used by both main view and sub-views
         id: osdelegate
 
         Item {
@@ -377,7 +375,7 @@ MainPopupBase {
         return m
     }
 
-    /// Is the item a sub-list or sub-sub-list in the OS selection model?
+    /// Returns whether this item has children
     function isOSsublist(d) {
         // Top level category
         if (typeof(d.subitems_json) == "string" && d.subitems_json !== "") {
@@ -395,25 +393,18 @@ MainPopupBase {
     }
 
     function fetchOSlist() {
-        var oslist_json = root.imageWriter.getFilteredOSlist();
-        var o = JSON.parse(oslist_json)
-        var oslist_parsed = oslistFromJson(o) // qmllint disable unqualified
-        if (oslist_parsed === false)
-            return
-        osmodel.clear()
-        for (var i in oslist_parsed) {
-            osmodel.append(oslist_parsed[i])
-        }
-
+        /// Reload OS model and HW model as well due to filtering
+        root.osmodel.reload()
         root.hwmodel.reload()
 
+        var o = JSON.parse(root.imageWriter.getFilteredOSlist())
         if ("imager" in o) {
             var imager = o["imager"]
 
             if (root.imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
                 if (!root.imageWriter.isEmbeddedMode() && root.imageWriter.isVersionNewer(imager["latest_version"])) {
-                    updatepopup.url = imager["url"]
-                    updatepopup.openPopup()
+                    root.updatepopup.url = imager["url"]
+                    root.updatepopup.openPopup()
                 }
             }
             if ("default_os" in imager) {

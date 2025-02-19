@@ -17,10 +17,13 @@ MainPopupBase {
     id: root
 
     property alias hwlist: hwlist
+
+    // These two could go away if their 'currentIndex' used bindings instead of direct assignment
     required property ListView oslist
     required property SwipeView osswipeview
-    required property ListModel osmodel
+
     required property ImageWriter imageWriter
+    readonly property OSListModel osModel: imageWriter.getOSList()
     readonly property HWListModel deviceModel: imageWriter.getHWList()
 
     title: qsTr("Raspberry Pi Device")
@@ -146,36 +149,18 @@ MainPopupBase {
     }
 
     function selectHWitem(index) {
-        root.deviceModel.setSelectedIndex(index);
+        // this calls the C++ setter, which sets the image writer device filter
+        root.deviceModel.currentIndex = index
 
-        /* Reload list */
-        var oslist_json = root.imageWriter.getFilteredOSlist();
-        var o = JSON.parse(oslist_json)
-        var oslist_parsed = oslistFromJson(o) // qmllint disable unqualified
-        if (oslist_parsed === false)
-            return
+        /* Reload OS list since filters changed */
+        root.osModel.reload()
 
         /* As we're filtering the OS list, we need to ensure we present a 'Recommended' OS.
             * To do this, we exploit a convention of how we build the OS list. By convention,
             * the preferred OS for a device is listed at the top level of the list, and is at the
             * lowest index. So..
             */
-        if (oslist_parsed.length != 0) {
-            var candidate = oslist_parsed[0]
-
-            if ("description" in candidate &&
-                !("subitems" in candidate) &&
-                !candidate["description"].includes("(Recommended)")
-                )
-            {
-                candidate["description"] += " (Recommended)"
-            }
-        }
-
-        root.osmodel.clear()
-        for (var i in oslist_parsed) {
-            root.osmodel.append(oslist_parsed[i])
-        }
+        root.osModel.markFirstAsRecommended()
 
         // When the HW device is changed, reset the OS selection otherwise
         // you get a weird effect with the selection moving around in the list
@@ -183,7 +168,6 @@ MainPopupBase {
         // an OS selected which isn't compatible with this HW device
         oslist.currentIndex = -1
         osswipeview.currentIndex = 0
-        imageWriter.setSrc("")
         osbutton.text = qsTr("CHOOSE OS")
         writebutton.enabled = false
 

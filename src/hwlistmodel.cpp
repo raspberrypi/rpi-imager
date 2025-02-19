@@ -10,7 +10,6 @@
 #include <QJsonDocument>
 #include <QDebug>
 #include <QJsonValue>
-#include <qtcoreexports.h>
 
 HWListModel::HWListModel(ImageWriter &imageWriter)
     : QAbstractListModel(&imageWriter), _imageWriter(imageWriter) {}
@@ -68,20 +67,6 @@ bool HWListModel::reload()
     return true;
 }
 
-void HWListModel::setSelectedIndex(int index)
-{
-    if (index < 0 || index >= _hwDevices.size()) {
-        qWarning() << Q_FUNC_INFO << "Invalid index" << index;
-        return;
-    }
-
-    const HardwareDevice &device = _hwDevices.at(index);
-
-    _imageWriter.setHWFilterList(device.tags, device.isInclusive());
-
-    setCurrentIndex(index);
-}
-
 int HWListModel::rowCount(const QModelIndex &) const
 {
     return _hwDevices.size();
@@ -132,6 +117,17 @@ QString HWListModel::currentName() const {
 void HWListModel::setCurrentIndex(int index) {
     if (_currentIndex == index)
         return;
+
+    if (index < 0 || index >= _hwDevices.size()) {
+        qWarning() << Q_FUNC_INFO << "Invalid index" << index;
+        return;
+    }
+
+    const HardwareDevice &device = _hwDevices.at(index);
+
+    _imageWriter.setHWFilterList(device.tags, device.isInclusive());
+    _imageWriter.setSrc({});
+
     _currentIndex = index;
 
     Q_EMIT currentIndexChanged();

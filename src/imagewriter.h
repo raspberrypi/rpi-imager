@@ -24,6 +24,7 @@
 #include "powersaveblocker.h"
 #include "drivelistmodel.h"
 #include "hwlistmodel.h"
+#include "oslistmodel.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
@@ -75,6 +76,9 @@ public:
 
     /* Return list of available devices. */
     Q_INVOKABLE HWListModel *getHWList();
+
+    /* Return list of available devices. */
+    Q_INVOKABLE OSListModel *getOSList();
 
     /* Utility function to return filename part from URL */
     Q_INVOKABLE QString fileNameFromUrl(const QUrl &url);
@@ -210,6 +214,7 @@ protected:
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
     HWListModel _hwlist;
+    OSListModel _oslist;
     QQmlApplicationEngine *_engine;
     QTimer _polltimer, _networkchecktimer;
     PowerSaveBlocker _powersave;

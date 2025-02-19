@@ -65,7 +65,8 @@ ImageWriter::ImageWriter(QObject *parent)
       _engine(nullptr), _thread(nullptr), _verifyEnabled(false), _cachingEnabled(false),
       _embeddedMode(false), _online(false), _customCacheFile(false), _trans(nullptr),
       _networkManager(this),
-      _hwlist(HWListModel(*this)) // explicitly parented, so QML doesn't delete it
+      _hwlist(HWListModel(*this)), // explicitly parented, so QML doesn't delete it
+      _oslist(OSListModel(*this))
 {
     connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
 
@@ -702,6 +703,11 @@ DriveListModel *ImageWriter::getDriveList()
 HWListModel *ImageWriter::getHWList()
 {
     return &_hwlist;
+}
+
+OSListModel *ImageWriter::getOSList()
+{
+    return &_oslist;
 }
 
 void ImageWriter::startProgressPolling()
