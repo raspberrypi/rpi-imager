@@ -143,7 +143,7 @@ MainPopupBase {
             required property string subitems_json
             required property string extract_sha256
             required property QtObject model
-            required property int image_download_size // KDAB
+            required property double image_download_size
 
             property string website
             property string tooltip
