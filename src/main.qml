@@ -433,17 +433,30 @@ ApplicationWindow {
 
     HwPopup {
         id: hwpopup
-        oslist: ospopup.oslist
-        osswipeview: ospopup.osswipeview
         windowWidth: window.width
         imageWriter: window.imageWriter
+
+        onDeviceSelected: {
+            // When the HW device is changed, reset the OS selection otherwise
+            // you get a weird effect with the selection moving around in the list
+            // when the user next opens the OS list, and the user could still have
+            // an OS selected which isn't compatible with this HW device
+            ospopup.oslist.currentIndex = -1
+            ospopup.osswipeview.currentIndex = 0
+            osbutton.text = qsTr("CHOOSE OS")
+            writebutton.enabled = false
+        }
     }
 
     OSPopup {
         id: ospopup
         windowWidth: window.width
         imageWriter: window.imageWriter
-        updatepopup: updatepopup
+
+        onUpdatePopupRequested: (url) => {
+            updatepopup.url = url
+            updatepopup.openPopup()
+        }
     }
 
     DstPopup {
