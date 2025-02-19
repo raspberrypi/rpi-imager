@@ -16,7 +16,6 @@ import RpiImager
 MainPopupBase {
     id: root
 
-    property string hwselected: ""
     property alias hwlist: hwlist
     required property ListView oslist
     required property SwipeView osswipeview
