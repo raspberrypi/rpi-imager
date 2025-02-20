@@ -11,7 +11,6 @@
 #include <QDebug>
 #include <QTextStream>
 #include "imagewriter.h"
-#include "drivelistmodel.h"
 #include "networkaccessmanagerfactory.h"
 #include "cli.h"
 #include <QMessageLogContext>
@@ -342,8 +341,7 @@ int main(int argc, char *argv[])
     imageWriter.setEngine(&engine);
     engine.setNetworkAccessManagerFactory(&namf);
 
-    engine.setInitialProperties(QVariantMap{{"imageWriter", QVariant::fromValue(&imageWriter)},
-                                            {"driveListModel", QVariant::fromValue(imageWriter.getDriveList())}});
+    engine.setInitialProperties(QVariantMap{{"imageWriter", QVariant::fromValue(&imageWriter)}});
     engine.load(QUrl(QStringLiteral("qrc:/RpiImager/main.qml")));
 
     if (engine.rootObjects().isEmpty())

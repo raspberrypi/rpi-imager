@@ -17,7 +17,6 @@ MainPopupBase {
     id: root
 
     required property ImageWriter imageWriter
-    required property DriveListModel driveListModel
     property alias dstlist: dstlist
 
     onClosed: imageWriter.stopDriveListPolling()
@@ -26,7 +25,7 @@ MainPopupBase {
 
     MainPopupListViewBase {
         id: dstlist
-        model: root.driveListModel
+        model: root.imageWriter.getDriveList()
         delegate: dstdelegate
         anchors.top: root.title_separator.bottom
         anchors.right: parent.right

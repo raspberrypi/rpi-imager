@@ -17,7 +17,7 @@ ApplicationWindow {
     visible: true
 
     required property ImageWriter imageWriter
-    required property DriveListModel driveListModel
+    readonly property DriveListModel driveListModel: imageWriter.getDriveList()
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 450
@@ -462,7 +462,6 @@ ApplicationWindow {
     DstPopup {
         id: dstpopup
         imageWriter: window.imageWriter
-        driveListModel: window.driveListModel
         windowWidth: window.width
     }
 
