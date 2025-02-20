@@ -72,7 +72,7 @@ public:
        Note: If you mark this as Q_INVOKABLE, be sure to parent it to ImageWriter,
        to prevent GC from deleting it.
     */
-    DriveListModel *getDriveList();
+    Q_INVOKABLE DriveListModel *getDriveList();
 
     /* Return list of available devices. */
     Q_INVOKABLE HWListModel *getHWList();
