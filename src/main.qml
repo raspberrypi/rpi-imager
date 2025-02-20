@@ -457,6 +457,11 @@ ApplicationWindow {
             updatepopup.url = url
             updatepopup.openPopup()
         }
+
+        onDefaultEmbeddedDriveRequested: (drive) => {
+            setDefaultDest.drive = drive
+            setDefaultDest.start()
+        }
     }
 
     DstPopup {

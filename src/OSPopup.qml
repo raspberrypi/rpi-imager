@@ -25,6 +25,7 @@ MainPopupBase {
     readonly property OSListModel osmodel: root.imageWriter.getOSList()
 
     signal updatePopupRequested(var url)
+    signal defaultEmbeddedDriveRequested(var drive)
 
     title: qsTr("Operating System")
 
@@ -416,8 +417,7 @@ MainPopupBase {
                 }
                 if ("embedded_default_destination" in imager) {
                     root.imageWriter.startDriveListPolling()
-                    setDefaultDest.drive = imager["embedded_default_destination"]
-                    setDefaultDest.start()
+                    root.defaultEmbeddedDriveRequested(imager["embedded_default_destination"])
                 }
             }
         }
