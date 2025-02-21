@@ -4,23 +4,23 @@
 <context>
     <name>DownloadExtractThread</name>
     <message>
-        <location filename="../downloadextractthread.cpp" line="196"/>
-        <location filename="../downloadextractthread.cpp" line="385"/>
+        <location filename="../downloadextractthread.cpp" line="197"/>
+        <location filename="../downloadextractthread.cpp" line="386"/>
         <source>Error extracting archive: %1</source>
         <translation>アーカイブを展開するのに失敗しました</translation>
     </message>
     <message>
-        <location filename="../downloadextractthread.cpp" line="261"/>
+        <location filename="../downloadextractthread.cpp" line="262"/>
         <source>Error mounting FAT32 partition</source>
         <translation>FAT32パーティションをマウントできませんでした</translation>
     </message>
     <message>
-        <location filename="../downloadextractthread.cpp" line="281"/>
+        <location filename="../downloadextractthread.cpp" line="282"/>
         <source>Operating system did not mount FAT32 partition</source>
         <translation>OSがFAT32パーティションをマウントしませんでした</translation>
     </message>
     <message>
-        <location filename="../downloadextractthread.cpp" line="304"/>
+        <location filename="../downloadextractthread.cpp" line="305"/>
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>カレントディレクトリを%1に変更できませんでした</translation>
     </message>
@@ -32,124 +32,124 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <location filename="../downloadthread.cpp" line="118"/>
+        <location filename="../downloadthread.cpp" line="119"/>
         <source>unmounting drive</source>
         <translation>ドライブをアンマウントしています</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="138"/>
+        <location filename="../downloadthread.cpp" line="139"/>
         <source>opening drive</source>
         <translation>デバイスを開いています</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="166"/>
+        <location filename="../downloadthread.cpp" line="167"/>
         <source>Error running diskpart: %1</source>
         <translation>diskpartの実行に失敗しました: %1</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="187"/>
+        <location filename="../downloadthread.cpp" line="188"/>
         <source>Error removing existing partitions</source>
         <translation>既に有るパーティションを削除する際にエラーが発生しました。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="213"/>
+        <location filename="../downloadthread.cpp" line="214"/>
         <source>Authentication cancelled</source>
         <translation>認証がキャンセルされました</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="216"/>
+        <location filename="../downloadthread.cpp" line="217"/>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
         <translation>ディスク%1にアクセスするための権限を取得するためにauthopenを実行するのに失敗しました</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="217"/>
+        <location filename="../downloadthread.cpp" line="218"/>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Raspberry Pi Imagerがリムーバブルボリュームへアクセスすることが「プライバシーとセキュリティ」の「ファイルとフォルダー」の設定、または「フルディスクアクセス」の付与によって許可されているかを確認してください。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="239"/>
+        <location filename="../downloadthread.cpp" line="240"/>
         <source>Cannot open storage device &apos;%1&apos;.</source>
         <translation>ストレージを開けませんでした。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="281"/>
+        <location filename="../downloadthread.cpp" line="282"/>
         <source>discarding existing data on drive</source>
         <translation>ドライブの現存するすべてのデータを破棄します</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="301"/>
+        <location filename="../downloadthread.cpp" line="302"/>
         <source>zeroing out first and last MB of drive</source>
         <translation>ドライブの最初と最後のMBを削除しています</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="307"/>
+        <location filename="../downloadthread.cpp" line="308"/>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>MBRを削除している際にエラーが発生しました。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="319"/>
+        <location filename="../downloadthread.cpp" line="320"/>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>カードの最後のパートを0で書き込む際書き込みエラーが発生しました。カードが示している容量と実際のカードの容量が違う可能性があります。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="408"/>
+        <location filename="../downloadthread.cpp" line="409"/>
         <source>starting download</source>
         <translation>ダウンロードを開始中</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="468"/>
+        <location filename="../downloadthread.cpp" line="469"/>
         <source>Error downloading: %1</source>
         <translation>%1をダウンロードする際エラーが発生しました</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="665"/>
+        <location filename="../downloadthread.cpp" line="666"/>
         <source>Access denied error while writing file to disk.</source>
         <translation>ディスクにファイルを書き込む際にアクセスが拒否されました。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="670"/>
+        <location filename="../downloadthread.cpp" line="671"/>
         <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
         <translation>フォルダーへのアクセスが制限されています。許可されたアプリにrpi-imager.exeとfat32format.exeを入れてもう一度お試しください。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="677"/>
+        <location filename="../downloadthread.cpp" line="678"/>
         <source>Error writing file to disk</source>
         <translation>ファイルをディスクに書き込んでいる際にエラーが発生しました</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="699"/>
+        <location filename="../downloadthread.cpp" line="700"/>
         <source>Download corrupt. Hash does not match</source>
         <translation>ダウンロードに失敗しました。ハッシュ値が一致していません。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="711"/>
-        <location filename="../downloadthread.cpp" line="763"/>
+        <location filename="../downloadthread.cpp" line="712"/>
+        <location filename="../downloadthread.cpp" line="764"/>
         <source>Error writing to storage (while flushing)</source>
         <translation>ストレージへの書き込み中にエラーが発生しました (フラッシング中)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="718"/>
-        <location filename="../downloadthread.cpp" line="770"/>
+        <location filename="../downloadthread.cpp" line="719"/>
+        <location filename="../downloadthread.cpp" line="771"/>
         <source>Error writing to storage (while fsync)</source>
         <translation>ストレージへの書き込み中にエラーが発生しました（fsync中)</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="753"/>
+        <location filename="../downloadthread.cpp" line="754"/>
         <source>Error writing first block (partition table)</source>
         <translation>最初のブロック（パーティションテーブル）を書き込み中にエラーが発生しました</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="828"/>
+        <location filename="../downloadthread.cpp" line="829"/>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
         <translation>ストレージを読むのに失敗しました。SDカードが壊れている可能性があります。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="847"/>
+        <location filename="../downloadthread.cpp" line="848"/>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>確認中にエラーが発生しました。書き込んだはずのデータが実際にSDカードに記録されたデータと一致していません。</translation>
     </message>
     <message>
-        <location filename="../downloadthread.cpp" line="900"/>
+        <location filename="../downloadthread.cpp" line="901"/>
         <source>Customizing image</source>
         <translation>イメージをカスタマイズしています</translation>
     </message>
@@ -251,39 +251,104 @@
     </message>
 </context>
 <context>
+    <name>DstPopup</name>
+    <message>
+        <location filename="../DstPopup.qml" line="24"/>
+        <source>Storage</source>
+        <translation type="unfinished">ストレージ</translation>
+    </message>
+    <message>
+        <location filename="../DstPopup.qml" line="38"/>
+        <source>No storage devices found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../DstPopup.qml" line="67"/>
+        <source>Exclude System Drives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../DstPopup.qml" line="94"/>
+        <source>gigabytes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../DstPopup.qml" line="96"/>
+        <location filename="../DstPopup.qml" line="152"/>
+        <source>Mounted as %1</source>
+        <translation type="unfinished">%1 としてマウントされています</translation>
+    </message>
+    <message>
+        <location filename="../DstPopup.qml" line="139"/>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../DstPopup.qml" line="154"/>
+        <source>[WRITE PROTECTED]</source>
+        <translation type="unfinished">[書き込み禁止]</translation>
+    </message>
+    <message>
+        <location filename="../DstPopup.qml" line="156"/>
+        <source>SYSTEM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../DstPopup.qml" line="197"/>
+        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
+        <translation type="unfinished">SDカードへの書き込みが制限されています。&lt;br&gt;カードの左上にあるロックスイッチを上げてロックを解除し、もう一度お試しください。</translation>
+    </message>
+</context>
+<context>
+    <name>HWListModel</name>
+    <message>
+        <location filename="../hwlistmodel.cpp" line="111"/>
+        <source>CHOOSE DEVICE</source>
+        <translation type="unfinished">デバイスを選択</translation>
+    </message>
+</context>
+<context>
+    <name>HwPopup</name>
+    <message>
+        <location filename="../HwPopup.qml" line="27"/>
+        <source>Raspberry Pi Device</source>
+        <translation type="unfinished">Raspberry Piデバイス</translation>
+    </message>
+</context>
+<context>
     <name>ImageWriter</name>
     <message>
-        <location filename="../imagewriter.cpp" line="253"/>
+        <location filename="../imagewriter.cpp" line="301"/>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
         <translation>ストレージの容量が足りません。少なくとも%1GBは必要です。</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="259"/>
+        <location filename="../imagewriter.cpp" line="307"/>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>入力されたファイルは適切なディスクイメージファイルではありません。ファイルサイズの%1は512バイトの倍数ではありません。</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="654"/>
+        <location filename="../imagewriter.cpp" line="716"/>
         <source>Downloading and writing image</source>
         <translation>イメージをダウンロードして書き込んでいます</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="787"/>
+        <location filename="../imagewriter.cpp" line="814"/>
         <source>Select image</source>
         <translation>イメージを選ぶ</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="962"/>
+        <location filename="../imagewriter.cpp" line="989"/>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="974"/>
+        <location filename="../imagewriter.cpp" line="1001"/>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="1185"/>
+        <location filename="../imagewriter.cpp" line="1212"/>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
         <translation>Wifiのパスワードをシステムのキーチェーンから読み取って設定しますか？</translation>
     </message>
@@ -291,12 +356,12 @@
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <location filename="../localfileextractthread.cpp" line="34"/>
+        <location filename="../localfileextractthread.cpp" line="36"/>
         <source>opening image file</source>
         <translation>イメージファイルを開いています</translation>
     </message>
     <message>
-        <location filename="../localfileextractthread.cpp" line="39"/>
+        <location filename="../localfileextractthread.cpp" line="41"/>
         <source>Error opening image file</source>
         <translation>イメージファイルを開く際にエラーが発生しました</translation>
     </message>
@@ -304,30 +369,163 @@
 <context>
     <name>MsgPopup</name>
     <message>
-        <location filename="../MsgPopup.qml" line="98"/>
+        <location filename="../MsgPopup.qml" line="52"/>
         <source>NO</source>
         <translation>いいえ</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="107"/>
+        <location filename="../MsgPopup.qml" line="61"/>
         <source>YES</source>
         <translation>はい</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="116"/>
+        <location filename="../MsgPopup.qml" line="70"/>
         <source>CONTINUE</source>
         <translation>続ける</translation>
     </message>
     <message>
-        <location filename="../MsgPopup.qml" line="124"/>
+        <location filename="../MsgPopup.qml" line="78"/>
         <source>QUIT</source>
         <translation>やめる</translation>
     </message>
 </context>
 <context>
+    <name>OSListModel</name>
+    <message>
+        <location filename="../oslistmodel.cpp" line="211"/>
+        <source>Recommended</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>OSPopup</name>
+    <message>
+        <location filename="../OSPopup.qml" line="30"/>
+        <source>Operating System</source>
+        <translation type="unfinished">OS</translation>
+    </message>
+    <message>
+        <location filename="../OSPopup.qml" line="92"/>
+        <source>Back</source>
+        <translation type="unfinished">戻る</translation>
+    </message>
+    <message>
+        <location filename="../OSPopup.qml" line="93"/>
+        <source>Go back to main menu</source>
+        <translation type="unfinished">メインメニューへ戻る</translation>
+    </message>
+    <message>
+        <location filename="../OSPopup.qml" line="250"/>
+        <source>Released: %1</source>
+        <translation type="unfinished">リリース日時: %1</translation>
+    </message>
+    <message>
+        <location filename="../OSPopup.qml" line="260"/>
+        <source>Cached on your computer</source>
+        <translation type="unfinished">コンピュータにキャッシュされたファイル</translation>
+    </message>
+    <message>
+        <location filename="../OSPopup.qml" line="262"/>
+        <source>Local file</source>
+        <translation type="unfinished">ローカルファイル</translation>
+    </message>
+    <message>
+        <location filename="../OSPopup.qml" line="263"/>
+        <source>Online - %1 GB download</source>
+        <translation type="unfinished">インターネットからダウンロード - %1 GB</translation>
+    </message>
+    <message>
+        <location filename="../OSPopup.qml" line="349"/>
+        <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
+        <translation type="unfinished">最初にイメージファイルがあるUSBメモリを接続してください。&lt;br&gt;イメージファイルはUSBメモリの一番上（ルートフォルダー）に入れてください。</translation>
+    </message>
+</context>
+<context>
+    <name>OptionsGeneralTab</name>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="40"/>
+        <source>Set hostname:</source>
+        <translation type="unfinished">ホスト名:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="68"/>
+        <source>Set username and password</source>
+        <translation type="unfinished">ユーザー名とパスワードを設定する</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="81"/>
+        <source>Username:</source>
+        <translation type="unfinished">ユーザー名</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="106"/>
+        <location filename="../OptionsGeneralTab.qml" line="183"/>
+        <source>Password:</source>
+        <translation type="unfinished">パスワード:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="147"/>
+        <source>Configure wireless LAN</source>
+        <translation type="unfinished">Wi-Fiを設定する</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="161"/>
+        <source>SSID:</source>
+        <translation type="unfinished">SSID:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="212"/>
+        <source>Show password</source>
+        <translation type="unfinished">パスワードを見る</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="223"/>
+        <source>Hidden SSID</source>
+        <translation type="unfinished">ステルスSSID</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="234"/>
+        <source>Wireless LAN country:</source>
+        <translation type="unfinished">Wifiを使う国:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="252"/>
+        <source>Set locale settings</source>
+        <translation type="unfinished">ロケール設定をする</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="256"/>
+        <source>Time zone:</source>
+        <translation type="unfinished">タイムゾーン:</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="275"/>
+        <source>Keyboard layout:</source>
+        <translation type="unfinished">キーボードレイアウト:</translation>
+    </message>
+</context>
+<context>
+    <name>OptionsMiscTab</name>
+    <message>
+        <location filename="../OptionsMiscTab.qml" line="23"/>
+        <source>Play sound when finished</source>
+        <translation type="unfinished">終わったときに音を鳴らす</translation>
+    </message>
+    <message>
+        <location filename="../OptionsMiscTab.qml" line="27"/>
+        <source>Eject media when finished</source>
+        <translation type="unfinished">終わったときにメディアを取り出す</translation>
+    </message>
+    <message>
+        <location filename="../OptionsMiscTab.qml" line="31"/>
+        <source>Enable telemetry</source>
+        <translation type="unfinished">テレメトリーを有効化</translation>
+    </message>
+</context>
+<context>
     <name>OptionsPopup</name>
     <message>
-        <location filename="../OptionsPopup.qml" line="20"/>
+        <location filename="../OptionsPopup.qml" line="28"/>
         <source>OS Customization</source>
         <translation type="unfinished"></translation>
     </message>
@@ -340,123 +538,102 @@
         <translation type="vanished">いつも使う設定にする</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="62"/>
+        <location filename="../OptionsPopup.qml" line="65"/>
         <source>General</source>
         <translation>一般</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="70"/>
+        <location filename="../OptionsPopup.qml" line="74"/>
         <source>Services</source>
         <translation>サービス</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="73"/>
+        <location filename="../OptionsPopup.qml" line="80"/>
         <source>Options</source>
         <translation>オプション</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="89"/>
         <source>Set hostname:</source>
-        <translation>ホスト名:</translation>
+        <translation type="vanished">ホスト名:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="112"/>
         <source>Set username and password</source>
-        <translation>ユーザー名とパスワードを設定する</translation>
+        <translation type="vanished">ユーザー名とパスワードを設定する</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="134"/>
         <source>Username:</source>
-        <translation>ユーザー名</translation>
+        <translation type="vanished">ユーザー名</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="151"/>
-        <location filename="../OptionsPopup.qml" line="220"/>
         <source>Password:</source>
-        <translation>パスワード:</translation>
+        <translation type="vanished">パスワード:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="187"/>
         <source>Configure wireless LAN</source>
-        <translation>Wi-Fiを設定する</translation>
+        <translation type="vanished">Wi-Fiを設定する</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="206"/>
         <source>SSID:</source>
-        <translation>SSID:</translation>
+        <translation type="vanished">SSID:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="239"/>
         <source>Show password</source>
-        <translation>パスワードを見る</translation>
+        <translation type="vanished">パスワードを見る</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="245"/>
         <source>Hidden SSID</source>
-        <translation>ステルスSSID</translation>
+        <translation type="vanished">ステルスSSID</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="251"/>
         <source>Wireless LAN country:</source>
-        <translation>Wifiを使う国:</translation>
+        <translation type="vanished">Wifiを使う国:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="262"/>
         <source>Set locale settings</source>
-        <translation>ロケール設定をする</translation>
+        <translation type="vanished">ロケール設定をする</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="272"/>
         <source>Time zone:</source>
-        <translation>タイムゾーン:</translation>
+        <translation type="vanished">タイムゾーン:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="282"/>
         <source>Keyboard layout:</source>
-        <translation>キーボードレイアウト:</translation>
+        <translation type="vanished">キーボードレイアウト:</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="299"/>
         <source>Enable SSH</source>
-        <translation>SSHを有効化する</translation>
+        <translation type="vanished">SSHを有効化する</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="318"/>
         <source>Use password authentication</source>
-        <translation>パスワード認証を使う</translation>
+        <translation type="vanished">パスワード認証を使う</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="328"/>
         <source>Allow public-key authentication only</source>
-        <translation>公開鍵認証のみを許可する</translation>
+        <translation type="vanished">公開鍵認証のみを許可する</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="346"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>ユーザー%1のためのauthorized_keys</translation>
+        <translation type="vanished">ユーザー%1のためのauthorized_keys</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="358"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation>ssh-keygenを実行する</translation>
+        <translation type="vanished">ssh-keygenを実行する</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="376"/>
         <source>Play sound when finished</source>
-        <translation>終わったときに音を鳴らす</translation>
+        <translation type="vanished">終わったときに音を鳴らす</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="380"/>
         <source>Eject media when finished</source>
-        <translation>終わったときにメディアを取り出す</translation>
+        <translation type="vanished">終わったときにメディアを取り出す</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="384"/>
         <source>Enable telemetry</source>
-        <translation>テレメトリーを有効化</translation>
+        <translation type="vanished">テレメトリーを有効化</translation>
     </message>
     <message>
-        <location filename="../OptionsPopup.qml" line="398"/>
+        <location filename="../OptionsPopup.qml" line="123"/>
         <source>SAVE</source>
         <translation>保存</translation>
     </message>
@@ -474,9 +651,47 @@
     </message>
 </context>
 <context>
+    <name>OptionsServicesTab</name>
+    <message>
+        <location filename="../OptionsServicesTab.qml" line="36"/>
+        <source>Enable SSH</source>
+        <translation type="unfinished">SSHを有効化する</translation>
+    </message>
+    <message>
+        <location filename="../OptionsServicesTab.qml" line="52"/>
+        <source>Use password authentication</source>
+        <translation type="unfinished">パスワード認証を使う</translation>
+    </message>
+    <message>
+        <location filename="../OptionsServicesTab.qml" line="63"/>
+        <source>Allow public-key authentication only</source>
+        <translation type="unfinished">公開鍵認証のみを許可する</translation>
+    </message>
+    <message>
+        <location filename="../OptionsServicesTab.qml" line="74"/>
+        <source>Set authorized_keys for &apos;%1&apos;:</source>
+        <translation type="unfinished">ユーザー%1のためのauthorized_keys</translation>
+    </message>
+    <message>
+        <location filename="../OptionsServicesTab.qml" line="121"/>
+        <source>Delete Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../OptionsServicesTab.qml" line="140"/>
+        <source>RUN SSH-KEYGEN</source>
+        <translation type="unfinished">ssh-keygenを実行する</translation>
+    </message>
+    <message>
+        <location filename="../OptionsServicesTab.qml" line="150"/>
+        <source>Add SSH Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
-        <location filename="../linux/linuxdrivelist.cpp" line="119"/>
+        <location filename="../linux/linuxdrivelist.cpp" line="126"/>
         <source>Internal SD card reader</source>
         <translation>SDカードリーダー</translation>
     </message>
@@ -484,32 +699,27 @@
 <context>
     <name>UseSavedSettingsPopup</name>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="77"/>
-        <source>Use OS customization?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="92"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="41"/>
         <source>Would you like to apply OS customization settings?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="134"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="82"/>
         <source>NO</source>
         <translation>いいえ</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="115"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="63"/>
         <source>NO, CLEAR SETTINGS</source>
         <translation>いいえ、設定をクリアする</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="125"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="73"/>
         <source>YES</source>
         <translation>はい</translation>
     </message>
     <message>
-        <location filename="../UseSavedSettingsPopup.qml" line="102"/>
+        <location filename="../UseSavedSettingsPopup.qml" line="50"/>
         <source>EDIT SETTINGS</source>
         <translation>設定を編集する</translation>
     </message>
@@ -517,62 +727,53 @@
 <context>
     <name>main</name>
     <message>
-        <location filename="../main.qml" line="22"/>
+        <location filename="../main.qml" line="27"/>
         <source>Raspberry Pi Imager v%1</source>
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="119"/>
-        <location filename="../main.qml" line="481"/>
+        <location filename="../main.qml" line="120"/>
         <source>Raspberry Pi Device</source>
         <translation>Raspberry Piデバイス</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="131"/>
         <source>CHOOSE DEVICE</source>
-        <translation>デバイスを選択</translation>
+        <translation type="vanished">デバイスを選択</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="143"/>
+        <location filename="../main.qml" line="144"/>
         <source>Select this button to choose your target Raspberry Pi</source>
         <translation>対象のRaspberry Piを選択するには、このボタンを押してください。</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="157"/>
-        <location filename="../main.qml" line="584"/>
+        <location filename="../main.qml" line="158"/>
         <source>Operating System</source>
         <translation>OS</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="168"/>
-        <location filename="../main.qml" line="1638"/>
+        <location filename="../main.qml" line="169"/>
+        <location filename="../main.qml" line="446"/>
         <source>CHOOSE OS</source>
         <translation>OSを選択</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="180"/>
+        <location filename="../main.qml" line="182"/>
         <source>Select this button to change the operating system</source>
         <translation>OSを変更するにはこのボタンを押してください</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="194"/>
-        <location filename="../main.qml" line="979"/>
+        <location filename="../main.qml" line="196"/>
         <source>Storage</source>
         <translation>ストレージ</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="330"/>
+        <location filename="../main.qml" line="331"/>
         <source>Network not ready yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1007"/>
-        <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main.qml" line="205"/>
-        <location filename="../main.qml" line="1317"/>
+        <location filename="../main.qml" line="207"/>
+        <location filename="../main.qml" line="668"/>
         <source>CHOOSE STORAGE</source>
         <translation>ストレージを選択</translation>
     </message>
@@ -581,40 +782,40 @@
         <translation type="vanished">書き込む</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="219"/>
+        <location filename="../main.qml" line="221"/>
         <source>Select this button to change the destination storage device</source>
         <translation>書き込み先のストレージデバイスを選択するにはこのボタンを押してください</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="265"/>
+        <location filename="../main.qml" line="266"/>
         <source>CANCEL WRITE</source>
         <translation>書き込みをキャンセル</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="268"/>
-        <location filename="../main.qml" line="1240"/>
+        <location filename="../main.qml" line="269"/>
+        <location filename="../main.qml" line="591"/>
         <source>Cancelling...</source>
         <translation>キャンセル中です...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="280"/>
+        <location filename="../main.qml" line="281"/>
         <source>CANCEL VERIFY</source>
         <translation>確認をやめる</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="283"/>
-        <location filename="../main.qml" line="1263"/>
-        <location filename="../main.qml" line="1336"/>
+        <location filename="../main.qml" line="284"/>
+        <location filename="../main.qml" line="614"/>
+        <location filename="../main.qml" line="687"/>
         <source>Finalizing...</source>
         <translation>最終処理をしています...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="292"/>
+        <location filename="../main.qml" line="293"/>
         <source>Next</source>
         <translation>次へ</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="298"/>
+        <location filename="../main.qml" line="299"/>
         <source>Select this button to start writing the image</source>
         <translation>書き込みをスタートさせるにはこのボタンを押してください</translation>
     </message>
@@ -623,22 +824,22 @@
         <translation type="vanished">詳細な設定を変更するのならこのボタンを押してください</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="320"/>
+        <location filename="../main.qml" line="321"/>
         <source>Using custom repository: %1</source>
         <translation>カスタムレポジトリを使います: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="339"/>
+        <location filename="../main.qml" line="340"/>
         <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
         <translation>キーボードの操作: 次のボタンに移動する→Tabキー  ボタンを押す/選択する→Spaceキー  上に行く/下に行く→矢印キー（上下）</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="360"/>
+        <location filename="../main.qml" line="361"/>
         <source>Language: </source>
         <translation>言語: </translation>
     </message>
     <message>
-        <location filename="../main.qml" line="383"/>
+        <location filename="../main.qml" line="384"/>
         <source>Keyboard: </source>
         <translation>キーボード: </translation>
     </message>
@@ -647,84 +848,73 @@
         <translation type="vanished">Raspberry Pi モデル:</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="500"/>
         <source>[ All ]</source>
-        <translation>[すべて]</translation>
+        <translation type="vanished">[すべて]</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="651"/>
         <source>Back</source>
-        <translation>戻る</translation>
+        <translation type="vanished">戻る</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="652"/>
         <source>Go back to main menu</source>
-        <translation>メインメニューへ戻る</translation>
+        <translation type="vanished">メインメニューへ戻る</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="894"/>
         <source>Released: %1</source>
-        <translation>リリース日時: %1</translation>
+        <translation type="vanished">リリース日時: %1</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="904"/>
         <source>Cached on your computer</source>
-        <translation>コンピュータにキャッシュされたファイル</translation>
+        <translation type="vanished">コンピュータにキャッシュされたファイル</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="906"/>
         <source>Local file</source>
-        <translation>ローカルファイル</translation>
+        <translation type="vanished">ローカルファイル</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="907"/>
         <source>Online - %1 GB download</source>
-        <translation>インターネットからダウンロード - %1 GB</translation>
+        <translation type="vanished">インターネットからダウンロード - %1 GB</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1042"/>
-        <location filename="../main.qml" line="1094"/>
-        <location filename="../main.qml" line="1100"/>
         <source>Mounted as %1</source>
-        <translation>%1 としてマウントされています</translation>
+        <translation type="vanished">%1 としてマウントされています</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1096"/>
         <source>[WRITE PROTECTED]</source>
-        <translation>[書き込み禁止]</translation>
+        <translation type="vanished">[書き込み禁止]</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1141"/>
+        <location filename="../main.qml" line="485"/>
         <source>Are you sure you want to quit?</source>
         <translation>本当にやめますか？</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1142"/>
+        <location filename="../main.qml" line="486"/>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
         <translation>Raspberry Pi Imagerは現在まだ処理中です。&lt;bt&gt;本当にやめますか？</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1153"/>
+        <location filename="../main.qml" line="497"/>
         <source>Warning</source>
         <translation>警告</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1162"/>
+        <location filename="../main.qml" line="506"/>
         <source>Preparing to write...</source>
         <translation>書き込み準備中...</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1176"/>
+        <location filename="../main.qml" line="520"/>
         <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
         <translation>%1 に存在するすべてのデータは完全に削除されます。本当に続けますか？</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1191"/>
+        <location filename="../main.qml" line="535"/>
         <source>Update available</source>
         <translation>アップデートがあります</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1192"/>
+        <location filename="../main.qml" line="536"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
         <translation>新しいバージョンのImagerがあります。&lt;br&gt;ダウンロードするためにウェブサイトを開きますか？</translation>
     </message>
@@ -733,75 +923,72 @@
         <translation type="vanished">OSのリストをダウンロードする際にエラーが発生しました。</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1243"/>
+        <location filename="../main.qml" line="594"/>
         <source>Writing... %1%</source>
         <translation>書き込み中... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1266"/>
+        <location filename="../main.qml" line="617"/>
         <source>Verifying... %1%</source>
         <translation>確認中... %1%</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1273"/>
+        <location filename="../main.qml" line="624"/>
         <source>Preparing to write... (%1)</source>
         <translation>書き込み準備中... (%1)</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1293"/>
+        <location filename="../main.qml" line="644"/>
         <source>Error</source>
         <translation>エラー</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1300"/>
+        <location filename="../main.qml" line="651"/>
         <source>Write Successful</source>
         <translation>書き込みが正常に終了しました</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1301"/>
-        <location filename="../imagewriter.cpp" line="596"/>
+        <location filename="../main.qml" line="652"/>
+        <location filename="../imagewriter.cpp" line="648"/>
         <source>Erase</source>
         <translation>削除</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1302"/>
+        <location filename="../main.qml" line="653"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b%gt;%1&lt;/b&gt; は削除されました。&lt;br&gt;&lt;bt&gt;SDカードをSDカードリーダーから取り出すことができます。</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1309"/>
+        <location filename="../main.qml" line="660"/>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; は&lt;b&gt;%2&lt;/b&gt;に書き込まれました。&lt;br&gt;&lt;br&gt;SDカードをSDカードリーダーから取り出すことができます。</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1463"/>
         <source>Error parsing os_list.json</source>
-        <translation>os_list.jsonの処理中にエラーが発生しました</translation>
+        <translation type="vanished">os_list.jsonの処理中にエラーが発生しました</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="597"/>
+        <location filename="../imagewriter.cpp" line="649"/>
         <source>Format card as FAT32</source>
         <translation>カードをFAT32でフォーマットする</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="603"/>
+        <location filename="../imagewriter.cpp" line="655"/>
         <source>Use custom</source>
         <translation>カスタムイメージを使う</translation>
     </message>
     <message>
-        <location filename="../imagewriter.cpp" line="604"/>
+        <location filename="../imagewriter.cpp" line="656"/>
         <source>Select a custom .img from your computer</source>
         <translation>自分で用意したイメージファイルを使う</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1712"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation>最初にイメージファイルがあるUSBメモリを接続してください。&lt;br&gt;イメージファイルはUSBメモリの一番上（ルートフォルダー）に入れてください。</translation>
+        <translation type="vanished">最初にイメージファイルがあるUSBメモリを接続してください。&lt;br&gt;イメージファイルはUSBメモリの一番上（ルートフォルダー）に入れてください。</translation>
     </message>
     <message>
-        <location filename="../main.qml" line="1728"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation>SDカードへの書き込みが制限されています。&lt;br&gt;カードの左上にあるロックスイッチを上げてロックを解除し、もう一度お試しください。</translation>
+        <translation type="vanished">SDカードへの書き込みが制限されています。&lt;br&gt;カードの左上にあるロックスイッチを上げてロックを解除し、もう一度お試しください。</translation>
     </message>
     <message>
         <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;</source>
