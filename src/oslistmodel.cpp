@@ -207,11 +207,15 @@ void OSListModel::markFirstAsRecommended() {
     if (!_osList.isEmpty()) {
         OS &candidate = _osList[0];
 
+        const QString recommendedString = QStringLiteral(" (Recommended)");
+        const QString recommendedStringLocalized = QStringLiteral(" (%1)").arg(tr("Recommended"));
+
         if (!candidate.description.isEmpty() &&
             candidate.subitemsJson.isEmpty() &&
-            !candidate.description.contains(QLatin1String("(Recommended)")))
+            !candidate.description.contains(recommendedString) &&
+            !candidate.description.contains(recommendedStringLocalized))
         {
-            candidate.description += QLatin1String(" (Recommended)");
+            candidate.description += recommendedStringLocalized;
         }
     }
 }
