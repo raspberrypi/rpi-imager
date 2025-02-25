@@ -171,7 +171,6 @@ ApplicationWindow {
                         padding: 0
                         bottomPadding: 0
                         topPadding: 0
-                        // text: window.imageWriter.getOSList().currentName TODO
                         Layout.minimumHeight: 40
                         Layout.fillWidth: true
                         onClicked: {
