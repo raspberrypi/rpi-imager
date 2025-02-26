@@ -32,6 +32,15 @@ if (APPLE)
     set(IMAGER_SIGNING_IDENTITY "" CACHE STRING "The Developer Identity to use for signing.")
     set(IMAGER_NOTARIZE_APP OFF CACHE BOOL "Perform notarization of the Imager .dmg as part of the build")
     set(IMAGER_NOTARIZE_KEYCHAIN_PROFILE "" CACHE STRING "The name of the Keychain item containing your notarization credentials")
+
+    # Per CMake Bug 21918, if you do not use the following block, CMake will automatically include homebrew libraries.
+    # This is undesirable, as on macOS/Apple Silicon, you may find newer versions of Qt will pull in new dependencies
+    # - breaking your x86_64 build prematurely. Regardless, this is desirable behaviour to make the build more predictable.
+    set(CMAKE_IGNORE_PATH)
+    foreach(_prefix /sw /opt/local /usr/local /opt/homebrew)
+      list(APPEND CMAKE_IGNORE_PATH ${_prefix}/bin ${_prefix}/include ${_prefix}/lib)
+      list(APPEND CMAKE_SYSTEM_IGNORE_PATH ${_prefix}/bin ${_prefix}/include ${_prefix}/lib)
+    endforeach()
 endif(APPLE)
 
 ## Preferentially build the bundled code. Full vendoring is to follow in a later version.
