@@ -43,8 +43,6 @@ if (APPLE)
     endforeach()
 endif(APPLE)
 
-## Preferentially build the bundled code. Full vendoring is to follow in a later version.
-
 # Bundled code will occasionally use identical options - eg, BUILD_TESTING.
 set(BUILD_TESTING OFF)
 set(BUILD_STATIC_LIBS ON)
@@ -89,6 +87,20 @@ set(ZSTD_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
 set(Zstd_LIBRARIES libzstd_static)
 set(ZSTD_LIBRARIES libzstd_static)
 set(ZSTD_LIBRARY libzstd_static)
+
+# Remote nghttp2
+include(FetchContent)
+FetchContent_Declare(nghttp2
+ GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
+ GIT_TAG        v1.64.0
+)
+set(BUILD_EXAMPLES OFF)
+set(ENABLE_LIB_ONLY ON)
+set(ENABLE_FAILMALLOC OFF)
+FetchContent_MakeAvailable(nghttp2)
+unset(ENABLE_LIB_ONLY)
+unset(ENABLE_FAILMALLOC)
+unset(BUILD_EXAMPLES)
 
 # Bundled zlib
 set(ZLIB_BUILD_EXAMPLES OFF)
