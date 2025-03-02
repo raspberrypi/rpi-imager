@@ -275,12 +275,12 @@
     <message>
         <location filename="../imagewriter.cpp" line="962"/>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>시간 동기화 오류, 3초 후 다시 시도합니다.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="974"/>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation type="unfinished"></translation>
+        <translation>STP가 이더넷 스위치에서 활성화되었습니다. IP를 얻는 데 시간이 오래 걸릴 수 있습니다.</translation>
     </message>
     <message>
         <location filename="../imagewriter.cpp" line="1185"/>
@@ -567,12 +567,12 @@
     <message>
         <location filename="../main.qml" line="330"/>
         <source>Network not ready yet</source>
-        <translation type="unfinished"></translation>
+        <translation>네트워크가 준비되지 않았습니다.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="1007"/>
         <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
+        <translation>저장소 기기가 발견되지 않았습니다.</translation>
     </message>
     <message>
         <location filename="../main.qml" line="205"/>
