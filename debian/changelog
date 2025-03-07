@@ -1,3 +1,19 @@
+rpi-imager (1.9.3) unstable; urgency=medium
+
+  * Windows: Add quiet uninstaller flag
+  * Windows: Fixup long filename construction in FAT partitions
+  * i18n: Updated Portuguese translation
+  * i18n: Updated zh-TW, zh-CN translations
+  * i18n: Updated Korean translation
+  * i18n: Make 'gigabytes' translatable
+  * Storage Selection: Allow controllable filtering of system drives
+  * Linux: Disable Wayland back-end
+  * OS customisation: SSH key handling, regex verification
+  * OS customisation: UI cleanup
+  * deps: cURL 8.11.0, libarchive 3.7.7
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 07 Mar 2025 14:45:00 +0000
+
 rpi-imager (1.9.2) unstable; urgency=medium
 
   * Drive List: Expose only physical devices - not volumes

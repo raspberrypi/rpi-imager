@@ -19,6 +19,7 @@ appimage:
       - qt
     raw_environment:
       QML_SOURCES_PATHS: "\"$PROJECT_ROOT\"/src/qmlcomponents/"
+    extra_args: --exclude-library "libwayland-*"
     environment:
       # Disable Wayland back-end until the dependency problem gets resolved.
       # Essentially, importing libqwayland-generic causes the AppImage dependency walker
