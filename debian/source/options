@@ -1,3 +1,6 @@
 tar-ignore = "release.appimagecraft.yml"
 tar-ignore = "*.AppImage"
 tar-ignore = "ci"
+tar-ignore = ".git"
+tar-ignore = "build"
+tar-ignore = "squashfs-root"
