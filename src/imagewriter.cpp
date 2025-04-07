@@ -793,7 +793,7 @@ void ImageWriter::openFileDialog()
 
     QFileDialog *fd = new QFileDialog(nullptr, tr("Select image"),
                                       path,
-                                      "Image files (*.img *.zip *.iso *.gz *.xz *.zst);;All files (*)");
+                                      "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic);;All files (*)");
     connect(fd, SIGNAL(fileSelected(QString)), SLOT(onFileSelected(QString)));
 
     if (_engine)
@@ -1028,7 +1028,7 @@ QByteArray ImageWriter::getUsbSourceOSlist()
     QJsonArray oslist;
     QDir dir("/media");
     const QStringList medialist = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-    QStringList namefilters = {"*.img", "*.zip", "*.gz", "*.xz", "*.zst"};
+    QStringList namefilters = {"*.img", "*.zip", "*.gz", "*.xz", "*.zst", "*.wic"};
 
     for (const QString &devname : medialist)
     {
