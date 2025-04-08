@@ -962,6 +962,7 @@ Window {
             cloudinitnetwork += "  wifis:\n"
             cloudinitnetwork += "    wlan0:\n"
             cloudinitnetwork += "      dhcp4: true\n"
+            cloudinitnetwork += "      dhcp6: true\n"
             cloudinitnetwork += "      optional: true\n"
             cloudinitnetwork += "      access-points:\n"
             cloudinitnetwork += "        \""+fieldWifiSSID.text+"\":\n"
