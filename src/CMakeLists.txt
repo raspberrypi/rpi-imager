@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2020-2024 Raspberry Pi Ltd
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.25)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
 
@@ -48,48 +48,73 @@ set(BUILD_TESTING OFF)
 set(BUILD_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
 
+include(FetchContent)
+
 # Bundled liblzma
-set(XZ_MICROLZMA_DECODER OFF)
-set(XZ_MICROLZMA_ENCODER OFF)
-set(XZ_LZIP_DECODER OFF)
-set(XZ_ENABLE_SANDBOX OFF)
-set(XZ_BUILD_SHARED_LIBS OFF)
-set(XZ_ENABLE_DOXYGEN OFF)
+FetchContent_Declare(xz
+    GIT_REPOSITORY https://github.com/tukaani-project/xz.git
+    GIT_TAG v5.6.4
+)
+set(XZ_MICROLZMA_DECODER OFF CACHE BOOL "" FORCE)
+set(XZ_MICROLZMA_ENCODER OFF CACHE BOOL "" FORCE)
+set(XZ_LZIP_DECODER OFF CACHE BOOL "" FORCE)
+set(XZ_ENABLE_SANDBOX OFF CACHE BOOL "" FORCE)
+set(XZ_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(XZ_ENABLE_DOXYGEN OFF CACHE BOOL "" FORCE)
 set(XZ_DECODERS
     lzma1
     lzma2
     delta
 )
 set(XZ_ENCODERS "")
-set(CREATE_LZMA_SYMLINKS OFF)
-set(CREATE_XZ_SYMLINKS OFF)
-add_subdirectory(dependencies/xz-5.6.2)
+set(CREATE_LZMA_SYMLINKS OFF CACHE BOOL "" FORCE)
+set(CREATE_XZ_SYMLINKS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(xz)
+unset(XZ_MICROLZMA_DECODER)
+unset(XZ_MICROLZMA_ENCODER)
+unset(XZ_LZIP_DECODER)
+unset(XZ_ENABLE_SANDBOX)
+unset(XZ_BUILD_SHARED_LIBS)
+unset(XZ_ENABLE_DOXYGEN)
+unset(CREATE_LZMA_SYMLINKS)
+unset(CREATE_XZ_SYMLINKS)
 set(LIBLZMA_FOUND true)
-set(LIBLZMA_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/xz-5.6.2/src/liblzma/api FORCE)
-set(LIBLZMA_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/xz-5.6.2/src/liblzma/api FORCE)
+set(LIBLZMA_INCLUDE_DIR ${xz_SOURCE_DIR}/src/liblzma/api FORCE)
+set(LIBLZMA_INCLUDE_DIRS ${xz_SOURCE_DIR}/src/liblzma/api FORCE)
 set(LIBLZMA_LIBRARY liblzma)
 set(LIBLZMA_LIBRARIES liblzma)
 
 # Bundled zstd
+FetchContent_Declare(zstd
+    GIT_REPOSITORY https://github.com/facebook/zstd.git
+    GIT_TAG v1.5.7
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SOURCE_SUBDIR build/cmake
+)
 set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_STATIC ON CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_DICTBUILDER OFF CACHE BOOL "" FORCE)
-add_subdirectory(dependencies/zstd-1.5.6/build/cmake)
+FetchContent_MakeAvailable(zstd)
+unset(ZSTD_BUILD_PROGRAMS)
+unset(ZSTD_BUILD_SHARED)
+unset(ZSTD_BUILD_STATIC)
+unset(ZSTD_BUILD_TESTS)
+unset(ZSTD_BUILD_DICTBUILDER)
 set(Zstd_FOUND true)
 set(ZSTD_FOUND true)
-set(Zstd_VERSION "1.5.6")
-set(ZSTD_VERSION "1.5.6")
-set(Zstd_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
-set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
-set(Zstd_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
-set(ZSTD_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/zstd-1.5.6/lib)
+set(Zstd_VERSION "1.5.7")
+set(ZSTD_VERSION "1.5.7")
+set(Zstd_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-src/lib)
+set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-src/lib)
+set(Zstd_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-src/lib)
+set(ZSTD_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-src/lib)
 set(Zstd_LIBRARIES libzstd_static)
 set(ZSTD_LIBRARIES libzstd_static)
 set(ZSTD_LIBRARY libzstd_static)
 
 # Remote nghttp2
-include(FetchContent)
 FetchContent_Declare(nghttp2
  GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
  GIT_TAG        v1.64.0
@@ -103,16 +128,32 @@ unset(ENABLE_FAILMALLOC)
 unset(BUILD_EXAMPLES)
 
 # Bundled zlib
-set(ZLIB_BUILD_EXAMPLES OFF)
-set(SKIP_INSTALL_ALL ON)
-add_subdirectory(dependencies/zlib-1.3.1)
+FetchContent_Declare(zlib
+    GIT_REPOSITORY https://github.com/madler/zlib.git
+    GIT_TAG v1.3.1
+)
+set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(zlib)
+unset(ZLIB_BUILD_EXAMPLES)
+unset(ZLIB_BUILD_SHARED)
+unset(ZLIB_BUILD_STATIC)
+unset(ZLIB_BUILD_TESTS)
+unset(SKIP_INSTALL_ALL)
 set(ZLIB_FOUND TRUE)
-set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
-set(ZLIB_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/zlib-1.3.1 CACHE PATH "zlib include dir")
-set(ZLIB_LIBRARY zlibstatic)
-set(ZLIB_LIBRARIES zlibstatic)
+set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib include dir")
+set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib include dir")
+# set(ZLIB_LIBRARY zlibstatic)
+# set(ZLIB_LIBRARIES zlibstatic)
 
 # Bundled libarchive
+FetchContent_Declare(libarchive
+    GIT_REPOSITORY https://github.com/libarchive/libarchive.git
+    GIT_TAG v3.7.8
+)
 set(ARCHIVE_ENABLE_WERROR OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_INSTALL OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_TEST OFF CACHE BOOL "")
@@ -133,16 +174,43 @@ set(ARCHIVE_ENABLE_TAR OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_CPIO OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_CAT OFF CACHE BOOL "")
 set(ARCHIVE_BUILD_SHARED_LIBS OFF CACHE BOOL "")
-add_subdirectory(dependencies/libarchive-3.7.7)
+set(ARCHIVE_BUILD_STATIC_LIBS ON CACHE BOOL "")
+set(ARCHIVE_BUILD_EXAMPLES OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_ZSTD ON CACHE BOOL "")
+FetchContent_MakeAvailable(libarchive)
+unset(ARCHIVE_ENABLE_WERROR)
+unset(ARCHIVE_ENABLE_INSTALL)
+unset(ARCHIVE_ENABLE_TEST)
+unset(ARCHIVE_ENABLE_CNG)
+unset(ARCHIVE_ENABLE_MBEDTLS)
+unset(ARCHIVE_ENABLE_NETTLE)
+unset(ARCHIVE_ENABLE_OPENSSL)
+unset(ARCHIVE_ENABLE_BZip2)
+unset(ARCHIVE_ENABLE_LZ4)
+unset(ARCHIVE_ENABLE_LZO)
+unset(ARCHIVE_ENABLE_LIBB2)
+unset(ARCHIVE_ENABLE_LIBXML2)
+unset(ARCHIVE_ENABLE_EXPAT)
+unset(ARCHIVE_ENABLE_PCREPOSIX)
+unset(ARCHIVE_ENABLE_PCRE2POSIX)
+unset(ARCHIVE_ENABLE_LIBGCC)
+unset(ARCHIVE_ENABLE_TAR)
+unset(ARCHIVE_ENABLE_CPIO)
+unset(ARCHIVE_ENABLE_CAT)
+unset(ARCHIVE_BUILD_SHARED_LIBS)
 set(LibArchive_FOUND true)
 set(LibArchive_LIBRARIES archive_static)
-set(LibArchive_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/libarchive-3.7.7/libarchive)
+set(LibArchive_INCLUDE_DIR ${libarchive_SOURCE_DIR}/libarchive)
 
 # Bundled libcurl
-set(CMAKE_CURL_INCLUDES)
+FetchContent_Declare(curl
+    GIT_REPOSITORY https://github.com/curl/curl.git
+    GIT_TAG curl-8_12_1
+)
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
 set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
 set(ENABLE_CURL_MANUAL OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(CURL_USE_LIBPSL OFF)
 set(CURL_USE_LIBSSH2 OFF)
 set(CURL_DISABLE_ALTSVC ON)
@@ -183,11 +251,43 @@ else()
     endif(WIN32)
 endif(APPLE)
 
-add_subdirectory(dependencies/curl-8.11.0)
+FetchContent_MakeAvailable(curl)
+
+unset(BUILD_CURL_EXE)
+unset(BUILD_LIBCURL_DOCS)
+unset(ENABLE_CURL_MANUAL)
+unset(BUILD_EXAMPLES)
+unset(CURL_USE_LIBPSL)
+unset(CURL_USE_LIBSSH2)
+unset(CURL_DISABLE_ALTSVC)
+unset(CURL_DISABLE_KERBEROS_AUTH)
+unset(CURL_DISABLE_DICT)
+unset(CURL_DISABLE_DISABLE_FORM_API)
+unset(CURL_DISABLE_FTP)
+unset(CURL_DISABLE_GOPHER)
+unset(CURL_DISABLE_IMAP)
+unset(CURL_DISABLE_LDAP)
+unset(CURL_DISABLE_LDAPS)
+unset(CURL_DISABLE_MQTT)
+unset(CURL_DISABLE_NETRC)
+unset(CURL_DISABLE_POP3)
+unset(CURL_DISABLE_RTSP)
+unset(CURL_DISABLE_SMTP)
+unset(CURL_DISABLE_TELNET)
+unset(CURL_DISABLE_TFTP)
+unset(CURL_ZSTD)
+unset(CURL_ENABLE_EXPORT_TARGET)
+unset(CURL_DISABLE_INSTALL)
+unset(CURL_USE_SECTRANSP)
+unset(CURL_DEFAULT_SSL_BACKEND)
+unset(USE_APPLE_IDN)
+unset(CURL_USE_SCHANNEL)
+unset(CURL_USE_GNUTLS)
+
 set(CURL_FOUND true)
 set(CURL_LIBRARIES libcurl_static)
-set(CURL_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/dependencies/curl-8.11.0/include)
-set(CURL_INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/dependencies/curl-8.11.0/include)
+set(CURL_INCLUDE_DIR ${curl_SOURCE_DIR}/include)
+set(CURL_INCLUDE_DIRS ${curl_SOURCE_DIR}/include)
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h drivelistmodelpollthread.h driveformatthread.h powersaveblocker.h cli.h
