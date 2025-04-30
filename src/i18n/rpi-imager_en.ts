@@ -490,10 +490,6 @@
         <translation>OS Customisation</translation>
     </message>
     <message>
-        <source>OS customization options</source>
-        <translation type="vanished">OS customisation options</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="65"/>
         <source>General</source>
         <translation type="unfinished"></translation>
@@ -562,10 +558,6 @@
 </context>
 <context>
     <name>UseSavedSettingsPopup</name>
-    <message>
-        <source>Use OS customization?</source>
-        <translation type="vanished">Use OS customisation?</translation>
-    </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="41"/>
         <source>Would you like to apply OS customization settings?</source>

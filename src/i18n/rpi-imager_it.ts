@@ -216,48 +216,48 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../DstPopup.qml" line="24"/>
         <source>Storage</source>
-        <translation type="unfinished">Scheda SD</translation>
+        <translation>Storage</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="38"/>
         <source>No storage devices found</source>
-        <translation type="unfinished">Nessun dispositivo archiviazione trovato</translation>
+        <translation>Nessun dispositivo archiviazione trovato</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="67"/>
         <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Escludi unità sistema</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="94"/>
         <source>gigabytes</source>
-        <translation type="unfinished"></translation>
+        <translation>Gigabyte</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="96"/>
         <location filename="../DstPopup.qml" line="152"/>
         <source>Mounted as %1</source>
-        <translation type="unfinished">Montato come %1</translation>
+        <translation>Montato come %1</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="139"/>
         <source>GB</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="154"/>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[PROTETTA DA SCRITTURA]</translation>
+        <translation>[PROTETTA DA SCRITTURA]</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="156"/>
         <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
+        <translation>SISTEMA</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="197"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">La scheda SD è protetta da scrittura.&lt;br&gt;Sposta verso l&apos;alto l&apos;interruttore LOCK sul lato sinistro della scheda SD e riprova.</translation>
+        <translation>La scheda SD è protetta da scrittura.&lt;br&gt;Sposta verso l&apos;alto l&apos;interruttore LOCK sul lato sinistro della scheda SD e riprova.</translation>
     </message>
 </context>
 <context>
@@ -265,7 +265,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../hwlistmodel.cpp" line="111"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">SCEGLI DISPOSITIVO</translation>
+        <translation>SCEGLI DISPOSITIVO</translation>
     </message>
 </context>
 <context>
@@ -273,7 +273,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../HwPopup.qml" line="27"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished">Dispositivo Raspberry Pi</translation>
+        <translation>Dispositivo Raspberry Pi</translation>
     </message>
 </context>
 <context>
@@ -355,7 +355,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../oslistmodel.cpp" line="211"/>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>Raccomandato</translation>
     </message>
 </context>
 <context>
@@ -363,42 +363,42 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../OSPopup.qml" line="30"/>
         <source>Operating System</source>
-        <translation type="unfinished">Sistema operativo</translation>
+        <translation>Sistema operativo</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="92"/>
         <source>Back</source>
-        <translation type="unfinished">Indietro</translation>
+        <translation>Indietro</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="93"/>
         <source>Go back to main menu</source>
-        <translation type="unfinished">Torna al menu principale</translation>
+        <translation>Torna al menu principale</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="250"/>
         <source>Released: %1</source>
-        <translation type="unfinished">Rilasciato: %1</translation>
+        <translation>Rilasciato: %1</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="260"/>
         <source>Cached on your computer</source>
-        <translation type="unfinished">Memorizzato temporaneamente nel computer</translation>
+        <translation>Memorizzato temporaneamente nel computer</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="262"/>
         <source>Local file</source>
-        <translation type="unfinished">File locale</translation>
+        <translation>File locale</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="263"/>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">Online - Download %1 GB</translation>
+        <translation>Online - Download %1 GB</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="349"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">Prima collega una chiavetta USB contenente il file immagine.&lt;br&gt;Il file immagine deve essere presente nella cartella principale della chiavetta USB.</translation>
+        <translation>Prima collega una chiavetta USB contenente il file immagine.&lt;br&gt;Il file immagine deve essere presente nella cartella principale della chiavetta USB.</translation>
     </message>
 </context>
 <context>
@@ -406,63 +406,63 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../OptionsGeneralTab.qml" line="40"/>
         <source>Set hostname:</source>
-        <translation type="unfinished">Imposta nome host:</translation>
+        <translation>Imposta nome host:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="68"/>
         <source>Set username and password</source>
-        <translation type="unfinished">Imposta nome utente e password</translation>
+        <translation>Imposta nome utente e password</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="81"/>
         <source>Username:</source>
-        <translation type="unfinished">Nome utente:</translation>
+        <translation>Nome utente:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="106"/>
         <location filename="../OptionsGeneralTab.qml" line="183"/>
         <source>Password:</source>
-        <translation type="unfinished">Password:</translation>
+        <translation>Password:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="147"/>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">Configura WiFi</translation>
+        <translation>Configura WiFi</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="161"/>
         <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="212"/>
         <source>Show password</source>
-        <translation type="unfinished">Visualizza password</translation>
+        <translation>Visualizza password</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="223"/>
         <source>Hidden SSID</source>
-        <translation type="unfinished">SSID nascosto</translation>
+        <translation>SSID nascosto</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="234"/>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">Nazione WiFi:</translation>
+        <translation>Nazione WiFi:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="252"/>
         <source>Set locale settings</source>
-        <translation type="unfinished">Imposta configurazioni locali</translation>
+        <translation>Imposta configurazione locale</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="256"/>
         <source>Time zone:</source>
-        <translation type="unfinished">Fuso orario:</translation>
+        <translation>Fuso orario:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="275"/>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">Layout tastiera:</translation>
+        <translation>Layout tastiera:</translation>
     </message>
 </context>
 <context>
@@ -470,17 +470,17 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../OptionsMiscTab.qml" line="23"/>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Riproduci suono quando completato</translation>
+        <translation>Riproduci suono quando completato</translation>
     </message>
     <message>
         <location filename="../OptionsMiscTab.qml" line="27"/>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Espelli media quando completato</translation>
+        <translation>Espelli media quando completato</translation>
     </message>
     <message>
         <location filename="../OptionsMiscTab.qml" line="31"/>
         <source>Enable telemetry</source>
-        <translation type="unfinished">Abilita telemetria</translation>
+        <translation>Abilita telemetria</translation>
     </message>
 </context>
 <context>
@@ -489,18 +489,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <location filename="../OptionsPopup.qml" line="28"/>
         <source>OS Customization</source>
         <translation>Personalizzazione SO</translation>
-    </message>
-    <message>
-        <source>OS customization options</source>
-        <translation type="vanished">Opzioni personalizzazione SO</translation>
-    </message>
-    <message>
-        <source>for this session only</source>
-        <translation type="vanished">solo per questa sessione</translation>
-    </message>
-    <message>
-        <source>to always use</source>
-        <translation type="vanished">da usare sempre</translation>
     </message>
     <message>
         <location filename="../OptionsPopup.qml" line="65"/>
@@ -518,86 +506,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Opzioni</translation>
     </message>
     <message>
-        <source>Set hostname:</source>
-        <translation type="vanished">Imposta nome host:</translation>
-    </message>
-    <message>
-        <source>Set username and password</source>
-        <translation type="vanished">Imposta nome utente e password</translation>
-    </message>
-    <message>
-        <source>Username:</source>
-        <translation type="vanished">Nome utente:</translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation type="vanished">Password:</translation>
-    </message>
-    <message>
-        <source>Configure wireless LAN</source>
-        <translation type="vanished">Configura WiFi</translation>
-    </message>
-    <message>
-        <source>SSID:</source>
-        <translation type="vanished">SSID:</translation>
-    </message>
-    <message>
-        <source>Show password</source>
-        <translation type="vanished">Visualizza password</translation>
-    </message>
-    <message>
-        <source>Hidden SSID</source>
-        <translation type="vanished">SSID nascosto</translation>
-    </message>
-    <message>
-        <source>Wireless LAN country:</source>
-        <translation type="vanished">Nazione WiFi:</translation>
-    </message>
-    <message>
-        <source>Set locale settings</source>
-        <translation type="vanished">Imposta configurazioni locali</translation>
-    </message>
-    <message>
-        <source>Time zone:</source>
-        <translation type="vanished">Fuso orario:</translation>
-    </message>
-    <message>
-        <source>Keyboard layout:</source>
-        <translation type="vanished">Layout tastiera:</translation>
-    </message>
-    <message>
-        <source>Enable SSH</source>
-        <translation type="vanished">Abilita SSH</translation>
-    </message>
-    <message>
-        <source>Use password authentication</source>
-        <translation type="vanished">Usa password autenticazione</translation>
-    </message>
-    <message>
-        <source>Allow public-key authentication only</source>
-        <translation type="vanished">Permetti solo autenticazione con chiave pubblica</translation>
-    </message>
-    <message>
-        <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="vanished">Imposta authorized_keys per &apos;%1&apos;:</translation>
-    </message>
-    <message>
-        <source>RUN SSH-KEYGEN</source>
-        <translation type="vanished">ESEGUI SSH-KEYGEN</translation>
-    </message>
-    <message>
-        <source>Play sound when finished</source>
-        <translation type="vanished">Riproduci suono quando completato</translation>
-    </message>
-    <message>
-        <source>Eject media when finished</source>
-        <translation type="vanished">Espelli media quando completato</translation>
-    </message>
-    <message>
-        <source>Enable telemetry</source>
-        <translation type="vanished">Abilita telemetria</translation>
-    </message>
-    <message>
         <location filename="../OptionsPopup.qml" line="123"/>
         <source>SAVE</source>
         <translation>SALVA</translation>
@@ -608,37 +516,37 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../OptionsServicesTab.qml" line="36"/>
         <source>Enable SSH</source>
-        <translation type="unfinished">Abilita SSH</translation>
+        <translation>Abilita SSH</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="52"/>
         <source>Use password authentication</source>
-        <translation type="unfinished">Usa password autenticazione</translation>
+        <translation>Usa password autenticazione</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="63"/>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished">Permetti solo autenticazione con chiave pubblica</translation>
+        <translation>Consenti solo autenticazione con chiave pubblica</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="74"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">Imposta authorized_keys per &apos;%1&apos;:</translation>
+        <translation>Imposta authorized_keys per &apos;%1&apos;:</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="121"/>
         <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Chiave predefinita</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="140"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">ESEGUI SSH-KEYGEN</translation>
+        <translation>ESEGUI SSH-KEYGEN</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="150"/>
         <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Aggiungi chiave SSH</translation>
     </message>
 </context>
 <context>
@@ -651,10 +559,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
 </context>
 <context>
     <name>UseSavedSettingsPopup</name>
-    <message>
-        <source>Use OS customization?</source>
-        <translation type="vanished">Vuoi usare la personalizzaizone SO?</translation>
-    </message>
     <message>
         <location filename="../UseSavedSettingsPopup.qml" line="41"/>
         <source>Would you like to apply OS customization settings?</source>
@@ -694,10 +598,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Dispositivo Raspberry Pi</translation>
     </message>
     <message>
-        <source>CHOOSE DEVICE</source>
-        <translation type="vanished">SCEGLI DISPOSITIVO</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="144"/>
         <source>Select this button to choose your target Raspberry Pi</source>
         <translation>Seleziona questo pulsante per scegliere il Raspberry Pi destinazione</translation>
@@ -729,18 +629,10 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Rete non ancora pronta</translation>
     </message>
     <message>
-        <source>No storage devices found</source>
-        <translation type="vanished">Nessun dispositivo archiviazione trovato</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="207"/>
         <location filename="../main.qml" line="668"/>
         <source>CHOOSE STORAGE</source>
         <translation>SCEGLI SCHEDA SD</translation>
-    </message>
-    <message>
-        <source>WRITE</source>
-        <translation type="vanished">SCRIVI</translation>
     </message>
     <message>
         <location filename="../main.qml" line="221"/>
@@ -781,10 +673,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Seleziona questo pulsante per avviare la scrittura del file immagine</translation>
     </message>
     <message>
-        <source>Select this button to access advanced settings</source>
-        <translation type="vanished">Seleziona questo pulsante per accedere alle impostazioni avanzate</translation>
-    </message>
-    <message>
         <location filename="../main.qml" line="321"/>
         <source>Using custom repository: %1</source>
         <translation>Usa repository personalizzato: %1</translation>
@@ -803,46 +691,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <location filename="../main.qml" line="384"/>
         <source>Keyboard: </source>
         <translation>Tastiera: </translation>
-    </message>
-    <message>
-        <source>Pi model:</source>
-        <translation type="vanished">Modello Pi:</translation>
-    </message>
-    <message>
-        <source>[ All ]</source>
-        <translation type="vanished">[ Tutti ]</translation>
-    </message>
-    <message>
-        <source>Back</source>
-        <translation type="vanished">Indietro</translation>
-    </message>
-    <message>
-        <source>Go back to main menu</source>
-        <translation type="vanished">Torna al menu principale</translation>
-    </message>
-    <message>
-        <source>Released: %1</source>
-        <translation type="vanished">Rilasciato: %1</translation>
-    </message>
-    <message>
-        <source>Cached on your computer</source>
-        <translation type="vanished">Memorizzato temporaneamente nel computer</translation>
-    </message>
-    <message>
-        <source>Local file</source>
-        <translation type="vanished">File locale</translation>
-    </message>
-    <message>
-        <source>Online - %1 GB download</source>
-        <translation type="vanished">Online - Download %1 GB</translation>
-    </message>
-    <message>
-        <source>Mounted as %1</source>
-        <translation type="vanished">Montato come %1</translation>
-    </message>
-    <message>
-        <source>[WRITE PROTECTED]</source>
-        <translation type="vanished">[PROTETTA DA SCRITTURA]</translation>
     </message>
     <message>
         <location filename="../main.qml" line="485"/>
@@ -878,10 +726,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <location filename="../main.qml" line="536"/>
         <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
         <translation>È disponibile una nuova versione di Imager.&lt;br&gt;Vuoi visitare il sito web per scaricare la nuova versione?</translation>
-    </message>
-    <message>
-        <source>Error downloading OS list from Internet</source>
-        <translation type="vanished">Errore durante download elenco SO da internet</translation>
     </message>
     <message>
         <location filename="../main.qml" line="594"/>
@@ -925,10 +769,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <translation>Scrittura di &lt;b&gt;%1&lt;/b&gt; in &lt;b&gt;%2&lt;/b&gt; completata&lt;br&gt;&lt;br&gt;Ora puoi rimuovere la scheda SD dal lettore</translation>
     </message>
     <message>
-        <source>Error parsing os_list.json</source>
-        <translation type="vanished">Errore durante analisi file os_list.json</translation>
-    </message>
-    <message>
         <location filename="../imagewriter.cpp" line="649"/>
         <source>Format card as FAT32</source>
         <translation>Formatta scheda come FAT32</translation>
@@ -942,14 +782,6 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
         <location filename="../imagewriter.cpp" line="656"/>
         <source>Select a custom .img from your computer</source>
         <translation>Seleziona un file immagine .img personalizzato</translation>
-    </message>
-    <message>
-        <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="vanished">Prima collega una chiavetta USB contenente il file immagine.&lt;br&gt;Il file immagine deve essere presente nella cartella principale della chiavetta USB.</translation>
-    </message>
-    <message>
-        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="vanished">La scheda SD è protetta da scrittura.&lt;br&gt;Sposta verso l&apos;alto l&apos;interruttore LOCK sul lato sinistro della scheda SD e riprova.</translation>
     </message>
 </context>
 </TS>
