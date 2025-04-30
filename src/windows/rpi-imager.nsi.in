@@ -4,17 +4,18 @@
 #              by Vlasis K. Barkas aka Red Wine red_wine@freemail.gr Sep 2006               
 ############################################################################################
 
-!define APP_NAME "Raspberry Pi Imager"
-!define COMP_NAME "Raspberry Pi Ltd"
-!define VERSION "@IMAGER_VERSION_STR@"
-!define INSTALLER_NAME "imager-${VERSION}.exe"
-!define COPYRIGHT "Raspberry Pi Ltd"
-!define DESCRIPTION "Raspberry Pi Imager"
-!define MAIN_APP_EXE "rpi-imager.exe"
-!define INSTALL_TYPE "SetShellVarContext all"
-!define REG_ROOT "HKCU"
-!define REG_APP_PATH "Software\Microsoft\Windows\CurrentVersion\App Paths\${MAIN_APP_EXE}"
-!define UNINSTALL_PATH "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+!define APP_NAME           "Raspberry Pi Imager"
+!define COMP_NAME          "Raspberry Pi Ltd"
+!define VERSION            "@IMAGER_VERSION_STR@"
+!define INSTALLER_NAME     "imager-${VERSION}.exe"
+!define /date CURRENT_YEAR "%Y"
+!define COPYRIGHT          "${CURRENT_YEAR} ${COMP_NAME}"
+!define DESCRIPTION        "${APP_NAME} installer"
+!define MAIN_APP_EXE       "rpi-imager.exe"
+!define INSTALL_TYPE       "SetShellVarContext all"
+!define REG_ROOT           "HKCU"
+!define REG_APP_PATH       "Software\Microsoft\Windows\CurrentVersion\App Paths\${MAIN_APP_EXE}"
+!define UNINSTALL_PATH     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
 # Window to close if running
 !define EXE_TO_TERMINATE "rpi-imager.exe"
@@ -22,19 +23,19 @@
 ######################################################################
 
 VIProductVersion "@IMAGER_VERSION_MAJOR@.@IMAGER_VERSION_MINOR@.0.0"
-VIAddVersionKey "ProductName"  "${APP_NAME}"
-VIAddVersionKey "CompanyName"  "${COMP_NAME}"
-VIAddVersionKey "LegalCopyright"  "${COPYRIGHT}"
-VIAddVersionKey "FileDescription"  "${DESCRIPTION}"
-VIAddVersionKey "FileVersion"  "${VERSION}"
-VIAddVersionKey "ProductVersion" "${VERSION}"
+VIAddVersionKey  "ProductName"     "${APP_NAME}"
+VIAddVersionKey  "CompanyName"     "${COMP_NAME}"
+VIAddVersionKey  "LegalCopyright"  "${COPYRIGHT}"
+VIAddVersionKey  "FileDescription" "${DESCRIPTION}"
+VIAddVersionKey  "FileVersion"     "${VERSION}"
+VIAddVersionKey  "ProductVersion"  "${VERSION}"
 
 ######################################################################
 
 SetCompressor LZMA
-Name "${APP_NAME}"
-Caption "${APP_NAME} ${VERSION}"
-OutFile "${INSTALLER_NAME}"
+Name         "${APP_NAME}"
+Caption      "${APP_NAME} ${VERSION}"
+OutFile      "${INSTALLER_NAME}"
 BrandingText "${APP_NAME}"
 XPStyle on
 InstallDirRegKey "${REG_ROOT}" "${REG_APP_PATH}" ""
