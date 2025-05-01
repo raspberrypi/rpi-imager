@@ -222,9 +222,11 @@ set(LibArchive_INCLUDE_DIR ${libarchive_SOURCE_DIR}/libarchive)
 set(LibArchive_INCLUDE_DIRS ${libarchive_SOURCE_DIR}/libarchive)
 
 # Bundled libcurl
+set(CURL_VERSION "8.13.0")
+string(REPLACE "." "_" CURL_TAG ${CURL_VERSION})
 FetchContent_Declare(curl
     GIT_REPOSITORY https://github.com/curl/curl.git
-    GIT_TAG curl-8_13_0
+    GIT_TAG curl-${CURL_TAG}
 )
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
 set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
