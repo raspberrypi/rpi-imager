@@ -22,7 +22,7 @@
 /* Update progressbar every 0.1 second */
 #define PROGRESS_UPDATE_INTERVAL          100
 
-/* Block size used for writes (currently used when using .zip images only) */
+/* Default block size for buffer allocation (dynamically adjusted at runtime) */
 #define IMAGEWRITER_BLOCKSIZE             1*1024*1024
 
 /* Block size used with uncompressed images */

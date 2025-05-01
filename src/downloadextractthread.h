@@ -32,6 +32,10 @@ public:
     virtual bool isImage();
     virtual void enableMultipleFileExtraction();
 
+signals:
+    void downloadProgressChanged(quint64 now, quint64 total);
+    void verifyProgressChanged(quint64 now, quint64 total);
+
 protected:
     char *_abuf[2];
     size_t _abufsize;
