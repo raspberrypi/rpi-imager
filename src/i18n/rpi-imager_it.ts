@@ -242,7 +242,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     <message>
         <location filename="../DstPopup.qml" line="139"/>
         <source>GB</source>
-        <translation></translation>
+        <translation>GB</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="154"/>
