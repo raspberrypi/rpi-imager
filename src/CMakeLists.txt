@@ -611,7 +611,7 @@ elseif(APPLE)
     set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${IMAGER_VERSION_STR}")
     set(MACOSX_BUNDLE_LONG_VERSION_STRING "${IMAGER_VERSION_STR}")
     set(MACOSX_BUNDLE_ICON_FILE "rpi-imager.icns")
-    set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2020-2024 Raspberry Pi Ltd")
+    set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2020-2025 Raspberry Pi Ltd")
     
     # Simple macos bundle with minimal Info.plist configuration
     set_target_properties(${PROJECT_NAME} PROPERTIES 
