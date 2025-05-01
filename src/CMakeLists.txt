@@ -93,9 +93,10 @@ set(LIBLZMA_HAS_EASY_ENCODER true)
 set(LIBLZMA_HAS_LZMA_PRESET true)
 
 # Bundled zstd
+set(ZSTD_VERSION "1.5.7")
 FetchContent_Declare(zstd
     GIT_REPOSITORY https://github.com/facebook/zstd.git
-    GIT_TAG v1.5.7
+    GIT_TAG v${ZSTD_VERSION}
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SOURCE_SUBDIR build/cmake
 )
@@ -112,8 +113,7 @@ unset(ZSTD_BUILD_TESTS)
 unset(ZSTD_BUILD_DICTBUILDER)
 set(Zstd_FOUND true)
 set(ZSTD_FOUND true)
-set(Zstd_VERSION "1.5.7")
-set(ZSTD_VERSION "1.5.7")
+set(Zstd_VERSION ${ZSTD_VERSION})
 set(Zstd_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-src/lib)
 set(ZSTD_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-src/lib)
 set(Zstd_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-src/lib)
