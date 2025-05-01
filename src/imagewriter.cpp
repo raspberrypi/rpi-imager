@@ -283,15 +283,22 @@ void ImageWriter::startWrite()
 
     QByteArray urlstr = _src.toString(_src.FullyEncoded).toLatin1();
     QString lowercaseurl = urlstr.toLower();
-    bool compressed = lowercaseurl.endsWith(".zip") || lowercaseurl.endsWith(".xz") || lowercaseurl.endsWith(".bz2") || lowercaseurl.endsWith(".gz") || lowercaseurl.endsWith(".7z") || lowercaseurl.endsWith(".zst") || lowercaseurl.endsWith(".cache");
+    const bool compressed = lowercaseurl.endsWith(".zip") || 
+                            lowercaseurl.endsWith(".xz") ||
+                            lowercaseurl.endsWith(".bz2") ||
+                            lowercaseurl.endsWith(".gz") ||
+                            lowercaseurl.endsWith(".7z") ||
+                            lowercaseurl.endsWith(".zst") ||
+                            lowercaseurl.endsWith(".cache");
+
     if (!_extrLen && _src.isLocalFile())
     {
         if (!compressed)
             _extrLen = _downloadLen;
-        else if (lowercaseurl.endsWith(".zip"))
-            _parseCompressedFile();
         else if (lowercaseurl.endsWith(".xz"))
             _parseXZFile();
+        else 
+            _parseCompressedFile();
     }
 
     if (_devLen && _extrLen > _devLen)
