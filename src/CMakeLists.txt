@@ -53,7 +53,7 @@ include(FetchContent)
 # Bundled liblzma
 FetchContent_Declare(xz
     GIT_REPOSITORY https://github.com/tukaani-project/xz.git
-    GIT_TAG v5.6.4
+    GIT_TAG v5.8.1
 )
 set(XZ_MICROLZMA_DECODER OFF CACHE BOOL "" FORCE)
 set(XZ_MICROLZMA_ENCODER OFF CACHE BOOL "" FORCE)
@@ -117,7 +117,7 @@ set(ZSTD_LIBRARY libzstd_static)
 # Remote nghttp2
 FetchContent_Declare(nghttp2
  GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
- GIT_TAG        v1.64.0
+ GIT_TAG        v1.65.0
 )
 set(BUILD_EXAMPLES OFF)
 set(ENABLE_LIB_ONLY ON)
@@ -152,7 +152,7 @@ set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib inc
 # Bundled libarchive
 FetchContent_Declare(libarchive
     GIT_REPOSITORY https://github.com/libarchive/libarchive.git
-    GIT_TAG v3.7.8
+    GIT_TAG v3.7.9
 )
 set(ARCHIVE_ENABLE_WERROR OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_INSTALL OFF CACHE BOOL "")
@@ -205,7 +205,7 @@ set(LibArchive_INCLUDE_DIR ${libarchive_SOURCE_DIR}/libarchive)
 # Bundled libcurl
 FetchContent_Declare(curl
     GIT_REPOSITORY https://github.com/curl/curl.git
-    GIT_TAG curl-8_12_1
+    GIT_TAG curl-8_13_0
 )
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
 set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
