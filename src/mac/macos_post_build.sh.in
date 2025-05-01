@@ -1,0 +1,101 @@
+#!/bin/bash
+
+# Exit on error
+set -e
+
+# Enable verbose output
+set -x
+
+# Define paths
+APP_BUNDLE_PATH="@CMAKE_BINARY_DIR@/@PROJECT_NAME@.app"
+DMG_PATH="@CMAKE_BINARY_DIR@/@APP_NAME@.dmg"
+FINAL_DMG_PATH="@CMAKE_BINARY_DIR@/@APP_NAME@-@IMAGER_VERSION_STR@.dmg"
+QML_DIR="@CMAKE_CURRENT_SOURCE_DIR@"
+SIGNING_IDENTITY="@IMAGER_SIGNING_IDENTITY@"
+KEYCHAIN_PROFILE="@IMAGER_NOTARIZE_KEYCHAIN_PROFILE@"
+SHOULD_NOTARIZE=@IMAGER_NOTARIZE_APP@
+
+# Make sure the app bundle exists before proceeding
+if [ ! -d "$APP_BUNDLE_PATH" ]; then
+    echo "Error: App bundle not found at $APP_BUNDLE_PATH"
+    exit 1
+fi
+
+# Check bundle structure before proceeding
+echo "Verifying app bundle structure..."
+ls -la "$APP_BUNDLE_PATH"
+ls -la "$APP_BUNDLE_PATH/Contents" || { echo "Contents directory missing"; exit 1; }
+
+# Check for Info.plist
+if [ ! -f "$APP_BUNDLE_PATH/Contents/Info.plist" ]; then
+    echo "Info.plist is missing after explicit copy. Let's try to copy it again."
+    
+    # Try to copy the Info.plist file again from our configured template
+    cp "@CMAKE_BINARY_DIR@/Info.plist" "$APP_BUNDLE_PATH/Contents/Info.plist" || {
+        echo "Failed to copy Info.plist again. The build configuration has an issue.";
+        echo "Debug information:";
+        echo "MACOSX_BUNDLE_EXECUTABLE_NAME: @MACOSX_BUNDLE_EXECUTABLE_NAME@";
+        echo "MACOSX_BUNDLE_BUNDLE_NAME: @MACOSX_BUNDLE_BUNDLE_NAME@";
+        echo "PROJECT_NAME: @PROJECT_NAME@";
+        
+        if [ -d "$APP_BUNDLE_PATH/Contents/MacOS" ]; then
+            echo "Contents of MacOS directory:";
+            ls -la "$APP_BUNDLE_PATH/Contents/MacOS";
+        else
+            echo "MacOS directory is missing!";
+        fi
+        
+        echo "Contents of build directory:";
+        ls -la "@CMAKE_BINARY_DIR@";
+        
+        echo "Checking if Info.plist was generated:";
+        ls -la "@CMAKE_BINARY_DIR@/Info.plist" || echo "Template Info.plist was not generated!";
+        
+        exit 1;
+    }
+fi
+
+# Verify Info.plist contents
+echo "Checking Info.plist contents:"
+cat "$APP_BUNDLE_PATH/Contents/Info.plist"
+
+# Run macdeployqt on the bundle
+echo "Running macdeployqt..."
+"@MACDEPLOYQT@" "$APP_BUNDLE_PATH" -qmldir="$QML_DIR" -always-overwrite
+
+# Check bundle contents after macdeployqt
+echo "Verifying app bundle after macdeployqt..."
+ls -la "$APP_BUNDLE_PATH/Contents/MacOS" || { echo "MacOS directory missing after macdeployqt"; exit 1; }
+ls -la "$APP_BUNDLE_PATH/Contents/Info.plist" || { echo "Info.plist missing after macdeployqt"; exit 1; }
+
+# Sign the app bundle
+echo "Signing app bundle..."
+codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "$SIGNING_IDENTITY" "$APP_BUNDLE_PATH"
+
+# Verify signing
+echo "Verifying app bundle signing..."
+codesign -vvv --deep --strict "$APP_BUNDLE_PATH"
+
+# Create DMG
+echo "Creating DMG..."
+hdiutil create -volname "@APP_NAME@" -srcfolder "$APP_BUNDLE_PATH" -ov -format UDBZ "$DMG_PATH"
+
+# Sign DMG
+echo "Signing DMG..."
+codesign -f --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "$SIGNING_IDENTITY" "$DMG_PATH"
+
+# Create versioned DMG
+echo "Creating versioned DMG..."
+cp "$DMG_PATH" "$FINAL_DMG_PATH"
+
+# Notarize if requested
+if [ "$SHOULD_NOTARIZE" = "ON" ] && [ ! -z "$KEYCHAIN_PROFILE" ]; then
+    echo "Notarizing DMG..."
+    xcrun notarytool submit "$FINAL_DMG_PATH" --wait --keychain-profile "$KEYCHAIN_PROFILE"
+    
+    echo "Stapling DMG..."
+    xcrun stapler staple "$FINAL_DMG_PATH"
+fi
+
+echo "macOS post-build process completed successfully!"
+exit 0 

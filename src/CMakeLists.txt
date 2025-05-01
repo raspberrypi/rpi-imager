@@ -599,66 +599,114 @@ elseif(APPLE)
     find_library(IOKit IOKit)
     find_library(SystemConfiguration SystemConfiguration)
     set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} ${IOKit} ${SystemConfiguration} iconv)
-    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in)
+    
+    # Set application name with proper spacing
+    set(APP_NAME "Raspberry Pi Imager")
+    
+    # Set all required bundle properties
+    set(MACOSX_BUNDLE_BUNDLE_NAME "${APP_NAME}")
+    set(MACOSX_BUNDLE_EXECUTABLE_NAME "${PROJECT_NAME}")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.raspberrypi.imagingutility")
+    set(MACOSX_BUNDLE_BUNDLE_VERSION "${IMAGER_VERSION_STR}")
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${IMAGER_VERSION_STR}")
+    set(MACOSX_BUNDLE_LONG_VERSION_STRING "${IMAGER_VERSION_STR}")
+    set(MACOSX_BUNDLE_ICON_FILE "rpi-imager.icns")
+    set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2020-2024 Raspberry Pi Ltd")
+    
+    # Simple macos bundle with minimal Info.plist configuration
+    set_target_properties(${PROJECT_NAME} PROPERTIES 
+        MACOSX_BUNDLE YES)
+
+    # Define app bundle location
+    set(APP_BUNDLE_PATH "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app")
+    set(DMG_PATH "${CMAKE_BINARY_DIR}/${APP_NAME}.dmg")
+    set(FINAL_DMG_PATH "${CMAKE_BINARY_DIR}/${APP_NAME}-${IMAGER_VERSION_STR}.dmg")
+
+    # Manually configure the Info.plist file from a template
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in" 
+        "${CMAKE_BINARY_DIR}/Info.plist"
+        @ONLY
+    )
+
+    # Clean only specific files/directories but not the entire app bundle
+    # This ensures directory structure for lipo doesn't get removed
+    add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Cleaning up previous macOS DMG files..."
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${DMG_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${FINAL_DMG_PATH}"
+        COMMENT "Cleaning previous macOS build artifacts"
+    )
+
+    # Ensure required directories exist before building
+    add_custom_command(TARGET ${PROJECT_NAME} PRE_LINK
+        COMMAND ${CMAKE_COMMAND} -E echo "Ensuring app bundle directories exist..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_BUNDLE_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_BUNDLE_PATH}/Contents"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_BUNDLE_PATH}/Contents/MacOS"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${APP_BUNDLE_PATH}/Contents/Resources"
+        COMMENT "Creating app bundle directory structure"
+    )
+
+    # Add a post-build command to copy the Info.plist file to the app bundle
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/Info.plist" "${APP_BUNDLE_PATH}/Contents/Info.plist"
+        COMMENT "Installing custom Info.plist"
+    )
 
     find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt6_ROOT}/bin")
-    if (NOT MACDEPLOYQT_EXECUTABLE)
+    if (NOT MACDEPLOYQT)
         message(FATAL_ERROR "Unable to locate macdeployqt")
     endif()
 
     if(IMAGER_SIGNED_APP)
         if(IMAGER_SIGNING_IDENTITY)
-            # Create the .app, leveraging macdeployqt's knowledge of Qt libraries and configuration files
+            # Using a simpler script for macOS post-processing
+            configure_file(
+                "${CMAKE_CURRENT_SOURCE_DIR}/mac/macos_post_build.sh.in"
+                "${CMAKE_BINARY_DIR}/macos_post_build.sh"
+                @ONLY
+            )
+            
+            # Make the script executable
+            execute_process(
+                COMMAND chmod +x "${CMAKE_BINARY_DIR}/macos_post_build.sh"
+            )
+            
+            # Execute the post-build script
             add_custom_command(TARGET ${PROJECT_NAME}
                 POST_BUILD
-                COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}")
-            add_custom_command(TARGET ${PROJECT_NAME}
-                POST_BUILD
-                COMMAND mv "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app")
-            # Sign the .app.
-            add_custom_command(TARGET ${PROJECT_NAME}
-                POST_BUILD
-                COMMAND codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app")
-
-            # Create the .dmg for distribution
-            add_custom_command(TARGET ${PROJECT_NAME}
-                POST_BUILD
-                COMMAND hdiutil create -volname "Raspberry Pi Imager" -srcfolder "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app" -ov -format UDBZ "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
-
-            # Sign the .dmg for distribution, but do not initialise notarisation
-            add_custom_command(TARGET ${PROJECT_NAME}
-                POST_BUILD
-                COMMAND codesign -f --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "${IMAGER_SIGNING_IDENTITY}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
-
-            if(IMAGER_NOTARIZE_APP)
-                if(IMAGER_NOTARIZE_KEYCHAIN_PROFILE)
-                    add_custom_command(TARGET ${PROJECT_NAME}
-                        POST_BUILD
-                        COMMAND xcrun notarytool submit "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg" --wait --keychain-profile "${IMAGER_NOTARIZE_KEYCHAIN_PROFILE}")
-                    add_custom_command(TARGET ${PROJECT_NAME}
-                        POST_BUILD
-                        COMMAND xcrun stapler staple "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg")
-                else()
-                    message(FATAL_ERROR "Notarization requested, but no keychain profile is supplied")
-                endif(IMAGER_NOTARIZE_KEYCHAIN_PROFILE)
-
-            endif(IMAGER_NOTARIZE_APP)
+                COMMAND "${CMAKE_BINARY_DIR}/macos_post_build.sh"
+                COMMENT "Running macOS post-build operations (deploy, sign, create DMG)"
+            )
         else()
             message(FATAL_ERROR "Signing requested, but no signing identity provided")
         endif(IMAGER_SIGNING_IDENTITY)
     else()
-        # Unsigned application
+        # Unsigned application - simpler approach
         add_custom_command(TARGET ${PROJECT_NAME}
             POST_BUILD
-            COMMAND mv "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app")
+            COMMAND ${CMAKE_COMMAND} -E echo "Deploying Qt dependencies..."
+            COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite
+            COMMENT "Deploying Qt dependencies"
+        )
+        
+        # Create DMG
         add_custom_command(TARGET ${PROJECT_NAME}
             POST_BUILD
-            COMMAND "${MACDEPLOYQT_EXECUTABLE}" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.app" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite -no-strip -dmg)
+            COMMAND ${CMAKE_COMMAND} -E echo "Creating DMG..."
+            COMMAND hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_BUNDLE_PATH}" -ov -format UDBZ "${DMG_PATH}"
+            COMMENT "Creating DMG"
+        )
+        
+        # Create the versioned DMG
+        add_custom_command(TARGET ${PROJECT_NAME}
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E echo "Creating versioned DMG at ${FINAL_DMG_PATH}..."
+            COMMAND ${CMAKE_COMMAND} -E copy "${DMG_PATH}" "${FINAL_DMG_PATH}"
+            COMMENT "Creating versioned DMG"
+        )
     endif(IMAGER_SIGNED_APP)
-
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND "mv" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager.dmg" "${CMAKE_BINARY_DIR}/Raspberry\ Pi\ Imager-${IMAGER_VERSION_STR}.dmg")
 
 else()
     # UNIX, Linux systems
