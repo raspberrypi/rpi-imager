@@ -51,9 +51,10 @@ set(BUILD_SHARED_LIBS OFF)
 include(FetchContent)
 
 # Bundled liblzma
+set(LIBLZMA_VERSION "5.8.1")
 FetchContent_Declare(xz
     GIT_REPOSITORY https://github.com/tukaani-project/xz.git
-    GIT_TAG v5.8.1
+    GIT_TAG v${LIBLZMA_VERSION}
 )
 set(XZ_MICROLZMA_DECODER OFF CACHE BOOL "" FORCE)
 set(XZ_MICROLZMA_ENCODER OFF CACHE BOOL "" FORCE)
@@ -66,7 +67,11 @@ set(XZ_DECODERS
     lzma2
     delta
 )
-set(XZ_ENCODERS "")
+set(XZ_ENCODERS
+    lzma1
+    lzma2
+    delta
+)
 set(CREATE_LZMA_SYMLINKS OFF CACHE BOOL "" FORCE)
 set(CREATE_XZ_SYMLINKS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(xz)
@@ -83,6 +88,9 @@ set(LIBLZMA_INCLUDE_DIR ${xz_SOURCE_DIR}/src/liblzma/api FORCE)
 set(LIBLZMA_INCLUDE_DIRS ${xz_SOURCE_DIR}/src/liblzma/api FORCE)
 set(LIBLZMA_LIBRARY liblzma)
 set(LIBLZMA_LIBRARIES liblzma)
+set(LIBLZMA_HAS_AUTO_DECODER true)
+set(LIBLZMA_HAS_EASY_ENCODER true)
+set(LIBLZMA_HAS_LZMA_PRESET true)
 
 # Bundled zstd
 FetchContent_Declare(zstd
