@@ -143,9 +143,10 @@ set(NGHTTP2_FOUND true)
 
 
 # Bundled zlib
+set(ZLIB_VERSION "1.3.1")
 FetchContent_Declare(zlib
     GIT_REPOSITORY https://github.com/madler/zlib.git
-    GIT_TAG v1.3.1
+    GIT_TAG v${ZLIB_VERSION}
 )
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
@@ -161,8 +162,8 @@ unset(SKIP_INSTALL_ALL)
 set(ZLIB_FOUND TRUE)
 set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib include dir")
 set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib include dir")
-# set(ZLIB_LIBRARY zlibstatic)
-# set(ZLIB_LIBRARIES zlibstatic)
+set(ZLIB_LIBRARY zlibstatic)
+set(ZLIB_LIBRARIES zlibstatic)
 
 # Bundled libarchive
 FetchContent_Declare(libarchive
