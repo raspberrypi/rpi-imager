@@ -28,6 +28,7 @@
 
 class QQmlApplicationEngine;
 class DownloadThread;
+class DownloadExtractThread;
 class QNetworkReply;
 class QTranslator;
 
@@ -181,10 +182,8 @@ signals:
     void networkInfo(QVariant msg);
 
 protected slots:
-
     void startProgressPolling();
     void stopProgressPolling();
-    void pollProgress();
     void pollNetwork();
     void syncTime();
     void onSuccess();
@@ -216,7 +215,7 @@ protected:
     HWListModel _hwlist;
     OSListModel _oslist;
     QQmlApplicationEngine *_engine;
-    QTimer _polltimer, _networkchecktimer;
+    QTimer _networkchecktimer;
     PowerSaveBlocker _powersave;
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _cachingEnabled, _embeddedMode, _online;

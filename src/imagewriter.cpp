@@ -69,8 +69,6 @@ ImageWriter::ImageWriter(QObject *parent)
       _hwlist(HWListModel(*this)),
       _oslist(OSListModel(*this))
 {
-    connect(&_polltimer, SIGNAL(timeout()), SLOT(pollProgress()));
-
     QString platform;
     if (qobject_cast<QGuiApplication*>(QCoreApplication::instance()) )
     {
@@ -333,6 +331,16 @@ void ImageWriter::startWrite()
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+    
+    // Connect to progress signals if this is a DownloadExtractThread
+    DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
+    if (downloadThread) {
+        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged, 
+                this, &ImageWriter::downloadProgress);
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged, 
+                this, &ImageWriter::verifyProgress);
+    }
+    
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
     _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
@@ -714,48 +722,13 @@ OSListModel *ImageWriter::getOSList()
 void ImageWriter::startProgressPolling()
 {
     _powersave.applyBlock(tr("Downloading and writing image"));
-    _dlnow = 0; _verifynow = 0;
-    _polltimer.start(PROGRESS_UPDATE_INTERVAL);
+    _dlnow = 0; 
+    _verifynow = 0;
 }
 
 void ImageWriter::stopProgressPolling()
 {
-    _polltimer.stop();
-    pollProgress();
     _powersave.removeBlock();
-}
-
-void ImageWriter::pollProgress()
-{
-    if (!_thread)
-        return;
-
-    quint64 newDlNow, dlTotal;
-    if (_extrLen)
-    {
-        newDlNow = _thread->bytesWritten();
-        dlTotal = _extrLen;
-    }
-    else
-    {
-        newDlNow = _thread->dlNow();
-        dlTotal = _thread->dlTotal();
-    }
-
-    if (newDlNow != _dlnow)
-    {
-        _dlnow = newDlNow;
-        emit downloadProgress(newDlNow, dlTotal);
-    }
-
-    quint64 newVerifyNow = _thread->verifyNow();
-
-    if (newVerifyNow != _verifynow)
-    {
-        _verifynow = newVerifyNow;
-        quint64 verifyTotal = _thread->verifyTotal();
-        emit verifyProgress(newVerifyNow, verifyTotal);
-    }
 }
 
 void ImageWriter::setVerifyEnabled(bool verify)
@@ -792,7 +765,6 @@ void ImageWriter::onError(QString msg)
 
 void ImageWriter::onFinalizing()
 {
-    _polltimer.stop();
     emit finalizing();
 }
 

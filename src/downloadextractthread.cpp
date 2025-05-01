@@ -20,10 +20,50 @@
 #include <QTemporaryDir>
 #include <QDebug>
 #include <QtConcurrent/qtconcurrentrun.h>
+#include <QTimer>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 using namespace std;
 
-const int DownloadExtractThread::MAX_QUEUE_SIZE = 64;
+const int DownloadExtractThread::MAX_QUEUE_SIZE = 128;
+
+// Get system page size
+static size_t getSystemPageSize()
+{
+#ifdef Q_OS_WIN
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return si.dwPageSize;
+#else
+    return sysconf(_SC_PAGESIZE);
+#endif
+}
+
+// Get optimal buffer size based on system characteristics
+static size_t getOptimalBufferSize()
+{
+    // Start with a reasonable default (1 MiB)
+    size_t bufferSize = IMAGEWRITER_BLOCKSIZE;
+    
+    // Adjust based on system page size
+    size_t pageSize = getSystemPageSize();
+    
+    // For SSD optimization, larger blocks tend to work better
+    // Make sure buffer size is a multiple of page size
+    bufferSize = ((bufferSize + pageSize - 1) / pageSize) * pageSize;
+    
+    // Cap at a reasonable maximum (8 MiB, aligned to page size)
+    const size_t maxBufferSize = (((8 * 1024 * 1024) + pageSize - 1) / pageSize) * pageSize;
+    if (bufferSize > maxBufferSize)
+        bufferSize = maxBufferSize;
+        
+    return bufferSize;
+}
 
 class _extractThreadClass : public QThread {
 public:
@@ -45,12 +85,46 @@ protected:
 };
 
 DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
-    : DownloadThread(url, localfilename, expectedHash, parent), _abufsize(IMAGEWRITER_BLOCKSIZE), _ethreadStarted(false),
-      _isImage(true), _inputHash(OSLIST_HASH_ALGORITHM), _activeBuf(0), _writeThreadStarted(false)
+    : DownloadThread(url, localfilename, expectedHash, parent), 
+      _abufsize(getOptimalBufferSize()), 
+      _ethreadStarted(false),
+      _isImage(true), 
+      _inputHash(OSLIST_HASH_ALGORITHM), 
+      _activeBuf(0), 
+      _writeThreadStarted(false)
 {
     _extractThread = new _extractThreadClass(this);
-    _abuf[0] = (char *) qMallocAligned(_abufsize, 4096);
-    _abuf[1] = (char *) qMallocAligned(_abufsize, 4096);
+    size_t pageSize = getSystemPageSize();
+    _abuf[0] = (char *) qMallocAligned(_abufsize, pageSize);
+    _abuf[1] = (char *) qMallocAligned(_abufsize, pageSize);
+    
+    qDebug() << "Using buffer size:" << _abufsize << "bytes with page size:" << pageSize << "bytes";
+    
+    // Timer to periodically check progress and emit signals
+    QTimer *progressTimer = new QTimer(this);
+    connect(progressTimer, &QTimer::timeout, [this]() {
+        static quint64 lastDlNow = 0;
+        static quint64 lastVerifyNow = 0;
+        
+        quint64 currentDlNow = this->dlNow();
+        quint64 currentDlTotal = this->dlTotal();
+        quint64 currentVerifyNow = this->verifyNow();
+        quint64 currentVerifyTotal = this->verifyTotal();
+        
+        // Only emit signals if values have changed
+        if (currentDlNow != lastDlNow || (currentDlTotal > 0 && lastDlNow == 0)) {
+            lastDlNow = currentDlNow;
+            emit downloadProgressChanged(currentDlNow, currentDlTotal);
+        }
+        
+        if (currentVerifyNow != lastVerifyNow || (currentVerifyTotal > 0 && lastVerifyNow == 0)) {
+            lastVerifyNow = currentVerifyNow;
+            emit verifyProgressChanged(currentVerifyNow, currentVerifyTotal);
+        }
+    });
+    
+    // Start the timer with the configured update interval
+    progressTimer->start(PROGRESS_UPDATE_INTERVAL);
 }
 
 DownloadExtractThread::~DownloadExtractThread()
