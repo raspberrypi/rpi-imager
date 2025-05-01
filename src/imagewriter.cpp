@@ -466,7 +466,7 @@ void ImageWriter::setCustomOsListUrl(const QUrl &url)
 }
 
 namespace {
-    QJsonArray findAndInsertJsonResult(QJsonArray parent_list, QJsonArray incomingBody, QUrl referenceUrl, uint8_t count = 0) {
+    QJsonArray findAndInsertJsonResult(QJsonArray parent_list, QJsonArray incomingBody, QUrl referenceUrl, uint8_t count) {
         if (count > MAX_SUBITEMS_DEPTH) {
             qDebug() << "Aborting insertion of subitems, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
             return {};
@@ -479,7 +479,7 @@ namespace {
 
             if (ositemObject.contains("subitems")) {
                 // Recurse!
-                ositemObject["subitems"] = findAndInsertJsonResult(ositemObject["subitems"].toArray(), incomingBody, referenceUrl, count++);
+                ositemObject["subitems"] = findAndInsertJsonResult(ositemObject["subitems"].toArray(), incomingBody, referenceUrl, count + 1);
             } else if (ositemObject.contains("subitems_url")) {
                 if ( !ositemObject["subitems_url"].toString().compare(referenceUrl.toString())) {
                     ositemObject.insert("subitems", incomingBody);
@@ -493,7 +493,7 @@ namespace {
         return returnArray;
     }
 
-    void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager &manager, uint8_t count = 0) {
+    void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager &manager, uint8_t count) {
         if (count > MAX_SUBITEMS_DEPTH) {
             qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
             return;
@@ -503,7 +503,7 @@ namespace {
             auto entryObject = entry.toObject();
             if (entryObject.contains("subitems")) {
                 // No need to handle a return - this isn't processing a list, it's searching and queuing downloads.
-                findAndQueueUnresolvedSubitemsJson(entryObject["subitems"].toArray(), manager, count++);
+                findAndQueueUnresolvedSubitemsJson(entryObject["subitems"].toArray(), manager, count + 1);
             } else if (entryObject.contains("subitems_url")) {
                 auto url = entryObject["subitems_url"].toString();
                 auto request = QNetworkRequest(url);
@@ -538,7 +538,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                 if (_completeOsList.isEmpty()) {
                     _completeOsList = QJsonDocument(response_object);
                 } else {
-                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url());
+                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url(), 1);
                     auto imager_meta = _completeOsList["imager"].toObject();
                     _completeOsList = QJsonDocument(QJsonObject({
                         {"imager", imager_meta},
@@ -546,7 +546,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     }));
                 }
 
-                findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager);
+                findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager, 1);
                 emit osListPrepared();
             } else {
                 qDebug() << "Incorrectly formatted OS list at: " << data->url();
@@ -576,7 +576,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
 }
 
 namespace {
-    QJsonArray filterOsListWithHWTags(QJsonArray incoming_os_list, QJsonArray hw_filter, const bool inclusive, uint8_t count = 0) {
+    QJsonArray filterOsListWithHWTags(QJsonArray incoming_os_list, QJsonArray hw_filter, const bool inclusive, uint8_t count) {
         if (count > MAX_SUBITEMS_DEPTH) {
             qDebug() << "Aborting insertion of subitems, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
             return {};
@@ -589,7 +589,7 @@ namespace {
 
             if (ositemObject.contains("subitems")) {
                 // Recurse!
-                ositemObject["subitems"] = filterOsListWithHWTags(ositemObject["subitems"].toArray(), hw_filter, inclusive, count++);
+                ositemObject["subitems"] = filterOsListWithHWTags(ositemObject["subitems"].toArray(), hw_filter, inclusive, count + 1);
                 if (ositemObject["subitems"].toArray().count() > 0) {
                     returnArray += ositemObject;
                 }
@@ -633,7 +633,7 @@ QJsonDocument ImageWriter::getFilteredOSlistDocument() {
     {
         if (!_completeOsList.isEmpty()) {
             if (!_deviceFilter.isEmpty()) {
-                reference_os_list_array = filterOsListWithHWTags(_completeOsList.object().value("os_list").toArray(), _deviceFilter, _deviceFilterIsInclusive);
+                reference_os_list_array = filterOsListWithHWTags(_completeOsList.object().value("os_list").toArray(), _deviceFilter, _deviceFilterIsInclusive, 1);
             } else {
                 // The device filter can be an empty array when a device filter has not been selected, or has explicitly been selected as
                 // "no filtering". In that case, avoid walking the tree and use the unfiltered list.
