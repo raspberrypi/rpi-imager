@@ -166,9 +166,10 @@ set(ZLIB_LIBRARY zlibstatic)
 set(ZLIB_LIBRARIES zlibstatic)
 
 # Bundled libarchive
+set(LIBARCHIVE_VERSION "3.7.9")
 FetchContent_Declare(libarchive
     GIT_REPOSITORY https://github.com/libarchive/libarchive.git
-    GIT_TAG v3.7.9
+    GIT_TAG v${LIBARCHIVE_VERSION}
 )
 set(ARCHIVE_ENABLE_WERROR OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_INSTALL OFF CACHE BOOL "")
@@ -177,7 +178,7 @@ set(ARCHIVE_ENABLE_CNG OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_MBEDTLS OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_NETTLE OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_OPENSSL OFF CACHE BOOL "")
-set(ARCHIVE_ENABLE_BZip2 OFF CACHE BOOL "")
+set(ARCHIVE_ENABLE_BZip2 ON CACHE BOOL "")
 set(ARCHIVE_ENABLE_LZ4 OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_LZO OFF CACHE BOOL "")
 set(ARCHIVE_ENABLE_LIBB2 OFF CACHE BOOL "")
@@ -214,9 +215,11 @@ unset(ARCHIVE_ENABLE_TAR)
 unset(ARCHIVE_ENABLE_CPIO)
 unset(ARCHIVE_ENABLE_CAT)
 unset(ARCHIVE_BUILD_SHARED_LIBS)
+unset(ARCHIVE_ENABLE_ZSTD)
 set(LibArchive_FOUND true)
 set(LibArchive_LIBRARIES archive_static)
 set(LibArchive_INCLUDE_DIR ${libarchive_SOURCE_DIR}/libarchive)
+set(LibArchive_INCLUDE_DIRS ${libarchive_SOURCE_DIR}/libarchive)
 
 # Bundled libcurl
 FetchContent_Declare(curl
