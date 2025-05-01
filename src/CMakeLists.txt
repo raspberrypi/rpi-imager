@@ -123,9 +123,10 @@ set(ZSTD_LIBRARIES libzstd_static)
 set(ZSTD_LIBRARY libzstd_static)
 
 # Remote nghttp2
+set(NGHTTP2_VERSION "1.65.0")
 FetchContent_Declare(nghttp2
  GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
- GIT_TAG        v1.65.0
+ GIT_TAG        v${NGHTTP2_VERSION}
 )
 set(BUILD_EXAMPLES OFF)
 set(ENABLE_LIB_ONLY ON)
@@ -134,6 +135,12 @@ FetchContent_MakeAvailable(nghttp2)
 unset(ENABLE_LIB_ONLY)
 unset(ENABLE_FAILMALLOC)
 unset(BUILD_EXAMPLES)
+set(NGHTTP2_LIBRARIES nghttp2_static)
+set(NGHTTP2_LIBRARY nghttp2_static)
+set(NGHTTP2_INCLUDE_DIR ${nghttp2_SOURCE_DIR}/lib)
+set(NGHTTP2_INCLUDE_DIRS ${nghttp2_SOURCE_DIR}/lib)
+set(NGHTTP2_FOUND true)
+
 
 # Bundled zlib
 FetchContent_Declare(zlib
