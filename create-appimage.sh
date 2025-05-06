@@ -45,16 +45,74 @@ SOURCE_DIR="src/"
 CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 
 # Extract version components
-MAJOR=$(grep "IMAGER_VERSION_MAJOR" "$CMAKE_FILE" | head -1 | sed 's/.*IMAGER_VERSION_MAJOR *\([0-9]*\).*/\1/')
-MINOR=$(grep "IMAGER_VERSION_MINOR" "$CMAKE_FILE" | head -1 | sed 's/.*IMAGER_VERSION_MINOR *\([0-9]*\).*/\1/')
-PATCH=$(grep "IMAGER_VERSION_PATCH" "$CMAKE_FILE" | head -1 | sed 's/.*IMAGER_VERSION_PATCH *\([0-9]*\).*/\1/')
+MAJOR=$(grep -E "set\(IMAGER_VERSION_MAJOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MAJOR \([0-9]*\).*/\1/')
+MINOR=$(grep -E "set\(IMAGER_VERSION_MINOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MINOR \([0-9]*\).*/\1/')
+PATCH=$(grep -E "set\(IMAGER_VERSION_PATCH [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_PATCH \([0-9]*\).*/\1/')
 PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
 
 # Extract project name (lowercase for AppImage naming convention)
 PROJECT_NAME=$(grep "project(" "$CMAKE_FILE" | head -1 | sed 's/project(\([^[:space:]]*\).*/\1/' | tr '[:upper:]' '[:lower:]')
-PROJECT_NAME="org.raspberrypi.$PROJECT_NAME"
 
 echo "Building $PROJECT_NAME version $PROJECT_VERSION"
+
+# Check for Qt installation
+# First try to find Qt in standard installations and select the newest version
+QT_VERSION=""
+QT_DIR=""
+if [ -d "/opt/Qt" ]; then
+    echo "Checking for Qt installations in /opt/Qt..."
+    # Find the newest Qt6 version installed
+    NEWEST_QT=$(find /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
+    if [ -n "$NEWEST_QT" ]; then
+        QT_VERSION=$(basename "$NEWEST_QT")
+        
+        # Find appropriate compiler directory for the architecture
+        if [ "$ARCH" = "x86_64" ]; then
+            if [ -d "$NEWEST_QT/gcc_64" ]; then
+                QT_DIR="$NEWEST_QT/gcc_64"
+            fi
+        elif [ "$ARCH" = "aarch64" ]; then
+            if [ -d "$NEWEST_QT/gcc_arm64" ]; then
+                QT_DIR="$NEWEST_QT/gcc_arm64"
+            fi
+        fi
+        
+        if [ -n "$QT_DIR" ]; then
+            echo "Found Qt $QT_VERSION for $ARCH at $QT_DIR"
+        else
+            echo "Found Qt $QT_VERSION, but no binary directory for $ARCH"
+            QT_VERSION=""
+        fi
+    fi
+fi
+
+# If Qt not found, suggest running build-qt.sh
+if [ -z "$QT_DIR" ]; then
+    echo "Error: No suitable Qt installation found for $ARCH"
+    
+    if [ -f "./build-qt.sh" ]; then
+        echo "You can build Qt using the provided script:"
+        echo "  ./build-qt.sh --version=6.9.0"
+        echo "Or specify the Qt location with:"
+        echo "  export Qt6_ROOT=/path/to/qt"
+    else
+        echo "You can build Qt using the provided script: specify the Qt location with:"
+        echo "  export Qt6_ROOT=/path/to/qt"
+    fi
+    
+    exit 1
+fi
+
+# Check if Qt6_ROOT is explicitly set, which takes precedence
+if [ -n "$Qt6_ROOT" ]; then
+    echo "Using Qt from specified Qt6_ROOT: $Qt6_ROOT"
+    QT_DIR="$Qt6_ROOT"
+    # Try to determine the version if possible
+    if [ -f "$QT_DIR/bin/qmake" ]; then
+        QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
+        echo "Qt version: $QT_VERSION"
+    fi
+fi
 
 # Configuration
 BUILD_TYPE="MinSizeRel"
@@ -62,7 +120,7 @@ QML_SOURCES_PATH="$PWD/src/qmlcomponents/"
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-$ARCH"
-OUTPUT_FILE="$PWD/${PROJECT_NAME}-${PROJECT_VERSION}-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-${ARCH}.AppImage"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"
@@ -129,6 +187,9 @@ if [ "$ARCH" = "aarch64" ] && [ "$(uname -m)" = "x86_64" ]; then
     CMAKE_EXTRA_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64"
 fi
 
+# Add Qt path to CMake flags
+CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
+
 # shellcheck disable=SC2086
 cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
 make -j$(nproc)
@@ -139,11 +200,11 @@ make DESTDIR="$APPDIR" install
 cd ..
 
 # Copy the desktop file from debian directory
-if [ ! -f "$APPDIR/usr/share/applications/$PROJECT_NAME.desktop" ]; then
+if [ ! -f "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager.desktop" ]; then
     mkdir -p "$APPDIR/usr/share/applications"
-    cp "debian/$PROJECT_NAME.desktop" "$APPDIR/usr/share/applications/"
+    cp "debian/org.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/"
     # Update the Exec line to match the AppImage requirements
-    sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/$PROJECT_NAME.desktop"
+    sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager.desktop"
 fi
 
 # Create the AppRun file if not created by the install process
@@ -162,10 +223,14 @@ EOF
 fi
 
 # Deploy Qt dependencies
-echo "Deploying Qt dependencies..."
+echo "Deploying Qt dependencies using $QT_DIR..."
 export QML_SOURCES_PATHS="$QML_SOURCES_PATH"
 # Enable FUSE to run the AppImages without extraction
 export APPIMAGE_EXTRACT_AND_RUN=1
+# Set Qt path for linuxdeploy-plugin-qt
+export QMAKE="$QT_DIR/bin/qmake"
+# Set LD_LIBRARY_PATH to include Qt libraries
+export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 "$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*"
 
 # Hook for removing files before AppImage creation
@@ -175,11 +240,12 @@ echo "Pre-packaging hook - opportunity to remove unwanted files"
 
 # Create the AppImage
 echo "Creating AppImage..."
+# Ensure LD_LIBRARY_PATH is still set for this call too
 "$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage
 
 # Rename the output file if needed
 for appimage in *.AppImage; do
-    if [ "$appimage" != "$OUTPUT_FILE" ] && [[ "$appimage" == *".AppImage" ]]; then
+    if [ "$appimage" != "$OUTPUT_FILE" ]; then
         mv "$appimage" "$OUTPUT_FILE"
     fi
 done
