@@ -162,8 +162,10 @@ unset(SKIP_INSTALL_ALL)
 set(ZLIB_FOUND TRUE)
 set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib include dir")
 set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib include dir")
-set(ZLIB_LIBRARY zlibstatic)
-set(ZLIB_LIBRARIES zlibstatic)
+if (NOT WIN32)
+    set(ZLIB_LIBRARY zlibstatic)
+    set(ZLIB_LIBRARIES zlibstatic)
+endif()
 
 # Bundled libarchive
 set(LIBARCHIVE_VERSION "3.7.9")
@@ -587,10 +589,42 @@ if (WIN32)
             "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
             "${CMAKE_BINARY_DIR}/deploy")
 
-    configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi"
-        @ONLY)
+    # Inno Setup configuration
+    option(ENABLE_INNO_INSTALLER "Build Inno Setup installer instead of NSIS" OFF)
+    
+    if(ENABLE_INNO_INSTALLER)
+        # Create installer output directory
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/installer")
+        
+        # Configure the Inno Setup script
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.iss.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
+            @ONLY)
+            
+        # Find Inno Setup compiler
+        find_program(INNO_COMPILER NAMES iscc ISCC "iscc.exe" PATHS
+            "C:/Program Files (x86)/Inno Setup 6"
+            "C:/Program Files/Inno Setup 6"
+            DOC "Path to Inno Setup compiler")
+            
+        if(INNO_COMPILER)
+            add_custom_target(inno_installer
+                COMMAND "${INNO_COMPILER}" "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
+                DEPENDS ${PROJECT_NAME}
+                COMMENT "Building Inno Setup installer"
+                VERBATIM)
+            message(STATUS "Added 'inno_installer' target to build the Inno Setup installer")
+        else()
+            message(WARNING "Inno Setup compiler not found. Install Inno Setup from https://jrsoftware.org/isinfo.php")
+        endif()
+    else()
+        # NSIS Installer (legacy option)
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi"
+            @ONLY)
+    endif()
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
@@ -751,4 +785,4 @@ else()
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBLZMA_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})

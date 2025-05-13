@@ -1,0 +1,218 @@
+#define MyAppName "Raspberry Pi Imager"
+#define MyAppVersion "@IMAGER_VERSION_STR@"
+#define MyAppPublisher "Raspberry Pi Ltd"
+#define MyAppURL "https://www.raspberrypi.com/software"
+#define MyAppExeName "rpi-imager.exe"
+
+[Setup]
+; NOTE: The value of AppId uniquely identifies this application.
+; Do not use the same AppId value in installers for other applications.
+AppId={{40378B5A-386A-4E38-BBB7-20EAF9D6B8DD}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName=Raspberry Pi
+AllowNoIcons=yes
+LicenseFile=@CMAKE_BINARY_DIR@\deploy\license.txt
+OutputDir=@CMAKE_BINARY_DIR@\installer
+OutputBaseFilename=imager-{#MyAppVersion}
+SetupIconFile=@CMAKE_SOURCE_DIR@\icons\rpi-imager.ico
+Compression=lzma
+SolidCompression=yes
+WizardStyle=modern
+ArchitecturesInstallIn64BitMode=x64compatible
+MinVersion=10.0.15063
+PrivilegesRequired=admin
+UninstallDisplayIcon={app}\{#MyAppExeName},0
+UninstallDisplayName={#MyAppName}
+DisableProgramGroupPage=yes
+DisableWelcomePage=no
+DisableReadyPage=yes
+DisableFinishedPage=no
+CreateUninstallRegKey=yes
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "dutch"; MessagesFile: "compiler:Languages\Dutch.isl"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"
+Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Registry]
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\{#MyAppExeName}"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\.zip\OpenWithProgIds"; ValueType: string; ValueName: "RPI_IMAGINGUTILITY"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Classes\.gz\OpenWithProgIds"; ValueType: string; ValueName: "RPI_IMAGINGUTILITY"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Classes\.xz\OpenWithProgIds"; ValueType: string; ValueName: "RPI_IMAGINGUTILITY"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Classes\.img\OpenWithProgIds"; ValueType: string; ValueName: "RPI_IMAGINGUTILITY"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Classes\.wic\OpenWithProgIds"; ValueType: string; ValueName: "RPI_IMAGINGUTILITY"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Classes\.zstd\OpenWithProgIds"; ValueType: string; ValueName: "RPI_IMAGINGUTILITY"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Classes\RPI_IMAGINGUTILITY\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\RPI_IMAGINGUTILITY\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey
+
+[Files]
+; Main program files
+Source: "@CMAKE_BINARY_DIR@\deploy\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "@CMAKE_BINARY_DIR@\deploy\fat32format.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-cli.cmd"; DestDir: "{app}"; Flags: ignoreversion
+Source: "@CMAKE_BINARY_DIR@\deploy\license.txt"; DestDir: "{app}"; Flags: ignoreversion
+
+; Core DLLs
+Source: "@CMAKE_BINARY_DIR@\deploy\D3Dcompiler_47.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "@CMAKE_BINARY_DIR@\deploy\libgcc_s_seh-1.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "@CMAKE_BINARY_DIR@\deploy\libstdc++-6.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "@CMAKE_BINARY_DIR@\deploy\libwinpthread-1.dll"; DestDir: "{app}"; Flags: ignoreversion
+
+; Qt DLLs
+Source: "@CMAKE_BINARY_DIR@\deploy\Qt6*.dll"; DestDir: "{app}"; Flags: ignoreversion
+
+; Qt Plugin directories
+Source: "@CMAKE_BINARY_DIR@\deploy\generic\*"; DestDir: "{app}\generic"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "@CMAKE_BINARY_DIR@\deploy\iconengines\*"; DestDir: "{app}\iconengines"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "@CMAKE_BINARY_DIR@\deploy\imageformats\*"; DestDir: "{app}\imageformats"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "@CMAKE_BINARY_DIR@\deploy\networkinformation\*"; DestDir: "{app}\networkinformation"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "@CMAKE_BINARY_DIR@\deploy\platforminputcontexts\*"; DestDir: "{app}\platforminputcontexts"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "@CMAKE_BINARY_DIR@\deploy\platforms\*"; DestDir: "{app}\platforms"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "@CMAKE_BINARY_DIR@\deploy\styles\*"; DestDir: "{app}\styles"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "@CMAKE_BINARY_DIR@\deploy\tls\*"; DestDir: "{app}\tls"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; QML directories
+Source: "@CMAKE_BINARY_DIR@\deploy\qml\*"; DestDir: "{app}\qml"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+
+// Helper function to find a process by name
+function FindProcess(ExeFileName: String; var ProcessID: Integer): Boolean;
+var
+  CmdLine: String;
+  ResultCode: Integer;
+  OutputFile: String;
+  FileLines: TArrayOfString;
+  I: Integer;
+  ProcessLine: String;
+  IdStr: String;
+begin
+  Result := False;
+  OutputFile := ExpandConstant('{tmp}\processes.txt');
+  
+  // Use tasklist to get running processes
+  CmdLine := Format('/c tasklist /FI "IMAGENAME eq %s" /FO CSV /NH > "%s"', [ExeFileName, OutputFile]);
+  ShellExec('', 'cmd.exe', CmdLine, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  
+  if ResultCode = 0 then
+  begin
+    // Read the output file
+    if LoadStringsFromFile(OutputFile, FileLines) then
+    begin
+      for I := 0 to GetArrayLength(FileLines) - 1 do
+      begin
+        ProcessLine := FileLines[I];
+        // Process line is in CSV format: "imagename","PID",...
+        if Pos('"' + ExeFileName + '"', ProcessLine) = 1 then
+        begin
+          // Get the PID
+          ProcessLine := Copy(ProcessLine, Length(ExeFileName) + 3, Length(ProcessLine));
+          IdStr := '';
+          
+          // Extract numeric PID
+          while (Length(ProcessLine) > 0) and (ProcessLine[1] <> '"') do
+          begin
+            ProcessLine := Copy(ProcessLine, 2, Length(ProcessLine));
+          end;
+          
+          if Length(ProcessLine) > 0 then 
+          begin
+            ProcessLine := Copy(ProcessLine, 2, Length(ProcessLine)); // Skip "
+            while (Length(ProcessLine) > 0) and (ProcessLine[1] <> '"') do
+            begin
+              IdStr := IdStr + ProcessLine[1];
+              ProcessLine := Copy(ProcessLine, 2, Length(ProcessLine));
+            end;
+            
+            ProcessID := StrToIntDef(IdStr, 0);
+            if ProcessID > 0 then
+            begin
+              Result := True;
+              break;
+            end;
+          end;
+        end;
+      end;
+    end;
+    
+    // Clean up temporary file
+    DeleteFile(OutputFile);
+  end;
+end;
+
+// Function to check if Windows 10 or later
+function IsWindows10OrNewer: Boolean;
+var
+  Version: TWindowsVersion;
+begin
+  GetWindowsVersionEx(Version);
+  Result := (Version.Major >= 10);
+end; 
+
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+  ResultFlag: Boolean;
+  ProcessFound: Boolean;
+  ProcessID: Integer;
+begin
+  ResultFlag := True;
+  ProcessFound := False;
+  
+  // More reliable way to check if rpi-imager.exe is running
+  try
+    // Try to find process with exact name
+    ProcessID := 0;
+    ProcessFound := FindProcess('rpi-imager.exe', ProcessID);
+    
+    if ProcessFound and (ProcessID > 0) then
+    begin
+      if MsgBox('Raspberry Pi Imager is running and needs to be closed before continuing. Close it now?', mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        // Try to shut down gracefully first
+        ShellExec('', 'taskkill.exe', '/IM rpi-imager.exe /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        if ResultCode <> 0 then
+        begin
+          MsgBox('Failed to close Raspberry Pi Imager. Please close it manually and try again.', mbError, MB_OK);
+          ResultFlag := False;
+        end;
+      end
+      else
+      begin
+        ResultFlag := False;
+      end;
+    end;
+  except
+    // If FindProcess fails, fall back to default behavior
+    Log('Error checking for running process');
+  end;
+
+  // Check Windows version - require Windows 10
+  if ResultFlag and (not IsWindows10OrNewer) then
+  begin
+    MsgBox('This application requires Windows 10 or later.', mbError, MB_OK);
+    ResultFlag := False;
+  end;
+  
+  Result := ResultFlag;
+end;
