@@ -342,7 +342,7 @@ int main(int argc, char *argv[])
     engine.setNetworkAccessManagerFactory(&namf);
 
     engine.setInitialProperties(QVariantMap{{"imageWriter", QVariant::fromValue(&imageWriter)}});
-    engine.load(QUrl(QStringLiteral("qrc:/RpiImager/main.qml")));
+    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/RpiImager/main.qml")));
 
     if (engine.rootObjects().isEmpty())
         return -1;

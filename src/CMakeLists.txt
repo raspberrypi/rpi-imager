@@ -639,7 +639,6 @@ qt_add_qml_module(${PROJECT_NAME}
     OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RpiImager
     DEPENDENCIES QtQuick
     NO_PLUGIN
-    RESOURCE_PREFIX "/" # Puts the stuff into qrc:/RpiImager/
 )
 
 # Because dependencies are typically not available by default on Windows, build bundled code
