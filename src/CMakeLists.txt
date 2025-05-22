@@ -609,11 +609,19 @@ if (WIN32)
             DOC "Path to Inno Setup compiler")
             
         if(INNO_COMPILER)
-            add_custom_target(inno_installer
-                COMMAND "${INNO_COMPILER}" "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
-                DEPENDS ${PROJECT_NAME}
-                COMMENT "Building Inno Setup installer"
-                VERBATIM)
+            if(IMAGER_SIGNED_APP)
+                add_custom_target(inno_installer
+                    COMMAND "${INNO_COMPILER}" "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss" "/DSIGNING_ENABLED" "/Ssign=${SIGNTOOL} sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a $p"
+                    DEPENDS ${PROJECT_NAME}
+                    COMMENT "Building Inno Setup installer"
+                    VERBATIM)
+            else()
+                add_custom_target(inno_installer
+                    COMMAND "${INNO_COMPILER}" "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
+                    DEPENDS ${PROJECT_NAME}
+                    COMMENT "Building Inno Setup installer"
+                    VERBATIM)
+            endif()
             message(STATUS "Added 'inno_installer' target to build the Inno Setup installer")
         else()
             message(WARNING "Inno Setup compiler not found. Install Inno Setup from https://jrsoftware.org/isinfo.php")
