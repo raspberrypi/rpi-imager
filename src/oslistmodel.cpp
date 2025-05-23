@@ -53,15 +53,23 @@ namespace {
         std::function<void(QJsonArray&)> shuffleIfRandom = [&](QJsonArray &lst) {
             for (int i = 0; i < lst.size(); i++) {
                 QJsonObject entry = lst[i].toObject();
+                
                 if (entry.contains(QLatin1String("subitems"))) {
                     QJsonArray subitems = entry["subitems"].toArray();
                     shuffleIfRandom(subitems);
+                    
+                    // Shuffle if random flag is set
                     if (entry.contains(QLatin1String("random")) && entry["random"].toBool()) {
-                        for (int j = 0; j < subitems.size() - 1; j++) {
-                            int k = j + (QRandomGenerator::global()->bounded(subitems.size() - j));
-                            auto temp = subitems[k];
-                            subitems[k] = subitems[j];
-                            subitems[j] = temp;
+                        // Fisher-Yates shuffle - properly handle QJsonArray
+                        for (int j = subitems.size() - 1; j > 0; j--) {
+                            int k = QRandomGenerator::global()->bounded(j + 1);
+                            if (j != k) {
+                                // Properly swap QJsonArray elements by storing values, not references
+                                QJsonValue tempValue = subitems[j];
+                                QJsonValue kValue = subitems[k];
+                                subitems[j] = kValue;
+                                subitems[k] = tempValue;
+                            }
                         }
                     }
                     entry["subitems"] = subitems;
@@ -96,8 +104,9 @@ bool OSListModel::reload()
     QJsonObject root = doc.object();
 
     QJsonArray list = parseOSJson(root);
-    if (list.isEmpty())
+    if (list.isEmpty()) {
         return false;
+    }
 
     beginResetModel();
     _osList.clear();
