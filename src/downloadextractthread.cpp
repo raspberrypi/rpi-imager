@@ -209,8 +209,7 @@ void DownloadExtractThread::extractImageRun()
     int r;
 
     archive_read_support_filter_all(a);
-    archive_read_support_format_zip(a);
-    archive_read_support_format_7zip(a);
+    archive_read_support_format_all(a);
     archive_read_support_format_raw(a); // for .gz and such
     archive_read_open(a, this, NULL, &DownloadExtractThread::_archive_read, &DownloadExtractThread::_archive_close);
 
