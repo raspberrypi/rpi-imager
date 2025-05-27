@@ -5,9 +5,8 @@
 #define MyAppExeName "rpi-imager.exe"
 
 [Setup]
-; NOTE: The value of AppId uniquely identifies this application.
-; Do not use the same AppId value in installers for other applications.
-AppId={{40378B5A-386A-4E38-BBB7-20EAF9D6B8DD}
+; NOTE: This was extracted from an NSIS installation.
+AppId={{6D809377-6AF0-444B-8957-A3773F02200E}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -196,15 +195,75 @@ begin
   Result := (Version.Major >= 10);
 end; 
 
+// Function to check if a program is installed by the NSIS installer
+function IsNSISVersionInstalled: Boolean;
+var
+  NSISUninstallString: String;
+begin
+  Result := False;
+  
+  // Check for NSIS registry entry in HKCU
+  if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Raspberry Pi Imager',
+                          'UninstallString', NSISUninstallString) then
+  begin
+    Result := True;
+  end;
+  
+  // Also check in HKLM
+  if not Result and RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Raspberry Pi Imager',
+                                       'UninstallString', NSISUninstallString) then
+  begin
+    Result := True;
+  end;
+end;
+
+// Function to uninstall the NSIS version if detected
+function UninstallNSISVersion: Boolean;
+var
+  NSISUninstallString, NSISUninstallArgs: String;
+  ResultCode: Integer;
+begin
+  Result := False;
+  
+  // First try HKCU
+  if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Raspberry Pi Imager',
+                         'UninstallString', NSISUninstallString) then
+  begin
+    // NSIS uninstaller is typically followed by /S for silent uninstall
+    NSISUninstallArgs := '/S';
+    
+    // Run the uninstaller
+    if Exec(NSISUninstallString, NSISUninstallArgs, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      Result := (ResultCode = 0);
+    end;
+  end
+  else if RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Raspberry Pi Imager',
+                              'UninstallString', NSISUninstallString) then
+  begin
+    // NSIS uninstaller is typically followed by /S for silent uninstall
+    NSISUninstallArgs := '/S';
+    
+    // Run the uninstaller
+    if Exec(NSISUninstallString, NSISUninstallArgs, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      Result := (ResultCode = 0);
+    end;
+  end;
+end;
+
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
   ResultFlag: Boolean;
   ProcessFound: Boolean;
   ProcessID: Integer;
+  NSISInstalled: Boolean;
+  UninstallResult: Boolean;
 begin
   ResultFlag := True;
   ProcessFound := False;
+  NSISInstalled := False;
   
   // More reliable way to check if rpi-imager.exe is running
   try
@@ -232,6 +291,29 @@ begin
   except
     // If FindProcess fails, fall back to default behavior
     Log('Error checking for running process');
+  end;
+
+  // Check for NSIS installation
+  if ResultFlag then
+  begin
+    NSISInstalled := IsNSISVersionInstalled;
+    if NSISInstalled then
+    begin
+      if MsgBox('A previous version of Raspberry Pi Imager was found that needs to be uninstalled first. Uninstall now?', 
+                mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        UninstallResult := UninstallNSISVersion;
+        if not UninstallResult then
+        begin
+          MsgBox('Failed to uninstall the previous version. Please uninstall it manually before continuing.', mbError, MB_OK);
+          ResultFlag := False;
+        end;
+      end
+      else
+      begin
+        ResultFlag := False;
+      end;
+    end;
   end;
 
   // Check Windows version - require Windows 10
