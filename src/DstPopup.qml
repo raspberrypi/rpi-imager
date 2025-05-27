@@ -84,12 +84,14 @@ MainPopupBase {
             required property var mountpoints
             required property QtObject modelData
 
-            readonly property bool unselectable: (isSystem && filterSystemDrives.checked) || isReadOnly
+            readonly property bool shouldHide: isSystem && filterSystemDrives.checked
+            readonly property bool unselectable: isReadOnly
 
             anchors.left: parent.left
             anchors.right: parent.right
             Layout.topMargin: 1
-            height: 61
+            height: shouldHide ? 0 : 61
+            visible: !shouldHide
             Accessible.name: {
                 var txt = description+" - "+(size/1000000000).toFixed(1)+ " " + qsTr("gigabytes")
                 if (mountpoints.length > 0) {
@@ -153,7 +155,7 @@ MainPopupBase {
                                 if (dstitem.isReadOnly) {
                                     txt += " " + qsTr("[WRITE PROTECTED]");
                                 } else if (dstitem.isSystem) {
-                                    text += " [" + qsTr("SYSTEM") + "]";
+                                    txt += " [" + qsTr("SYSTEM") + "]";
                                 }
                                 return txt;
                             }
