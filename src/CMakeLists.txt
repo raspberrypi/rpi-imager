@@ -143,38 +143,54 @@ set(NGHTTP2_FOUND true)
 
 
 # Bundled zlib
-set(ZLIB_VERSION "1.3.1")
-FetchContent_Declare(zlib
-    GIT_REPOSITORY https://github.com/madler/zlib.git
-    GIT_TAG v${ZLIB_VERSION}
-)
+set(ZLIB_VERSION "1.4.1.1")
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
+FetchContent_Declare(zlib
+    GIT_REPOSITORY https://github.com/madler/zlib.git
+    GIT_TAG 5a82f71ed1dfc0bec044d9702463dbdf84ea3b71 # v1.4.1.1, as of 27/05/2025   
+)
 FetchContent_MakeAvailable(zlib)
 unset(ZLIB_BUILD_EXAMPLES)
 unset(ZLIB_BUILD_SHARED)
 unset(ZLIB_BUILD_STATIC)
 unset(ZLIB_BUILD_TESTS)
 unset(SKIP_INSTALL_ALL)
-set(ZLIB_FOUND TRUE)
-set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib include dir")
-set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} CACHE PATH "zlib include dir")
-if (NOT WIN32)
-    set(ZLIB_LIBRARY zlibstatic)
-    set(ZLIB_LIBRARIES zlibstatic)
+# Set zlib variables that libarchive's CMake will use
+set(ZLIB_USE_STATIC_LIBS ON CACHE BOOL "" FORCE) # This is to help FindZlib.cmake find the static library over the shared one
+set(ZLIB_ROOT ${zlib_SOURCE_DIR} CACHE PATH "" FORCE)
+
+# On Windows with MinGW, zlib builds with .a extension, not .lib
+# Set the correct library path before find_package
+if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
+    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzlibstatic.a CACHE FILEPATH "" FORCE)
+endif()
+
+find_package(ZLIB REQUIRED)
+
+# Fix all zlib variables and targets to point to the correct file on MinGW
+if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
+    # Fix the variables that find_package set
+    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzlibstatic.a CACHE FILEPATH "" FORCE)
+    set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libzlibstatic.a CACHE STRING "" FORCE)
+    
+    # Fix the imported target if it exists
+    if (TARGET ZLIB::ZLIB)
+        set_target_properties(ZLIB::ZLIB PROPERTIES 
+            IMPORTED_LOCATION ${zlib_BINARY_DIR}/libzlibstatic.a
+        )
+    endif()
+    
+    # Debug output
+    message(STATUS "ZLIB_LIBRARY corrected to: ${ZLIB_LIBRARY}")
+    message(STATUS "ZLIB_LIBRARIES corrected to: ${ZLIB_LIBRARIES}")
 endif()
 
 # Bundled libarchive
-set(LIBARCHIVE_VERSION "3.8.0")
-FetchContent_Declare(libarchive
-    GIT_REPOSITORY https://github.com/libarchive/libarchive.git
-    GIT_TAG v${LIBARCHIVE_VERSION}
-)
 
-# Configure libarchive with explicit zlib support
 set(ENABLE_WERROR OFF CACHE BOOL "")
 set(ENABLE_INSTALL OFF CACHE BOOL "")
 set(ENABLE_TEST OFF CACHE BOOL "")
@@ -182,8 +198,9 @@ set(ENABLE_CNG OFF CACHE BOOL "")
 set(ENABLE_MBEDTLS OFF CACHE BOOL "")
 set(ENABLE_NETTLE OFF CACHE BOOL "")
 set(ENABLE_OPENSSL OFF CACHE BOOL "")
+# Configure libarchive with explicit zlib support
 set(ENABLE_ZLIB ON CACHE BOOL "")
-set(ENABLE_BZip2 ON CACHE BOOL "")
+set(ENABLE_BZip2 OFF CACHE BOOL "")
 set(ENABLE_LZ4 OFF CACHE BOOL "")
 set(ENABLE_LZO OFF CACHE BOOL "")
 set(ENABLE_LIBB2 OFF CACHE BOOL "")
@@ -199,9 +216,20 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
 set(ARCHIVE_BUILD_STATIC_LIBS ON CACHE BOOL "")
 set(ARCHIVE_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(ENABLE_ZSTD ON CACHE BOOL "")
-
+set(POSIX_REGEX_LIB "libc" CACHE STRING "" FORCE)
+set(LIBARCHIVE_VERSION "3.8.0")
+FetchContent_Declare(libarchive
+    GIT_REPOSITORY https://github.com/libarchive/libarchive.git
+    GIT_TAG v${LIBARCHIVE_VERSION}
+)
 FetchContent_MakeAvailable(libarchive)
 
+# Ensure libarchive is built after zlib
+if (TARGET archive_static AND TARGET ZLIB::ZLIB)
+    add_dependencies(archive_static ZLIB::ZLIB)
+endif()
+
+unset(POSIX_REGEX_LIB)
 unset(ENABLE_WERROR)
 unset(ENABLE_INSTALL)
 unset(ENABLE_TEST)
@@ -238,26 +266,27 @@ FetchContent_Declare(curl
 )
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
 set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
+set(BUILD_MISC_DOCS OFF CACHE BOOL "" FORCE)
 set(ENABLE_CURL_MANUAL OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(CURL_USE_LIBPSL OFF)
-set(CURL_USE_LIBSSH2 OFF)
-set(CURL_DISABLE_ALTSVC ON)
-set(CURL_DISABLE_KERBEROS_AUTH ON)
-set(CURL_DISABLE_DICT ON)
-set(CURL_DISABLE_DISABLE_FORM_API ON)
-set(CURL_DISABLE_FTP ON)
-set(CURL_DISABLE_GOPHER ON)
-set(CURL_DISABLE_IMAP ON)
-set(CURL_DISABLE_LDAP ON)
-set(CURL_DISABLE_LDAPS ON)
-set(CURL_DISABLE_MQTT ON)
-set(CURL_DISABLE_NETRC ON)
-set(CURL_DISABLE_POP3 ON)
-set(CURL_DISABLE_RTSP ON)
-set(CURL_DISABLE_SMTP ON)
-set(CURL_DISABLE_TELNET ON)
-set(CURL_DISABLE_TFTP ON)
+set(CURL_USE_LIBPSL OFF CACHE BOOL "" FORCE)
+set(CURL_USE_LIBSSH2 OFF CACHE BOOL "" FORCE)
+set(CURL_DISABLE_ALTSVC ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_KERBEROS_AUTH ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_DICT ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_DISABLE_FORM_API ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_FTP ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_GOPHER ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_IMAP ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_LDAP ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_LDAPS ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_MQTT ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_NETRC ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_POP3 ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_RTSP ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_SMTP ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_TELNET ON CACHE BOOL "" FORCE)
+set(CURL_DISABLE_TFTP ON CACHE BOOL "" FORCE)
 set(CURL_ZSTD ON)
 set(CURL_ENABLE_EXPORT_TARGET OFF CACHE BOOL "" FORCE)
 set(CURL_DISABLE_INSTALL ON)
@@ -284,6 +313,7 @@ FetchContent_MakeAvailable(curl)
 
 unset(BUILD_CURL_EXE)
 unset(BUILD_LIBCURL_DOCS)
+unset(BUILD_MISC_DOCS)
 unset(ENABLE_CURL_MANUAL)
 unset(BUILD_EXAMPLES)
 unset(CURL_USE_LIBPSL)
@@ -799,4 +829,4 @@ else()
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ZLIB::ZLIB ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
