@@ -1,10 +1,15 @@
 /build**
 src/build/*
 src/build/**
-.vscode
 compile_commands.json
 src/.cache/clangd
 obj-**
+
+# IDE Configurations
+.vscode
+.zed
+
+# Debian packaging
 debian/rpi-imager/**
 debian/.debhelper**
 debian/*.debhelper**
@@ -12,6 +17,8 @@ debian/files
 debian/*.substvars
 debian/debhelper**
 debian/tmp
+
+# macOS
 .DS_Store
 *.DS_Store
 # editor backups
