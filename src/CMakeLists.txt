@@ -342,10 +342,10 @@ unset(USE_APPLE_IDN)
 unset(CURL_USE_SCHANNEL)
 unset(CURL_USE_GNUTLS)
 
-set(CURL_FOUND true)
-set(CURL_LIBRARIES libcurl_static)
-set(CURL_INCLUDE_DIR ${curl_SOURCE_DIR}/include)
-set(CURL_INCLUDE_DIRS ${curl_SOURCE_DIR}/include)
+set(CURL_FOUND true CACHE BOOL "" FORCE)
+set(CURL_LIBRARIES libcurl_static CACHE FILEPATH "" FORCE)
+set(CURL_INCLUDE_DIR ${curl_SOURCE_DIR}/include CACHE PATH "" FORCE)
+set(CURL_INCLUDE_DIRS ${curl_SOURCE_DIR}/include CACHE PATH "" FORCE)
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h drivelistmodelpollthread.h driveformatthread.h powersaveblocker.h cli.h
