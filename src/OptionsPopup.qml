@@ -333,7 +333,21 @@ Window {
         firstrun += s+"\n"
     }
     function escapeshellarg(arg) {
-        return "'"+arg.replace(/'/g, "'\"'\"'")+"'"
+        return "'"+arg.replace(/'/g, "'\\''")+"'"
+    }
+    function escapeForDoubleQuotes(arg) {
+        // Escape backslashes and double quotes for use inside double-quoted strings
+        return arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+    }
+    function escapeForWpaSupplicant(arg) {
+        // Escape for wpa_supplicant.conf format (inside double quotes)
+        // Need to escape backslashes, double quotes, and newlines
+        return arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t")
+    }
+    function escapeForYAML(arg) {
+        // Escape for YAML string values (inside double quotes)
+        // YAML requires escaping backslashes, double quotes, and control characters
+        return arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t")
     }
     function addCloudInit(s) {
         cloudinit += s+"\n"
@@ -362,10 +376,10 @@ Window {
         if (generalTab.chkHostname.checked && generalTab.fieldHostname.length) {
             addFirstRun("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\t\\n\\r\"`")
             addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
-            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_hostname "+generalTab.fieldHostname.text)
+            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_hostname "+escapeshellarg(generalTab.fieldHostname.text))
             addFirstRun("else")
-            addFirstRun("   echo "+generalTab.fieldHostname.text+" >/etc/hostname")
-            addFirstRun("   sed -i \"s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\\t"+generalTab.fieldHostname.text+"/g\" /etc/hosts")
+            addFirstRun("   echo "+escapeshellarg(generalTab.fieldHostname.text)+" >/etc/hostname")
+            addFirstRun("   sed -i \"s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\\t"+escapeForDoubleQuotes(generalTab.fieldHostname.text)+"/g\" /etc/hosts")
             addFirstRun("fi")
 
             addCloudInit("hostname: "+generalTab.fieldHostname.text)
@@ -406,7 +420,7 @@ Window {
                     var pkitem = remoteAccessTab.publicKeyModel.get(j)["publicKeyField"];
                     if (pkitem) {
                         pubkeySpaceSep += ' '+escapeshellarg(pkitem)
-                        pubKeyNewlineSep += escapeshellarg(pkitem) + '\n'
+                        pubKeyNewlineSep += escapeForDoubleQuotes(pkitem) + '\n'
                     }
                 }
 
@@ -448,18 +462,18 @@ Window {
                 addFirstRun("   /usr/lib/userconf-pi/userconf "+escapeshellarg(generalTab.fieldUserName.text)+" "+escapeshellarg(cryptedPassword))
                 addFirstRun("else")
                 addFirstRun("   echo \"$FIRSTUSER:\""+escapeshellarg(cryptedPassword)+" | chpasswd -e")
-                addFirstRun("   if [ \"$FIRSTUSER\" != \""+generalTab.fieldUserName.text+"\" ]; then")
-                addFirstRun("      usermod -l \""+generalTab.fieldUserName.text+"\" \"$FIRSTUSER\"")
-                addFirstRun("      usermod -m -d \"/home/"+generalTab.fieldUserName.text+"\" \""+generalTab.fieldUserName.text+"\"")
-                addFirstRun("      groupmod -n \""+generalTab.fieldUserName.text+"\" \"$FIRSTUSER\"")
+                addFirstRun("   if [ \"$FIRSTUSER\" != \""+escapeForDoubleQuotes(generalTab.fieldUserName.text)+"\" ]; then")
+                addFirstRun("      usermod -l \""+escapeForDoubleQuotes(generalTab.fieldUserName.text)+"\" \"$FIRSTUSER\"")
+                addFirstRun("      usermod -m -d \"/home/"+escapeForDoubleQuotes(generalTab.fieldUserName.text)+"\" \""+escapeForDoubleQuotes(generalTab.fieldUserName.text)+"\"")
+                addFirstRun("      groupmod -n \""+escapeForDoubleQuotes(generalTab.fieldUserName.text)+"\" \"$FIRSTUSER\"")
                 addFirstRun("      if grep -q \"^autologin-user=\" /etc/lightdm/lightdm.conf ; then")
-                addFirstRun("         sed /etc/lightdm/lightdm.conf -i -e \"s/^autologin-user=.*/autologin-user="+generalTab.fieldUserName.text+"/\"")
+                addFirstRun("         sed /etc/lightdm/lightdm.conf -i -e \"s/^autologin-user=.*/autologin-user="+escapeForDoubleQuotes(generalTab.fieldUserName.text)+"/\"")
                 addFirstRun("      fi")
                 addFirstRun("      if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then")
-                addFirstRun("         sed /etc/systemd/system/getty@tty1.service.d/autologin.conf -i -e \"s/$FIRSTUSER/"+generalTab.fieldUserName.text+"/\"")
+                addFirstRun("         sed /etc/systemd/system/getty@tty1.service.d/autologin.conf -i -e \"s/$FIRSTUSER/"+escapeForDoubleQuotes(generalTab.fieldUserName.text)+"/\"")
                 addFirstRun("      fi")
                 addFirstRun("      if [ -f /etc/sudoers.d/010_pi-nopasswd ]; then")
-                addFirstRun("         sed -i \"s/^$FIRSTUSER /"+generalTab.fieldUserName.text+" /\" /etc/sudoers.d/010_pi-nopasswd")
+                addFirstRun("         sed -i \"s/^$FIRSTUSER /"+escapeForDoubleQuotes(generalTab.fieldUserName.text)+" /\" /etc/sudoers.d/010_pi-nopasswd")
                 addFirstRun("      fi")
                 addFirstRun("   fi")
                 addFirstRun("fi")
@@ -475,13 +489,13 @@ Window {
             if (generalTab.chkWifiSSIDHidden.checked) {
                 wpaconfig += "\tscan_ssid=1\n"
             }
-            wpaconfig += "\tssid=\""+generalTab.fieldWifiSSID.text+"\"\n"
+            wpaconfig += "\tssid=\""+escapeForWpaSupplicant(generalTab.fieldWifiSSID.text)+"\"\n"
 
             const isPassphrase = generalTab.fieldWifiPassword.text.length >= 8 &&
                 generalTab.fieldWifiPassword.text.length < 64
             var cryptedPsk = isPassphrase ? imageWriter.pbkdf2(generalTab.fieldWifiPassword.text, generalTab.fieldWifiSSID.text)
                                           : generalTab.fieldWifiPassword.text
-            wpaconfig += "\tpsk="+cryptedPsk+"\n"
+            wpaconfig += "\tpsk="+escapeForWpaSupplicant(cryptedPsk)+"\n"
             wpaconfig += "}\n"
 
             addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
@@ -507,8 +521,8 @@ Window {
             cloudinitnetwork += "    dhcp4: true\n"
             cloudinitnetwork += "    optional: true\n"
             cloudinitnetwork += "    access-points:\n"
-            cloudinitnetwork += "      \""+generalTab.fieldWifiSSID.text+"\":\n"
-            cloudinitnetwork += "        password: \""+cryptedPsk+"\"\n"
+            cloudinitnetwork += "      \""+escapeForYAML(generalTab.fieldWifiSSID.text)+"\":\n"
+            cloudinitnetwork += "        password: \""+escapeForYAML(cryptedPsk)+"\"\n"
             if (generalTab.chkWifiSSIDHidden.checked) {
                 cloudinitnetwork += "        hidden: true\n"
             }
@@ -517,7 +531,7 @@ Window {
         }
         if (generalTab.chkLocale.checked) {
             var kbdconfig = "XKBMODEL=\"pc105\"\n"
-            kbdconfig += "XKBLAYOUT=\""+generalTab.fieldKeyboardLayout.editText+"\"\n"
+            kbdconfig += "XKBLAYOUT=\""+escapeForDoubleQuotes(generalTab.fieldKeyboardLayout.editText)+"\"\n"
             kbdconfig += "XKBVARIANT=\"\"\n"
             kbdconfig += "XKBOPTIONS=\"\"\n"
 
@@ -526,7 +540,7 @@ Window {
             addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_timezone "+escapeshellarg(generalTab.fieldTimezone.editText))
             addFirstRun("else")
             addFirstRun("   rm -f /etc/localtime")
-            addFirstRun("   echo \""+generalTab.fieldTimezone.editText+"\" >/etc/timezone")
+            addFirstRun("   echo \""+escapeForDoubleQuotes(generalTab.fieldTimezone.editText)+"\" >/etc/timezone")
             addFirstRun("   dpkg-reconfigure -f noninteractive tzdata")
             addFirstRun("cat >/etc/default/keyboard <<'KBEOF'")
             addFirstRun(kbdconfig)
@@ -537,7 +551,7 @@ Window {
             addCloudInit("timezone: "+generalTab.fieldTimezone.editText)
             addCloudInit("keyboard:")
             addCloudInit("  model: pc105")
-            addCloudInit("  layout: \"" + generalTab.fieldKeyboardLayout.editText + "\"")
+            addCloudInit("  layout: \"" + escapeForYAML(generalTab.fieldKeyboardLayout.editText) + "\"")
         }
 
         if (firstrun.length) {
