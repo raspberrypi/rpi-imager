@@ -217,9 +217,68 @@ set(ARCHIVE_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(ENABLE_ZSTD ON CACHE BOOL "")
 set(POSIX_REGEX_LIB "libc" CACHE STRING "" FORCE)
 set(LIBARCHIVE_VERSION "3.8.0")
+
+# Create a patch script to fix ZSTD detection in libarchive
+set(LIBARCHIVE_PATCH_FILE "${CMAKE_CURRENT_BINARY_DIR}/libarchive_zstd_patch.cmake")
+file(WRITE ${LIBARCHIVE_PATCH_FILE} "
+# Read the original CMakeLists.txt
+file(READ \"\${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt\" CONTENT)
+
+# Find the start and end of the ZSTD section
+string(FIND \"\${CONTENT}\" \"IF(ZSTD_FOUND)\" ZSTD_START)
+string(FIND \"\${CONTENT}\" \"MARK_AS_ADVANCED(CLEAR ZSTD_INCLUDE_DIR)\" ZSTD_END)
+
+if(ZSTD_START GREATER -1 AND ZSTD_END GREATER -1)
+    # Calculate positions
+    math(EXPR ZSTD_END \"\${ZSTD_END} + 40\") # Length of \"MARK_AS_ADVANCED(CLEAR ZSTD_INCLUDE_DIR)\"
+    
+    # Extract parts before and after the ZSTD section
+    string(SUBSTRING \"\${CONTENT}\" 0 \${ZSTD_START} BEFORE_ZSTD)
+    string(SUBSTRING \"\${CONTENT}\" \${ZSTD_END} -1 AFTER_ZSTD)
+    
+    # Create the new ZSTD section
+    set(NEW_ZSTD_SECTION \"IF(ZSTD_FOUND)
+  SET(HAVE_ZSTD_H 1)
+  INCLUDE_DIRECTORIES(\\\${ZSTD_INCLUDE_DIR})
+  LIST(APPEND ADDITIONAL_LIBS \\\${ZSTD_LIBRARY})
+  
+  # Check if ZSTD variables were provided externally (indicating static build)
+  get_property(ZSTD_LIB_IS_CACHE CACHE ZSTD_LIBRARY PROPERTY TYPE)
+  get_property(ZSTD_INC_IS_CACHE CACHE ZSTD_INCLUDE_DIR PROPERTY TYPE)
+  if(ZSTD_LIB_IS_CACHE AND ZSTD_INC_IS_CACHE)
+    # Skip function checks for static builds and assume all functions are available
+    message(STATUS \\\"Using provided ZSTD library: \\\${ZSTD_LIBRARY}\\\")
+    SET(HAVE_LIBZSTD 1)
+    SET(HAVE_ZSTD_compressStream 1)
+    SET(HAVE_ZSTD_minCLevel 1)
+  else()
+    # Original function checks for dynamic builds
+    CMAKE_PUSH_CHECK_STATE()
+    SET(CMAKE_REQUIRED_LIBRARIES \\\${ZSTD_LIBRARY})
+    SET(CMAKE_REQUIRED_INCLUDES \\\${ZSTD_INCLUDE_DIR})
+    CHECK_FUNCTION_EXISTS(ZSTD_decompressStream HAVE_LIBZSTD)
+    CHECK_FUNCTION_EXISTS(ZSTD_compressStream HAVE_ZSTD_compressStream)
+    CHECK_FUNCTION_EXISTS(ZSTD_minCLevel HAVE_ZSTD_minCLevel)
+    CMAKE_POP_CHECK_STATE()
+  endif()
+ENDIF(ZSTD_FOUND)
+MARK_AS_ADVANCED(CLEAR ZSTD_INCLUDE_DIR)\")
+    
+    # Combine the parts
+    set(NEW_CONTENT \"\${BEFORE_ZSTD}\${NEW_ZSTD_SECTION}\")
+    
+    # Write the modified content back
+    file(WRITE \"\${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt\" \"\${NEW_CONTENT}\${AFTER_ZSTD}\")
+    message(STATUS \"Patched libarchive CMakeLists.txt for static ZSTD support\")
+else()
+    message(WARNING \"Could not find ZSTD section in libarchive CMakeLists.txt\")
+endif()
+")
+
 FetchContent_Declare(libarchive
     GIT_REPOSITORY https://github.com/libarchive/libarchive.git
     GIT_TAG v${LIBARCHIVE_VERSION}
+    PATCH_COMMAND ${CMAKE_COMMAND} -P ${LIBARCHIVE_PATCH_FILE}
 )
 FetchContent_MakeAvailable(libarchive)
 
