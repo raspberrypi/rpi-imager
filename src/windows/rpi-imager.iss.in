@@ -1,7 +1,9 @@
 #define MyAppName "Raspberry Pi Imager"
 #define MyAppVersion "@IMAGER_VERSION_STR@"
 #define MyAppPublisher "Raspberry Pi Ltd"
-#define MyAppURL "https://www.raspberrypi.com/software"
+#define RaspberryPiSoftwareURL "https://www.raspberrypi.com/software"
+#define ImagerRepoRootURL "https://github.com/raspberrypi/rpi-imager"
+#define ImagerRepoIssuesURL "https://github.com/raspberrypi/rpi-imager/issues"
 #define MyAppExeName "rpi-imager.exe"
 
 [Setup]
@@ -11,9 +13,9 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppPublisherURL={#MyAppURL}
-AppSupportURL={#MyAppURL}
-AppUpdatesURL={#MyAppURL}
+AppPublisherURL={#RaspberryPiSoftwareURL}
+AppSupportURL={#ImagerRepoIssuesURL}
+AppUpdatesURL={#ImagerRepoRootURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName=Raspberry Pi
 AllowNoIcons=yes
