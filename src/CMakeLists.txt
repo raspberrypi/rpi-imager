@@ -134,11 +134,11 @@ FetchContent_MakeAvailable(nghttp2)
 unset(ENABLE_LIB_ONLY)
 unset(ENABLE_FAILMALLOC)
 unset(BUILD_EXAMPLES)
-set(NGHTTP2_LIBRARIES nghttp2_static)
-set(NGHTTP2_LIBRARY nghttp2_static)
-set(NGHTTP2_INCLUDE_DIR ${nghttp2_SOURCE_DIR}/lib)
-set(NGHTTP2_INCLUDE_DIRS ${nghttp2_SOURCE_DIR}/lib)
-set(NGHTTP2_FOUND true)
+set(NGHTTP2_LIBRARIES nghttp2_static CACHE FILEPATH "" FORCE)
+set(NGHTTP2_LIBRARY nghttp2_static CACHE FILEPATH "" FORCE)
+set(NGHTTP2_INCLUDE_DIR ${nghttp2_SOURCE_DIR}/lib CACHE PATH "" FORCE)
+set(NGHTTP2_INCLUDE_DIRS ${nghttp2_SOURCE_DIR}/lib CACHE PATH "" FORCE)
+set(NGHTTP2_FOUND true CACHE BOOL "" FORCE)
 
 
 # Bundled zlib
