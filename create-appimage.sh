@@ -245,7 +245,7 @@ echo "Creating AppImage..."
 
 # Rename the output file if needed
 for appimage in *.AppImage; do
-    if [ "$appimage" != "$OUTPUT_FILE" ]; then
+    if [ "$PWD/$appimage" != "$OUTPUT_FILE" ]; then
         mv "$appimage" "$OUTPUT_FILE"
     fi
 done
