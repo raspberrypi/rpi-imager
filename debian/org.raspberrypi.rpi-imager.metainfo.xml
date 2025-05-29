@@ -55,7 +55,7 @@
     <binary>rpi-imager</binary>
   </provides>
   <releases>
-    <release version="1.9.2" />
+    <release version="1.9.4" />
   </releases>
   <content_rating type="oars-1.1">
     <content_attribute id="social-info">moderate</content_attribute>
