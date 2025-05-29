@@ -55,6 +55,7 @@ set(LIBLZMA_VERSION "5.8.1")
 FetchContent_Declare(xz
     GIT_REPOSITORY https://github.com/tukaani-project/xz.git
     GIT_TAG v${LIBLZMA_VERSION}
+    OVERRIDE_FIND_PACKAGE
 )
 set(XZ_MICROLZMA_DECODER OFF CACHE BOOL "" FORCE)
 set(XZ_MICROLZMA_ENCODER OFF CACHE BOOL "" FORCE)
@@ -99,6 +100,7 @@ FetchContent_Declare(zstd
     GIT_TAG v${ZSTD_VERSION}
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SOURCE_SUBDIR build/cmake
+    OVERRIDE_FIND_PACKAGE
 )
 set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
@@ -124,8 +126,9 @@ set(ZSTD_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-build/lib/libzstd.a CACH
 # Remote nghttp2
 set(NGHTTP2_VERSION "1.65.0")
 FetchContent_Declare(nghttp2
- GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
- GIT_TAG        v${NGHTTP2_VERSION}
+    GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
+    GIT_TAG        v${NGHTTP2_VERSION}
+    OVERRIDE_FIND_PACKAGE
 )
 set(BUILD_EXAMPLES OFF)
 set(ENABLE_LIB_ONLY ON)
@@ -150,7 +153,8 @@ set(ZLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 FetchContent_Declare(zlib
     GIT_REPOSITORY https://github.com/madler/zlib.git
-    GIT_TAG 5a82f71ed1dfc0bec044d9702463dbdf84ea3b71 # v1.4.1.1, as of 27/05/2025   
+    GIT_TAG 5a82f71ed1dfc0bec044d9702463dbdf84ea3b71 # v1.4.1.1, as of 27/05/2025
+    OVERRIDE_FIND_PACKAGE
 )
 FetchContent_MakeAvailable(zlib)
 unset(ZLIB_BUILD_EXAMPLES)
@@ -166,6 +170,8 @@ set(ZLIB_ROOT ${zlib_SOURCE_DIR} CACHE PATH "" FORCE)
 # Set the correct library path before find_package
 if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
     set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzlibstatic.a CACHE FILEPATH "" FORCE)
+elseif(APPLE)
+    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libz.a CACHE FILEPATH "" FORCE)
 endif()
 
 find_package(ZLIB REQUIRED)
@@ -279,6 +285,7 @@ FetchContent_Declare(libarchive
     GIT_REPOSITORY https://github.com/libarchive/libarchive.git
     GIT_TAG v${LIBARCHIVE_VERSION}
     PATCH_COMMAND ${CMAKE_COMMAND} -P ${LIBARCHIVE_PATCH_FILE}
+    OVERRIDE_FIND_PACKAGE
 )
 FetchContent_MakeAvailable(libarchive)
 
@@ -321,6 +328,7 @@ string(REPLACE "." "_" CURL_TAG ${CURL_VERSION})
 FetchContent_Declare(curl
     GIT_REPOSITORY https://github.com/curl/curl.git
     GIT_TAG curl-${CURL_TAG}
+    OVERRIDE_FIND_PACKAGE
 )
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
 set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
