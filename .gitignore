@@ -27,3 +27,12 @@ debian/tmp
 # AppImage related
 *.AppImage*
 *.appimagecraft*
+AppDir-*
+appimage-*
+
+# Qt related
+qt-build
+qt-src
+build
+build-aarch64
+build-x86_64
