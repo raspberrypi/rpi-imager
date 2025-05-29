@@ -920,8 +920,8 @@ else()
 
     install(TARGETS ${PROJECT_NAME} DESTINATION bin)
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/rpi-imager.png" DESTINATION share/icons/hicolor/128x128/apps)
-    install(FILES "linux/org.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
-    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/rpi-imager.metainfo.xml" DESTINATION share/metainfo)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/org.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/org.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
 
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
