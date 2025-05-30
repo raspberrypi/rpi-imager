@@ -1,3 +1,21 @@
+rpi-imager (1.9.4) unstable; urgency=medium
+
+  * Windows: Switch to Inno Setup for installer
+  * all: Added .wic file filter for custom images
+  * all: Fix optionspopup not handling 'Esc' key
+  * all: Internal refactoring
+  * i18n: Updated Italian translation
+  * packaging: Add custom AppImage build script
+  * packaging: Add custom Qt build script
+  * packaging: Include custom Qt 6.9.0
+  * dependencies: Update to libarchive 3.8.0
+  * dependencies: Update to cURL 8.13.0
+  * dependencies: Update to zstd 1.5.7
+  * dependencies: Update to nghttp2 1.65.0
+  * dependencies: Update to zlib 1.4.1.1
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 30 May 2025 14:45:00 +0100
+
 rpi-imager (1.9.3) unstable; urgency=medium
 
   * Windows: Add quiet uninstaller flag
