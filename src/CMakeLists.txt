@@ -174,61 +174,40 @@ set(ZLIB_ROOT ${zlib_SOURCE_DIR} CACHE PATH "" FORCE)
 # Set the correct library path before find_package
 if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
     set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzlibstatic.a CACHE FILEPATH "" FORCE)
-else()
-    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libz.a CACHE FILEPATH "" FORCE)
-endif()
-
-find_package(ZLIB REQUIRED HINTS ${zlib_BINARY_DIR})
-
-# Fix all zlib variables and targets to point to the correct file on MinGW
-if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
-    # Fix the variables that find_package set
-    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzlibstatic.a CACHE FILEPATH "" FORCE)
     set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libzlibstatic.a CACHE STRING "" FORCE)
-    
-    # Fix the imported target if it exists
-    if (TARGET ZLIB::ZLIB)
-        set_target_properties(ZLIB::ZLIB PROPERTIES 
-            IMPORTED_LOCATION ${zlib_BINARY_DIR}/libzlibstatic.a
-        )
-    endif()
 else()
     set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libz.a CACHE FILEPATH "" FORCE)
     set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libz.a CACHE STRING "" FORCE)
-    
-    # Fix the imported target if it exists
-    if (TARGET ZLIB::ZLIB)
-        set_target_properties(ZLIB::ZLIB PROPERTIES     
-            IMPORTED_LOCATION ${zlib_BINARY_DIR}/libz.a
-        )
-    endif()
 endif()
 
-# Explicitly create ZLIB::ZLIB target if it doesn't exist
-if (NOT TARGET ZLIB::ZLIB)
-    message(STATUS "Creating ZLIB::ZLIB target manually")
-    add_library(ZLIB::ZLIB STATIC IMPORTED)
-    if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
-        set_target_properties(ZLIB::ZLIB PROPERTIES
-            IMPORTED_LOCATION "${zlib_BINARY_DIR}/libzlibstatic.a"
-            INTERFACE_INCLUDE_DIRECTORIES "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}"
-        )
-    elseif(APPLE)
-        set_target_properties(ZLIB::ZLIB PROPERTIES
-            IMPORTED_LOCATION "${zlib_BINARY_DIR}/libz.a"
-            INTERFACE_INCLUDE_DIRECTORIES "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}"
-        )
-    else()
-        set_target_properties(ZLIB::ZLIB PROPERTIES
-            IMPORTED_LOCATION "${zlib_BINARY_DIR}/libz.a"
-            INTERFACE_INCLUDE_DIRECTORIES "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}"
-        )
-    endif()
+# Since we're building zlib ourselves with EXCLUDE_FROM_ALL, we don't need find_package
+# Instead, we'll create the ZLIB::ZLIB target manually and set all required variables
+set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} CACHE PATH "" FORCE)
+set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} CACHE PATH "" FORCE)
+
+# Create ZLIB::ZLIB target manually since we're not using find_package
+# Set zlib variables that other packages expect
+set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
+add_library(ZLIB::ZLIB STATIC IMPORTED)
+if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
+    set_target_properties(ZLIB::ZLIB PROPERTIES
+        IMPORTED_LOCATION "${zlib_BINARY_DIR}/libzlibstatic.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}"
+    )
+    add_dependencies(ZLIB::ZLIB zlibstatic)
+else()
+    set_target_properties(ZLIB::ZLIB PROPERTIES
+        IMPORTED_LOCATION "${zlib_BINARY_DIR}/libz.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}"
+    )
+    add_dependencies(ZLIB::ZLIB zlibstatic)
 endif()
 
 # Debug output
-message(STATUS "ZLIB_LIBRARY corrected to: ${ZLIB_LIBRARY}")
-message(STATUS "ZLIB_LIBRARIES corrected to: ${ZLIB_LIBRARIES}")
+message(STATUS "ZLIB_LIBRARY set to: ${ZLIB_LIBRARY}")
+message(STATUS "ZLIB_LIBRARIES set to: ${ZLIB_LIBRARIES}")
+message(STATUS "ZLIB_INCLUDE_DIRS set to: ${ZLIB_INCLUDE_DIRS}")
+
 # Bundled libarchive
 
 set(ENABLE_WERROR OFF CACHE BOOL "")
