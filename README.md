@@ -21,34 +21,24 @@ Please see our [official documentation](https://www.raspberrypi.com/documentatio
 sudo apt install --no-install-recommends build-essential cmake git libgnutls28-dev
 ```
 
-- Get the Qt online installer from: https://www.qt.io/download-open-source
-- During installation, choose Qt 6.7, CMake and Qt Creator.
-
 #### Get the source
 
 ```sh
 git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 ```
 
-#### Build the AppImage
-
-Modify appimagecraft.yml:
-
-- First, you _must_ set Qt6_ROOT (as a extra_variables item under build/cmake) to the root of your Qt6 installation. eg: `/opt/Qt/6.7.2/gcc_arm64/`
-- Second, you _must_ set QMAKE (as a raw_environment variable of the linuxdeploy plugin) to the full path of qmake inside that Qt6 installation. eg: `/opt/Qt/6.7.2./gcc_arm64/bin/qmake`
-
-Now, use AppImageCraft to build your AppImage:
+#### Build Qt
 
 ```sh
-cd rpi-imager
-export LD_LIBRARY_PATH=${your_Qt6_install_path}/lib
-./${your_platform_appimagecraft}.AppImage
+sudo ./built-qt.sh
 ```
 
-Now mark the AppImage as executable, and run it:
+This will build and install the version of Qt preferred for Raspberry Pi Imager into /opt/Qt/<version>. You must use `sudo` for the installation step to complete.
+
+#### Build the AppImage
 
 ```sh
-chmod +x ./Raspberry_Pi_Imager-*.AppImage
+./create_appimage.sh
 ./Raspberry_Pi_Imager-*.AppImage
 ```
 
@@ -57,44 +47,48 @@ chmod +x ./Raspberry_Pi_Imager-*.AppImage
 #### Get dependencies
 
 - Get the Qt online installer from: https://www.qt.io/download-open-source
-During installation, choose Qt 6.7 with Mingw64 64-bit toolchain, CMake and Qt Creator.
-
-- For building the installer, get Nullsoft scriptable install system: https://nsis.sourceforge.io/Download
-
+  - During installation, choose Qt 6.9 with Mingw64 64-bit toolchain.
+- For building the installer, install Inno Setup scriptable install system: https://jrsoftware.org/isdl.php
+- Install Visual Studio Code (or a derivative) and the Qt Extension Pack.
 - It is assumed you already have a valid code signing certificate, and the Windows 10 Kit (SDK) installed.
 
 #### Building
 
-Building Raspberry Pi Imager on Windows is best done with the Qt Creator GUI.
+Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or a derivative).
 
-- Download source .zip from github and extract it to a folder on disk
-- Open src/CMakeLists.txt in Qt Creator.
-- Use Qt Creator to set the MINGW64_ROOT CMake variable to your MingGW64 installation path, eg `C:\Qt\Tools\mingw64`
-- For builds you distribute to others, make sure you choose "Release" in the toolchain settings and not the Debug configuration.
-- Menu "Build" -> "Build all"
-- Result will be in build_rpi-imager_someversion
-- Go to the BUILD folder, right click on the .nsi script "Compile NSIS script", to create installer.
+- Open Visual Studio Code, and select 'Clone repo'. Give it the git url of this project.
+- Open the CMake plugin settings, and set the following Configure Args:
+  - `-DQt6_ROOT=C:\Qt\6.9.0\mingw_64` - or the equivalent path you installed Qt 6.9 to.
+  - `-DMINGW64_ROOT=C:\Qt\Tools\mingw1310_64` - or the equivalent path you installed mingw64 to.
+  - `-DENABLE_INNO_INSTALLER=ON` - to enable the Inno Setup installer, rather than the legacy NSIS installer.
+  - `-DIMAGER_SIGNED_APP=ON` - to enable code signing for redistribution.
+- In the CMake plugin tab, ensure you have selected the `MinSizeRel` variant if you intend to distribute to others.
+- In the CMake plugin tab, select the 'inno_installer' target, and build it
+- Your resultant installer will be located in `%WORKSPACE%\build\installer`
 
 ### macOS
 
 #### Get dependencies
 
 - Get the Qt online installer from: https://www.qt.io/download-open-source
-During installation, choose Qt 6.7, CMake and Qt Creator.
+  - During installation, choose Qt 6.9.
+- Install Visual Studio Code (or a derivative), and the Qt Extension Pack.
 - It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store.
 
 #### Building
 
-- Download source .zip from github and extract it to a folder on disk
-- Start Qt Creator and open src/CMakeLists.txt
-- Use Qt Creator to set the Qt6_ROOT CMake variable to your Qt6 installation path, eg `/opt/Qt6/6.7.2/gcc_arm64`
-- Menu "Build" -> "Build all"
-- Result will be in build_rpi-imager_someversion
-- For distribution to others:
-  - Use the IMAGER_SIGNED_APP flag to enable Application signing
-  - Use the IMAGER_SIGNING_IDENTITY string to specify the Developer ID certificate Common Name
-  - Use the IMAGER_NOTARIZE_APP flag to enable notarization as part of the build
-  - Use the IMAGER_NOTARIZE_KEYCHAIN_PROFILE string to specify the name of the keychain item containing your Apple ID credentials for notarizing.
+Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or a derivative).
+
+- Open Visual Studio Code, and select 'Clone repo'. Give it the git url of this project.
+- Open the CMake plugin settings, and set the following Configure Args:
+  - `-DQt6_ROOT=/opt/Qt6/6.9.0/gcc_arm64` - or the equivalent path you installed Qt 6.9 to.
+  - `-DIMAGER_SIGNED_APP=ON` - to enable code signing.
+  - `-DIMAGER_SIGNING_IDENTITY=$cn` - to specify the Developer ID Certificate Common Name.
+  - `-DIMAGER_NOTARIZE_APP=ON` - to enable automatic notarization for distribution to others.
+  - `-DIMAGER_NOTARIZE_KEYCHAIN_PROFILE=notarytool-password` - specify the name of the keychain item containing your Apple ID credentials for notarizing.
+- In the CMake plugin tab, ensure you have selected the `MinSizeRel` variant if you intend to distribute to others.
+- In the CMake plugin tab, select the 'rpi_imager' target, and build it
+- Your resultant DMG will be located at `$WORKSPACE\build\Raspberry Pi Imager-$VERSION.dmg`
 
 ### Linux embedded (netboot) build
 
