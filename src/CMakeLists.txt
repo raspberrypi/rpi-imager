@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright (C) 2020-2024 Raspberry Pi Ltd
+# Copyright (C) 2020-2025 Raspberry Pi Ltd
 
 cmake_minimum_required(VERSION 3.25)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
@@ -20,7 +20,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 #add_link_options("-fsanitize=address")
 
 # You _must_ set your Qt6 root for the build to progress.
-set(Qt6_ROOT "/opt/Qt/6.7.2/gcc_arm64" CACHE PATH "Your Qt6 root path")
+set(Qt6_ROOT "/opt/Qt/6.9.0/gcc_arm64" CACHE PATH "Your Qt6 root path")
 
 if (WIN32)
     set(MINGW64_ROOT "" CACHE PATH "Your MinGW64 root path, likely provided by QtCreator")
