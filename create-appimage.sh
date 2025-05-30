@@ -4,13 +4,15 @@ set -e
 # Parse command line arguments
 ARCH=$(uname -m)  # Default to current architecture
 CLEAN_BUILD=1
+QT_ROOT_ARG=""
 
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --arch=ARCH    Target architecture (x86_64, aarch64)"
-    echo "  --no-clean     Don't clean build directory"
-    echo "  -h, --help     Show this help message"
+    echo "  --arch=ARCH        Target architecture (x86_64, aarch64)"
+    echo "  --qt-root=PATH     Path to Qt installation directory"
+    echo "  --no-clean         Don't clean build directory"
+    echo "  -h, --help         Show this help message"
     exit 1
 }
 
@@ -18,6 +20,9 @@ for arg in "$@"; do
     case $arg in
         --arch=*)
             ARCH="${arg#*=}"
+            ;;
+        --qt-root=*)
+            QT_ROOT_ARG="${arg#*=}"
             ;;
         --no-clean)
             CLEAN_BUILD=0
@@ -56,32 +61,54 @@ PROJECT_NAME=$(grep "project(" "$CMAKE_FILE" | head -1 | sed 's/project(\([^[:sp
 echo "Building $PROJECT_NAME version $PROJECT_VERSION"
 
 # Check for Qt installation
-# First try to find Qt in standard installations and select the newest version
+# Priority: 1. Command line argument, 2. Environment variable, 3. Auto-detection
 QT_VERSION=""
 QT_DIR=""
-if [ -d "/opt/Qt" ]; then
-    echo "Checking for Qt installations in /opt/Qt..."
-    # Find the newest Qt6 version installed
-    NEWEST_QT=$(find /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
-    if [ -n "$NEWEST_QT" ]; then
-        QT_VERSION=$(basename "$NEWEST_QT")
-        
-        # Find appropriate compiler directory for the architecture
-        if [ "$ARCH" = "x86_64" ]; then
-            if [ -d "$NEWEST_QT/gcc_64" ]; then
-                QT_DIR="$NEWEST_QT/gcc_64"
+
+# Check if Qt root is specified via command line argument (highest priority)
+if [ -n "$QT_ROOT_ARG" ]; then
+    echo "Using Qt from command line argument: $QT_ROOT_ARG"
+    QT_DIR="$QT_ROOT_ARG"
+    # Try to determine the version if possible
+    if [ -f "$QT_DIR/bin/qmake" ]; then
+        QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
+        echo "Qt version: $QT_VERSION"
+    fi
+# Check if Qt6_ROOT is explicitly set in environment
+elif [ -n "$Qt6_ROOT" ]; then
+    echo "Using Qt from Qt6_ROOT environment variable: $Qt6_ROOT"
+    QT_DIR="$Qt6_ROOT"
+    # Try to determine the version if possible
+    if [ -f "$QT_DIR/bin/qmake" ]; then
+        QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
+        echo "Qt version: $QT_VERSION"
+    fi
+# Auto-detect Qt installation in /opt/Qt
+else
+    if [ -d "/opt/Qt" ]; then
+        echo "Checking for Qt installations in /opt/Qt..."
+        # Find the newest Qt6 version installed
+        NEWEST_QT=$(find /opt/Qt -maxdepth 1 -type d -name "6.*" | sort -V | tail -n 1)
+        if [ -n "$NEWEST_QT" ]; then
+            QT_VERSION=$(basename "$NEWEST_QT")
+            
+            # Find appropriate compiler directory for the architecture
+            if [ "$ARCH" = "x86_64" ]; then
+                if [ -d "$NEWEST_QT/gcc_64" ]; then
+                    QT_DIR="$NEWEST_QT/gcc_64"
+                fi
+            elif [ "$ARCH" = "aarch64" ]; then
+                if [ -d "$NEWEST_QT/gcc_arm64" ]; then
+                    QT_DIR="$NEWEST_QT/gcc_arm64"
+                fi
             fi
-        elif [ "$ARCH" = "aarch64" ]; then
-            if [ -d "$NEWEST_QT/gcc_arm64" ]; then
-                QT_DIR="$NEWEST_QT/gcc_arm64"
+            
+            if [ -n "$QT_DIR" ]; then
+                echo "Found Qt $QT_VERSION for $ARCH at $QT_DIR"
+            else
+                echo "Found Qt $QT_VERSION, but no binary directory for $ARCH"
+                QT_VERSION=""
             fi
-        fi
-        
-        if [ -n "$QT_DIR" ]; then
-            echo "Found Qt $QT_VERSION for $ARCH at $QT_DIR"
-        else
-            echo "Found Qt $QT_VERSION, but no binary directory for $ARCH"
-            QT_VERSION=""
         fi
     fi
 fi
@@ -94,24 +121,15 @@ if [ -z "$QT_DIR" ]; then
         echo "You can build Qt using the provided script:"
         echo "  ./build-qt.sh --version=6.9.0"
         echo "Or specify the Qt location with:"
+        echo "  $0 --qt-root=/path/to/qt"
         echo "  export Qt6_ROOT=/path/to/qt"
     else
-        echo "You can build Qt using the provided script: specify the Qt location with:"
+        echo "You can specify the Qt location with:"
+        echo "  $0 --qt-root=/path/to/qt"
         echo "  export Qt6_ROOT=/path/to/qt"
     fi
     
     exit 1
-fi
-
-# Check if Qt6_ROOT is explicitly set, which takes precedence
-if [ -n "$Qt6_ROOT" ]; then
-    echo "Using Qt from specified Qt6_ROOT: $Qt6_ROOT"
-    QT_DIR="$Qt6_ROOT"
-    # Try to determine the version if possible
-    if [ -f "$QT_DIR/bin/qmake" ]; then
-        QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
-        echo "Qt version: $QT_VERSION"
-    fi
 fi
 
 # Configuration
