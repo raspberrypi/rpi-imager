@@ -13,8 +13,9 @@ rpi-imager (1.9.4) unstable; urgency=medium
   * dependencies: Update to zstd 1.5.7
   * dependencies: Update to nghttp2 1.65.0
   * dependencies: Update to zlib 1.4.1.1
+  * OS customisation: Remove 'Show password' checkbox
 
- -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 30 May 2025 14:45:00 +0100
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 30 May 2025 17:00:00 +0100
 
 rpi-imager (1.9.3) unstable; urgency=medium
 

@@ -22,7 +22,6 @@ OptionsTabBase {
     property alias fieldKeyboardLayout: fieldKeyboardLayout
     property alias fieldWifiPassword: fieldWifiPassword
     property alias fieldWifiSSID: fieldWifiSSID
-    property alias chkShowPassword: chkShowPassword
     property alias chkWifi: chkWifi
     property alias chkWifiSSIDHidden: chkWifiSSIDHidden
     property alias chkHostname: chkHostname
@@ -193,7 +192,7 @@ OptionsTabBase {
                 enabled: chkWifi.checked
                 Layout.minimumWidth: 200
                 selectByMouse: true
-                echoMode: chkShowPassword.checked ? TextInput.Normal : TextInput.Password
+                echoMode: TextInput.Password
                 property bool indicateError: false
                 onTextEdited: {
                     indicateError = false
@@ -202,16 +201,6 @@ OptionsTabBase {
         }
 
         RowLayout {
-            // Spacer item
-            Item {
-                Layout.fillWidth: true
-            }
-            ImCheckBox {
-                id: chkShowPassword
-                enabled: chkWifi.checked
-                text: qsTr("Show password")
-                checked: true
-            }
             // Spacer item
             Item {
                 Layout.fillWidth: true
