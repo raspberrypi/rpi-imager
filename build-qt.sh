@@ -16,6 +16,7 @@ SKIP_DEPENDENCIES=0   # Don't skip installing dependencies by default
 RPI_OPTIMIZED=0       # Raspberry Pi optimizations disabled by default
 USE_EGLFS=0           # Use Wayland by default, not EGLFS
 VERBOSE_BUILD=0       # By default, don't show verbose build output
+UNPRIVILEGED=0        # By default, allow sudo usage
 
 # Parse command line arguments
 usage() {
@@ -30,6 +31,7 @@ usage() {
     echo "  --rpi-optimize       Apply Raspberry Pi specific optimizations"
     echo "  --use-eglfs          Configure for EGLFS (direct rendering) instead of Wayland"
     echo "  --verbose            Show verbose build output"
+    echo "  --unprivileged       Run without sudo (skips dependency installation)"
     echo "  -h, --help           Show this help message"
     exit 1
 }
@@ -63,6 +65,10 @@ for arg in "$@"; do
         --verbose)
             VERBOSE_BUILD=1
             ;;
+        --unprivileged)
+            UNPRIVILEGED=1
+            SKIP_DEPENDENCIES=1  # Automatically skip dependencies in unprivileged mode
+            ;;
         -h|--help)
             usage
             ;;
@@ -77,6 +83,12 @@ done
 if ! [[ $CORES =~ ^[0-9]+$ ]]; then
     echo "Error: Cores must be a number"
     exit 1
+fi
+
+# In unprivileged mode, suggest a user-writable prefix if using default
+if [ "$UNPRIVILEGED" -eq 1 ] && [ "$PREFIX" = "/opt/Qt/${QT_VERSION}" ]; then
+    PREFIX="$HOME/Qt/${QT_VERSION}"
+    echo "Unprivileged mode: Using user-writable prefix: $PREFIX"
 fi
 
 # Major version (for directory structure)
@@ -129,6 +141,7 @@ echo "  Clean Build: $CLEAN_BUILD"
 echo "  Raspberry Pi Optimizations: $RPI_OPTIMIZED"
 echo "  Use EGLFS: $USE_EGLFS"
 echo "  Verbose Build: $VERBOSE_BUILD"
+echo "  Unprivileged Mode: $UNPRIVILEGED"
 if [ -n "$RPI_CFLAGS" ]; then
     echo "  Raspberry Pi CFLAGS: $RPI_CFLAGS"
 fi
@@ -193,6 +206,13 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
         sudo apt-get install -y libwayland-dev wayland-protocols \
             libxkbcommon-dev libwayland-cursor0 libwayland-egl1 \
             libwayland-server0 libwayland-client0 libwayland-bin
+    fi
+else
+    if [ "$UNPRIVILEGED" -eq 1 ]; then
+        echo "Skipping dependency installation (unprivileged mode)"
+        echo "Please ensure all Qt build dependencies are already installed."
+    else
+        echo "Skipping dependency installation as requested"
     fi
 fi
 
@@ -296,9 +316,27 @@ fi
 
 # Install Qt
 echo "Installing Qt to $PREFIX..."
-sudo cmake --install .
+if [ "$UNPRIVILEGED" -eq 1 ]; then
+    # Create prefix directory if it doesn't exist (without sudo)
+    mkdir -p "$(dirname "$PREFIX")"
+    cmake --install .
+else
+    sudo cmake --install .
+fi
 
 echo "Qt $QT_VERSION has been built and installed to $PREFIX"
+
+if [ "$UNPRIVILEGED" -eq 1 ]; then
+    echo ""
+    echo "UNPRIVILEGED MODE NOTES:"
+    echo "- Dependencies were not automatically installed"
+    echo "- Make sure you have all required Qt build dependencies installed"
+    echo "- Common missing dependencies can cause build failures"
+    echo "- If you encounter build errors, install dependencies manually with:"
+    echo "  sudo apt-get install build-essential perl python3 git cmake ninja-build pkg-config libfontconfig1-dev libfreetype6-dev libx11-dev [and others...]"
+    echo ""
+fi
+
 echo "To use it, you may want to set the following environment variables:"
 echo "  export PATH=\"$PREFIX/bin:\$PATH\""
 echo "  export LD_LIBRARY_PATH=\"$PREFIX/lib:\$LD_LIBRARY_PATH\""
