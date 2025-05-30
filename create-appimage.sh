@@ -240,6 +240,8 @@ echo "Pre-packaging hook - opportunity to remove unwanted files"
 
 # Create the AppImage
 echo "Creating AppImage..."
+# Remove old AppImage symlink
+rm -f "$PWD/rpi-imager.AppImage"
 # Ensure LD_LIBRARY_PATH is still set for this call too
 "$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage
 
@@ -251,4 +253,13 @@ for appimage in *.AppImage; do
 done
 
 echo "AppImage created at $OUTPUT_FILE"
+
+# Create a symlink with a simpler name
+SYMLINK_NAME="$PWD/rpi-imager.AppImage"
+if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
+    rm -f "$SYMLINK_NAME"
+fi
+ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_NAME"
+echo "Created symlink: $SYMLINK_NAME -> $(basename "$OUTPUT_FILE")"
+
 echo "Build completed successfully for $ARCH architecture." 
