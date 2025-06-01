@@ -30,7 +30,7 @@ git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 #### Build Qt
 
 ```sh
-sudo ./built-qt.sh
+sudo ./build-qt.sh
 ```
 
 This will build and install the version of Qt preferred for Raspberry Pi Imager into /opt/Qt/<version>. You must use `sudo` for the installation step to complete.
