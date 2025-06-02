@@ -115,7 +115,6 @@ set(ZSTD_VERSION "1.5.7")
 FetchContent_Declare(zstd
     GIT_REPOSITORY https://github.com/facebook/zstd.git
     GIT_TAG v${ZSTD_VERSION}
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SOURCE_SUBDIR build/cmake
     ${USE_OVERRIDE_FIND_PACKAGE}
 )
