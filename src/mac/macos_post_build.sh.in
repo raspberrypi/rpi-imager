@@ -8,6 +8,7 @@ set -x
 
 # Define paths
 APP_BUNDLE_PATH="@CMAKE_BINARY_DIR@/@PROJECT_NAME@.app"
+FINAL_APP_BUNDLE_PATH="@CMAKE_BINARY_DIR@/Raspberry Pi Imager.app"
 DMG_PATH="@CMAKE_BINARY_DIR@/@APP_NAME@.dmg"
 FINAL_DMG_PATH="@CMAKE_BINARY_DIR@/@APP_NAME@-@IMAGER_VERSION_STR@.dmg"
 QML_DIR="@CMAKE_CURRENT_SOURCE_DIR@"
@@ -65,20 +66,27 @@ echo "Running macdeployqt..."
 
 # Check bundle contents after macdeployqt
 echo "Verifying app bundle after macdeployqt..."
-ls -la "$APP_BUNDLE_PATH/Contents/MacOS" || { echo "MacOS directory missing after macdeployqt"; exit 1; }
-ls -la "$APP_BUNDLE_PATH/Contents/Info.plist" || { echo "Info.plist missing after macdeployqt"; exit 1; }
+ls -la "$APP_BUNDLE_PATH/Contents/MacOS" > /dev/null 2>&1 || { echo "MacOS directory missing after macdeployqt"; exit 1; }
+ls -la "$APP_BUNDLE_PATH/Contents/Info.plist" > /dev/null 2>&1 || { echo "Info.plist missing after macdeployqt"; exit 1; }
 
-# Sign the app bundle
+# Rename app bundle to final name BEFORE signing
+echo "Renaming app bundle to 'Raspberry Pi Imager.app'..."
+if [ -d "$FINAL_APP_BUNDLE_PATH" ]; then
+    rm -rf "$FINAL_APP_BUNDLE_PATH"
+fi
+mv "$APP_BUNDLE_PATH" "$FINAL_APP_BUNDLE_PATH"
+
+# Sign the app bundle (now with final name)
 echo "Signing app bundle..."
-codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "$SIGNING_IDENTITY" "$APP_BUNDLE_PATH"
+codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "$SIGNING_IDENTITY" "$FINAL_APP_BUNDLE_PATH"
 
 # Verify signing
 echo "Verifying app bundle signing..."
-codesign -vvv --deep --strict "$APP_BUNDLE_PATH"
+codesign -vvv --deep --strict "$FINAL_APP_BUNDLE_PATH"
 
 # Create DMG
 echo "Creating DMG..."
-hdiutil create -volname "@APP_NAME@" -srcfolder "$APP_BUNDLE_PATH" -ov -format UDBZ "$DMG_PATH"
+hdiutil create -volname "@APP_NAME@" -srcfolder "$FINAL_APP_BUNDLE_PATH" -ov -format UDBZ "$DMG_PATH"
 
 # Sign DMG
 echo "Signing DMG..."
