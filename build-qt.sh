@@ -155,44 +155,41 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
 
     # Qt dependencies - based on Debian's build dependencies for Qt
     sudo apt-get install -y \
-        libfontconfig1-dev libfreetype6-dev libx11-dev libx11-xcb-dev libxext-dev \
-        libxfixes-dev libxi-dev libxrender-dev libxcb1-dev libxcb-glx0-dev \
-        libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev \
-        libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev \
-        libxcb-render-util0-dev libxcb-util-dev libxcb-xinerama0-dev libxcb-xkb-dev \
-        libxkbcommon-dev libxkbcommon-x11-dev zlib1g-dev libjpeg-dev libpng-dev \
-        libssl-dev libdbus-1-dev libglib2.0-dev libxcursor-dev libicu-dev \
-        libinput-dev libdrm-dev libgbm-dev \
-        libegl1-mesa-dev libgles2-mesa-dev libsqlite3-dev libvulkan-dev \
-        libpcre2-dev libasound2-dev libpulse-dev gperf bison flex \
-        libnss3-dev libcups2-dev libxcomposite-dev libxdamage-dev libxrandr-dev \
-        libxtst-dev libatk1.0-dev libatk-bridge2.0-dev libassimp-dev \
-        libdouble-conversion-dev \
-        libfontconfig1-dev \
-        libfreetype6-dev \
-        libx11-dev \
-        libx11-xcb-dev \
-        libxext-dev \
-        libxfixes-dev \
-        libxi-dev \
-        libxrender-dev \
-        libxcb1-dev \
-        libxcb-cursor-dev \
-        libxcb-glx0-dev \
-        libxcb-keysyms1-dev \
-        libxcb-image0-dev \
-        libxcb-shm0-dev \
-        libxcb-icccm4-dev \
-        libxcb-sync-dev \
-        libxcb-xfixes0-dev \
-        libxcb-shape0-dev \
-        libxcb-randr0-dev \
-        libxcb-render-util0-dev \
-        libxcb-util-dev \
-        libxcb-xinerama0-dev \
-        libxcb-xkb-dev \
-        libxkbcommon-dev \
-        libxkbcommon-x11-dev
+        `# Build tools` \
+        bison flex gperf \
+        `# X11 core libraries` \
+        libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev \
+        libxrender-dev libxcomposite-dev libxcursor-dev libxdamage-dev \
+        libxrandr-dev libxtst-dev \
+        `# XCB libraries` \
+        libxcb1-dev libxcb-cursor-dev libxcb-glx0-dev libxcb-icccm4-dev \
+        libxcb-image0-dev libxcb-keysyms1-dev libxcb-randr0-dev \
+        libxcb-render-util0-dev libxcb-shape0-dev libxcb-shm0-dev \
+        libxcb-sync-dev libxcb-util-dev libxcb-xfixes0-dev \
+        libxcb-xinerama0-dev libxcb-xkb-dev \
+        `# Keyboard and input` \
+        libinput-dev libxkbcommon-dev libxkbcommon-x11-dev \
+        `# Font and text rendering` \
+        libfontconfig1-dev libfreetype6-dev libicu-dev \
+        `# Graphics and OpenGL` \
+        libdrm-dev libegl1-mesa-dev libgbm-dev libgles2-mesa-dev \
+        libvulkan-dev \
+        `# Image and media formats` \
+        libjpeg-dev libpng-dev zlib1g-dev \
+        `# Audio` \
+        libasound2-dev libpulse-dev \
+        `# Security and crypto` \
+        libnss3-dev libssl-dev \
+        `# System libraries` \
+        libdbus-1-dev libglib2.0-dev libsqlite3-dev \
+        `# Utility libraries` \
+        libdouble-conversion-dev libpcre2-dev \
+        `# Accessibility` \
+        libatk1.0-dev libatk-bridge2.0-dev \
+        `# Printing` \
+        libcups2-dev \
+        `# 3D and assets` \
+        libassimp-dev
 
     # Additional dependencies for Raspberry Pi
     if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_MODEL" ]; then
