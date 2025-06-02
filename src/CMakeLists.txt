@@ -8,7 +8,9 @@ OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
 # We use FetchContent_Populate() instead of FetchContent_MakeAvailable() to allow EXCLUDE_FROM_ALL
 # This prevents the dependencies from being built by default, which is our desired behavior
 # CMP0169 warns about this usage, but we intentionally want the old behavior
-cmake_policy(SET CMP0169 OLD)
+if(POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+endif()
 
 # OVERRIDE_FIND_PACKAGE is only available in CMake 3.24+
 # Create a variable to conditionally use it
