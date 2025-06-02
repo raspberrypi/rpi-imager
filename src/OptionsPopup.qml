@@ -240,7 +240,6 @@ Window {
             if ('wifiSSIDHidden' in settings && settings.wifiSSIDHidden) {
                 generalTab.chkWifiSSIDHidden.checked = true
             }
-            generalTab.chkShowPassword.checked = false
             generalTab.fieldWifiPassword.text = settings.wifiPassword
             generalTab.fieldWifiCountry.currentIndex = generalTab.fieldWifiCountry.find(settings.wifiCountry)
             if (generalTab.fieldWifiCountry.currentIndex == -1) {
@@ -253,7 +252,6 @@ Window {
             if (generalTab.fieldWifiSSID.text.length) {
                 generalTab.fieldWifiPassword.text = imageWriter.getPSK()
                 if (generalTab.fieldWifiPassword.text.length) {
-                    generalTab.chkShowPassword.checked = false
                     if (Qt.platform.os == "osx") {
                         /* User indicated wifi must be prefilled */
                         generalTab.chkWifi.checked = true
@@ -650,7 +648,6 @@ Window {
         if (generalTab.fieldWifiSSID.text.length) {
             generalTab.fieldWifiPassword.text = imageWriter.getPSK()
             if (generalTab.fieldWifiPassword.text.length) {
-                generalTab.chkShowPassword.checked = false
                 if (Qt.platform.os == "osx") {
                     /* User indicated wifi must be prefilled */
                     generalTab.chkWifi.checked = true
