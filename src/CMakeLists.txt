@@ -1,9 +1,22 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2020-2025 Raspberry Pi Ltd
 
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.22)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
+
+# We use FetchContent_Populate() instead of FetchContent_MakeAvailable() to allow EXCLUDE_FROM_ALL
+# This prevents the dependencies from being built by default, which is our desired behavior
+# CMP0169 warns about this usage, but we intentionally want the old behavior
+cmake_policy(SET CMP0169 OLD)
+
+# OVERRIDE_FIND_PACKAGE is only available in CMake 3.24+
+# Create a variable to conditionally use it
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
+    set(USE_OVERRIDE_FIND_PACKAGE "OVERRIDE_FIND_PACKAGE")
+else()
+    set(USE_OVERRIDE_FIND_PACKAGE "")
+endif()
 
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectures to build for")
 
@@ -55,7 +68,7 @@ set(LIBLZMA_VERSION "5.8.1")
 FetchContent_Declare(xz
     GIT_REPOSITORY https://github.com/tukaani-project/xz.git
     GIT_TAG v${LIBLZMA_VERSION}
-    OVERRIDE_FIND_PACKAGE
+    ${USE_OVERRIDE_FIND_PACKAGE}
 )
 set(XZ_MICROLZMA_DECODER OFF CACHE BOOL "" FORCE)
 set(XZ_MICROLZMA_ENCODER OFF CACHE BOOL "" FORCE)
@@ -75,8 +88,11 @@ set(XZ_ENCODERS
 )
 set(CREATE_LZMA_SYMLINKS OFF CACHE BOOL "" FORCE)
 set(CREATE_XZ_SYMLINKS OFF CACHE BOOL "" FORCE)
-FetchContent_Populate(xz)
-add_subdirectory(${xz_SOURCE_DIR} ${xz_BINARY_DIR} EXCLUDE_FROM_ALL)
+FetchContent_GetProperties(xz)
+if(NOT xz_POPULATED)
+    FetchContent_Populate(xz)
+    add_subdirectory(${xz_SOURCE_DIR} ${xz_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 unset(XZ_MICROLZMA_DECODER)
 unset(XZ_MICROLZMA_ENCODER)
 unset(XZ_LZIP_DECODER)
@@ -101,15 +117,18 @@ FetchContent_Declare(zstd
     GIT_TAG v${ZSTD_VERSION}
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SOURCE_SUBDIR build/cmake
-    OVERRIDE_FIND_PACKAGE
+    ${USE_OVERRIDE_FIND_PACKAGE}
 )
 set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_STATIC ON CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_DICTBUILDER OFF CACHE BOOL "" FORCE)
-FetchContent_Populate(zstd)
-add_subdirectory(${zstd_SOURCE_DIR}/build/cmake ${zstd_BINARY_DIR} EXCLUDE_FROM_ALL)
+FetchContent_GetProperties(zstd)
+if(NOT zstd_POPULATED)
+    FetchContent_Populate(zstd)
+    add_subdirectory(${zstd_SOURCE_DIR}/build/cmake ${zstd_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 unset(ZSTD_BUILD_PROGRAMS)
 unset(ZSTD_BUILD_SHARED)
 unset(ZSTD_BUILD_STATIC)
@@ -130,13 +149,16 @@ set(NGHTTP2_VERSION "1.65.0")
 FetchContent_Declare(nghttp2
     GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
     GIT_TAG        v${NGHTTP2_VERSION}
-    OVERRIDE_FIND_PACKAGE
+    ${USE_OVERRIDE_FIND_PACKAGE}
 )
 set(BUILD_EXAMPLES OFF)
 set(ENABLE_LIB_ONLY ON)
 set(ENABLE_FAILMALLOC OFF)
-FetchContent_Populate(nghttp2)
-add_subdirectory(${nghttp2_SOURCE_DIR} ${nghttp2_BINARY_DIR} EXCLUDE_FROM_ALL)
+FetchContent_GetProperties(nghttp2)
+if(NOT nghttp2_POPULATED)
+    FetchContent_Populate(nghttp2)
+    add_subdirectory(${nghttp2_SOURCE_DIR} ${nghttp2_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 unset(ENABLE_LIB_ONLY)
 unset(ENABLE_FAILMALLOC)
 unset(BUILD_EXAMPLES)
@@ -157,10 +179,13 @@ set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 FetchContent_Declare(zlib
     GIT_REPOSITORY https://github.com/madler/zlib.git
     GIT_TAG 5a82f71ed1dfc0bec044d9702463dbdf84ea3b71 # v1.4.1.1, as of 27/05/2025
-    OVERRIDE_FIND_PACKAGE
+    ${USE_OVERRIDE_FIND_PACKAGE}
 )
-FetchContent_Populate(zlib)
-add_subdirectory(${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} EXCLUDE_FROM_ALL)
+FetchContent_GetProperties(zlib)
+if(NOT zlib_POPULATED)
+    FetchContent_Populate(zlib)
+    add_subdirectory(${zlib_SOURCE_DIR} ${zlib_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 unset(ZLIB_BUILD_EXAMPLES)
 unset(ZLIB_BUILD_SHARED)
 unset(ZLIB_BUILD_STATIC)
@@ -299,10 +324,13 @@ FetchContent_Declare(libarchive
     GIT_REPOSITORY https://github.com/libarchive/libarchive.git
     GIT_TAG v${LIBARCHIVE_VERSION}
     PATCH_COMMAND ${CMAKE_COMMAND} -P ${LIBARCHIVE_PATCH_FILE}
-    OVERRIDE_FIND_PACKAGE
+    ${USE_OVERRIDE_FIND_PACKAGE}
 )
-FetchContent_Populate(libarchive)
-add_subdirectory(${libarchive_SOURCE_DIR} ${libarchive_BINARY_DIR} EXCLUDE_FROM_ALL)
+FetchContent_GetProperties(libarchive)
+if(NOT libarchive_POPULATED)
+    FetchContent_Populate(libarchive)
+    add_subdirectory(${libarchive_SOURCE_DIR} ${libarchive_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
 # Ensure libarchive is built after zlib
 if (TARGET archive_static AND TARGET ZLIB::ZLIB)
@@ -343,7 +371,7 @@ string(REPLACE "." "_" CURL_TAG ${CURL_VERSION})
 FetchContent_Declare(curl
     GIT_REPOSITORY https://github.com/curl/curl.git
     GIT_TAG curl-${CURL_TAG}
-    OVERRIDE_FIND_PACKAGE
+    ${USE_OVERRIDE_FIND_PACKAGE}
 )
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
 set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
@@ -390,8 +418,11 @@ else()
     endif(WIN32)
 endif(APPLE)
 
-FetchContent_Populate(curl)
-add_subdirectory(${curl_SOURCE_DIR} ${curl_BINARY_DIR} EXCLUDE_FROM_ALL)
+FetchContent_GetProperties(curl)
+if(NOT curl_POPULATED)
+    FetchContent_Populate(curl)
+    add_subdirectory(${curl_SOURCE_DIR} ${curl_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
 unset(BUILD_CURL_EXE)
 unset(BUILD_LIBCURL_DOCS)
