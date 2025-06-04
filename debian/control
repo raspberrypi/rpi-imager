@@ -2,7 +2,7 @@ Source: rpi-imager
 Section: admin
 Priority: optional
 Maintainer: Tom Dewey <tom.dewey@raspberrypi.com>
-Build-Depends: debhelper (>= 10), cmake, libgnutls28-dev, dh-exec
+Build-Depends: debhelper (>= 13), cmake, libgnutls28-dev, dh-exec
 Standards-Version: 4.1.2
 Homepage: https://www.raspberrypi.com/software
 
