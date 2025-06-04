@@ -1,3 +1,6 @@
-src/rpi-imager                                      usr/bin/rpi-imager-embedded
+#!/usr/bin/dh-exec
+
+rpi-imager-embedded.AppImage => usr/bin/rpi-imager-embedded
+
 debian/rpi-imager.png                               usr/share/pixmaps/
 debian/org.raspberrypi.rpi-imager-embedded.desktop  usr/share/applications/ 
