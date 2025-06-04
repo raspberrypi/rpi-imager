@@ -1,6 +1,7 @@
 #!/usr/bin/dh-exec
 
-rpi-imager-embedded.AppImage => usr/bin/rpi-imager-embedded
+rpi-imager-embedded.AppImage => /usr/bin/rpi-imager-embedded
 
-debian/rpi-imager.png                               usr/share/pixmaps/
-debian/org.raspberrypi.rpi-imager-embedded.desktop  usr/share/applications/ 
+debian/rpi-imager.png /usr/share/icons/hicolor/128x128/apps/
+
+debian/org.raspberrypi.rpi-imager-embedded.desktop /usr/share/applications/ 

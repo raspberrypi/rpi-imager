@@ -1,6 +1,6 @@
 #!/usr/bin/dh-exec
 
-rpi-imager.AppImage => /usr/bin/rpi-imager
+rpi-imager-aarch64.AppImage => /usr/bin/rpi-imager
 
 debian/rpi-imager.png /usr/share/icons/hicolor/128x128/apps/
 

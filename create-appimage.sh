@@ -272,8 +272,8 @@ done
 
 echo "AppImage created at $OUTPUT_FILE"
 
-# Create a symlink with a simpler name
-SYMLINK_NAME="$PWD/rpi-imager.AppImage"
+# Create a symlink with an architecture-specific name
+SYMLINK_NAME="$PWD/rpi-imager-$ARCH.AppImage"
 if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
     rm -f "$SYMLINK_NAME"
 fi
