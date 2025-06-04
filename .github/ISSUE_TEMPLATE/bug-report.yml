@@ -24,7 +24,7 @@ body:
       label: Version
       description: What version of our software are you running?
       options:
-        - 1.9.2 (Default)
+        - 1.9.4 (Default)
         - 1.9.0
         - 1.8.5
         - 1.8.4
@@ -108,4 +108,3 @@ body:
       label: Relevant log output
       description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
       render: shell
-
