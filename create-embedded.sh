@@ -416,7 +416,7 @@ if [ -f "$OUTPUT_FILE" ]; then
     echo "  - Configured for headless/embedded environments"
     echo ""
     echo "To run on embedded systems:"
-    echo "  - Ensure /dev/fb0 or /dev/dri/card0 is available"
+    echo "  - Ensure /dev/dri/card0 is available"
     echo "  - Run directly: ./$(basename "$OUTPUT_FILE")"
     echo "  - No desktop environment required"
 else
