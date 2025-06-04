@@ -11,16 +11,16 @@ Build-Profiles: <!amd64> <!embedded>
 Architecture: arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38)
 Recommends: udisks2
-Conflicts: rpi-imager-embedded
+Conflicts: rpi-imager-embedded, rpi-imager-amd64
 Description: Raspberry Pi Imaging utility
  A user-friendly tool for creating bootable media for Raspberry Pi Devices.
 
-Package: rpi-imager
+Package: rpi-imager-amd64
 Build-Profiles: <amd64> <!embedded>
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38)
 Recommends: udisks2
-Conflicts: rpi-imager-embedded
+Conflicts: rpi-imager-embedded, rpi-imager
 Description: Raspberry Pi Imaging utility (x86_64)
  A user-friendly tool for creating bootable media for Raspberry Pi Devices.
  .
@@ -35,7 +35,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
          libinput10, libudev1, libraspberrypi0 | mesa-utils
 Recommends: udisks2, gpu-mem-256 | raspi-config
 Suggests: rpi-eeprom, firmware-brcm80211
-Conflicts: rpi-imager
+Conflicts: rpi-imager, rpi-imager-amd64
 Replaces: rpi-imager
 Description: Raspberry Pi Imaging utility for embedded systems
  A user-friendly tool for creating bootable media for Raspberry Pi devices,
