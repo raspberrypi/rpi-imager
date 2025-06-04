@@ -10,5 +10,27 @@ Package: rpi-imager
 Architecture: arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38)
 Recommends: udisks2
+Conflicts: rpi-imager-embedded
 Description: Raspberry Pi Imaging utility
  A user-friendly tool for creating bootable media for Raspberry Pi Devices.
+
+Package: rpi-imager-embedded
+Architecture: arm64
+Depends: ${shlibs:Depends}, ${misc:Depends}, 
+         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38),
+         libegl1-mesa, libgles2-mesa, libgbm1, libdrm2,
+         libinput10, libudev1, libraspberrypi0 | mesa-utils
+Recommends: udisks2, gpu-mem-256 | raspi-config
+Suggests: rpi-eeprom, firmware-brcm80211
+Conflicts: rpi-imager
+Replaces: rpi-imager
+Description: Raspberry Pi Imaging utility for embedded systems
+ A user-friendly tool for creating bootable media for Raspberry Pi devices,
+ optimized for embedded systems.
+ .
+ This version is specifically designed for Raspberry Pi embedded systems:
+  - Uses EGLFS for direct rendering (no desktop environment required)
+  - Optimized for network-based installation
+  - Includes proper OpenGL ES dependencies for Raspberry Pi
+  - Smaller memory footprint for embedded applications
+  - Supports both framebuffer and DRM/KMS rendering

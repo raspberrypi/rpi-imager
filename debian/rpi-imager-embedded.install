@@ -1,0 +1,3 @@
+src/rpi-imager                                      usr/bin/rpi-imager-embedded
+debian/rpi-imager.png                               usr/share/pixmaps/
+debian/org.raspberrypi.rpi-imager-embedded.desktop  usr/share/applications/ 

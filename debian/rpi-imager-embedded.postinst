@@ -1,0 +1,39 @@
+#!/bin/bash
+set -e
+
+# Configure system for optimal embedded operation
+if [ "$1" = "configure" ]; then    
+    if [ -d /dev/dri ]; then
+        chmod 755 /dev/dri || true
+        if [ -c /dev/dri/card0 ]; then
+            chmod 660 /dev/dri/card0 || true
+            chgrp video /dev/dri/card0 || true
+        fi
+    fi
+    
+    # Add a launcher script for EGLFS mode
+    cat > /usr/bin/rpi-imager-eglfs << 'EGLFS_EOF'
+#!/bin/bash
+# Launcher script for EGLFS mode
+export QT_QPA_PLATFORM=eglfs
+export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+export QT_QPA_EGLFS_ALWAYS_SET_MODE=1
+export QT_QUICK_CONTROLS_STYLE=Basic
+export QT_OPENGL=es2
+
+# Check for available devices
+if [ -c /dev/dri/card0 ]; then
+    export QT_QPA_EGLFS_KMS_DEVICE=/dev/dri/card0
+fi
+
+exec /usr/bin/rpi-imager-embedded "$@"
+EGLFS_EOF
+    
+    chmod +x /usr/bin/rpi-imager-eglfs
+    
+    echo "Raspberry Pi Imager (Embedded) installed successfully."
+    echo "Run with: rpi-imager-embedded (requires display)"
+    echo "Or for direct EGLFS: rpi-imager-eglfs (EGLFS mode)"
+fi
+
+#DEBHELPER# 
