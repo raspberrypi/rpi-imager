@@ -7,6 +7,7 @@ Standards-Version: 4.1.2
 Homepage: https://www.raspberrypi.com/software
 
 Package: rpi-imager
+Build-Profiles: <!amd64> <!embedded>
 Architecture: arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38)
 Recommends: udisks2
@@ -14,7 +15,19 @@ Conflicts: rpi-imager-embedded
 Description: Raspberry Pi Imaging utility
  A user-friendly tool for creating bootable media for Raspberry Pi Devices.
 
+Package: rpi-imager
+Build-Profiles: <amd64> <!embedded>
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38)
+Recommends: udisks2
+Conflicts: rpi-imager-embedded
+Description: Raspberry Pi Imaging utility (x86_64)
+ A user-friendly tool for creating bootable media for Raspberry Pi Devices.
+ .
+ This is the x86_64/amd64 version.
+
 Package: rpi-imager-embedded
+Build-Profiles: <embedded>
 Architecture: arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, 
          dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38),
