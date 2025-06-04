@@ -11,6 +11,8 @@ obj-**
 
 # Debian packaging
 debian/rpi-imager/**
+debian/rpi-imager-amd64/**
+debian/rpi-imager-embedded/**
 debian/.debhelper**
 debian/*.debhelper**
 debian/files
