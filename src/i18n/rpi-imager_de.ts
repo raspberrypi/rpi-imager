@@ -256,48 +256,48 @@
     <message>
         <location filename="../DstPopup.qml" line="24"/>
         <source>Storage</source>
-        <translation type="unfinished">SD-Karte</translation>
+        <translation>SD-Karte</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="38"/>
         <source>No storage devices found</source>
-        <translation type="unfinished">Keine SD-Karte gefunden</translation>
+        <translation>Keine SD-Karte gefunden</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="67"/>
         <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Systemlaufwerke ausschließen</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="94"/>
         <source>gigabytes</source>
-        <translation type="unfinished"></translation>
+        <translation>Gigabytes</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="96"/>
         <location filename="../DstPopup.qml" line="152"/>
         <source>Mounted as %1</source>
-        <translation type="unfinished">Als %1 eingebunden</translation>
+        <translation>Als %1 eingebunden</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="139"/>
         <source>GB</source>
-        <translation type="unfinished"></translation>
+        <translation>GB</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="154"/>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[SCHREIBGESCHÜTZT]</translation>
+        <translation>[SCHREIBGESCHÜTZT]</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="156"/>
         <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
+        <translation>SYSTEM</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="197"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">Die Speicherkarte ist schreibgeschützt.&lt;br&gt;Schieben Sie den Schutzschalter auf der linken Seite nach oben, und versuchen Sie es erneut.</translation>
+        <translation>Die Speicherkarte ist schreibgeschützt.&lt;br&gt;Schieben Sie den Schutzschalter auf der linken Seite nach oben, und versuchen Sie es erneut.</translation>
     </message>
 </context>
 <context>
@@ -305,7 +305,7 @@
     <message>
         <location filename="../hwlistmodel.cpp" line="111"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">MODELL WÄHLEN</translation>
+        <translation>MODELL WÄHLEN</translation>
     </message>
 </context>
 <context>
@@ -313,7 +313,7 @@
     <message>
         <location filename="../HwPopup.qml" line="27"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished">Raspberry Pi Modell</translation>
+        <translation>Raspberry Pi Modell</translation>
     </message>
 </context>
 <context>
@@ -395,7 +395,7 @@
     <message>
         <location filename="../oslistmodel.cpp" line="211"/>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>Empfohlen</translation>
     </message>
 </context>
 <context>
@@ -403,42 +403,42 @@
     <message>
         <location filename="../OSPopup.qml" line="30"/>
         <source>Operating System</source>
-        <translation type="unfinished">Betriebssystem (OS)</translation>
+        <translation>Betriebssystem (OS)</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="92"/>
         <source>Back</source>
-        <translation type="unfinished">Zurück</translation>
+        <translation>Zurück</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="93"/>
         <source>Go back to main menu</source>
-        <translation type="unfinished">Zurück zum Hauptmenü</translation>
+        <translation>Zurück zum Hauptmenü</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="250"/>
         <source>Released: %1</source>
-        <translation type="unfinished">Veröffentlicht: %1</translation>
+        <translation>Veröffentlicht: %1</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="260"/>
         <source>Cached on your computer</source>
-        <translation type="unfinished">Auf Ihrem Computer zwischengespeichert</translation>
+        <translation>Auf Ihrem Computer zwischengespeichert</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="262"/>
         <source>Local file</source>
-        <translation type="unfinished">Lokale Datei</translation>
+        <translation>Lokale Datei</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="263"/>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">Online - %1 GB Download</translation>
+        <translation>Online - %1 GB Download</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="349"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">Verbinden Sie zuerst einen USB-Stick mit Images.&lt;br&gt;Die Images müssen sich im Wurzelverzeichnes des USB-Sticks befinden.</translation>
+        <translation>Verbinden Sie zuerst einen USB-Stick mit Images.&lt;br&gt;Die Images müssen sich im Wurzelverzeichnes des USB-Sticks befinden.</translation>
     </message>
 </context>
 <context>
@@ -446,63 +446,63 @@
     <message>
         <location filename="../OptionsGeneralTab.qml" line="40"/>
         <source>Set hostname:</source>
-        <translation type="unfinished">Hostname:</translation>
+        <translation>Hostname:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="68"/>
         <source>Set username and password</source>
-        <translation type="unfinished">Benutzername und Passwort festlegen</translation>
+        <translation>Benutzername und Passwort festlegen</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="81"/>
         <source>Username:</source>
-        <translation type="unfinished">Benutzername:</translation>
+        <translation>Benutzername:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="106"/>
         <location filename="../OptionsGeneralTab.qml" line="183"/>
         <source>Password:</source>
-        <translation type="unfinished">Passwort:</translation>
+        <translation>Passwort:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="147"/>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">Wifi einrichten</translation>
+        <translation>Wifi einrichten</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="161"/>
         <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="212"/>
         <source>Show password</source>
-        <translation type="unfinished">Passwort anzeigen</translation>
+        <translation>Passwort anzeigen</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="223"/>
         <source>Hidden SSID</source>
-        <translation type="unfinished">Verborgene SSID</translation>
+        <translation>Verborgene SSID</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="234"/>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">Wifi-Land:</translation>
+        <translation>Wifi-Land:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="252"/>
         <source>Set locale settings</source>
-        <translation type="unfinished">Spracheinstellungen festlegen</translation>
+        <translation>Spracheinstellungen festlegen</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="256"/>
         <source>Time zone:</source>
-        <translation type="unfinished">Zeitzone:</translation>
+        <translation>Zeitzone:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="275"/>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">Tastaturlayout:</translation>
+        <translation>Tastaturlayout:</translation>
     </message>
 </context>
 <context>
@@ -510,17 +510,17 @@
     <message>
         <location filename="../OptionsMiscTab.qml" line="23"/>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Tonsignal nach Beenden abspielen</translation>
+        <translation>Tonsignal nach Beenden abspielen</translation>
     </message>
     <message>
         <location filename="../OptionsMiscTab.qml" line="27"/>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Medien nach Beenden auswerfen</translation>
+        <translation>Medien nach Beenden auswerfen</translation>
     </message>
     <message>
         <location filename="../OptionsMiscTab.qml" line="31"/>
         <source>Enable telemetry</source>
-        <translation type="unfinished">Telemetrie aktivieren</translation>
+        <translation>Telemetrie aktivieren</translation>
     </message>
 </context>
 <context>
@@ -664,37 +664,37 @@
     <message>
         <location filename="../OptionsServicesTab.qml" line="36"/>
         <source>Enable SSH</source>
-        <translation type="unfinished">SSH aktivieren</translation>
+        <translation>SSH aktivieren</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="52"/>
         <source>Use password authentication</source>
-        <translation type="unfinished">Passwort zur Authentifizierung verwenden</translation>
+        <translation>Passwort zur Authentifizierung verwenden</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="63"/>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished">Authentifizierung via Public-Key</translation>
+        <translation>Authentifizierung via Public-Key</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="74"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">authorized_keys für &apos;%1&apos;:</translation>
+        <translation>authorized_keys für &apos;%1&apos;:</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="121"/>
         <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Schlüssel löschen</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="140"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">SSH-KEYGEN ausführen</translation>
+        <translation>SSH-KEYGEN ausführen</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="150"/>
         <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Schlüssel hinzufügen</translation>
     </message>
 </context>
 <context>
