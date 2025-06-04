@@ -1,18 +1,35 @@
 rpi-imager (1.9.4) unstable; urgency=medium
 
   * Windows: Switch to Inno Setup for installer
-  * all: Added .wic file filter for custom images
-  * all: Fix optionspopup not handling 'Esc' key
-  * all: Internal refactoring
+  * Windows: Add signing for binaries, installer, and uninstaller
+  * Windows: Add administrator privileges and NSIS removal support
+  * macOS: Fix .app naming in .dmg packages
+  * macOS: Improve build reliability and programmatic copyright handling
+  * Linux: Hide system drives in destination popup
+  * all: Fix OptionsPopup not handling 'Esc' key
+  * all: Internal refactoring and QML code improvements
+  * all: Add support for more archive formats via libarchive
+  * all: Performance improvements in download/extract operations
+  * qml: Split main UI into multiple component files
+  * qml: Add Style singleton and ImCloseButton component
+  * qml: Make options popup modal and improve accessibility
+  * qml: Fix various QML linting warnings and unqualified accesses
   * i18n: Updated Italian translation
-  * packaging: Add custom AppImage build script
-  * packaging: Add custom Qt build script
+  * i18n: Added Georgian translation
+  * i18n: Make 'Recommended' OS string translatable
+  * packaging: Add custom AppImage build script with Qt detection
+  * packaging: Add custom Qt build script with unprivileged mode
   * packaging: Include custom Qt 6.9.0
+  * packaging: Migrate dependencies to FetchContent system
   * dependencies: Update to libarchive 3.8.0
   * dependencies: Update to cURL 8.13.0
-  * dependencies: Update to zstd 1.5.7
   * dependencies: Update to nghttp2 1.65.0
+  * dependencies: Update to zstd 1.5.7
+  * dependencies: Update to xz/liblzma 5.8.1
   * dependencies: Update to zlib 1.4.1.1
+  * cmake: Version requirement bumped to 3.22
+  * cmake: Various build system improvements and hardening
+  * build: Updated README with new build instructions
   * OS customisation: Remove 'Show password' checkbox
 
  -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 30 May 2025 17:00:00 +0100
