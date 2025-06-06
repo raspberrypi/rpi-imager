@@ -37,6 +37,7 @@
 #include <QTranslator>
 #include <QPasswordDigestor>
 #include <QVersionNumber>
+#include <QCryptographicHash>
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
 #include <QApplication>
@@ -178,9 +179,27 @@ ImageWriter::ImageWriter(QObject *parent)
         QFileInfo f(_cacheFileName);
         if (!f.exists() || !f.isReadable() || !f.size())
         {
+            qDebug() << "Cache file missing or unreadable, clearing cached hash";
             _cachedFileHash.clear();
             _settings.remove("lastDownloadSHA256");
             _settings.sync();
+        }
+        else
+        {
+            // Perform basic accessibility check
+            QFile testFile(_cacheFileName);
+            if (!testFile.open(QIODevice::ReadOnly))
+            {
+                qDebug() << "Cache file exists but cannot be opened (permission issue?), clearing cached hash";
+                _cachedFileHash.clear();
+                _settings.remove("lastDownloadSHA256");
+                _settings.sync();
+            }
+            else
+            {
+                testFile.close();
+                qDebug() << "Cache file found and accessible:" << _cacheFileName << "(" << f.size() << "bytes)";
+            }
         }
     }
     _settings.endGroup();
@@ -315,8 +334,19 @@ void ImageWriter::startWrite()
 
     if (!_expectedHash.isEmpty() && _cachedFileHash == _expectedHash)
     {
-        // Use cached file
-        urlstr = QUrl::fromLocalFile(_cacheFileName).toString(_src.FullyEncoded).toLatin1();
+        // Check cache file integrity before using it
+        if (_verifyCacheFileIntegrity())
+        {
+            qDebug() << "Using verified cache file:" << _cacheFileName;
+            // Use cached file
+            urlstr = QUrl::fromLocalFile(_cacheFileName).toString(_src.FullyEncoded).toLatin1();
+        }
+        else
+        {
+            qDebug() << "Cache file failed integrity check, invalidating and proceeding with download";
+            _invalidateCache();
+            // Continue with original URL - cache will be recreated during download
+        }
     }
 
     if (QUrl(urlstr).isLocalFile())
@@ -371,18 +401,27 @@ void ImageWriter::startWrite()
 
         if (_cachingEnabled)
         {
-            QStorageInfo si(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
-            qint64 avail = si.bytesAvailable();
-            qDebug() << "Available disk space for caching:" << avail/1024/1024/1024 << "GB";
-
-            if (avail-_downloadLen < IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING)
+            // Ensure cache directory exists and is writable
+            if (!_ensureCacheDirectoryExists())
             {
-                qDebug() << "Low disk space. Not caching files to disk.";
+                qDebug() << "Cache directory is not accessible. Disabling caching for this session.";
+                _cachingEnabled = false;
             }
             else
             {
-                _thread->setCacheFile(_cacheFileName, _downloadLen);
-                connect(_thread, SIGNAL(cacheFileUpdated(QByteArray)), SLOT(onCacheFileUpdated(QByteArray)));
+                QStorageInfo si(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
+                qint64 avail = si.bytesAvailable();
+                qDebug() << "Available disk space for caching:" << avail/1024/1024/1024 << "GB";
+
+                if (avail-_downloadLen < IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING)
+                {
+                    qDebug() << "Low disk space. Not caching files to disk.";
+                }
+                else
+                {
+                    _thread->setCacheFile(_cacheFileName, _downloadLen);
+                    connect(_thread, SIGNAL(cacheFileUpdated(QByteArray)), SLOT(onCacheFileUpdated(QByteArray)));
+                }
             }
         }
     }
@@ -1461,6 +1500,126 @@ bool ImageWriter::hasMouse()
 bool ImageWriter::customRepo()
 {
     return _repo.toString() != OSLIST_URL;
+}
+
+bool ImageWriter::_verifyCacheFileIntegrity()
+{
+    if (_cachedFileHash.isEmpty() || _cacheFileName.isEmpty())
+        return false;
+
+    QFile cacheFile(_cacheFileName);
+    if (!cacheFile.exists() || !cacheFile.open(QIODevice::ReadOnly))
+    {
+        qDebug() << "Cache file does not exist or cannot be opened:" << _cacheFileName;
+        return false;
+    }
+
+    // Calculate SHA256 of the actual cache file content
+    QCryptographicHash hash(OSLIST_HASH_ALGORITHM);
+    
+    const qint64 bufferSize = 64 * 1024; // 64KB buffer
+    char buffer[bufferSize];
+    qint64 totalBytes = 0;
+    
+    while (!cacheFile.atEnd())
+    {
+        qint64 bytesRead = cacheFile.read(buffer, bufferSize);
+        if (bytesRead == -1)
+        {
+            qDebug() << "Error reading cache file:" << cacheFile.errorString();
+            cacheFile.close();
+            return false;
+        }
+        hash.addData(buffer, bytesRead);
+        totalBytes += bytesRead;
+    }
+    
+    cacheFile.close();
+    
+    QByteArray computedHash = hash.result().toHex();
+    
+    qDebug() << "Cache file verification:";
+    qDebug() << "  Expected hash:" << _cachedFileHash;
+    qDebug() << "  Computed hash:" << computedHash;
+    qDebug() << "  File size:" << totalBytes << "bytes";
+    
+    bool isValid = (computedHash == _cachedFileHash);
+    
+    if (!isValid)
+    {
+        qDebug() << "Cache file integrity check FAILED - hash mismatch";
+    }
+    else
+    {
+        qDebug() << "Cache file integrity check PASSED";
+    }
+    
+    return isValid;
+}
+
+void ImageWriter::_invalidateCache()
+{
+    qDebug() << "Invalidating cache due to integrity failure";
+    
+    // Clear the cached hash from settings
+    _settings.beginGroup("caching");
+    _settings.remove("lastDownloadSHA256");
+    _settings.endGroup();
+    _settings.sync();
+    
+    // Clear the in-memory hash
+    _cachedFileHash.clear();
+    
+    // Try to remove the cache file
+    if (!_cacheFileName.isEmpty() && QFile::exists(_cacheFileName))
+    {
+        if (QFile::remove(_cacheFileName))
+        {
+            qDebug() << "Successfully removed corrupted cache file:" << _cacheFileName;
+        }
+        else
+        {
+            qDebug() << "Failed to remove corrupted cache file:" << _cacheFileName;
+            qDebug() << "Please manually delete:" << _cacheFileName;
+        }
+    }
+}
+
+bool ImageWriter::_ensureCacheDirectoryExists()
+{
+    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    
+    if (cacheDir.isEmpty())
+    {
+        qDebug() << "Cannot determine cache directory location";
+        return false;
+    }
+    
+    QDir dir(cacheDir);
+    if (!dir.exists())
+    {
+        if (!dir.mkpath(cacheDir))
+        {
+            qDebug() << "Failed to create cache directory:" << cacheDir;
+            return false;
+        }
+        qDebug() << "Created cache directory:" << cacheDir;
+    }
+    
+    // Test write access
+    QString testFile = cacheDir + QDir::separator() + "test_write_access.tmp";
+    QFile test(testFile);
+    if (!test.open(QIODevice::WriteOnly))
+    {
+        qDebug() << "Cache directory exists but is not writable:" << cacheDir;
+        return false;
+    }
+    test.write("test");
+    test.close();
+    QFile::remove(testFile);
+    
+    qDebug() << "Cache directory is accessible:" << cacheDir;
+    return true;
 }
 
 void MountUtilsLog(std::string msg) {

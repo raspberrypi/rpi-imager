@@ -226,6 +226,9 @@ protected:
 
     void _parseCompressedFile();
     void _parseXZFile();
+    bool _verifyCacheFileIntegrity();
+    void _invalidateCache();
+    bool _ensureCacheDirectoryExists();
     QString _pubKeyFileName();
     QString _privKeyFileName();
     QString _sshKeyDir();
