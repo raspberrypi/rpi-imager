@@ -255,48 +255,48 @@
     <message>
         <location filename="../DstPopup.qml" line="24"/>
         <source>Storage</source>
-        <translation type="unfinished">Stockage</translation>
+        <translation>Stockage</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="38"/>
         <source>No storage devices found</source>
-        <translation type="unfinished">Aucun périphérique de stockage trouvé</translation>
+        <translation>Aucun périphérique de stockage trouvé</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="67"/>
         <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Exclure les volumes système</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="94"/>
         <source>gigabytes</source>
-        <translation type="unfinished"></translation>
+        <translation>gigaoctets</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="96"/>
         <location filename="../DstPopup.qml" line="152"/>
         <source>Mounted as %1</source>
-        <translation type="unfinished">Monté sur %1</translation>
+        <translation>Monté sur %1</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="139"/>
         <source>GB</source>
-        <translation type="unfinished"></translation>
+        <translation>Go</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="154"/>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[PROTÉGÉ EN ÉCRITURE]</translation>
+        <translation>[PROTÉGÉ EN ÉCRITURE]</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="156"/>
         <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
+        <translation>SYSTÈME</translation>
     </message>
     <message>
         <location filename="../DstPopup.qml" line="197"/>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">La carte SD est protégée en écriture.&lt;br&gt;Poussez vers le haut le commutateur de verrouillage sur le côté gauche de la carte et essayez à nouveau.</translation>
+        <translation>La carte SD est protégée en écriture.&lt;br&gt;Poussez vers le haut le commutateur de verrouillage sur le côté gauche de la carte et essayez à nouveau.</translation>
     </message>
 </context>
 <context>
@@ -304,7 +304,7 @@
     <message>
         <location filename="../hwlistmodel.cpp" line="111"/>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">CHOISIR LE MODÈLE</translation>
+        <translation>CHOISIR LE MODÈLE</translation>
     </message>
 </context>
 <context>
@@ -312,7 +312,7 @@
     <message>
         <location filename="../HwPopup.qml" line="27"/>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished">Modèle de Raspberry Pi</translation>
+        <translation>Modèle de Raspberry Pi</translation>
     </message>
 </context>
 <context>
@@ -394,7 +394,7 @@
     <message>
         <location filename="../oslistmodel.cpp" line="211"/>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>Recommandé</translation>
     </message>
 </context>
 <context>
@@ -402,42 +402,42 @@
     <message>
         <location filename="../OSPopup.qml" line="30"/>
         <source>Operating System</source>
-        <translation type="unfinished">Système d&apos;exploitation</translation>
+        <translation>Système d&apos;exploitation</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="92"/>
         <source>Back</source>
-        <translation type="unfinished">Retour</translation>
+        <translation>Retour</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="93"/>
         <source>Go back to main menu</source>
-        <translation type="unfinished">Retour au menu principal</translation>
+        <translation>Retour au menu principal</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="250"/>
         <source>Released: %1</source>
-        <translation type="unfinished">Publié le&#xa0;: %1</translation>
+        <translation>Publié le&#xa0;: %1</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="260"/>
         <source>Cached on your computer</source>
-        <translation type="unfinished">Mis en cache sur votre ordinateur</translation>
+        <translation>Mis en cache sur votre ordinateur</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="262"/>
         <source>Local file</source>
-        <translation type="unfinished">Fichier local</translation>
+        <translation>Fichier local</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="263"/>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">En ligne - %1 GO à télécharger</translation>
+        <translation>En ligne - %1 Go à télécharger</translation>
     </message>
     <message>
         <location filename="../OSPopup.qml" line="349"/>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">Connecter d&apos;abord une clé USB contenant les images.&lt;br&gt;Les images doivent se trouver dans le dossier racine de la clé USB.</translation>
+        <translation>Connecter d&apos;abord une clé USB contenant les images.&lt;br&gt;Les images doivent se trouver dans le dossier racine de la clé USB.</translation>
     </message>
 </context>
 <context>
@@ -445,63 +445,63 @@
     <message>
         <location filename="../OptionsGeneralTab.qml" line="40"/>
         <source>Set hostname:</source>
-        <translation type="unfinished">Nom d&apos;hôte</translation>
+        <translation>Nom d&apos;hôte&#xa0;:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="68"/>
         <source>Set username and password</source>
-        <translation type="unfinished">Définir nom d&apos;utilisateur et mot de passe</translation>
+        <translation>Définir nom d&apos;utilisateur et mot de passe</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="81"/>
         <source>Username:</source>
-        <translation type="unfinished">Nom d&apos;utilisateur&#xa0;:</translation>
+        <translation>Nom d&apos;utilisateur&#xa0;:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="106"/>
         <location filename="../OptionsGeneralTab.qml" line="183"/>
         <source>Password:</source>
-        <translation type="unfinished">Mot de passe&#xa0;:</translation>
+        <translation>Mot de passe&#xa0;:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="147"/>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">Configurer le Wi-Fi</translation>
+        <translation>Configurer le Wi-Fi</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="161"/>
         <source>SSID:</source>
-        <translation type="unfinished">SSID&#xa0;:</translation>
+        <translation>SSID&#xa0;:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="212"/>
         <source>Show password</source>
-        <translation type="unfinished">Afficher le mot de passe</translation>
+        <translation>Afficher le mot de passe</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="223"/>
         <source>Hidden SSID</source>
-        <translation type="unfinished">SSID caché</translation>
+        <translation>SSID caché</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="234"/>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">Pays Wi-Fi&#xa0;:</translation>
+        <translation>Pays Wi-Fi&#xa0;:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="252"/>
         <source>Set locale settings</source>
-        <translation type="unfinished">Définir les réglages locaux</translation>
+        <translation>Définir les réglages locaux</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="256"/>
         <source>Time zone:</source>
-        <translation type="unfinished">Fuseau horaire&#xa0;:</translation>
+        <translation>Fuseau horaire&#xa0;:</translation>
     </message>
     <message>
         <location filename="../OptionsGeneralTab.qml" line="275"/>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">Type de clavier&#xa0;:</translation>
+        <translation>Type de clavier&#xa0;:</translation>
     </message>
 </context>
 <context>
@@ -509,17 +509,17 @@
     <message>
         <location filename="../OptionsMiscTab.qml" line="23"/>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Jouer un son quand terminé</translation>
+        <translation>Jouer un son quand terminé</translation>
     </message>
     <message>
         <location filename="../OptionsMiscTab.qml" line="27"/>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Éjecter le média quand terminé</translation>
+        <translation>Éjecter le média quand terminé</translation>
     </message>
     <message>
         <location filename="../OptionsMiscTab.qml" line="31"/>
         <source>Enable telemetry</source>
-        <translation type="unfinished">Activer la télémétrie</translation>
+        <translation>Activer la télémétrie</translation>
     </message>
 </context>
 <context>
@@ -614,7 +614,7 @@
     </message>
     <message>
         <source>Allow public-key authentication only</source>
-        <translation type="vanished">Authentification via clef publique</translation>
+        <translation type="vanished">Authentification via clé publique</translation>
     </message>
     <message>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
@@ -651,37 +651,37 @@
     <message>
         <location filename="../OptionsServicesTab.qml" line="36"/>
         <source>Enable SSH</source>
-        <translation type="unfinished">Activer SSH</translation>
+        <translation>Activer SSH</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="52"/>
         <source>Use password authentication</source>
-        <translation type="unfinished">Utiliser un mot de passe pour l&apos;authentification</translation>
+        <translation>Utiliser un mot de passe pour l&apos;authentification</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="63"/>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished">Authentification via clef publique</translation>
+        <translation>Authentification via clé publique</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="74"/>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">Définir authorized_keys pour &apos;%1&apos;&#xa0;:</translation>
+        <translation>Définir authorized_keys pour &apos;%1&apos;&#xa0;:</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="121"/>
         <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer la clé</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="140"/>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">LANCER SSH-KEYGEN</translation>
+        <translation>LANCER SSH-KEYGEN</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="150"/>
         <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Ajouter clé SSH</translation>
     </message>
 </context>
 <context>
@@ -877,7 +877,7 @@
     </message>
     <message>
         <source>Online - %1 GB download</source>
-        <translation type="vanished">En ligne - %1 GO à télécharger</translation>
+        <translation type="vanished">En ligne - %1 Go à télécharger</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
