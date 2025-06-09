@@ -237,6 +237,21 @@ ImageWriter::ImageWriter(QObject *parent)
 
 ImageWriter::~ImageWriter()
 {
+    // Ensure any running thread is properly cleaned up
+    if (_thread) {
+        if (_thread->isRunning()) {
+            qDebug() << "Cancelling running thread in ImageWriter destructor";
+            _thread->cancelDownload();
+            if (!_thread->wait(10000)) {
+                qDebug() << "Thread did not finish within 10 seconds, terminating it";
+                _thread->terminate();
+                _thread->wait(2000);
+            }
+        }
+        delete _thread;
+        _thread = nullptr;
+    }
+    
     if (_trans)
     {
         QCoreApplication::removeTranslator(_trans);
