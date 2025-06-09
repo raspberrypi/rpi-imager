@@ -555,6 +555,13 @@ elseif (UNIX)
     set(DEPENDENCIES "")
     add_definitions(-DHAVE_GNUTLS)
 elseif (WIN32)
+    add_custom_command(
+        OUTPUT wlanapi_delayed.lib
+        COMMAND ${CMAKE_DLLTOOL} --input-def "${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def"
+                --output-delaylib "wlanapi_delayed.lib" --dllname "wlanapi.dll"
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def
+        VERBATIM
+    )
     set(PLATFORM_SOURCES
         windows/acceleratedcryptographichash_cng.cpp
         dependencies/mountutils/src/windows/functions.cpp
@@ -564,8 +571,12 @@ elseif (WIN32)
         windows/winwlancredentials.h
         windows/winwlancredentials.cpp
     )
-    set(DEPENDENCIES windows/rpi-imager.rc)
-    set(EXTRALIBS setupapi wlanapi Bcrypt.dll)
+    set(DEPENDENCIES
+        windows/rpi-imager.rc
+        wlanapi_delayed.lib
+    )
+    set(EXTRALIBS setupapi ${CMAKE_CURRENT_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll)
+
 endif()
 
 include_directories(BEFORE .)
