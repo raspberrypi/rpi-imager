@@ -357,6 +357,11 @@ Window {
         cloudinitwrite = ""
         cloudinitnetwork = ""
 
+        // Pre-trim ComboBox values to avoid repeated trim() calls
+        var wifiCountry = generalTab.fieldWifiCountry.editText.trim()
+        var timezone = generalTab.fieldTimezone.editText.trim()
+        var keyboardLayout = generalTab.fieldKeyboardLayout.editText.trim()
+
         if (generalTab.chkHostname.checked && generalTab.fieldHostname.length) {
             addFirstRun("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\t\\n\\r\"`")
             addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
@@ -465,7 +470,7 @@ Window {
             addCloudInit("")
         }
         if (generalTab.chkWifi.checked) {
-            var wpaconfig = "country="+generalTab.fieldWifiCountry.editText+"\n"
+            var wpaconfig = "country="+wifiCountry+"\n"
             wpaconfig += "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n"
             wpaconfig += "ap_scan=1\n\n"
             wpaconfig += "update_config=1\n"
@@ -485,7 +490,7 @@ Window {
             addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
             addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_wlan "
                         +(generalTab.chkWifiSSIDHidden.checked ? " -h " : "")
-                        +escapeshellarg(generalTab.fieldWifiSSID.text)+" "+escapeshellarg(cryptedPsk)+" "+escapeshellarg(generalTab.fieldWifiCountry.editText))
+                        +escapeshellarg(generalTab.fieldWifiSSID.text)+" "+escapeshellarg(cryptedPsk)+" "+escapeshellarg(wifiCountry))
             addFirstRun("else")
             addFirstRun("cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'WPAEOF'")
             addFirstRun(wpaconfig)
@@ -511,20 +516,20 @@ Window {
                 cloudinitnetwork += "        hidden: true\n"
             }
 
-            addCmdline("cfg80211.ieee80211_regdom="+generalTab.fieldWifiCountry.editText)
+            addCmdline("cfg80211.ieee80211_regdom="+wifiCountry)
         }
         if (generalTab.chkLocale.checked) {
             var kbdconfig = "XKBMODEL=\"pc105\"\n"
-            kbdconfig += "XKBLAYOUT=\""+generalTab.fieldKeyboardLayout.editText+"\"\n"
+            kbdconfig += "XKBLAYOUT=\""+keyboardLayout+"\"\n"
             kbdconfig += "XKBVARIANT=\"\"\n"
             kbdconfig += "XKBOPTIONS=\"\"\n"
 
             addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
-            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_keymap "+escapeshellarg(generalTab.fieldKeyboardLayout.editText))
-            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_timezone "+escapeshellarg(generalTab.fieldTimezone.editText))
+            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_keymap "+escapeshellarg(keyboardLayout))
+            addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom set_timezone "+escapeshellarg(timezone))
             addFirstRun("else")
             addFirstRun("   rm -f /etc/localtime")
-            addFirstRun("   echo \""+generalTab.fieldTimezone.editText+"\" >/etc/timezone")
+            addFirstRun("   echo \""+timezone+"\" >/etc/timezone")
             addFirstRun("   dpkg-reconfigure -f noninteractive tzdata")
             addFirstRun("cat >/etc/default/keyboard <<'KBEOF'")
             addFirstRun(kbdconfig)
@@ -532,10 +537,10 @@ Window {
             addFirstRun("   dpkg-reconfigure -f noninteractive keyboard-configuration")
             addFirstRun("fi")
 
-            addCloudInit("timezone: "+generalTab.fieldTimezone.editText)
+            addCloudInit("timezone: "+timezone)
             addCloudInit("keyboard:")
             addCloudInit("  model: pc105")
-            addCloudInit("  layout: \"" + generalTab.fieldKeyboardLayout.editText + "\"")
+            addCloudInit("  layout: \"" + keyboardLayout + "\"")
         }
 
         if (firstrun.length) {
@@ -562,6 +567,11 @@ Window {
 
     function saveSettings()
     {
+        // Pre-trim ComboBox values to avoid repeated trim() calls
+        var wifiCountry = generalTab.fieldWifiCountry.editText.trim()
+        var timezone = generalTab.fieldTimezone.editText.trim()
+        var keyboardLayout = generalTab.fieldKeyboardLayout.editText.trim()
+        
         var settings = { };
         if (generalTab.chkHostname.checked && generalTab.fieldHostname.length) {
             settings.hostname = generalTab.fieldHostname.text
@@ -588,7 +598,7 @@ Window {
             if (generalTab.chkWifiSSIDHidden.checked) {
                 settings.wifiSSIDHidden = true
             }
-            settings.wifiCountry = generalTab.fieldWifiCountry.editText
+            settings.wifiCountry = wifiCountry
 
             const isPassphrase = generalTab.fieldWifiPassword.text.length >= 8 &&
                 generalTab.fieldWifiPassword.text.length < 64
@@ -597,8 +607,8 @@ Window {
             settings.wifiPassword = cryptedPsk
         }
         if (generalTab.chkLocale.checked) {
-            settings.timezone = generalTab.fieldTimezone.editText
-            settings.keyboardLayout = generalTab.fieldKeyboardLayout.editText
+            settings.timezone = timezone
+            settings.keyboardLayout = keyboardLayout
         }
 
         imageWriter.setSetting("beep", optionsTab.beepEnabled)
