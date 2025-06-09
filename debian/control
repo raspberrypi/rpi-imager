@@ -9,7 +9,7 @@ Homepage: https://www.raspberrypi.com/software
 Package: rpi-imager
 Build-Profiles: <!amd64 !embedded>
 Architecture: arm64
-Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38)
+Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37)
 Recommends: udisks2
 Conflicts: rpi-imager-embedded, rpi-imager-amd64
 Description: Raspberry Pi Imaging utility
@@ -18,7 +18,7 @@ Description: Raspberry Pi Imaging utility
 Package: rpi-imager-amd64
 Build-Profiles: <amd64 !embedded>
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38)
+Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37)
 Recommends: udisks2
 Conflicts: rpi-imager-embedded, rpi-imager
 Description: Raspberry Pi Imaging utility (x86_64)
@@ -30,7 +30,7 @@ Package: rpi-imager-embedded
 Build-Profiles: <embedded>
 Architecture: arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, 
-         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.38),
+         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37),
          libegl1-mesa, libgles2-mesa, libgbm1, libdrm2,
          libinput10, libudev1, libraspberrypi0 | mesa-utils
 Recommends: udisks2, gpu-mem-256 | raspi-config
