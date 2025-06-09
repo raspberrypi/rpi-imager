@@ -53,8 +53,9 @@ DownloadThread::~DownloadThread()
 {
     _cancelled = true;
     wait();
-    if (_file.isOpen())
-        _file.close();
+    
+    // Use _closeFiles() to ensure all file handles are properly closed
+    _closeFiles();
 
     if (_firstBlock)
         qFreeAligned(_firstBlock);

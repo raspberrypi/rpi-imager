@@ -369,7 +369,16 @@ void DownloadExtractThread::extractMultiFileRun()
         return;
     }
 
-    QString currentDir;
+    QString currentDir = QDir::currentPath();
+
+    if (!QDir::setCurrent(folder))
+    {
+        DownloadThread::cancelDownload();
+        emit error(tr("Error changing to directory '%1'").arg(folder));
+        return;
+    }
+
+    // Now create libarchive handles after all early returns are handled
     struct archive *a = archive_read_new();
     struct archive *ext = archive_write_disk_new();
     struct archive_entry *entry;
@@ -382,15 +391,6 @@ void DownloadExtractThread::extractMultiFileRun()
     if (::getuid() == 0)
         flags |= ARCHIVE_EXTRACT_OWNER;
 #endif
-
-    currentDir = QDir::currentPath();
-
-    if (!QDir::setCurrent(folder))
-    {
-        DownloadThread::cancelDownload();
-        emit error(tr("Error changing to directory '%1'").arg(folder));
-        return;
-    }
 
     archive_read_support_filter_all(a);
     archive_read_support_format_all(a);
@@ -473,20 +473,38 @@ void DownloadExtractThread::extractMultiFileRun()
         }
     }
 
+    // Ensure proper cleanup sequence
+    
+    // 1. Close libarchive handles properly (this should flush any pending writes)
+    if (archive_write_close(ext) != ARCHIVE_OK) {
+        qDebug() << "Warning: Failed to properly close archive write handle";
+    }
     archive_read_free(a);
     archive_write_free(ext);
+    
+    // 2. Change back to original directory BEFORE sync to avoid holding references
     QDir::setCurrent(currentDir);
+    
+    // 3. Force filesystem sync to ensure all writes are committed
+#ifdef Q_OS_LINUX
+    sync(); // Force all cached writes to be flushed to disk
+    qDebug() << "Filesystem sync completed";
+#endif
 
 #ifdef Q_OS_LINUX
     if (manualmount)
     {
         QStringList args;
         args << folder;
-        QProcess::execute("umount", args);
+        int umountResult = QProcess::execute("umount", args);
         QDir d;
-        d.rmdir(folder);
+        bool rmResult = d.rmdir(folder);
+        qDebug() << "Manual cleanup: umount result:" << umountResult << ", rmdir result:" << rmResult << ", folder:" << folder;
     }
 #endif
+
+    // Give the filesystem a moment to settle after sync before ejecting
+    QThread::msleep(500);
 
     eject_disk(_filename.constData());
 }
@@ -535,12 +553,10 @@ QByteArray DownloadExtractThread::_popQueue()
 
     QByteArray result = _queue.front();
     _queue.pop_front();
-
-    if (_queue.size() == (MAX_QUEUE_SIZE-1))
-    {
-        lock.unlock();
-        _cv.notify_one();
-    }
+    
+    // Always notify waiting pushers that space is available
+    lock.unlock();
+    _cv.notify_one();
 
     return result;
 }
@@ -554,10 +570,8 @@ void DownloadExtractThread::_pushQueue(const char *data, size_t len)
     });
 
     _queue.emplace_back(data, len);
-
-    if (_queue.size() == 1)
-    {
-        lock.unlock();
-        _cv.notify_one();
-    }
+    
+    // Always notify waiting poppers that data is available
+    lock.unlock();
+    _cv.notify_one();
 }

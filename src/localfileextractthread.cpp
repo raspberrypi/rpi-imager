@@ -17,6 +17,13 @@ LocalFileExtractThread::LocalFileExtractThread(const QByteArray &url, const QByt
 LocalFileExtractThread::~LocalFileExtractThread()
 {
     _cancelled = true;
+    
+    // Ensure input file is always closed to prevent file handle leaks
+    if (_inputfile.isOpen()) {
+        _inputfile.close();
+        qDebug() << "Closed input file in LocalFileExtractThread destructor";
+    }
+    
     wait();
     qFreeAligned(_inputBuf);
 }
