@@ -20,7 +20,7 @@
 #include <QTemporaryDir>
 #include <QDebug>
 #include <QtConcurrent/qtconcurrentrun.h>
-#include <QTimer>
+#include <QElapsedTimer>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -92,7 +92,10 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
       _inputHash(OSLIST_HASH_ALGORITHM), 
       _activeBuf(0), 
       _writeThreadStarted(false),
-      _progressTimerStarted(false)
+      _progressStarted(false),
+      _lastProgressTime(0),
+      _lastEmittedDlNow(0),
+      _lastLocalVerifyNow(0)
 {
     _extractThread = new _extractThreadClass(this);
     size_t pageSize = getSystemPageSize();
@@ -100,41 +103,11 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     _abuf[1] = (char *) qMallocAligned(_abufsize, pageSize);
     
     qDebug() << "Using buffer size:" << _abufsize << "bytes with page size:" << pageSize << "bytes";
-    
-    // Timer to periodically check progress and emit signals
-    _progressTimer = new QTimer(this);
-    connect(_progressTimer, &QTimer::timeout, [this]() {
-        static quint64 lastDlNow = 0;
-        static quint64 lastVerifyNow = 0;
-        
-        quint64 currentDlNow = this->dlNow();
-        quint64 currentDlTotal = this->dlTotal();
-        quint64 currentVerifyNow = this->verifyNow();
-        quint64 currentVerifyTotal = this->verifyTotal();
-        
-        // Only emit signals if values have changed
-        if (currentDlNow != lastDlNow || (currentDlTotal > 0 && lastDlNow == 0)) {
-            lastDlNow = currentDlNow;
-            emit downloadProgressChanged(currentDlNow, currentDlTotal);
-        }
-        
-        if (currentVerifyNow != lastVerifyNow || (currentVerifyTotal > 0 && lastVerifyNow == 0)) {
-            lastVerifyNow = currentVerifyNow;
-            emit verifyProgressChanged(currentVerifyNow, currentVerifyTotal);
-        }
-    });
-    
-    // Timer will be started when data first starts flowing (after successful drive opening)
 }
 
 DownloadExtractThread::~DownloadExtractThread()
 {
     _cancelled = true;
-    
-    // Stop progress timer if it was started
-    if (_progressTimerStarted && _progressTimer) {
-        _progressTimer->stop();
-    }
     
     _cancelExtract();
     if (!_extractThread->wait(10000))
@@ -145,17 +118,48 @@ DownloadExtractThread::~DownloadExtractThread()
     qFreeAligned(_abuf[1]);
 }
 
+void DownloadExtractThread::_emitProgressUpdate()
+{
+    static QElapsedTimer timer;
+    bool firstProgressUpdate = false;
+    if (!_progressStarted) {
+        _progressStarted = true;
+        firstProgressUpdate = true;
+        timer.start();
+        qDebug() << "Started progress updates after successful drive opening";
+    }
+    
+    // Only emit progress updates every 100ms to avoid flooding (but always emit the first one)
+    qint64 currentTime = timer.elapsed();
+    if (!firstProgressUpdate && currentTime - _lastProgressTime < PROGRESS_UPDATE_INTERVAL) {
+        return;
+    }
+    _lastProgressTime = currentTime;
+    
+    quint64 currentDlNow = this->dlNow();
+    quint64 currentDlTotal = this->dlTotal();
+    quint64 currentVerifyNow = this->verifyNow();
+    quint64 currentVerifyTotal = this->verifyTotal();
+    
+    // Only emit signals if values have changed
+    if (currentDlNow != _lastEmittedDlNow || (currentDlTotal > 0 && _lastEmittedDlNow == 0)) {
+        _lastEmittedDlNow = currentDlNow;
+        emit downloadProgressChanged(currentDlNow, currentDlTotal);
+    }
+    
+    if (currentVerifyNow != _lastLocalVerifyNow || (currentVerifyTotal > 0 && _lastLocalVerifyNow == 0)) {
+        _lastLocalVerifyNow = currentVerifyNow;
+        emit verifyProgressChanged(currentVerifyNow, currentVerifyTotal);
+    }
+}
+
 size_t DownloadExtractThread::_writeData(const char *buf, size_t len)
 {
     if (_cancelled)
         return 0;
 
-    // Start progress timer when data first starts flowing (indicates successful drive opening)
-    if (!_progressTimerStarted) {
-        _progressTimerStarted = true;
-        _progressTimer->start(PROGRESS_UPDATE_INTERVAL);
-        qDebug() << "Started progress timer after successful drive opening";
-    }
+    // Emit progress updates when data starts flowing
+    _emitProgressUpdate();
 
     _writeCache(buf, len);
 
@@ -246,6 +250,9 @@ void DownloadExtractThread::extractImageRun()
                 memset(_abuf[_activeBuf]+size, 0, paddingBytes);
                 size += paddingBytes;
             }
+
+            // Emit progress updates during extraction
+            _emitProgressUpdate();
 
             if (_writeThreadStarted)
             {
@@ -438,6 +445,9 @@ void DownloadExtractThread::extractMultiFileRun()
         if (_cacheEnabled && _expectedHash == computedHash)
         {
             _cachefile.close();
+            // Emit the hash of the uncompressed image data for cache validation
+            // (The compressed cache file hash is tracked separately by _cachehash for integrity checks)
+            qDebug() << "Cache file created for image hash:" << computedHash;
             emit cacheFileUpdated(computedHash);
         }
 
@@ -574,4 +584,63 @@ void DownloadExtractThread::_pushQueue(const char *data, size_t len)
     // Always notify waiting poppers that data is available
     lock.unlock();
     _cv.notify_one();
+}
+
+bool DownloadExtractThread::_verify()
+{
+    qDebug() << "DownloadExtractThread::_verify() called (child class implementation with progress updates)";
+    char *verifyBuf = (char *) qMallocAligned(IMAGEWRITER_VERIFY_BLOCKSIZE, 4096);
+    _lastVerifyNow = 0;
+    _verifyTotal = _file.pos();
+    QElapsedTimer t1;
+    t1.start();
+
+#ifdef Q_OS_LINUX
+    /* Make sure we are reading from the drive and not from cache */
+    posix_fadvise(_file.handle(), 0, 0, POSIX_FADV_DONTNEED);
+#endif
+
+    if (!_firstBlock)
+    {
+        _file.seek(0);
+    }
+    else
+    {
+        _verifyhash.addData(_firstBlock, _firstBlockSize);
+        _file.seek(_firstBlockSize);
+        _lastVerifyNow += _firstBlockSize;
+    }
+
+    while (_verifyEnabled && _lastVerifyNow < _verifyTotal && !_cancelled)
+    {
+        qint64 lenRead = _file.read(verifyBuf, qMin((qint64) IMAGEWRITER_VERIFY_BLOCKSIZE, (qint64) (_verifyTotal-_lastVerifyNow) ));
+        if (lenRead == -1)
+        {
+            DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"
+                                                "SD card may be broken."));
+            qFreeAligned(verifyBuf);
+            return false;
+        }
+
+        _verifyhash.addData(verifyBuf, lenRead);
+        _lastVerifyNow += lenRead;
+        
+        // Emit progress updates during verification
+        _emitProgressUpdate();
+    }
+    qFreeAligned(verifyBuf);
+
+    qDebug() << "Verify hash:" << _verifyhash.result().toHex();
+    qDebug() << "Verify done in" << t1.elapsed() / 1000.0 << "seconds";
+
+    if (_verifyhash.result() == _writehash.result() || !_verifyEnabled || _cancelled)
+    {
+        return true;
+    }
+    else
+    {
+        DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of SD card is different from what was written to it."));
+    }
+
+    return false;
 }

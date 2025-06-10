@@ -14,13 +14,15 @@ struct AcceleratedCryptographicHash
 private:
     struct impl;
     std::unique_ptr<impl> p_Impl;
+    mutable QByteArray _cachedResult; // Cache the result to avoid multiple hash finalization calls
+    mutable bool _resultCached = false;
 
 public:
     explicit AcceleratedCryptographicHash(QCryptographicHash::Algorithm method);
     ~AcceleratedCryptographicHash();
     void addData(const char *data, int length);
     void addData(const QByteArray &data);
-    QByteArray result();
+    QByteArray result() const;
 };
 
 #endif // ACCELERATEDCRYPTOGRAPHICHASH_H

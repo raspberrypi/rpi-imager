@@ -466,6 +466,9 @@ void ImageWriter::onCacheFileUpdated(QByteArray sha256)
     }
     _cachedFileHash = sha256;
     qDebug() << "Done writing cache file";
+    
+    // Emit signal to refresh UI cache status indicators
+    emit osListPrepared();
 }
 
 /* Cancel write */
