@@ -87,8 +87,8 @@ MainPopupBase {
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
             readonly property bool unselectable: isReadOnly
 
-            anchors.left: parent.left
-            anchors.right: parent.right
+            anchors.left: parent ? parent.left : undefined
+            anchors.right: parent ? parent.right : undefined
             Layout.topMargin: 1
             height: shouldHide ? 0 : 61
             visible: !shouldHide
@@ -103,9 +103,9 @@ MainPopupBase {
 
             Rectangle {
                 id: dstbgrect
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
+                anchors.top: parent ? parent.top : undefined
+                anchors.left: parent ? parent.left : undefined
+                anchors.right: parent ? parent.right : undefined
                 height: 60
 
                 color: mouseOver ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
@@ -167,8 +167,8 @@ MainPopupBase {
             Rectangle {
                 id: dstborderrect
                 anchors.top: dstbgrect.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
+                anchors.left: parent ? parent.left : undefined
+                anchors.right: parent ? parent.right : undefined
                 height: 1
                 color: Style.popupBorderColor
             }
