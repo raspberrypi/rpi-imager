@@ -50,6 +50,8 @@ void LocalFileExtractThread::run()
         return;
     }
     _lastDlTotal = _inputfile.size();
+    
+    emit preparationStatusUpdate(tr("starting extraction"));
 
     if (isImage())
         extractImageRun();
@@ -75,6 +77,9 @@ ssize_t LocalFileExtractThread::_on_read(struct archive *, const void **buff)
         {
             _inputHash.addData(_inputBuf, len);
         }
+        
+        // Emit progress updates for local file extraction
+        _emitProgressUpdate();
     }
 
     return len;

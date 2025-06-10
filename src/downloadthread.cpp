@@ -39,7 +39,7 @@ int DownloadThread::_curlCount = 0;
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
-    _inputBufferSize(0), _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM)
+    _inputBufferSize(0), _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _cachehash(OSLIST_HASH_ALGORITHM)
 {
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -491,6 +491,9 @@ void DownloadThread::_writeCache(const char *buf, size_t len)
     if (!_cacheEnabled || _cancelled)
         return;
 
+    // Hash the data going into the cache file
+    _cachehash.addData(buf, len);
+
     if (_cachefile.write(buf, len) != len)
     {
         qDebug() << "Error writing to cache file. Disabling caching.";
@@ -725,6 +728,9 @@ void DownloadThread::_writeComplete()
     if (_cacheEnabled && _expectedHash == computedHash)
     {
         _cachefile.close();
+        // Emit the hash of the uncompressed image data for cache validation
+        // (The compressed cache file hash is tracked separately by _cachehash for integrity checks)
+        qDebug() << "Cache file created for image hash:" << computedHash;
         emit cacheFileUpdated(computedHash);
     }
 
@@ -952,7 +958,7 @@ bool DownloadThread::_customizeImage()
                     /* config.txt already contains the line */
                 } else {
                     /* Append new line to config.txt */
-                    if (config.right(1) != "\n")
+                    if (config.right(1) != QByteArray("\n"))
                         config += "\n"+item+"\n";
                     else
                         config += item+"\n";
