@@ -550,16 +550,33 @@ elseif (UNIX)
         linux/stpanalyzer.h
         linux/stpanalyzer.cpp
         linux/acceleratedcryptographichash_gnutls.cpp
+        "disk_formatter.cpp"
     )
     set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
     set(DEPENDENCIES "")
     add_definitions(-DHAVE_GNUTLS)
 elseif (WIN32)
+    # Find dlltool for creating import library
+    if(NOT CMAKE_DLLTOOL)
+        find_program(CMAKE_DLLTOOL NAMES dlltool x86_64-w64-mingw32-dlltool)
+        if(NOT CMAKE_DLLTOOL)
+            # Try to find it in the same directory as the compiler
+            get_filename_component(COMPILER_DIR ${CMAKE_C_COMPILER} DIRECTORY)
+            find_program(CMAKE_DLLTOOL NAMES dlltool x86_64-w64-mingw32-dlltool PATHS ${COMPILER_DIR} NO_DEFAULT_PATH)
+        endif()
+        if(NOT CMAKE_DLLTOOL)
+            message(FATAL_ERROR "Could not find dlltool, needed for creating wlanapi import library")
+        endif()
+        message(STATUS "Found dlltool: ${CMAKE_DLLTOOL}")
+    endif()
+    
     add_custom_command(
         OUTPUT wlanapi_delayed.lib
         COMMAND ${CMAKE_DLLTOOL} --input-def "${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def"
-                --output-delaylib "wlanapi_delayed.lib" --dllname "wlanapi.dll"
+                --output-delaylib "${CMAKE_BINARY_DIR}/wlanapi_delayed.lib" --dllname "wlanapi.dll"
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Creating wlanapi delay-load library"
         VERBATIM
     )
     set(PLATFORM_SOURCES
@@ -575,7 +592,7 @@ elseif (WIN32)
         windows/rpi-imager.rc
         wlanapi_delayed.lib
     )
-    set(EXTRALIBS setupapi ${CMAKE_CURRENT_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll)
+    set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll)
 
 endif()
 
@@ -609,7 +626,7 @@ endif( IS_BIG_ENDIAN )
 set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
-    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp" "disk_formatter.cpp")
+    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp")
 
 find_package(Qt6 6.7 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
 if (Qt6_FOUND)
@@ -757,9 +774,9 @@ if (WIN32)
             get_filename_component(w10_kits_path "[${regkey};${regval}]" ABSOLUTE CACHE)
             if (w10_kits_path)
                 message(WARNING "Found Windows 10 kits path: ${w10_kits_path}")
-                    file(GLOB w10_kit_versions "${w10_kits_path}/bin/10.*")
-                    # Reverse list, so newer (higher-numbered) versions appear first.
-                    list(REVERSE w10_kit_versions)
+                file(GLOB w10_kit_versions "${w10_kits_path}/bin/10.*")
+                # Reverse list, so newer (higher-numbered) versions appear first.
+                list(REVERSE w10_kit_versions)
             endif ()
             unset(w10_kits_path CACHE)
             if (w10_kit_versions)
