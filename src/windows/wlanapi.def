@@ -7,3 +7,10 @@ WlanGetProfile@28
 WlanGetProfileList@16
 WlanOpenHandle@16
 WlanQueryInterface@28
+WlanCloseHandle
+WlanEnumInterfaces
+WlanFreeMemory
+WlanGetProfile
+WlanGetProfileList
+WlanOpenHandle
+WlanQueryInterface
