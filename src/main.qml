@@ -18,6 +18,9 @@ ApplicationWindow {
 
     required property ImageWriter imageWriter
     readonly property DriveListModel driveListModel: imageWriter.getDriveList()
+    
+    property string selectedOsName: ""
+    property string selectedStorageName: ""
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 450
@@ -166,7 +169,7 @@ ApplicationWindow {
 
                     ImButton {
                         id: osbutton
-                        text: window.imageWriter.srcFileName() === "" ? qsTr("CHOOSE OS") : window.imageWriter.srcFileName()
+                        text: window.selectedOsName === "" ? qsTr("CHOOSE OS") : window.selectedOsName
                         spacing: 0
                         padding: 0
                         bottomPadding: 0
@@ -203,7 +206,7 @@ ApplicationWindow {
 
                     ImButton {
                         id: dstbutton
-                        text: qsTr("CHOOSE STORAGE")
+                        text: window.selectedStorageName === "" ? qsTr("CHOOSE STORAGE") : window.selectedStorageName
                         spacing: 0
                         padding: 0
                         bottomPadding: 0
@@ -442,7 +445,8 @@ ApplicationWindow {
             // an OS selected which isn't compatible with this HW device
             ospopup.oslist.currentIndex = -1
             ospopup.osswipeview.currentIndex = 0
-            osbutton.text = qsTr("CHOOSE OS")
+            window.imageWriter.setSrc("")
+            window.selectedOsName = ""
             writebutton.enabled = false
         }
     }
@@ -664,13 +668,13 @@ ApplicationWindow {
 
         msgpopup.openPopup()
         imageWriter.setDst("")
-        dstbutton.text = qsTr("CHOOSE STORAGE")
+        window.selectedStorageName = ""
         resetWriteButton()
     }
 
     function onFileSelected(file) {
         imageWriter.setSrc(file)
-        osbutton.text = imageWriter.srcFileName()
+        window.selectedOsName = imageWriter.srcFileName()
         ospopup.close()
         ospopup.osswipeview.decrementCurrentIndex()
         if (imageWriter.readyToWrite()) {

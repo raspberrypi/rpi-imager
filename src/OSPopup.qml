@@ -351,7 +351,7 @@ MainPopupBase {
             }
         } else {
             root.imageWriter.setSrc(d.url, d.image_download_size, d.extract_size, typeof(d.extract_sha256) != "undefined" ? d.extract_sha256 : "", typeof(d.contains_multiple_files) != "undefined" ? d.contains_multiple_files : false, root.categorySelected, d.name, typeof(d.init_format) != "undefined" ? d.init_format : "")
-            osbutton.text = d.name
+            window.selectedOsName = d.name
             root.close()
             osswipeview.decrementCurrentIndex()
             if (root.imageWriter.readyToWrite()) {
