@@ -153,13 +153,6 @@ MainPopupBase {
         /* Reload OS list since filters changed */
         root.osModel.reload()
 
-        /* As we're filtering the OS list, we need to ensure we present a 'Recommended' OS.
-            * To do this, we exploit a convention of how we build the OS list. By convention,
-            * the preferred OS for a device is listed at the top level of the list, and is at the
-            * lowest index. So..
-            */
-        root.osModel.markFirstAsRecommended()
-
         root.deviceSelected()
         root.close()
     }

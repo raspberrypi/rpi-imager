@@ -52,7 +52,8 @@ bool HWListModel::reload()
             deviceObj["tags"].toArray(),
             deviceObj["icon"].toString(),
             deviceObj["description"].toString(),
-            deviceObj["matching_type"].toString()
+            deviceObj["matching_type"].toString(),
+            deviceObj["architecture"].toString()
         };
         _hwDevices.append(hwDevice);
 
@@ -79,7 +80,8 @@ QHash<int, QByteArray> HWListModel::roleNames() const
         {TagsRole, "tags"},
         {IconRole, "icon"},
         {DescriptionRole, "description"},
-        {MatchingTypeRole, "matching_type"}
+        {MatchingTypeRole, "matching_type"},
+        {ArchitectureRole, "architecture"}
     };
 }
 
@@ -101,6 +103,8 @@ QVariant HWListModel::data(const QModelIndex &index, int role) const {
         return device.description;
     case MatchingTypeRole:
         return device.matchingType;
+    case ArchitectureRole:
+        return device.architecture;
     }
 
     return {};
@@ -112,6 +116,14 @@ QString HWListModel::currentName() const {
 
     HardwareDevice device = _hwDevices[_currentIndex];
     return device.name;
+}
+
+QString HWListModel::currentArchitecture() const {
+    if (_currentIndex < 0 || _currentIndex >= _hwDevices.size())
+        return QString();
+
+    HardwareDevice device = _hwDevices[_currentIndex];
+    return device.architecture;
 }
 
 void HWListModel::setCurrentIndex(int index) {
@@ -132,6 +144,7 @@ void HWListModel::setCurrentIndex(int index) {
 
     Q_EMIT currentIndexChanged();
     Q_EMIT currentNameChanged();
+    Q_EMIT currentArchitectureChanged();
 }
 
 int HWListModel::currentIndex() const {

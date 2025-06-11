@@ -40,6 +40,7 @@ public:
         SubItemsJsonRole,
         TooltipRole,
         WebsiteRole,
+        ArchitectureRole,
     };
 
     struct OS {
@@ -55,6 +56,7 @@ public:
         QString tooltip;
         QString website;
         QString extractSha256;
+        QString architecture; // Architecture this OS expects (armel, armhf, armv8)
 
         quint64 imageDownloadSize = 0;
         quint64 extractSize = 0;
