@@ -21,7 +21,6 @@ LocalFileExtractThread::~LocalFileExtractThread()
     // Ensure input file is always closed to prevent file handle leaks
     if (_inputfile.isOpen()) {
         _inputfile.close();
-        qDebug() << "Closed input file in LocalFileExtractThread destructor";
     }
     
     wait();
