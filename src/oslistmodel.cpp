@@ -296,18 +296,29 @@ QVariant OSListModel::data(const QModelIndex &index, int role) const {
 }
 
 void OSListModel::markFirstAsRecommended() {
+    const QString recommendedString = QStringLiteral(" (%1)").arg(tr("Recommended"));
+
+    // First pass: Remove any existing "(Recommended)" labels from all items
+    for (int i = 0; i < _osList.size(); i++) {
+        OS &os = _osList[i];
+        // Remove any variant of the recommended string (handles different locales)
+        if (os.description.contains(QRegularExpression(R"( \([^)]*\bRecommended\b[^)]*\))"))) {
+            os.description.remove(QRegularExpression(R"( \([^)]*\bRecommended\b[^)]*\))"));
+        }
+        // Also remove the localized version if it exists
+        if (os.description.contains(recommendedString)) {
+            os.description.remove(recommendedString);
+        }
+    }
+
+    // Second pass: Add the localized "(Recommended)" to the first item if appropriate
     if (!_osList.isEmpty()) {
         OS &candidate = _osList[0];
 
-        const QString recommendedString = QStringLiteral(" (Recommended)");
-        const QString recommendedStringLocalized = QStringLiteral(" (%1)").arg(tr("Recommended"));
-
         if (!candidate.description.isEmpty() &&
-            candidate.subitemsJson.isEmpty() &&
-            !candidate.description.contains(recommendedString) &&
-            !candidate.description.contains(recommendedStringLocalized))
+            candidate.subitemsJson.isEmpty())
         {
-            candidate.description += recommendedStringLocalized;
+            candidate.description += recommendedString;
         }
     }
 }
