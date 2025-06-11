@@ -202,7 +202,7 @@ MainPopupBase {
 
         dstpopup.close()
         imageWriter.setDst(d.device, d.size)
-        dstbutton.text = d.description
+        window.selectedStorageName = d.description
         if (imageWriter.readyToWrite()) {
             writebutton.enabled = true
         }
