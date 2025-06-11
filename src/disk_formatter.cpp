@@ -5,8 +5,6 @@
 
 #include "disk_formatter.h"
 
-#include <fcntl.h>
-#include <unistd.h>
 #include <cstring>
 #include <algorithm>
 #include <bit>
@@ -58,51 +56,54 @@ T ToLittleEndian(T value) {
   }
 }
 
-// RAII file descriptor wrapper
-class FileDescriptor {
- public:
-  explicit FileDescriptor(int fd) : fd_(fd) {}
-  ~FileDescriptor() { 
-    if (fd_ >= 0) {
-      close(fd_);
-    }
+// Helper to convert FileError to FormatError
+FormatError ConvertFileError(FileError error) {
+  switch (error) {
+    case FileError::kSuccess:
+      return FormatError::kInvalidParameters; // Should never happen
+    case FileError::kOpenError:
+      return FormatError::kFileOpenError;
+    case FileError::kWriteError:
+      return FormatError::kFileWriteError;
+    case FileError::kSeekError:
+      return FormatError::kFileSeekError;
+    case FileError::kSizeError:
+    case FileError::kCloseError:
+    case FileError::kLockError:
+      return FormatError::kFileOpenError;
   }
-
-  // Non-copyable, movable
-  FileDescriptor(const FileDescriptor&) = delete;
-  FileDescriptor& operator=(const FileDescriptor&) = delete;
-  FileDescriptor(FileDescriptor&& other) noexcept : fd_(other.fd_) {
-    other.fd_ = -1;
-  }
-  FileDescriptor& operator=(FileDescriptor&& other) noexcept {
-    if (this != &other) {
-      if (fd_ >= 0) close(fd_);
-      fd_ = other.fd_;
-      other.fd_ = -1;
-    }
-    return *this;
-  }
-
-  int get() const { return fd_; }
-  bool is_valid() const { return fd_ >= 0; }
-
- private:
-  int fd_;
-};
+  return FormatError::kFileOpenError;
+}
 
 }  // namespace <anonymous>
 
-Result<void> DiskFormatter::FormatDrive(
-    const std::string& device_path, 
-    std::uint64_t device_size_bytes) {
-  
-  FileDescriptor fd(open(device_path.c_str(), O_RDWR | O_SYNC));
-  if (!fd.is_valid()) {
-    return Result<void>(FormatError::kFileOpenError);
+DiskFormatter::DiskFormatter(std::unique_ptr<FileOperations> file_ops)
+    : file_ops_(std::move(file_ops)) {
+  if (!file_ops_) {
+    file_ops_ = FileOperations::Create();
+  }
+}
+
+FormatError DiskFormatter::ConvertError(FileError error) const {
+  return ConvertFileError(error);
+}
+
+Result<void> DiskFormatter::FormatDrive(const std::string& device_path) {
+  // Open the device
+  FileError error = file_ops_->OpenDevice(device_path);
+  if (error != FileError::kSuccess) {
+    return Result<void>(ConvertError(error));
+  }
+
+  // Get device size
+  std::uint64_t device_size_bytes;
+  error = file_ops_->GetSize(device_size_bytes);
+  if (error != FileError::kSuccess) {
+    return Result<void>(ConvertError(error));
   }
 
   // Write MBR
-  if (auto result = WriteMbr(fd.get(), device_size_bytes); !result) {
+  if (auto result = WriteMbr(device_size_bytes); !result) {
     return result;
   }
 
@@ -111,30 +112,33 @@ Result<void> DiskFormatter::FormatDrive(
   std::uint32_t partition_size_sectors = total_sectors - kPartitionStartSector;
 
   // Write FAT32 filesystem
-  return WriteFat32(fd.get(), kPartitionStartSector, partition_size_sectors);
+  return WriteFat32(kPartitionStartSector, partition_size_sectors);
 }
 
 Result<void> DiskFormatter::FormatFile(
     const std::string& file_path,
     std::uint64_t file_size_bytes) {
   
-  FileDescriptor fd(open(file_path.c_str(), 
-                        O_CREAT | O_RDWR | O_TRUNC, 
-                        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH));
-  if (!fd.is_valid()) {
-    return Result<void>(FormatError::kFileOpenError);
+  // Create and open the file with the specified size
+  FileError error = file_ops_->CreateTestFile(file_path, file_size_bytes);
+  if (error != FileError::kSuccess) {
+    return Result<void>(ConvertError(error));
   }
 
-  // Extend file to desired size
-  if (ftruncate(fd.get(), file_size_bytes) != 0) {
-    return Result<void>(FormatError::kFileWriteError);
+  // Write MBR
+  if (auto result = WriteMbr(file_size_bytes); !result) {
+    return result;
   }
 
-  return FormatDrive("/proc/self/fd/" + std::to_string(fd.get()), file_size_bytes);
+  // Calculate partition size
+  std::uint32_t total_sectors = file_size_bytes / kSectorSize;
+  std::uint32_t partition_size_sectors = total_sectors - kPartitionStartSector;
+
+  // Write FAT32 filesystem
+  return WriteFat32(kPartitionStartSector, partition_size_sectors);
 }
 
 Result<void> DiskFormatter::WriteMbr(
-    int fd, 
     std::uint64_t device_size_bytes) const {
   
   std::array<std::uint8_t, kSectorSize> mbr_sector{};
@@ -180,11 +184,14 @@ Result<void> DiskFormatter::WriteMbr(
   mbr_sector[510] = 0x55;
   mbr_sector[511] = 0xAA;
 
-  return WriteAtOffset(fd, 0, mbr_sector.data(), mbr_sector.size());
+  FileError error = file_ops_->WriteAtOffset(0, mbr_sector.data(), mbr_sector.size());
+  if (error != FileError::kSuccess) {
+    return Result<void>(ConvertError(error));
+  }
+  return Result<void>();
 }
 
 Result<void> DiskFormatter::WriteFat32(
-    int fd,
     std::uint32_t partition_start_sector,
     std::uint32_t partition_size_sectors) const {
   
@@ -192,34 +199,33 @@ Result<void> DiskFormatter::WriteFat32(
   config.total_sectors = partition_size_sectors;
 
   // Write boot sector
-  if (auto result = WriteBootSector(fd, partition_start_sector, config); !result) {
+  if (auto result = WriteBootSector(partition_start_sector, config); !result) {
     return result;
   }
 
   // Write FSInfo sector
-  if (auto result = WriteFsInfo(fd, partition_start_sector + 1, config); !result) {
+  if (auto result = WriteFsInfo(partition_start_sector + 1, config); !result) {
     return result;
   }
 
   // Write backup boot sector
-  if (auto result = WriteBootSector(fd, partition_start_sector + config.reserved_sectors / 2, config); !result) {
+  if (auto result = WriteBootSector(partition_start_sector + config.reserved_sectors / 2, config); !result) {
     return result;
   }
 
   // Write FAT tables
   std::uint32_t fat_start_sector = partition_start_sector + config.reserved_sectors;
-  if (auto result = WriteFatTables(fd, fat_start_sector, config); !result) {
+  if (auto result = WriteFatTables(fat_start_sector, config); !result) {
     return result;
   }
 
   // Write root directory
   std::uint32_t sectors_per_fat = CalculateSectorsPerFat(config);
   std::uint32_t root_sector = fat_start_sector + (config.num_fats * sectors_per_fat);
-  return WriteRootDirectory(fd, root_sector);
+  return WriteRootDirectory(root_sector);
 }
 
 Result<void> DiskFormatter::WriteBootSector(
-    int fd,
     std::uint32_t offset_sectors,
     const Fat32Config& config) const {
   
@@ -278,11 +284,15 @@ Result<void> DiskFormatter::WriteBootSector(
   boot_sector.signature = ToLittleEndian(static_cast<std::uint16_t>(0xAA55));
 
   std::uint64_t offset = static_cast<std::uint64_t>(offset_sectors) * kSectorSize;
-  return WriteStructAtOffset(fd, offset, boot_sector);
+  const auto* data = reinterpret_cast<const std::uint8_t*>(&boot_sector);
+  FileError error = file_ops_->WriteAtOffset(offset, data, sizeof(boot_sector));
+  if (error != FileError::kSuccess) {
+    return Result<void>(ConvertError(error));
+  }
+  return Result<void>();
 }
 
 Result<void> DiskFormatter::WriteFsInfo(
-    int fd,
     std::uint32_t offset_sectors,
     const Fat32Config& config) const {
   
@@ -303,11 +313,15 @@ Result<void> DiskFormatter::WriteFsInfo(
   fs_info.trail_signature = ToLittleEndian(static_cast<std::uint32_t>(0xAA550000));
 
   std::uint64_t offset = static_cast<std::uint64_t>(offset_sectors) * kSectorSize;
-  return WriteStructAtOffset(fd, offset, fs_info);
+  const auto* data = reinterpret_cast<const std::uint8_t*>(&fs_info);
+  FileError error = file_ops_->WriteAtOffset(offset, data, sizeof(fs_info));
+  if (error != FileError::kSuccess) {
+    return Result<void>(ConvertError(error));
+  }
+  return Result<void>();
 }
 
 Result<void> DiskFormatter::WriteFatTables(
-    int fd,
     std::uint32_t fat_start_sector,
     const Fat32Config& config) const {
   
@@ -326,8 +340,9 @@ Result<void> DiskFormatter::WriteFatTables(
   // Write both FAT copies
   for (std::uint8_t fat_num = 0; fat_num < config.num_fats; ++fat_num) {
     std::uint64_t fat_offset = static_cast<std::uint64_t>(fat_start_sector + (fat_num * sectors_per_fat)) * kSectorSize;
-    if (auto result = WriteAtOffset(fd, fat_offset, fat_table.data(), fat_table.size()); !result) {
-      return result;
+    FileError error = file_ops_->WriteAtOffset(fat_offset, fat_table.data(), fat_table.size());
+    if (error != FileError::kSuccess) {
+      return Result<void>(ConvertError(error));
     }
   }
   
@@ -335,14 +350,17 @@ Result<void> DiskFormatter::WriteFatTables(
 }
 
 Result<void> DiskFormatter::WriteRootDirectory(
-    int fd,
     std::uint32_t root_cluster_sector) const {
   
   // Root directory is just an empty cluster
   std::array<std::uint8_t, 4096> root_cluster{};  // 8 sectors * 512 bytes
   
   std::uint64_t offset = static_cast<std::uint64_t>(root_cluster_sector) * kSectorSize;
-  return WriteAtOffset(fd, offset, root_cluster.data(), root_cluster.size());
+  FileError error = file_ops_->WriteAtOffset(offset, root_cluster.data(), root_cluster.size());
+  if (error != FileError::kSuccess) {
+    return Result<void>(ConvertError(error));
+  }
+  return Result<void>();
 }
 
 Fat32Config DiskFormatter::CalculateFat32Config(std::uint32_t partition_size_sectors) const {
@@ -382,38 +400,6 @@ std::uint32_t DiskFormatter::CalculateSectorsPerFat(const Fat32Config& config) c
   fat_sectors = (fat_bytes + kSectorSize - 1) / kSectorSize;
   
   return fat_sectors;
-}
-
-Result<void> DiskFormatter::WriteAtOffset(
-    int fd,
-    std::uint64_t offset,
-    const std::uint8_t* data,
-    std::size_t size) const {
-  
-  if (lseek(fd, offset, SEEK_SET) == -1) {
-    return Result<void>(FormatError::kFileSeekError);
-  }
-  
-  std::size_t bytes_written = 0;
-  while (bytes_written < size) {
-    ssize_t result = write(fd, data + bytes_written, size - bytes_written);
-    if (result <= 0) {
-      return Result<void>(FormatError::kFileWriteError);
-    }
-    bytes_written += result;
-  }
-  
-  return Result<void>();
-}
-
-template<typename T>
-Result<void> DiskFormatter::WriteStructAtOffset(
-    int fd,
-    std::uint64_t offset,
-    const T& structure) const {
-  
-  const auto* data = reinterpret_cast<const std::uint8_t*>(&structure);
-  return WriteAtOffset(fd, offset, data, sizeof(T));
 }
 
 }  // namespace rpi_imager 

@@ -66,7 +66,7 @@ Root: HKLM; Subkey: "Software\Classes\RPI_IMAGINGUTILITY\shell\open\command"; Va
 [Files]
 ; Main program files
 Source: "@CMAKE_BINARY_DIR@\deploy\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion signonce
-Source: "@CMAKE_BINARY_DIR@\deploy\fat32format.exe"; DestDir: "{app}"; Flags: ignoreversion signonce
+@INCLUDE_FAT32FORMAT_FALLBACK_TRUE@Source: "@CMAKE_BINARY_DIR@\deploy\fat32format.exe"; DestDir: "{app}"; Flags: ignoreversion signonce
 Source: "@CMAKE_BINARY_DIR@\deploy\rpi-imager-cli.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "@CMAKE_BINARY_DIR@\deploy\license.txt"; DestDir: "{app}"; Flags: ignoreversion
 

@@ -537,6 +537,7 @@ if (APPLE)
         mac/macwlancredentials.cpp
         dependencies/drivelist/src/darwin/list.mm
         dependencies/drivelist/src/darwin/REDiskList.m
+        mac/file_operations_macos.cpp
     )
     set(DEPENDENCIES  icons/rpi-imager.icns)
     enable_language(OBJC C)
@@ -550,7 +551,7 @@ elseif (UNIX)
         linux/stpanalyzer.h
         linux/stpanalyzer.cpp
         linux/acceleratedcryptographichash_gnutls.cpp
-        "disk_formatter.cpp"
+        linux/file_operations_linux.cpp
     )
     set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
     set(DEPENDENCIES "")
@@ -587,6 +588,7 @@ elseif (WIN32)
         windows/winfile.h
         windows/winwlancredentials.h
         windows/winwlancredentials.cpp
+        windows/file_operations_windows.cpp
     )
     set(DEPENDENCIES
         windows/rpi-imager.rc
@@ -626,7 +628,8 @@ endif( IS_BIG_ENDIAN )
 set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
-    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp")
+    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
+    "disk_formatter.cpp" "file_operations.cpp")
 
 find_package(Qt6 6.7 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
 if (Qt6_FOUND)
@@ -746,9 +749,15 @@ if (WIN32)
     # Target Windows 10, in line with Qt requirements
     add_definitions(-DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DNTDDI_VERION=0x0A000000)
 
-    # Bundled fat32format
-    add_subdirectory(dependencies/fat32format)
-    add_dependencies(${PROJECT_NAME} fat32format)
+    # Option to include fat32format fallback (legacy support)
+    option(INCLUDE_FAT32FORMAT_FALLBACK "Include fat32format.exe as fallback for Windows formatting" OFF)
+    
+    if(INCLUDE_FAT32FORMAT_FALLBACK)
+        # Bundled fat32format
+        add_subdirectory(dependencies/fat32format)
+        add_dependencies(${PROJECT_NAME} fat32format)
+        add_definitions(-DHAVE_FAT32FORMAT_FALLBACK)
+    endif()
 
     # Strip debug symbols
     add_custom_command(TARGET ${PROJECT_NAME}
@@ -800,9 +809,11 @@ if (WIN32)
         POST_BUILD
         COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
 
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe")
+    if(INCLUDE_FAT32FORMAT_FALLBACK)
+        add_custom_command(TARGET ${PROJECT_NAME}
+            POST_BUILD
+            COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe")
+    endif()
 
     endif(IMAGER_SIGNED_APP)
 
@@ -814,12 +825,28 @@ if (WIN32)
 
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/deploy")
 
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe" "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe"
-            "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
-            "${CMAKE_BINARY_DIR}/deploy")
+    if(INCLUDE_FAT32FORMAT_FALLBACK)
+        add_custom_command(TARGET ${PROJECT_NAME}
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
+                "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe" "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe"
+                "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
+                "${CMAKE_BINARY_DIR}/deploy")
+    else()
+        add_custom_command(TARGET ${PROJECT_NAME}
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
+                "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe"
+                "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
+                "${CMAKE_BINARY_DIR}/deploy")
+    endif()
+
+    # Configure installer templates based on fat32format inclusion
+    if(INCLUDE_FAT32FORMAT_FALLBACK)
+        set(INCLUDE_FAT32FORMAT_FALLBACK_TRUE "")
+    else()
+        set(INCLUDE_FAT32FORMAT_FALLBACK_TRUE ";")
+    endif()
 
     # Inno Setup configuration
     option(ENABLE_INNO_INSTALLER "Build Inno Setup installer instead of NSIS" OFF)

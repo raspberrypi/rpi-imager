@@ -12,6 +12,8 @@
 #include <vector>
 #include <system_error>
 #include <optional>
+#include <memory>
+#include "file_operations.h"
 
 namespace rpi_imager {
 
@@ -129,7 +131,8 @@ struct __attribute__((packed)) Fat32FsInfo {
 
 class DiskFormatter {
  public:
-  DiskFormatter() = default;
+  // Constructor that accepts a FileOperations implementation
+  explicit DiskFormatter(std::unique_ptr<FileOperations> file_ops = nullptr);
   ~DiskFormatter() = default;
 
   // Non-copyable, movable
@@ -139,9 +142,7 @@ class DiskFormatter {
   DiskFormatter& operator=(DiskFormatter&&) = default;
 
   // Format a device with MBR partition table and FAT32 filesystem
-  Result<void> FormatDrive(
-      const std::string& device_path, 
-      std::uint64_t device_size_bytes);
+  Result<void> FormatDrive(const std::string& device_path);
 
   // Format to a file for testing
   Result<void> FormatFile(
@@ -153,35 +154,33 @@ class DiskFormatter {
   static constexpr std::uint32_t kPartitionStartSector = 8192;  // 4MB offset
   static constexpr std::uint8_t kFat32PartitionType = 0x0C;    // FAT32 LBA
 
+  std::unique_ptr<FileOperations> file_ops_;
+
+  // Convert FileError to FormatError
+  FormatError ConvertError(FileError error) const;
+
   // Write MBR with single partition
-  Result<void> WriteMbr(
-      int fd, 
-      std::uint64_t device_size_bytes) const;
+  Result<void> WriteMbr(std::uint64_t device_size_bytes) const;
 
   // Write FAT32 filesystem
   Result<void> WriteFat32(
-      int fd,
       std::uint32_t partition_start_sector,
       std::uint32_t partition_size_sectors) const;
 
   // Helper functions
   Result<void> WriteBootSector(
-      int fd,
       std::uint32_t offset_sectors,
       const Fat32Config& config) const;
 
   Result<void> WriteFsInfo(
-      int fd,
       std::uint32_t offset_sectors,
       const Fat32Config& config) const;
 
   Result<void> WriteFatTables(
-      int fd,
       std::uint32_t fat_start_sector,
       const Fat32Config& config) const;
 
   Result<void> WriteRootDirectory(
-      int fd,
       std::uint32_t root_cluster_sector) const;
 
   // Utility functions
