@@ -21,6 +21,7 @@ ApplicationWindow {
     
     property string selectedOsName: ""
     property string selectedStorageName: ""
+    property bool isCacheVerifying: false
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 450
@@ -285,6 +286,21 @@ ApplicationWindow {
                             enabled = false
                             progressText.text = qsTr("Finalizing...")
                             window.imageWriter.setVerifyEnabled(false)
+                        }
+                        Layout.alignment: Qt.AlignRight
+                        visible: false
+                    }
+                    ImButton {
+                        Layout.bottomMargin: 25
+                        Layout.minimumHeight: 40
+                        Layout.preferredWidth: 200
+                        padding: 5
+                        id: skipcachebutton
+                        text: qsTr("SKIP CACHE VERIFICATION")
+                        onClicked: {
+                            enabled = false
+                            progressText.text = qsTr("Starting download...")
+                            window.imageWriter.skipCacheVerification()
                         }
                         Layout.alignment: Qt.AlignRight
                         visible: false
@@ -594,6 +610,16 @@ ApplicationWindow {
             if (progressText.text === qsTr("Cancelling..."))
                 return
 
+            // Ensure we're in write mode, not cache verification mode
+            if (isCacheVerifying) {
+                isCacheVerifying = false
+                skipcachebutton.visible = false
+                cancelwritebutton.visible = true
+                cancelwritebutton.enabled = true
+            }
+            
+            // Ensure progress bar is set to write color
+            progressBar.Material.accent = "#ffffff"
             progressText.text = qsTr("Writing... %1%").arg(Math.floor(newPos*100))
             progressBar.indeterminate = false
             progressBar.value = newPos
@@ -609,7 +635,7 @@ ApplicationWindow {
         }
 
         if (progressBar.value !== newPos) {
-            if (cancelwritebutton.visible) {
+            if (cancelwritebutton.visible && !isCacheVerifying) {
                 cancelwritebutton.visible = false
                 cancelverifybutton.visible = true
             }
@@ -617,7 +643,11 @@ ApplicationWindow {
             if (progressText.text === qsTr("Finalizing..."))
                 return
 
-            progressText.text = qsTr("Verifying... %1%").arg(Math.floor(newPos*100))
+            if (isCacheVerifying) {
+                progressText.text = qsTr("Verifying cached file... %1%").arg(Math.floor(newPos*100))
+            } else {
+                progressText.text = qsTr("Verifying... %1%").arg(Math.floor(newPos*100))
+            }
             progressBar.Material.accent = Style.progressBarVerifyForegroundColor
             progressBar.value = newPos
         }
@@ -641,6 +671,7 @@ ApplicationWindow {
         writebutton.enabled = imageWriter.readyToWrite()
         cancelwritebutton.visible = false
         cancelverifybutton.visible = false
+        skipcachebutton.visible = false
     }
 
     function onError(msg) {
@@ -692,6 +723,37 @@ ApplicationWindow {
 
     function onNetworkInfo(msg) {
         networkInfo.text = msg
+    }
+
+    function onCacheVerificationStarted() {
+        // Set cache verification state
+        isCacheVerifying = true
+        
+        // Hide write/cancel write buttons, show skip cache button
+        cancelwritebutton.visible = false
+        skipcachebutton.visible = true
+        skipcachebutton.enabled = true
+        progressText.text = qsTr("Verifying cached file...")
+        progressBar.Material.accent = Style.progressBarVerifyForegroundColor
+        progressBar.indeterminate = false
+    }
+
+    function onCacheVerificationFinished() {
+        // Clear cache verification state
+        isCacheVerifying = false
+        
+        // Hide skip cache button
+        skipcachebutton.visible = false
+        
+        // Reset progress bar color to write color and show write phase UI
+        progressBar.Material.accent = "#ffffff"
+        progressText.text = qsTr("Starting write...")
+        progressBar.indeterminate = true
+        progressBar.value = 0
+        
+        // Show appropriate buttons for write phase
+        cancelwritebutton.visible = true
+        cancelwritebutton.enabled = true
     }
 
     Timer {

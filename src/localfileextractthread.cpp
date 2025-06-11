@@ -5,13 +5,17 @@
 
 #include "localfileextractthread.h"
 #include "config.h"
+#include "buffer_optimization.h"
 
 #include <QUrl>
 
 LocalFileExtractThread::LocalFileExtractThread(const QByteArray &url, const QByteArray &dst, const QByteArray &expectedHash, QObject *parent)
     : DownloadExtractThread(url, dst, expectedHash, parent)
 {
-    _inputBuf = (char *) qMallocAligned(IMAGEWRITER_UNCOMPRESSED_BLOCKSIZE, 4096);
+    // Use the same optimal buffer sizing as compressed files for better performance
+    size_t bufferSize = getOptimalWriteBufferSize();
+    _inputBuf = (char *) qMallocAligned(bufferSize, 4096);
+    _inputBufSize = bufferSize;
 }
 
 LocalFileExtractThread::~LocalFileExtractThread()
@@ -67,7 +71,7 @@ ssize_t LocalFileExtractThread::_on_read(struct archive *, const void **buff)
         return -1;
 
     *buff = _inputBuf;
-    ssize_t len = _inputfile.read(_inputBuf, IMAGEWRITER_UNCOMPRESSED_BLOCKSIZE);
+    ssize_t len = _inputfile.read(_inputBuf, _inputBufSize);
 
     if (len > 0)
     {

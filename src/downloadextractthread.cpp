@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "config.h"
+#include "buffer_optimization.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/mountutils/src/mountutils.hpp"
 #include <iostream>
@@ -445,9 +446,17 @@ void DownloadExtractThread::extractMultiFileRun()
         if (_cacheEnabled && _expectedHash == computedHash)
         {
             _cachefile.close();
-            // Emit the hash of the uncompressed image data for cache validation
-            // (The compressed cache file hash is tracked separately by _cachehash for integrity checks)
-            qDebug() << "Cache file created for image hash:" << computedHash;
+            
+            // Get both hashes: compressed cache file and uncompressed image data
+            QByteArray cacheFileHash = _cachehash.result().toHex();
+            
+            qDebug() << "Cache file created:";
+            qDebug() << "  Image hash (uncompressed):" << computedHash;
+            qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
+            
+            // Emit both hashes for proper cache verification
+            emit cacheFileHashUpdated(cacheFileHash, computedHash);
+            // Keep old signal for backward compatibility
             emit cacheFileUpdated(computedHash);
         }
 
@@ -589,11 +598,18 @@ void DownloadExtractThread::_pushQueue(const char *data, size_t len)
 bool DownloadExtractThread::_verify()
 {
     qDebug() << "DownloadExtractThread::_verify() called (child class implementation with progress updates)";
-    char *verifyBuf = (char *) qMallocAligned(IMAGEWRITER_VERIFY_BLOCKSIZE, 4096);
     _lastVerifyNow = 0;
     _verifyTotal = _file.pos();
+    
+    // Use adaptive buffer size based on file size for optimal verification performance
+    size_t verifyBufferSize = getAdaptiveVerifyBufferSize(_verifyTotal);
+    char *verifyBuf = (char *) qMallocAligned(verifyBufferSize, 4096);
+    
     QElapsedTimer t1;
     t1.start();
+    
+    qDebug() << "Post-write verification using" << verifyBufferSize/1024 << "KB buffer for" 
+             << _verifyTotal/(1024*1024) << "MB image";
 
 #ifdef Q_OS_LINUX
     /* Make sure we are reading from the drive and not from cache */
@@ -613,7 +629,7 @@ bool DownloadExtractThread::_verify()
 
     while (_verifyEnabled && _lastVerifyNow < _verifyTotal && !_cancelled)
     {
-        qint64 lenRead = _file.read(verifyBuf, qMin((qint64) IMAGEWRITER_VERIFY_BLOCKSIZE, (qint64) (_verifyTotal-_lastVerifyNow) ));
+        qint64 lenRead = _file.read(verifyBuf, qMin((qint64) verifyBufferSize, (qint64) (_verifyTotal-_lastVerifyNow) ));
         if (lenRead == -1)
         {
             DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"

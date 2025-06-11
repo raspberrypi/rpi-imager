@@ -134,6 +134,7 @@ signals:
     void success();
     void error(QString msg);
     void cacheFileUpdated(QByteArray sha256);
+    void cacheFileHashUpdated(QByteArray cacheFileHash, QByteArray imageHash);
     void finalizing();
     void preparationStatusUpdate(QString msg);
 
