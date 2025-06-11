@@ -538,6 +538,7 @@ if (APPLE)
         dependencies/drivelist/src/darwin/list.mm
         dependencies/drivelist/src/darwin/REDiskList.m
         mac/file_operations_macos.cpp
+        mac/buffer_optimization_macos.cpp
     )
     set(DEPENDENCIES  icons/rpi-imager.icns)
     enable_language(OBJC C)
@@ -552,6 +553,7 @@ elseif (UNIX)
         linux/stpanalyzer.cpp
         linux/acceleratedcryptographichash_gnutls.cpp
         linux/file_operations_linux.cpp
+        linux/buffer_optimization_linux.cpp
     )
     set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
     set(DEPENDENCIES "")
@@ -589,6 +591,7 @@ elseif (WIN32)
         windows/winwlancredentials.h
         windows/winwlancredentials.cpp
         windows/file_operations_windows.cpp
+        windows/buffer_optimization_windows.cpp
     )
     set(DEPENDENCIES
         windows/rpi-imager.rc
@@ -629,7 +632,7 @@ set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
-    "disk_formatter.cpp" "file_operations.cpp")
+    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h")
 
 find_package(Qt6 6.7 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
 if (Qt6_FOUND)

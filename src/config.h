@@ -25,12 +25,6 @@
 /* Default block size for buffer allocation (dynamically adjusted at runtime) */
 #define IMAGEWRITER_BLOCKSIZE             1*1024*1024
 
-/* Block size used with uncompressed images */
-#define IMAGEWRITER_UNCOMPRESSED_BLOCKSIZE 128*1024
-
-/* Block size used when reading during verify stage */
-#define IMAGEWRITER_VERIFY_BLOCKSIZE      128*1024
-
 /* Enable caching */
 #define IMAGEWRITER_ENABLE_CACHE_DEFAULT        true
 

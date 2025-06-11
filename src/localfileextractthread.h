@@ -23,6 +23,7 @@ protected:
     virtual int _on_close(struct archive *a);
     QFile _inputfile;
     char *_inputBuf;
+    size_t _inputBufSize;
 };
 
 #endif // LOCALFILEEXTRACTTHREAD_H

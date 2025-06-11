@@ -68,7 +68,9 @@ ImageWriter::ImageWriter(QObject *parent)
       _networkManager(this),
       _drivelist(DriveListModel(this)), // explicitly parented, so QML doesn't delete it
       _hwlist(HWListModel(*this)),
-      _oslist(OSListModel(*this))
+      _oslist(OSListModel(*this)),
+      _cacheManager(new CacheManager(this)),
+      _waitingForCacheVerification(false)
 {
     QString platform;
     if (qobject_cast<QGuiApplication*>(QCoreApplication::instance()) )
@@ -173,6 +175,7 @@ ImageWriter::ImageWriter(QObject *parent)
     _settings.beginGroup("caching");
     _cachingEnabled = !_embeddedMode && _settings.value("enabled", IMAGEWRITER_ENABLE_CACHE_DEFAULT).toBool();
     _cachedFileHash = _settings.value("lastDownloadSHA256").toByteArray();
+    _cacheFileHash = _settings.value("caching/lastCacheFileHash").toByteArray();
     _cacheFileName = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+QDir::separator()+"lastdownload.cache";
     if (!_cachedFileHash.isEmpty())
     {
@@ -233,6 +236,9 @@ ImageWriter::ImageWriter(QObject *parent)
 
     // Centralised network manager, for fetching OS lists
     connect(&_networkManager, SIGNAL(finished(QNetworkReply *)), this, SLOT(handleNetworkRequestFinished(QNetworkReply *)));
+    
+    // Start background cache operations early
+    _cacheManager->startBackgroundOperations();
 }
 
 ImageWriter::~ImageWriter()
@@ -308,6 +314,8 @@ void ImageWriter::startWrite()
 
     if (_src.toString() == "internal://format")
     {
+        // For formatting operations, skip all cache operations since we don't need cached files
+        qDebug() << "Starting format operation - skipping cache operations";
         DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
         connect(dft, SIGNAL(success()), SLOT(onSuccess()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
@@ -349,18 +357,54 @@ void ImageWriter::startWrite()
 
     if (!_expectedHash.isEmpty() && _cachedFileHash == _expectedHash)
     {
-        // Check cache file integrity before using it
-        if (_verifyCacheFileIntegrity())
+        // Use background cache manager to check cache file integrity
+        CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
+        
+        if (cacheStatus.verificationComplete && cacheStatus.isValid && 
+            cacheStatus.cacheFileName == _cacheFileName && cacheStatus.cachedHash == _expectedHash)
         {
-            qDebug() << "Using verified cache file:" << _cacheFileName;
+            qDebug() << "Using verified cache file (background verified):" << _cacheFileName;
             // Use cached file
             urlstr = QUrl::fromLocalFile(_cacheFileName).toString(_src.FullyEncoded).toLatin1();
         }
-        else
+        else if (cacheStatus.verificationComplete && !cacheStatus.isValid)
         {
-            qDebug() << "Cache file failed integrity check, invalidating and proceeding with download";
+            qDebug() << "Cache file failed background integrity check, invalidating and proceeding with download";
             _invalidateCache();
             // Continue with original URL - cache will be recreated during download
+        }
+        else
+        {
+            // Background verification not yet complete or different file
+            // Start cache verification with progress display (like download progress)
+            qDebug() << "Cache verification needed - starting with progress display";
+            
+            // Connect to cache verification progress and completion signals
+            connect(_cacheManager, &CacheManager::cacheVerificationProgress,
+                    this, &ImageWriter::onCacheVerificationProgress);
+            connect(_cacheManager, &CacheManager::cacheVerificationComplete,
+                    this, &ImageWriter::onCacheVerificationComplete);
+            
+            // Start cache verification using the cache file hash, not the image hash
+            QByteArray storedCacheFileHash = _settings.value("caching/lastCacheFileHash").toByteArray();
+            
+            if (storedCacheFileHash.isEmpty()) {
+                // Fall back to old behavior if no cache file hash stored
+                qDebug() << "No cache file hash found, using image hash (may cause false negatives)";
+                _cacheManager->startCacheVerification(_cacheFileName, _expectedHash);
+            } else {
+                qDebug() << "Using stored cache file hash for verification";
+                _cacheManager->startCacheVerification(_cacheFileName, storedCacheFileHash);
+            }
+            
+            // Set flag to indicate we're waiting for cache verification
+            _waitingForCacheVerification = true;
+            
+            // Emit signal to update UI for cache verification
+            emit cacheVerificationStarted();
+            
+            // Don't proceed with write yet - wait for cache verification to complete
+            return;
         }
     }
 
@@ -416,26 +460,56 @@ void ImageWriter::startWrite()
 
         if (_cachingEnabled)
         {
-            // Ensure cache directory exists and is writable
-            if (!_ensureCacheDirectoryExists())
+            // Use background cache manager for directory and disk space checking
+            CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
+            
+            if (cacheStatus.diskSpaceCheckComplete)
             {
-                qDebug() << "Cache directory is not accessible. Disabling caching for this session.";
-                _cachingEnabled = false;
-            }
-            else
-            {
-                QStorageInfo si(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
-                qint64 avail = si.bytesAvailable();
-                qDebug() << "Available disk space for caching:" << avail/1024/1024/1024 << "GB";
-
-                if (avail-_downloadLen < IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING)
+                // Background check completed
+                if (!cacheStatus.hasAvailableSpace || cacheStatus.availableBytes - _downloadLen < IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING)
                 {
-                    qDebug() << "Low disk space. Not caching files to disk.";
+                    qDebug() << "Low disk space (background check). Not caching files to disk.";
+                    qDebug() << "Available:" << cacheStatus.availableBytes/1024/1024/1024 << "GB, Need:" << _downloadLen/1024/1024/1024 << "GB";
                 }
                 else
                 {
+                    qDebug() << "Sufficient disk space for caching (background check):" << cacheStatus.availableBytes/1024/1024/1024 << "GB available";
                     _thread->setCacheFile(_cacheFileName, _downloadLen);
                     connect(_thread, SIGNAL(cacheFileUpdated(QByteArray)), SLOT(onCacheFileUpdated(QByteArray)));
+                    connect(_thread, SIGNAL(cacheFileHashUpdated(QByteArray,QByteArray)), SLOT(onCacheFileHashUpdated(QByteArray,QByteArray)));
+                }
+            }
+            else
+            {
+                // Background check not ready, poll briefly for completion
+                qDebug() << "Background disk space check not ready, polling for completion...";
+                
+                // Poll for up to 1 second for disk space check (faster than file verification)
+                bool diskSpaceReady = false;
+                for (int i = 0; i < 10; ++i) { // 10 * 100ms = 1 second max
+                    QCoreApplication::processEvents(); // Allow background thread to work
+                    QThread::msleep(100); // Wait 100ms
+                    
+                    CacheManager::CacheStatus status = _cacheManager->getCacheStatus();
+                    if (status.diskSpaceCheckComplete) {
+                        if (!status.hasAvailableSpace || status.availableBytes - _downloadLen < IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING) {
+                            qDebug() << "Low disk space (background poll). Not caching files to disk.";
+                            qDebug() << "Available:" << status.availableBytes/1024/1024/1024 << "GB, Need:" << _downloadLen/1024/1024/1024 << "GB";
+                        } else {
+                            qDebug() << "Sufficient disk space for caching (background poll):" << status.availableBytes/1024/1024/1024 << "GB available";
+                            _thread->setCacheFile(_cacheFileName, _downloadLen);
+                            connect(_thread, SIGNAL(cacheFileUpdated(QByteArray)), SLOT(onCacheFileUpdated(QByteArray)));
+                            connect(_thread, SIGNAL(cacheFileHashUpdated(QByteArray,QByteArray)), SLOT(onCacheFileHashUpdated(QByteArray,QByteArray)));
+                        }
+                        diskSpaceReady = true;
+                        break;
+                    }
+                }
+                
+                if (!diskSpaceReady) {
+                    qDebug() << "Background disk space check taking too long, proceeding without caching";
+                    // Don't fall back to synchronous operations - just proceed without caching
+                    // The background check will complete eventually and be ready for next time
                 }
             }
         }
@@ -471,9 +545,34 @@ void ImageWriter::onCacheFileUpdated(QByteArray sha256)
     emit osListPrepared();
 }
 
+void ImageWriter::onCacheFileHashUpdated(QByteArray cacheFileHash, QByteArray imageHash)
+{
+    // Store both hashes separately
+    _cacheFileHash = cacheFileHash;
+    _cachedFileHash = imageHash;
+    
+    if (!_customCacheFile)
+    {
+        _settings.setValue("caching/lastDownloadSHA256", imageHash);
+        _settings.setValue("caching/lastCacheFileHash", cacheFileHash);
+        _settings.sync();
+    }
+    
+    qDebug() << "Cache file hashes updated:";
+    qDebug() << "  Image hash:" << imageHash;
+    qDebug() << "  Cache file hash:" << cacheFileHash;
+}
+
 /* Cancel write */
 void ImageWriter::cancelWrite()
 {
+    if (_waitingForCacheVerification)
+    {
+        // If we're waiting for cache verification, treat this as skip cache verification
+        skipCacheVerification();
+        return;
+    }
+    
     if (_thread)
     {
         connect(_thread, SIGNAL(finished()), SLOT(onCancelled()));
@@ -484,6 +583,34 @@ void ImageWriter::cancelWrite()
     {
         emit cancelled();
     }
+}
+
+/* Skip cache verification and proceed with download */
+void ImageWriter::skipCacheVerification()
+{
+    if (!_waitingForCacheVerification)
+    {
+        qDebug() << "skipCacheVerification called but not waiting for cache verification";
+        return;
+    }
+    
+    qDebug() << "User skipped cache verification, proceeding with download";
+    
+    _waitingForCacheVerification = false;
+    
+    // Disconnect cache verification signals
+    disconnect(_cacheManager, &CacheManager::cacheVerificationProgress,
+               this, &ImageWriter::onCacheVerificationProgress);
+    disconnect(_cacheManager, &CacheManager::cacheVerificationComplete,
+               this, &ImageWriter::onCacheVerificationComplete);
+    
+    // Emit signal to update UI (cache verification finished)
+    emit cacheVerificationFinished();
+    
+    // Proceed with download (not using cache)
+    qDebug() << "Cache verification skipped, invalidating cache and proceeding with download";
+    _invalidateCache();
+    _continueStartWriteAfterCacheVerification(false); // false = cache not valid, use download
 }
 
 void ImageWriter::onCancelled()
@@ -1579,14 +1706,16 @@ void ImageWriter::_invalidateCache()
 {
     qDebug() << "Invalidating cache due to integrity failure";
     
-    // Clear the cached hash from settings
+    // Clear the cached hashes from settings
     _settings.beginGroup("caching");
     _settings.remove("lastDownloadSHA256");
+    _settings.remove("lastCacheFileHash");
     _settings.endGroup();
     _settings.sync();
     
-    // Clear the in-memory hash
+    // Clear the in-memory hashes
     _cachedFileHash.clear();
+    _cacheFileHash.clear();
     
     // Try to remove the cache file
     if (!_cacheFileName.isEmpty() && QFile::exists(_cacheFileName))
@@ -1638,6 +1767,176 @@ bool ImageWriter::_ensureCacheDirectoryExists()
     
     qDebug() << "Cache directory is accessible:" << cacheDir;
     return true;
+}
+
+void ImageWriter::onCacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes)
+{
+    if (_waitingForCacheVerification) {
+        // Show cache verification progress as "verify" progress
+        // This reuses the existing verify progress UI
+        emit verifyProgress(bytesProcessed, totalBytes);
+        // The progress text will be updated by the QML onVerifyProgress handler
+        // which shows "Verifying... X%" - this is perfect for cache verification too
+    }
+}
+
+void ImageWriter::onCacheVerificationComplete(bool isValid)
+{
+    if (!_waitingForCacheVerification) {
+        return; // Not waiting for this verification
+    }
+    
+    _waitingForCacheVerification = false;
+    
+    // Disconnect signals to avoid receiving future notifications
+    disconnect(_cacheManager, &CacheManager::cacheVerificationProgress,
+               this, &ImageWriter::onCacheVerificationProgress);
+    disconnect(_cacheManager, &CacheManager::cacheVerificationComplete,
+               this, &ImageWriter::onCacheVerificationComplete);
+    
+    qDebug() << "Cache verification completed - valid:" << isValid;
+    
+    // Emit signal to update UI (cache verification finished)
+    emit cacheVerificationFinished();
+    
+    // Continue with the rest of startWrite() logic
+    _continueStartWriteAfterCacheVerification(isValid);
+}
+
+void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
+{
+    QString urlstr = _src.toString(_src.FullyEncoded);
+    
+    if (cacheIsValid) {
+        qDebug() << "Using verified cache file:" << _cacheFileName;
+        urlstr = QUrl::fromLocalFile(_cacheFileName).toString(_src.FullyEncoded);
+    } else {
+        qDebug() << "Cache file invalid, invalidating and using original URL";
+        _invalidateCache();
+    }
+    
+    // Continue with the write operation (this is the code that was after cache verification)
+    if (QUrl(urlstr).isLocalFile())
+    {
+        _thread = new LocalFileExtractThread(urlstr.toLatin1(), _dst.toLatin1(), _expectedHash, this);
+    }
+    else
+    {
+        _thread = new DownloadExtractThread(urlstr.toLatin1(), _dst.toLatin1(), _expectedHash, this);
+        if (_repo.toString() == OSLIST_URL)
+        {
+            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr.toLatin1(), _parentCategory.toLatin1(), _osName.toLatin1(), _embeddedMode, _currentLangcode, this);
+            connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
+            tele->start();
+        }
+    }
+
+    connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
+    connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
+    connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
+    connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+    
+    // Connect to progress signals if this is a DownloadExtractThread
+    DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
+    if (downloadThread) {
+        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged, 
+                this, &ImageWriter::downloadProgress);
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged, 
+                this, &ImageWriter::verifyProgress);
+    }
+    
+    _thread->setVerifyEnabled(_verifyEnabled);
+    _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
+    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+
+    // Handle caching setup for downloads (rest of the original startWrite logic)
+    if (!_expectedHash.isEmpty() && _cachedFileHash != _expectedHash && _cachingEnabled)
+    {
+        if (!_cachedFileHash.isEmpty())
+        {
+            if (_settings.isWritable() && QFile::remove(_cacheFileName))
+            {
+                _settings.remove("caching/lastDownloadSHA256");
+                _settings.sync();
+                _cachedFileHash.clear();
+            }
+            else
+            {
+                qDebug() << "Error removing old cache file. Disabling caching";
+                _cachingEnabled = false;
+            }
+        }
+
+        if (_cachingEnabled)
+        {
+            // Use background cache manager for directory and disk space checking
+            CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
+            
+            if (cacheStatus.diskSpaceCheckComplete)
+            {
+                // Background check completed
+                if (!cacheStatus.hasAvailableSpace || cacheStatus.availableBytes - _downloadLen < IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING)
+                {
+                    qDebug() << "Low disk space (background check). Not caching files to disk.";
+                    qDebug() << "Available:" << cacheStatus.availableBytes/1024/1024/1024 << "GB, Need:" << _downloadLen/1024/1024/1024 << "GB";
+                }
+                else
+                {
+                    qDebug() << "Sufficient disk space for caching (background check):" << cacheStatus.availableBytes/1024/1024/1024 << "GB available";
+                    _thread->setCacheFile(_cacheFileName, _downloadLen);
+                    connect(_thread, SIGNAL(cacheFileUpdated(QByteArray)), SLOT(onCacheFileUpdated(QByteArray)));
+                }
+            }
+            else
+            {
+                // Background check not ready, poll briefly for completion
+                qDebug() << "Background disk space check not ready, polling for completion...";
+                
+                // Poll for up to 1 second for disk space check (faster than file verification)
+                bool diskSpaceReady = false;
+                for (int i = 0; i < 10; ++i) { // 10 * 100ms = 1 second max
+                    QCoreApplication::processEvents(); // Allow background thread to work
+                    QThread::msleep(100); // Wait 100ms
+                    
+                    CacheManager::CacheStatus status = _cacheManager->getCacheStatus();
+                    if (status.diskSpaceCheckComplete) {
+                        if (!status.hasAvailableSpace || status.availableBytes - _downloadLen < IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING) {
+                            qDebug() << "Low disk space (background poll). Not caching files to disk.";
+                            qDebug() << "Available:" << status.availableBytes/1024/1024/1024 << "GB, Need:" << _downloadLen/1024/1024/1024 << "GB";
+                        } else {
+                            qDebug() << "Sufficient disk space for caching (background poll):" << status.availableBytes/1024/1024/1024 << "GB available";
+                            _thread->setCacheFile(_cacheFileName, _downloadLen);
+                            connect(_thread, SIGNAL(cacheFileUpdated(QByteArray)), SLOT(onCacheFileUpdated(QByteArray)));
+                        }
+                        diskSpaceReady = true;
+                        break;
+                    }
+                }
+                
+                if (!diskSpaceReady) {
+                    qDebug() << "Background disk space check taking too long, proceeding without caching";
+                    // Don't fall back to synchronous operations - just proceed without caching
+                    // The background check will complete eventually and be ready for next time
+                }
+            }
+        }
+    }
+
+    // Start the actual write operation
+    if (_multipleFilesInZip)
+    {
+        static_cast<DownloadExtractThread *>(_thread)->enableMultipleFileExtraction();
+        DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
+        connect(dft, SIGNAL(success()), _thread, SLOT(start()));
+        connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
+        dft->start();
+    }
+    else
+    {
+        _thread->start();
+    }
+
+    startProgressPolling();
 }
 
 void MountUtilsLog(std::string msg) {

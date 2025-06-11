@@ -25,6 +25,7 @@
 #include "drivelistmodel.h"
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
+#include "cachemanager.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
@@ -59,6 +60,9 @@ public:
 
     /* Cancel write */
     Q_INVOKABLE void cancelWrite();
+
+    /* Skip cache verification and proceed with download */
+    Q_INVOKABLE void skipCacheVerification();
 
     /* Return true if url is in our local disk cache */
     Q_INVOKABLE bool isCached(const QUrl &url, const QByteArray &sha256);
@@ -180,6 +184,8 @@ signals:
     void preparationStatusUpdate(QVariant msg);
     void osListPrepared();
     void networkInfo(QVariant msg);
+    void cacheVerificationStarted();
+    void cacheVerificationFinished();
 
 protected slots:
     void startProgressPolling();
@@ -191,13 +197,20 @@ protected slots:
     void onFileSelected(QString filename);
     void onCancelled();
     void onCacheFileUpdated(QByteArray sha256);
+    void onCacheFileHashUpdated(QByteArray cacheFileHash, QByteArray imageHash);
     void onFinalizing();
     void onTimeSyncReply(QNetworkReply *reply);
     void onPreparationStatusUpdate(QString msg);
     void handleNetworkRequestFinished(QNetworkReply *data);
     void onSTPdetected();
+    void onCacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes);
+    void onCacheVerificationComplete(bool isValid);
 
 private:
+    // Cache management
+    CacheManager* _cacheManager;
+    bool _waitingForCacheVerification;
+
     // Recursively walk all the entries with subitems and, for any which
     // refer to an external JSON list, fetch the list and put it in place.
     void fillSubLists(QJsonArray &topLevel);
@@ -209,7 +222,7 @@ private:
 protected:
     QUrl _src, _repo;
     QString _dst, _cacheFileName, _parentCategory, _osName, _currentLang, _currentLangcode, _currentKeyboard;
-    QByteArray _expectedHash, _cachedFileHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
+    QByteArray _expectedHash, _cachedFileHash, _cacheFileHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
     HWListModel _hwlist;
@@ -233,6 +246,7 @@ protected:
     QString _privKeyFileName();
     QString _sshKeyDir();
     QString _sshKeyGen();
+    void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
 };
 
 #endif // IMAGEWRITER_H
