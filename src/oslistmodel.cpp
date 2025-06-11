@@ -14,6 +14,8 @@
 #include <QGuiApplication>
 #include <QRandomGenerator>
 #include <qjsonarray.h>
+#include <algorithm>
+#include <QRegularExpression>
 
 namespace {
 
@@ -93,6 +95,74 @@ namespace {
 
         return list;
     }
+
+    // Apply architecture-based sorting to subitems in a JSON array
+    void applyArchitectureSorting(QJsonArray &list, const QString &preferredArchitecture) {
+        if (preferredArchitecture.isEmpty()) {
+            return; // No preferred architecture, no sorting needed
+        }
+
+        // First, sort the top-level array itself
+        QJsonArray sortedList;
+        QJsonArray otherItems;
+        
+        // Collect items that match preferred architecture first
+        for (int i = 0; i < list.size(); i++) {
+            QJsonObject item = list[i].toObject();
+            QString itemArch = item["architecture"].toString();
+            
+            if (itemArch == preferredArchitecture) {
+                sortedList.append(list[i]);
+            } else {
+                otherItems.append(list[i]);
+            }
+        }
+        
+        // Append all non-matching items
+        for (int i = 0; i < otherItems.size(); i++) {
+            sortedList.append(otherItems[i]);
+        }
+        
+        // Replace the original list with the sorted one
+        list = sortedList;
+
+        // Then recursively process subitems within each entry
+        for (int i = 0; i < list.size(); i++) {
+            QJsonObject entry = list[i].toObject();
+            
+            if (entry.contains(QLatin1String("subitems"))) {
+                QJsonArray subitems = entry["subitems"].toArray();
+                
+                // Recursively apply to nested subitems
+                applyArchitectureSorting(subitems, preferredArchitecture);
+                
+                // Manual stable sort: move items matching preferred architecture to the front
+                // We'll build a new array with preferred items first, then others
+                QJsonArray sortedSubitems;
+                QJsonArray otherSubitems;
+                
+                // First pass: collect items that match preferred architecture
+                for (int j = 0; j < subitems.size(); j++) {
+                    QJsonObject subitem = subitems[j].toObject();
+                    QString itemArch = subitem["architecture"].toString();
+                    
+                    if (itemArch == preferredArchitecture) {
+                        sortedSubitems.append(subitems[j]);
+                    } else {
+                        otherSubitems.append(subitems[j]);
+                    }
+                }
+                
+                // Second pass: append all non-matching items
+                for (int j = 0; j < otherSubitems.size(); j++) {
+                    sortedSubitems.append(otherSubitems[j]);
+                }
+                
+                entry["subitems"] = sortedSubitems;
+                list[i] = entry;
+            }
+        }
+    }
 }
 
 OSListModel::OSListModel(ImageWriter &imageWriter)
@@ -107,6 +177,12 @@ bool OSListModel::reload()
     if (list.isEmpty()) {
         return false;
     }
+
+    // Get the preferred architecture from the currently selected device
+    QString preferredArchitecture = _imageWriter.getHWList()->currentArchitecture();
+    
+    // Apply architecture-based sorting if device has a preference
+    applyArchitectureSorting(list, preferredArchitecture);
 
     beginResetModel();
     _osList.clear();
@@ -138,9 +214,13 @@ bool OSListModel::reload()
         os.subitemsJson = obj["subitems_json"].toString();
         os.tooltip = obj["tooltip"].toString();
         os.website = obj["website"].toString();
+        os.architecture = obj["architecture"].toString();
 
         _osList.append(os);
     }
+
+    // Mark the first OS as recommended after architecture sorting
+    markFirstAsRecommended();
 
     endResetModel();
 
@@ -167,7 +247,8 @@ QHash<int, QByteArray> OSListModel::roleNames() const
         { UrlRole, "url" },{ RandomRole, "random" },
         { SubItemsJsonRole, "subitems_json" },
         { TooltipRole, "tooltip" },
-        { WebsiteRole, "website" }
+        { WebsiteRole, "website" },
+        { ArchitectureRole, "architecture" }
     };
 }
 
@@ -207,6 +288,8 @@ QVariant OSListModel::data(const QModelIndex &index, int role) const {
             return os.tooltip;
         case WebsiteRole:
             return os.website;
+        case ArchitectureRole:
+            return os.architecture;
     }
 
     return {};
