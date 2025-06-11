@@ -137,6 +137,102 @@
                     "examples": [
                         "/dev/mmcblk0p1"
                     ]
+                },
+                "devices": {
+                    "$id": "#/properties/imager/properties/devices",
+                    "type": "array",
+                    "title": "The devices schema",
+                    "description": "Optional. Array of device definitions that can be selected by the user.",
+                    "default": [],
+                    "items": {
+                        "$id": "#/properties/imager/properties/devices/items",
+                        "type": "object",
+                        "title": "Device entry",
+                        "description": "An entry for a Raspberry Pi device.",
+                        "default": {},
+                        "examples": [
+                            {
+                                "name": "Raspberry Pi 4",
+                                "description": "4GB, 8GB and 2GB variants",
+                                "icon": "icons/pi4.png",
+                                "tags": ["pi4"],
+                                "matching_type": "exclusive",
+                                "architecture": "armv8"
+                            }
+                        ],
+                        "required": [
+                            "name",
+                            "description",
+                            "tags"
+                        ],
+                        "properties": {
+                            "name": {
+                                "$id": "#/properties/imager/properties/devices/items/properties/name",
+                                "type": "string",
+                                "title": "The name schema",
+                                "description": "Name of device as shown in the 'CHOOSE DEVICE' list.",
+                                "default": "",
+                                "examples": [
+                                    "Raspberry Pi 4"
+                                ]
+                            },
+                            "description": {
+                                "$id": "#/properties/imager/properties/devices/items/properties/description",
+                                "type": "string",
+                                "title": "The description schema",
+                                "description": "Description of device as shown in the 'CHOOSE DEVICE' list.",
+                                "default": "",
+                                "examples": [
+                                    "4GB, 8GB and 2GB variants"
+                                ]
+                            },
+                            "icon": {
+                                "$id": "#/properties/imager/properties/devices/items/properties/icon",
+                                "type": "string",
+                                "title": "The icon schema",
+                                "description": "Optional. Icon of the device as shown in the 'CHOOSE DEVICE' list.",
+                                "default": "",
+                                "examples": [
+                                    "icons/pi4.png"
+                                ]
+                            },
+                            "tags": {
+                                "$id": "#/properties/imager/properties/devices/items/properties/tags",
+                                "type": "array",
+                                "title": "The tags schema",
+                                "description": "Array of strings representing device tags used for filtering OS lists.",
+                                "default": [],
+                                "examples": [
+                                    ["pi4"],
+                                    ["pi3", "pi3b"]
+                                ]
+                            },
+                            "matching_type": {
+                                "$id": "#/properties/imager/properties/devices/items/properties/matching_type",
+                                "type": "string",
+                                "title": "The matching_type schema",
+                                "description": "Optional. Matching algorithm for device filtering. Defaults to 'exclusive'.",
+                                "default": "exclusive",
+                                "examples": [
+                                    "exclusive",
+                                    "inclusive"
+                                ]
+                            },
+                            "architecture": {
+                                "$id": "#/properties/imager/properties/devices/items/properties/architecture",
+                                "type": "string",
+                                "title": "The architecture schema",
+                                "description": "Optional. Preferred architecture for this device (armel, armhf, armv8). When specified, OS items matching this architecture will be sorted to the top of sublists.",
+                                "default": "",
+                                "examples": [
+                                    "armhf",
+                                    "armv8",
+                                    "armel"
+                                ]
+                            }
+                        },
+                        "additionalProperties": true
+                    }
                 }
             },
             "additionalProperties": false 
@@ -333,6 +429,18 @@
                                 "default": "",
                                 "examples": [
                                     "https://ubuntu.com/raspberry-pi/server"
+                                ]
+                            },
+                            "architecture": {
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/architecture",
+                                "type": "string",
+                                "title": "The architecture schema",
+                                "description": "Optional. Specifies the architecture this OS expects (armel, armhf, armv8). Used for sorting when a device has expressed an architecture preference.",
+                                "default": "",
+                                "examples": [
+                                    "armhf",
+                                    "armv8",
+                                    "armel"
                                 ]
                             }
                         },
