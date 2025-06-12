@@ -48,6 +48,6 @@ void AcceleratedCryptographicHash::addData(const char *data, int length) {
 void AcceleratedCryptographicHash::addData(const QByteArray &data) {
     p_Impl->addData(data);
 }
-QByteArray AcceleratedCryptographicHash::result() {
+QByteArray AcceleratedCryptographicHash::result() const {
     return p_Impl->result();
 }
