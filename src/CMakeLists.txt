@@ -31,6 +31,9 @@ set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},${IMAGER
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
 add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #add_compile_options("-fsanitize=address")
 #add_link_options("-fsanitize=address")
 
@@ -552,6 +555,13 @@ elseif (UNIX)
     set(DEPENDENCIES "")
     add_definitions(-DHAVE_GNUTLS)
 elseif (WIN32)
+    add_custom_command(
+        OUTPUT wlanapi_delayed.lib
+        COMMAND ${CMAKE_DLLTOOL} --input-def "${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def"
+                --output-delaylib "wlanapi_delayed.lib" --dllname "wlanapi.dll"
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/windows/wlanapi.def
+        VERBATIM
+    )
     set(PLATFORM_SOURCES
         windows/acceleratedcryptographichash_cng.cpp
         dependencies/mountutils/src/windows/functions.cpp
@@ -561,8 +571,12 @@ elseif (WIN32)
         windows/winwlancredentials.h
         windows/winwlancredentials.cpp
     )
-    set(DEPENDENCIES windows/rpi-imager.rc)
-    set(EXTRALIBS setupapi wlanapi Bcrypt.dll)
+    set(DEPENDENCIES
+        windows/rpi-imager.rc
+        wlanapi_delayed.lib
+    )
+    set(EXTRALIBS setupapi ${CMAKE_CURRENT_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll)
+
 endif()
 
 include_directories(BEFORE .)
@@ -595,7 +609,7 @@ endif( IS_BIG_ENDIAN )
 set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
-    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp")
+    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp" "disk_formatter.cpp")
 
 find_package(Qt6 6.7 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
 if (Qt6_FOUND)

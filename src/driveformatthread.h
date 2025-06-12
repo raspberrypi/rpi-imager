@@ -7,6 +7,7 @@
  */
 
 #include <QThread>
+#include <cstdint>
 
 class DriveFormatThread : public QThread
 {
@@ -22,6 +23,7 @@ signals:
 
 protected:
     QByteArray _device;
+    std::uint64_t getDeviceSize(const QByteArray &device);
 };
 
 #endif // DRIVEFORMATTHREAD_H

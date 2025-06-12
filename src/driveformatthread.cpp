@@ -6,6 +6,7 @@
 #include "driveformatthread.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/mountutils/src/mountutils.hpp"
+#include "disk_formatter.h"
 #include <regex>
 #include <QDebug>
 #include <QProcess>
@@ -26,6 +27,19 @@ DriveFormatThread::DriveFormatThread(const QByteArray &device, QObject *parent)
 DriveFormatThread::~DriveFormatThread()
 {
     wait();
+}
+
+std::uint64_t DriveFormatThread::getDeviceSize(const QByteArray &device)
+{
+    auto driveList = Drivelist::ListStorageDevices();
+    for (const auto &drive : driveList) {
+        if (QByteArray::fromStdString(drive.device) == device) {
+            return drive.size;
+        }
+    }
+    
+    qDebug() << "Warning: Could not find device size for" << device << ", using default";
+    return 64ULL * 1024 * 1024 * 1024;  // Default to 64GB if not found
 }
 
 void DriveFormatThread::run()
@@ -151,74 +165,48 @@ void DriveFormatThread::run()
         return;
     }
 
-
-    QProcess proc;
-    QByteArray partitionTable;
-    QStringList args;
-    QByteArray fatpartition = _device;
-    partitionTable = "8192,,0E\n"
-            "0,0\n"
-            "0,0\n"
-            "0,0\n";
-    args << "-uS" << _device;
-    if (isdigit(fatpartition.at(fatpartition.length()-1)))
-        fatpartition += "p1";
-    else
-        fatpartition += "1";
-
+    // Unmount the device before formatting
     unmount_disk(_device);
-    proc.setProcessChannelMode(proc.MergedChannels);
-    proc.start("sfdisk", args);
-    if (!proc.waitForStarted())
-    {
-        emit error(tr("Error starting sfdisk"));
-        return;
-    }
-    proc.write(partitionTable);
-    proc.closeWriteChannel();
-    proc.waitForFinished();
-    QByteArray output = proc.readAll();
-    qDebug() << "sfdisk:" << output;
 
-    if (proc.exitCode())
-    {
-        emit error(tr("Error partitioning: %1").arg(QString(output)));
-        return;
-    }
+    qDebug() << "Formatting device" << _device << "with clean-room implementation";
 
-    proc.execute("partprobe", QStringList() );
-    for (int tries = 0; tries < 30; tries++)
-    {
-        if (QFile::exists(fatpartition))
-            break;
+    // Get device size
+    std::uint64_t deviceSize = getDeviceSize(_device);
+    qDebug() << "Device size:" << deviceSize << "bytes";
 
-        QThread::msleep(100);
-    }
-    if (!QFile::exists(fatpartition))
-    {
-        emit error(tr("Partitioning did not create expected FAT partition %1").arg(QString(fatpartition)));
-        return;
-    }
+    // Use our clean-room disk formatter
+    rpi_imager::DiskFormatter formatter;
+    auto result = formatter.FormatDrive(_device.toStdString(), deviceSize);
 
-    args.clear();
-    args << fatpartition;
-    proc.start("mkfs.fat", args);
-    if (!proc.waitForStarted())
-    {
-        emit error(tr("Error starting mkfs.fat"));
+    if (!result) {
+        QString errorMessage;
+        switch (result.error()) {
+            case rpi_imager::FormatError::kFileOpenError:
+                errorMessage = tr("Error opening device for formatting");
+                break;
+            case rpi_imager::FormatError::kFileWriteError:
+                errorMessage = tr("Error writing to device during formatting");
+                break;
+            case rpi_imager::FormatError::kFileSeekError:
+                errorMessage = tr("Error seeking on device during formatting");
+                break;
+            case rpi_imager::FormatError::kInvalidParameters:
+                errorMessage = tr("Invalid parameters for formatting");
+                break;
+            case rpi_imager::FormatError::kInsufficientSpace:
+                errorMessage = tr("Insufficient space on device");
+                break;
+            default:
+                errorMessage = tr("Unknown formatting error");
+                break;
+        }
+        
+        qDebug() << "Formatting failed:" << errorMessage;
+        emit error(errorMessage);
         return;
     }
 
-    proc.waitForFinished();
-    output = proc.readAll();
-    qDebug() << "mkfs.fat:" << output;
-
-    if (proc.exitCode())
-    {
-        emit error(tr("Error running mkfs.fat: %1").arg(QString(output)));
-        return;
-    }
-
+    qDebug() << "Formatting completed successfully";
     emit success();
 
 #else

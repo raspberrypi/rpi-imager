@@ -91,7 +91,8 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
       _isImage(true), 
       _inputHash(OSLIST_HASH_ALGORITHM), 
       _activeBuf(0), 
-      _writeThreadStarted(false)
+      _writeThreadStarted(false),
+      _progressTimerStarted(false)
 {
     _extractThread = new _extractThreadClass(this);
     size_t pageSize = getSystemPageSize();
@@ -101,8 +102,8 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     qDebug() << "Using buffer size:" << _abufsize << "bytes with page size:" << pageSize << "bytes";
     
     // Timer to periodically check progress and emit signals
-    QTimer *progressTimer = new QTimer(this);
-    connect(progressTimer, &QTimer::timeout, [this]() {
+    _progressTimer = new QTimer(this);
+    connect(_progressTimer, &QTimer::timeout, [this]() {
         static quint64 lastDlNow = 0;
         static quint64 lastVerifyNow = 0;
         
@@ -123,13 +124,18 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
         }
     });
     
-    // Start the timer with the configured update interval
-    progressTimer->start(PROGRESS_UPDATE_INTERVAL);
+    // Timer will be started when data first starts flowing (after successful drive opening)
 }
 
 DownloadExtractThread::~DownloadExtractThread()
 {
     _cancelled = true;
+    
+    // Stop progress timer if it was started
+    if (_progressTimerStarted && _progressTimer) {
+        _progressTimer->stop();
+    }
+    
     _cancelExtract();
     if (!_extractThread->wait(10000))
     {
@@ -143,6 +149,13 @@ size_t DownloadExtractThread::_writeData(const char *buf, size_t len)
 {
     if (_cancelled)
         return 0;
+
+    // Start progress timer when data first starts flowing (indicates successful drive opening)
+    if (!_progressTimerStarted) {
+        _progressTimerStarted = true;
+        _progressTimer->start(PROGRESS_UPDATE_INTERVAL);
+        qDebug() << "Started progress timer after successful drive opening";
+    }
 
     _writeCache(buf, len);
 

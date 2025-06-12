@@ -697,7 +697,27 @@ void DownloadThread::_writeComplete()
         qDebug() << "Mismatch with expected hash:" << _expectedHash;
         if (_cachefile.isOpen())
             _cachefile.remove();
-        DownloadThread::_onDownloadError(tr("Download corrupt. Hash does not match"));
+        
+        // Provide more specific error message based on context
+        QString errorMsg;
+        if (_url.startsWith("file://") && _url.contains("lastdownload.cache"))
+        {
+            errorMsg = tr("Cached file is corrupt. SHA256 hash does not match expected value.<br>"
+                         "The cache file will be removed and the download will restart.");
+        }
+        else if (_url.startsWith("file://"))
+        {
+            errorMsg = tr("Local file is corrupt or has incorrect SHA256 hash.<br>"
+                         "Expected: %1<br>Actual: %2").arg(QString(_expectedHash), QString(computedHash));
+        }
+        else
+        {
+            errorMsg = tr("Download appears to be corrupt. SHA256 hash does not match.<br>"
+                         "Expected: %1<br>Actual: %2<br>"
+                         "Please check your network connection and try again.").arg(QString(_expectedHash), QString(computedHash));
+        }
+        
+        DownloadThread::_onDownloadError(errorMsg);
         _closeFiles();
         return;
     }

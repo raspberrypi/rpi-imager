@@ -10,6 +10,7 @@
 #include <deque>
 #include <condition_variable>
 #include <QFuture>
+#include <QTimer>
 
 class _extractThreadClass;
 
@@ -49,6 +50,8 @@ protected:
     int _activeBuf;
     bool _writeThreadStarted;
     QFuture<size_t> _writeFuture;
+    QTimer *_progressTimer;
+    bool _progressTimerStarted;
 
     QByteArray _popQueue();
     void _pushQueue(const char *data, size_t len);
