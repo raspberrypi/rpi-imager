@@ -45,26 +45,7 @@ static size_t getSystemPageSize()
 #endif
 }
 
-// Get optimal buffer size based on system characteristics
-static size_t getOptimalBufferSize()
-{
-    // Start with a reasonable default (1 MiB)
-    size_t bufferSize = IMAGEWRITER_BLOCKSIZE;
-    
-    // Adjust based on system page size
-    size_t pageSize = getSystemPageSize();
-    
-    // For SSD optimization, larger blocks tend to work better
-    // Make sure buffer size is a multiple of page size
-    bufferSize = ((bufferSize + pageSize - 1) / pageSize) * pageSize;
-    
-    // Cap at a reasonable maximum (8 MiB, aligned to page size)
-    const size_t maxBufferSize = (((8 * 1024 * 1024) + pageSize - 1) / pageSize) * pageSize;
-    if (bufferSize > maxBufferSize)
-        bufferSize = maxBufferSize;
-        
-    return bufferSize;
-}
+// Note: Buffer optimization logic moved to centralized buffer_optimization module
 
 class _extractThreadClass : public QThread {
 public:
@@ -87,7 +68,7 @@ protected:
 
 DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
     : DownloadThread(url, localfilename, expectedHash, parent), 
-      _abufsize(getOptimalBufferSize()), 
+      _abufsize(getOptimalWriteBufferSize()), 
       _ethreadStarted(false),
       _isImage(true), 
       _inputHash(OSLIST_HASH_ALGORITHM), 
