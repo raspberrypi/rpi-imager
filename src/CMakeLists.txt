@@ -987,6 +987,13 @@ elseif(APPLE)
 
     if(IMAGER_SIGNED_APP)
         if(IMAGER_SIGNING_IDENTITY)
+            # Configure the styled DMG creation script
+            configure_file(
+                "${CMAKE_CURRENT_SOURCE_DIR}/mac/create_styled_dmg.sh.in"
+                "${CMAKE_BINARY_DIR}/create_styled_dmg.sh"
+                @ONLY
+            )
+            
             # Using a simpler script for macOS post-processing
             configure_file(
                 "${CMAKE_CURRENT_SOURCE_DIR}/mac/macos_post_build.sh.in"
