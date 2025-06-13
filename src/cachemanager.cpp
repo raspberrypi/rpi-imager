@@ -10,6 +10,7 @@
 #include <QDebug>
 #include <QCoreApplication>
 #include <functional>
+#include "buffer_optimization.h"
 
 // Hash algorithm used for cache verification
 #define CACHE_HASH_ALGORITHM QCryptographicHash::Sha256
@@ -169,17 +170,8 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
             
             qint64 fileSize = cacheFile.size();
             
-            // Adaptive buffer size based on file size for optimal performance
-            qint64 bufferSize;
-            if (fileSize < 100 * 1024 * 1024) {        // < 100MB: use 64KB
-                bufferSize = 64 * 1024;
-            } else if (fileSize < 1024 * 1024 * 1024) { // 100MB-1GB: use 1MB  
-                bufferSize = 1024 * 1024;
-            } else if (fileSize < 4LL * 1024 * 1024 * 1024) { // 1GB-4GB: use 4MB
-                bufferSize = 4 * 1024 * 1024;
-            } else {                                    // > 4GB: use 8MB
-                bufferSize = 8 * 1024 * 1024;
-            }
+            // Use centralized buffer optimization module for consistent buffer sizing
+            qint64 bufferSize = getAdaptiveVerifyBufferSize(fileSize);
             
             // Allocate buffer on heap for large sizes
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(bufferSize);

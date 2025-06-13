@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "buffer_optimization.h"
 #include "drivelistitem.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/sha256crypt/sha256crypt.h"
@@ -1662,20 +1663,21 @@ bool ImageWriter::_verifyCacheFileIntegrity()
     // Calculate SHA256 of the actual cache file content
     QCryptographicHash hash(OSLIST_HASH_ALGORITHM);
     
-    const qint64 bufferSize = 64 * 1024; // 64KB buffer
-    char buffer[bufferSize];
+    qint64 fileSize = cacheFile.size();
+    const qint64 bufferSize = getAdaptiveVerifyBufferSize(fileSize);
+    std::unique_ptr<char[]> buffer = std::make_unique<char[]>(bufferSize);
     qint64 totalBytes = 0;
     
     while (!cacheFile.atEnd())
     {
-        qint64 bytesRead = cacheFile.read(buffer, bufferSize);
+        qint64 bytesRead = cacheFile.read(buffer.get(), bufferSize);
         if (bytesRead == -1)
         {
             qDebug() << "Error reading cache file:" << cacheFile.errorString();
             cacheFile.close();
             return false;
         }
-        hash.addData(buffer, bytesRead);
+        hash.addData(buffer.get(), bytesRead);
         totalBytes += bytesRead;
     }
     
