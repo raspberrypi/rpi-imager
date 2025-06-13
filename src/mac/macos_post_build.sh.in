@@ -1,109 +1,68 @@
 #!/bin/bash
 
-# Exit on error
+# macOS post-build script for Raspberry Pi Imager
+# This script creates a styled DMG for distribution
+
 set -e
 
-# Enable verbose output
-set -x
+echo "Starting macOS post-build process..."
 
-# Define paths
-APP_BUNDLE_PATH="@CMAKE_BINARY_DIR@/@PROJECT_NAME@.app"
-FINAL_APP_BUNDLE_PATH="@CMAKE_BINARY_DIR@/Raspberry Pi Imager.app"
-DMG_PATH="@CMAKE_BINARY_DIR@/@APP_NAME@.dmg"
-FINAL_DMG_PATH="@CMAKE_BINARY_DIR@/@APP_NAME@-@IMAGER_VERSION_STR@.dmg"
-QML_DIR="@CMAKE_CURRENT_SOURCE_DIR@"
+# Configuration
+APP_NAME="@CMAKE_PROJECT_NAME@"
+APP_PATH="@CMAKE_BINARY_DIR@/${APP_NAME}.app"
+FINAL_DMG_PATH="@CMAKE_BINARY_DIR@/${APP_NAME}-@IMAGER_VERSION_STR@.dmg"
 SIGNING_IDENTITY="@IMAGER_SIGNING_IDENTITY@"
+SHOULD_NOTARIZE="@IMAGER_NOTARIZE_APP@"
 KEYCHAIN_PROFILE="@IMAGER_NOTARIZE_KEYCHAIN_PROFILE@"
-SHOULD_NOTARIZE=@IMAGER_NOTARIZE_APP@
 
-# Make sure the app bundle exists before proceeding
-if [ ! -d "$APP_BUNDLE_PATH" ]; then
-    echo "Error: App bundle not found at $APP_BUNDLE_PATH"
+# Verify app bundle exists
+if [ ! -d "$APP_PATH" ]; then
+    echo "Error: App bundle not found at $APP_PATH"
+    echo "Make sure the build completed successfully"
     exit 1
 fi
 
-# Check bundle structure before proceeding
-echo "Verifying app bundle structure..."
-ls -la "$APP_BUNDLE_PATH"
-ls -la "$APP_BUNDLE_PATH/Contents" || { echo "Contents directory missing"; exit 1; }
+echo "Found app bundle: $APP_PATH"
 
-# Check for Info.plist
-if [ ! -f "$APP_BUNDLE_PATH/Contents/Info.plist" ]; then
-    echo "Info.plist is missing after explicit copy. Let's try to copy it again."
-    
-    # Try to copy the Info.plist file again from our configured template
-    cp "@CMAKE_BINARY_DIR@/Info.plist" "$APP_BUNDLE_PATH/Contents/Info.plist" || {
-        echo "Failed to copy Info.plist again. The build configuration has an issue.";
-        echo "Debug information:";
-        echo "MACOSX_BUNDLE_EXECUTABLE_NAME: @MACOSX_BUNDLE_EXECUTABLE_NAME@";
-        echo "MACOSX_BUNDLE_BUNDLE_NAME: @MACOSX_BUNDLE_BUNDLE_NAME@";
-        echo "PROJECT_NAME: @PROJECT_NAME@";
-        
-        if [ -d "$APP_BUNDLE_PATH/Contents/MacOS" ]; then
-            echo "Contents of MacOS directory:";
-            ls -la "$APP_BUNDLE_PATH/Contents/MacOS";
-        else
-            echo "MacOS directory is missing!";
-        fi
-        
-        echo "Contents of build directory:";
-        ls -la "@CMAKE_BINARY_DIR@";
-        
-        echo "Checking if Info.plist was generated:";
-        ls -la "@CMAKE_BINARY_DIR@/Info.plist" || echo "Template Info.plist was not generated!";
-        
-        exit 1;
-    }
+# Clean up any existing DMGs
+echo "Cleaning up existing DMGs..."
+rm -f "$FINAL_DMG_PATH"
+
+# Create styled DMG using create-dmg
+echo "Creating styled DMG..."
+"@CMAKE_BINARY_DIR@/create_styled_dmg.sh" || {
+    echo "Error: Failed to create styled DMG"
+    exit 1
+}
+
+# Verify final DMG was created
+if [ ! -f "$FINAL_DMG_PATH" ]; then
+    echo "Error: Final DMG was not created at $FINAL_DMG_PATH"
+    exit 1
 fi
 
-# Verify Info.plist contents
-echo "Checking Info.plist contents:"
-cat "$APP_BUNDLE_PATH/Contents/Info.plist"
+# Clean up any intermediate files
+echo "Cleaning up intermediate build files..."
+rm -f "@CMAKE_BINARY_DIR@"/temp_dmg_build*
+rm -f "@CMAKE_BINARY_DIR@"/*.applescript
+rm -f "@CMAKE_BINARY_DIR@"/dmg_*.html
+rm -rf "@CMAKE_BINARY_DIR@"/dmg_temp*
 
-# Run macdeployqt on the bundle
-echo "Running macdeployqt..."
-"@MACDEPLOYQT@" "$APP_BUNDLE_PATH" -qmldir="$QML_DIR" -always-overwrite
+# Clean up any background generation artifacts
+rm -f "@CMAKE_CURRENT_SOURCE_DIR@/mac/dmg_background.html"
 
-# Check bundle contents after macdeployqt
-echo "Verifying app bundle after macdeployqt..."
-ls -la "$APP_BUNDLE_PATH/Contents/MacOS" > /dev/null 2>&1 || { echo "MacOS directory missing after macdeployqt"; exit 1; }
-ls -la "$APP_BUNDLE_PATH/Contents/Info.plist" > /dev/null 2>&1 || { echo "Info.plist missing after macdeployqt"; exit 1; }
-
-# Rename app bundle to final name BEFORE signing
-echo "Renaming app bundle to 'Raspberry Pi Imager.app'..."
-if [ -d "$FINAL_APP_BUNDLE_PATH" ]; then
-    rm -rf "$FINAL_APP_BUNDLE_PATH"
+echo ""
+echo "✅ macOS post-build process completed successfully!"
+echo "Final DMG: $FINAL_DMG_PATH"
+echo ""
+echo "The DMG is ready for distribution and includes:"
+if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
+    echo "  ✓ Code signing"
 fi
-mv "$APP_BUNDLE_PATH" "$FINAL_APP_BUNDLE_PATH"
-
-# Sign the app bundle (now with final name)
-echo "Signing app bundle..."
-codesign -f --deep --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "$SIGNING_IDENTITY" "$FINAL_APP_BUNDLE_PATH"
-
-# Verify signing
-echo "Verifying app bundle signing..."
-codesign -vvv --deep --strict "$FINAL_APP_BUNDLE_PATH"
-
-# Create DMG
-echo "Creating DMG..."
-hdiutil create -volname "@APP_NAME@" -srcfolder "$FINAL_APP_BUNDLE_PATH" -ov -format UDBZ "$DMG_PATH"
-
-# Sign DMG
-echo "Signing DMG..."
-codesign -f --digest-algorithm=sha1,sha256 -o runtime --timestamp -s "$SIGNING_IDENTITY" "$DMG_PATH"
-
-# Create versioned DMG
-echo "Creating versioned DMG..."
-cp "$DMG_PATH" "$FINAL_DMG_PATH"
-
-# Notarize if requested
-if [ "$SHOULD_NOTARIZE" = "ON" ] && [ ! -z "$KEYCHAIN_PROFILE" ]; then
-    echo "Notarizing DMG..."
-    xcrun notarytool submit "$FINAL_DMG_PATH" --wait --keychain-profile "$KEYCHAIN_PROFILE"
-    
-    echo "Stapling DMG..."
-    xcrun stapler staple "$FINAL_DMG_PATH"
+if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_PROFILE" != "" ]; then
+    echo "  ✓ Notarization"
 fi
+echo ""
+echo "Users can drag the app to Applications for easy installation!"
 
-echo "macOS post-build process completed successfully!"
 exit 0 
