@@ -182,7 +182,7 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
             }
             
             // Allocate buffer on heap for large sizes
-            std::unique_ptr<char[]> buffer(new char[bufferSize]);
+            std::unique_ptr<char[]> buffer = std::make_unique<char[]>(bufferSize);
             qint64 totalBytes = 0;
             
             qDebug() << "Background: Cache verification using" << bufferSize/1024 << "KB buffer for" 
@@ -197,7 +197,7 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
                     qDebug() << "Background: Error reading cache file:" << cacheFile.errorString();
                     break;
                 }
-                hash.addData(buffer.get(), bytesRead);
+                hash.addData(QByteArrayView(buffer.get(), bytesRead));
                 totalBytes += bytesRead;
                 
                 // Adaptive progress update frequency based on buffer size
