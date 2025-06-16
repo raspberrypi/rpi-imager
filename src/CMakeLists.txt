@@ -753,16 +753,6 @@ if (WIN32)
     # Target Windows 10, in line with Qt requirements
     add_definitions(-DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DNTDDI_VERION=0x0A000000)
 
-    # Option to include fat32format fallback (legacy support)
-    option(INCLUDE_FAT32FORMAT_FALLBACK "Include fat32format.exe as fallback for Windows formatting" OFF)
-    
-    if(INCLUDE_FAT32FORMAT_FALLBACK)
-        # Bundled fat32format
-        add_subdirectory(dependencies/fat32format)
-        add_dependencies(${PROJECT_NAME} fat32format)
-        add_definitions(-DHAVE_FAT32FORMAT_FALLBACK)
-    endif()
-
     # Strip debug symbols
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
@@ -813,11 +803,6 @@ if (WIN32)
         POST_BUILD
         COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
 
-    if(INCLUDE_FAT32FORMAT_FALLBACK)
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
-            COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe")
-    endif()
 
     endif(IMAGER_SIGNED_APP)
 
@@ -829,28 +814,12 @@ if (WIN32)
 
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/deploy")
 
-    if(INCLUDE_FAT32FORMAT_FALLBACK)
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-                "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe" "${CMAKE_BINARY_DIR}/dependencies/fat32format/fat32format.exe"
-                "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
-                "${CMAKE_BINARY_DIR}/deploy")
-    else()
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-                "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe"
-                "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
-                "${CMAKE_BINARY_DIR}/deploy")
-    endif()
-
-    # Configure installer templates based on fat32format inclusion
-    if(INCLUDE_FAT32FORMAT_FALLBACK)
-        set(INCLUDE_FAT32FORMAT_FALLBACK_TRUE "")
-    else()
-        set(INCLUDE_FAT32FORMAT_FALLBACK_TRUE ";")
-    endif()
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe"
+            "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
+            "${CMAKE_BINARY_DIR}/deploy")
 
     # Inno Setup configuration
     option(ENABLE_INNO_INSTALLER "Build Inno Setup installer instead of NSIS" OFF)
