@@ -129,7 +129,7 @@ void CacheManager::onVerificationComplete(bool isValid, const QString& fileName,
 
 void CacheManager::onDiskSpaceCheckComplete(qint64 availableBytes, const QString& directory)
 {
-    qDebug() << "Disk space check complete:" << availableBytes / (1024*1024*1024) << "GB available in" << directory;
+    qDebug() << "Disk space check complete:" << availableBytes / (1024*1024*1024) << "GiB available in" << directory;
     
     updateCacheStatus([&](CacheStatus& status) {
         status.availableBytes = availableBytes;
@@ -179,7 +179,7 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
             qint64 totalBytes = 0;
             
             qDebug() << "Background: Cache verification using" << bufferSize/1024 << "KB buffer for" 
-                     << fileSize/(1024*1024) << "MB file";
+                     << fileSize/(1024*1024) << "MiB file";
             
             // Emit initial progress
             emit verificationProgress(0, fileSize);
@@ -242,7 +242,7 @@ void CacheVerificationWorker::checkDiskSpace()
     qint64 availableBytes = storageInfo.bytesAvailable();
     
     qDebug() << "Background: Cache directory:" << cacheDir;
-    qDebug() << "Background: Available space:" << availableBytes / (1024*1024*1024) << "GB";
+    qDebug() << "Background: Available space:" << availableBytes / (1024*1024*1024) << "GiB";
     
     emit diskSpaceCheckComplete(availableBytes, cacheDir);
 }
