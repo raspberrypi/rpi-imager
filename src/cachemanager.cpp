@@ -11,6 +11,7 @@
 #include <QCoreApplication>
 #include <functional>
 #include "buffer_optimization.h"
+#include "config.h"
 
 // Hash algorithm used for cache verification
 #define CACHE_HASH_ALGORITHM QCryptographicHash::Sha256
@@ -132,7 +133,7 @@ void CacheManager::onDiskSpaceCheckComplete(qint64 availableBytes, const QString
     
     updateCacheStatus([&](CacheStatus& status) {
         status.availableBytes = availableBytes;
-        status.hasAvailableSpace = availableBytes > (1024 * 1024 * 1024); // > 1GB
+        status.hasAvailableSpace = availableBytes > IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING;
         status.cacheDirectory = directory;
         status.diskSpaceCheckComplete = true;
     });
