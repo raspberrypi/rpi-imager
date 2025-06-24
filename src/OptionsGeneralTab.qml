@@ -40,6 +40,13 @@ OptionsTabBase {
                 onCheckedChanged: {
                     if (checked) {
                         fieldHostname.forceActiveFocus()
+                        // Re-validate existing content when section is re-enabled
+                        if (fieldHostname.text.length > 0 && !fieldHostname.acceptableInput) {
+                            fieldHostname.indicateError = true
+                        }
+                    } else {
+                        // Clear error state when hostname section is disabled
+                        fieldHostname.indicateError = false
                     }
                 }
             }
@@ -55,6 +62,29 @@ OptionsTabBase {
                 maximumLength: 253
                 validator: RegularExpressionValidator { regularExpression: /[0-9A-Za-z][0-9A-Za-z-]{0,62}/ }
                 Layout.minimumWidth: 200
+                
+                property bool indicateError: false
+                
+                // Visual feedback for validation errors
+                color: indicateError ? Style.formLabelErrorColor : (enabled ? "black" : "grey")
+                
+                onTextChanged: {
+                    // Always validate on text change and update error state accordingly
+                    if (text.length > 0 || acceptableInput) {
+                        indicateError = false
+                    } else {
+                        indicateError = true
+                    }
+                }
+                
+                onEditingFinished: {
+                    // Final validation check when editing is finished
+                    if (text.length > 0 && !acceptableInput) {
+                        indicateError = true
+                    } else {
+                        indicateError = false
+                    }
+                }
             }
             Text {
                 text : ".local"
@@ -71,6 +101,18 @@ OptionsTabBase {
                 }
                 if (checked && !fieldUserPassword.length) {
                     fieldUserPassword.forceActiveFocus()
+                } else if (checked) {
+                    // Re-validate existing content when section is re-enabled
+                    if (fieldUserName.text.length > 0 && !fieldUserName.acceptableInput) {
+                        fieldUserName.indicateError = true
+                    }
+                    if (fieldUserPassword.text.length === 0) {
+                        fieldUserPassword.indicateError = true
+                    }
+                } else if (!checked) {
+                    // Clear error states when user account section is disabled
+                    fieldUserName.indicateError = false
+                    fieldUserPassword.indicateError = false
                 }
             }
         }
@@ -94,9 +136,26 @@ OptionsTabBase {
                 property bool indicateError: false
                 maximumLength: 31
                 validator: RegularExpressionValidator { regularExpression: /^[a-z][a-z0-9-]{0,30}$/ }
+                
+                // Visual feedback for validation errors
+                color: indicateError ? Style.formLabelErrorColor : (enabled ? "black" : "grey")
 
-                onTextEdited: {
-                    indicateError = false
+                onTextChanged: {
+                    // Always validate on text change and update error state accordingly
+                    if (text.length > 0 || acceptableInput) {
+                        indicateError = false
+                    } else {
+                        indicateError = true
+                    }
+                }
+                
+                onEditingFinished: {
+                    // Final validation check when editing is finished
+                    if (text.length > 0 && !acceptableInput) {
+                        indicateError = true
+                    } else {
+                        indicateError = false
+                    }
                 }
             }
         }
@@ -119,6 +178,9 @@ OptionsTabBase {
                 selectByMouse: true
                 property bool alreadyCrypted: false
                 property bool indicateError: false
+                
+                // Visual feedback for validation errors (password field uses different validation logic)
+                color: indicateError ? Style.formLabelErrorColor : (enabled ? "black" : "grey")
 
                 Keys.onPressed: (event)=> {
                     if (alreadyCrypted) {
@@ -133,8 +195,11 @@ OptionsTabBase {
                     event.accepted = false
                 }
 
-                onTextEdited: {
-                    if (indicateError) {
+                onTextChanged: {
+                    // Password validation: cannot be empty when user account is enabled
+                    if (text.length === 0) {
+                        indicateError = true
+                    } else {
                         indicateError = false
                     }
                 }
@@ -151,6 +216,19 @@ OptionsTabBase {
                     } else if (!fieldWifiPassword.length) {
                         fieldWifiPassword.forceActiveFocus()
                     }
+                    
+                    // Re-validate existing content when section is re-enabled
+                    if (fieldWifiSSID.text.length === 0) {
+                        fieldWifiSSID.indicateError = true
+                    }
+                    if (fieldWifiPassword.text.length > 0 && 
+                        !(fieldWifiPassword.text.length >= 8 && fieldWifiPassword.text.length <= 64)) {
+                        fieldWifiPassword.indicateError = true
+                    }
+                } else {
+                    // Clear error states when Wi-Fi section is disabled
+                    fieldWifiSSID.indicateError = false
+                    fieldWifiPassword.indicateError = false
                 }
             }
         }
@@ -172,8 +250,17 @@ OptionsTabBase {
                 Layout.minimumWidth: 200
                 selectByMouse: true
                 property bool indicateError: false
-                onTextEdited: {
-                    indicateError = false
+                
+                // Visual feedback for validation errors
+                color: indicateError ? Style.formLabelErrorColor : (enabled ? "black" : "grey")
+                
+                onTextChanged: {
+                    // Validate SSID: cannot be empty when Wi-Fi is enabled
+                    if (text.length === 0) {
+                        indicateError = true
+                    } else {
+                        indicateError = false
+                    }
                 }
             }
         }
@@ -194,8 +281,17 @@ OptionsTabBase {
                 selectByMouse: true
                 echoMode: TextInput.Password
                 property bool indicateError: false
-                onTextEdited: {
-                    indicateError = false
+
+                // Visual feedback for validation errors
+                color: indicateError ? Style.formLabelErrorColor : (enabled ? "black" : "grey")
+
+                onTextChanged: {
+                    // Validate Wi-Fi password: 0 chars (open), 8-63 chars (passphrase), or 64 chars (hash)
+                    if (text.length === 0 || (text.length >= 8 && text.length <= 64)) {
+                        indicateError = false
+                    } else {
+                        indicateError = true
+                    }
                 }
             }
         }

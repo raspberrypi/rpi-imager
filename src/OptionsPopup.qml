@@ -120,8 +120,35 @@ Window {
             }
 
             ImButtonRed {
+                id: saveButton
                 text: qsTr("SAVE")
+                enabled: {
+                    // Check hostname validation (only if hostname is enabled)
+                    if (generalTab.chkHostname.checked && generalTab.fieldHostname.indicateError) {
+                        return false
+                    }
+                    
+                    // Check user account validation (only if user account is enabled)
+                    if (generalTab.chkSetUser.checked && (generalTab.fieldUserName.indicateError || generalTab.fieldUserPassword.indicateError)) {
+                        return false
+                    }
+                    
+                    // Check Wi-Fi validation (only if Wi-Fi is enabled)
+                    if (generalTab.chkWifi.checked && (generalTab.fieldWifiSSID.indicateError || generalTab.fieldWifiPassword.indicateError)) {
+                        return false
+                    }
+                    
+                    // For SSH keys, we need a different approach since we can't easily bind to delegate errors
+                    // We'll rely on the safety check in onClicked for SSH validation
+                    
+                    return true
+                }
                 onClicked: {
+                    // Safety check - don't save if there are validation errors
+                    if (hasValidationErrors()) {
+                        return
+                    }
+                    
                     if (generalTab.chkSetUser.checked && generalTab.fieldUserPassword.text.length == 0)
                     {
                         generalTab.fieldUserPassword.indicateError = true
@@ -171,6 +198,41 @@ Window {
                 Layout.fillWidth: true
             }
         }
+    }
+
+    function hasValidationErrors() {
+        // Check hostname validation (only if hostname is enabled)
+        if (generalTab.chkHostname.checked && generalTab.fieldHostname.indicateError) {
+            return true
+        }
+        
+        // Check user account validation (only if user account is enabled)
+        if (generalTab.chkSetUser.checked && (generalTab.fieldUserName.indicateError || generalTab.fieldUserPassword.indicateError)) {
+            return true
+        }
+        
+        // Check SSH key validation (only if SSH is enabled and public key auth is selected)
+        if (remoteAccessTab.chkSSH.checked && remoteAccessTab.radioPubKeyAuthentication.checked) {
+            for (var i = 0; i < remoteAccessTab.publicKeyModel.count; i++) {
+                // We need to check if any SSH key field has an error
+                // This is a bit tricky because we need to access the delegate items
+                // For now, let's iterate through the model and validate each key
+                var keyData = remoteAccessTab.publicKeyModel.get(i)
+                if (keyData && keyData.publicKeyField && keyData.publicKeyField.length > 0) {
+                    // Validate the SSH key using the unified validation function
+                    if (!remoteAccessTab.isValidSSHKey(keyData.publicKeyField)) {
+                        return true
+                    }
+                }
+            }
+        }
+        
+        // Check Wi-Fi validation (only if Wi-Fi is enabled)
+        if (generalTab.chkWifi.checked && (generalTab.fieldWifiSSID.indicateError || generalTab.fieldWifiPassword.indicateError)) {
+            return true
+        }
+        
+        return false
     }
 
     function initialize() {
