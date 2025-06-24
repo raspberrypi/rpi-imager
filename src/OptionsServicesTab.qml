@@ -28,6 +28,19 @@ OptionsTabBase {
     required property TextField fieldUserName
     required property TextField fieldUserPassword
 
+    // Unified SSH key validation function
+    function isValidSSHKey(keyText) {
+        if (!keyText || keyText.trim().length === 0) return true // Empty is valid
+        
+        // SSH key regex - supports standard keys, ECDSA curves, security keys, and certificates
+        // Standard: ssh-rsa, ssh-ed25519, ssh-dss
+        // ECDSA: ecdsa-sha2-nistp256/384/521 (using \d+ for any curve)  
+        // Security keys: sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com
+        // Certificates: any valid key type + "-cert-v01@openssh.com"
+        var sshKeyRegex = /^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-nistp\d+|sk-(ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com|[\w-]+-cert-v01@openssh\.com) [A-Za-z0-9+\/=]+( .*)?$/
+        return sshKeyRegex.test(keyText.trim())
+    }
+
     ColumnLayout {
         Layout.fillWidth: true
 
@@ -42,6 +55,11 @@ OptionsTabBase {
                     if (radioPasswordAuthentication.checked) {
                         root.chkSetUser.checked = true
                     }
+                    // Re-validate SSH keys when SSH is re-enabled
+                    revalidateAllSSHKeys()
+                } else {
+                    // Clear SSH key errors when SSH is disabled
+                    clearAllSSHKeyErrors()
                 }
             }
         }
@@ -54,6 +72,8 @@ OptionsTabBase {
                 if (checked) {
                     root.chkSetUser.checked = true
                     //root.fieldUserPassword.forceActiveFocus()
+                    // Clear SSH key errors when switching to password authentication
+                    clearAllSSHKeyErrors()
                 }
             }
         }
@@ -66,6 +86,8 @@ OptionsTabBase {
                     if (root.chkSetUser.checked && root.fieldUserName.text == "pi" && root.fieldUserPassword.text.length == 0) {
                         root.chkSetUser.checked = false
                     }
+                    // Re-validate SSH keys when switching to public key authentication
+                    revalidateAllSSHKeys()
                 }
             }
         }
@@ -95,41 +117,90 @@ OptionsTabBase {
                 spacing: 12
                 clip: true
 
-                delegate: RowLayout {
+                delegate: Column {                       
                     id: publicKeyItem
                     required property int index
                     readonly property int publicKeyModelIndex: index
                     required property string publicKeyField
 
-                    height: 50
+                    width: publicKeyList.width
+                    spacing: 4
 
-                    TextField {
-                        id: contentField
-                        enabled: radioPubKeyAuthentication.checked
-                        validator: RegularExpressionValidator { regularExpression: /^ssh-(ed25519|rsa|dss|ecdsa) AAAA(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{4})( [A-Za-z0-9+\-\._\\]+@[A-Za-z0-9+\-\.]+)?/ }
-                        text: publicKeyItem.publicKeyField
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
-                        implicitWidth: publicKeyList.width - (removePublicKeyItem.width + 20)
-
-                        onEditingFinished: {
-                                publicKeyModel.set(publicKeyItem.publicKeyModelIndex, {publicKeyField: contentField.text})
+                    RowLayout {
+                        width: parent.width
+                        
+                        TextField {
+                            id: contentField
+                            enabled: radioPubKeyAuthentication.checked
+                            text: publicKeyItem.publicKeyField
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                            
+                            property bool indicateError: false
+                            
+                            // Clear error state when field becomes disabled
+                            onEnabledChanged: {
+                                if (!enabled) {
+                                    indicateError = false
+                                }
                             }
-                    }
-                    ImButton {
-                        id: removePublicKeyItem
-                        text: qsTr("Delete Key")
-                        enabled: root.radioPubKeyAuthentication.checked
-                        Layout.minimumWidth: 100
-                        Layout.preferredWidth: 100
-                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                            
 
-                        onClicked: {
-                            if (publicKeyItem.publicKeyModelIndex != -1) {
-                                publicKeyModel.remove(publicKeyItem.publicKeyModelIndex)
-                                publicKeyListViewContainer.implicitHeight -= 50 + publicKeyList.spacing
+                            
+                            // Visual feedback for validation errors
+                            color: indicateError ? Style.formLabelErrorColor : (enabled ? "black" : "grey")
+                            
+                            // Helpful tooltip on hover
+                            ToolTip.visible: hovered && text.length === 0
+                            ToolTip.text: qsTr("Paste your SSH public key here.\nSupported formats: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates\nExample: ssh-rsa AAAAB3NzaC1yc2E... user@hostname")
+                            ToolTip.delay: 1000
+                            
+                            onTextChanged: {
+                                // Always validate on text change and update error state accordingly
+                                if (text.length === 0 || root.isValidSSHKey(text)) {
+                                    indicateError = false
+                                } else {
+                                    indicateError = true
+                                }
+                            }
+
+                            onEditingFinished: {
+                                // Final validation check when editing is finished
+                                if (text.length > 0 && !root.isValidSSHKey(text)) {
+                                    indicateError = true
+                                } else {
+                                    indicateError = false
+                                    publicKeyModel.set(publicKeyItem.publicKeyModelIndex, {publicKeyField: contentField.text})
+                                }
                             }
                         }
+                        
+                        ImButton {
+                            id: removePublicKeyItem
+                            text: qsTr("Delete Key")
+                            enabled: root.radioPubKeyAuthentication.checked
+                            Layout.minimumWidth: 100
+                            Layout.preferredWidth: 100
+                            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+
+                            onClicked: {
+                                if (publicKeyItem.publicKeyModelIndex != -1) {
+                                    publicKeyModel.remove(publicKeyItem.publicKeyModelIndex)
+                                    publicKeyListViewContainer.implicitHeight -= 50 + publicKeyList.spacing
+                                }
+                            }
+                        }
+                    }
+                    
+                    Text {
+                        id: errorText
+                        visible: contentField.indicateError
+                        text: qsTr("Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.")
+                        color: Style.formLabelErrorColor
+                        font.pointSize: 9
+                        wrapMode: Text.WordWrap
+                        width: parent.width - 20
+                        leftPadding: 10
                     }
                 }
             }
@@ -157,6 +228,36 @@ OptionsTabBase {
                     } else {
                         publicKeyListViewContainer.implicitHeight += 100 + (publicKeyList.spacing)
                     }
+                }
+            }
+        }
+    }
+    
+    function clearAllSSHKeyErrors() {
+        // Clear validation errors from all SSH key fields
+        // Note: This is a workaround since we can't easily access delegate items directly
+        // The actual clearing will happen when the fields become disabled or when validation
+        // logic runs again, but this ensures consistent state
+        for (var i = 0; i < publicKeyModel.count; i++) {
+            var item = publicKeyModel.get(i)
+            if (item && item.publicKeyField) {
+                // Trigger a data change to potentially refresh validation state
+                publicKeyModel.set(i, {publicKeyField: item.publicKeyField})
+            }
+        }
+    }
+    
+    function revalidateAllSSHKeys() {
+        // Re-validate all SSH keys when section is re-enabled
+        // This ensures that existing invalid content shows errors again
+        for (var i = 0; i < publicKeyModel.count; i++) {
+            var item = publicKeyModel.get(i)
+            if (item && item.publicKeyField && item.publicKeyField.length > 0) {
+                if (!isValidSSHKey(item.publicKeyField)) {
+                    // We can't directly set indicateError on delegate items, but we can
+                    // trigger the validation by updating the model, which will cause
+                    // the onTextChanged handler to run in the TextField
+                    publicKeyModel.set(i, {publicKeyField: item.publicKeyField})
                 }
             }
         }
