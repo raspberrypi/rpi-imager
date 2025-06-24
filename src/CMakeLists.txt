@@ -665,7 +665,7 @@ set(TRANSLATIONS i18n/rpi-imager_en.ts i18n/rpi-imager_nl.ts i18n/rpi-imager_zh.
     i18n/rpi-imager_ca.ts i18n/rpi-imager_sl.ts i18n/rpi-imager_ko.ts i18n/rpi-imager_ja.ts
     i18n/rpi-imager_ru.ts i18n/rpi-imager_es.ts i18n/rpi-imager_uk.ts i18n/rpi-imager_zh-TW.ts
     i18n/rpi-imager_pl.ts i18n/rpi-imager_he.ts i18n/rpi-imager_pt.ts i18n/rpi-imager_ka.ts
-    i18n/rpi-imager_ga.ts)
+    i18n/rpi-imager_ga.ts i18n/rpi-imager_bn.ts)
 #qt6_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TRANSLATIONS})
 qt_add_translation(QM_FILES  ${TRANSLATIONS})
 configure_file(i18n/translations.qrc "${CMAKE_CURRENT_BINARY_DIR}" COPYONLY)
