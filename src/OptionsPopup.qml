@@ -62,7 +62,7 @@ Window {
             Layout.fillWidth: true
 
             TabButton {
-                text: qsTr("General")
+                text: qsTr("General") + (hasGeneralTabErrors() ? " ⚠" : "")
                 onClicked: {
                     if (generalTab.chkSetUser.checked && !generalTab.fieldUserPassword.length) {
                         generalTab.fieldUserPassword.forceActiveFocus()
@@ -71,7 +71,7 @@ Window {
                 }
             }
             TabButton {
-                text: qsTr("Services")
+                text: qsTr("Services") + (hasServicesTabErrors() ? " ⚠" : "")
                 onClicked: {
                     remoteAccessTab.scrollPosition = 0
                 }
@@ -122,72 +122,32 @@ Window {
             ImButtonRed {
                 id: saveButton
                 text: qsTr("SAVE")
-                enabled: {
-                    // Check hostname validation (only if hostname is enabled)
-                    if (generalTab.chkHostname.checked && generalTab.fieldHostname.indicateError) {
-                        return false
+                enabled: !hasValidationErrors()
+                
+                // Show helpful tooltip when button is disabled
+                ToolTip.visible: hovered && !enabled
+                ToolTip.text: {
+                    if (hasGeneralTabErrors() && hasServicesTabErrors()) {
+                        return qsTr("Please fix validation errors in General and Services tabs")
+                    } else if (hasGeneralTabErrors()) {
+                        return qsTr("Please fix validation errors in General tab")
+                    } else if (hasServicesTabErrors()) {
+                        return qsTr("Please fix validation errors in Services tab")
+                    } else {
+                        return ""
                     }
-                    
-                    // Check user account validation (only if user account is enabled)
-                    if (generalTab.chkSetUser.checked && (generalTab.fieldUserName.indicateError || generalTab.fieldUserPassword.indicateError)) {
-                        return false
-                    }
-                    
-                    // Check Wi-Fi validation (only if Wi-Fi is enabled)
-                    if (generalTab.chkWifi.checked && (generalTab.fieldWifiSSID.indicateError || generalTab.fieldWifiPassword.indicateError)) {
-                        return false
-                    }
-                    
-                    // For SSH keys, we need a different approach since we can't easily bind to delegate errors
-                    // We'll rely on the safety check in onClicked for SSH validation
-                    
-                    return true
                 }
+                ToolTip.delay: 500
+                
                 onClicked: {
                     // Safety check - don't save if there are validation errors
+                    // This should rarely trigger since the button is disabled when there are errors,
+                    // but provides a fallback and focuses the first error field for better UX
                     if (hasValidationErrors()) {
+                        focusFirstErrorField()
                         return
                     }
                     
-                    if (generalTab.chkSetUser.checked && generalTab.fieldUserPassword.text.length == 0)
-                    {
-                        generalTab.fieldUserPassword.indicateError = true
-                        generalTab.fieldUserPassword.forceActiveFocus()
-                        bar.currentIndex = 0
-                        return
-                    }
-                    if (generalTab.chkSetUser.checked && generalTab.fieldUserName.text.length == 0)
-                    {
-                        generalTab.fieldUserName.indicateError = true
-                        generalTab.fieldUserName.forceActiveFocus()
-                        bar.currentIndex = 0
-                        return
-                    }
-
-                    if (generalTab.chkWifi.checked)
-                    {
-                        // Valid Wi-Fi PSKs are:
-                        // - 0 characters (indicating an open network)
-                        // - 8-63 characters (passphrase)
-                        // - 64 characters (hashed passphrase, as hex)
-                        if (generalTab.fieldWifiPassword.text.length > 0 &&
-                            (generalTab.fieldWifiPassword.text.length < 8 || generalTab.fieldWifiPassword.text.length > 64))
-                        {
-                            generalTab.fieldWifiPassword.indicateError = true
-                            generalTab.fieldWifiPassword.forceActiveFocus()
-                        }
-                        if (generalTab.fieldWifiSSID.text.length == 0)
-                        {
-                            generalTab.fieldWifiSSID.indicateError = true
-                            generalTab.fieldWifiSSID.forceActiveFocus()
-                        }
-                        if (generalTab.fieldWifiSSID.indicateError || generalTab.fieldWifiPassword.indicateError)
-                        {
-                            bar.currentIndex = 0
-                            return
-                        }
-                    }
-
                     popup.applySettings()
                     popup.saveSettings()
                     popup.close()
@@ -200,7 +160,7 @@ Window {
         }
     }
 
-    function hasValidationErrors() {
+    function hasGeneralTabErrors() {
         // Check hostname validation (only if hostname is enabled)
         if (generalTab.chkHostname.checked && generalTab.fieldHostname.indicateError) {
             return true
@@ -211,28 +171,71 @@ Window {
             return true
         }
         
-        // Check SSH key validation (only if SSH is enabled and public key auth is selected)
-        if (remoteAccessTab.chkSSH.checked && remoteAccessTab.radioPubKeyAuthentication.checked) {
-            for (var i = 0; i < remoteAccessTab.publicKeyModel.count; i++) {
-                // We need to check if any SSH key field has an error
-                // This is a bit tricky because we need to access the delegate items
-                // For now, let's iterate through the model and validate each key
-                var keyData = remoteAccessTab.publicKeyModel.get(i)
-                if (keyData && keyData.publicKeyField && keyData.publicKeyField.length > 0) {
-                    // Validate the SSH key using the unified validation function
-                    if (!remoteAccessTab.isValidSSHKey(keyData.publicKeyField)) {
-                        return true
-                    }
-                }
-            }
-        }
-        
         // Check Wi-Fi validation (only if Wi-Fi is enabled)
         if (generalTab.chkWifi.checked && (generalTab.fieldWifiSSID.indicateError || generalTab.fieldWifiPassword.indicateError)) {
             return true
         }
         
         return false
+    }
+    
+    function hasServicesTabErrors() {
+        // Check SSH key validation (only if SSH is enabled and public key auth is selected)
+        if (remoteAccessTab.chkSSH.checked && remoteAccessTab.radioPubKeyAuthentication.checked) {
+            // Use the dedicated function that can access delegate validation state
+            if (remoteAccessTab.hasSSHKeyValidationErrors()) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    function hasValidationErrors() {
+        return hasGeneralTabErrors() || hasServicesTabErrors()
+    }
+
+    function focusFirstErrorField() {
+        // Focus the first field with a validation error for better UX
+        // Check in order of tabs: General -> Services
+        
+        // General tab errors
+        if (generalTab.chkHostname.checked && generalTab.fieldHostname.indicateError) {
+            bar.currentIndex = 0
+            generalTab.fieldHostname.forceActiveFocus()
+            return
+        }
+        
+        if (generalTab.chkSetUser.checked && generalTab.fieldUserName.indicateError) {
+            bar.currentIndex = 0
+            generalTab.fieldUserName.forceActiveFocus()
+            return
+        }
+        
+        if (generalTab.chkSetUser.checked && generalTab.fieldUserPassword.indicateError) {
+            bar.currentIndex = 0
+            generalTab.fieldUserPassword.forceActiveFocus()
+            return
+        }
+        
+        if (generalTab.chkWifi.checked && generalTab.fieldWifiSSID.indicateError) {
+            bar.currentIndex = 0
+            generalTab.fieldWifiSSID.forceActiveFocus()
+            return
+        }
+        
+        if (generalTab.chkWifi.checked && generalTab.fieldWifiPassword.indicateError) {
+            bar.currentIndex = 0
+            generalTab.fieldWifiPassword.forceActiveFocus()
+            return
+        }
+        
+        // Services tab errors (SSH keys)
+        if (remoteAccessTab.chkSSH.checked && remoteAccessTab.radioPubKeyAuthentication.checked) {
+            bar.currentIndex = 1
+            // SSH key errors are handled by the fields themselves, just switch to the tab
+            return
+        }
     }
 
     function initialize() {

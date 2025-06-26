@@ -87,7 +87,8 @@ OptionsTabBase {
                         root.chkSetUser.checked = false
                     }
                     // Re-validate SSH keys when switching to public key authentication
-                    revalidateAllSSHKeys()
+                    // Use a timer to ensure the enabled state has settled before re-validating
+                    revalidationTimer.restart()
                 }
             }
         }
@@ -138,10 +139,17 @@ OptionsTabBase {
                             
                             property bool indicateError: false
                             
-                            // Clear error state when field becomes disabled
+                            // Handle error state when field is disabled/enabled
                             onEnabledChanged: {
                                 if (!enabled) {
                                     indicateError = false
+                                } else {
+                                    // Re-validate when field becomes enabled
+                                    if (text.length > 0 && !root.isValidSSHKey(text)) {
+                                        indicateError = true
+                                    } else {
+                                        indicateError = false
+                                    }
                                 }
                             }
                             
@@ -162,6 +170,11 @@ OptionsTabBase {
                                 } else {
                                     indicateError = true
                                 }
+                                
+                                // Update the model with current text so hasSSHKeyValidationErrors() sees current state
+                                if (enabled) {
+                                    publicKeyModel.set(publicKeyItem.publicKeyModelIndex, {publicKeyField: text})
+                                }
                             }
 
                             onEditingFinished: {
@@ -170,8 +183,9 @@ OptionsTabBase {
                                     indicateError = true
                                 } else {
                                     indicateError = false
-                                    publicKeyModel.set(publicKeyItem.publicKeyModelIndex, {publicKeyField: contentField.text})
                                 }
+                                // Always update the model with the current text
+                                publicKeyModel.set(publicKeyItem.publicKeyModelIndex, {publicKeyField: contentField.text})
                             }
                         }
                         
@@ -233,6 +247,13 @@ OptionsTabBase {
         }
     }
     
+    // Timer to handle delayed re-validation when switching authentication modes
+    Timer {
+        id: revalidationTimer
+        interval: 50 // Small delay to let UI settle
+        onTriggered: revalidateAllSSHKeys()
+    }
+    
     function clearAllSSHKeyErrors() {
         // Clear validation errors from all SSH key fields
         // Note: This is a workaround since we can't easily access delegate items directly
@@ -249,17 +270,28 @@ OptionsTabBase {
     
     function revalidateAllSSHKeys() {
         // Re-validate all SSH keys when section is re-enabled
-        // This ensures that existing invalid content shows errors again
+        // The onEnabledChanged handlers should handle the visual state updates
+        // We just need to ensure the model is up to date
         for (var i = 0; i < publicKeyModel.count; i++) {
             var item = publicKeyModel.get(i)
-            if (item && item.publicKeyField && item.publicKeyField.length > 0) {
-                if (!isValidSSHKey(item.publicKeyField)) {
-                    // We can't directly set indicateError on delegate items, but we can
-                    // trigger the validation by updating the model, which will cause
-                    // the onTextChanged handler to run in the TextField
-                    publicKeyModel.set(i, {publicKeyField: item.publicKeyField})
+            if (item && item.publicKeyField) {
+                publicKeyModel.set(i, {publicKeyField: item.publicKeyField})
+            }
+        }
+    }
+    
+    function hasSSHKeyValidationErrors() {
+        // Directly validate all SSH keys in the model - this is the most reliable approach
+        // since it doesn't depend on maintaining counter state
+        for (var i = 0; i < publicKeyModel.count; i++) {
+            var keyData = publicKeyModel.get(i)
+            if (keyData && keyData.publicKeyField && keyData.publicKeyField.length > 0) {
+                // Validate the SSH key using the unified validation function
+                if (!isValidSSHKey(keyData.publicKeyField)) {
+                    return true
                 }
             }
         }
+        return false
     }
 }
