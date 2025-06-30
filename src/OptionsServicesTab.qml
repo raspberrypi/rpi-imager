@@ -121,7 +121,6 @@ OptionsTabBase {
                 delegate: Column {                       
                     id: publicKeyItem
                     required property int index
-                    readonly property int publicKeyModelIndex: index
                     required property string publicKeyField
 
                     width: publicKeyList.width
@@ -173,7 +172,7 @@ OptionsTabBase {
                                 
                                 // Update the model with current text so hasSSHKeyValidationErrors() sees current state
                                 if (enabled) {
-                                    publicKeyModel.set(publicKeyItem.publicKeyModelIndex, {publicKeyField: text})
+                                    publicKeyModel.set(publicKeyItem.index, {publicKeyField: text})
                                 }
                             }
 
@@ -185,7 +184,7 @@ OptionsTabBase {
                                     indicateError = false
                                 }
                                 // Always update the model with the current text
-                                publicKeyModel.set(publicKeyItem.publicKeyModelIndex, {publicKeyField: contentField.text})
+                                publicKeyModel.set(publicKeyItem.index, {publicKeyField: contentField.text})
                             }
                         }
                         
@@ -198,9 +197,16 @@ OptionsTabBase {
                             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
                             onClicked: {
-                                if (publicKeyItem.publicKeyModelIndex != -1) {
-                                    publicKeyModel.remove(publicKeyItem.publicKeyModelIndex)
-                                    publicKeyListViewContainer.implicitHeight -= 50 + publicKeyList.spacing
+                                // Find the correct index by matching the actual key data
+                                // This is more reliable than using delegate index which can become stale
+                                var keyToDelete = publicKeyItem.publicKeyField
+                                for (var i = 0; i < publicKeyModel.count; i++) {
+                                    var modelItem = publicKeyModel.get(i)
+                                    if (modelItem && modelItem.publicKeyField === keyToDelete) {
+                                        publicKeyModel.remove(i)
+                                        publicKeyListViewContainer.implicitHeight -= 50 + publicKeyList.spacing
+                                        break
+                                    }
                                 }
                             }
                         }
@@ -293,5 +299,23 @@ OptionsTabBase {
             }
         }
         return false
+    }
+    
+    function forceListViewRefresh() {
+        // Force the ListView to completely refresh its delegates
+        // This is needed when the model is cleared and reloaded to ensure proper rendering
+        
+        // Reset the container height based on actual model count
+        var newHeight = publicKeyModel.count * (50 + publicKeyList.spacing)
+        if (newHeight > 0) {
+            publicKeyListViewContainer.implicitHeight = newHeight
+        } else {
+            publicKeyListViewContainer.implicitHeight = 50 // Minimum height
+        }
+        
+        // Force the ListView to refresh by temporarily setting model to null and back
+        var tempModel = publicKeyList.model
+        publicKeyList.model = null
+        publicKeyList.model = tempModel
     }
 }

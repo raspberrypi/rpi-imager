@@ -33,6 +33,7 @@ Window {
 
     property bool initialized: false
     property bool hasSavedSettings: false
+    property bool changesAppliedInSession: false
     property string config
     property string cmdline
     property string firstrun
@@ -46,6 +47,13 @@ Window {
     Shortcut {
         sequence: "Esc"
         onActivated: popup.close()
+    }
+
+    onClosing: {
+        // If user closes without saving, don't apply unsaved changes
+        if (!changesAppliedInSession) {
+            restorePreviousState()
+        }
     }
 
     ColumnLayout {
@@ -119,6 +127,15 @@ Window {
                 Layout.fillWidth: true
             }
 
+            ImButton {
+                id: cancelButton
+                text: qsTr("CANCEL")
+                
+                onClicked: {
+                    popup.close()
+                }
+            }
+
             ImButtonRed {
                 id: saveButton
                 text: qsTr("SAVE")
@@ -150,6 +167,7 @@ Window {
                     
                     popup.applySettings()
                     popup.saveSettings()
+                    changesAppliedInSession = true
                     popup.close()
                 }
             }
@@ -379,6 +397,9 @@ Window {
                 applySettings()
             }
         }
+        
+        // Reset the session flag when opening the popup
+        changesAppliedInSession = false
 
         //open()
         show()
@@ -687,6 +708,109 @@ Window {
         }
     }
 
+    function restorePreviousState() {
+        // Restore UI to the last saved state by reloading from persistent settings
+        // This discards any unsaved changes made by the user
+        
+        // Clear current state first
+        clearCustomizationFields()
+        
+        // Reload from saved settings if they exist
+        if (imageWriter.hasSavedCustomizationSettings()) {
+            loadSettingsIntoUI()
+        }
+        
+        // Reset the session flag
+        changesAppliedInSession = false
+    }
+    
+    function loadSettingsIntoUI() {
+        // Load saved settings into the UI (similar to initialize() but focused on settings restoration)
+        var settings = imageWriter.getSavedCustomizationSettings()
+        
+        if ('hostname' in settings) {
+            generalTab.fieldHostname.text = settings.hostname
+            generalTab.chkHostname.checked = true
+        }
+        if ('sshUserPassword' in settings) {
+            generalTab.fieldUserPassword.text = settings.sshUserPassword
+            generalTab.fieldUserPassword.alreadyCrypted = true
+            generalTab.chkSetUser.checked = true
+            if (!('sshEnabled' in settings) || settings.sshEnabled === "true" || settings.sshEnabled === true) {
+                remoteAccessTab.chkSSH.checked = true
+                remoteAccessTab.radioPasswordAuthentication.checked = true
+            }
+        }
+        if ('sshAuthorizedKeys' in settings) {
+            var possiblePublicKeys = settings.sshAuthorizedKeys.split('\n')
+            // Clear existing keys first
+            remoteAccessTab.publicKeyModel.clear()
+            
+            for (const publicKey of possiblePublicKeys) {
+                var pkitem = publicKey.trim()
+                if (pkitem) {
+                    remoteAccessTab.publicKeyModel.append({publicKeyField: pkitem})
+                }
+            }
+
+            remoteAccessTab.radioPubKeyAuthentication.checked = true
+            remoteAccessTab.chkSSH.checked = true
+        }
+        
+        if ('sshUserName' in settings) {
+            generalTab.fieldUserName.text = settings.sshUserName
+            generalTab.chkSetUser.checked = true
+        }
+
+        if ('wifiSSID' in settings) {
+            generalTab.fieldWifiSSID.text = settings.wifiSSID
+            if ('wifiSSIDHidden' in settings && settings.wifiSSIDHidden) {
+                generalTab.chkWifiSSIDHidden.checked = true
+            }
+            generalTab.fieldWifiPassword.text = settings.wifiPassword
+            generalTab.fieldWifiCountry.currentIndex = generalTab.fieldWifiCountry.find(settings.wifiCountry)
+            if (generalTab.fieldWifiCountry.currentIndex == -1) {
+                generalTab.fieldWifiCountry.editText = settings.wifiCountry
+            }
+            generalTab.chkWifi.checked = true
+        }
+
+        if ('timezone' in settings) {
+            generalTab.chkLocale.checked = true
+            var tzidx = generalTab.fieldTimezone.find(settings.timezone)
+            if (tzidx === -1) {
+                generalTab.fieldTimezone.editText = settings.timezone
+            } else {
+                generalTab.fieldTimezone.currentIndex = tzidx
+            }
+        }
+        if ('keyboardLayout' in settings) {
+            generalTab.fieldKeyboardLayout.currentIndex = generalTab.fieldKeyboardLayout.find(settings.keyboardLayout)
+            if (generalTab.fieldKeyboardLayout.currentIndex == -1) {
+                generalTab.fieldKeyboardLayout.editText = settings.keyboardLayout
+            }
+        }
+        
+        // Attempt to insert the default public key, but avoid clashes.
+        // This ensures the default key is available even when restoring settings
+        var insertDefaultKey = true
+        var defaultKey = imageWriter.getDefaultPubKey()
+        if (defaultKey && defaultKey.length > 0) {
+            for (var i = 0; i < remoteAccessTab.publicKeyModel.count; i++) {
+                if (remoteAccessTab.publicKeyModel.get(i)["publicKeyField"] == defaultKey) {
+                    insertDefaultKey = false
+                    break;
+                }
+            }
+            if (insertDefaultKey) {
+                remoteAccessTab.publicKeyModel.append({publicKeyField: defaultKey})
+            }
+        }
+        
+        // Force final ListView refresh after all keys (including default) are loaded
+        remoteAccessTab.forceListViewRefresh()
+    }
+
     function clearCustomizationFields()
     {
         /* Bind copies of the lists */
@@ -700,6 +824,15 @@ Window {
         remoteAccessTab.radioPubKeyAuthentication.checked = false
         remoteAccessTab.radioPasswordAuthentication.checked = false
         remoteAccessTab.publicKeyModel.clear()
+        
+        // Add default key if available (when clearing, we want to show the default key)
+        var defaultKey = imageWriter.getDefaultPubKey()
+        if (defaultKey && defaultKey.length > 0) {
+            remoteAccessTab.publicKeyModel.append({publicKeyField: defaultKey})
+        }
+        
+        // Force ListView refresh after clearing and adding default key
+        remoteAccessTab.forceListViewRefresh()
 
         /* Timezone Settings*/
         generalTab.fieldTimezone.currentIndex = generalTab.fieldTimezone.find(imageWriter.getTimezone())
@@ -729,5 +862,8 @@ Window {
                 }
             }
         }
+        
+        // Reset the session flag when clearing fields
+        changesAppliedInSession = false
     }
 }
