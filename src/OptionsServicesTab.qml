@@ -318,4 +318,31 @@ OptionsTabBase {
         publicKeyList.model = null
         publicKeyList.model = tempModel
     }
+    
+    function focusFirstInvalidSSHKey() {
+        // Focus the first SSH key field that has a validation error
+        for (var i = 0; i < publicKeyModel.count; i++) {
+            var keyData = publicKeyModel.get(i)
+            if (keyData && keyData.publicKeyField && keyData.publicKeyField.length > 0) {
+                // Check if this key is invalid
+                if (!isValidSSHKey(keyData.publicKeyField)) {
+                    // Try to get the delegate item and focus its text field
+                    var delegateItem = publicKeyList.itemAtIndex(i)
+                    if (delegateItem) {
+                        // Navigate to the TextField within the delegate
+                        // Structure: Column -> RowLayout -> TextField
+                        var rowLayout = delegateItem.children[0] // First child is the RowLayout
+                        if (rowLayout && rowLayout.children && rowLayout.children.length > 0) {
+                            var textField = rowLayout.children[0] // First child is the TextField
+                            if (textField && textField.forceActiveFocus) {
+                                textField.forceActiveFocus()
+                                return true // Successfully focused
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false // No invalid field found or failed to focus
+    }
 }
