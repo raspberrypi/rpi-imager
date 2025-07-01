@@ -72,16 +72,26 @@ Window {
             TabButton {
                 text: qsTr("General") + (hasGeneralTabErrors() ? " ⚠" : "")
                 onClicked: {
-                    if (generalTab.chkSetUser.checked && !generalTab.fieldUserPassword.length) {
+                    generalTab.scrollPosition = 0
+                    
+                    // Auto-focus first error field if there are validation errors
+                    if (hasGeneralTabErrors()) {
+                        focusFirstGeneralTabError()
+                    } else if (generalTab.chkSetUser.checked && !generalTab.fieldUserPassword.length) {
+                        // Legacy behavior: focus password field if user account is enabled but password is empty
                         generalTab.fieldUserPassword.forceActiveFocus()
                     }
-                    generalTab.scrollPosition = 0
                 }
             }
             TabButton {
                 text: qsTr("Services") + (hasServicesTabErrors() ? " ⚠" : "")
                 onClicked: {
                     remoteAccessTab.scrollPosition = 0
+                    
+                    // Auto-focus first error field if there are validation errors
+                    if (hasServicesTabErrors()) {
+                        focusFirstServicesTabError()
+                    }
                 }
             }
             TabButton {
@@ -213,47 +223,59 @@ Window {
         return hasGeneralTabErrors() || hasServicesTabErrors()
     }
 
-    function focusFirstErrorField() {
-        // Focus the first field with a validation error for better UX
-        // Check in order of tabs: General -> Services
-        
-        // General tab errors
+    function focusFirstGeneralTabError() {
+        // Focus the first error field in the General tab
         if (generalTab.chkHostname.checked && generalTab.fieldHostname.indicateError) {
-            bar.currentIndex = 0
             generalTab.fieldHostname.forceActiveFocus()
             return
         }
         
         if (generalTab.chkSetUser.checked && generalTab.fieldUserName.indicateError) {
-            bar.currentIndex = 0
             generalTab.fieldUserName.forceActiveFocus()
             return
         }
         
         if (generalTab.chkSetUser.checked && generalTab.fieldUserPassword.indicateError) {
-            bar.currentIndex = 0
             generalTab.fieldUserPassword.forceActiveFocus()
             return
         }
         
         if (generalTab.chkWifi.checked && generalTab.fieldWifiSSID.indicateError) {
-            bar.currentIndex = 0
             generalTab.fieldWifiSSID.forceActiveFocus()
             return
         }
         
         if (generalTab.chkWifi.checked && generalTab.fieldWifiPassword.indicateError) {
-            bar.currentIndex = 0
             generalTab.fieldWifiPassword.forceActiveFocus()
             return
         }
-        
-        // Services tab errors (SSH keys)
+    }
+    
+    function focusFirstServicesTabError() {
+        // Focus the first error field in the Services tab
         if (remoteAccessTab.chkSSH.checked && remoteAccessTab.radioPubKeyAuthentication.checked) {
-            bar.currentIndex = 1
-            // SSH key errors are handled by the fields themselves, just switch to the tab
+            // Try to focus the first invalid SSH key field
+            remoteAccessTab.focusFirstInvalidSSHKey()
+        }
+    }
+
+    function focusFirstErrorField() {
+        // Focus the first field with a validation error for better UX
+        // Check in order of tabs: General -> Services
+        
+        // General tab errors
+        if (hasGeneralTabErrors()) {
+            bar.currentIndex = 0
+            focusFirstGeneralTabError()
             return
         }
+        
+                 // Services tab errors (SSH keys)
+         if (hasServicesTabErrors()) {
+             bar.currentIndex = 1
+             focusFirstServicesTabError()
+             return
+         }
     }
 
     function initialize() {
