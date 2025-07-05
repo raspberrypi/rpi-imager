@@ -194,53 +194,53 @@
     <name>DstPopup</name>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">储存设备</translation>
+        <translation>储存设备</translation>
     </message>
     <message>
         <source>No storage devices found</source>
-        <translation type="unfinished">找不到存储设备</translation>
+        <translation>找不到存储设备</translation>
     </message>
     <message>
         <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <translation>排除系统驱动器</translation>
     </message>
     <message>
         <source>gigabytes</source>
-        <translation type="unfinished"></translation>
+        <translation>千兆字节</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
-        <translation type="unfinished">已挂载为：%1</translation>
+        <translation>已挂载为：%1</translation>
     </message>
     <message>
         <source>GB</source>
-        <translation type="unfinished"></translation>
+        <translation>GB</translation>
     </message>
     <message>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[写保护]</translation>
+        <translation>[写保护]</translation>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
+        <translation>系统</translation>
     </message>
     <message>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">SD 卡写保护。&lt;br&gt;请尝试向上推动 SD 卡左侧的锁定开关，然后再试一次。</translation>
+        <translation>SD 卡写保护。&lt;br&gt;请尝试向上推动 SD 卡左侧的锁定开关，然后再试一次。</translation>
     </message>
 </context>
 <context>
     <name>HWListModel</name>
     <message>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">选择设备</translation>
+        <translation>选择设备</translation>
     </message>
 </context>
 <context>
     <name>HwPopup</name>
     <message>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished">树莓派设备</translation>
+        <translation>树莓派设备</translation>
     </message>
 </context>
 <context>
@@ -312,104 +312,110 @@
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>建议</translation>
     </message>
 </context>
 <context>
     <name>OSPopup</name>
     <message>
         <source>Operating System</source>
-        <translation type="unfinished">操作系统</translation>
+        <translation>操作系统</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">返回</translation>
+        <translation>返回</translation>
     </message>
     <message>
         <source>Go back to main menu</source>
-        <translation type="unfinished">回到主菜单</translation>
+        <translation>回到主菜单</translation>
     </message>
     <message>
         <source>Released: %1</source>
-        <translation type="unfinished">发布时间：%1</translation>
+        <translation>发布时间：%1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">已缓存到本地磁盘</translation>
+        <translation>已缓存到本地磁盘</translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">本地文件</translation>
+        <translation>本地文件</translation>
     </message>
     <message>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">需要下载：%1 GB</translation>
+        <translation>还需下载：%1 GB</translation>
     </message>
     <message>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">请先接入一款包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根路径下。</translation>
+        <translation>请先接入一款包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根路径下。</translation>
     </message>
 </context>
 <context>
     <name>OptionsGeneralTab</name>
     <message>
         <source>Set hostname:</source>
-        <translation type="unfinished">设置主机名：</translation>
+        <translation>设置主机名：</translation>
     </message>
     <message>
         <source>Set username and password</source>
-        <translation type="unfinished">设置用户名及密码</translation>
+        <translation>设置用户名及密码</translation>
     </message>
     <message>
         <source>Username:</source>
-        <translation type="unfinished">用户名：</translation>
+        <translation>用户名：</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">密码：</translation>
+        <translation>密码：</translation>
     </message>
     <message>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">配置 WLAN</translation>
+        <translation>配置 WLAN</translation>
     </message>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">网络名称：</translation>
+        <translation>网络名称：</translation>
     </message>
     <message>
+        <location filename="../OptionsGeneralTab.qml" line="212"/>
+        <source>Show password</source>
+        <translation>显示密码</translation>
+    </message>
+    <message>
+        <location filename="../OptionsGeneralTab.qml" line="223"/>
         <source>Hidden SSID</source>
-        <translation type="unfinished">隐藏的网络</translation>
+        <translation隐藏的网络</translation>
     </message>
     <message>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">WLAN 区域：</translation>
+        <translation>WLAN 区域：</translation>
     </message>
     <message>
         <source>Set locale settings</source>
-        <translation type="unfinished">本地化设置</translation>
+        <translation>本地化设置</translation>
     </message>
     <message>
         <source>Time zone:</source>
-        <translation type="unfinished">时区：</translation>
+        <translation>时区：</translation>
     </message>
     <message>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">键盘布局：</translation>
+        <translation>键盘布局：</translation>
     </message>
 </context>
 <context>
     <name>OptionsMiscTab</name>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">在完成后播放提示音</translation>
+        <translation>在完成后播放提示音</translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">在完成后卸载磁盘</translation>
+        <translation>在完成后卸载磁盘</translation>
     </message>
     <message>
         <source>Enable telemetry</source>
-        <translation type="unfinished">启用遥测</translation>
+        <translation>启用遥测</translation>
     </message>
 </context>
 <context>
@@ -431,6 +437,7 @@
         <translation>可选配置</translation>
     </message>
     <message>
+        <location filename="../OptionsPopup.qml" line="123"/>
         <source>SAVE</source>
         <translation>保存</translation>
     </message>
@@ -439,36 +446,37 @@
     <name>OptionsServicesTab</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">开启 SSH</translation>
+        <translation>开启 SSH</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">使用密码登录</translation>
+        <translation>使用密码登录</translation>
     </message>
     <message>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished">仅使用公钥登录</translation>
+        <translation>仅使用公钥登录</translation>
     </message>
     <message>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">为用户 “%1” 设置 authorized_keys：</translation>
+        <translation>为用户 “%1” 设置 authorized_keys：</translation>
     </message>
     <message>
         <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">运行 SSH-KEYGEN</translation>
+        <translation>运行 SSH-KEYGEN</translation>
     </message>
     <message>
         <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
 </context>
 <context>
     <name>UseSavedSettingsPopup</name>
     <message>
+        <location filename="../UseSavedSettingsPopup.qml" line="41"/>
         <source>Would you like to apply OS customization settings?</source>
         <translation>您想应用自定义系统配置吗？</translation>
     </message>
@@ -500,6 +508,7 @@
         <translation>树莓派设备</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="144"/>
         <source>Select this button to choose your target Raspberry Pi</source>
         <translation>点击此处选择您的树莓派型号</translation>
     </message>
@@ -524,6 +533,8 @@
         <translation>网络不可用</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="207"/>
+        <location filename="../main.qml" line="668"/>
         <source>CHOOSE STORAGE</source>
         <translation>选择储存设备</translation>
     </message>
@@ -572,6 +583,7 @@
         <translation>键盘：</translation>
     </message>
     <message>
+        <location filename="../main.qml" line="485"/>
         <source>Are you sure you want to quit?</source>
         <translation>您确定要退出吗？</translation>
     </message>
@@ -632,6 +644,7 @@
         <translation>&lt;b&gt;%1&lt;/b&gt; 已成功写入至 &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;，您现在可以从读卡器上取下 SD 卡了</translation>
     </message>
     <message>
+        <location filename="../imagewriter.cpp" line="649"/>
         <source>Format card as FAT32</source>
         <translation>把 SD 卡格式化为 FAT32</translation>
     </message>
@@ -642,26 +655,6 @@
     <message>
         <source>Select a custom .img from your computer</source>
         <translation>选择本地已有的 .img 文件</translation>
-    </message>
-    <message>
-        <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Starting download...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Starting write...</source>
-        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>
