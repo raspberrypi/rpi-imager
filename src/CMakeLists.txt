@@ -955,6 +955,15 @@ elseif(APPLE)
         message(FATAL_ERROR "Unable to locate macdeployqt")
     endif()
 
+    # Deploy Qt dependencies as part of the main build
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Deploying Qt dependencies..."
+        COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite
+        COMMENT "Deploying Qt dependencies"
+    )
+
+    # Create explicit DMG target (similar to inno_installer on Windows)
     if(IMAGER_SIGNED_APP)
         if(IMAGER_SIGNING_IDENTITY)
             # Configure the styled DMG creation script
@@ -976,40 +985,28 @@ elseif(APPLE)
                 COMMAND chmod +x "${CMAKE_BINARY_DIR}/macos_post_build.sh"
             )
             
-            # Execute the post-build script
-            add_custom_command(TARGET ${PROJECT_NAME}
-                POST_BUILD
+            # Create signed DMG target
+            add_custom_target(dmg
                 COMMAND "${CMAKE_BINARY_DIR}/macos_post_build.sh"
-                COMMENT "Running macOS post-build operations (deploy, sign, create DMG)"
-            )
+                DEPENDS ${PROJECT_NAME}
+                COMMENT "Creating signed macOS DMG"
+                VERBATIM)
         else()
             message(FATAL_ERROR "Signing requested, but no signing identity provided")
         endif(IMAGER_SIGNING_IDENTITY)
     else()
-        # Unsigned application - simpler approach
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E echo "Deploying Qt dependencies..."
-            COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite
-            COMMENT "Deploying Qt dependencies"
-        )
-        
-        # Create DMG
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
+        # Create unsigned DMG target
+        add_custom_target(dmg
             COMMAND ${CMAKE_COMMAND} -E echo "Creating DMG..."
             COMMAND hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_BUNDLE_PATH}" -ov -format UDBZ "${DMG_PATH}"
-            COMMENT "Creating DMG"
-        )
-        
-        # Create the versioned DMG
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E echo "Creating versioned DMG at ${FINAL_DMG_PATH}..."
             COMMAND ${CMAKE_COMMAND} -E copy "${DMG_PATH}" "${FINAL_DMG_PATH}"
-            COMMENT "Creating versioned DMG"
-        )
+            DEPENDS ${PROJECT_NAME}
+            COMMENT "Creating macOS DMG"
+            VERBATIM)
     endif(IMAGER_SIGNED_APP)
+    
+    message(STATUS "Added 'dmg' target to build the macOS DMG installer")
 
 else()
     # UNIX, Linux systems
