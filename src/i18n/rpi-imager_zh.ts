@@ -545,7 +545,7 @@
     <message>
         <location filename="../OptionsServicesTab.qml" line="150"/>
         <source>Add SSH Key</source>
-        <translation></translation>
+        <translation>添加 SSH 密钥</translation>
     </message>
 </context>
 <context>
