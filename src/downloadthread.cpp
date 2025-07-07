@@ -769,7 +769,7 @@ void DownloadThread::_writeComplete()
 
     emit finalizing();
 
-    if (!_config.isEmpty() || !_cmdline.isEmpty() || !_firstrun.isEmpty() || !_cloudinit.isEmpty())
+    if ((!_config.isEmpty() || !_cmdline.isEmpty() || !_firstrun.isEmpty() || !_cloudinit.isEmpty()) && !_initFormat.isEmpty())
     {
         if (!_customizeImage())
         {

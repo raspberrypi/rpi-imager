@@ -290,7 +290,15 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     }
     if (url.isLocalFile())
     {
-        _initFormat = "auto";
+        QString filename = url.toLocalFile().toLower();
+        if (filename.endsWith(".iso"))
+        {
+            _initFormat = ""; // ISO files don't support customization
+        }
+        else
+        {
+            _initFormat = "auto";
+        }
     }
 }
 
