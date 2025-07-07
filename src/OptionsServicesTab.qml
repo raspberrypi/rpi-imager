@@ -55,7 +55,7 @@ OptionsTabBase {
                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                     radioPasswordAuthentication.forceActiveFocus()
                     event.accepted = true
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     // Navigate back to TabBar
                     if (root.tabBar) {
                         root.tabBar.forceActiveFocus()
@@ -91,7 +91,7 @@ OptionsTabBase {
                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                     radioPubKeyAuthentication.forceActiveFocus()
                     event.accepted = true
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     chkSSH.forceActiveFocus()
                     event.accepted = true
                 }
@@ -122,7 +122,7 @@ OptionsTabBase {
                         addSshKeyButton.forceActiveFocus()
                         event.accepted = true
                     }
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     radioPasswordAuthentication.forceActiveFocus()
                     event.accepted = true
                 }
@@ -209,7 +209,7 @@ OptionsTabBase {
                                         root.navigateToButtons()
                                         event.accepted = true
                                     }
-                                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                                     // Shift+Tab backward: go to previous SSH key or radio buttons
                                     if (publicKeyItem.index > 0) {
                                         // Navigate to previous SSH key field
@@ -332,7 +332,7 @@ OptionsTabBase {
                         // Navigate to Add SSH Key button
                         addSshKeyButton.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Navigate back to radio buttons
                         radioPubKeyAuthentication.forceActiveFocus()
                         event.accepted = true
@@ -359,7 +359,7 @@ OptionsTabBase {
                             root.navigateToButtons()
                             event.accepted = true
                         }
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Navigate back to RUN SSH-KEYGEN button if enabled, otherwise radio buttons
                         if (sshKeygenButton.enabled) {
                             sshKeygenButton.forceActiveFocus()

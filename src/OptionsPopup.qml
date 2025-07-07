@@ -77,7 +77,7 @@ Window {
                 // For now, just focus the second radio button as it's always accessible
                 remoteAccessTab.radioPubKeyAuthentication.forceActiveFocus()
             } else if (bar.currentIndex === 2) {
-                // Options tab - focus telemetry checkbox
+                // Options tab - focus telemetry checkbox (last element)
                 optionsTab.chkTelemtry.forceActiveFocus()
             }
         })
@@ -244,7 +244,7 @@ Window {
                         // Tab to Save button
                         saveButton.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Shift+Tab back to last element in current tab
                         focusLastElementInCurrentTab()
                         event.accepted = true
@@ -283,7 +283,7 @@ Window {
                         // Tab wraps back to TabBar
                         bar.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Shift+Tab to Cancel button
                         cancelButton.forceActiveFocus()
                         event.accepted = true

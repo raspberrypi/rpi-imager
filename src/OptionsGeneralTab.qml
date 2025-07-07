@@ -46,7 +46,7 @@ OptionsTabBase {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         fieldHostname.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Navigate back to TabBar
                         if (root.tabBar) {
                             root.tabBar.forceActiveFocus()
@@ -86,7 +86,7 @@ OptionsTabBase {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         chkSetUser.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         chkHostname.forceActiveFocus()
                         event.accepted = true
                     }
@@ -130,7 +130,7 @@ OptionsTabBase {
                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                     fieldUserName.forceActiveFocus()
                     event.accepted = true
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     // Go to hostname field if enabled, otherwise hostname checkbox
                     if (chkHostname.checked) {
                         fieldHostname.forceActiveFocus()
@@ -188,7 +188,7 @@ OptionsTabBase {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         fieldUserPassword.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         chkSetUser.forceActiveFocus()
                         event.accepted = true
                     }
@@ -249,7 +249,7 @@ OptionsTabBase {
                         // Always go to chkWifi first
                         chkWifi.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Go to username field if user enabled, otherwise user checkbox
                         if (chkSetUser.checked) {
                             fieldUserName.forceActiveFocus()
@@ -296,7 +296,7 @@ OptionsTabBase {
                         chkLocale.forceActiveFocus()
                     }
                     event.accepted = true
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     // Go to password field if user enabled, otherwise user checkbox
                     if (chkSetUser.checked) {
                         fieldUserPassword.forceActiveFocus()
@@ -354,7 +354,7 @@ OptionsTabBase {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         fieldWifiPassword.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         chkWifi.forceActiveFocus()
                         event.accepted = true
                     }
@@ -396,7 +396,7 @@ OptionsTabBase {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         chkWifiSSIDHidden.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         fieldWifiSSID.forceActiveFocus()
                         event.accepted = true
                     }
@@ -433,7 +433,7 @@ OptionsTabBase {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         fieldWifiCountry.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         fieldWifiPassword.forceActiveFocus()
                         event.accepted = true
                     }
@@ -467,7 +467,7 @@ OptionsTabBase {
                         // Navigate to locale checkbox
                         chkLocale.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Go back through WiFi fields if enabled
                         if (chkWifi.checked) {
                             chkWifiSSIDHidden.forceActiveFocus()
@@ -497,7 +497,7 @@ OptionsTabBase {
                         }
                     }
                     event.accepted = true
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     // Backward: conditional navigation based on WiFi state
                     if (chkWifi.checked) {
                         // WiFi is enabled, go to country combo
@@ -532,7 +532,7 @@ OptionsTabBase {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         fieldKeyboardLayout.forceActiveFocus()
                         event.accepted = true
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Debug: try direct focus without callLater
                         console.log("Timezone shift+tab: trying to focus chkLocale")
                         chkLocale.focus = true
@@ -569,7 +569,7 @@ OptionsTabBase {
                             root.navigateToButtons()
                             event.accepted = true
                         }
-                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Go to timezone field if locale enabled, otherwise locale checkbox
                         if (chkLocale.checked) {
                             fieldTimezone.forceActiveFocus()

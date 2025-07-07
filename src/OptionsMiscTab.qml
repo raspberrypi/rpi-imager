@@ -35,7 +35,7 @@ OptionsTabBase {
                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                     chkEject.forceActiveFocus()
                     event.accepted = true
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     // Navigate back to TabBar
                     if (root.tabBar) {
                         root.tabBar.forceActiveFocus()
@@ -53,7 +53,7 @@ OptionsTabBase {
                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                     chkTelemtry.forceActiveFocus()
                     event.accepted = true
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     chkBeep.forceActiveFocus()
                     event.accepted = true
                 }
@@ -71,7 +71,7 @@ OptionsTabBase {
                         root.navigateToButtons()
                         event.accepted = true
                     }
-                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     chkEject.forceActiveFocus()
                     event.accepted = true
                 }
