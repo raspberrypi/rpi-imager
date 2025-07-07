@@ -535,7 +535,7 @@
     <message>
         <location filename="../OptionsServicesTab.qml" line="121"/>
         <source>Delete Key</source>
-        <translation></translation>
+        <translation>删除密钥</translation>
     </message>
     <message>
         <location filename="../OptionsServicesTab.qml" line="140"/>
