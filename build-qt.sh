@@ -262,9 +262,6 @@ CONFIG_OPTS=(
     -skip qt3d
     -skip qtandroidextras
     -skip qtwinextras
-    --
-    -DQT_BUILD_TESTS=OFF
-    -DQT_BUILD_EXAMPLES=OFF
 )
 
 # Add debug/release specific options
@@ -281,6 +278,12 @@ if [ "$USE_EGLFS" -eq 1 ]; then
         -opengl es2
     )
 fi
+
+CONFIG_OPTS+=(
+        --
+        -DQT_BUILD_TESTS=OFF
+        -DQT_BUILD_EXAMPLES=OFF
+)
 
 # Run the configure script with verbose output if requested
 echo "Configuring Qt with options: ${CONFIG_OPTS[*]}"
