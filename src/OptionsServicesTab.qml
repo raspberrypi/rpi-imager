@@ -114,7 +114,23 @@ OptionsTabBase {
             // Handle explicit navigation
             Keys.onPressed: (event) => {
                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
-                    // Navigate to RUN SSH-KEYGEN button if enabled, otherwise Add SSH Key button
+                    // Check if there are SSH key fields to navigate to first
+                    if (publicKeyModel.count > 0) {
+                        // Navigate to first SSH key field
+                        var firstDelegate = publicKeyList.itemAtIndex(0)
+                        if (firstDelegate) {
+                            var firstRowLayout = firstDelegate.children[0]
+                            if (firstRowLayout && firstRowLayout.children && firstRowLayout.children.length > 0) {
+                                var firstTextField = firstRowLayout.children[0]
+                                if (firstTextField && firstTextField.forceActiveFocus) {
+                                    firstTextField.forceActiveFocus()
+                                    event.accepted = true
+                                    return
+                                }
+                            }
+                        }
+                    }
+                    // No SSH keys or fallback: Navigate to RUN SSH-KEYGEN button if enabled, otherwise Add SSH Key button
                     if (sshKeygenButton.enabled) {
                         sshKeygenButton.forceActiveFocus()
                         event.accepted = true
@@ -188,38 +204,20 @@ OptionsTabBase {
                             // Handle tab navigation between SSH key fields
                             Keys.onPressed: (event) => {
                                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
-                                    // Tab forward: go to next SSH key or to Add SSH Key button
-                                    if (publicKeyItem.index < publicKeyModel.count - 1) {
-                                        // Navigate to next SSH key field
-                                        var nextDelegate = publicKeyList.itemAtIndex(publicKeyItem.index + 1)
-                                        if (nextDelegate) {
-                                            var nextRowLayout = nextDelegate.children[0]
-                                            if (nextRowLayout && nextRowLayout.children && nextRowLayout.children.length > 0) {
-                                                var nextTextField = nextRowLayout.children[0]
-                                                if (nextTextField && nextTextField.forceActiveFocus) {
-                                                    nextTextField.forceActiveFocus()
-                                                    event.accepted = true
-                                                    return
-                                                }
-                                            }
-                                        }
-                                    }
-                                    // Last SSH key or fallback: navigate to buttons
-                                    if (root.navigateToButtons) {
-                                        root.navigateToButtons()
-                                        event.accepted = true
-                                    }
+                                    // Tab forward: go to delete button for this row
+                                    removePublicKeyItem.forceActiveFocus()
+                                    event.accepted = true
                                 } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                                    // Shift+Tab backward: go to previous SSH key or radio buttons
+                                    // Shift+Tab backward: go to previous delete button or radio buttons
                                     if (publicKeyItem.index > 0) {
-                                        // Navigate to previous SSH key field
+                                        // Navigate to previous SSH key's delete button
                                         var prevDelegate = publicKeyList.itemAtIndex(publicKeyItem.index - 1)
                                         if (prevDelegate) {
                                             var prevRowLayout = prevDelegate.children[0]
-                                            if (prevRowLayout && prevRowLayout.children && prevRowLayout.children.length > 0) {
-                                                var prevTextField = prevRowLayout.children[0]
-                                                if (prevTextField && prevTextField.forceActiveFocus) {
-                                                    prevTextField.forceActiveFocus()
+                                            if (prevRowLayout && prevRowLayout.children && prevRowLayout.children.length > 1) {
+                                                var prevDeleteButton = prevRowLayout.children[1]
+                                                if (prevDeleteButton && prevDeleteButton.forceActiveFocus) {
+                                                    prevDeleteButton.forceActiveFocus()
                                                     event.accepted = true
                                                     return
                                                 }
@@ -289,6 +287,39 @@ OptionsTabBase {
                             Layout.preferredWidth: 100
                             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
+                            // Handle keyboard navigation for delete buttons
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                                    // Tab forward: go to next SSH key or to buttons if this is the last one
+                                    if (publicKeyItem.index < publicKeyModel.count - 1) {
+                                        // Navigate to next SSH key field
+                                        var nextDelegate = publicKeyList.itemAtIndex(publicKeyItem.index + 1)
+                                        if (nextDelegate) {
+                                            var nextRowLayout = nextDelegate.children[0]
+                                            if (nextRowLayout && nextRowLayout.children && nextRowLayout.children.length > 0) {
+                                                var nextTextField = nextRowLayout.children[0]
+                                                if (nextTextField && nextTextField.forceActiveFocus) {
+                                                    nextTextField.forceActiveFocus()
+                                                    event.accepted = true
+                                                    return
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Last delete button: navigate to RUN SSH-KEYGEN or Add SSH Key buttons
+                                    if (sshKeygenButton.enabled) {
+                                        sshKeygenButton.forceActiveFocus()
+                                    } else {
+                                        addSshKeyButton.forceActiveFocus()
+                                    }
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
+                                    // Shift+Tab backward: go back to the SSH key text field in this same row
+                                    contentField.forceActiveFocus()
+                                    event.accepted = true
+                                }
+                            }
+
                             onClicked: {
                                 // Find the correct index by matching the actual key data
                                 // This is more reliable than using delegate index which can become stale
@@ -333,7 +364,23 @@ OptionsTabBase {
                         addSshKeyButton.forceActiveFocus()
                         event.accepted = true
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                        // Navigate back to radio buttons
+                        // Navigate back: check if there are SSH keys to go to, otherwise radio buttons
+                        if (publicKeyModel.count > 0) {
+                            // Navigate to last SSH key's delete button
+                            var lastDelegate = publicKeyList.itemAtIndex(publicKeyModel.count - 1)
+                            if (lastDelegate) {
+                                var lastRowLayout = lastDelegate.children[0]
+                                if (lastRowLayout && lastRowLayout.children && lastRowLayout.children.length > 1) {
+                                    var lastDeleteButton = lastRowLayout.children[1]
+                                    if (lastDeleteButton && lastDeleteButton.forceActiveFocus) {
+                                        lastDeleteButton.forceActiveFocus()
+                                        event.accepted = true
+                                        return
+                                    }
+                                }
+                            }
+                        }
+                        // No SSH keys: navigate back to radio buttons
                         radioPubKeyAuthentication.forceActiveFocus()
                         event.accepted = true
                     }
@@ -360,11 +407,29 @@ OptionsTabBase {
                             event.accepted = true
                         }
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                        // Navigate back to RUN SSH-KEYGEN button if enabled, otherwise radio buttons
+                        // Navigate back to RUN SSH-KEYGEN button if enabled, otherwise check for SSH keys
                         if (sshKeygenButton.enabled) {
                             sshKeygenButton.forceActiveFocus()
                             event.accepted = true
+                        } else if (publicKeyModel.count > 0) {
+                            // Navigate to last SSH key's delete button
+                            var lastDelegate = publicKeyList.itemAtIndex(publicKeyModel.count - 1)
+                            if (lastDelegate) {
+                                var lastRowLayout = lastDelegate.children[0]
+                                if (lastRowLayout && lastRowLayout.children && lastRowLayout.children.length > 1) {
+                                    var lastDeleteButton = lastRowLayout.children[1]
+                                    if (lastDeleteButton && lastDeleteButton.forceActiveFocus) {
+                                        lastDeleteButton.forceActiveFocus()
+                                        event.accepted = true
+                                        return
+                                    }
+                                }
+                            }
+                            // Fallback to radio buttons if SSH key navigation fails
+                            radioPubKeyAuthentication.forceActiveFocus()
+                            event.accepted = true
                         } else {
+                            // No SSH-KEYGEN button and no SSH keys: go to radio buttons
                             radioPubKeyAuthentication.forceActiveFocus()
                             event.accepted = true
                         }
