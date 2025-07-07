@@ -161,10 +161,8 @@ Window {
                     // Auto-focus first error field if there are validation errors
                     if (hasGeneralTabErrors()) {
                         focusFirstGeneralTabError()
-                    } else {
-                        // Always transfer focus to tab content when clicked
-                        focusFirstElementInCurrentTab()
                     }
+                    // For mouse clicks, don't automatically focus - let user navigate manually
                 }
             }
             TabButton {
@@ -175,10 +173,8 @@ Window {
                     // Auto-focus first error field if there are validation errors
                     if (hasServicesTabErrors()) {
                         focusFirstServicesTabError()
-                    } else {
-                        // Always transfer focus to tab content when clicked
-                        focusFirstElementInCurrentTab()
                     }
+                    // For mouse clicks, don't automatically focus - let user navigate manually
                 }
             }
             TabButton {
@@ -186,8 +182,7 @@ Window {
                 onClicked: {
                     optionsTab.scrollPosition = 0
                     
-                    // Always transfer focus to tab content when clicked
-                    focusFirstElementInCurrentTab()
+                    // For mouse clicks, don't automatically focus - let user navigate manually
                 }
             }
         }
