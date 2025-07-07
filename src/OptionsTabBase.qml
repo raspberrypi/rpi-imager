@@ -14,10 +14,20 @@ ScrollView {
     id: root
 
     property double scrollPosition
+    
+    // Function to navigate to the buttons (should be set by parent)
+    property var navigateToButtons: null
+    
+    // Reference to the TabBar (set by parent)
+    property var tabBar: null
 
     font.family: Style.fontFamily
     Layout.fillWidth: true
     Layout.fillHeight: true
+    
+    // Ensure ScrollView doesn't interfere with tab navigation
+    activeFocusOnTab: false
+    focus: false
 
     // clip: true
     ScrollBar.vertical.policy: ScrollBar.AsNeeded
