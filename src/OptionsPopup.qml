@@ -49,6 +49,73 @@ Window {
         onActivated: popup.close()
     }
 
+    // Keyboard navigation shortcuts
+    function focusFirstElementInCurrentTab() {
+        // Focus the first focusable element in the current tab
+        Qt.callLater(function() {
+            if (bar.currentIndex === 0) {
+                // General tab - focus hostname checkbox
+                generalTab.chkHostname.forceActiveFocus()
+            } else if (bar.currentIndex === 1) {
+                // Services tab - focus SSH checkbox
+                remoteAccessTab.chkSSH.forceActiveFocus()
+            } else if (bar.currentIndex === 2) {
+                // Options tab - focus beep checkbox
+                optionsTab.chkBeep.forceActiveFocus()
+            }
+        })
+    }
+    
+    function focusLastElementInCurrentTab() {
+        // Focus the last focusable element in the current tab
+        Qt.callLater(function() {
+            if (bar.currentIndex === 0) {
+                // General tab - focus keyboard layout combo
+                generalTab.fieldKeyboardLayout.forceActiveFocus()
+            } else if (bar.currentIndex === 1) {
+                // Services tab - need to find a reliable way to access Add SSH Key button
+                // For now, just focus the second radio button as it's always accessible
+                remoteAccessTab.radioPubKeyAuthentication.forceActiveFocus()
+            } else if (bar.currentIndex === 2) {
+                // Options tab - focus telemetry checkbox
+                optionsTab.chkTelemtry.forceActiveFocus()
+            }
+        })
+    }
+    
+    Shortcut {
+        sequence: "Ctrl+Tab"
+        onActivated: {
+            bar.currentIndex = (bar.currentIndex + 1) % 3
+            focusFirstElementInCurrentTab()
+        }
+    }
+    
+    Shortcut {
+        sequence: "Ctrl+Shift+Tab"
+        onActivated: {
+            bar.currentIndex = (bar.currentIndex + 2) % 3  // +2 for going backwards in modulo 3
+            focusFirstElementInCurrentTab()
+        }
+    }
+
+    // Also support Ctrl+PageDown/PageUp as alternative tab switching
+    Shortcut {
+        sequence: "Ctrl+PgDown"
+        onActivated: {
+            bar.currentIndex = (bar.currentIndex + 1) % 3
+            focusFirstElementInCurrentTab()
+        }
+    }
+    
+    Shortcut {
+        sequence: "Ctrl+PgUp"
+        onActivated: {
+            bar.currentIndex = (bar.currentIndex + 2) % 3
+            focusFirstElementInCurrentTab()
+        }
+    }
+
     onClosing: {
         // If user closes without saving, don't apply unsaved changes
         if (!changesAppliedInSession) {
@@ -68,6 +135,23 @@ Window {
         TabBar {
             id: bar
             Layout.fillWidth: true
+            focus: true
+            activeFocusOnTab: true
+            
+            // Allow arrow key navigation between tabs
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) {
+                    currentIndex = (currentIndex + 2) % 3  // Go backwards
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) {
+                    currentIndex = (currentIndex + 1) % 3  // Go forwards  
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Tab) {
+                    // Allow Tab to move to first element in current tab
+                    focusFirstElementInCurrentTab()
+                    event.accepted = true
+                }
+            }
 
             TabButton {
                 text: qsTr("General") + (hasGeneralTabErrors() ? " ⚠" : "")
@@ -77,9 +161,9 @@ Window {
                     // Auto-focus first error field if there are validation errors
                     if (hasGeneralTabErrors()) {
                         focusFirstGeneralTabError()
-                    } else if (generalTab.chkSetUser.checked && !generalTab.fieldUserPassword.length) {
-                        // Legacy behavior: focus password field if user account is enabled but password is empty
-                        generalTab.fieldUserPassword.forceActiveFocus()
+                    } else {
+                        // Always transfer focus to tab content when clicked
+                        focusFirstElementInCurrentTab()
                     }
                 }
             }
@@ -91,6 +175,9 @@ Window {
                     // Auto-focus first error field if there are validation errors
                     if (hasServicesTabErrors()) {
                         focusFirstServicesTabError()
+                    } else {
+                        // Always transfer focus to tab content when clicked
+                        focusFirstElementInCurrentTab()
                     }
                 }
             }
@@ -98,6 +185,9 @@ Window {
                 text: qsTr("Options")
                 onClicked: {
                     optionsTab.scrollPosition = 0
+                    
+                    // Always transfer focus to tab content when clicked
+                    focusFirstElementInCurrentTab()
                 }
             }
         }
@@ -114,6 +204,8 @@ Window {
                 id: generalTab
                 sshEnabled: remoteAccessTab.chkSSH.enabled
                 passwordAuthenticationEnabled: remoteAccessTab.radioPasswordAuthentication.enabled
+                navigateToButtons: function() { cancelButton.forceActiveFocus() }
+                tabBar: bar
             }
 
             OptionsServicesTab {
@@ -122,10 +214,14 @@ Window {
                 chkSetUser: generalTab.chkSetUser
                 fieldUserName: generalTab.fieldUserName
                 fieldUserPassword: generalTab.fieldUserPassword
+                navigateToButtons: function() { cancelButton.forceActiveFocus() }
+                tabBar: bar
             }
 
             OptionsMiscTab {
                 id: optionsTab
+                navigateToButtons: function() { cancelButton.forceActiveFocus() }
+                tabBar: bar
             }
         }
 
@@ -140,6 +236,20 @@ Window {
             ImButton {
                 id: cancelButton
                 text: qsTr("CANCEL")
+                activeFocusOnTab: true
+                
+                // Add keyboard navigation
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                        // Tab to Save button
+                        saveButton.forceActiveFocus()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                        // Shift+Tab back to last element in current tab
+                        focusLastElementInCurrentTab()
+                        event.accepted = true
+                    }
+                }
                 
                 onClicked: {
                     popup.close()
@@ -150,6 +260,7 @@ Window {
                 id: saveButton
                 text: qsTr("SAVE")
                 enabled: !hasValidationErrors()
+                activeFocusOnTab: true
                 
                 // Show helpful tooltip when button is disabled
                 ToolTip.visible: hovered && !enabled
@@ -165,6 +276,19 @@ Window {
                     }
                 }
                 ToolTip.delay: 500
+                
+                // Add keyboard navigation  
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                        // Tab wraps back to TabBar
+                        bar.forceActiveFocus()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                        // Shift+Tab to Cancel button
+                        cancelButton.forceActiveFocus()
+                        event.accepted = true
+                    }
+                }
                 
                 onClicked: {
                     // Safety check - don't save if there are validation errors
@@ -426,6 +550,8 @@ Window {
         //open()
         show()
         raise()
+        
+        // Set initial focus to TabBar for keyboard navigation
         bar.forceActiveFocus()
     }
 

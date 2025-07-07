@@ -43,10 +43,27 @@ OptionsTabBase {
 
     ColumnLayout {
         Layout.fillWidth: true
+        // Ensure layout doesn't interfere with tab navigation
+        activeFocusOnTab: false
 
         ImCheckBox {
             id: chkSSH
             text: qsTr("Enable SSH")
+            
+            // Handle explicit navigation in both directions
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                    radioPasswordAuthentication.forceActiveFocus()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    // Navigate back to TabBar
+                    if (root.tabBar) {
+                        root.tabBar.forceActiveFocus()
+                        event.accepted = true
+                    }
+                }
+            }
+            
             onCheckedChanged: {
                 if (checked) {
                     if (!radioPasswordAuthentication.checked && !radioPubKeyAuthentication.checked) {
@@ -68,6 +85,18 @@ OptionsTabBase {
             id: radioPasswordAuthentication
             enabled: chkSSH.checked
             text: qsTr("Use password authentication")
+            
+            // Handle explicit navigation
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                    radioPubKeyAuthentication.forceActiveFocus()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    chkSSH.forceActiveFocus()
+                    event.accepted = true
+                }
+            }
+            
             onCheckedChanged: {
                 if (checked) {
                     root.chkSetUser.checked = true
@@ -81,6 +110,24 @@ OptionsTabBase {
             id: radioPubKeyAuthentication
             enabled: chkSSH.checked
             text: qsTr("Allow public-key authentication only")
+            
+            // Handle explicit navigation
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                    // Navigate to RUN SSH-KEYGEN button if enabled, otherwise Add SSH Key button
+                    if (sshKeygenButton.enabled) {
+                        sshKeygenButton.forceActiveFocus()
+                        event.accepted = true
+                    } else {
+                        addSshKeyButton.forceActiveFocus()
+                        event.accepted = true
+                    }
+                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                    radioPasswordAuthentication.forceActiveFocus()
+                    event.accepted = true
+                }
+            }
+            
             onCheckedChanged: {
                 if (checked) {
                     if (root.chkSetUser.checked && root.fieldUserName.text == "pi" && root.fieldUserPassword.text.length == 0) {
@@ -138,6 +185,54 @@ OptionsTabBase {
                             
                             property bool indicateError: false
                             
+                            // Handle tab navigation between SSH key fields
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                                    // Tab forward: go to next SSH key or to Add SSH Key button
+                                    if (publicKeyItem.index < publicKeyModel.count - 1) {
+                                        // Navigate to next SSH key field
+                                        var nextDelegate = publicKeyList.itemAtIndex(publicKeyItem.index + 1)
+                                        if (nextDelegate) {
+                                            var nextRowLayout = nextDelegate.children[0]
+                                            if (nextRowLayout && nextRowLayout.children && nextRowLayout.children.length > 0) {
+                                                var nextTextField = nextRowLayout.children[0]
+                                                if (nextTextField && nextTextField.forceActiveFocus) {
+                                                    nextTextField.forceActiveFocus()
+                                                    event.accepted = true
+                                                    return
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Last SSH key or fallback: navigate to buttons
+                                    if (root.navigateToButtons) {
+                                        root.navigateToButtons()
+                                        event.accepted = true
+                                    }
+                                } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                                    // Shift+Tab backward: go to previous SSH key or radio buttons
+                                    if (publicKeyItem.index > 0) {
+                                        // Navigate to previous SSH key field
+                                        var prevDelegate = publicKeyList.itemAtIndex(publicKeyItem.index - 1)
+                                        if (prevDelegate) {
+                                            var prevRowLayout = prevDelegate.children[0]
+                                            if (prevRowLayout && prevRowLayout.children && prevRowLayout.children.length > 0) {
+                                                var prevTextField = prevRowLayout.children[0]
+                                                if (prevTextField && prevTextField.forceActiveFocus) {
+                                                    prevTextField.forceActiveFocus()
+                                                    event.accepted = true
+                                                    return
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        // First SSH key: go back to radio buttons
+                                        radioPubKeyAuthentication.forceActiveFocus()
+                                        event.accepted = true
+                                    }
+                                }
+                            }
+                            
                             // Handle error state when field is disabled/enabled
                             onEnabledChanged: {
                                 if (!enabled) {
@@ -151,8 +246,6 @@ OptionsTabBase {
                                     }
                                 }
                             }
-                            
-
                             
                             // Visual feedback for validation errors
                             color: indicateError ? Style.formLabelErrorColor : (enabled ? "black" : "grey")
@@ -228,9 +321,24 @@ OptionsTabBase {
 
         RowLayout {
             ImButton {
+                id: sshKeygenButton
                 text: qsTr("RUN SSH-KEYGEN")
                 Layout.leftMargin: 40
                 enabled: root.imageWriter.hasSshKeyGen() && !root.imageWriter.hasPubKey()
+                
+                // Handle navigation in both directions
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                        // Navigate to Add SSH Key button
+                        addSshKeyButton.forceActiveFocus()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                        // Navigate back to radio buttons
+                        radioPubKeyAuthentication.forceActiveFocus()
+                        event.accepted = true
+                    }
+                }
+                
                 onClicked: {
                     enabled = false
                     root.imageWriter.generatePubKey()
@@ -238,9 +346,31 @@ OptionsTabBase {
                 }
             }
             ImButton {
+                id: addSshKeyButton
                 text: qsTr("Add SSH Key")
                 Layout.leftMargin: 40
                 enabled: radioPubKeyAuthentication.checked
+                
+                // Handle navigation in both directions
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                        // Navigate to Cancel/Save buttons
+                        if (root.navigateToButtons) {
+                            root.navigateToButtons()
+                            event.accepted = true
+                        }
+                    } else if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier)) {
+                        // Navigate back to RUN SSH-KEYGEN button if enabled, otherwise radio buttons
+                        if (sshKeygenButton.enabled) {
+                            sshKeygenButton.forceActiveFocus()
+                            event.accepted = true
+                        } else {
+                            radioPubKeyAuthentication.forceActiveFocus()
+                            event.accepted = true
+                        }
+                    }
+                }
+                
                 onClicked: {
                     publicKeyModel.append({publicKeyField: ""})
                     if (publicKeyListViewContainer.implicitHeight) {
