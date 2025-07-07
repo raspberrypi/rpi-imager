@@ -462,7 +462,7 @@
     </message>
     <message>
         <source>Delete Key</source>
-        <translation></translation>
+        <translation>删除密钥</translation>
     </message>
     <message>
         <source>RUN SSH-KEYGEN</source>
