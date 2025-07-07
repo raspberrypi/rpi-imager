@@ -238,13 +238,7 @@ OptionsTabBase {
                 
                 // Handle navigation and password clearing
                 Keys.onPressed: (event) => {
-                    if (alreadyCrypted) {
-                        /* User is trying to edit saved
-                            (crypted) password, clear field */
-                        alreadyCrypted = false
-                        clear()
-                    }
-                    
+                    // Handle navigation keys first
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         // Always go to chkWifi first
                         chkWifi.forceActiveFocus()
@@ -257,12 +251,31 @@ OptionsTabBase {
                             chkSetUser.forceActiveFocus()
                         }
                         event.accepted = true
+                    } else if (alreadyCrypted && isContentKey(event.key)) {
+                        /* User is trying to edit saved (crypted) password with actual content, clear field */
+                        alreadyCrypted = false
+                        clear()
+                        // Don't mark as accepted so the key input can proceed normally
+                        event.accepted = false
                     }
                     
                     // Don't mark as accepted for other keys so they can propagate
-                    if (event.key !== Qt.Key_Tab) {
+                    if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
                         event.accepted = false
                     }
+                }
+                
+                // Helper function to determine if a key represents content input
+                function isContentKey(key) {
+                    // Navigation and modifier keys that should NOT clear the password
+                    var navigationKeys = [
+                        Qt.Key_Tab, Qt.Key_Backtab, Qt.Key_Left, Qt.Key_Right, 
+                        Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End,
+                        Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Escape,
+                        Qt.Key_Shift, Qt.Key_Control, Qt.Key_Alt, Qt.Key_Meta
+                    ]
+                    
+                    return navigationKeys.indexOf(key) === -1
                 }
                 
                 // Visual feedback for validation errors (password field uses different validation logic)
@@ -533,11 +546,7 @@ OptionsTabBase {
                         fieldKeyboardLayout.forceActiveFocus()
                         event.accepted = true
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                        // Debug: try direct focus without callLater
-                        console.log("Timezone shift+tab: trying to focus chkLocale")
-                        chkLocale.focus = true
                         chkLocale.forceActiveFocus()
-                        console.log("chkLocale.activeFocus:", chkLocale.activeFocus)
                         event.accepted = true
                     }
                 }
