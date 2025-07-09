@@ -14,6 +14,7 @@ import RpiImager
 
 OptionsTabBase {
     id: root
+    property var optionsPopup
 
     property alias fieldHostname: fieldHostname
     property alias fieldUserName: fieldUserName
@@ -39,7 +40,9 @@ OptionsTabBase {
         RowLayout {
             ImCheckBox {
                 id: chkHostname
+                objectName: "chkHostname"
                 text: qsTr("Set hostname:")
+                KeyNavigation.backtab: root.tabBar
                 
                 // Handle explicit navigation in both directions
                 Keys.onPressed: (event) => {
@@ -47,11 +50,11 @@ OptionsTabBase {
                         fieldHostname.forceActiveFocus()
                         event.accepted = true
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                        // Navigate back to TabBar
                         if (root.tabBar) {
+                            root.tabBar.currentIndex = 0
                             root.tabBar.forceActiveFocus()
-                            event.accepted = true
                         }
+                        event.accepted = true
                     }
                 }
                 
@@ -74,6 +77,7 @@ OptionsTabBase {
             }
             TextField {
                 id: fieldHostname
+                objectName: "fieldHostname"
                 enabled: chkHostname.checked
                 text: "raspberrypi"
                 selectByMouse: true
@@ -123,6 +127,7 @@ OptionsTabBase {
 
         ImCheckBox {
             id: chkSetUser
+            objectName: "chkSetUser"
             text: qsTr("Set username and password")
             
             // Handle explicit navigation
@@ -175,6 +180,7 @@ OptionsTabBase {
             }
             TextField {
                 id: fieldUserName
+                objectName: "fieldUserName"
                 enabled: chkSetUser.checked
                 text: "pi"
                 Layout.minimumWidth: 200
@@ -228,6 +234,7 @@ OptionsTabBase {
             }
             TextField {
                 id: fieldUserPassword
+                objectName: "fieldUserPassword"
                 enabled: chkSetUser.checked
                 echoMode: TextInput.Password
                 passwordMaskDelay: 2000 //ms
@@ -296,6 +303,7 @@ OptionsTabBase {
 
         ImCheckBox {
             id: chkWifi
+            objectName: "chkWifi"
             text: qsTr("Configure wireless LAN")
             
             // Handle explicit navigation in both directions
@@ -356,6 +364,7 @@ OptionsTabBase {
             }
             TextField {
                 id: fieldWifiSSID
+                objectName: "fieldWifiSSID"
                 // placeholderText: qsTr("SSID")
                 enabled: chkWifi.checked
                 Layout.minimumWidth: 200
@@ -398,6 +407,7 @@ OptionsTabBase {
             }
             TextField {
                 id: fieldWifiPassword
+                objectName: "fieldWifiPassword"
                 enabled: chkWifi.checked
                 Layout.minimumWidth: 200
                 selectByMouse: true
@@ -436,6 +446,7 @@ OptionsTabBase {
             }
             ImCheckBox {
                 id: chkWifiSSIDHidden
+                objectName: "chkWifiSSIDHidden"
                 enabled: chkWifi.checked
                 Layout.columnSpan: 2
                 text: qsTr("Hidden SSID")
@@ -470,6 +481,7 @@ OptionsTabBase {
             }
             ComboBox {
                 id: fieldWifiCountry
+                objectName: "fieldWifiCountry"
                 selectTextByMouse: true
                 enabled: chkWifi.checked
                 editable: true
@@ -495,6 +507,7 @@ OptionsTabBase {
 
         ImCheckBox {
             id: chkLocale
+            objectName: "chkLocale"
             text: qsTr("Set locale settings")
             
             // Handle explicit navigation in both directions
@@ -505,9 +518,7 @@ OptionsTabBase {
                         fieldTimezone.forceActiveFocus()
                     } else {
                         // Locale disabled, navigate to buttons
-                        if (root.navigateToButtons) {
-                            root.navigateToButtons()
-                        }
+                        root.optionsPopup.navigateToButtons()
                     }
                     event.accepted = true
                 } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
@@ -537,6 +548,7 @@ OptionsTabBase {
                 enabled: chkLocale.checked
                 selectTextByMouse: true
                 id: fieldTimezone
+                objectName: "fieldTimezone"
                 editable: true
                 Layout.minimumWidth: 200
                 
@@ -564,20 +576,20 @@ OptionsTabBase {
                 Layout.fillWidth: true
             }
             ComboBox {
-                enabled: chkLocale.checked
-                selectTextByMouse: true
                 id: fieldKeyboardLayout
-                editable: true
+                objectName: "fieldKeyboardLayout"
+                enabled: chkLocale.checked
+                model: root.optionsPopup.imageWriter.getKeymapLayoutList()
                 Layout.minimumWidth: 200
-                
-                // Handle explicit navigation in both directions
+                selectTextByMouse: true
+                editable: true
+
                 Keys.onPressed: (event) => {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
-                        // Navigate to Cancel/Save buttons
-                        if (root.navigateToButtons) {
-                            root.navigateToButtons()
-                            event.accepted = true
+                        if (root.optionsPopup && typeof root.optionsPopup.navigateToButtons === 'function') {
+                            root.optionsPopup.navigateToButtons()
                         }
+                        event.accepted = true
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Go to timezone field if locale enabled, otherwise locale checkbox
                         if (chkLocale.checked) {

@@ -16,6 +16,7 @@ ImPopup {
 
     height: msgpopupbody.implicitHeight+150
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    focus: true
 
     required property ImageWriter imageWriter
     property bool hasSavedSettings: false
@@ -23,6 +24,35 @@ ImPopup {
     signal noClearSettings()
     signal editSettings()
     signal closeSettings()
+
+    // Provide implementation for the base popup's navigation functions
+    getNextFocusableElement: function(startElement) {
+        var focusableItems = [yesButton, noButton, editButton, noAndClearButton, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+        
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[0];
+
+        var nextIndex = (currentIndex + 1) % focusableItems.length;
+        return focusableItems[nextIndex];
+    }
+
+    getPreviousFocusableElement: function(startElement) {
+        var focusableItems = [yesButton, noButton, editButton, noAndClearButton, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[0];
+        
+        var prevIndex = (currentIndex - 1 + focusableItems.length) % focusableItems.length;
+        return focusableItems[prevIndex];
+    }
 
     // These children go into ImPopup's ColumnLayout
 
@@ -47,6 +77,7 @@ ImPopup {
         id: buttons
 
         ImButtonRed {
+            id: editButton
             text: qsTr("EDIT SETTINGS")
             onClicked: {
                 // Don't close this dialog when "edit settings" is
@@ -79,6 +110,7 @@ ImPopup {
         }
 
         ImButtonRed {
+            id: noButton
             text: qsTr("NO")
             onClicked: {
                 root.close()
@@ -87,16 +119,9 @@ ImPopup {
         }
     }
 
-    function openPopup() {
-        open()
-        if (imageWriter.hasSavedCustomizationSettings()) {
-            /* HACK: Bizarrely, the button enabled characteristics are not re-evaluated on open.
-             * So, let's manually _force_ these buttons to be enabled */
-            hasSavedSettings = true
-        }
-
-        // trigger screen reader to speak out message
-        msgpopupbody.forceActiveFocus()
+    onOpened: {
+        hasSavedSettings = imageWriter.hasSavedCustomizationSettings()
+        root.contentItem.forceActiveFocus()
     }
 
     onClosed: {

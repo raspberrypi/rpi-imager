@@ -6,28 +6,20 @@
 import QtQuick 2.9
 import QtQuick.Controls 2.2
 import QtQuick.Controls.Material 2.2
+import RpiImager
 
 CheckBox {
+    id: control
     activeFocusOnTab: true
-    focus: true  // Ensure checkboxes can receive focus
     
-    // Add visual focus indicator
     Rectangle {
-        anchors.fill: parent
-        anchors.margins: -4
-        color: "transparent"
-        border.color: parent.activeFocus ? "#0078d4" : "transparent"
-        border.width: 2
-        radius: 4
-        z: -1
+        // This rectangle serves as a high-contrast underline for focus
+        anchors.left: control.contentItem.left
+        anchors.right: control.contentItem.right
+        anchors.top: control.contentItem.bottom
+        anchors.topMargin: 2
+        height: 2
+        color: Style.button2FocusedBackgroundColor
+        visible: control.activeFocus
     }
-    
-    Keys.onPressed: (event) => {
-        if (event.key === Qt.Key_Space) {
-            toggle()
-            event.accepted = true
-        }
-    }
-    Keys.onEnterPressed: toggle()
-    Keys.onReturnPressed: toggle()
 }

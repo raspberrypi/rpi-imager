@@ -73,10 +73,10 @@ OptionsTabBase {
                         root.chkSetUser.checked = true
                     }
                     // Re-validate SSH keys when SSH is re-enabled
-                    revalidateAllSSHKeys()
+                    root.revalidateAllSSHKeys()
                 } else {
                     // Clear SSH key errors when SSH is disabled
-                    clearAllSSHKeyErrors()
+                    root.clearAllSSHKeyErrors()
                 }
             }
         }
@@ -102,7 +102,7 @@ OptionsTabBase {
                     root.chkSetUser.checked = true
                     //root.fieldUserPassword.forceActiveFocus()
                     // Clear SSH key errors when switching to password authentication
-                    clearAllSSHKeyErrors()
+                    root.clearAllSSHKeyErrors()
                 }
             }
         }
@@ -402,16 +402,11 @@ OptionsTabBase {
                 Keys.onPressed: (event) => {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         // Navigate to Cancel/Save buttons
-                        if (root.navigateToButtons) {
-                            root.navigateToButtons()
-                            event.accepted = true
-                        }
+                        root.optionsPopup.navigateToButtons()
+                        event.accepted = true
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                        // Navigate back to RUN SSH-KEYGEN button if enabled, otherwise check for SSH keys
-                        if (sshKeygenButton.enabled) {
-                            sshKeygenButton.forceActiveFocus()
-                            event.accepted = true
-                        } else if (publicKeyModel.count > 0) {
+                        // Go to last SSH key field if any, otherwise Add SSH Key button
+                        if (publicKeyModel.count > 0) {
                             // Navigate to last SSH key's delete button
                             var lastDelegate = publicKeyList.itemAtIndex(publicKeyModel.count - 1)
                             if (lastDelegate) {
@@ -452,7 +447,7 @@ OptionsTabBase {
     Timer {
         id: revalidationTimer
         interval: 50 // Small delay to let UI settle
-        onTriggered: revalidateAllSSHKeys()
+        onTriggered: root.revalidateAllSSHKeys()
     }
     
     function clearAllSSHKeyErrors() {

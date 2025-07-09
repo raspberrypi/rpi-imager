@@ -20,6 +20,25 @@ MainPopupBase {
     property alias oslist: oslist
     property alias osswipeview: osswipeview
 
+    // Provide implementation for the base popup's navigation functions
+    function getNextFocusableElement(startElement) {
+        if (!startElement || !startElement.visible) startElement = root.closeButton;
+        var order = [ osswipeview, root.closeButton, ]
+        var currentIndex = order.indexOf(startElement)
+        if (currentIndex === -1) return osswipeview;
+        var nextElement = order[(currentIndex + 1) % order.length]
+        return nextElement.visible && nextElement.enabled ? nextElement : startElement
+    }
+
+    function getPreviousFocusableElement(startElement) {
+        if (!startElement || !startElement.visible) startElement = root.closeButton;
+        var order = [  osswipeview, root.closeButton ]
+        var currentIndex = order.indexOf(startElement)
+        if (currentIndex === -1) return osswipeview;
+        var prevElement = order[(currentIndex - 1 + order.length) % order.length]
+        return prevElement.visible && prevElement.enabled ? prevElement : startElement
+    }
+
     required property ImageWriter imageWriter
     readonly property HWListModel hwmodel: root.imageWriter.getHWList()
     readonly property OSListModel osmodel: root.imageWriter.getOSList()
@@ -33,6 +52,13 @@ MainPopupBase {
         osswipeview.decrementCurrentIndex()
     }
 
+    function _focusFirstItemInCurrentView() {
+        var currentView = osswipeview.currentItem
+        if (osswipeview.activeFocus && currentView && currentView.count > 0 && currentView.currentIndex === -1) {
+            currentView.currentIndex = 0
+        }
+    }
+
     SwipeView {
         anchors.top: root.title_separator.bottom
         anchors.left: parent.left
@@ -41,6 +67,9 @@ MainPopupBase {
         id: osswipeview
         interactive: false
         clip: true
+
+        onActiveFocusChanged: _focusFirstItemInCurrentView()
+        onCurrentIndexChanged: _focusFirstItemInCurrentView()
 
         MainPopupListViewBase {
             id: oslist
@@ -51,18 +80,27 @@ MainPopupBase {
             width: root.width
 
             Keys.onSpacePressed: {
-                if (currentIndex != -1)
-                    root.selectOSitem(model.get(currentIndex), true)
+                if (currentIndex != -1) {
+                    var item = oslist.itemAtIndex(currentIndex)
+                    if (item)
+                        root.selectOSitem(item.model, true)
+                }
             }
             Accessible.onPressAction: {
-                if (currentIndex != -1)
-                    root.selectOSitem(model.get(currentIndex), true)
+                if (currentIndex != -1) {
+                    var item = oslist.itemAtIndex(currentIndex)
+                    if (item)
+                        root.selectOSitem(item.model, true)
+                }
             }
 
             Keys.onRightPressed: {
                 // Navigate into sublists but don't select an OS entry
-                if (currentIndex != -1 && root.isOSsublist(model.get(currentIndex)))
-                    root.selectOSitem(model.get(currentIndex), true)
+                if (currentIndex != -1) {
+                    var item = oslist.itemAtIndex(currentIndex)
+                    if (item && root.isOSsublist(item.model))
+                        root.selectOSitem(item.model, true)
+                }
             }
         }
     }
@@ -421,5 +459,9 @@ MainPopupBase {
                 }
             }
         }
+    }
+
+    onOpened: {
+        osswipeview.forceActiveFocus()
     }
 }
