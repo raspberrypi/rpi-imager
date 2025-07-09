@@ -14,6 +14,7 @@ import RpiImager
 ImPopup {
     id: root
     closePolicy: Popup.CloseOnEscape
+    focus: true
 
     property alias text: msgpopupbody.text
     property bool continueButton: true
@@ -22,6 +23,35 @@ ImPopup {
     property bool noButton: false
 
     height: msgpopupbody.implicitHeight+150
+
+    // Provide implementation for the base popup's navigation functions
+    getNextFocusableElement: function(startElement) {
+        var focusableItems = [noButton, yesButton, continueButton, quitButton, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[0];
+
+        var nextIndex = (currentIndex + 1) % focusableItems.length;
+        return focusableItems[nextIndex];
+    }
+
+    getPreviousFocusableElement: function(startElement) {
+        var focusableItems = [noButton, yesButton, continueButton, quitButton, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[0];
+
+        var prevIndex = (currentIndex - 1 + focusableItems.length) % focusableItems.length;
+        return focusableItems[prevIndex];
+    }
 
     // These children go into ImPopup's ColumnLayout
 
@@ -49,6 +79,7 @@ ImPopup {
         id: buttons
 
         ImButtonRed {
+            id: noButton
             text: qsTr("NO")
             onClicked: {
                 root.close()
@@ -58,6 +89,7 @@ ImPopup {
         }
 
         ImButtonRed {
+            id: yesButton
             text: qsTr("YES")
             onClicked: {
                 root.close()
@@ -67,6 +99,7 @@ ImPopup {
         }
 
         ImButtonRed {
+            id: continueButton
             text: qsTr("CONTINUE")
             onClicked: {
                 root.close()
@@ -75,6 +108,7 @@ ImPopup {
         }
 
         ImButtonRed {
+            id: quitButton
             text: qsTr("QUIT")
             onClicked: {
                 Qt.quit()
@@ -85,9 +119,9 @@ ImPopup {
     }
 
 
-    function openPopup() {
-        open()
-        // trigger screen reader to speak out message
-        msgpopupbody.forceActiveFocus()
+    onOpened: {
+        // The popup will get focus by default.
+        // First tab press will move focus to the first interactive element.
+        root.contentItem.forceActiveFocus()
     }
 }

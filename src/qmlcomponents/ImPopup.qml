@@ -22,9 +22,34 @@ Popup {
     default property alias content: contents.data
 
     property alias title: msgpopupheader.text
+    property alias closeButton: closeButton
+
+    // Functions to be implemented by derived components
+    property var getNextFocusableElement: function(startElement) { return startElement }
+    property var getPreviousFocusableElement: function(startElement) { return startElement }
 
     signal yes()
     signal no()
+
+    contentItem: Item {
+        focus: true
+        Keys.onPressed: (event) => {
+            if (!event.accepted) {
+                var focusedItem = Window.activeFocusItem
+                if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                    msgpopup.getPreviousFocusableElement(focusedItem).forceActiveFocus()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Tab) {
+                    msgpopup.getNextFocusableElement(focusedItem).forceActiveFocus()
+                    event.accepted = true
+                }
+            }
+        }
+    }
+
+    onOpened: {
+        contentItem.forceActiveFocus()
+    }
 
     // background of title
     Rectangle {
@@ -45,6 +70,7 @@ Popup {
         }
 
         ImCloseButton {
+            id: closeButton
             onClicked: {
                 msgpopup.close();
             }
@@ -67,6 +93,6 @@ Popup {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
 
-        // Derived components inject their childrens here.
+        // Derived components inject their children here.
     }
 }

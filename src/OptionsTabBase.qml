@@ -7,30 +7,51 @@ import QtQuick 2.15
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import "qmlcomponents"
 
 import RpiImager
 
-ScrollView {
+Flickable {
     id: root
-
-    property double scrollPosition
-    
-    // Function to navigate to the buttons (should be set by parent)
-    property var navigateToButtons: null
     
     // Reference to the TabBar (set by parent)
     property var tabBar: null
+    property var optionsPopup: null
+    property int bottomOffset: 0
 
-    font.family: Style.fontFamily
-    Layout.fillWidth: true
-    Layout.fillHeight: true
+    width: parent.width
+    height: parent.height
+    contentWidth: contentItem.children[0].width
+    contentHeight: contentItem.children[0].implicitHeight
+    clip: true
     
-    // Ensure ScrollView doesn't interfere with tab navigation
+    // Ensure Flickable doesn't interfere with tab navigation
     activeFocusOnTab: false
     focus: false
 
-    // clip: true
-    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+    ScrollBar.vertical: ScrollBar {
+        id: verticalScrollBar
+        policy: ScrollBar.AsNeeded
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        
+        background: Rectangle {
+            color: Style.titleBackgroundColor
+        }
+        contentItem: Rectangle {
+            implicitWidth: 8
+            implicitHeight: 100
+            color: Style.button2FocusedBackgroundColor
+            radius: 4
+        }
+    }
+
+    function resetScroll() {
+        if (verticalScrollBar) {
+            root.contentY = 0
+        }
+    }
 
     // Auto-scroll functionality
     function ensureVisible(item) {
@@ -43,80 +64,49 @@ ScrollView {
     }
 
     function ensureVisibleImmediate(item) {
-        if (!item || !item.visible || !item.parent || !contentItem) {
-            return
-        }
+        if (!item || !item.visible || !item.parent) return
 
-        // Get the actual content container (should be the first child, which is the ColumnLayout)
-        var actualContent = contentChildren.length > 0 ? contentChildren[0] : null
-        if (!actualContent) {
-            return
-        }
+        // This is the corrected mapping. It gets the item's position relative
+        // to the Flickable's content area.
+        var itemPos = item.mapToItem(root.contentItem, 0, 0)
+        if (!itemPos) return
 
-        // Get the item's position relative to the actual content container
-        var itemPos = item.mapToItem(actualContent, 0, 0)
-        if (!itemPos) {
-            return
-        }
-        
         var itemY = itemPos.y
         var itemHeight = item.height
-        
-        // Get the actual content height
-        var actualContentHeight = actualContent.height
-        
-        // Get current scroll position using contentY if available, otherwise ScrollBar
-        var currentScrollY = 0
-        if (contentItem && contentItem.contentY !== undefined) {
-            currentScrollY = contentItem.contentY
-        } else {
-            var scrollBarPosition = ScrollBar.vertical ? ScrollBar.vertical.position : 0
-            var maxScroll = Math.max(0, actualContentHeight - height)
-            currentScrollY = scrollBarPosition * maxScroll
-        }
-        
+        var viewportHeight = height - bottomOffset
+
+        var maxScroll = Math.max(0, contentHeight - viewportHeight)
+        var currentScrollY = contentY
         var visibleTop = currentScrollY
-        var visibleBottom = currentScrollY + height
-        
-        // Add some padding for better visibility
-        var padding = 20
-        
-        // Check if item is already comfortably visible
-        if (itemY >= (visibleTop + padding) && (itemY + itemHeight) <= (visibleBottom - padding)) {
-            return // Already comfortably visible
+        var visibleBottom = currentScrollY + viewportHeight
+        var targetScrollY = currentScrollY
+
+        var comfortPadding = 20;
+        var comfortTop = visibleTop + comfortPadding;
+        var comfortBottom = visibleBottom - comfortPadding;
+
+        if (itemY >= comfortTop && (itemY + itemHeight) <= comfortBottom) {
+            return;
         }
-        
-        var targetScrollY
-        
-        // If item is above visible area, scroll to show it at the top
-        if (itemY < visibleTop + padding) {
-            targetScrollY = Math.max(0, itemY - padding)
+
+        if (itemY < visibleTop) {
+            targetScrollY = itemY
+        } else if (itemY + itemHeight > visibleBottom) {
+            targetScrollY = itemY + itemHeight - viewportHeight
+        } else {
+            targetScrollY = itemY - (viewportHeight / 2) + (itemHeight / 2)
         }
-        // If item is below visible area, scroll to show it at the bottom
-        else if (itemY + itemHeight > visibleBottom - padding) {
-            targetScrollY = Math.min(actualContentHeight - height, itemY + itemHeight + padding - height)
-        }
-        else {
+
+        if (maxScroll <= 0) {
             return
         }
+
+        var clampedY = Math.max(0, Math.min(targetScrollY, maxScroll))
         
-        var maxScroll = Math.max(0, actualContentHeight - height)
-        if (maxScroll <= 0) {
-            return // No scrolling needed
-        }
-        
-        targetScrollY = Math.max(0, Math.min(targetScrollY, maxScroll))
-        
-        // Try to scroll using contentY if available
-        if (contentItem && contentItem.contentY !== undefined) {
-            contentScrollAnimation.to = targetScrollY
-            contentScrollAnimation.start()
-        } else {
-            // Fallback to ScrollBar position
-            var newScrollPosition = targetScrollY / maxScroll
-            scrollAnimation.to = newScrollPosition
-            scrollAnimation.start()
-        }
+        // Directly set contentY for Flickable
+        scrollAnimation.from = contentY
+        scrollAnimation.to = clampedY
+        scrollAnimation.start()
     }
 
     // Recursively find the currently focused item within our content
@@ -136,10 +126,10 @@ ScrollView {
         return null
     }
 
-    // Track focus changes using a timer since we can't reliably detect focus changes otherwise
+    // Track focus changes using a timer
     Timer {
         id: focusCheckTimer
-        interval: 100  // Check every 100ms - frequent enough but not too taxing
+        interval: 100
         running: root.visible
         repeat: true
         
@@ -154,42 +144,18 @@ ScrollView {
         }
     }
 
-    // Reset focus tracking when tab becomes invisible
     onVisibleChanged: {
         if (!visible) {
             focusCheckTimer.lastFocusedItem = null
         }
     }
 
-    // Animation for contentY (direct content scrolling)
-    NumberAnimation {
-        id: contentScrollAnimation
-        target: root.contentItem
-        property: "contentY"
-        duration: 200
-        easing.type: Easing.OutQuad
-    }
-
-    // Smooth scrolling animation (fallback)
+    // Smooth scrolling animation for Flickable
     NumberAnimation {
         id: scrollAnimation
         target: root
-        property: "scrollPosition"
+        property: "contentY"
         duration: 200
         easing.type: Easing.OutQuad
-        
-        onFinished: {
-            // Ensure ScrollBar position is synchronized
-            if (ScrollBar.vertical) {
-                ScrollBar.vertical.position = scrollPosition
-            }
-        }
-    }
-
-    // Also handle when scrollPosition is set externally (e.g., when switching tabs)
-    onScrollPositionChanged: {
-        if (!scrollAnimation.running && ScrollBar.vertical) {
-            ScrollBar.vertical.position = scrollPosition
-        }
     }
 }

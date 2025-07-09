@@ -30,17 +30,14 @@ OptionsTabBase {
             id: chkBeep
             text: qsTr("Play sound when finished")
             
-            // Handle explicit navigation in both directions
             Keys.onPressed: (event) => {
                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                     chkEject.forceActiveFocus()
                     event.accepted = true
                 } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                    // Navigate back to TabBar
-                    if (root.tabBar) {
-                        root.tabBar.forceActiveFocus()
-                        event.accepted = true
-                    }
+                    // Navigate back to the TabBar
+                    root.tabBar.forceActiveFocus()
+                    event.accepted = true
                 }
             }
         }
@@ -67,10 +64,8 @@ OptionsTabBase {
             Keys.onPressed: (event) => {
                 if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                     // Navigate to Cancel/Save buttons
-                    if (root.navigateToButtons) {
-                        root.navigateToButtons()
-                        event.accepted = true
-                    }
+                    root.optionsPopup.navigateToButtons()
+                    event.accepted = true
                 } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     chkEject.forceActiveFocus()
                     event.accepted = true
