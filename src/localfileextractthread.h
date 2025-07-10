@@ -9,6 +9,10 @@
 #include "downloadextractthread.h"
 #include <QFile>
 
+// Forward declarations for libarchive
+struct archive;
+struct archive_entry;
+
 class LocalFileExtractThread : public DownloadExtractThread
 {
     Q_OBJECT
@@ -21,6 +25,10 @@ protected:
     virtual void run();
     virtual ssize_t _on_read(struct archive *a, const void **buff);
     virtual int _on_close(struct archive *a);
+    void extractRawImageRun();
+    bool _testArchiveFormat();
+    static ssize_t _archive_read_test(struct archive *, void *client_data, const void **buff);
+    static int _archive_close_test(struct archive *, void *client_data);
     QFile _inputfile;
     char *_inputBuf;
     size_t _inputBufSize;

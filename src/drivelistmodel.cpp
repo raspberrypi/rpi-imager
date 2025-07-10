@@ -76,7 +76,11 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
             continue;
 
 #ifdef Q_OS_DARWIN
-        if (i.isVirtual)
+        // Allow read/write virtual devices (mounted disk images) but filter out:
+        // - Read-only virtual devices
+        // - System virtual devices (like APFS volumes)
+        // - Virtual devices that are not removable/ejectable (likely system virtual devices)
+        if (i.isVirtual && (i.isReadOnly || i.isSystem || !i.isRemovable))
             continue;
 #endif
 

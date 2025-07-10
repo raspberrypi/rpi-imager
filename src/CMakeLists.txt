@@ -149,7 +149,7 @@ set(ZSTD_LIBRARIES libzstd_static CACHE FILEPATH "" FORCE)
 set(ZSTD_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-build/lib/libzstd.a CACHE FILEPATH "" FORCE)
 
 # Remote nghttp2
-set(NGHTTP2_VERSION "1.65.0")
+set(NGHTTP2_VERSION "1.66.0")
 FetchContent_Declare(nghttp2
     GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
     GIT_TAG        v${NGHTTP2_VERSION}
@@ -265,7 +265,7 @@ set(ARCHIVE_BUILD_STATIC_LIBS ON CACHE BOOL "")
 set(ARCHIVE_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(ENABLE_ZSTD ON CACHE BOOL "")
 set(POSIX_REGEX_LIB "libc" CACHE STRING "" FORCE)
-set(LIBARCHIVE_VERSION "3.8.0")
+set(LIBARCHIVE_VERSION "3.8.1")
 
 # Create a patch script to fix ZSTD detection in libarchive
 set(LIBARCHIVE_PATCH_FILE "${CMAKE_CURRENT_BINARY_DIR}/libarchive_zstd_patch.cmake")
@@ -660,12 +660,9 @@ if(${QT}WinExtras_FOUND)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::WinExtras)
 endif()
 
-set(TRANSLATIONS i18n/rpi-imager_en.ts i18n/rpi-imager_nl.ts i18n/rpi-imager_zh.ts i18n/rpi-imager_tr.ts
-    i18n/rpi-imager_fr.ts i18n/rpi-imager_de.ts i18n/rpi-imager_sk.ts i18n/rpi-imager_it.ts
-    i18n/rpi-imager_ca.ts i18n/rpi-imager_sl.ts i18n/rpi-imager_ko.ts i18n/rpi-imager_ja.ts
-    i18n/rpi-imager_ru.ts i18n/rpi-imager_es.ts i18n/rpi-imager_uk.ts i18n/rpi-imager_zh-TW.ts
-    i18n/rpi-imager_pl.ts i18n/rpi-imager_he.ts i18n/rpi-imager_pt.ts i18n/rpi-imager_ka.ts
-    i18n/rpi-imager_ga.ts i18n/rpi-imager_bn.ts)
+# Find all translation files automatically
+file(GLOB TRANSLATIONS CONFIGURE_DEPENDS "i18n/*.ts")
+
 #qt6_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TRANSLATIONS})
 qt_add_translation(QM_FILES  ${TRANSLATIONS})
 configure_file(i18n/translations.qrc "${CMAKE_CURRENT_BINARY_DIR}" COPYONLY)
@@ -955,6 +952,15 @@ elseif(APPLE)
         message(FATAL_ERROR "Unable to locate macdeployqt")
     endif()
 
+    # Deploy Qt dependencies as part of the main build
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Deploying Qt dependencies..."
+        COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite
+        COMMENT "Deploying Qt dependencies"
+    )
+
+    # Create explicit DMG target (similar to inno_installer on Windows)
     if(IMAGER_SIGNED_APP)
         if(IMAGER_SIGNING_IDENTITY)
             # Configure the styled DMG creation script
@@ -976,40 +982,28 @@ elseif(APPLE)
                 COMMAND chmod +x "${CMAKE_BINARY_DIR}/macos_post_build.sh"
             )
             
-            # Execute the post-build script
-            add_custom_command(TARGET ${PROJECT_NAME}
-                POST_BUILD
+            # Create signed DMG target
+            add_custom_target(dmg
                 COMMAND "${CMAKE_BINARY_DIR}/macos_post_build.sh"
-                COMMENT "Running macOS post-build operations (deploy, sign, create DMG)"
-            )
+                DEPENDS ${PROJECT_NAME}
+                COMMENT "Creating signed macOS DMG"
+                VERBATIM)
         else()
             message(FATAL_ERROR "Signing requested, but no signing identity provided")
         endif(IMAGER_SIGNING_IDENTITY)
     else()
-        # Unsigned application - simpler approach
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E echo "Deploying Qt dependencies..."
-            COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite
-            COMMENT "Deploying Qt dependencies"
-        )
-        
-        # Create DMG
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
+        # Create unsigned DMG target
+        add_custom_target(dmg
             COMMAND ${CMAKE_COMMAND} -E echo "Creating DMG..."
             COMMAND hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_BUNDLE_PATH}" -ov -format UDBZ "${DMG_PATH}"
-            COMMENT "Creating DMG"
-        )
-        
-        # Create the versioned DMG
-        add_custom_command(TARGET ${PROJECT_NAME}
-            POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E echo "Creating versioned DMG at ${FINAL_DMG_PATH}..."
             COMMAND ${CMAKE_COMMAND} -E copy "${DMG_PATH}" "${FINAL_DMG_PATH}"
-            COMMENT "Creating versioned DMG"
-        )
+            DEPENDS ${PROJECT_NAME}
+            COMMENT "Creating macOS DMG"
+            VERBATIM)
     endif(IMAGER_SIGNED_APP)
+    
+    message(STATUS "Added 'dmg' target to build the macOS DMG installer")
 
 else()
     # UNIX, Linux systems

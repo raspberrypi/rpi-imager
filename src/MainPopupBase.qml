@@ -20,6 +20,27 @@ Popup {
     required property int windowWidth
     required property string title
     property alias title_separator: title_separator
+    property alias closeButton: closeButton
+
+    // Functions to be implemented by derived components
+    function getNextFocusableElement(startElement) { return startElement }
+    function getPreviousFocusableElement(startElement) { return startElement }
+
+    contentItem: Item {
+        id: content
+        Keys.onPressed: (event) => {
+            if (!event.accepted) {
+                var focusedItem = Window.activeFocusItem
+                if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                    getPreviousFocusableElement(focusedItem).forceActiveFocus()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Tab) {
+                    getNextFocusableElement(focusedItem).forceActiveFocus()
+                    event.accepted = true
+                }
+            }
+        }
+    }
 
     // background of title
     Rectangle {
@@ -40,8 +61,19 @@ Popup {
         }
 
         ImCloseButton {
+            id: closeButton
             onClicked: {
                 root.close()
+            }
+
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                    root.getPreviousFocusableElement(closeButton).forceActiveFocus()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Tab) {
+                    root.getNextFocusableElement(closeButton).forceActiveFocus()
+                    event.accepted = true
+                }
             }
         }
     }

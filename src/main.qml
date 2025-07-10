@@ -23,20 +23,92 @@ ApplicationWindow {
     property string selectedStorageName: ""
     property bool isCacheVerifying: false
 
+    Item {
+        id: focusAnchor
+        focus: true
+        Keys.onPressed: (event) => {
+            if (event.key === Qt.Key_Tab) {
+                if (event.modifiers & Qt.ShiftModifier) {
+                    window.getPreviousFocusableElement(null).forceActiveFocus()
+                } else {
+                    window.getNextFocusableElement(null).forceActiveFocus()
+                }
+                event.accepted = true;
+            }
+        }
+    }
+
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 450
     minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
+    
+    Component.onCompleted: {
+        // Set initial focus to the anchor
+        focusAnchor.forceActiveFocus()
+    }
+    
+    // Helper function to get the next focusable element
+    function getNextFocusableElement(startElement) {
+        var order = [ hwbutton, osbutton, dstbutton, writebutton, cancelwritebutton, cancelverifybutton, skipcachebutton, languageCombo, keyboardCombo ]
+        var focusableItems = order.filter(function(item) {
+            if (!item) return false;
+            // Special handling for language bar items, which are inside a container
+            if (item === languageCombo || item === keyboardCombo) {
+                return langbarRect.visible && item.enabled
+            }
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) {
+            return startElement;
+        }
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) {
+            return focusableItems[0];
+        }
+
+        var nextIndex = (currentIndex + 1) % focusableItems.length;
+        var nextElement = focusableItems[nextIndex];
+        return nextElement;
+    }
+
+    // Helper function to get the previous focusable element
+    function getPreviousFocusableElement(startElement) {
+        var order = [ hwbutton, osbutton, dstbutton, writebutton, cancelwritebutton, cancelverifybutton, skipcachebutton, languageCombo, keyboardCombo ]
+        var focusableItems = order.filter(function(item) {
+            if (!item) return false;
+            // Special handling for language bar items, which are inside a container
+            if (item === languageCombo || item === keyboardCombo) {
+                return langbarRect.visible && item.enabled
+            }
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) {
+            return startElement;
+        }
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) {
+            return focusableItems[focusableItems.length - 1];
+        }
+        
+        var prevIndex = (currentIndex - 1 + focusableItems.length) % focusableItems.length;
+        var prevElement = focusableItems[prevIndex];
+        return prevElement;
+    }
 
     onClosing: {
         if (progressBar.visible) {
             close.accepted = false
-            quitpopup.openPopup()
+            quitpopup.open()
         }
     }
-
+    
     Shortcut {
         sequence: StandardKey.Quit
         context: Qt.ApplicationShortcut
@@ -51,13 +123,14 @@ ApplicationWindow {
         sequences: ["Shift+Ctrl+X", "Shift+Meta+X"]
         context: Qt.ApplicationShortcut
         onActivated: {
-            optionspopup.openPopup()
+            optionspopup.show()
         }
     }
 
     ColumnLayout {
         id: bg
         spacing: 0
+        activeFocusOnTab: false
 
         Rectangle {
             id: logoContainer
@@ -101,6 +174,7 @@ ApplicationWindow {
             GridLayout {
                 id: gridLayout
                 rowSpacing: 15
+                activeFocusOnTab: false
 
                 anchors.fill: parent
                 anchors.topMargin: 25
@@ -114,6 +188,7 @@ ApplicationWindow {
                 ColumnLayout {
                     id: columnLayout0
                     spacing: 0
+                    activeFocusOnTab: false
                     Layout.row: 0
                     Layout.column: 0
                     Layout.fillWidth: true
@@ -146,12 +221,24 @@ ApplicationWindow {
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to choose your target Raspberry Pi")
+                        
+                        Keys.onPressed: (event) => {
+                            if (!hwbutton.focus) return
+                            if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                window.getPreviousFocusableElement(hwbutton).forceActiveFocus()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Tab) {
+                                window.getNextFocusableElement(hwbutton).forceActiveFocus()
+                                event.accepted = true
+                            }
+                        }
                     }
                 }
 
                 ColumnLayout {
                     id: columnLayout1
                     spacing: 0
+                    activeFocusOnTab: false
                     Layout.row: 0
                     Layout.column: 1
                     Layout.fillWidth: true
@@ -183,12 +270,24 @@ ApplicationWindow {
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to change the operating system")
+                        
+                        Keys.onPressed: (event) => {
+                            if (!osbutton.focus) return
+                            if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                window.getPreviousFocusableElement(osbutton).forceActiveFocus()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Tab) {
+                                window.getNextFocusableElement(osbutton).forceActiveFocus()
+                                event.accepted = true
+                            }
+                        }
                     }
                 }
 
                 ColumnLayout {
                     id: columnLayout2
                     spacing: 0
+                    activeFocusOnTab: false
                     Layout.row: 0
                     Layout.column: 2
                     Layout.fillWidth: true
@@ -222,12 +321,25 @@ ApplicationWindow {
                         }
                         Accessible.ignored: ospopup.visible || dstpopup.visible || hwpopup.visible
                         Accessible.description: qsTr("Select this button to change the destination storage device")
+                        
+                        Keys.onPressed: (event) => {
+                            if (!dstbutton.focus) return
+                            if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                window.getPreviousFocusableElement(dstbutton).forceActiveFocus()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Tab) {
+                                window.getNextFocusableElement(dstbutton).forceActiveFocus()
+                                event.accepted = true
+                            }
+                        }
                     }
                 }
 
                 ColumnLayout {
                     id: columnLayoutProgress
                     spacing: 0
+                    activeFocusOnTab: false
+                    focus: false
                     Layout.row: 1
                     Layout.column: 0
                     Layout.columnSpan: 2
@@ -239,6 +351,7 @@ ApplicationWindow {
                         font.family: Style.fontFamilyBold
                         font.bold: true
                         visible: false
+                        focus: false
                         horizontalAlignment: Text.AlignHCenter
                         Layout.fillWidth: true
                         Layout.bottomMargin: 25
@@ -249,6 +362,8 @@ ApplicationWindow {
                         id: progressBar
                         Layout.fillWidth: true
                         visible: false
+                        activeFocusOnTab: false
+                        focus: false
                         Material.background: Style.progressBarBackgroundColor
                     }
                 }
@@ -259,6 +374,7 @@ ApplicationWindow {
                     Layout.column: 2
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                     spacing: 0
+                    activeFocusOnTab: false
 
                     ImButton {
                         Layout.bottomMargin: 25
@@ -271,9 +387,20 @@ ApplicationWindow {
                             enabled = false
                             progressText.text = qsTr("Cancelling...")
                             window.imageWriter.cancelWrite()
+                            focusAnchor.forceActiveFocus()
                         }
                         Layout.alignment: Qt.AlignRight
                         visible: false
+                        
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                window.getPreviousFocusableElement(cancelwritebutton).forceActiveFocus()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Tab) {
+                                window.getNextFocusableElement(cancelwritebutton).forceActiveFocus()
+                                event.accepted = true
+                            }
+                        }
                     }
                     ImButton {
                         Layout.bottomMargin: 25
@@ -286,9 +413,20 @@ ApplicationWindow {
                             enabled = false
                             progressText.text = qsTr("Finalizing...")
                             window.imageWriter.setVerifyEnabled(false)
+                            focusAnchor.forceActiveFocus()
                         }
                         Layout.alignment: Qt.AlignRight
                         visible: false
+                        
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                window.getPreviousFocusableElement(cancelverifybutton).forceActiveFocus()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Tab) {
+                                window.getNextFocusableElement(cancelverifybutton).forceActiveFocus()
+                                event.accepted = true
+                            }
+                        }
                     }
                     ImButton {
                         Layout.bottomMargin: 25
@@ -301,9 +439,20 @@ ApplicationWindow {
                             enabled = false
                             progressText.text = qsTr("Starting download...")
                             window.imageWriter.skipCacheVerification()
+                            focusAnchor.forceActiveFocus()
                         }
                         Layout.alignment: Qt.AlignRight
                         visible: false
+                        
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                window.getPreviousFocusableElement(skipcachebutton).forceActiveFocus()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Tab) {
+                                window.getNextFocusableElement(skipcachebutton).forceActiveFocus()
+                                event.accepted = true
+                            }
+                        }
                     }
 
                     ImButton {
@@ -320,11 +469,23 @@ ApplicationWindow {
                             if (!window.imageWriter.readyToWrite()) {
                                 return
                             }
+                            focusAnchor.forceActiveFocus()
 
                             if (!optionspopup.visible && window.imageWriter.imageSupportsCustomization()) {
-                                usesavedsettingspopup.openPopup()
+                                usesavedsettingspopup.open()
                             } else {
                                 confirmwritepopup.askForConfirmation()
+                            }
+                        }
+                        
+                        Keys.onPressed: (event) => {
+                            if (!writebutton.focus) return
+                            if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                window.getPreviousFocusableElement(writebutton).forceActiveFocus()
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Tab) {
+                                window.getNextFocusableElement(writebutton).forceActiveFocus()
+                                event.accepted = true
                             }
                         }
                     }
@@ -372,6 +533,7 @@ ApplicationWindow {
                     RowLayout {
                         id: langbar
                         spacing: 10
+                        activeFocusOnTab: false
 
                         Text {
                             font.pixelSize: 12
@@ -382,11 +544,13 @@ ApplicationWindow {
                             Layout.bottomMargin: 10
                         }
                         ComboBox {
+                            id: languageCombo
                             font.pixelSize: 12
                             font.family: Style.fontFamily
                             model: window.imageWriter.getTranslations()
                             Layout.preferredWidth: 200
                             currentIndex: -1
+                            activeFocusOnTab: true
                             Component.onCompleted: {
                                 currentIndex = find(window.imageWriter.getCurrentLanguage())
                             }
@@ -395,6 +559,16 @@ ApplicationWindow {
                             }
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
+
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                    window.getPreviousFocusableElement(languageCombo).forceActiveFocus()
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Tab) {
+                                    window.getNextFocusableElement(languageCombo).forceActiveFocus()
+                                    event.accepted = true
+                                }
+                            }
                         }
                         Text {
                             font.pixelSize: 12
@@ -404,11 +578,13 @@ ApplicationWindow {
                             Layout.bottomMargin: 10
                         }
                         ComboBox {
+                            id: keyboardCombo
                             enabled: window.imageWriter.isEmbeddedMode()
                             font.pixelSize: 12
                             font.family: Style.fontFamily
                             model: window.imageWriter.getKeymapLayoutList()
                             currentIndex: -1
+                            activeFocusOnTab: true
                             Component.onCompleted: {
                                 currentIndex = find(window.imageWriter.getCurrentKeyboard())
                             }
@@ -418,6 +594,16 @@ ApplicationWindow {
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
                             Layout.rightMargin: 30
+
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                                    window.getPreviousFocusableElement(keyboardCombo).forceActiveFocus()
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Tab) {
+                                    window.getNextFocusableElement(keyboardCombo).forceActiveFocus()
+                                    event.accepted = true
+                                }
+                            }
                         }
                     }
                 }
@@ -474,7 +660,7 @@ ApplicationWindow {
 
         onUpdatePopupRequested: (url) => {
             updatepopup.url = url
-            updatepopup.openPopup()
+            updatepopup.open()
         }
 
         onDefaultEmbeddedDriveRequested: (drive) => {
@@ -493,6 +679,11 @@ ApplicationWindow {
         id: msgpopup
         onOpened: {
             forceActiveFocus()
+        }
+        onClosed: {
+            window.imageWriter.setDst("")
+            window.selectedStorageName = ""
+            window.resetWriteButton()
         }
     }
 
@@ -537,7 +728,7 @@ ApplicationWindow {
         function askForConfirmation()
         {
             text = qsTr("All existing data on '%1' will be erased.<br>Are you sure you want to continue?").arg(dstbutton.text)
-            openPopup()
+            open()
         }
 
         onOpened: {
@@ -591,7 +782,7 @@ ApplicationWindow {
             confirmwritepopup.askForConfirmation()
         }
         onEditSettings: {
-            optionspopup.openPopup()
+            optionspopup.show()
         }
         onCloseSettings: {
             optionspopup.close()
@@ -672,12 +863,13 @@ ApplicationWindow {
         cancelwritebutton.visible = false
         cancelverifybutton.visible = false
         skipcachebutton.visible = false
+        focusAnchor.forceActiveFocus()
     }
 
     function onError(msg) {
         msgpopup.title = qsTr("Error")
         msgpopup.text = msg
-        msgpopup.openPopup()
+        msgpopup.open()
         resetWriteButton()
     }
 
@@ -697,10 +889,7 @@ ApplicationWindow {
             msgpopup.quitButton = true
         }
 
-        msgpopup.openPopup()
-        imageWriter.setDst("")
-        window.selectedStorageName = ""
-        resetWriteButton()
+        msgpopup.open()
     }
 
     function onFileSelected(file) {
@@ -736,6 +925,7 @@ ApplicationWindow {
         progressText.text = qsTr("Verifying cached file...")
         progressBar.Material.accent = Style.progressBarVerifyForegroundColor
         progressBar.indeterminate = false
+        focusAnchor.forceActiveFocus()
     }
 
     function onCacheVerificationFinished() {

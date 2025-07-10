@@ -18,6 +18,35 @@ MainPopupBase {
 
     property alias hwlist: hwlist
 
+    // Provide implementation for the base popup's navigation functions
+    function getNextFocusableElement(startElement) {
+        var focusableItems = [hwlist, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[0];
+
+        var nextIndex = (currentIndex + 1) % focusableItems.length;
+        return focusableItems[nextIndex];
+    }
+
+    function getPreviousFocusableElement(startElement) {
+        var focusableItems = [hwlist, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[focusableItems.length - 1];
+        
+        var prevIndex = (currentIndex - 1 + focusableItems.length) % focusableItems.length;
+        return focusableItems[prevIndex];
+    }
+
     required property ImageWriter imageWriter
     readonly property OSListModel osModel: imageWriter.getOSList()
     readonly property HWListModel deviceModel: imageWriter.getHWList()
@@ -34,6 +63,12 @@ MainPopupBase {
         currentIndex: root.deviceModel.currentIndex
         delegate: hwdelegate
         anchors.top: root.title_separator.bottom
+
+        onActiveFocusChanged: {
+            if (activeFocus && currentIndex === -1 && count > 0) {
+                currentIndex = 0
+            }
+        }
 
         Keys.onSpacePressed: {
             if (currentIndex != -1)
@@ -155,5 +190,9 @@ MainPopupBase {
 
         root.deviceSelected()
         root.close()
+    }
+
+    onOpened: {
+        hwlist.forceActiveFocus()
     }
 }
