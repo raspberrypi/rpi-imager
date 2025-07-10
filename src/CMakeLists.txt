@@ -149,7 +149,7 @@ set(ZSTD_LIBRARIES libzstd_static CACHE FILEPATH "" FORCE)
 set(ZSTD_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-build/lib/libzstd.a CACHE FILEPATH "" FORCE)
 
 # Remote nghttp2
-set(NGHTTP2_VERSION "1.65.0")
+set(NGHTTP2_VERSION "1.66.0")
 FetchContent_Declare(nghttp2
     GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
     GIT_TAG        v${NGHTTP2_VERSION}
