@@ -265,7 +265,7 @@ set(ARCHIVE_BUILD_STATIC_LIBS ON CACHE BOOL "")
 set(ARCHIVE_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(ENABLE_ZSTD ON CACHE BOOL "")
 set(POSIX_REGEX_LIB "libc" CACHE STRING "" FORCE)
-set(LIBARCHIVE_VERSION "3.8.0")
+set(LIBARCHIVE_VERSION "3.8.1")
 
 # Create a patch script to fix ZSTD detection in libarchive
 set(LIBARCHIVE_PATCH_FILE "${CMAKE_CURRENT_BINARY_DIR}/libarchive_zstd_patch.cmake")
