@@ -18,12 +18,16 @@
 class CacheVerificationWorker;
 
 /**
- * @brief Manages cache operations in the background to avoid blocking the UI
+ * @brief Manages all cache operations in the background to avoid blocking the UI
  * 
  * This class handles:
  * - Cache file integrity verification
+ * - Cache file path management
+ * - Cache settings persistence
+ * - Cache file invalidation
  * - Disk space monitoring
  * - Cache directory setup
+ * - Custom cache file support
  * 
  * Operations are performed on background threads and results are cached
  * to avoid blocking the main UI thread during write operations.
@@ -39,12 +43,14 @@ public:
         qint64 availableBytes = 0;
         QString cacheDirectory;
         QString cacheFileName;
-        QByteArray cachedHash;
+        QByteArray cachedHash;      // Uncompressed hash (extract_sha256) - for UI matching
+        QByteArray cacheFileHash;   // Compressed hash (image_download_sha256) - for cache verification
         bool verificationComplete = false;
         bool diskSpaceCheckComplete = false;
+        bool customCacheFile = false;
     };
 
-    explicit CacheManager(QObject *parent = nullptr);
+    explicit CacheManager(bool embeddedMode = false, QObject *parent = nullptr);
     ~CacheManager();
 
     // Start background operations (call at app startup)
@@ -56,17 +62,28 @@ public:
     // Check if cache operations are complete
     bool isReady() const;
 
-    // Set cache file to verify
-    void setCacheFile(const QString& fileName, const QByteArray& expectedHash);
+    // Cache file queries
+    Q_INVOKABLE bool isCached(const QByteArray& expectedHash) const;
+    Q_INVOKABLE QString getCacheFilePath(const QByteArray& expectedHash) const;
     
-    // Start cache verification with progress (for immediate use)
-    void startCacheVerification(const QString& fileName, const QByteArray& expectedHash);
+    // Cache file management
+    void setCustomCacheFile(const QString& cacheFile, const QByteArray& sha256);
+    void invalidateCache();
+    void updateCacheFile(const QByteArray& uncompressedHash, const QByteArray& compressedHash);
+    
+    // Cache verification
+    void startVerification(const QByteArray& expectedHash);
+    
+    // Cache file setup for downloads
+    bool setupCacheForDownload(const QByteArray& expectedHash, qint64 downloadSize, QString& cacheFilePath);
 
 signals:
     void cacheVerificationComplete(bool isValid);
     void diskSpaceCheckComplete(qint64 availableBytes);
     void cacheOperationsReady();
     void cacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes);
+    void cacheInvalidated();
+    void cacheFileUpdated(const QByteArray& uncompressedHash);
 
 private slots:
     void onVerificationComplete(bool isValid, const QString& fileName, const QByteArray& hash);
@@ -78,8 +95,13 @@ private:
     QThread* workerThread_;
     CacheVerificationWorker* worker_;
     QSettings settings_;
+    bool cachingEnabled_;
 
     void updateCacheStatus(const std::function<void(CacheStatus&)>& updater);
+    void loadCacheSettings();
+    void saveCacheSettings();
+    QString getDefaultCacheFilePath() const;
+    bool isCachingEnabled() const;
 };
 
 /**
