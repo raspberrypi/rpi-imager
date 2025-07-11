@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "config.h"
+#include "buffer_optimization.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/mountutils/src/mountutils.hpp"
 #include <iostream>
@@ -20,7 +21,7 @@
 #include <QTemporaryDir>
 #include <QDebug>
 #include <QtConcurrent/qtconcurrentrun.h>
-#include <QTimer>
+#include <QElapsedTimer>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -44,26 +45,7 @@ static size_t getSystemPageSize()
 #endif
 }
 
-// Get optimal buffer size based on system characteristics
-static size_t getOptimalBufferSize()
-{
-    // Start with a reasonable default (1 MiB)
-    size_t bufferSize = IMAGEWRITER_BLOCKSIZE;
-    
-    // Adjust based on system page size
-    size_t pageSize = getSystemPageSize();
-    
-    // For SSD optimization, larger blocks tend to work better
-    // Make sure buffer size is a multiple of page size
-    bufferSize = ((bufferSize + pageSize - 1) / pageSize) * pageSize;
-    
-    // Cap at a reasonable maximum (8 MiB, aligned to page size)
-    const size_t maxBufferSize = (((8 * 1024 * 1024) + pageSize - 1) / pageSize) * pageSize;
-    if (bufferSize > maxBufferSize)
-        bufferSize = maxBufferSize;
-        
-    return bufferSize;
-}
+// Note: Buffer optimization logic moved to centralized buffer_optimization module
 
 class _extractThreadClass : public QThread {
 public:
@@ -86,13 +68,16 @@ protected:
 
 DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
     : DownloadThread(url, localfilename, expectedHash, parent), 
-      _abufsize(getOptimalBufferSize()), 
+      _abufsize(getOptimalWriteBufferSize()), 
       _ethreadStarted(false),
       _isImage(true), 
       _inputHash(OSLIST_HASH_ALGORITHM), 
       _activeBuf(0), 
       _writeThreadStarted(false),
-      _progressTimerStarted(false)
+      _progressStarted(false),
+      _lastProgressTime(0),
+      _lastEmittedDlNow(0),
+      _lastLocalVerifyNow(0)
 {
     _extractThread = new _extractThreadClass(this);
     size_t pageSize = getSystemPageSize();
@@ -100,41 +85,11 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     _abuf[1] = (char *) qMallocAligned(_abufsize, pageSize);
     
     qDebug() << "Using buffer size:" << _abufsize << "bytes with page size:" << pageSize << "bytes";
-    
-    // Timer to periodically check progress and emit signals
-    _progressTimer = new QTimer(this);
-    connect(_progressTimer, &QTimer::timeout, [this]() {
-        static quint64 lastDlNow = 0;
-        static quint64 lastVerifyNow = 0;
-        
-        quint64 currentDlNow = this->dlNow();
-        quint64 currentDlTotal = this->dlTotal();
-        quint64 currentVerifyNow = this->verifyNow();
-        quint64 currentVerifyTotal = this->verifyTotal();
-        
-        // Only emit signals if values have changed
-        if (currentDlNow != lastDlNow || (currentDlTotal > 0 && lastDlNow == 0)) {
-            lastDlNow = currentDlNow;
-            emit downloadProgressChanged(currentDlNow, currentDlTotal);
-        }
-        
-        if (currentVerifyNow != lastVerifyNow || (currentVerifyTotal > 0 && lastVerifyNow == 0)) {
-            lastVerifyNow = currentVerifyNow;
-            emit verifyProgressChanged(currentVerifyNow, currentVerifyTotal);
-        }
-    });
-    
-    // Timer will be started when data first starts flowing (after successful drive opening)
 }
 
 DownloadExtractThread::~DownloadExtractThread()
 {
     _cancelled = true;
-    
-    // Stop progress timer if it was started
-    if (_progressTimerStarted && _progressTimer) {
-        _progressTimer->stop();
-    }
     
     _cancelExtract();
     if (!_extractThread->wait(10000))
@@ -145,17 +100,48 @@ DownloadExtractThread::~DownloadExtractThread()
     qFreeAligned(_abuf[1]);
 }
 
+void DownloadExtractThread::_emitProgressUpdate()
+{
+    static QElapsedTimer timer;
+    bool firstProgressUpdate = false;
+    if (!_progressStarted) {
+        _progressStarted = true;
+        firstProgressUpdate = true;
+        timer.start();
+        qDebug() << "Started progress updates after successful drive opening";
+    }
+    
+    // Only emit progress updates every 100ms to avoid flooding (but always emit the first one)
+    qint64 currentTime = timer.elapsed();
+    if (!firstProgressUpdate && currentTime - _lastProgressTime < PROGRESS_UPDATE_INTERVAL) {
+        return;
+    }
+    _lastProgressTime = currentTime;
+    
+    quint64 currentDlNow = this->dlNow();
+    quint64 currentDlTotal = this->dlTotal();
+    quint64 currentVerifyNow = this->verifyNow();
+    quint64 currentVerifyTotal = this->verifyTotal();
+    
+    // Only emit signals if values have changed
+    if (currentDlNow != _lastEmittedDlNow || (currentDlTotal > 0 && _lastEmittedDlNow == 0)) {
+        _lastEmittedDlNow = currentDlNow;
+        emit downloadProgressChanged(currentDlNow, currentDlTotal);
+    }
+    
+    if (currentVerifyNow != _lastLocalVerifyNow || (currentVerifyTotal > 0 && _lastLocalVerifyNow == 0)) {
+        _lastLocalVerifyNow = currentVerifyNow;
+        emit verifyProgressChanged(currentVerifyNow, currentVerifyTotal);
+    }
+}
+
 size_t DownloadExtractThread::_writeData(const char *buf, size_t len)
 {
     if (_cancelled)
         return 0;
 
-    // Start progress timer when data first starts flowing (indicates successful drive opening)
-    if (!_progressTimerStarted) {
-        _progressTimerStarted = true;
-        _progressTimer->start(PROGRESS_UPDATE_INTERVAL);
-        qDebug() << "Started progress timer after successful drive opening";
-    }
+    // Emit progress updates when data starts flowing
+    _emitProgressUpdate();
 
     _writeCache(buf, len);
 
@@ -246,6 +232,9 @@ void DownloadExtractThread::extractImageRun()
                 memset(_abuf[_activeBuf]+size, 0, paddingBytes);
                 size += paddingBytes;
             }
+
+            // Emit progress updates during extraction
+            _emitProgressUpdate();
 
             if (_writeThreadStarted)
             {
@@ -369,7 +358,16 @@ void DownloadExtractThread::extractMultiFileRun()
         return;
     }
 
-    QString currentDir;
+    QString currentDir = QDir::currentPath();
+
+    if (!QDir::setCurrent(folder))
+    {
+        DownloadThread::cancelDownload();
+        emit error(tr("Error changing to directory '%1'").arg(folder));
+        return;
+    }
+
+    // Now create libarchive handles after all early returns are handled
     struct archive *a = archive_read_new();
     struct archive *ext = archive_write_disk_new();
     struct archive_entry *entry;
@@ -382,15 +380,6 @@ void DownloadExtractThread::extractMultiFileRun()
     if (::getuid() == 0)
         flags |= ARCHIVE_EXTRACT_OWNER;
 #endif
-
-    currentDir = QDir::currentPath();
-
-    if (!QDir::setCurrent(folder))
-    {
-        DownloadThread::cancelDownload();
-        emit error(tr("Error changing to directory '%1'").arg(folder));
-        return;
-    }
 
     archive_read_support_filter_all(a);
     archive_read_support_format_all(a);
@@ -438,6 +427,17 @@ void DownloadExtractThread::extractMultiFileRun()
         if (_cacheEnabled && _expectedHash == computedHash)
         {
             _cachefile.close();
+            
+            // Get both hashes: compressed cache file and uncompressed image data
+            QByteArray cacheFileHash = _cachehash.result().toHex();
+            
+            qDebug() << "Cache file created:";
+            qDebug() << "  Image hash (uncompressed):" << computedHash;
+            qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
+            
+            // Emit both hashes for proper cache verification
+            emit cacheFileHashUpdated(cacheFileHash, computedHash);
+            // Keep old signal for backward compatibility
             emit cacheFileUpdated(computedHash);
         }
 
@@ -473,20 +473,38 @@ void DownloadExtractThread::extractMultiFileRun()
         }
     }
 
+    // Ensure proper cleanup sequence
+    
+    // 1. Close libarchive handles properly (this should flush any pending writes)
+    if (archive_write_close(ext) != ARCHIVE_OK) {
+        qDebug() << "Warning: Failed to properly close archive write handle";
+    }
     archive_read_free(a);
     archive_write_free(ext);
+    
+    // 2. Change back to original directory BEFORE sync to avoid holding references
     QDir::setCurrent(currentDir);
+    
+    // 3. Force filesystem sync to ensure all writes are committed
+#ifdef Q_OS_LINUX
+    sync(); // Force all cached writes to be flushed to disk
+    qDebug() << "Filesystem sync completed";
+#endif
 
 #ifdef Q_OS_LINUX
     if (manualmount)
     {
         QStringList args;
         args << folder;
-        QProcess::execute("umount", args);
+        int umountResult = QProcess::execute("umount", args);
         QDir d;
-        d.rmdir(folder);
+        bool rmResult = d.rmdir(folder);
+        qDebug() << "Manual cleanup: umount result:" << umountResult << ", rmdir result:" << rmResult << ", folder:" << folder;
     }
 #endif
+
+    // Give the filesystem a moment to settle after sync before ejecting
+    QThread::msleep(500);
 
     eject_disk(_filename.constData());
 }
@@ -535,12 +553,10 @@ QByteArray DownloadExtractThread::_popQueue()
 
     QByteArray result = _queue.front();
     _queue.pop_front();
-
-    if (_queue.size() == (MAX_QUEUE_SIZE-1))
-    {
-        lock.unlock();
-        _cv.notify_one();
-    }
+    
+    // Always notify waiting pushers that space is available
+    lock.unlock();
+    _cv.notify_one();
 
     return result;
 }
@@ -554,10 +570,74 @@ void DownloadExtractThread::_pushQueue(const char *data, size_t len)
     });
 
     _queue.emplace_back(data, len);
+    
+    // Always notify waiting poppers that data is available
+    lock.unlock();
+    _cv.notify_one();
+}
 
-    if (_queue.size() == 1)
+bool DownloadExtractThread::_verify()
+{
+    qDebug() << "DownloadExtractThread::_verify() called (child class implementation with progress updates)";
+    _lastVerifyNow = 0;
+    _verifyTotal = _file.pos();
+    
+    // Use adaptive buffer size based on file size for optimal verification performance
+    size_t verifyBufferSize = getAdaptiveVerifyBufferSize(_verifyTotal);
+    char *verifyBuf = (char *) qMallocAligned(verifyBufferSize, 4096);
+    
+    QElapsedTimer t1;
+    t1.start();
+    
+    qDebug() << "Post-write verification using" << verifyBufferSize/1024 << "KB buffer for" 
+             << _verifyTotal/(1024*1024) << "MB image";
+
+#ifdef Q_OS_LINUX
+    /* Make sure we are reading from the drive and not from cache */
+    posix_fadvise(_file.handle(), 0, 0, POSIX_FADV_DONTNEED);
+#endif
+
+    if (!_firstBlock)
     {
-        lock.unlock();
-        _cv.notify_one();
+        _file.seek(0);
     }
+    else
+    {
+        _verifyhash.addData(_firstBlock, _firstBlockSize);
+        _file.seek(_firstBlockSize);
+        _lastVerifyNow += _firstBlockSize;
+    }
+
+    while (_verifyEnabled && _lastVerifyNow < _verifyTotal && !_cancelled)
+    {
+        qint64 lenRead = _file.read(verifyBuf, qMin((qint64) verifyBufferSize, (qint64) (_verifyTotal-_lastVerifyNow) ));
+        if (lenRead == -1)
+        {
+            DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"
+                                                "SD card may be broken."));
+            qFreeAligned(verifyBuf);
+            return false;
+        }
+
+        _verifyhash.addData(verifyBuf, lenRead);
+        _lastVerifyNow += lenRead;
+        
+        // Emit progress updates during verification
+        _emitProgressUpdate();
+    }
+    qFreeAligned(verifyBuf);
+
+    qDebug() << "Verify hash:" << _verifyhash.result().toHex();
+    qDebug() << "Verify done in" << t1.elapsed() / 1000.0 << "seconds";
+
+    if (_verifyhash.result() == _writehash.result() || !_verifyEnabled || _cancelled)
+    {
+        return true;
+    }
+    else
+    {
+        DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of SD card is different from what was written to it."));
+    }
+
+    return false;
 }

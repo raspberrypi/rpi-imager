@@ -134,6 +134,7 @@ signals:
     void success();
     void error(QString msg);
     void cacheFileUpdated(QByteArray sha256);
+    void cacheFileHashUpdated(QByteArray cacheFileHash, QByteArray imageHash);
     void finalizing();
     void preparationStatusUpdate(QString msg);
 
@@ -145,7 +146,7 @@ protected:
 
     void _hashData(const char *buf, size_t len);
     void _writeComplete();
-    bool _verify();
+    virtual bool _verify();
     int _authopen(const QByteArray &filename);
     bool _openAndPrepareDevice();
     void _writeCache(const char *buf, size_t len);
@@ -191,6 +192,7 @@ protected:
     QFile _cachefile;
 
     AcceleratedCryptographicHash _writehash, _verifyhash;
+    AcceleratedCryptographicHash _cachehash;
 };
 
 #endif // DOWNLOADTHREAD_H

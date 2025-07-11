@@ -25,6 +25,7 @@
 #include "drivelistmodel.h"
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
+#include "cachemanager.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
@@ -48,8 +49,14 @@ public:
     /* Set device to write to */
     Q_INVOKABLE void setDst(const QString &device, quint64 deviceSize = 0);
 
-    /* Enable/disable verification */
+    /* Set verification enabled */
     Q_INVOKABLE void setVerifyEnabled(bool verify);
+
+    /* Set custom repo */
+    Q_INVOKABLE void setCustomRepo(const QUrl &repo);
+
+    /* Set custom cache file - now handled by CacheManager */
+    Q_INVOKABLE void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
 
     /* Returns true if src and dst are set */
     Q_INVOKABLE bool readyToWrite();
@@ -59,6 +66,9 @@ public:
 
     /* Cancel write */
     Q_INVOKABLE void cancelWrite();
+
+    /* Skip cache verification and proceed with download */
+    Q_INVOKABLE void skipCacheVerification();
 
     /* Return true if url is in our local disk cache */
     Q_INVOKABLE bool isCached(const QUrl &url, const QByteArray &sha256);
@@ -107,9 +117,6 @@ public:
 
     /** Set the HW filter, for a filtered view of the OS list */
     Q_INVOKABLE void setHWFilterList(const QJsonArray &tags, const bool &inclusive);
-
-    /* Set custom cache file */
-    void setCustomCacheFile(const QString &cacheFile, const QByteArray &sha256);
 
     /* Utility function to open OS file dialog */
     Q_INVOKABLE void openFileDialog();
@@ -180,6 +187,8 @@ signals:
     void preparationStatusUpdate(QVariant msg);
     void osListPrepared();
     void networkInfo(QVariant msg);
+    void cacheVerificationStarted();
+    void cacheVerificationFinished();
 
 protected slots:
     void startProgressPolling();
@@ -190,14 +199,19 @@ protected slots:
     void onError(QString msg);
     void onFileSelected(QString filename);
     void onCancelled();
-    void onCacheFileUpdated(QByteArray sha256);
     void onFinalizing();
     void onTimeSyncReply(QNetworkReply *reply);
     void onPreparationStatusUpdate(QString msg);
     void handleNetworkRequestFinished(QNetworkReply *data);
     void onSTPdetected();
+    void onCacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes);
+    void onCacheVerificationComplete(bool isValid);
 
 private:
+    // Cache management
+    CacheManager* _cacheManager;
+    bool _waitingForCacheVerification;
+
     // Recursively walk all the entries with subitems and, for any which
     // refer to an external JSON list, fetch the list and put it in place.
     void fillSubLists(QJsonArray &topLevel);
@@ -208,8 +222,8 @@ private:
 
 protected:
     QUrl _src, _repo;
-    QString _dst, _cacheFileName, _parentCategory, _osName, _currentLang, _currentLangcode, _currentKeyboard;
-    QByteArray _expectedHash, _cachedFileHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
+    QString _dst, _parentCategory, _osName, _currentLang, _currentLangcode, _currentKeyboard;
+    QByteArray _expectedHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
     HWListModel _hwlist;
@@ -218,21 +232,18 @@ protected:
     QTimer _networkchecktimer;
     PowerSaveBlocker _powersave;
     DownloadThread *_thread;
-    bool _verifyEnabled, _multipleFilesInZip, _cachingEnabled, _embeddedMode, _online;
+    bool _verifyEnabled, _multipleFilesInZip, _embeddedMode, _online;
     QSettings _settings;
     QMap<QString,QString> _translations;
-    bool _customCacheFile;
     QTranslator *_trans;
 
     void _parseCompressedFile();
     void _parseXZFile();
-    bool _verifyCacheFileIntegrity();
-    void _invalidateCache();
-    bool _ensureCacheDirectoryExists();
     QString _pubKeyFileName();
     QString _privKeyFileName();
     QString _sshKeyDir();
     QString _sshKeyGen();
+    void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
 };
 
 #endif // IMAGEWRITER_H

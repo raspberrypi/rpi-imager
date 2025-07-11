@@ -18,6 +18,35 @@ MainPopupBase {
 
     property alias hwlist: hwlist
 
+    // Provide implementation for the base popup's navigation functions
+    function getNextFocusableElement(startElement) {
+        var focusableItems = [hwlist, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[0];
+
+        var nextIndex = (currentIndex + 1) % focusableItems.length;
+        return focusableItems[nextIndex];
+    }
+
+    function getPreviousFocusableElement(startElement) {
+        var focusableItems = [hwlist, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[focusableItems.length - 1];
+        
+        var prevIndex = (currentIndex - 1 + focusableItems.length) % focusableItems.length;
+        return focusableItems[prevIndex];
+    }
+
     required property ImageWriter imageWriter
     readonly property OSListModel osModel: imageWriter.getOSList()
     readonly property HWListModel deviceModel: imageWriter.getHWList()
@@ -34,6 +63,12 @@ MainPopupBase {
         currentIndex: root.deviceModel.currentIndex
         delegate: hwdelegate
         anchors.top: root.title_separator.bottom
+
+        onActiveFocusChanged: {
+            if (activeFocus && currentIndex === -1 && count > 0) {
+                currentIndex = 0
+            }
+        }
 
         Keys.onSpacePressed: {
             if (currentIndex != -1)
@@ -153,14 +188,11 @@ MainPopupBase {
         /* Reload OS list since filters changed */
         root.osModel.reload()
 
-        /* As we're filtering the OS list, we need to ensure we present a 'Recommended' OS.
-            * To do this, we exploit a convention of how we build the OS list. By convention,
-            * the preferred OS for a device is listed at the top level of the list, and is at the
-            * lowest index. So..
-            */
-        root.osModel.markFirstAsRecommended()
-
         root.deviceSelected()
         root.close()
+    }
+
+    onOpened: {
+        hwlist.forceActiveFocus()
     }
 }

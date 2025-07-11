@@ -255,6 +255,10 @@ export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 echo "Pre-packaging hook - opportunity to remove unwanted files"
 # Add your file removal commands here, for example:
 # rm -rf "$APPDIR/usr/lib/libunwanted.so"
+rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Universal"
+rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Fusion"
+rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Imagine"
+rm -rf "$APPDIR/usr/qml/QtQuick/Controls/FluentWinUI3"
 
 # Create the AppImage
 echo "Creating AppImage..."

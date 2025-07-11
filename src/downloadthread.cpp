@@ -5,6 +5,7 @@
 
 #include "downloadthread.h"
 #include "config.h"
+#include "buffer_optimization.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include "dependencies/mountutils/src/mountutils.hpp"
@@ -39,7 +40,7 @@ int DownloadThread::_curlCount = 0;
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
-    _inputBufferSize(0), _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM)
+    _inputBufferSize(0), _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _cachehash(OSLIST_HASH_ALGORITHM)
 {
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -53,8 +54,9 @@ DownloadThread::~DownloadThread()
 {
     _cancelled = true;
     wait();
-    if (_file.isOpen())
-        _file.close();
+    
+    // Use _closeFiles() to ensure all file handles are properly closed
+    _closeFiles();
 
     if (_firstBlock)
         qFreeAligned(_firstBlock);
@@ -490,6 +492,9 @@ void DownloadThread::_writeCache(const char *buf, size_t len)
     if (!_cacheEnabled || _cancelled)
         return;
 
+    // Hash the data going into the cache file
+    _cachehash.addData(buf, len);
+
     if (_cachefile.write(buf, len) != len)
     {
         qDebug() << "Error writing to cache file. Disabling caching.";
@@ -724,6 +729,17 @@ void DownloadThread::_writeComplete()
     if (_cacheEnabled && _expectedHash == computedHash)
     {
         _cachefile.close();
+        
+        // Get both hashes: compressed cache file and uncompressed image data
+        QByteArray cacheFileHash = _cachehash.result().toHex();
+        
+        qDebug() << "Cache file created:";
+        qDebug() << "  Image hash (uncompressed):" << computedHash;
+        qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
+        
+        // Emit both hashes for proper cache verification
+        emit cacheFileHashUpdated(cacheFileHash, computedHash);
+        // Keep old signal for backward compatibility
         emit cacheFileUpdated(computedHash);
     }
 
@@ -753,7 +769,7 @@ void DownloadThread::_writeComplete()
 
     emit finalizing();
 
-    if (!_config.isEmpty() || !_cmdline.isEmpty() || !_firstrun.isEmpty() || !_cloudinit.isEmpty())
+    if ((!_config.isEmpty() || !_cmdline.isEmpty() || !_firstrun.isEmpty() || !_cloudinit.isEmpty()) && !_initFormat.isEmpty())
     {
         if (!_customizeImage())
         {
@@ -818,11 +834,18 @@ void DownloadThread::_writeComplete()
 
 bool DownloadThread::_verify()
 {
-    char *verifyBuf = (char *) qMallocAligned(IMAGEWRITER_VERIFY_BLOCKSIZE, 4096);
     _lastVerifyNow = 0;
     _verifyTotal = _file.pos();
+    
+    // Use adaptive buffer size based on file size for optimal verification performance
+    size_t verifyBufferSize = getAdaptiveVerifyBufferSize(_verifyTotal);
+    char *verifyBuf = (char *) qMallocAligned(verifyBufferSize, 4096);
+    
     QElapsedTimer t1;
     t1.start();
+    
+    qDebug() << "Post-write verification using" << verifyBufferSize/1024 << "KB buffer for" 
+             << _verifyTotal/(1024*1024) << "MB image";
 
 #ifdef Q_OS_LINUX
     /* Make sure we are reading from the drive and not from cache */
@@ -843,11 +866,12 @@ bool DownloadThread::_verify()
 
     while (_verifyEnabled && _lastVerifyNow < _verifyTotal && !_cancelled)
     {
-        qint64 lenRead = _file.read(verifyBuf, qMin((qint64) IMAGEWRITER_VERIFY_BLOCKSIZE, (qint64) (_verifyTotal-_lastVerifyNow) ));
+        qint64 lenRead = _file.read(verifyBuf, qMin((qint64) verifyBufferSize, (qint64) (_verifyTotal-_lastVerifyNow) ));
         if (lenRead == -1)
         {
             DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"
                                                 "SD card may be broken."));
+            qFreeAligned(verifyBuf);
             return false;
         }
 
@@ -951,7 +975,7 @@ bool DownloadThread::_customizeImage()
                     /* config.txt already contains the line */
                 } else {
                     /* Append new line to config.txt */
-                    if (config.right(1) != "\n")
+                    if (config.right(1) != QByteArray("\n"))
                         config += "\n"+item+"\n";
                     else
                         config += item+"\n";

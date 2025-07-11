@@ -15,7 +15,7 @@ ListView {
     anchors.left: parent.left
     anchors.bottom: parent.bottom
     boundsBehavior: Flickable.StopAtBounds
-    highlight: Rectangle { color: Style.listViewHighlightColor; radius: 5 }
+    highlight: Rectangle { color: Style.listViewHighlightColor; radius: 5; visible: root.activeFocus }
 
     ScrollBar.vertical: ScrollBar {
         width: 10

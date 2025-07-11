@@ -18,6 +18,7 @@ class HWListModel : public QAbstractListModel
     QML_ELEMENT
     QML_UNCREATABLE("Created by C++")
     Q_PROPERTY(QString currentName READ currentName NOTIFY currentNameChanged)
+    Q_PROPERTY(QString currentArchitecture READ currentArchitecture NOTIFY currentArchitectureChanged)
     Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY currentIndexChanged)
 public:
 
@@ -26,7 +27,8 @@ public:
         TagsRole,
         IconRole,
         DescriptionRole,
-        MatchingTypeRole
+        MatchingTypeRole,
+        ArchitectureRole
     };
 
     struct HardwareDevice {
@@ -35,6 +37,7 @@ public:
         QString icon;
         QString description;
         QString matchingType;
+        QString architecture; // Preferred architecture (armel, armhf, armv8)
 
         bool isInclusive() const {
             return matchingType == QLatin1String("inclusive");
@@ -48,11 +51,15 @@ public:
     // Returns the name associated with the current index
     QString currentName() const;
 
+    // Returns the preferred architecture of the current device
+    QString currentArchitecture() const;
+
     int currentIndex() const;
     void setCurrentIndex(int index);
 
 Q_SIGNALS:
     void currentNameChanged();
+    void currentArchitectureChanged();
     void currentIndexChanged();
 
 protected:

@@ -19,6 +19,14 @@
         <source>Error changing to directory &apos;%1&apos;</source>
         <translation>Earráid ag athrú go dtí an eolaire &apos;%1&apos;</translation>
     </message>
+    <message>
+        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
+        <translation type="unfinished">Earráid ag léamh ón stóras.&lt;br&gt;B’fhéidir go bhfuil an cárta SD briste.</translation>
+    </message>
+    <message>
+        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
+        <translation type="unfinished">Theip ar fhíorú an scríbhneoireachta. Tá ábhar an chárta SD difriúil ón méid a scríobhadh air.</translation>
+    </message>
 </context>
 <context>
     <name>DownloadThread</name>
@@ -91,10 +99,6 @@
         <translation>Earráid ag scríobh comhaid chuig diosca</translation>
     </message>
     <message>
-        <source>Download corrupt. Hash does not match</source>
-        <translation>Íoslódáil truaillithe. Ní hionann an hash</translation>
-    </message>
-    <message>
         <source>Error writing to storage (while flushing)</source>
         <translation>Earráid ag scríobh chuig an stóras (agus é ag sruthlú)</translation>
     </message>
@@ -117,6 +121,18 @@
     <message>
         <source>Customizing image</source>
         <translation>Íomhá á saincheapadh</translation>
+    </message>
+    <message>
+        <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -146,24 +162,32 @@
         <translation>Earráid ag formáidiú (trí udisks2)</translation>
     </message>
     <message>
-        <source>Error starting sfdisk</source>
-        <translation>Earráid ag tosú sfdisk</translation>
-    </message>
-    <message>
-        <source>Partitioning did not create expected FAT partition %1</source>
-        <translation>Níor chruthaigh an deighilt an deighilt FAT a bhíothas ag súil léi %1</translation>
-    </message>
-    <message>
-        <source>Error starting mkfs.fat</source>
-        <translation>Earráid ag tosú mkfs.fat</translation>
-    </message>
-    <message>
-        <source>Error running mkfs.fat: %1</source>
-        <translation>Earráid ag rith mkfs.fat: %1</translation>
-    </message>
-    <message>
         <source>Formatting not implemented for this platform</source>
         <translation>Níl an formáidiú curtha i bhfeidhm don ardán seo</translation>
+    </message>
+    <message>
+        <source>Error opening device for formatting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to device during formatting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error seeking on device during formatting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid parameters for formatting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Insufficient space on device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown formatting error</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -260,6 +284,10 @@
         <source>Error opening image file</source>
         <translation>Earráid ag oscailt comhad íomhá</translation>
     </message>
+    <message>
+        <source>starting extraction</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MsgPopup</name>
@@ -349,10 +377,6 @@
         <translation>SSID:</translation>
     </message>
     <message>
-        <source>Show password</source>
-        <translation>Taispeáin an focal faire</translation>
-    </message>
-    <message>
         <source>Hidden SSID</source>
         <translation>SSID i bhfolach</translation>
     </message>
@@ -393,10 +417,6 @@
     <message>
         <source>OS Customization</source>
         <translation>Saincheapadh OS</translation>
-    </message>
-    <message>
-        <source>OS customization options</source>
-        <translation>Roghanna saincheaptha OS</translation>
     </message>
     <message>
         <source>General</source>
@@ -447,18 +467,7 @@
     </message>
 </context>
 <context>
-    <name>QObject</name>
-    <message>
-        <source>Internal SD card reader</source>
-        <translation>Léitheoir cárta SD inmheánach</translation>
-    </message>
-</context>
-<context>
     <name>UseSavedSettingsPopup</name>
-    <message>
-        <source>Use OS customization?</source>
-        <translation>Úsáid saincheapadh OS?</translation>
-    </message>
     <message>
         <source>Would you like to apply OS customization settings?</source>
         <translation>Ar mhaith leat socruithe saincheaptha OS a chur i bhfeidhm?</translation>
@@ -633,6 +642,26 @@
     <message>
         <source>Select a custom .img from your computer</source>
         <translation>Roghnaigh .img saincheaptha ó do ríomhaire</translation>
+    </message>
+    <message>
+        <source>SKIP CACHE VERIFICATION</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verifying cached file... %1%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verifying cached file...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting write...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

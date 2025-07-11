@@ -16,6 +16,35 @@ import RpiImager
 MainPopupBase {
     id: root
 
+    // Provide implementation for the base popup's navigation functions
+    function getNextFocusableElement(startElement) {
+        var focusableItems = [dstlist, filterSystemDrives, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+        
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[0];
+
+        var nextIndex = (currentIndex + 1) % focusableItems.length;
+        return focusableItems[nextIndex];
+    }
+
+    function getPreviousFocusableElement(startElement) {
+        var focusableItems = [dstlist, filterSystemDrives, root.closeButton].filter(function(item) {
+            return item.visible && item.enabled
+        })
+
+        if (focusableItems.length === 0) return startElement;
+
+        var currentIndex = focusableItems.indexOf(startElement)
+        if (currentIndex === -1) return focusableItems[focusableItems.length - 1];
+        
+        var prevIndex = (currentIndex - 1 + focusableItems.length) % focusableItems.length;
+        return focusableItems[prevIndex];
+    }
+
     required property ImageWriter imageWriter
     property alias dstlist: dstlist
 
@@ -30,6 +59,12 @@ MainPopupBase {
         anchors.top: root.title_separator.bottom
         anchors.right: parent.right
 
+        onActiveFocusChanged: {
+            if (activeFocus && currentIndex === -1 && count > 0) {
+                currentIndex = 0
+            }
+        }
+
         Label {
             anchors.fill: parent
             horizontalAlignment: Qt.AlignHCenter
@@ -37,6 +72,19 @@ MainPopupBase {
             visible: parent.count == 0
             text: qsTr("No storage devices found")
             font.bold: true
+        }
+
+        Keys.onPressed: (event) => {
+            if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                root.getPreviousFocusableElement(dstlist).forceActiveFocus()
+                event.accepted = true
+            } else if (event.key === Qt.Key_Tab) {
+                root.getNextFocusableElement(dstlist).forceActiveFocus()
+                event.accepted = true
+            } else {
+                // Allow default up/down arrow processing
+                event.accepted = false
+            }
         }
 
         Keys.onSpacePressed: {
@@ -65,6 +113,16 @@ MainPopupBase {
             id: filterSystemDrives
             checked: true
             text: qsTr("Exclude System Drives")
+
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
+                    root.getPreviousFocusableElement(filterSystemDrives).forceActiveFocus()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Tab) {
+                    root.getNextFocusableElement(filterSystemDrives).forceActiveFocus()
+                    event.accepted = true
+                }
+            }
         }
     }
 
@@ -74,6 +132,7 @@ MainPopupBase {
         Item {
             id: dstitem
 
+            required property int index
             required property string device
             required property string description
             required property string size
@@ -87,8 +146,8 @@ MainPopupBase {
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
             readonly property bool unselectable: isReadOnly
 
-            anchors.left: parent.left
-            anchors.right: parent.right
+            anchors.left: parent ? parent.left : undefined
+            anchors.right: parent ? parent.right : undefined
             Layout.topMargin: 1
             height: shouldHide ? 0 : 61
             visible: !shouldHide
@@ -103,12 +162,14 @@ MainPopupBase {
 
             Rectangle {
                 id: dstbgrect
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
+                anchors.top: parent ? parent.top : undefined
+                anchors.left: parent ? parent.left : undefined
+                anchors.right: parent ? parent.right : undefined
                 height: 60
 
-                color: mouseOver ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
+                color: (dstitem.ListView.view && dstitem.ListView.view.activeFocus && dstitem.ListView.view.currentIndex == index)
+                       ? Style.listViewHighlightColor
+                       : (mouseOver ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 property bool mouseOver: false
 
                 RowLayout {
@@ -167,8 +228,8 @@ MainPopupBase {
             Rectangle {
                 id: dstborderrect
                 anchors.top: dstbgrect.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
+                anchors.left: parent ? parent.left : undefined
+                anchors.right: parent ? parent.right : undefined
                 height: 1
                 color: Style.popupBorderColor
             }
@@ -199,12 +260,15 @@ MainPopupBase {
             onError(qsTr("SD card is write protected.<br>Push the lock switch on the left side of the card upwards, and try again."))
             return
         }
-
-        dstpopup.close()
-        imageWriter.setDst(d.device, d.size)
-        dstbutton.text = d.description
+        imageWriter.setDst(d.device)
+        window.selectedStorageName = d.description
         if (imageWriter.readyToWrite()) {
             writebutton.enabled = true
         }
+        root.close()
+    }
+
+    onOpened: {
+        root.contentItem.forceActiveFocus()
     }
 }

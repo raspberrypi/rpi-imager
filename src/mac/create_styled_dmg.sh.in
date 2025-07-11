@@ -1,0 +1,180 @@
+#!/bin/bash
+
+# Simple DMG creation using create-dmg tool
+# This replaces the complex AppleScript-based approach with a reliable solution
+
+set -e
+
+# Configuration  
+APP_NAME="Raspberry Pi Imager"
+PROJECT_NAME="@CMAKE_PROJECT_NAME@"
+SOURCE_APP_PATH="@CMAKE_BINARY_DIR@/${PROJECT_NAME}.app"
+DMG_APP_PATH="@CMAKE_BINARY_DIR@/${APP_NAME}.app"
+FINAL_DMG_PATH="@CMAKE_BINARY_DIR@/${PROJECT_NAME}-@IMAGER_VERSION_STR@.dmg"
+DMG_BACKGROUND_PATH="@CMAKE_BINARY_DIR@/dmg_background.png"
+SIGNING_IDENTITY="@IMAGER_SIGNING_IDENTITY@"
+SHOULD_NOTARIZE="@IMAGER_NOTARIZE_APP@"
+KEYCHAIN_PROFILE="@IMAGER_NOTARIZE_KEYCHAIN_PROFILE@"
+
+echo "Creating styled DMG using create-dmg..."
+
+# Show configuration
+echo "Configuration:"
+echo "  Source App: $SOURCE_APP_PATH"
+echo "  DMG App: $DMG_APP_PATH"
+echo "  Output: $FINAL_DMG_PATH"
+echo "  Signing Identity: ${SIGNING_IDENTITY:-'(not set)'}"
+echo "  Notarize: ${SHOULD_NOTARIZE:-'OFF'}"
+echo "  Keychain Profile: ${KEYCHAIN_PROFILE:-'(not set)'}"
+echo ""
+
+# Check if create-dmg is installed
+if ! command -v create-dmg &> /dev/null; then
+    echo "Error: create-dmg is not installed."
+    echo "Please install it using: brew install create-dmg"
+    echo "Or download from: https://github.com/create-dmg/create-dmg"
+    exit 1
+fi
+
+# Verify source app bundle exists
+if [ ! -d "$SOURCE_APP_PATH" ]; then
+    echo "Error: Source app bundle not found at $SOURCE_APP_PATH"
+    exit 1
+fi
+
+# Copy app bundle with display name for DMG
+echo "Copying app bundle with display name..."
+rm -rf "$DMG_APP_PATH"
+cp -R "$SOURCE_APP_PATH" "$DMG_APP_PATH"
+
+# Deploy Qt dependencies to the copied app bundle
+echo "Deploying Qt dependencies to app bundle..."
+"@CMAKE_COMMAND@" -E echo "Running macdeployqt on: $DMG_APP_PATH"
+
+# Find macdeployqt (it should be in the Qt6_ROOT/bin directory)
+MACDEPLOYQT_PATH="@Qt6_ROOT@/bin/macdeployqt"
+if [ ! -f "$MACDEPLOYQT_PATH" ]; then
+    echo "Error: macdeployqt not found at $MACDEPLOYQT_PATH"
+    echo "Checking alternative locations..."
+    
+    # Try some common Qt installation paths
+    for qt_path in "@QT_DIR@" "@CMAKE_PREFIX_PATH@" "/usr/local/qt6" "/opt/homebrew/opt/qt6"; do
+        if [ -f "$qt_path/bin/macdeployqt" ]; then
+            MACDEPLOYQT_PATH="$qt_path/bin/macdeployqt"
+            echo "Found macdeployqt at: $MACDEPLOYQT_PATH"
+            break
+        fi
+    done
+    
+    if [ ! -f "$MACDEPLOYQT_PATH" ]; then
+        echo "Error: Could not locate macdeployqt"
+        exit 1
+    fi
+fi
+
+echo "Using macdeployqt: $MACDEPLOYQT_PATH"
+"$MACDEPLOYQT_PATH" "$DMG_APP_PATH" -qmldir="@CMAKE_CURRENT_SOURCE_DIR@" -always-overwrite
+
+# Sign the deployed app bundle if signing identity is provided
+if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
+    echo "Signing the deployed app bundle..."
+    echo "Signing identity: $SIGNING_IDENTITY"
+    
+    # Sign all the frameworks first
+    find "$DMG_APP_PATH" -name "*.framework" -type d | while read framework; do
+        echo "Signing framework: $framework"
+        codesign --force --verify --verbose --sign "$SIGNING_IDENTITY" --timestamp --options runtime "$framework" || {
+            echo "Warning: Failed to sign framework $framework"
+        }
+    done
+    
+    # Sign all dylibs
+    find "$DMG_APP_PATH" -name "*.dylib" -type f | while read dylib; do
+        echo "Signing dylib: $dylib"
+        codesign --force --verify --verbose --sign "$SIGNING_IDENTITY" --timestamp --options runtime "$dylib" || {
+            echo "Warning: Failed to sign dylib $dylib"
+        }
+    done
+    
+    # Sign the main app bundle
+    echo "Signing main app bundle: $DMG_APP_PATH"
+    
+    # Sign without entitlements to avoid provisioning profile requirements
+    echo "Signing without entitlements to avoid taskgated provisioning profile issues"
+    CODESIGN_CMD=(codesign --force --verify --verbose --sign "$SIGNING_IDENTITY" --timestamp --options runtime "$DMG_APP_PATH")
+    
+    "${CODESIGN_CMD[@]}" || {
+        echo "Error: Failed to sign main app bundle"
+        exit 1
+    }
+    
+    echo "✓ App bundle signed successfully"
+else
+    echo "No signing identity provided, skipping app bundle signing"
+fi
+
+# Remove existing DMG and background image to force regeneration
+rm -f "$FINAL_DMG_PATH"
+rm -f "$DMG_BACKGROUND_PATH"
+
+# Generate background image fresh each time
+echo "Generating DMG background image..."
+"@CMAKE_CURRENT_SOURCE_DIR@/mac/generate_dmg_background.sh" "$DMG_BACKGROUND_PATH" "@IMAGER_VERSION_STR@" || {
+    echo "Warning: Failed to generate background image, proceeding without custom background"
+}
+
+# Create DMG using create-dmg
+echo "Creating DMG with create-dmg..."
+
+# Build create-dmg command
+CREATE_DMG_CMD=(
+    create-dmg
+    --volname "Raspberry Pi Imager"
+    --window-pos 200 120
+    --window-size 600 400
+    --icon-size 128
+    --icon "${APP_NAME}.app" 150 200
+    --app-drop-link 450 200
+)
+
+# Add background image if it exists
+if [ -f "$DMG_BACKGROUND_PATH" ]; then
+    echo "Using custom background image: $DMG_BACKGROUND_PATH"
+    CREATE_DMG_CMD+=(--background "$DMG_BACKGROUND_PATH")
+else
+    echo "No custom background image found, using default"
+fi
+
+# Note: We don't add --codesign to create-dmg since we've already signed the app bundle
+# create-dmg will sign the DMG itself, but the app bundle is already properly signed
+
+# Add notarization if requested
+if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_PROFILE" != "" ]; then
+    echo "Adding notarization to create-dmg command..."
+    CREATE_DMG_CMD+=(--notarize "$KEYCHAIN_PROFILE")
+fi
+
+# Add output path and source
+CREATE_DMG_CMD+=("$FINAL_DMG_PATH" "$DMG_APP_PATH")
+
+# Execute create-dmg (this will create, sign, and notarize in one step)
+echo "Running create-dmg with command:"
+echo "${CREATE_DMG_CMD[*]}"
+"${CREATE_DMG_CMD[@]}" || {
+    echo "Error: create-dmg failed"
+    exit 1
+}
+
+# Verify DMG was created
+if [ ! -f "$FINAL_DMG_PATH" ]; then
+    echo "Error: DMG was not created at $FINAL_DMG_PATH"
+    exit 1
+fi
+
+echo "✓ DMG created successfully: $FINAL_DMG_PATH"
+
+# Clean up temporary app bundle copy
+echo "Cleaning up temporary app bundle..."
+rm -rf "$DMG_APP_PATH"
+
+exit 0 

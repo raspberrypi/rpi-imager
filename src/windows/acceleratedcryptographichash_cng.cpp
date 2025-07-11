@@ -99,7 +99,7 @@ struct AcceleratedCryptographicHash::impl {
         cleanup();
     }
 
-    void cleanup() {
+    void cleanup() const {
         if(hAlg)
         {
             BCryptCloseAlgorithmProvider(hAlg,0);
@@ -141,7 +141,7 @@ struct AcceleratedCryptographicHash::impl {
         addData(data.constData(), data.size());
     }
 
-    QByteArray result() {
+    QByteArray result() const {
             //close the hash
         if(!NT_SUCCESS(status = BCryptFinishHash(
                                             hHash, 
@@ -162,7 +162,7 @@ struct AcceleratedCryptographicHash::impl {
 private:
     BCRYPT_ALG_HANDLE       hAlg            = NULL;
     BCRYPT_HASH_HANDLE      hHash           = NULL;
-    NTSTATUS                status          = STATUS_UNSUCCESSFUL;
+    mutable NTSTATUS        status          = STATUS_UNSUCCESSFUL;
     DWORD                   cbData          = 0,
                             cbHash          = 0,
                             cbHashObject    = 0;
@@ -181,6 +181,10 @@ void AcceleratedCryptographicHash::addData(const char *data, int length) {
 void AcceleratedCryptographicHash::addData(const QByteArray &data) {
     p_Impl->addData(data);
 }
-QByteArray AcceleratedCryptographicHash::result() {
-    return p_Impl->result();
+QByteArray AcceleratedCryptographicHash::result() const {
+    if (!_resultCached) {
+        _cachedResult = p_Impl->result();
+        _resultCached = true;
+    }
+    return _cachedResult;
 }
