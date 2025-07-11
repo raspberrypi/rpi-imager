@@ -99,7 +99,7 @@ struct AcceleratedCryptographicHash::impl {
         cleanup();
     }
 
-    void cleanup() {
+    void cleanup() const {
         if(hAlg)
         {
             BCryptCloseAlgorithmProvider(hAlg,0);
@@ -162,7 +162,7 @@ struct AcceleratedCryptographicHash::impl {
 private:
     BCRYPT_ALG_HANDLE       hAlg            = NULL;
     BCRYPT_HASH_HANDLE      hHash           = NULL;
-    NTSTATUS                status          = STATUS_UNSUCCESSFUL;
+    mutable NTSTATUS        status          = STATUS_UNSUCCESSFUL;
     DWORD                   cbData          = 0,
                             cbHash          = 0,
                             cbHashObject    = 0;
