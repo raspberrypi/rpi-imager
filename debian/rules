@@ -9,23 +9,6 @@ PACKAGES := $(shell dh_listpackages)
 %:
 	dh $@
 
-# Override the build step to create version-independent symlinks
-override_dh_auto_build:
-	dh_auto_build
-	# Create version-independent symlinks for the packages that will be built
-ifneq (,$(filter rpi-imager,$(PACKAGES)))
-	# Regular arm64 package - find and link the aarch64 AppImage (excluding embedded)
-	if ls Raspberry_Pi_Imager-*-aarch64.AppImage 2>/dev/null | grep -v embedded | head -1 | xargs -I{} ln -sf {} rpi-imager-aarch64.AppImage; then :; fi
-endif
-ifneq (,$(filter rpi-imager-amd64,$(PACKAGES)))
-	# AMD64 package - find and link the x86_64 AppImage  
-	if ls Raspberry_Pi_Imager-*-x86_64.AppImage 2>/dev/null | head -1 | xargs -I{} ln -sf {} rpi-imager-x86_64.AppImage; then :; fi
-endif
-ifneq (,$(filter rpi-imager-embedded,$(PACKAGES)))
-	# Embedded package - find and link the embedded AppImage
-	if ls Raspberry_Pi_Imager-*-embedded-aarch64.AppImage 2>/dev/null | head -1 | xargs -I{} ln -sf {} rpi-imager-embedded.AppImage; then :; fi
-endif
-
 .PHONY: override_dh_strip 
 override_dh_strip: 
 	dh_strip --exclude=AppImage --exclude=rpi-imager
