@@ -33,7 +33,7 @@ struct AcceleratedCryptographicHash::impl {
         addData(data.constData(), data.size());
     }
 
-    QByteArray result()
+    QByteArray result() const
     {
         unsigned char binhash[gnutls_hash_get_len(GNUTLS_DIG_SHA256)];
         gnutls_hash_output(_sha256, binhash);
@@ -55,6 +55,6 @@ void AcceleratedCryptographicHash::addData(const char *data, int length) {
 void AcceleratedCryptographicHash::addData(const QByteArray &data) {
     p_Impl->addData(data);
 }
-QByteArray AcceleratedCryptographicHash::result() {
+QByteArray AcceleratedCryptographicHash::result() const {
     return p_Impl->result();
 }

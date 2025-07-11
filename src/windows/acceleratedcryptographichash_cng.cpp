@@ -141,7 +141,7 @@ struct AcceleratedCryptographicHash::impl {
         addData(data.constData(), data.size());
     }
 
-    QByteArray result() {
+    QByteArray result() const {
             //close the hash
         if(!NT_SUCCESS(status = BCryptFinishHash(
                                             hHash, 
