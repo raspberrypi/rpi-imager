@@ -27,7 +27,7 @@ rpi-imager (1.9.5) unstable; urgency=medium
   * windows:
     - Restore delayed wlanpi loading
   
-  -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 11 Jul 2025 17:00:00 +0100
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 11 Jul 2025 17:00:00 +0100
 
 rpi-imager (1.9.4) unstable; urgency=medium
 
