@@ -91,10 +91,6 @@
         <translation>Odopretý prístup pri zápise súboru na disk.</translation>
     </message>
     <message>
-        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation>Vyzerá, že máte zapnutý Controlled Folder Access. Pridajte, prosím, rpi-imager.exe a fat32format.exe do zoznamu povolených aplikácií a skúste to znovu.</translation>
-    </message>
-    <message>
         <source>Error writing file to disk</source>
         <translation>Chyba pri zápise na disk</translation>
     </message>
@@ -134,28 +130,16 @@
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
     <message>
         <source>Error partitioning: %1</source>
         <translation>Chyba pri zápise partícií: %1</translation>
-    </message>
-    <message>
-        <source>Error starting fat32format</source>
-        <translation>Chyba pri spustení fat32format</translation>
-    </message>
-    <message>
-        <source>Error running fat32format: %1</source>
-        <translation>Chyba pri spustení fat32format: %1</translation>
-    </message>
-    <message>
-        <source>Error determining new drive letter</source>
-        <translation>Chyba pri zisťovaní písmena novej jednotky</translation>
-    </message>
-    <message>
-        <source>Invalid device: %1</source>
-        <translation>Neplatné zariadenie: %1</translation>
     </message>
     <message>
         <source>Error formatting (through udisks2)</source>
@@ -286,6 +270,18 @@
     </message>
     <message>
         <source>starting extraction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error reading from image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read complete image file</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -434,6 +430,22 @@
         <source>SAVE</source>
         <translation>ULOŽIŤ</translation>
     </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General and Services tabs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General tab</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in Services tab</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>OptionsServicesTab</name>
@@ -463,6 +475,16 @@
     </message>
     <message>
         <source>Add SSH Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste your SSH public key here.
+Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
+Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
