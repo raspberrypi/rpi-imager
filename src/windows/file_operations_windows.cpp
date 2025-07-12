@@ -18,10 +18,13 @@ WindowsFileOperations::~WindowsFileOperations() {
 
 FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   // Windows device paths like \\.\PHYSICALDRIVE0
+  std::cout << "Opening Windows device: " << path << std::endl;
+  
   FileError result = OpenInternal(path, 
                                   GENERIC_READ | GENERIC_WRITE,
                                   OPEN_EXISTING);
   if (result != FileError::kSuccess) {
+    std::cout << "Failed to open device: " << path << std::endl;
     return result;
   }
 
@@ -30,10 +33,17 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   if (!DeviceIoControl(handle_, FSCTL_ALLOW_EXTENDED_DASD_IO, 
                        nullptr, 0, nullptr, 0, &bytes_returned, nullptr)) {
     // This may fail on some systems, but we can continue
+    std::cout << "Warning: FSCTL_ALLOW_EXTENDED_DASD_IO failed, continuing anyway" << std::endl;
   }
 
   // Lock the volume for exclusive access
-  return LockVolume();
+  FileError lock_result = LockVolume();
+  if (lock_result != FileError::kSuccess) {
+    std::cout << "Warning: Failed to lock volume, continuing anyway" << std::endl;
+  }
+  
+  std::cout << "Successfully opened device: " << path << std::endl;
+  return FileError::kSuccess;
 }
 
 FileError WindowsFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
@@ -68,6 +78,7 @@ FileError WindowsFileOperations::WriteAtOffset(
     std::size_t size) {
   
   if (!IsOpen()) {
+    std::cout << "WriteAtOffset: Device not open" << std::endl;
     return FileError::kOpenError;
   }
 
@@ -76,6 +87,8 @@ FileError WindowsFileOperations::WriteAtOffset(
   offset_large.QuadPart = static_cast<LONGLONG>(offset);
   
   if (!SetFilePointerEx(handle_, offset_large, nullptr, FILE_BEGIN)) {
+    DWORD error = GetLastError();
+    std::cout << "WriteAtOffset: SetFilePointerEx failed, offset=" << offset << ", error=" << error << std::endl;
     return FileError::kSeekError;
   }
 
@@ -87,10 +100,14 @@ FileError WindowsFileOperations::WriteAtOffset(
     DWORD written = 0;
     
     if (!WriteFile(handle_, data + bytes_written, chunk_size, &written, nullptr)) {
+      DWORD error = GetLastError();
+      std::cout << "WriteAtOffset: WriteFile failed, offset=" << offset + bytes_written 
+                << ", chunk_size=" << chunk_size << ", error=" << error << std::endl;
       return FileError::kWriteError;
     }
     
     if (written == 0) {
+      std::cout << "WriteAtOffset: WriteFile returned 0 bytes written" << std::endl;
       return FileError::kWriteError;
     }
     
@@ -98,7 +115,12 @@ FileError WindowsFileOperations::WriteAtOffset(
   }
 
   // Flush to ensure data is written
-  FlushFileBuffers(handle_);
+  if (!FlushFileBuffers(handle_)) {
+    DWORD error = GetLastError();
+    std::cout << "WriteAtOffset: FlushFileBuffers failed, error=" << error << std::endl;
+    // Continue anyway, as this is not always critical
+  }
+  
   return FileError::kSuccess;
 }
 
@@ -189,7 +211,7 @@ FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD acc
                         FILE_SHARE_READ | FILE_SHARE_WRITE,
                         nullptr,
                         creation,
-                        FILE_FLAG_NO_BUFFERING, // Important for raw disk access
+                        FILE_ATTRIBUTE_NORMAL, // Removed FILE_FLAG_NO_BUFFERING to fix alignment issues
                         nullptr);
 
   if (handle_ == INVALID_HANDLE_VALUE) {
