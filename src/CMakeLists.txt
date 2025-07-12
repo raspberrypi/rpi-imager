@@ -523,6 +523,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
     downloadthread.h downloadextractthread.h localfileextractthread.h downloadstatstelemetry.h dependencies/mountutils/src/mountutils.hpp dependencies/sha256crypt/sha256crypt.h
     hwlistmodel.h
     oslistmodel.h
+    disk_formatter.h file_operations.h
 )
 
 # Add dependencies
