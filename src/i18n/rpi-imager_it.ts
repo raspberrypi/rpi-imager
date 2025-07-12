@@ -134,6 +134,10 @@
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
         <translation>L&apos;accesso controllato alla cartella sembra sia abilitato. Aggiungi rpi-imager.exe all&apos;elenco delle app consentite e riprova.</translation>
     </message>
+    <message>
+        <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
@@ -279,6 +283,18 @@
     <message>
         <source>Failed to read complete image file</source>
         <translation>Impossibile leggere il file immagine completo</translation>
+    </message>
+    <message>
+        <source>Error reading from image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read complete image file</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
