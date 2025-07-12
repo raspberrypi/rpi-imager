@@ -123,16 +123,16 @@
         <translation>使用自定义镜像</translation>
     </message>
     <message>
-        <source>缓存文件已损坏。SHA256 哈希值与预期值不匹配。&lt;br&gt;该缓存文件将被删除，将重新开始下载。</source>
-        <translation></translation>
+        <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
+        <translation>缓存文件已损坏。SHA256 哈希值与预期值不匹配。&lt;br&gt;该缓存文件将被删除，将重新开始下载。</translation>
     </message>
     <message>
-        <source>本地文件已损坏或其 SHA256 哈希值不正确。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2</source>
-        <translation></translation>
+        <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
+        <translation>本地文件已损坏或其 SHA256 哈希值不正确。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2。</translation>
     </message>
     <message>
-        <source>下载内容似乎已损坏。SHA256 哈希值不匹配。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2&lt;br&gt;请检查您的网络连接，然后重试。</source>
-        <translation></translation>
+        <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
+        <translation>下载内容似乎已损坏。SHA256 哈希值不匹配。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2&lt;br&gt;请检查您的网络连接，然后重试。</translation>
     </message>
 </context>
 <context>
