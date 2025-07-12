@@ -21,11 +21,11 @@
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">Errore lettura dallo storage.&lt;br&gt;La scheda SD potrebbe essere danneggiata.</translation>
+        <translation>Errore lettura dallo storage.&lt;br&gt;La scheda SD potrebbe essere danneggiata.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">Verifica scrittura fallita.&lt;br&gt;Il contenuto della SD è differente da quello che vi è stato scritto.</translation>
+        <translation>Verifica scrittura fallita.&lt;br&gt;Il contenuto della SD è differente da quello che vi è stato scritto.</translation>
     </message>
 </context>
 <context>
@@ -125,15 +125,15 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>Il file memorizzata nella cache è corrotto.&lt;br&gt;L&apos;hash SHA256 non corrisponde al valore previsto.&lt;br&gt; Il file cache verrà rimosso ed il download si riavvierà.</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Il file locale è corrotto o ha l&apos;hash SHA256 errato. &lt;br&gt;Previsto: %1 &lt;br&gt;Effettivo: %2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Il download sembra essere corrotto.&lt;br&gt;L&apos;hash SHA256 non corrisponde.&lt;br&gt;Previsto: %1&lt;br&gt;Effettivo: %2&lt;br&gt;Controlla la connessione di rete e riprova.</translation>
     </message>
 </context>
 <context>
@@ -168,27 +168,27 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore apertura dispositivo durante la formattazione</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore scrittura dispositivo durante la formattazione</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore ricerca dispositivo durante la formattazione</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Parametro non valido per la formattazione</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>Spazio insufficiente nel dispositivo</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore formattazione sconosciuto</translation>
     </message>
 </context>
 <context>
@@ -287,7 +287,7 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <source>starting extraction</source>
-        <translation type="unfinished"></translation>
+        <translation>avvio estrazione</translation>
     </message>
 </context>
 <context>
@@ -646,23 +646,23 @@ Aggiungi sia &apos;rpi-imager.exe&apos; che &apos;fat32format.exe&apos; all&apos
     </message>
     <message>
         <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <translation>SALTA VERIFICA CACHE</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>Avvio download...</translation>
     </message>
     <message>
         <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>Verifica file nella cache... %1%</translation>
     </message>
     <message>
         <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
+        <translation>Verifica file nella cache...</translation>
     </message>
     <message>
         <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Avvio scrittura...</translation>
     </message>
 </context>
 </TS>
