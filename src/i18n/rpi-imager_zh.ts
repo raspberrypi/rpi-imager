@@ -21,11 +21,11 @@
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">读取存储设备时发生错误。&lt;br&gt;SD 卡可能已损坏。</translation>
+        <translation>读取存储设备时发生错误。&lt;br&gt;SD 卡可能已损坏。</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">写入校验失败。SD 卡与写入的内容不一致。</translation>
+        <translation>写入校验失败。SD 卡与写入的内容不一致。</translation>
     </message>
 </context>
 <context>
@@ -123,16 +123,16 @@
         <translation>使用自定义镜像</translation>
     </message>
     <message>
-        <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <source>缓存文件已损坏。SHA256 哈希值与预期值不匹配。&lt;br&gt;该缓存文件将被删除，将重新开始下载。</source>
+        <translation></translation>
     </message>
     <message>
-        <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <source>本地文件已损坏或其 SHA256 哈希值不正确。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2</source>
+        <translation></translation>
     </message>
     <message>
-        <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <source>下载内容似乎已损坏。SHA256 哈希值不匹配。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2&lt;br&gt;请检查您的网络连接，然后重试。</source>
+        <translation></translation>
     </message>
 </context>
 <context>
@@ -167,27 +167,27 @@
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>格式化时设备打开失败</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>格式化过程中写入设备时出错</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>格式化过程中定位设备时出错</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>格式化参数无效</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>设备空间不足</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>未知的格式化错误</translation>
     </message>
 </context>
 <context>
@@ -286,7 +286,7 @@
     </message>
     <message>
         <source>starting extraction</source>
-        <translation type="unfinished"></translation>
+        <translation>开始解压</translation>
     </message>
 </context>
 <context>
@@ -645,23 +645,23 @@
     </message>
     <message>
         <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <translation>跳过缓存验证</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>开始下载……</translation>
     </message>
     <message>
         <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>正在验证缓存文件……</translation>
     </message>
     <message>
         <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在验证缓存文件……</translation>
     </message>
     <message>
         <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <translation>开始写入……</translation>
     </message>
 </context>
 </TS>
