@@ -42,133 +42,67 @@ std::uint64_t DriveFormatThread::getDeviceSize(const QByteArray &device)
 
 void DriveFormatThread::run()
 {
-#ifdef Q_OS_WIN
-    qDebug() << "Formatting Windows device" << _device << "with cross-platform implementation";
-
-    // Use our cross-platform disk formatter
-    rpi_imager::DiskFormatter formatter;
-    auto result = formatter.FormatDrive(_device.toStdString());
-
-    if (!result) {
-        // Report the original error from the cross-platform formatter
-        QString errorMessage;
-        switch (result.error()) {
-            case rpi_imager::FormatError::kFileOpenError:
-                errorMessage = tr("Error opening device for formatting");
-                break;
-            case rpi_imager::FormatError::kFileWriteError:
-                errorMessage = tr("Error writing to device during formatting");
-                break;
-            case rpi_imager::FormatError::kFileSeekError:
-                errorMessage = tr("Error seeking on device during formatting");
-                break;
-            case rpi_imager::FormatError::kInvalidParameters:
-                errorMessage = tr("Invalid parameters for formatting");
-                break;
-            case rpi_imager::FormatError::kInsufficientSpace:
-                errorMessage = tr("Insufficient space on device");
-                break;
-            default:
-                errorMessage = tr("Unknown formatting error");
-                break;
-        }
-        
-        qDebug() << "Cross-platform formatting failed:" << errorMessage;
-        emit error(errorMessage);
-    }
-    else
-    {
-        qDebug() << "Cross-platform disk formatter succeeded";
-        emit success();
-    }
-#elif defined(Q_OS_DARWIN)
-    QProcess proc;
-    QStringList args;
-    args << "eraseDisk" << "FAT32" << "SDCARD" << "MBRFormat" << _device;
-    proc.start("diskutil", args);
-    proc.waitForFinished();
-
-    QByteArray output = proc.readAllStandardError();
-    qDebug() << args;
-    qDebug() << "diskutil output:" << output;
-
-    if (proc.exitCode())
-    {
-        emit error(tr("Error partitioning: %1").arg(QString(output)));
-    }
-    else
-    {
-        emit success();
-    }
-
-#elif defined(Q_OS_LINUX)
-
+#ifdef Q_OS_LINUX
+    // Linux-specific: Check if we need to use udisks2 fallback
     if (::access(_device.constData(), W_OK) != 0)
     {
         /* Not running as root, try to outsource formatting to udisks2 */
-
 #ifndef QT_NO_DBUS
         UDisks2Api udisks2;
         if (udisks2.formatDrive(_device))
         {
             emit success();
-        }
-        else
-        {
-#endif
+            return;
+        } else {
             emit error(tr("Error formatting (through udisks2)"));
-#ifndef QT_NO_DBUS
         }
+#else // QT_NO_DBUS
+        emit error(tr("Cannot format device: insufficient permissions and udisks2 not available"));
 #endif
-
         return;
     }
+#endif
 
-    // Unmount the device before formatting
-    unmount_disk(_device);
+    // Common formatting logic for all platforms
+    qDebug() << "Formatting device" << _device << "with cross-platform implementation";
 
-    qDebug() << "Formatting device" << _device << "with clean-room implementation";
+    // Unmount the device before formatting (needed for macOS and Linux)
+#if defined(Q_OS_DARWIN) || defined(Q_OS_LINUX)
+    unmount_disk(_device.constData());
+#endif
 
-    // Get device size
+#ifdef Q_OS_LINUX
+    // Get device size for logging
     std::uint64_t deviceSize = getDeviceSize(_device);
     qDebug() << "Device size:" << deviceSize << "bytes";
+#endif
 
-    // Use our clean-room disk formatter
+    // Use cross-platform disk formatter
     rpi_imager::DiskFormatter formatter;
     auto result = formatter.FormatDrive(_device.toStdString());
 
     if (!result) {
-        QString errorMessage;
-        switch (result.error()) {
-            case rpi_imager::FormatError::kFileOpenError:
-                errorMessage = tr("Error opening device for formatting");
-                break;
-            case rpi_imager::FormatError::kFileWriteError:
-                errorMessage = tr("Error writing to device during formatting");
-                break;
-            case rpi_imager::FormatError::kFileSeekError:
-                errorMessage = tr("Error seeking on device during formatting");
-                break;
-            case rpi_imager::FormatError::kInvalidParameters:
-                errorMessage = tr("Invalid parameters for formatting");
-                break;
-            case rpi_imager::FormatError::kInsufficientSpace:
-                errorMessage = tr("Insufficient space on device");
-                break;
-            default:
-                errorMessage = tr("Unknown formatting error");
-                break;
-        }
-        
-        qDebug() << "Formatting failed:" << errorMessage;
-        emit error(errorMessage);
-        return;
+        emit error(formatErrorToString(result.error()));
+    } else {
+        qDebug() << "Cross-platform disk formatter succeeded";
+        emit success();
     }
+}
 
-    qDebug() << "Formatting completed successfully";
-    emit success();
-
-#else
-    emit error(tr("Formatting not implemented for this platform"));
-#endif
+QString DriveFormatThread::formatErrorToString(rpi_imager::FormatError error)
+{
+    switch (error) {
+        case rpi_imager::FormatError::kFileOpenError:
+            return tr("Error opening device for formatting");
+        case rpi_imager::FormatError::kFileWriteError:
+            return tr("Error writing to device during formatting");
+        case rpi_imager::FormatError::kFileSeekError:
+            return tr("Error seeking on device during formatting");
+        case rpi_imager::FormatError::kInvalidParameters:
+            return tr("Invalid parameters for formatting");
+        case rpi_imager::FormatError::kInsufficientSpace:
+            return tr("Insufficient space on device");
+        default:
+            return tr("Unknown formatting error");
+    }
 }
