@@ -25,7 +25,7 @@
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>写入校验失败。SD 卡与写入的内容不一致。</translation>
+        <translation>写入校验失败。SD 卡内容与写入内容不符。</translation>
     </message>
 </context>
 <context>
