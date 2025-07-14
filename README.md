@@ -38,7 +38,7 @@ This will build and install the version of Qt preferred for Raspberry Pi Imager 
 #### Build the AppImage
 
 ```sh
-./create_appimage.sh
+./create-appimage.sh
 ./Raspberry_Pi_Imager-*.AppImage
 ```
 
