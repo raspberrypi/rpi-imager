@@ -142,24 +142,24 @@ if [ -f "$QT_DIR/bin/qmake" ]; then
     QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
     echo "Qt version: $QT_VERSION"
     
-    # Check for EGLFS platform plugin
-    if [ -f "$QT_DIR/plugins/platforms/libqeglfs.so" ] || [ -f "$QT_DIR/lib/libQt6EglFSDeviceIntegration.so" ]; then
-        echo "✓ EGLFS support detected in Qt installation"
-    else
-        echo "⚠ Warning: EGLFS support not detected in Qt installation"
-        if [ "$FORCE_EGLFS_BUILD" -eq 1 ]; then
-            echo "Continuing anyway due to --force-eglfs-build flag"
-        else
-            echo "This may cause runtime issues. Use --force-eglfs-build to continue anyway."
-            echo "For best results, rebuild Qt with EGLFS support:"
-            echo "  ./build-qt.sh --version=$QT_VERSION --use-eglfs --rpi-optimize"
-            exit 1
-        fi
-    fi
+    # # Check for EGLFS platform plugin
+    # if [ -f "$QT_DIR/plugins/platforms/libqeglfs.so" ] || [ -f "$QT_DIR/lib/libQt6EglFSDeviceIntegration.so" ]; then
+    #     echo "✓ EGLFS support detected in Qt installation"
+    # else
+    #     echo "⚠ Warning: EGLFS support not detected in Qt installation"
+    #     if [ "$FORCE_EGLFS_BUILD" -eq 1 ]; then
+    #         echo "Continuing anyway due to --force-eglfs-build flag"
+    #     else
+    #         echo "This may cause runtime issues. Use --force-eglfs-build to continue anyway."
+    #         echo "For best results, rebuild Qt with EGLFS support:"
+    #         echo "  ./build-qt.sh --version=$QT_VERSION --use-eglfs --rpi-optimize"
+    #         exit 1
+    #     fi
+    # fi
 fi
 
 # Configuration
-BUILD_TYPE="MinSizeRel"  # Optimize for size in embedded systems
+BUILD_TYPE="Debug"  # Optimize for size in embedded systems
 QML_SOURCES_PATH="$PWD/src/qmlcomponents/"
 
 # Location of AppDir and output file
@@ -242,6 +242,9 @@ fi
 # Add Qt path to CMake flags
 CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
 
+## Build Embedded now
+CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DBUILD_EMBEDDED=ON"
+
 # shellcheck disable=SC2086
 cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
 make -j$(nproc)
@@ -261,9 +264,13 @@ if [ ! -f "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager-embedded.de
     sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager-embedded.desktop"
 fi
 
+cat > "$APPDIR/usr/bin/eglfs.json" << 'EOF'
+{ "device": "/dev/dri/card1", "hwcursor": false }
+EOF
+
 # Create the AppRun file optimized for EGLFS
 cat > "$APPDIR/AppRun" << 'EOF'
-#!/bin/bash
+#!/bin/sh
 HERE="$(dirname "$(readlink -f "${0}")")"
 
 # Set up paths
@@ -272,11 +279,7 @@ export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="${HERE}/usr/plugins"
 export QML_IMPORT_PATH="${HERE}/usr/qml"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
-
-# Configure Qt for EGLFS (embedded/direct rendering)
-export QT_QPA_PLATFORM=eglfs
-export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
-export QT_QPA_EGLFS_ALWAYS_SET_MODE=1
+QT_QPA_PLATFORM=linuxfb
 
 # Disable desktop-specific features for embedded use
 export QT_QUICK_CONTROLS_STYLE=Material
@@ -284,20 +287,12 @@ export QT_SCALE_FACTOR=1.0
 
 # GPU memory optimization for embedded systems
 export QT_QUICK_BACKEND=software
-export QT_OPENGL=es2
+export QT_QPA_FB_DRM=/dev/dri/card1
+
 
 # Logging (can be disabled in production)
-export QT_LOGGING_RULES="*.debug=false;qt.qpa.eglfs.debug=true"
+export QT_LOGGING_RULES="*.debug=true"
 
-# Check if running on a framebuffer device
-if [ -c /dev/fb0 ]; then
-    export QT_QPA_EGLFS_FB=/dev/fb0
-fi
-
-# For systems with DRM/KMS
-if [ -c /dev/dri/card0 ]; then
-    export QT_QPA_EGLFS_KMS_DEVICE=/dev/dri/card0
-fi
 
 exec "${HERE}/usr/bin/rpi-imager" "$@"
 EOF
@@ -306,56 +301,88 @@ chmod +x "$APPDIR/AppRun"
 # Manual Qt deployment for embedded systems (optimized)
 echo "Deploying Qt dependencies for embedded systems..."
 
-if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
-    # Use linuxdeploy if available
-    export QML_SOURCES_PATHS="$QML_SOURCES_PATH"
-    export APPIMAGE_EXTRACT_AND_RUN=1
-    export QMAKE="$QT_DIR/bin/qmake"
-    export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
+# if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
+#     # Use linuxdeploy if available
+#     export QML_SOURCES_PATHS="$QML_SOURCES_PATH"
+#     export APPIMAGE_EXTRACT_AND_RUN=1
+#     export QMAKE="$QT_DIR/bin/qmake"
+#     export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
     
-    # Deploy with exclusions for desktop-specific libraries
-    "$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt \
-        --exclude-library="libwayland-*" \
-        --exclude-library="libX11*" \
-        --exclude-library="libxcb*" \
-        --exclude-library="libXext*" \
-        --exclude-library="libXrender*"
-else
-    # Manual deployment for architectures without linuxdeploy support
-    echo "Performing manual Qt deployment..."
+#     # Deploy with exclusions for desktop-specific libraries
+#     "$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt \
+#         --exclude-library="libwayland-*" \
+#         --exclude-library="libX11*" \
+#         --exclude-library="libxcb*" \
+#         --exclude-library="libXext*" \
+#         --exclude-library="libXrender*"
+#     cp -d "$QT_DIR/lib/libQt6EglFSDeviceIntegration.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
     
-    # Copy essential Qt libraries
-    mkdir -p "$APPDIR/usr/lib"
-    cp -d "$QT_DIR/lib/libQt6Core.so"* "$APPDIR/usr/lib/"
-    cp -d "$QT_DIR/lib/libQt6Gui.so"* "$APPDIR/usr/lib/"
-    cp -d "$QT_DIR/lib/libQt6Widgets.so"* "$APPDIR/usr/lib/"
-    cp -d "$QT_DIR/lib/libQt6Quick.so"* "$APPDIR/usr/lib/"
-    cp -d "$QT_DIR/lib/libQt6Qml.so"* "$APPDIR/usr/lib/"
-    cp -d "$QT_DIR/lib/libQt6Network.so"* "$APPDIR/usr/lib/"
-    cp -d "$QT_DIR/lib/libQt6OpenGL.so"* "$APPDIR/usr/lib/"
-    cp -d "$QT_DIR/lib/libQt6EglFSDeviceIntegration.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
-    
-    # Copy EGLFS platform plugin
-    mkdir -p "$APPDIR/usr/plugins/platforms"
-    cp "$QT_DIR/plugins/platforms/libqeglfs.so" "$APPDIR/usr/plugins/platforms/" 2>/dev/null || true
-    cp -r "$QT_DIR/plugins/egldeviceintegrations" "$APPDIR/usr/plugins/" 2>/dev/null || true
-    
-    # Copy essential plugins (excluding desktop-specific ones)
-    mkdir -p "$APPDIR/usr/plugins/imageformats"
-    cp "$QT_DIR/plugins/imageformats/libqjpeg.so" "$APPDIR/usr/plugins/imageformats/" 2>/dev/null || true
-    cp "$QT_DIR/plugins/imageformats/libqpng.so" "$APPDIR/usr/plugins/imageformats/" 2>/dev/null || true
-    
-    # Copy QML components
-    if [ -d "$QT_DIR/qml" ]; then
-        mkdir -p "$APPDIR/usr/qml"
-        cp -r "$QT_DIR/qml/QtQuick" "$APPDIR/usr/qml/" 2>/dev/null || true
-        cp -r "$QT_DIR/qml/QtQuick.2" "$APPDIR/usr/qml/" 2>/dev/null || true
-        cp -r "$QT_DIR/qml/QtQml" "$APPDIR/usr/qml/" 2>/dev/null || true
-    fi
+#     # Copy EGLFS platform plugin
+#     mkdir -p "$APPDIR/usr/plugins/platforms"
+#     cp "$QT_DIR/plugins/platforms/libqeglfs.so" "$APPDIR/usr/plugins/platforms/" 2>/dev/null || true
+#     cp -r "$QT_DIR/plugins/egldeviceintegrations" "$APPDIR/usr/plugins/" 2>/dev/null || true
+#     cp -d "$QT_DIR/lib/libQt6EglFsKmsGbmSupport.so.6" "$APPDIR/usr/lib/" 2>/dev/null || true
+
+#else
+# Manual deployment for architectures without linuxdeploy support
+echo "Performing manual Qt deployment..."
+
+# Copy essential Qt libraries
+mkdir -p "$APPDIR/usr/lib"
+cp -d "$QT_DIR/lib/libQt6Core.so"* "$APPDIR/usr/lib/"
+cp -d "$QT_DIR/lib/libQt6Gui.so"* "$APPDIR/usr/lib/"
+cp -d "$QT_DIR/lib/libQt6Widgets.so"* "$APPDIR/usr/lib/"
+cp -d "$QT_DIR/lib/libQt6Quick.so"* "$APPDIR/usr/lib/"
+cp -d "$QT_DIR/lib/libQt6Qml.so"* "$APPDIR/usr/lib/"
+cp -d "$QT_DIR/lib/libQt6Network.so"* "$APPDIR/usr/lib/"
+# cp -d "$QT_DIR/lib/libQt6OpenGL.so"* "$APPDIR/usr/lib/"
+# cp -d "$QT_DIR/lib/libQt6EglFSDeviceIntegration.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6QmlMeta.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+# cp -d "$QT_DIR/lib/libQt6EglFsKmsGbmSupport.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6QuickTemplates2.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6QuickControls2Material.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6QuickControls2Basic.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6QuickControls2Impl.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6QuickLayouts.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6QuickControls2MaterialStyleImpl.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6Svg.so.6"* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+
+
+#mkdir -p "$APPDIR/lib/aarch64-linux-gnu/"
+#cp -d "$QT_DIR/lib/libQt6QuickTemplates2.so.6" "$APPDIR/lib/aarch64-linux-gnu/" 2>/dev/null || true
+
+# Copy EGLFS platform plugin
+mkdir -p "$APPDIR/usr/plugins/platforms"
+cp "$QT_DIR/plugins/platforms/libqlinuxfb.so" "$APPDIR/usr/plugins/platforms/" 2>/dev/null || true
+# cp -r "$QT_DIR/plugins/egldeviceintegrations" "$APPDIR/usr/plugins/" 2>/dev/null || true
+cp -r "$QT_DIR/plugins/tls" "$APPDIR/usr/plugins/" 2>/dev/null || true
+
+# Copy essential plugins (excluding desktop-specific ones)
+mkdir -p "$APPDIR/usr/plugins/imageformats"
+cp "$QT_DIR/plugins/imageformats/libqjpeg.so" "$APPDIR/usr/plugins/imageformats/" 2>/dev/null || true
+cp "$QT_DIR/plugins/imageformats/libqpng.so" "$APPDIR/usr/plugins/imageformats/" 2>/dev/null || true
+cp "$QT_DIR/plugins/imageformats/libqsvg.so" "$APPDIR/usr/plugins/imageformats/" 2>/dev/null || true
+
+cp "$QT_DIR/qml/QtQuick/Controls/libqtquickcontrols2plugin.so" "$APPDIR/usr/qml/QtQuick/Controls/" 2>/dev/null || true
+cp "$QT_DIR/qml/QtQuick/Controls/Material/impl/libqtquickcontrols2materialstyleimplplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/" 2>/dev/null || true
+
+# Copy QML components
+if [ -d "$QT_DIR/qml" ]; then
+    mkdir -p "$APPDIR/usr/qml"
+    cp -r "$QT_DIR/qml/QtQuick" "$APPDIR/usr/qml/" 2>/dev/null || true
+    cp -r "$QT_DIR/qml/QtQuick.2" "$APPDIR/usr/qml/" 2>/dev/null || true
+    cp -r "$QT_DIR/qml/QtQml" "$APPDIR/usr/qml/" 2>/dev/null || true
 fi
+#fi
 
 # Embedded-specific optimizations
 echo "Applying embedded system optimizations..."
+
+rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Universal"
+rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Fusion"
+rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Imagine"
+rm -rf "$APPDIR/usr/qml/QtQuick/Controls/FluentWinUI3"
 
 # Remove desktop-specific libraries that may have been included
 rm -f "$APPDIR/usr/lib/libwayland"* 2>/dev/null || true
@@ -378,7 +405,13 @@ rm -f "$PWD/rpi-imager-embedded.AppImage"
 
 if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
     # Create AppImage using linuxdeploy
-    "$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage
+    LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage --exclude-library="libwayland-*" \
+        --exclude-library="libX11*" \
+        --exclude-library="libxcb*" \
+        --exclude-library="libXext*" \
+        --exclude-library="libLLVM*" \
+        --exclude-library="libgallium*" \
+        --exclude-library="libXrender*"
     
     # Rename the output file
     for appimage in *.AppImage; do

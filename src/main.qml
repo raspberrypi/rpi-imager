@@ -849,7 +849,28 @@ ApplicationWindow {
     }
 
     function onOsListPrepared() {
+        console.log("onOsListPrepared");
+        imageWriter.createHardwareTags();
+        console.log("created HW tags");
         ospopup.fetchOSlist()
+        if (window.imageWriter.isRaspberryPiDevice())
+        {
+            console.log("is raspberry");
+            // Want to disable hardware selection and default to only the model
+            if (window.imageWriter.isEmbeddedMode()){
+            console.log("is Embedded");
+                let hardwareTag = window.imageWriter.getHardwareName();
+                if (!(hardwareTag === "error")){
+                    // Limit the hardware selection button to only the specified device
+                    text0.text = "Hardware Type Detected";
+                    hwbutton.enabled = false
+                    hwbutton.text = hardwareTag;
+                }
+            }
+        }
+        else {
+            console.log("Seems we're not a raspberry pi...");
+        }
     }
 
     function resetWriteButton() {

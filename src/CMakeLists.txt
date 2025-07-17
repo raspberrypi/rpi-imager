@@ -4,6 +4,7 @@
 cmake_minimum_required(VERSION 3.22)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
+OPTION (BUILD_EMBEDDED "Build for Embedded Imager" OFF)
 
 # We use FetchContent_Populate() instead of FetchContent_MakeAvailable() to allow EXCLUDE_FROM_ALL
 # This prevents the dependencies from being built by default, which is our desired behavior
@@ -34,8 +35,8 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-#add_compile_options("-fsanitize=address")
-#add_link_options("-fsanitize=address")
+add_compile_options("-fsanitize=address")
+add_link_options("-fsanitize=address")
 
 # You _must_ set your Qt6 root for the build to progress.
 set(Qt6_ROOT "/opt/Qt/6.9.0/gcc_arm64" CACHE PATH "Your Qt6 root path")
@@ -202,8 +203,8 @@ set(ZLIB_ROOT ${zlib_SOURCE_DIR} CACHE PATH "" FORCE)
 # On Windows with MinGW, zlib builds with .a extension, not .lib
 # Set the correct library path before find_package
 if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
-    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzlibstatic.a CACHE FILEPATH "" FORCE)
-    set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libzlibstatic.a CACHE STRING "" FORCE)
+    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzsd.a CACHE FILEPATH "" FORCE)
+    set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libzsd.a CACHE STRING "" FORCE)
 else()
     set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libz.a CACHE FILEPATH "" FORCE)
     set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libz.a CACHE STRING "" FORCE)
@@ -220,7 +221,7 @@ set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
 add_library(ZLIB::ZLIB STATIC IMPORTED)
 if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
     set_target_properties(ZLIB::ZLIB PROPERTIES
-        IMPORTED_LOCATION "${zlib_BINARY_DIR}/libzlibstatic.a"
+        IMPORTED_LOCATION "${zlib_BINARY_DIR}/libzsd.a"
         INTERFACE_INCLUDE_DIRECTORIES "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}"
     )
     add_dependencies(ZLIB::ZLIB zlibstatic)
@@ -602,6 +603,8 @@ elseif (WIN32)
 
 endif()
 
+# If running on embedded Imager, need to include the correct decide_info
+
 include_directories(BEFORE .)
 
 # Test if we need libatomic
@@ -635,7 +638,13 @@ set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h")
 
-find_package(Qt6 6.7 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
+if(BUILD_EMBEDDED)
+    set(SOURCES ${SOURCES} "embedded/device_info.cpp")
+else()
+    set(SOURCES ${SOURCES} "device_info.cpp")
+endif()
+
+find_package(Qt6 6.7 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS Widgets LinguistTools DBus WinExtras)
 if (Qt6_FOUND)
     set(QT Qt6)
     if (APPLE)
@@ -665,12 +674,12 @@ endif()
 file(GLOB TRANSLATIONS CONFIGURE_DEPENDS "i18n/*.ts")
 
 #qt6_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TRANSLATIONS})
-qt_add_translation(QM_FILES  ${TRANSLATIONS})
-configure_file(i18n/translations.qrc "${CMAKE_CURRENT_BINARY_DIR}" COPYONLY)
-set(SOURCES ${SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/translations.qrc ${QM_FILES})
+# qt_add_translation(QM_FILES  ${TRANSLATIONS})
+# configure_file(i18n/translations.qrc "${CMAKE_CURRENT_BINARY_DIR}" COPYONLY)
+# set(SOURCES ${SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/translations.qrc ${QM_FILES})
 
 # Create an rpi-imager_lupdate target
-qt_add_lupdate(TS_FILES ${TRANSLATIONS} SOURCE_TARGETS ${PROJECT_NAME} OPTIONS -no-obsolete -locations none)
+# qt_add_lupdate(TS_FILES ${TRANSLATIONS} SOURCE_TARGETS ${PROJECT_NAME} OPTIONS -no-obsolete -locations none)
 
 if (WIN32)
     # Adding WIN32 prevents a console window being opened on Windows

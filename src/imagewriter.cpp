@@ -13,6 +13,7 @@
 #include "localfileextractthread.h"
 #include "downloadstatstelemetry.h"
 #include "wlancredentials.h"
+#include "device_info.h"
 #include <archive.h>
 #include <archive_entry.h>
 #include <lzma.h>
@@ -95,6 +96,7 @@ ImageWriter::ImageWriter(QObject *parent)
     {
         platform = "cli";
     }
+    _device_info = std::make_unique<DeviceInfo>();
 
 #ifdef Q_OS_LINUX
     if (platform == "eglfs" || platform == "linuxfb")
@@ -317,6 +319,43 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
 bool ImageWriter::readyToWrite()
 {
     return !_src.isEmpty() && !_dst.isEmpty();
+}
+
+/* Returns true if running on Raspberry Pi */
+bool ImageWriter::isRaspberryPiDevice()
+{
+    return _device_info->isRaspberryPi();
+}
+
+bool ImageWriter::createHardwareTags()
+{
+    QJsonDocument doc = getFilteredOSlistDocument();
+    QJsonObject root = doc.object();
+
+    if (root.isEmpty() || !doc.isObject()) {
+        qWarning() << Q_FUNC_INFO << "Invalid root";
+        return false;
+    }
+
+    QJsonValue imager = root.value("imager");
+
+    if (!imager.isObject()) {
+        qWarning() << Q_FUNC_INFO << "missing imager";
+        return false;
+    }
+
+    QJsonValue devices = imager.toObject().value("devices");
+
+    const QJsonArray deviceArray = devices.toArray();
+
+    _device_info->setHardwareTags(deviceArray);
+
+    return true;
+}
+
+QString ImageWriter::getHardwareName()
+{
+    return _device_info->hardwareName();
 }
 
 /* Start writing */
@@ -761,6 +800,11 @@ QByteArray ImageWriter::getFilteredOSlist()
 QJsonDocument ImageWriter::getFilteredOSlistDocument() {
     QJsonArray reference_os_list_array = {};
     QJsonObject reference_imager_metadata = {};
+
+    if (_device_info->hardwareTagsSet()) {
+        _deviceFilter = _device_info->getHardwareTags();
+    }
+    
     {
         if (!_completeOsList.isEmpty()) {
             if (!_deviceFilter.isEmpty()) {

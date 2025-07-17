@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -e
+# set -e
 
 if [ ! -x /usr/bin/rpi-imager ]; then
     chmod +x /usr/bin/rpi-imager
