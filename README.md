@@ -77,7 +77,7 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
 
 #### Building
 
-Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or a derivative).
+Building Raspberry Pi Imager on macOS is best done with Visual Studio Code (or a derivative).
 
 - Open Visual Studio Code, and select 'Clone repo'. Give it the git url of this project.
 - Open the CMake plugin settings, and set the following Configure Args:
