@@ -50,7 +50,15 @@ bool HWListModel::reload()
         HardwareDevice hwDevice = {
             deviceObj["name"].toString(),
             deviceObj["tags"].toArray(),
-            deviceObj["icon"].toString(),
+            [&]() {
+                QString iconPath = deviceObj["icon"].toString();
+                // Adjust icon path for wizard directory structure
+                if (iconPath.startsWith("icons/")) {
+                    return "../" + iconPath;
+                } else {
+                    return iconPath;
+                }
+            }(),
             deviceObj["description"].toString(),
             deviceObj["matching_type"].toString(),
             deviceObj["architecture"].toString()

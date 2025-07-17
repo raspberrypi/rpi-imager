@@ -837,6 +837,22 @@ set(IMAGER_QML_FILES
     OSPopup.qml
     DstPopup.qml
     MainPopupListViewBase.qml
+    wizard/WizardStepBase.qml
+    wizard/WizardContainer.qml
+    wizard/AdvancedOptionsPopup.qml
+    wizard/DeviceSelectionStep.qml
+    wizard/OSSelectionStep.qml
+    wizard/StorageSelectionStep.qml
+    wizard/HostnameCustomizationStep.qml
+    wizard/LocaleCustomizationStep.qml
+    wizard/UserCustomizationStep.qml
+    wizard/WifiCustomizationStep.qml
+    wizard/RemoteAccessStep.qml
+    wizard/WritingStep.qml
+    wizard/DoneStep.qml
+    wizard/components/WizardSectionContainer.qml
+    wizard/components/WizardFormLabel.qml
+    wizard/components/WizardDescriptionText.qml
 )
 
 set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)

@@ -10,6 +10,7 @@ import QtQuick 2.15
 Item {
     id: root
 
+    // === COLORS ===
     readonly property color mainBackgroundColor: "#cd2355"
 
     readonly property color buttonBackgroundColor: "#ffffff"
@@ -52,12 +53,43 @@ Item {
 
     readonly property color embeddedModeInfoTextColor: "#ffffff"
 
+    // === FONTS ===
     readonly property alias fontFamily: roboto.name
     readonly property alias fontFamilyLight: robotoLight.name
     readonly property alias fontFamilyBold: robotoBold.name
 
+    // Font sizes
+    readonly property int fontSizeTitle: 24
+    readonly property int fontSizeSubtitle: 14
+    readonly property int fontSizeFormLabel: 14
+    readonly property int fontSizeInput: 12
+    readonly property int fontSizeDescription: 12
+
+    // === SPACING ===
+    readonly property int spacingSmall: 10
+    readonly property int spacingMedium: 15
+    readonly property int spacingLarge: 20
+    readonly property int spacingExtraLarge: 30
+
+    // === SIZES ===
+    readonly property int buttonHeightStandard: 40
+    readonly property int buttonWidthMinimum: 120
+    readonly property int buttonWidthSkip: 150
+    
+    readonly property int sectionMaxWidth: 500
+    readonly property int sectionMargins: 30
+    readonly property int sectionPadding: 20
+    readonly property int sectionBorderWidth: 1
+    readonly property int sectionBorderRadius: 8
+
+    // === LAYOUT ===
+    readonly property int formColumnSpacing: 20
+    readonly property int formRowSpacing: 15
+    readonly property int stepContentMargins: 30
+    readonly property int stepContentSpacing: 20
+
+    // Font loaders
     FontLoader { id: roboto;      source: "fonts/Roboto-Regular.ttf" }
     FontLoader { id: robotoLight; source: "fonts/Roboto-Light.ttf" }
     FontLoader { id: robotoBold;  source: "fonts/Roboto-Bold.ttf" }
-
 }

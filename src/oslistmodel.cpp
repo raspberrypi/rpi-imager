@@ -207,7 +207,13 @@ bool OSListModel::reload()
         os.random = obj["random"].toBool();
 
         os.extractSha256 = obj["extract_sha256"].toString();
-        os.icon = obj["icon"].toString();
+        QString iconPath = obj["icon"].toString();
+        // Adjust icon path for wizard directory structure
+        if (iconPath.startsWith("icons/")) {
+            os.icon = "../" + iconPath;
+        } else {
+            os.icon = iconPath;
+        }
         os.initFormat = obj["init_format"].toString();
         os.releaseDate = obj["release_date"].toString();
         os.url = obj["url"].toString();

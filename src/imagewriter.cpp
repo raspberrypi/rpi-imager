@@ -873,14 +873,14 @@ QJsonDocument ImageWriter::getFilteredOSlistDocument() {
     reference_os_list_array.append(QJsonObject({
             {"name", QCoreApplication::translate("main", "Erase")},
             {"description", QCoreApplication::translate("main", "Format card as FAT32")},
-            {"icon", "icons/erase.png"},
+            {"icon", "../icons/erase.png"},
             {"url", "internal://format"},
         }));
 
     reference_os_list_array.append(QJsonObject({
             {"name", QCoreApplication::translate("main", "Use custom")},
             {"description", QCoreApplication::translate("main", "Select a custom .img from your computer")},
-            {"icon", "icons/use_custom.png"},
+            {"icon", "../icons/use_custom.png"},
             {"url", ""},
         }));
 
