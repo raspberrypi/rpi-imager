@@ -132,7 +132,7 @@
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;accesso controllato alla cartella sembra sia abilitato. Aggiungi rpi-imager.exe all&apos;elenco delle app consentite e riprova.</translation>
     </message>
 </context>
 <context>
@@ -270,15 +270,15 @@
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore lettura file immagine</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation type="unfinished"></translation>
+        <translation>Errore scrittura file immagine</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossibile leggere il file immagine completo</translation>
     </message>
 </context>
 <context>
@@ -428,19 +428,19 @@
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished"></translation>
+        <translation>ANNULLA</translation>
     </message>
     <message>
         <source>Please fix validation errors in General and Services tabs</source>
-        <translation type="unfinished"></translation>
+        <translation>Correggi gli errori di convalida nelle schede Generale e Servizi</translation>
     </message>
     <message>
         <source>Please fix validation errors in General tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Correggi gli errori di convalida nella scheda Generale</translation>
     </message>
     <message>
         <source>Please fix validation errors in Services tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Correggi gli errori di convalida nella scheda Servizi</translation>
     </message>
 </context>
 <context>
@@ -477,11 +477,13 @@
         <source>Paste your SSH public key here.
 Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Incolla qui la chiave pubblica SSH.
+Formati supportati: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sa2-nistp256@openssh.com e certificati SSH
+Esempio: ssh-rsa aaab3nzac1yc2e ... user@hostname</translation>
     </message>
     <message>
-        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation type="unfinished"></translation>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
+        <translation>Formato chiave SSH non valido. Le chiavi SSH devono iniziare con ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com o certificati SSH, seguiti dai dati chiave e dal commento opzionale.</translation>
     </message>
 </context>
 <context>
