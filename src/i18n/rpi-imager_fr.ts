@@ -21,11 +21,11 @@
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">Erreur de lecture du stockage.&lt;br&gt;La carte SD est peut-être défectueuse.</translation>
+        <translation>Erreur de lecture du stockage.&lt;br&gt;La carte SD est peut-être défectueuse.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">La vérification de l&apos;écriture à échoué. Le contenu de la carte SD est différent de ce qui y a été écrit.</translation>
+        <translation>La vérification de l&apos;écriture à échoué. Le contenu de la carte SD est différent de ce qui y a été écrit.</translation>
     </message>
 </context>
 <context>
@@ -120,19 +120,19 @@
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le fichier en cache est corrompu. Le hachage SHA256 ne correspond pas à la valeur attendue.&lt;br&gt;Le fichier en cache va être supprimé et le téléchargement recommencé.</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Le fichier local est corrompu ou son hachage SHA256 est incorrect.&lt;br&gt;Attendu&#xa0;: %1&lt;br&gt;Actuel&#xa0;: %2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le téléchargement semble corrompu. Le hachage SHA256 ne correspond pas.&lt;br&gt;Attendu&#xa0;: %1&lt;br&gt;Actuel&#xa0;: %2&lt;br&gt;Veuillez vérifier votre connexion réseau et ré-essayer.</translation>
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;accès contrôlé aux dossiers semble être activé. Veuillez ajouter rpi-imager.exe à la liste des apps autorisées et ré-essayer.</translation>
     </message>
 </context>
 <context>
@@ -143,27 +143,27 @@
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur à l&apos;ouverture du périphérique pour formatage</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur d&apos;écriture sur le périphérique durant le formatage</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur de recherche sur le périphérique durant le formatage</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Paramètres non valides pour le formatage</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>Espace insuffisant sur le périphérique</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur de formatage inconnue</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
@@ -266,19 +266,19 @@
     </message>
     <message>
         <source>starting extraction</source>
-        <translation type="unfinished"></translation>
+        <translation>début d&apos;extraction</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur de lecture du fichier image</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur d&apos;écriture sur le périphérique</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de lecture du fichier image complet</translation>
     </message>
 </context>
 <context>
@@ -428,19 +428,19 @@
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished"></translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>Please fix validation errors in General and Services tabs</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez corriger les erreurs de validation dans les onglets Général et Services</translation>
     </message>
     <message>
         <source>Please fix validation errors in General tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez corriger les erreurs de validation dans l&apos;onglet Général</translation>
     </message>
     <message>
         <source>Please fix validation errors in Services tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez corriger les erreurs de validation dans l&apos;onglet Services</translation>
     </message>
 </context>
 <context>
@@ -477,11 +477,14 @@
         <source>Paste your SSH public key here.
 Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Collez ici votre clé SSH publique.
+Formats pris en charge&#xa0;: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, et certificats SSH certificates
+Exemple&#xa0;: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
+</translation>
     </message>
     <message>
-        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation type="unfinished"></translation>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
+        <translation>Format de clé SSH non valide. Les clés SSH doivent commencer par ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, ou un certificat SSH, suivi des données de la clé et d&apos;un commentaire optionnel.</translation>
     </message>
 </context>
 <context>
@@ -663,23 +666,23 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <translation>SAUTER LA VÉRIFICATION DU CACHE</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>Début du téléchargement...</translation>
     </message>
     <message>
         <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>Vérification du fichier en cache... %1%</translation>
     </message>
     <message>
         <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
+        <translation>Vérification du fichier en cache...</translation>
     </message>
     <message>
         <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Début d&apos;écriture</translation>
     </message>
 </context>
 </TS>
