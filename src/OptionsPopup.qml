@@ -373,7 +373,7 @@ Window {
         }
         
         // Check Wi-Fi validation (only if Wi-Fi is enabled)
-        if (generalTab.chkWifi.checked && (generalTab.fieldWifiSSID.indicateError || generalTab.fieldWifiPassword.indicateError)) {
+        if (generalTab.chkWifi.checked && (generalTab.fieldWifiSSID.indicateError || generalTab.fieldWifiPassword.indicateError || generalTab.fieldWifiCountry.indicateError)) {
             return true
         }
         
@@ -420,6 +420,11 @@ Window {
         
         if (generalTab.chkWifi.checked && generalTab.fieldWifiPassword.indicateError) {
             generalTab.fieldWifiPassword.forceActiveFocus()
+            return
+        }
+        
+        if (generalTab.chkWifi.checked && generalTab.fieldWifiCountry.indicateError) {
+            generalTab.fieldWifiCountry.forceActiveFocus()
             return
         }
     }

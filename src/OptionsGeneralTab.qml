@@ -344,10 +344,13 @@ OptionsTabBase {
                         !(fieldWifiPassword.text.length >= 8 && fieldWifiPassword.text.length <= 64)) {
                         fieldWifiPassword.indicateError = true
                     }
+                    // Re-validate wireless LAN country when Wi-Fi is enabled
+                    fieldWifiCountry.validateCountrySelection()
                 } else {
                     // Clear error states when Wi-Fi section is disabled
                     fieldWifiSSID.indicateError = false
                     fieldWifiPassword.indicateError = false
+                    fieldWifiCountry.indicateError = false
                 }
             }
         }
@@ -472,7 +475,7 @@ OptionsTabBase {
         RowLayout {
             Text {
                 text: qsTr("Wireless LAN country:")
-                color: chkWifi.checked ? Style.formLabelColor : Style.formLabelColor
+                color: chkWifi.checked ? (fieldWifiCountry.indicateError ? Style.formLabelErrorColor : Style.formLabelColor) : Style.formLabelColor
                 Layout.leftMargin: 40
             }
             // Spacer item
@@ -485,6 +488,7 @@ OptionsTabBase {
                 selectTextByMouse: true
                 enabled: chkWifi.checked
                 editable: true
+                property bool indicateError: false
                 
                 // Handle explicit navigation in both directions
                 Keys.onPressed: (event) => {
@@ -500,6 +504,25 @@ OptionsTabBase {
                             chkWifi.forceActiveFocus()
                         }
                         event.accepted = true
+                    }
+                }
+                
+                onEditTextChanged: {
+                    validateCountrySelection()
+                }
+                
+                onCurrentIndexChanged: {
+                    validateCountrySelection()
+                }
+                
+                function validateCountrySelection() {
+                    // Country is mandatory when Wi-Fi is enabled
+                    if (chkWifi.checked) {
+                        var currentCountry = editText.trim()
+                        var hasValidCountry = currentCountry.length > 0 && currentCountry !== ""
+                        indicateError = !hasValidCountry
+                    } else {
+                        indicateError = false
                     }
                 }
             }
