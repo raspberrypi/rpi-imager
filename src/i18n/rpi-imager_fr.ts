@@ -480,7 +480,6 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>Collez ici votre clé SSH publique.
 Formats pris en charge&#xa0;: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, et certificats SSH certificates
 Exemple&#xa0;: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</translation>
-</translation>
     </message>
     <message>
         <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
