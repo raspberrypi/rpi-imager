@@ -485,6 +485,10 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
         <translation>Неверный формат ключа SSH. Ключи SSH должны начинаться с ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com или SSH-сертификатов, за которыми следуют данные ключа и необязательный комментарий.</translation>
     </message>
+    <message>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>UseSavedSettingsPopup</name>

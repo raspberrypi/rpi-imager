@@ -339,7 +339,7 @@ OptionsTabBase {
                     Text {
                         id: errorText
                         visible: contentField.indicateError
-                        text: qsTr("Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.")
+                        text: qsTr("Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.")
                         color: Style.formLabelErrorColor
                         font.pointSize: 9
                         wrapMode: Text.WordWrap
