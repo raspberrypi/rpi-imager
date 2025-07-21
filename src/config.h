@@ -11,7 +11,7 @@
 #define OSLIST_URL                        "https://downloads.raspberrypi.org/os_list_imagingutility_v4.json"
 
 /* Time synchronization URL (only used on eglfs QPA platform, URL must be HTTP) */
-#define TIME_URL                          "http://downloads.raspberrypi.org/os_list_imagingutility_v4.json?time_synchronization"
+#define TIME_URL                          "http://downloads.raspberrypi.org/"
 
 /* Phone home the name of images downloaded for image popularity ranking */
 #define TELEMETRY_URL                     "https://rpi-imager-stats.raspberrypi.com/downloads"

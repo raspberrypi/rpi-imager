@@ -15,6 +15,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QSettings>
+#include <QString>
 #include <QVariant>
 #include <QQmlEngine>
 #include <QNetworkReply>
@@ -26,6 +27,7 @@
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
 #include "cachemanager.h"
+#include "device_info.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
@@ -60,6 +62,14 @@ public:
 
     /* Returns true if src and dst are set */
     Q_INVOKABLE bool readyToWrite();
+
+    /* Returns true if running on a Raspberry Pi */
+    Q_INVOKABLE bool isRaspberryPiDevice();
+
+    /* Returns hardware name if running on a Raspberry Pi */
+    Q_INVOKABLE QString getHardwareName();
+
+    Q_INVOKABLE bool createHardwareTags();
 
     /* Start writing */
     Q_INVOKABLE void startWrite();
@@ -219,6 +229,7 @@ private:
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter;
     bool _deviceFilterIsInclusive;
+    std::shared_ptr<DeviceInfo> _device_info;
 
 protected:
     QUrl _src, _repo;

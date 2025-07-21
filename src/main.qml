@@ -849,7 +849,16 @@ ApplicationWindow {
     }
 
     function onOsListPrepared() {
+        imageWriter.createHardwareTags();
         ospopup.fetchOSlist()
+        let hardwareTag = window.imageWriter.getHardwareName();
+        console.log(hardwareTag);
+        if (window.imageWriter.isEmbeddedMode() && hardwareTag !== ""){
+                // Limit the hardware selection button to only the specified device
+                text0.text = "Hardware Type Detected";
+                hwbutton.enabled = false
+                hwbutton.text = hardwareTag;
+        }
     }
 
     function resetWriteButton() {
@@ -880,6 +889,8 @@ ApplicationWindow {
         else if (imageWriter.isEmbeddedMode()) {
             //msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b>").arg(osbutton.text).arg(dstbutton.text)
             /* Just reboot to the installed OS */
+            msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now unplug your Raspberry Pi")
+            msgpopup.open()
             Qt.quit()
         }
         else
