@@ -167,7 +167,7 @@
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
+        <translation>Невозможно отформатировать устройство: недостаточно прав и udisks2 недоступен</translation>
     </message>
 </context>
 <context>
