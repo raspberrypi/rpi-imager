@@ -374,6 +374,7 @@ void ImageWriter::startWrite()
         DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
         connect(dft, SIGNAL(success()), SLOT(onSuccess()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
+        connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
         dft->start();
         return;
     }
@@ -525,6 +526,7 @@ void ImageWriter::startWrite()
         DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
         connect(dft, SIGNAL(success()), _thread, SLOT(start()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
+        connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
         dft->start();
     }
     else
@@ -1747,6 +1749,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         DriveFormatThread *dft = new DriveFormatThread(_dst.toLatin1(), this);
         connect(dft, SIGNAL(success()), _thread, SLOT(start()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
+        connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
         dft->start();
     }
     else

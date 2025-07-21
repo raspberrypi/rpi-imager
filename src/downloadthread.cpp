@@ -26,6 +26,11 @@
 #include <QtConcurrent/qtconcurrentrun.h>
 #include <QtNetwork/QNetworkProxy>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include "windows/winfile.h"
+#endif
+
 #ifdef Q_OS_LINUX
 #include <sys/ioctl.h>
 #include <linux/fs.h>
@@ -155,23 +160,92 @@ bool DownloadThread::_openAndPrepareDevice()
         if (!_nr.isEmpty()) {
             qDebug() << "Removing partition table from Windows drive #" << _nr << "(" << _filename << ")";
 
-            QProcess proc;
-            proc.start("diskpart", QStringList());
-            proc.waitForStarted();
-            proc.write("select disk "+_nr+"\r\n"
-                            "clean\r\n"
-                            "rescan\r\n");
-            proc.closeWriteChannel();
-            proc.waitForFinished();
-
-            if (proc.exitCode())
+            // First, try to unmount any volumes on this disk
+            auto l = Drivelist::ListStorageDevices();
+            QByteArray devlower = _filename.toLower();
+            for (auto i : l)
             {
-                emit error(tr("Error running diskpart: %1").arg(QString(proc.readAllStandardError())));
+                if (QByteArray::fromStdString(i.device).toLower() == devlower)
+                {
+                    for (const auto& mountpoint : i.mountpoints)
+                    {
+                        QString driveLetter = QString::fromStdString(mountpoint);
+                        if (driveLetter.endsWith("\\"))
+                            driveLetter.chop(1);
+                        
+                        qDebug() << "Attempting to unmount drive" << driveLetter;
+                        
+                        // Try to lock and unlock the volume to force unmount
+                        WinFile tempFile;
+                        tempFile.setFileName("\\\\.\\" + driveLetter);
+                        if (tempFile.open(QIODevice::ReadWrite))
+                        {
+                            if (tempFile.lockVolume())
+                            {
+                                tempFile.unlockVolume();
+                                qDebug() << "Successfully unlocked volume" << driveLetter;
+                            }
+                            tempFile.close();
+                        }
+                        
+                        // Give the system time to process the unmount
+                        QThread::msleep(500);
+                    }
+                    break;
+                }
+            }
+
+            // Now run diskpart with retry logic
+            bool diskpartSuccess = false;
+            for (int attempt = 1; attempt <= 3; attempt++)
+            {
+                qDebug() << "Running diskpart attempt" << attempt;
+                
+                QProcess proc;
+                proc.start("diskpart", QStringList());
+                if (!proc.waitForStarted(5000))
+                {
+                    qDebug() << "Failed to start diskpart";
+                    continue;
+                }
+                
+                proc.write("select disk "+_nr+"\r\n"
+                                "clean\r\n"
+                                "rescan\r\n");
+                proc.closeWriteChannel();
+                
+                if (!proc.waitForFinished(30000)) // 30 second timeout
+                {
+                    qDebug() << "diskpart timed out";
+                    proc.kill();
+                    continue;
+                }
+
+                if (proc.exitCode() == 0)
+                {
+                    diskpartSuccess = true;
+                    qDebug() << "diskpart succeeded on attempt" << attempt;
+                    break;
+                }
+                else
+                {
+                    QString errorOutput = QString(proc.readAllStandardError());
+                    qDebug() << "diskpart failed on attempt" << attempt << "with error:" << errorOutput;
+                    
+                    // Wait before retry
+                    QThread::msleep(1000 * attempt); // Progressive delay
+                }
+            }
+
+            if (!diskpartSuccess)
+            {
+                emit error(tr("Failed to clean disk after 3 attempts. Please ensure the disk is not in use by other applications and try again."));
                 return false;
             }
         }
     }
 
+    // Re-scan for drive letters after diskpart
     auto l = Drivelist::ListStorageDevices();
     QByteArray devlower = _filename.toLower();
     QByteArray driveLetter;
@@ -187,7 +261,7 @@ bool DownloadThread::_openAndPrepareDevice()
             }
             else if (i.mountpoints.size() > 1)
             {
-                emit error(tr("Error removing existing partitions"));
+                emit error(tr("Error: Multiple partitions found on disk. Please ensure the disk is completely clean."));
                 return false;
             }
             else
@@ -197,11 +271,18 @@ bool DownloadThread::_openAndPrepareDevice()
         }
     }
 
+    // Only try to lock volume if there's a drive letter (which shouldn't happen after clean)
     if (!driveLetter.isEmpty())
     {
+        qDebug() << "Warning: Drive letter still present after clean:" << driveLetter;
         _volumeFile.setFileName("\\\\.\\"+driveLetter);
         if (_volumeFile.open(QIODevice::ReadWrite))
-            _volumeFile.lockVolume();
+        {
+            if (!_volumeFile.lockVolume())
+            {
+                qDebug() << "Warning: Failed to lock volume, but continuing anyway";
+            }
+        }
     }
 
 #endif
@@ -675,7 +756,31 @@ void DownloadThread::_onWriteError()
         {
             msg += "<br>"+tr("Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.");
         }
+        else
+        {
+            msg += "<br>"+tr("The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.");
+        }
         _onDownloadError(msg);
+    }
+    else if (_file.errorCode() == ERROR_DISK_FULL)
+    {
+        _onDownloadError(tr("Disk is full. Please use a larger storage device."));
+    }
+    else if (_file.errorCode() == ERROR_WRITE_PROTECT)
+    {
+        _onDownloadError(tr("The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only."));
+    }
+    else if (_file.errorCode() == ERROR_SECTOR_NOT_FOUND || _file.errorCode() == ERROR_CRC)
+    {
+        _onDownloadError(tr("Media error detected. The storage device may be damaged or counterfeit. Please try a different device."));
+    }
+    else if (_file.errorCode() == ERROR_INVALID_PARAMETER)
+    {
+        _onDownloadError(tr("Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device."));
+    }
+    else if (_file.errorCode() == ERROR_IO_DEVICE)
+    {
+        _onDownloadError(tr("I/O device error. The storage device may have been disconnected or is malfunctioning."));
     }
     else
 #endif

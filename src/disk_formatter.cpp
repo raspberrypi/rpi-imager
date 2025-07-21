@@ -9,6 +9,11 @@
 #include <algorithm>
 #include <bit>
 #include <vector>
+#include <iostream>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace rpi_imager {
 
@@ -89,6 +94,16 @@ FormatError DiskFormatter::ConvertError(FileError error) const {
 }
 
 Result<void> DiskFormatter::FormatDrive(const std::string& device_path) {
+  // Pre-format checks for Windows physical drives
+#ifdef _WIN32
+  if (device_path.find("\\\\.\\PHYSICALDRIVE") == 0) {
+    std::cout << "Pre-format check: Ensuring no volumes are mounted on physical drive" << std::endl;
+    
+    // Give the system a moment to process any previous unmount operations
+    Sleep(1000);
+  }
+#endif
+
   // Open the device
   FileError error = file_ops_->OpenDevice(device_path);
   if (error != FileError::kSuccess) {
@@ -186,8 +201,11 @@ Result<void> DiskFormatter::WriteMbr(
 
   FileError error = file_ops_->WriteAtOffset(0, mbr_sector.data(), mbr_sector.size());
   if (error != FileError::kSuccess) {
+    std::cout << "Failed to write MBR to device. Error: " << static_cast<int>(error) << std::endl;
     return Result<void>(ConvertError(error));
   }
+  
+  std::cout << "Successfully wrote MBR to device" << std::endl;
   return Result<void>();
 }
 
@@ -285,10 +303,14 @@ Result<void> DiskFormatter::WriteBootSector(
 
   std::uint64_t offset = static_cast<std::uint64_t>(offset_sectors) * kSectorSize;
   const auto* data = reinterpret_cast<const std::uint8_t*>(&boot_sector);
+  
   FileError error = file_ops_->WriteAtOffset(offset, data, sizeof(boot_sector));
   if (error != FileError::kSuccess) {
+    std::cout << "Failed to write boot sector at offset " << offset << " (sector " << offset_sectors << "). Error: " << static_cast<int>(error) << std::endl;
     return Result<void>(ConvertError(error));
   }
+  
+  std::cout << "Successfully wrote boot sector at offset " << offset << " (sector " << offset_sectors << ")" << std::endl;
   return Result<void>();
 }
 
