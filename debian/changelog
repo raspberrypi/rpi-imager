@@ -1,3 +1,14 @@
+rpi-imager (1.9.6) unstable; urgency=medium
+
+  * OS customisation:
+    - Add Wi-Fi country selection validator
+    - Add new SSH key error messages
+  * i18n: Updated Chinese, French, Italian, Russian translations
+  * windows: Use normal mode for file writing operations
+  * all: Refactor drive formatting logic, home-grown formatter
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Mon, 21 Jul 2025 17:00:00 +0100
+
 rpi-imager (1.9.5) unstable; urgency=medium
 
   * OS customisation:
