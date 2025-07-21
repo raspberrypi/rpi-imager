@@ -167,7 +167,7 @@
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossibile formare il dispositivo: autorizzazioni insufficienti e udisks2 non disponibile</translation>
     </message>
 </context>
 <context>
