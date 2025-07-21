@@ -370,7 +370,7 @@
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation隐藏的网络</translation>
+        <translation>隐藏的网络</translation>
     </message>
     <message>
         <source>Wireless LAN country:</source>
