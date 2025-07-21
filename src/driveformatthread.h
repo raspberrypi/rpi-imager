@@ -21,6 +21,7 @@ public:
 signals:
     void success();
     void error(QString msg);
+    void preparationStatusUpdate(QString msg);
 
 protected:
     QByteArray _device;

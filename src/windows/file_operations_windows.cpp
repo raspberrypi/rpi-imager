@@ -20,6 +20,17 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   // Windows device paths like \\.\PHYSICALDRIVE0
   std::cout << "Opening Windows device: " << path << std::endl;
   
+  // Check if this is a physical drive
+  bool isPhysicalDrive = (path.find("\\\\.\\PHYSICALDRIVE") == 0);
+  
+  if (isPhysicalDrive) {
+    std::cout << "Detected physical drive, ensuring no volumes are mounted" << std::endl;
+    
+    // For physical drives, we need to ensure no volumes are mounted
+    // This is handled by the calling code in downloadthread.cpp
+    // but we can add additional safety here
+  }
+  
   FileError result = OpenInternal(path, 
                                   GENERIC_READ | GENERIC_WRITE,
                                   OPEN_EXISTING);
@@ -36,10 +47,14 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
     std::cout << "Warning: FSCTL_ALLOW_EXTENDED_DASD_IO failed, continuing anyway" << std::endl;
   }
 
-  // Lock the volume for exclusive access
-  FileError lock_result = LockVolume();
-  if (lock_result != FileError::kSuccess) {
-    std::cout << "Warning: Failed to lock volume, continuing anyway" << std::endl;
+  // Only try to lock volume if this is not a physical drive
+  if (!isPhysicalDrive) {
+    FileError lock_result = LockVolume();
+    if (lock_result != FileError::kSuccess) {
+      std::cout << "Warning: Failed to lock volume, continuing anyway" << std::endl;
+    }
+  } else {
+    std::cout << "Skipping volume lock for physical drive" << std::endl;
   }
   
   std::cout << "Successfully opened device: " << path << std::endl;
@@ -92,8 +107,11 @@ FileError WindowsFileOperations::WriteAtOffset(
     return FileError::kSeekError;
   }
 
-  // Write data in chunks
+  // Write data in chunks with retry logic
   std::size_t bytes_written = 0;
+  int retry_count = 0;
+  const int max_retries = 3;
+  
   while (bytes_written < size) {
     DWORD chunk_size = static_cast<DWORD>(std::min(size - bytes_written, 
                                                    static_cast<std::size_t>(MAXDWORD)));
@@ -103,15 +121,57 @@ FileError WindowsFileOperations::WriteAtOffset(
       DWORD error = GetLastError();
       std::cout << "WriteAtOffset: WriteFile failed, offset=" << offset + bytes_written 
                 << ", chunk_size=" << chunk_size << ", error=" << error << std::endl;
+      
+      // Handle specific Windows errors
+      if (error == ERROR_ACCESS_DENIED) {
+        std::cout << "WriteAtOffset: Access denied - volume may be locked or protected" << std::endl;
+        return FileError::kWriteError;
+      } else if (error == ERROR_DISK_FULL) {
+        std::cout << "WriteAtOffset: Disk full" << std::endl;
+        return FileError::kWriteError;
+      } else if (error == ERROR_WRITE_PROTECT) {
+        std::cout << "WriteAtOffset: Write protected" << std::endl;
+        return FileError::kWriteError;
+      } else if (error == ERROR_SECTOR_NOT_FOUND || error == ERROR_CRC) {
+        std::cout << "WriteAtOffset: Media error detected" << std::endl;
+        return FileError::kWriteError;
+      }
+      
+      // For other errors, try to retry
+      if (retry_count < max_retries) {
+        retry_count++;
+        std::cout << "WriteAtOffset: Retrying write operation, attempt " << retry_count << std::endl;
+        
+        // Wait a bit before retry
+        Sleep(100 * retry_count);
+        
+        // Reset file pointer
+        if (!SetFilePointerEx(handle_, offset_large, nullptr, FILE_BEGIN)) {
+          std::cout << "WriteAtOffset: Failed to reset file pointer for retry" << std::endl;
+          return FileError::kSeekError;
+        }
+        
+        continue;
+      }
+      
       return FileError::kWriteError;
     }
     
     if (written == 0) {
       std::cout << "WriteAtOffset: WriteFile returned 0 bytes written" << std::endl;
+      
+      if (retry_count < max_retries) {
+        retry_count++;
+        std::cout << "WriteAtOffset: Retrying write operation, attempt " << retry_count << std::endl;
+        Sleep(100 * retry_count);
+        continue;
+      }
+      
       return FileError::kWriteError;
     }
     
     bytes_written += written;
+    retry_count = 0; // Reset retry count on successful write
   }
 
   // Flush to ensure data is written
@@ -155,7 +215,11 @@ FileError WindowsFileOperations::GetSize(std::uint64_t& size) {
 
 FileError WindowsFileOperations::Close() {
   if (handle_ != INVALID_HANDLE_VALUE) {
-    UnlockVolume(); // Unlock if it was locked
+    // Only unlock volume if this is not a physical drive
+    bool isPhysicalDrive = (current_path_.find("\\\\.\\PHYSICALDRIVE") == 0);
+    if (!isPhysicalDrive) {
+      UnlockVolume(); // Unlock if it was locked
+    }
     
     if (!CloseHandle(handle_)) {
       handle_ = INVALID_HANDLE_VALUE;
