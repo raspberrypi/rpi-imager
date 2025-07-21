@@ -138,16 +138,8 @@
 <context>
     <name>DriveFormatThread</name>
     <message>
-        <source>Error partitioning: %1</source>
-        <translation>Errore partizionamento: %1</translation>
-    </message>
-    <message>
         <source>Error formatting (through udisks2)</source>
         <translation>Errore formattazione (attraverso udisk2)</translation>
-    </message>
-    <message>
-        <source>Formatting not implemented for this platform</source>
-        <translation>Formattazione non implementata per questa piattaforma</translation>
     </message>
     <message>
         <source>Error opening device for formatting</source>
@@ -172,6 +164,10 @@
     <message>
         <source>Unknown formatting error</source>
         <translation>Errore formattazione sconosciuto</translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -479,15 +475,15 @@
     </message>
     <message>
         <source>Paste your SSH public key here.
-Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
+Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>Incolla qui la chiave pubblica SSH.
 Formati supportati: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com e certificati SSH
 Esempio: ssh-rsa aaab3nzac1yc2e ... user@hostname</translation>
     </message>
     <message>
-        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation>Formato chiave SSH non valido. Le chiavi SSH devono iniziare con ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com o certificati SSH, seguiti dai dati chiave e dal commento opzionale.</translation>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
+        <translation>Formato chiave SSH non valido. Le chiavi SSH devono iniziare con ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com o certificati SSH, seguiti dai dati chiave e dal commento opzionale.</translation>
     </message>
 </context>
 <context>
