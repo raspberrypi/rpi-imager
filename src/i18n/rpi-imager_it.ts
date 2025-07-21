@@ -478,7 +478,7 @@
 Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>Incolla qui la chiave pubblica SSH.
-Formati supportati: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com e certificati SSH
+Formati supportati: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com e certificati SSH
 Esempio: ssh-rsa aaab3nzac1yc2e ... user@hostname</translation>
     </message>
     <message>
