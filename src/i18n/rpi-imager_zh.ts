@@ -21,11 +21,11 @@
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">读取存储设备时发生错误。&lt;br&gt;SD 卡可能已损坏。</translation>
+        <translation>读取存储设备时发生错误。&lt;br&gt;SD 卡可能已损坏。</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">写入校验失败。SD 卡与写入的内容不一致。</translation>
+        <translation>写入校验失败。SD 卡内容与写入内容不符。</translation>
     </message>
 </context>
 <context>
@@ -120,15 +120,15 @@
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>缓存文件已损坏。SHA256 哈希值与预期值不匹配。&lt;br&gt;该缓存文件将被删除，将重新开始下载。</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>本地文件已损坏或其 SHA256 哈希值不正确。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2。</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>下载内容似乎已损坏。SHA256 哈希值不匹配。&lt;br&gt;预期值：%1&lt;br&gt;实际值：%2&lt;br&gt;请检查您的网络连接，然后重试。</translation>
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
@@ -143,27 +143,27 @@
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>格式化时设备打开失败</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>格式化过程中写入设备时出错</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>格式化过程中定位设备时出错</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>格式化参数无效</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>设备空间不足</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>未知的格式化错误</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
@@ -174,53 +174,53 @@
     <name>DstPopup</name>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">储存设备</translation>
+        <translation>储存设备</translation>
     </message>
     <message>
         <source>No storage devices found</source>
-        <translation type="unfinished">找不到存储设备</translation>
+        <translation>找不到存储设备</translation>
     </message>
     <message>
         <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <translation>排除系统驱动器</translation>
     </message>
     <message>
         <source>gigabytes</source>
-        <translation type="unfinished"></translation>
+        <translation>千兆字节</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
-        <translation type="unfinished">已挂载为：%1</translation>
+        <translation>已挂载为：%1</translation>
     </message>
     <message>
         <source>GB</source>
-        <translation type="unfinished"></translation>
+        <translation>GB</translation>
     </message>
     <message>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[写保护]</translation>
+        <translation>[写保护]</translation>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
+        <translation>系统</translation>
     </message>
     <message>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">SD 卡写保护。&lt;br&gt;请尝试向上推动 SD 卡左侧的锁定开关，然后再试一次。</translation>
+        <translation>SD 卡写保护。&lt;br&gt;请尝试向上推动 SD 卡左侧的锁定开关，然后再试一次。</translation>
     </message>
 </context>
 <context>
     <name>HWListModel</name>
     <message>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">选择设备</translation>
+        <translation>选择设备</translation>
     </message>
 </context>
 <context>
     <name>HwPopup</name>
     <message>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished">树莓派设备</translation>
+        <translation>树莓派设备</translation>
     </message>
 </context>
 <context>
@@ -266,7 +266,7 @@
     </message>
     <message>
         <source>starting extraction</source>
-        <translation type="unfinished"></translation>
+        <translation>开始解压</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -304,104 +304,104 @@
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>建议</translation>
     </message>
 </context>
 <context>
     <name>OSPopup</name>
     <message>
         <source>Operating System</source>
-        <translation type="unfinished">操作系统</translation>
+        <translation>操作系统</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">返回</translation>
+        <translation>返回</translation>
     </message>
     <message>
         <source>Go back to main menu</source>
-        <translation type="unfinished">回到主菜单</translation>
+        <translation>回到主菜单</translation>
     </message>
     <message>
         <source>Released: %1</source>
-        <translation type="unfinished">发布时间：%1</translation>
+        <translation>发布时间：%1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">已缓存到本地磁盘</translation>
+        <translation>已缓存到本地磁盘</translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">本地文件</translation>
+        <translation>本地文件</translation>
     </message>
     <message>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">需要下载：%1 GB</translation>
+        <translation>还需下载：%1 GB</translation>
     </message>
     <message>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">请先接入一款包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根路径下。</translation>
+        <translation>请先接入一款包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根路径下。</translation>
     </message>
 </context>
 <context>
     <name>OptionsGeneralTab</name>
     <message>
         <source>Set hostname:</source>
-        <translation type="unfinished">设置主机名：</translation>
+        <translation>设置主机名：</translation>
     </message>
     <message>
         <source>Set username and password</source>
-        <translation type="unfinished">设置用户名及密码</translation>
+        <translation>设置用户名及密码</translation>
     </message>
     <message>
         <source>Username:</source>
-        <translation type="unfinished">用户名：</translation>
+        <translation>用户名：</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">密码：</translation>
+        <translation>密码：</translation>
     </message>
     <message>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">配置 WLAN</translation>
+        <translation>配置 WLAN</translation>
     </message>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">网络名称：</translation>
+        <translation>网络名称：</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation type="unfinished">隐藏的网络</translation>
+        <translation隐藏的网络</translation>
     </message>
     <message>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">WLAN 区域：</translation>
+        <translation>WLAN 区域：</translation>
     </message>
     <message>
         <source>Set locale settings</source>
-        <translation type="unfinished">本地化设置</translation>
+        <translation>本地化设置</translation>
     </message>
     <message>
         <source>Time zone:</source>
-        <translation type="unfinished">时区：</translation>
+        <translation>时区：</translation>
     </message>
     <message>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">键盘布局：</translation>
+        <translation>键盘布局：</translation>
     </message>
 </context>
 <context>
     <name>OptionsMiscTab</name>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">在完成后播放提示音</translation>
+        <translation>在完成后播放提示音</translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">在完成后卸载磁盘</translation>
+        <translation>在完成后卸载磁盘</translation>
     </message>
     <message>
         <source>Enable telemetry</source>
-        <translation type="unfinished">启用遥测</translation>
+        <translation>启用遥测</translation>
     </message>
 </context>
 <context>
@@ -447,31 +447,31 @@
     <name>OptionsServicesTab</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">开启 SSH</translation>
+        <translation>开启 SSH</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">使用密码登录</translation>
+        <translation>使用密码登录</translation>
     </message>
     <message>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished">仅使用公钥登录</translation>
+        <translation>仅使用公钥登录</translation>
     </message>
     <message>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">为用户 “%1” 设置 authorized_keys：</translation>
+        <translation>为用户 “%1” 设置 authorized_keys：</translation>
     </message>
     <message>
         <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <translation>删除密钥</translation>
     </message>
     <message>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">运行 SSH-KEYGEN</translation>
+        <translation>运行 SSH-KEYGEN</translation>
     </message>
     <message>
         <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <translation>添加 SSH 密钥</translation>
     </message>
     <message>
         <source>Paste your SSH public key here.
@@ -663,23 +663,23 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <translation>跳过缓存验证</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>开始下载……</translation>
     </message>
     <message>
         <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>正在验证缓存文件……</translation>
     </message>
     <message>
         <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
+        <translation>正在验证缓存文件……</translation>
     </message>
     <message>
         <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <translation>开始写入……</translation>
     </message>
 </context>
 </TS>
