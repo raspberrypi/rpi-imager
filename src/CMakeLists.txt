@@ -4,6 +4,7 @@
 cmake_minimum_required(VERSION 3.22)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
+OPTION (BUILD_EMBEDDED "Build for Embedded Imager" OFF)
 
 # We use FetchContent_Populate() instead of FetchContent_MakeAvailable() to allow EXCLUDE_FROM_ALL
 # This prevents the dependencies from being built by default, which is our desired behavior
@@ -634,7 +635,13 @@ set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h")
 
-find_package(Qt6 6.7 QUIET COMPONENTS Core Quick LinguistTools Svg OPTIONAL_COMPONENTS Widgets DBus WinExtras)
+if(BUILD_EMBEDDED)
+    set(SOURCES ${SOURCES} "embedded/device_info.cpp")
+else()
+    set(SOURCES ${SOURCES} "device_info.cpp")
+endif()
+
+find_package(Qt6 6.7 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS Widgets LinguistTools DBus WinExtras)
 if (Qt6_FOUND)
     set(QT Qt6)
     if (APPLE)
