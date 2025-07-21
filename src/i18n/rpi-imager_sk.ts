@@ -138,16 +138,8 @@
 <context>
     <name>DriveFormatThread</name>
     <message>
-        <source>Error partitioning: %1</source>
-        <translation>Chyba pri zápise partícií: %1</translation>
-    </message>
-    <message>
         <source>Error formatting (through udisks2)</source>
         <translation>Chyba pri formátovaní (pomocou udisks2)</translation>
-    </message>
-    <message>
-        <source>Formatting not implemented for this platform</source>
-        <translation>Formátovanie nie je na tejto platforme implementované</translation>
     </message>
     <message>
         <source>Error opening device for formatting</source>
@@ -171,6 +163,10 @@
     </message>
     <message>
         <source>Unknown formatting error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -478,13 +474,13 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Paste your SSH public key here.
-Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
-Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
+        <source>Paste your SSH public key here.
+Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
+Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

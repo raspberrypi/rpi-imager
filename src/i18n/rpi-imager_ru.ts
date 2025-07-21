@@ -138,16 +138,8 @@
 <context>
     <name>DriveFormatThread</name>
     <message>
-        <source>Error partitioning: %1</source>
-        <translation>Ошибка создания разделов: %1</translation>
-    </message>
-    <message>
         <source>Error formatting (through udisks2)</source>
         <translation>Ошибка форматирования (с помощью udisks2)</translation>
-    </message>
-    <message>
-        <source>Formatting not implemented for this platform</source>
-        <translation>Для этой платформы не реализовано форматирование</translation>
     </message>
     <message>
         <source>Error opening device for formatting</source>
@@ -172,6 +164,10 @@
     <message>
         <source>Unknown formatting error</source>
         <translation>Неизвестная ошибка форматирования</translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -478,16 +474,16 @@
         <translation>Добавить SSH ключ</translation>
     </message>
     <message>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
+        <translation>Неверный формат ключа SSH. Ключи SSH должны начинаться с ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com или SSH-сертификатов, за которыми следуют данные ключа и необязательный комментарий.</translation>
+    </message>
+    <message>
         <source>Paste your SSH public key here.
 Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>Вставьте сюда свой открытый ключ SSH.
 Поддерживаемые форматы: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com и сертификаты SSH.
 Пример: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</translation>
-    </message>
-    <message>
-        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation>Неверный формат ключа SSH. Ключи SSH должны начинаться с ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com или SSH-сертификатов, за которыми следуют данные ключа и необязательный комментарий.</translation>
     </message>
 </context>
 <context>
