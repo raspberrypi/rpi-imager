@@ -250,7 +250,7 @@ OptionsTabBase {
                             
                             // Helpful tooltip on hover
                             ToolTip.visible: hovered && text.length === 0
-                            ToolTip.text: qsTr("Paste your SSH public key here.\nSupported formats: ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates\nExample: ssh-rsa AAAAB3NzaC1yc2E... user@hostname")
+                            ToolTip.text: qsTr("Paste your SSH public key here.\nSupported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates\nExample: ssh-rsa AAAAB3NzaC1yc2E... user@hostname")
                             ToolTip.delay: 1000
                             
                             onTextChanged: {
@@ -339,7 +339,7 @@ OptionsTabBase {
                     Text {
                         id: errorText
                         visible: contentField.indicateError
-                        text: qsTr("Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ssh-ecdsa, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.")
+                        text: qsTr("Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.")
                         color: Style.formLabelErrorColor
                         font.pointSize: 9
                         wrapMode: Text.WordWrap

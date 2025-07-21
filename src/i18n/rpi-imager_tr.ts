@@ -91,10 +91,6 @@
         <translation>Dosyayı diske yazarken erişim reddedildi hatası</translation>
     </message>
     <message>
-        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation>Kontrollü Klasör Erişimi etkin görünüyor. Lütfen izin verilen uygulamalar listesine hem rpi-imager.exe&apos;yi hem de fat32format.exe&apos;yi ekleyin ve tekrar deneyin.</translation>
-    </message>
-    <message>
         <source>Error writing file to disk</source>
         <translation>Dosyayı diske yazma hatası</translation>
     </message>
@@ -134,36 +130,16 @@
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
     <message>
-        <source>Error partitioning: %1</source>
-        <translation>Bölümleme hatası: %1</translation>
-    </message>
-    <message>
-        <source>Error starting fat32format</source>
-        <translation>fat32format başlatılırken hata oluştu</translation>
-    </message>
-    <message>
-        <source>Error running fat32format: %1</source>
-        <translation>fat32format çalıştırılırken hata oluştu: %1</translation>
-    </message>
-    <message>
-        <source>Error determining new drive letter</source>
-        <translation>Yeni sürücü harfi belirlenirken hata oluştu</translation>
-    </message>
-    <message>
-        <source>Invalid device: %1</source>
-        <translation>Geçersiz cihaz: %1</translation>
-    </message>
-    <message>
         <source>Error formatting (through udisks2)</source>
         <translation>Hatalı biçimlendirme (udisks2 aracılığıyla)</translation>
-    </message>
-    <message>
-        <source>Formatting not implemented for this platform</source>
-        <translation>Bu platform için biçimlendirme uygulanmadı</translation>
     </message>
     <message>
         <source>Error opening device for formatting</source>
@@ -187,6 +163,10 @@
     </message>
     <message>
         <source>Unknown formatting error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -286,6 +266,18 @@
     </message>
     <message>
         <source>starting extraction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error reading from image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read complete image file</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -435,6 +427,22 @@
         <source>SAVE</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General and Services tabs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General tab</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in Services tab</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>OptionsServicesTab</name>
@@ -464,6 +472,16 @@
     </message>
     <message>
         <source>Add SSH Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste your SSH public key here.
+Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
+Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

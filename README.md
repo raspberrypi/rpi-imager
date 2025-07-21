@@ -38,7 +38,7 @@ This will build and install the version of Qt preferred for Raspberry Pi Imager 
 #### Build the AppImage
 
 ```sh
-./create_appimage.sh
+./create-appimage.sh
 ./Raspberry_Pi_Imager-*.AppImage
 ```
 
@@ -77,7 +77,7 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
 
 #### Building
 
-Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or a derivative).
+Building Raspberry Pi Imager on macOS is best done with Visual Studio Code (or a derivative).
 
 - Open Visual Studio Code, and select 'Clone repo'. Give it the git url of this project.
 - Open the CMake plugin settings, and set the following Configure Args:
@@ -88,7 +88,7 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
   - `-DIMAGER_NOTARIZE_KEYCHAIN_PROFILE=notarytool-password` - specify the name of the keychain item containing your Apple ID credentials for notarizing.
 - In the CMake plugin tab, ensure you have selected the `MinSizeRel` variant if you intend to distribute to others.
 - In the CMake plugin tab, select the 'rpi_imager' target, and build it
-- Your resultant DMG will be located at `$WORKSPACE\build\Raspberry Pi Imager-$VERSION.dmg`
+- Your resultant DMG will be located at `$WORKSPACE/build/Raspberry Pi Imager-$VERSION.dmg`
 
 ### Linux embedded (netboot) build
 

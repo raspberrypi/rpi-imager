@@ -92,10 +92,6 @@
         <translation>დისკზე ჩაწერისას წვდომა აკრძალულია.</translation>
     </message>
     <message>
-        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation>როგორც ჩანს, ჩართულია კონტროლირებადი საქაღალდის წვდომა. დაამატეთ rpi-imager.exe და fat32format.exe დაშვებული პროგრამების სიაში და თავიდან სცადეთ.</translation>
-    </message>
-    <message>
         <source>Error writing file to disk</source>
         <translation>ფაილის დისკზე ჩაწერის შეცდომა</translation>
     </message>
@@ -135,36 +131,16 @@
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
     <message>
-        <source>Error partitioning: %1</source>
-        <translation>დაყოფის შეცდომა: %1</translation>
-    </message>
-    <message>
-        <source>Error starting fat32format</source>
-        <translation>fat32format-ის გაშვების შეცდომა</translation>
-    </message>
-    <message>
-        <source>Error running fat32format: %1</source>
-        <translation>fat32format-ის გაშვების შეცდომა: %1</translation>
-    </message>
-    <message>
-        <source>Error determining new drive letter</source>
-        <translation>ახალი დისკის ასოს განსაზღვრის შეცდომა</translation>
-    </message>
-    <message>
-        <source>Invalid device: %1</source>
-        <translation>არასწორი მოწყობილობა: %1</translation>
-    </message>
-    <message>
         <source>Error formatting (through udisks2)</source>
         <translation>დაფორმატების შეცდომა (udisks2-ით)</translation>
-    </message>
-    <message>
-        <source>Formatting not implemented for this platform</source>
-        <translation>ამ პლატფორმისთვის დაფორმატება განხორციელებული არაა</translation>
     </message>
     <message>
         <source>Error opening device for formatting</source>
@@ -188,6 +164,10 @@
     </message>
     <message>
         <source>Unknown formatting error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -287,6 +267,18 @@
     </message>
     <message>
         <source>starting extraction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error reading from image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read complete image file</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -435,6 +427,22 @@
         <source>SAVE</source>
         <translation>შენახვა</translation>
     </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General and Services tabs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General tab</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in Services tab</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>OptionsServicesTab</name>
@@ -464,6 +472,16 @@
     </message>
     <message>
         <source>Add SSH Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste your SSH public key here.
+Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
+Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

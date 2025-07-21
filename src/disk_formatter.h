@@ -11,8 +11,8 @@
 #include <array>
 #include <vector>
 #include <system_error>
-#include <optional>
 #include <memory>
+#include <optional>
 #include "file_operations.h"
 
 namespace rpi_imager {
@@ -67,7 +67,7 @@ struct Fat32Config {
   std::uint32_t sectors_per_cluster = 8;  // 4KB clusters
   std::uint16_t reserved_sectors = 32;
   std::uint8_t num_fats = 2;
-  std::string volume_label = "SDCARD";
+  std::string volume_label = "BOOT";       // More Pi-appropriate than "SDCARD"
   std::uint32_t volume_id = 0x12345678;
 };
 

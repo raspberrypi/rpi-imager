@@ -21,11 +21,11 @@
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">Ошибка чтения с запоминающего устройства.&lt;br&gt;SD-карта может быть повреждена.</translation>
+        <translation>Ошибка чтения с запоминающего устройства.&lt;br&gt;Возможно, SD-карта повреждена.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">Ошибка по результатам проверки записи. Содержимое SD-карты отличается от того, что было на неё записано.</translation>
+        <translation>Проверка записи не удалась. Содержимое SD-карты отличается от того, что было на неё записано.</translation>
     </message>
 </context>
 <context>
@@ -91,10 +91,6 @@
         <translation>Ошибка доступа при записи файла на диск.</translation>
     </message>
     <message>
-        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation>Похоже, что включён контролируемый доступ к папкам (Controlled Folder Access). Добавьте rpi-imager.exe и fat32format.exe в список разрешённых программ и попробуйте снова.</translation>
-    </message>
-    <message>
         <source>Error writing file to disk</source>
         <translation>Ошибка записи файла на диск</translation>
     </message>
@@ -116,7 +112,7 @@
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>Ошибка по результатам проверки записи. Содержимое SD-карты отличается от того, что было на неё записано.</translation>
+        <translation>Проверка записи не удалась. Содержимое SD-карты отличается от того, что было на неё записано.</translation>
     </message>
     <message>
         <source>Customizing image</source>
@@ -124,69 +120,53 @@
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>Кэшированный файл повреждён. Хэш SHA256 не соответствует ожидаемому значению.&lt;br&gt;Кэшированный файл будет удалён, и загрузка будет возобновлена.</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Локальный файл поврежден или имеет неверный хэш SHA256.&lt;br&gt;Ожидается: %1&lt;br&gt;Фактически: %2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Похоже, загрузка повреждена. Хэш SHA256 не совпадает.&lt;br&gt;Ожидается: %1&lt;br&gt;Фактически: %2&lt;br&gt;Проверьте сетевое подключение и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
+        <translation>Похоже, включён контролируемый доступ к папкам. Добавьте rpi-imager.exe в список разрешённых приложений и повторите попытку.</translation>
     </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
     <message>
-        <source>Error partitioning: %1</source>
-        <translation>Ошибка создания разделов: %1</translation>
-    </message>
-    <message>
-        <source>Error starting fat32format</source>
-        <translation>Ошибка запуска fat32format</translation>
-    </message>
-    <message>
-        <source>Error running fat32format: %1</source>
-        <translation>Ошибка выполнения fat32format: %1</translation>
-    </message>
-    <message>
-        <source>Error determining new drive letter</source>
-        <translation>Ошибка определения новой буквы диска</translation>
-    </message>
-    <message>
-        <source>Invalid device: %1</source>
-        <translation>Недопустимое устройство: %1</translation>
-    </message>
-    <message>
         <source>Error formatting (through udisks2)</source>
         <translation>Ошибка форматирования (с помощью udisks2)</translation>
     </message>
     <message>
-        <source>Formatting not implemented for this platform</source>
-        <translation>Для этой платформы не реализовано форматирование</translation>
-    </message>
-    <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка открытия устройства для форматирования</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка записи на устройство во время форматирования</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка поиска на устройстве во время форматирования</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Неверные параметры форматирования</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>Недостаточно места на устройстве</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
+        <translation>Неизвестная ошибка форматирования</translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -194,53 +174,53 @@
     <name>DstPopup</name>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">Запоминающее устройство</translation>
+        <translation>Запоминающее устройство</translation>
     </message>
     <message>
         <source>No storage devices found</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройства хранения данных не найдены</translation>
     </message>
     <message>
         <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Исключить системные диски</translation>
     </message>
     <message>
         <source>gigabytes</source>
-        <translation type="unfinished"></translation>
+        <translation>гигабайты</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
-        <translation type="unfinished">Подключено как %1</translation>
+        <translation>Подключено как %1</translation>
     </message>
     <message>
         <source>GB</source>
-        <translation type="unfinished"></translation>
+        <translation>ГБ</translation>
     </message>
     <message>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[ЗАЩИЩЕНО ОТ ЗАПИСИ]</translation>
+        <translation>[ЗАЩИЩЕНО ОТ ЗАПИСИ]</translation>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
+        <translation>СИСТЕМА</translation>
     </message>
     <message>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">SD-карта защищена от записи.&lt;br&gt;Переместите вверх блокировочный переключатель, расположенный с левой стороны карты, и попробуйте ещё раз.</translation>
+        <translation>SD-карта защищена от записи.&lt;br&gt;Переместите вверх блокировочный переключатель, расположенный с левой стороны карты, и попробуйте ещё раз.</translation>
     </message>
 </context>
 <context>
     <name>HWListModel</name>
     <message>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">ВЫБРАТЬ УСТРОЙСТВО</translation>
+        <translation>ВЫБРАТЬ УСТРОЙСТВО</translation>
     </message>
 </context>
 <context>
     <name>HwPopup</name>
     <message>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished">Устройство Raspberry Pi</translation>
+        <translation>Устройство Raspberry Pi</translation>
     </message>
 </context>
 <context>
@@ -263,11 +243,11 @@
     </message>
     <message>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка синхронизации времени. Повторите попытку через 3 секунды</translation>
     </message>
     <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
-        <translation type="unfinished"></translation>
+        <translation>На вашем Ethernet-коммутаторе включён протокол STP. Получение IP-адреса займёт много времени.</translation>
     </message>
     <message>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
@@ -286,7 +266,19 @@
     </message>
     <message>
         <source>starting extraction</source>
-        <translation type="unfinished"></translation>
+        <translation>начиная извлечение</translation>
+    </message>
+    <message>
+        <source>Error reading from image file</source>
+        <translation>Ошибка чтения из файла образа</translation>
+    </message>
+    <message>
+        <source>Error writing to device</source>
+        <translation>Ошибка записи на устройство</translation>
+    </message>
+    <message>
+        <source>Failed to read complete image file</source>
+        <translation>Не удалось прочитать файл образа</translation>
     </message>
 </context>
 <context>
@@ -312,111 +304,111 @@
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>Рекомендуется</translation>
     </message>
 </context>
 <context>
     <name>OSPopup</name>
     <message>
         <source>Operating System</source>
-        <translation type="unfinished">Операционная система</translation>
+        <translation>Операционная система</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Назад</translation>
+        <translation>Назад</translation>
     </message>
     <message>
         <source>Go back to main menu</source>
-        <translation type="unfinished">Вернуться в главное меню</translation>
+        <translation>Вернуться в главное меню</translation>
     </message>
     <message>
         <source>Released: %1</source>
-        <translation type="unfinished">Дата выпуска: %1</translation>
+        <translation>Дата выпуска: %1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">Кэш на компьютере</translation>
+        <translation>Кэшировано на вашем компьютере</translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">Локальный файл</translation>
+        <translation>Локальный файл</translation>
     </message>
     <message>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">Онлайн — объём загрузки составляет %1 ГБ</translation>
+        <translation>Онлайн - загрузка %1 ГБ</translation>
     </message>
     <message>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">Сначала подключите USB-накопитель с образами.&lt;br&gt;Образы должны находиться в корневой папке USB-накопителя.</translation>
+        <translation>Сначала подключите USB-накопитель с образами.&lt;br&gt;Образы должны находиться в корневой папке USB-накопителя.</translation>
     </message>
 </context>
 <context>
     <name>OptionsGeneralTab</name>
     <message>
         <source>Set hostname:</source>
-        <translation type="unfinished">Имя хоста:</translation>
+        <translation>Имя хоста:</translation>
     </message>
     <message>
         <source>Set username and password</source>
-        <translation type="unfinished">Указать имя пользователя и пароль</translation>
+        <translation>Указать имя пользователя и пароль</translation>
     </message>
     <message>
         <source>Username:</source>
-        <translation type="unfinished">Имя пользователя:</translation>
+        <translation>Имя пользователя:</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Пароль:</translation>
+        <translation>Пароль:</translation>
     </message>
     <message>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">Настроить Wi-Fi</translation>
+        <translation>Настроить Wi-Fi</translation>
     </message>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation type="unfinished">Скрытый идентификатор SSID</translation>
+        <translation>Скрытый идентификатор SSID</translation>
     </message>
     <message>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">Страна Wi-Fi:</translation>
+        <translation>Страна Wi-Fi:</translation>
     </message>
     <message>
         <source>Set locale settings</source>
-        <translation type="unfinished">Указать параметры региона</translation>
+        <translation>Указать параметры региона</translation>
     </message>
     <message>
         <source>Time zone:</source>
-        <translation type="unfinished">Часовой пояс:</translation>
+        <translation>Часовой пояс:</translation>
     </message>
     <message>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">Раскладка клавиатуры:</translation>
+        <translation>Раскладка клавиатуры:</translation>
     </message>
 </context>
 <context>
     <name>OptionsMiscTab</name>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Воспроизводить звук после завершения</translation>
+        <translation>Воспроизводить звук после завершения</translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Извлекать носитель после завершения</translation>
+        <translation>Извлекать носитель после завершения</translation>
     </message>
     <message>
         <source>Enable telemetry</source>
-        <translation type="unfinished">Включить телеметрию</translation>
+        <translation>Включить телеметрию</translation>
     </message>
 </context>
 <context>
     <name>OptionsPopup</name>
     <message>
         <source>OS Customization</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка ОС</translation>
     </message>
     <message>
         <source>General</source>
@@ -434,43 +426,71 @@
         <source>SAVE</source>
         <translation>СОХРАНИТЬ</translation>
     </message>
+    <message>
+        <source>CANCEL</source>
+        <translation>ОТМЕНА</translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General and Services tabs</source>
+        <translation>Исправьте ошибки на вкладках Общие и Службы</translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General tab</source>
+        <translation>Исправьте ошибки на вкладке Общие</translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in Services tab</source>
+        <translation>Исправьте ошибки на вкладке Службы</translation>
+    </message>
 </context>
 <context>
     <name>OptionsServicesTab</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">Включить SSH</translation>
+        <translation>Включить SSH</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">Использовать аутентификацию по паролю</translation>
+        <translation>Использовать аутентификацию по паролю</translation>
     </message>
     <message>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished">Разрешить только аутентификацию с использованием открытого ключа</translation>
+        <translation>Разрешить только аутентификацию с открытым ключом</translation>
     </message>
     <message>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">authorized_keys для «%1»:</translation>
+        <translation>Установить authorized_keys для &apos;%1&apos;:</translation>
     </message>
     <message>
         <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Удалить ключ</translation>
     </message>
     <message>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">ВЫПОЛНИТЬ SSH-KEYGEN</translation>
+        <translation>ВЫПОЛНИТЬ SSH-KEYGEN</translation>
     </message>
     <message>
         <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Добавить SSH ключ</translation>
+    </message>
+    <message>
+        <source>Paste your SSH public key here.
+Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
+Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
+        <translation>Вставьте сюда свой открытый ключ SSH.
+Поддерживаемые форматы: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com и сертификаты SSH.
+Пример: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</translation>
+    </message>
+    <message>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
+        <translation>Неверный формат ключа SSH. Ключи SSH должны начинаться с ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com или SSH-сертификатов, за которыми следуют данные ключа и необязательный комментарий.</translation>
     </message>
 </context>
 <context>
     <name>UseSavedSettingsPopup</name>
     <message>
         <source>Would you like to apply OS customization settings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Хотите ли вы применить параметры настройки ОС?</translation>
     </message>
     <message>
         <source>NO</source>
@@ -521,7 +541,7 @@
     </message>
     <message>
         <source>Network not ready yet</source>
-        <translation type="unfinished"></translation>
+        <translation>Сеть еще не готова</translation>
     </message>
     <message>
         <source>CHOOSE STORAGE</source>
@@ -645,23 +665,23 @@
     </message>
     <message>
         <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <translation>ПРОПУСТИТЬ ПРОВЕРКУ КЭША</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>Начинаем загрузку...</translation>
     </message>
     <message>
         <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>Проверка кэшированного файла... %1%</translation>
     </message>
     <message>
         <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
+        <translation>Проверка кэшированного файла...</translation>
     </message>
     <message>
         <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Начинаю запись...</translation>
     </message>
 </context>
 </TS>

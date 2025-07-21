@@ -91,10 +91,6 @@
         <translation>寫入檔案至磁碟時存取被拒絕的錯誤。</translation>
     </message>
     <message>
-        <source>Controlled Folder Access seems to be enabled. Please add both rpi-imager.exe and fat32format.exe to the list of allowed apps and try again.</source>
-        <translation>似乎已啟用受控資料夾存取。請將 rpi-imager.exe 和 fat32format.exe 兩者都加入允許的應用程式清單，然後再試一次。</translation>
-    </message>
-    <message>
         <source>Error writing file to disk</source>
         <translation>寫入檔案至磁碟時發生錯誤</translation>
     </message>
@@ -134,36 +130,16 @@
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
     <message>
-        <source>Error partitioning: %1</source>
-        <translation>分割時發生錯誤：%1</translation>
-    </message>
-    <message>
-        <source>Error starting fat32format</source>
-        <translation>開始執行 fat32format 時發生錯誤</translation>
-    </message>
-    <message>
-        <source>Error running fat32format: %1</source>
-        <translation>執行 fat32format 時發生錯誤：%1</translation>
-    </message>
-    <message>
-        <source>Error determining new drive letter</source>
-        <translation>確定新磁碟機代號時發生錯誤</translation>
-    </message>
-    <message>
-        <source>Invalid device: %1</source>
-        <translation>無效裝置：%1</translation>
-    </message>
-    <message>
         <source>Error formatting (through udisks2)</source>
         <translation>格式化時發生錯誤（透過 udisks2）</translation>
-    </message>
-    <message>
-        <source>Formatting not implemented for this platform</source>
-        <translation>此平台未實作格式化</translation>
     </message>
     <message>
         <source>Error opening device for formatting</source>
@@ -187,6 +163,10 @@
     </message>
     <message>
         <source>Unknown formatting error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -286,6 +266,18 @@
     </message>
     <message>
         <source>starting extraction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error reading from image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read complete image file</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -434,6 +426,22 @@
         <source>SAVE</source>
         <translation>儲存</translation>
     </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General and Services tabs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in General tab</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please fix validation errors in Services tab</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>OptionsServicesTab</name>
@@ -463,6 +471,16 @@
     </message>
     <message>
         <source>Add SSH Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste your SSH public key here.
+Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
+Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
