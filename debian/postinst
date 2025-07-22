@@ -1,9 +1,0 @@
-#!/bin/sh
-
-set -e
-
-if [ ! -x /usr/bin/rpi-imager ]; then
-    chmod +x /usr/bin/rpi-imager
-fi
-
-#DEBHELPER#

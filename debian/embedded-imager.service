@@ -1,0 +1,11 @@
+[Unit]
+Description=Start Raspberry Pi Embedded Imager on bootup
+After=sync-network-time.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/rpi-imager-embedded
+
+[Install]
+WantedBy=multi-user.target
