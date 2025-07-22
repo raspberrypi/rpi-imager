@@ -30,10 +30,8 @@ Package: rpi-imager-embedded
 Build-Profiles: <embedded>
 Architecture: arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, 
-         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37),
-         libegl1-mesa, libgles2-mesa, libgbm1, libdrm2,
-         libinput10, libudev1, libraspberrypi0 | mesa-utils
-Recommends: udisks2, gpu-mem-256 | raspi-config
+         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37), libdrm2,
+         libinput10, libudev1, openssl
 Suggests: rpi-eeprom, firmware-brcm80211
 Conflicts: rpi-imager, rpi-imager-amd64
 Description: Raspberry Pi Imaging utility for embedded systems
