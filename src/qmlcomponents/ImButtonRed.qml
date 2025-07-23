@@ -2,12 +2,30 @@
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2022 Raspberry Pi Ltd
  */
-
-import QtQuick.Controls.Material 2.2
+import QtQuick 2.9
+import QtQuick.Controls 2.2
 
 import RpiImager
 
-ImButton {
-    Material.background: activeFocus ? Style.button2FocusedBackgroundColor : Style.mainBackgroundColor
-    Material.foreground: Style.button2ForegroundColor
+Button {
+    font.family: Style.fontFamily
+    font.capitalization: Font.AllUppercase
+
+    background: Rectangle {
+        color: parent.enabled ? (parent.activeFocus ? Style.progressBarBackgroundColor : (parent.hovered ? Style.buttonFocusedBackgroundColor : Style.mainBackgroundColor)) : Qt.rgba(0, 0, 0, 0.1)
+        radius: 4
+    }
+
+    contentItem: Text {
+        text: parent.text
+        font: parent.font
+        color: parent.enabled ? Style.button2ForegroundColor : Qt.rgba(0, 0, 0, 0.3)
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
+    }
+
+    activeFocusOnTab: true
+    Accessible.onPressAction: clicked()
+    Keys.onEnterPressed: clicked()
+    Keys.onReturnPressed: clicked()
 }

@@ -31,6 +31,11 @@ Popup {
     signal yes()
     signal no()
 
+    background: Rectangle {
+    color: Style.listViewRowBackgroundColor
+    radius: 5
+    }
+
     contentItem: Item {
         focus: true
         Keys.onPressed: (event) => {

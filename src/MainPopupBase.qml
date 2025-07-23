@@ -26,8 +26,9 @@ Popup {
     function getNextFocusableElement(startElement) { return startElement }
     function getPreviousFocusableElement(startElement) { return startElement }
 
-    contentItem: Item {
+    contentItem: Rectangle {
         id: content
+        color: Style.listViewRowBackgroundColor
         Keys.onPressed: (event) => {
             if (!event.accepted) {
                 var focusedItem = Window.activeFocusItem
