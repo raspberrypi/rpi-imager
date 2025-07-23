@@ -72,10 +72,11 @@ body:
       label: Which Raspberry Pi Device are you using?
       multiple: false
       options:
-        - Raspberry Pi 5
+        - Raspberry Pi 5, 500, and Compute Modules 5
         - Raspberry Pi 4B, 400, and Compute Modules 4, 4S
         - Raspberry Pi Zero 2 W
         - Raspberry Pi 3B, 3A+, 3B+, and Compute Module 3, 3+
+        - Raspberry Pi 2B
         - Raspberry Pi Zero, Zero W, Zero WH
         - Raspberry Pi A, B, A+, B+, and Compute Module 1
     validations:
