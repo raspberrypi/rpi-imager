@@ -39,6 +39,7 @@
 #include <QPasswordDigestor>
 #include <QVersionNumber>
 #include <QCryptographicHash>
+#include <stdlib.h>
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
 #include <QApplication>
@@ -105,6 +106,7 @@ ImageWriter::ImageWriter(QObject *parent)
         changeKeyboard(detectPiKeyboard());
         if (_currentKeyboard.isEmpty())
             _currentKeyboard = "us";
+            _currentLang = "English";
 
         {
             QString nvmem_blconfig_path = {};
@@ -1712,4 +1714,10 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
 void MountUtilsLog(std::string msg) {
     Q_UNUSED(msg)
     //qDebug() << "mountutils:" << msg.c_str();
+}
+
+void ImageWriter::reboot()
+{
+    qDebug() << "Rebooting system.";
+    system("reboot");
 }

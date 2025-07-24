@@ -30,6 +30,7 @@ Popup {
 
     signal yes()
     signal no()
+    signal reboot()
 
     contentItem: Item {
         focus: true

@@ -789,6 +789,23 @@ ApplicationWindow {
         }
     }
 
+    MsgPopup {
+        id: embeddedFinishedPopup
+        continueButton: true
+        rebootButton: true        
+        title: qsTr("Write Successful")
+        text: qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You may now reboot").arg(osbutton.text).arg(dstbutton.text)
+
+        onReboot: {
+           window.imageWriter.reboot()
+        }
+        onClosed: {
+            window.imageWriter.setDst("")
+            window.selectedStorageName = ""
+            window.resetWriteButton()
+        }
+    }
+
     /* Slots for signals imagewrite emits */
     function onDownloadProgress(now,total) {
         var newPos
@@ -858,6 +875,10 @@ ApplicationWindow {
         osbutton.enabled = true
         dstbutton.enabled = true
         hwbutton.enabled = true
+        if (window.imageWriter.isEmbeddedMode()) {
+            hwbutton.enabled = false
+            langbarRect.visible = true
+        }
         writebutton.visible = true
         writebutton.enabled = imageWriter.readyToWrite()
         cancelwritebutton.visible = false
@@ -874,22 +895,18 @@ ApplicationWindow {
     }
 
     function onSuccess() {
-        msgpopup.title = qsTr("Write Successful")
-        if (osbutton.text === qsTr("Erase"))
-            msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
-        else if (imageWriter.isEmbeddedMode()) {
-            //msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b>").arg(osbutton.text).arg(dstbutton.text)
-            /* Just reboot to the installed OS */
-            Qt.quit()
-        }
-        else
-            msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
         if (imageWriter.isEmbeddedMode()) {
-            msgpopup.continueButton = false
-            msgpopup.quitButton = true
+            embeddedFinishedPopup.open()
         }
-
-        msgpopup.open()
+        else {
+            msgpopup.title = qsTr("Write Successful");
+            if (osbutton.text === qsTr("Erase")) {
+                msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text); 
+            } else {
+                msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text); 
+            }
+            msgpopup.open();
+        }
     }
 
     function onFileSelected(file) {

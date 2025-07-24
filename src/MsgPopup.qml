@@ -21,12 +21,13 @@ ImPopup {
     property bool quitButton: false
     property bool yesButton: false
     property bool noButton: false
+    property bool rebootButton: false
 
     height: msgpopupbody.implicitHeight+150
 
     // Provide implementation for the base popup's navigation functions
     getNextFocusableElement: function(startElement) {
-        var focusableItems = [noButton, yesButton, continueButton, quitButton, root.closeButton].filter(function(item) {
+        var focusableItems = [noButton, yesButton, continueButton, quitButton, rebootButton, root.closeButton].filter(function(item) {
             return item.visible && item.enabled
         })
 
@@ -40,7 +41,7 @@ ImPopup {
     }
 
     getPreviousFocusableElement: function(startElement) {
-        var focusableItems = [noButton, yesButton, continueButton, quitButton, root.closeButton].filter(function(item) {
+        var focusableItems = [noButton, yesButton, continueButton, quitButton, rebootButton, root.closeButton].filter(function(item) {
             return item.visible && item.enabled
         })
 
@@ -105,6 +106,16 @@ ImPopup {
                 root.close()
             }
             visible: root.continueButton
+        }
+
+        ImButtonRed {
+            id: rebootButton
+            text: qsTr("REBOOT")
+            onClicked: {
+                root.close()
+                root.reboot()
+            }
+            visible: root.rebootButton
         }
 
         ImButtonRed {
