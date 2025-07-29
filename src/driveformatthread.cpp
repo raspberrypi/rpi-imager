@@ -18,6 +18,8 @@
 
 #ifdef Q_OS_WIN
 #include <regex>
+#include <chrono>
+#include "windows/diskpart_util.h"
 #endif
 
 DriveFormatThread::DriveFormatThread(const QByteArray &device, QObject *parent)
@@ -71,57 +73,13 @@ void DriveFormatThread::run()
     // Windows-specific disk preparation
     emit preparationStatusUpdate(tr("Preparing disk for formatting..."));
     
-    std::regex windriveregex("\\\\\\\\.\\\\PHYSICALDRIVE([0-9]+)", std::regex_constants::icase);
-    std::cmatch m;
-
-    if (std::regex_match(_device.constData(), m, windriveregex))
+    // Clean disk with diskpart utility (standardized to 60s timeout with 3 retries, always unmount volumes)
+    emit preparationStatusUpdate(tr("Cleaning disk..."));
+    auto result = DiskpartUtil::cleanDisk(_device, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::UnmountFirst);
+    if (!result.success)
     {
-        QByteArray diskNumber = QByteArray::fromStdString(m[1]);
-        
-        // Check for mounted volumes
-        auto l = Drivelist::ListStorageDevices();
-        QByteArray devlower = _device.toLower();
-        bool hasVolumes = false;
-        
-        for (auto i : l)
-        {
-            if (QByteArray::fromStdString(i.device).toLower() == devlower)
-            {
-                hasVolumes = !i.mountpoints.empty();
-                break;
-            }
-        }
-
-        // Clean disk with diskpart (required for mounted volumes, safe for clean disks)
-        emit preparationStatusUpdate(tr("Cleaning disk..."));
-        QProcess diskpartProcess;
-        diskpartProcess.start("diskpart", QStringList());
-        if (!diskpartProcess.waitForStarted(5000))
-        {
-            emit error(tr("Failed to start disk cleanup utility. Please ensure you have administrator privileges."));
-            return;
-        }
-        
-        QString script = QString("select disk %1\nclean\nrescan\n").arg(diskNumber);
-        diskpartProcess.write(script.toLatin1());
-        diskpartProcess.closeWriteChannel();
-        
-        if (!diskpartProcess.waitForFinished(60000))
-        {
-            diskpartProcess.kill();
-            emit error(tr("Disk cleaning operation timed out. The disk may be in use by another application."));
-            return;
-        }
-        
-        if (diskpartProcess.exitCode() != 0)
-        {
-            QString errorOutput = QString(diskpartProcess.readAllStandardError());
-            emit error(tr("Failed to clean disk. Error: %1").arg(errorOutput.isEmpty() ? tr("Unknown error") : errorOutput));
-            return;
-        }
-        
-        // Brief pause to let system settle
-        QThread::msleep(1000);
+        emit error(result.errorMessage);
+        return;
     }
 #endif
 

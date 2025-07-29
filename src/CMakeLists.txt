@@ -590,6 +590,8 @@ elseif (WIN32)
         dependencies/drivelist/src/windows/list.cpp
         windows/winfile.cpp
         windows/winfile.h
+        windows/diskpart_util.cpp
+        windows/diskpart_util.h
         windows/winwlancredentials.h
         windows/winwlancredentials.cpp
         windows/file_operations_windows.cpp
