@@ -28,7 +28,9 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <chrono>
 #include "windows/winfile.h"
+#include "windows/diskpart_util.h"
 #endif
 
 #ifdef Q_OS_LINUX
@@ -195,51 +197,11 @@ bool DownloadThread::_openAndPrepareDevice()
                 }
             }
 
-            // Now run diskpart with retry logic
-            bool diskpartSuccess = false;
-            for (int attempt = 1; attempt <= 3; attempt++)
+            // Clean disk with diskpart utility (standardized behavior: 60s timeout, 3 retries, always unmount volumes)
+            auto result = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::UnmountFirst);
+            if (!result.success)
             {
-                qDebug() << "Running diskpart attempt" << attempt;
-                
-                QProcess proc;
-                proc.start("diskpart", QStringList());
-                if (!proc.waitForStarted(5000))
-                {
-                    qDebug() << "Failed to start diskpart";
-                    continue;
-                }
-                
-                proc.write("select disk "+_nr+"\r\n"
-                                "clean\r\n"
-                                "rescan\r\n");
-                proc.closeWriteChannel();
-                
-                if (!proc.waitForFinished(30000)) // 30 second timeout
-                {
-                    qDebug() << "diskpart timed out";
-                    proc.kill();
-                    continue;
-                }
-
-                if (proc.exitCode() == 0)
-                {
-                    diskpartSuccess = true;
-                    qDebug() << "diskpart succeeded on attempt" << attempt;
-                    break;
-                }
-                else
-                {
-                    QString errorOutput = QString(proc.readAllStandardError());
-                    qDebug() << "diskpart failed on attempt" << attempt << "with error:" << errorOutput;
-                    
-                    // Wait before retry
-                    QThread::msleep(1000 * attempt); // Progressive delay
-                }
-            }
-
-            if (!diskpartSuccess)
-            {
-                emit error(tr("Failed to clean disk after 3 attempts. Please ensure the disk is not in use by other applications and try again."));
+                emit error(result.errorMessage);
                 return false;
             }
         }
