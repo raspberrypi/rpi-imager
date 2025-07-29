@@ -30,6 +30,7 @@ Popup {
 
     signal yes()
     signal no()
+    signal reboot()
 
     background: Rectangle {
     color: Style.listViewRowBackgroundColor

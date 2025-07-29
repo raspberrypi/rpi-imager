@@ -182,6 +182,7 @@ public:
     void replaceTranslator(QTranslator *trans);
     QString detectPiKeyboard();
     Q_INVOKABLE bool hasMouse();
+    Q_INVOKABLE void reboot();
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
