@@ -717,6 +717,7 @@ Window {
                 addFirstRun("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then")
                 addFirstRun("   /usr/lib/raspberrypi-sys-mods/imager_custom enable_ssh")
                 addFirstRun("else")
+                addFirstRun("   echo 'PasswordAuthentication yes' >>/etc/ssh/sshd_config")
                 addFirstRun("   systemctl enable ssh")
                 addFirstRun("fi")
             }
@@ -902,16 +903,20 @@ Window {
             generalTab.fieldHostname.text = settings.hostname
             generalTab.chkHostname.checked = true
         }
-        if ('sshUserPassword' in settings) {
+        // Handle SSH settings - ensure mutual exclusivity between password and key authentication
+        var hasPasswordSettings = 'sshUserPassword' in settings
+        var hasKeySettings = 'sshAuthorizedKeys' in settings
+        
+        if (hasPasswordSettings) {
             generalTab.fieldUserPassword.text = settings.sshUserPassword
             generalTab.fieldUserPassword.alreadyCrypted = true
             generalTab.chkSetUser.checked = true
             if (!('sshEnabled' in settings) || settings.sshEnabled === "true" || settings.sshEnabled === true) {
                 remoteAccessTab.chkSSH.checked = true
-                remoteAccessTab.radioPasswordAuthentication.checked = true
             }
         }
-        if ('sshAuthorizedKeys' in settings) {
+        
+        if (hasKeySettings) {
             var possiblePublicKeys = settings.sshAuthorizedKeys.split('\n')
             // Clear existing keys first
             remoteAccessTab.publicKeyModel.clear()
@@ -922,9 +927,16 @@ Window {
                     remoteAccessTab.publicKeyModel.append({publicKeyField: pkitem})
                 }
             }
-
-            remoteAccessTab.radioPubKeyAuthentication.checked = true
             remoteAccessTab.chkSSH.checked = true
+        }
+        
+        // Set authentication method - prioritize key authentication if both are present
+        if (hasKeySettings) {
+            remoteAccessTab.radioPubKeyAuthentication.checked = true
+            remoteAccessTab.radioPasswordAuthentication.checked = false
+        } else if (hasPasswordSettings) {
+            remoteAccessTab.radioPasswordAuthentication.checked = true
+            remoteAccessTab.radioPubKeyAuthentication.checked = false
         }
         
         if ('sshUserName' in settings) {
@@ -991,6 +1003,7 @@ Window {
         generalTab.fieldHostname.text = "raspberrypi"
         generalTab.fieldUserName.text = imageWriter.getCurrentUser()
         generalTab.fieldUserPassword.clear()
+        // Clear SSH authentication state - default to password authentication
         remoteAccessTab.radioPubKeyAuthentication.checked = false
         remoteAccessTab.radioPasswordAuthentication.checked = false
         remoteAccessTab.publicKeyModel.clear()

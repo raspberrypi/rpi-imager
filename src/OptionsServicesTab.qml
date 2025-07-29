@@ -28,6 +28,12 @@ OptionsTabBase {
     required property TextField fieldUserName
     required property TextField fieldUserPassword
 
+    // ButtonGroup to ensure SSH authentication radio buttons are mutually exclusive
+    ButtonGroup {
+        id: sshAuthButtonGroup
+        buttons: [radioPasswordAuthentication, radioPubKeyAuthentication]
+    }
+
     // Unified SSH key validation function
     function isValidSSHKey(keyText) {
         if (!keyText || keyText.trim().length === 0) return true // Empty is valid
