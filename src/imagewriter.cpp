@@ -40,6 +40,7 @@
 #include <QPasswordDigestor>
 #include <QVersionNumber>
 #include <QCryptographicHash>
+#include <QDesktopServices>
 #include <stdlib.h>
 #ifndef QT_NO_WIDGETS
 #include <QFileDialog>
@@ -1765,4 +1766,40 @@ void ImageWriter::reboot()
 {
     qDebug() << "Rebooting system.";
     system("reboot");
+}
+
+void ImageWriter::openUrl(const QUrl &url)
+{
+    qDebug() << "Opening URL:" << url.toString();
+    
+    bool success = false;
+    
+#ifdef Q_OS_LINUX
+    // Use xdg-open on Linux (including AppImage environments)
+    int result = QProcess::execute("xdg-open", QStringList() << url.toString());
+    success = (result == 0);
+    if (!success) {
+        qWarning() << "xdg-open failed with exit code:" << result;
+    }
+#elif defined(Q_OS_DARWIN)
+    // Use open on macOS  
+    int result = QProcess::execute("open", QStringList() << url.toString());
+    success = (result == 0);
+    if (!success) {
+        qWarning() << "open failed with exit code:" << result;
+    }
+#elif defined(Q_OS_WIN)
+    // Use start on Windows
+    int result = QProcess::execute("cmd", QStringList() << "/c" << "start" << url.toString());
+    success = (result == 0);
+    if (!success) {
+        qWarning() << "cmd /c start failed with exit code:" << result;
+    }
+#endif
+
+    // Fallback to Qt's method if platform command failed or platform is unsupported
+    if (!success) {
+        qDebug() << "Falling back to QDesktopServices::openUrl";
+        QDesktopServices::openUrl(url);
+    }
 }

@@ -183,6 +183,7 @@ public:
     QString detectPiKeyboard();
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
+    Q_INVOKABLE void openUrl(const QUrl &url);
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */

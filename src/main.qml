@@ -780,7 +780,7 @@ ApplicationWindow {
         title: qsTr("Update available")
         text: qsTr("There is a newer version of Imager available.<br>Would you like to visit the website to download it?")
         onYes: {
-            Qt.openUrlExternally(url)
+            window.imageWriter.openUrl(url)
         }
     }
 
