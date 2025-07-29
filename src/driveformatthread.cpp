@@ -75,10 +75,10 @@ void DriveFormatThread::run()
     
     // Clean disk with diskpart utility (standardized to 60s timeout with 3 retries, always unmount volumes)
     emit preparationStatusUpdate(tr("Cleaning disk..."));
-    auto result = DiskpartUtil::cleanDisk(_device, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::UnmountFirst);
-    if (!result.success)
+    auto diskpartResult = DiskpartUtil::cleanDisk(_device, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::UnmountFirst);
+    if (!diskpartResult.success)
     {
-        emit error(result.errorMessage);
+        emit error(diskpartResult.errorMessage);
         return;
     }
 #endif
@@ -100,10 +100,10 @@ void DriveFormatThread::run()
 
     // Use cross-platform disk formatter
     rpi_imager::DiskFormatter formatter;
-    auto result = formatter.FormatDrive(_device.toStdString());
+    auto formatResult = formatter.FormatDrive(_device.toStdString());
 
-    if (!result) {
-        emit error(formatErrorToString(result.error()));
+    if (!formatResult) {
+        emit error(formatErrorToString(formatResult.error()));
     } else {
         qDebug() << "Cross-platform disk formatter succeeded";
         emit success();
