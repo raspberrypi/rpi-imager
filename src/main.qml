@@ -560,6 +560,24 @@ ApplicationWindow {
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10
 
+                            delegate: ItemDelegate {
+                                width: parent.width
+                                height: 30
+
+                                contentItem: Text {
+                                    text: modelData
+                                    font.pixelSize: 16
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 10
+                                    color: Style.textDescriptionColor
+                                }
+
+                                background: Rectangle {
+                                    id: bgrect
+                                    color: parent.hovered ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
+                                }
+                            }
+
                             Keys.onPressed: (event) => {
                                 if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
                                     window.getPreviousFocusableElement(languageCombo).forceActiveFocus()
@@ -595,6 +613,23 @@ ApplicationWindow {
                             Layout.bottomMargin: 10
                             Layout.rightMargin: 30
 
+                            delegate: ItemDelegate {
+                                width: parent.width
+                                height: 30
+
+                                contentItem: Text {
+                                    text: modelData
+                                    font.pixelSize: 16
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 10
+                                    color: Style.textDescriptionColor
+                                }
+
+                                background: Rectangle {
+                                    id: bgrect
+                                    color: parent.hovered ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
+                                }
+                            }
                             Keys.onPressed: (event) => {
                                 if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && event.modifiers & Qt.ShiftModifier)) {
                                     window.getPreviousFocusableElement(keyboardCombo).forceActiveFocus()
@@ -754,6 +789,9 @@ ApplicationWindow {
         minimumWidth: 450
         minimumHeight: 400
 
+        x: window.x + (window.width - width) / 2
+        y: window.y + (window.height - height) / 2
+    
         imageWriter: window.imageWriter
 
         onSaveSettingsSignal: (settings) => {
@@ -866,7 +904,16 @@ ApplicationWindow {
     }
 
     function onOsListPrepared() {
+        imageWriter.createHardwareTags();
         ospopup.fetchOSlist()
+        let hardwareTag = window.imageWriter.getHardwareName();
+        console.log(hardwareTag);
+        if (window.imageWriter.isEmbeddedMode() && hardwareTag !== ""){
+                // Limit the hardware selection button to only the specified device
+                text0.text = "Hardware Type Detected";
+                hwbutton.enabled = false
+                hwbutton.text = hardwareTag;
+        }
     }
 
     function resetWriteButton() {
@@ -899,13 +946,13 @@ ApplicationWindow {
             embeddedFinishedPopup.open()
         }
         else {
-            msgpopup.title = qsTr("Write Successful");
+            msgpopup.title = qsTr("Write Successful")
             if (osbutton.text === qsTr("Erase")) {
-                msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text); 
+                msgpopup.text = qsTr("<b>%1</b> has been erased<br><br>You can now remove the SD card from the reader").arg(dstbutton.text)
             } else {
-                msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text); 
+                msgpopup.text = qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You can now remove the SD card from the reader").arg(osbutton.text).arg(dstbutton.text)
             }
-            msgpopup.open();
+            msgpopup.open()
         }
     }
 
