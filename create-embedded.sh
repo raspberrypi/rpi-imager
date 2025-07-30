@@ -321,6 +321,14 @@ cp src/fonts/DejaVuSans-Bold.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
 cp src/fonts/FreeSans.ttf "$APPDIR/usr/share/fonts/truetype/freefont"
 cp src/fonts/DroidSansFallbackFull.ttf "$APPDIR/usr/share/fonts/truetype/droid"
 
+mkdir -p "$APPDIR/usr/share/fonts/truetype/dejavu"
+mkdir -p "$APPDIR/usr/share/fonts/truetype/freefont"
+mkdir -p "$APPDIR/usr/share/fonts/truetype/droid"
+cp src/fonts/DejaVuSans.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
+cp src/fonts/DejaVuSans-Bold.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
+cp src/fonts/FreeSans.ttf "$APPDIR/usr/share/fonts/truetype/freefont"
+cp src/fonts/DroidSansFallbackFull.ttf "$APPDIR/usr/share/fonts/truetype/droid"
+
 # Copy QML components
 if [ -d "$QT_DIR/qml" ]; then
     mkdir -p "$APPDIR/usr/qml"
