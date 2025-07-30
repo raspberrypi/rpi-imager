@@ -222,6 +222,50 @@ if [ "$CLEAN_BUILD" -eq 1 ]; then
     mkdir -p "$BUILD_DIR"
 fi
 
+if [ -d "$BASE_DIR/icu/icu4c/source/lib" ]; then
+    echo "ICU already built"
+else
+    echo "Building ICU..."
+
+    cd "$BASE_DIR"
+    echo "Building custom ICU..."
+    # Compile Languages List
+    LANG_DIR="$BASE_DIR/src/i18n"
+
+    pushd $LANG_DIR
+    LANGUAGES=($(find . -maxdepth 1 -name "*.ts" | grep -oP 'rpi-imager_\K[^.]+' | sort -u))
+
+    JSON_INCLUDELIST=""
+    for lang in "${LANGUAGES[@]}"; do
+        if [[ -z "$JSON_INCLUDELIST" ]]; then
+            JSON_INCLUDELIST="\"$lang\""
+        else
+            JSON_INCLUDELIST="${JSON_INCLUDELIST}, \"$lang\""
+        fi
+    done
+    popd
+    cat << EOF > "$BASE_DIR/language_filters.json"
+    {
+    "localeFilter": {
+        "filterType": "language",
+        "includelist": [
+        $JSON_INCLUDELIST
+        ]
+    }
+    }
+EOF
+    echo "Language filters: $JSON_INCLUDELIST"
+
+    git clone https://github.com/unicode-org/icu.git
+    cd "$BASE_DIR/icu/icu4c/source"
+    git checkout release-72-1
+    rm -rf data
+    wget https://github.com/unicode-org/icu/releases/download/release-72-1/icu4c-72_1-data.zip
+    unzip icu4c-72_1-data.zip
+    ICU_DATA_FILTER_FILE="$BASE_DIR/language_filters.json" ./runConfigureICU Linux
+    make -j"$CORES"
+fi
+
 # Configure and build Qt
 cd "$BASE_DIR"
 
@@ -238,6 +282,9 @@ CONFIG_OPTS=(
     -prefix "$PREFIX"
     -opensource
     -confirm-license
+    -no-glib
+    -optimize-size
+    -release
     -make libs
     -skip qt3d
     -skip qtandroidextras
@@ -290,6 +337,7 @@ CONFIG_OPTS+=(
         --
         -DQT_BUILD_TESTS=OFF
         -DQT_BUILD_EXAMPLES="${BUILD_EXAMPLES}"
+        -DICU_ROOT="$BASE_DIR/icu/icu4c/source/lib"
 )
 
 # Run the configure script with verbose output if requested
