@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/i18n">
+        @QM_FILES_FOR_QRC@
+    </qresource>
+</RCC>

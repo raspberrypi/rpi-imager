@@ -310,6 +310,7 @@ cp "$QT_DIR/qml/QtQuick/Controls/Basic/impl/libqtquickcontrols2basicstyleimplplu
 cp "$QT_DIR/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Basic/" 2>/dev/null || true
 cp "$QT_DIR/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Material/" 2>/dev/null || true
 
+cp "$PWD/icu/icu4c/source/lib/libicudata.so.72" "$APPDIR/usr/lib/libicudata.so.72"
 
 # Copy QML components
 if [ -d "$QT_DIR/qml" ]; then
@@ -355,7 +356,8 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         --exclude-library="libXext*" \
         --exclude-library="libLLVM*" \
         --exclude-library="libgallium*" \
-        --exclude-library="libXrender*"
+        --exclude-library="libXrender*" \
+        --exclude-library="libicudata*"
     
     # Rename the output file
     for appimage in *.AppImage; do

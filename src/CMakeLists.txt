@@ -673,10 +673,27 @@ endif()
 # Find all translation files automatically
 file(GLOB TRANSLATIONS CONFIGURE_DEPENDS "i18n/*.ts")
 
-#qt6_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TRANSLATIONS})
-qt_add_translation(QM_FILES  ${TRANSLATIONS})
-configure_file(i18n/translations.qrc "${CMAKE_CURRENT_BINARY_DIR}" COPYONLY)
-set(SOURCES ${SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/translations.qrc ${QM_FILES})
+# Embedded mode does not have support for Korean
+if (BUILD_EMBEDDED)
+    list(REMOVE_ITEM TRANSLATIONS "${CMAKE_CURRENT_SOURCE_DIR}/i18n/rpi-imager_ko.ts")
+endif()
+qt_add_translation(QM_FILES ${TRANSLATIONS})
+
+# Auto Generate translations.qrc
+set(QRC_FILE_ENTRIES "")
+foreach(qm_file IN LISTS QM_FILES)
+    get_filename_component(qm_basename "${qm_file}" NAME)
+    list(APPEND QRC_FILE_ENTRIES "        <file>${qm_basename}</file>")
+endforeach()
+string(JOIN "\n" QM_FILES_FOR_QRC ${QRC_FILE_ENTRIES})
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/i18n/translations.qrc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/translations.qrc"
+    @ONLY
+)
+
+set(SOURCES ${SOURCES} "${CMAKE_CURRENT_BINARY_DIR}/translations.qrc" ${QM_FILES})
 
 # Create an rpi-imager_lupdate target
 qt_add_lupdate(TS_FILES ${TRANSLATIONS} SOURCE_TARGETS ${PROJECT_NAME} OPTIONS -no-obsolete -locations none)
