@@ -13,6 +13,7 @@
 #include "imagewriter.h"
 #include "networkaccessmanagerfactory.h"
 #include "cli.h"
+#include "platformquirks.h"
 #include <QMessageLogContext>
 #include <QQuickWindow>
 #include <QTranslator>
@@ -164,6 +165,9 @@ int main(int argc, char *argv[])
     // See https://www.qt.io/blog/material-3-changes-in-qt-quick-controls
     qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
 #endif
+
+    // Apply platform-specific quirks and workarounds
+    PlatformQuirks::applyQuirks();
 
 #ifdef QT_NO_WIDGETS
     if ( !handleDri() )

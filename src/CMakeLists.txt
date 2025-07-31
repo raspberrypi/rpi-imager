@@ -524,7 +524,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
     downloadthread.h downloadextractthread.h localfileextractthread.h downloadstatstelemetry.h dependencies/mountutils/src/mountutils.hpp dependencies/sha256crypt/sha256crypt.h
     hwlistmodel.h
     oslistmodel.h
-    disk_formatter.h file_operations.h
+    disk_formatter.h file_operations.h platformquirks.h
 )
 
 # Add dependencies
@@ -541,6 +541,7 @@ if (APPLE)
         dependencies/drivelist/src/darwin/REDiskList.m
         mac/file_operations_macos.cpp
         mac/buffer_optimization_macos.cpp
+        mac/platformquirks_macos.cpp
     )
     set(DEPENDENCIES  icons/rpi-imager.icns)
     enable_language(OBJC C)
@@ -556,6 +557,7 @@ elseif (UNIX)
         linux/acceleratedcryptographichash_gnutls.cpp
         linux/file_operations_linux.cpp
         linux/buffer_optimization_linux.cpp
+        linux/platformquirks_linux.cpp
     )
     set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
     set(DEPENDENCIES "")
@@ -596,12 +598,13 @@ elseif (WIN32)
         windows/winwlancredentials.cpp
         windows/file_operations_windows.cpp
         windows/buffer_optimization_windows.cpp
+        windows/platformquirks_windows.cpp
     )
     set(DEPENDENCIES
         windows/rpi-imager.rc
         wlanapi_delayed.lib
     )
-    set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll)
+    set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll ole32 oleaut32 wbemuuid)
 
 endif()
 
