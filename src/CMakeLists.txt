@@ -676,6 +676,10 @@ file(GLOB TRANSLATIONS CONFIGURE_DEPENDS "i18n/*.ts")
 # Embedded mode does not have support for Korean
 if (BUILD_EMBEDDED)
     list(REMOVE_ITEM TRANSLATIONS "${CMAKE_CURRENT_SOURCE_DIR}/i18n/rpi-imager_ko.ts")
+    list(REMOVE_ITEM TRANSLATIONS "${CMAKE_CURRENT_SOURCE_DIR}/i18n/rpi-imager_bn.ts")
+    list(REMOVE_ITEM TRANSLATIONS "${CMAKE_CURRENT_SOURCE_DIR}/i18n/rpi-imager_ja.ts")
+    list(REMOVE_ITEM TRANSLATIONS "${CMAKE_CURRENT_SOURCE_DIR}/i18n/rpi-imager_zh.ts")
+    list(REMOVE_ITEM TRANSLATIONS "${CMAKE_CURRENT_SOURCE_DIR}/i18n/rpi-imager_zh-TW.ts")
 endif()
 qt_add_translation(QM_FILES ${TRANSLATIONS})
 

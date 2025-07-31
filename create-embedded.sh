@@ -264,7 +264,7 @@ export QT_QUICK_BACKEND=software
 export QT_QPA_FB_DRM=/dev/dri/card1
 
 # Logging (can be disabled in production)
-export QT_LOGGING_RULES="*.debug=true"
+export QT_LOGGING_RULES="*.debug=false"
 
 exec "${HERE}/usr/bin/rpi-imager" "$@"
 EOF
@@ -311,6 +311,15 @@ cp "$QT_DIR/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so" "
 cp "$QT_DIR/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Material/" 2>/dev/null || true
 
 cp "$PWD/icu/icu4c/source/lib/libicudata.so.72" "$APPDIR/usr/lib/libicudata.so.72"
+
+mkdir -p "$APPDIR/usr/share/fonts/truetype/dejavu"
+mkdir -p "$APPDIR/usr/share/fonts/truetype/freefont"
+mkdir -p "$APPDIR/usr/share/fonts/truetype/droid"
+
+cp src/fonts/DejaVuSans.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
+cp src/fonts/DejaVuSans-Bold.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
+cp src/fonts/FreeSans.ttf "$APPDIR/usr/share/fonts/truetype/freefont"
+cp src/fonts/DroidSansFallbackFull.ttf "$APPDIR/usr/share/fonts/truetype/droid"
 
 # Copy QML components
 if [ -d "$QT_DIR/qml" ]; then

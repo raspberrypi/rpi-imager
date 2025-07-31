@@ -15,10 +15,12 @@ Item {
     readonly property color buttonBackgroundColor: "#ffffff"
     readonly property color buttonForegroundColor: mainBackgroundColor
     readonly property color buttonFocusedBackgroundColor: "#d1dcfb"
+    readonly property color buttonHoveredBackgroundColor: "#f2f2f2"
 
     readonly property color button2BackgroundColor: mainBackgroundColor
     readonly property color button2ForegroundColor: "#ffffff"
     readonly property color button2FocusedBackgroundColor: "#32a0d7"
+    readonly property color button2HoveredBackgroundColor: "#b71f4d"
 
     readonly property color titleBackgroundColor: "#f5f5f5"
     readonly property color titleSeparatorColor: "#afafaf"

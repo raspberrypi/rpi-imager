@@ -12,7 +12,7 @@ Button {
     font.capitalization: Font.AllUppercase
 
     background: Rectangle {
-        color: parent.enabled ? (parent.activeFocus ? Style.progressBarBackgroundColor : (parent.hovered ? Style.buttonFocusedBackgroundColor : Style.mainBackgroundColor)) : Qt.rgba(0, 0, 0, 0.1)
+        color: parent.enabled ? (parent.activeFocus ? Style.progressBarBackgroundColor : (parent.hovered ? Style.button2HoveredBackgroundColor : Style.mainBackgroundColor)) : Qt.rgba(0, 0, 0, 0.1)
         radius: 4
     }
 
