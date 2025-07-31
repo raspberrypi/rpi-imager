@@ -482,33 +482,27 @@ OptionsTabBase {
             Item {
                 Layout.fillWidth: true
             }
-            ComboBox {
+            ImComboBox {
                 id: fieldWifiCountry
                 objectName: "fieldWifiCountry"
-                selectTextByMouse: true
                 enabled: chkWifi.checked
-                editable: true
-                property bool indicateError: false
+                indicateError: false
                 
-                // Handle explicit navigation in both directions
+                // Handle tab navigation
                 Keys.onPressed: (event) => {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
-                        // Navigate to locale checkbox
                         chkLocale.forceActiveFocus()
                         event.accepted = true
+                        return
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                        // Go back through WiFi fields if enabled
                         if (chkWifi.checked) {
                             chkWifiSSIDHidden.forceActiveFocus()
                         } else {
                             chkWifi.forceActiveFocus()
                         }
                         event.accepted = true
+                        return
                     }
-                }
-                
-                onEditTextChanged: {
-                    validateCountrySelection()
                 }
                 
                 onCurrentIndexChanged: {
@@ -518,8 +512,7 @@ OptionsTabBase {
                 function validateCountrySelection() {
                     // Country is mandatory when Wi-Fi is enabled
                     if (chkWifi.checked) {
-                        var currentCountry = editText.trim()
-                        var hasValidCountry = currentCountry.length > 0 && currentCountry !== ""
+                        var hasValidCountry = currentIndex >= 0 && currentIndex < model.length
                         indicateError = !hasValidCountry
                     } else {
                         indicateError = false
@@ -567,22 +560,22 @@ OptionsTabBase {
             Item {
                 Layout.fillWidth: true
             }
-            ComboBox {
-                enabled: chkLocale.checked
-                selectTextByMouse: true
+            ImComboBox {
                 id: fieldTimezone
                 objectName: "fieldTimezone"
-                editable: true
+                enabled: chkLocale.checked
                 Layout.minimumWidth: 200
                 
-                // Handle explicit navigation
+                // Handle tab navigation
                 Keys.onPressed: (event) => {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
                         fieldKeyboardLayout.forceActiveFocus()
                         event.accepted = true
+                        return
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         chkLocale.forceActiveFocus()
                         event.accepted = true
+                        return
                     }
                 }
             }
@@ -598,14 +591,12 @@ OptionsTabBase {
             Item {
                 Layout.fillWidth: true
             }
-            ComboBox {
+            ImComboBox {
                 id: fieldKeyboardLayout
                 objectName: "fieldKeyboardLayout"
                 enabled: chkLocale.checked
                 model: root.optionsPopup.imageWriter.getKeymapLayoutList()
                 Layout.minimumWidth: 200
-                selectTextByMouse: true
-                editable: true
 
                 Keys.onPressed: (event) => {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
@@ -613,6 +604,7 @@ OptionsTabBase {
                             root.optionsPopup.navigateToButtons()
                         }
                         event.accepted = true
+                        return
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Go to timezone field if locale enabled, otherwise locale checkbox
                         if (chkLocale.checked) {
@@ -621,6 +613,7 @@ OptionsTabBase {
                             chkLocale.forceActiveFocus()
                         }
                         event.accepted = true
+                        return
                     }
                 }
             }

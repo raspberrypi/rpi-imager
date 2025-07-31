@@ -747,6 +747,7 @@ set(IMAGER_QML_FILES
     qmlcomponents/ImButtonRed.qml
     qmlcomponents/ImCheckBox.qml
     qmlcomponents/ImCloseButton.qml
+    qmlcomponents/ImComboBox.qml
     qmlcomponents/ImPopup.qml
     qmlcomponents/ImRadioButton.qml
     MainPopupBase.qml
