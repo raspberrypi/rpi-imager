@@ -503,19 +503,8 @@ Window {
             remoteAccessTab.chkSSH.checked = true
         }
         // Attempt to insert the default public key, but avoid clashes.
-        {
-            var insertDefaultKey = true
-            var defaultKey = imageWriter.getDefaultPubKey()
-            for (var i = 0; i<remoteAccessTab.publicKeyModel.count; i++) {
-                if (remoteAccessTab.publicKeyModel.get(i)["publicKeyField"] == defaultKey) {
-                    insertDefaultKey = false
-                    break;
-                }
-            }
-            if (insertDefaultKey) {
-                remoteAccessTab.publicKeyModel.append({publicKeyField: defaultKey})
-            }
-        }
+        // Use improved duplicate detection
+        insertDefaultKeyIfNotExists()
 
         if ('sshUserName' in settings) {
             generalTab.fieldUserName.text = settings.sshUserName
@@ -981,22 +970,36 @@ Window {
         
         // Attempt to insert the default public key, but avoid clashes.
         // This ensures the default key is available even when restoring settings
-        var insertDefaultKey = true
-        var defaultKey = imageWriter.getDefaultPubKey()
-        if (defaultKey && defaultKey.length > 0) {
-            for (var i = 0; i < remoteAccessTab.publicKeyModel.count; i++) {
-                if (remoteAccessTab.publicKeyModel.get(i)["publicKeyField"] == defaultKey) {
-                    insertDefaultKey = false
-                    break;
-                }
-            }
-            if (insertDefaultKey) {
-                remoteAccessTab.publicKeyModel.append({publicKeyField: defaultKey})
-            }
-        }
+        insertDefaultKeyIfNotExists()
         
         // Force final ListView refresh after all keys (including default) are loaded
         remoteAccessTab.forceListViewRefresh()
+    }
+    
+    function insertDefaultKeyIfNotExists() {
+        // Improved function to add default key with better duplicate detection
+        var defaultKey = imageWriter.getDefaultPubKey()
+        if (!defaultKey || defaultKey.trim().length === 0) {
+            return // No default key available
+        }
+        
+        // Normalize the default key for comparison
+        var normalizedDefaultKey = defaultKey.trim()
+        
+        // Check if default key already exists with improved comparison
+        for (var i = 0; i < remoteAccessTab.publicKeyModel.count; i++) {
+            var existingKey = remoteAccessTab.publicKeyModel.get(i)["publicKeyField"]
+            if (existingKey) {
+                var normalizedExistingKey = existingKey.trim()
+                // Compare normalized keys to handle whitespace differences
+                if (normalizedExistingKey === normalizedDefaultKey) {
+                    return // Default key already exists
+                }
+            }
+        }
+        
+        // Default key doesn't exist, add it
+        remoteAccessTab.publicKeyModel.append({publicKeyField: normalizedDefaultKey})
     }
 
     function clearCustomizationFields()
@@ -1015,10 +1018,8 @@ Window {
         remoteAccessTab.publicKeyModel.clear()
         
         // Add default key if available (when clearing, we want to show the default key)
-        var defaultKey = imageWriter.getDefaultPubKey()
-        if (defaultKey && defaultKey.length > 0) {
-            remoteAccessTab.publicKeyModel.append({publicKeyField: defaultKey})
-        }
+        // Use the consolidated function to prevent duplicates
+        insertDefaultKeyIfNotExists()
         
         // Force ListView refresh after clearing and adding default key
         remoteAccessTab.forceListViewRefresh()
