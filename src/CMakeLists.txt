@@ -894,6 +894,21 @@ if (WIN32)
             @ONLY)
     endif()
 
+    # Configure the application manifest with version information
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.manifest.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.manifest"
+        @ONLY)
+        
+    # Copy the generated manifest to the windows directory for the .rc file to find
+    add_custom_command(TARGET ${PROJECT_NAME}
+        PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.manifest"
+            "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.manifest"
+        DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.manifest"
+        COMMENT "Copying generated manifest for resource compilation")
+
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
