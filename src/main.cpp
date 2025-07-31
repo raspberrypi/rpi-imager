@@ -32,6 +32,10 @@
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
 #endif
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <winnls.h>
+#endif
 
 static QTextStream cerr(stderr);
 
@@ -161,10 +165,6 @@ int main(int argc, char *argv[])
     qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
 #endif
 
-#ifdef Q_OS_WIN
-    // prefer ANGLE (DirectX) over desktop OpenGL
-    QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
-#endif
 #ifdef QT_NO_WIDGETS
     if ( !handleDri() )
         return 1;
@@ -180,6 +180,8 @@ int main(int argc, char *argv[])
     QLocale::Language l = QLocale::system().language();
     if (l == QLocale::AnyLanguage || l == QLocale::C)
         QLocale::setDefault(QLocale("en"));
+    
+    qDebug() << "System locale detected:" << QLocale::system().name();
 #else
     QApplication app(argc, argv);
 #endif
@@ -320,6 +322,24 @@ int main(int argc, char *argv[])
         }
 
         CFRelease(prefLangs);
+        QLocale::setDefault(QLocale(langcode));
+#elif defined(Q_OS_WIN)
+        // Use Windows API to get the actual UI language preference
+        // This fixes the issue where QLocale::system() returns wrong language
+        // when multiple language packs are installed
+        QString langcode = "en_US";
+        LANGID langId = GetUserDefaultUILanguage();
+        if (langId != 0)
+        {
+            WCHAR langName[LOCALE_NAME_MAX_LENGTH] = {0};
+            if (LCIDToLocaleName(MAKELCID(langId, SORT_DEFAULT), langName, 
+                                LOCALE_NAME_MAX_LENGTH, 0) != 0)
+            {
+                langcode = QString::fromWCharArray(langName);
+                langcode.replace('-', '_');
+                qDebug() << "Windows UI language:" << langcode;
+            }
+        }
         QLocale::setDefault(QLocale(langcode));
 #endif
 
