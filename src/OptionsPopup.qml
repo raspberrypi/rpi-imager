@@ -521,7 +521,9 @@ Window {
             generalTab.fieldWifiPassword.text = settings.wifiPassword
             generalTab.fieldWifiCountry.currentIndex = generalTab.fieldWifiCountry.find(settings.wifiCountry)
             if (generalTab.fieldWifiCountry.currentIndex == -1) {
-                generalTab.fieldWifiCountry.editText = settings.wifiCountry
+                // If country not found in list, log warning and skip setting
+                console.warn("Country not found in list:", settings.wifiCountry)
+                generalTab.fieldWifiCountry.currentIndex = -1
             }
             generalTab.chkWifi.checked = true
         } else {
@@ -547,14 +549,21 @@ Window {
         }
         var tzidx = generalTab.fieldTimezone.find(tz)
         if (tzidx === -1) {
-            generalTab.fieldTimezone.editText = tz
+            // If timezone not found in list, log warning and default to first item
+            console.warn("Timezone not found in list:", tz)
+            generalTab.fieldTimezone.currentIndex = 0 // Default to first timezone
         } else {
             generalTab.fieldTimezone.currentIndex = tzidx
         }
         if ('keyboardLayout' in settings) {
             generalTab.fieldKeyboardLayout.currentIndex = generalTab.fieldKeyboardLayout.find(settings.keyboardLayout)
             if (generalTab.fieldKeyboardLayout.currentIndex == -1) {
-                generalTab.fieldKeyboardLayout.editText = settings.keyboardLayout
+                // If keyboard layout not found, log warning and default to "us"
+                console.warn("Keyboard layout not found in list:", settings.keyboardLayout)
+                generalTab.fieldKeyboardLayout.currentIndex = generalTab.fieldKeyboardLayout.find("us")
+                if (generalTab.fieldKeyboardLayout.currentIndex == -1) {
+                    generalTab.fieldKeyboardLayout.currentIndex = 0 // Fallback to first item
+                }
             }
         } else {
             if (imageWriter.isEmbeddedMode())
@@ -947,7 +956,9 @@ Window {
             generalTab.fieldWifiPassword.text = settings.wifiPassword
             generalTab.fieldWifiCountry.currentIndex = generalTab.fieldWifiCountry.find(settings.wifiCountry)
             if (generalTab.fieldWifiCountry.currentIndex == -1) {
-                generalTab.fieldWifiCountry.editText = settings.wifiCountry
+                // If country not found in list, log warning and skip setting
+                console.warn("Country not found in list:", settings.wifiCountry)
+                generalTab.fieldWifiCountry.currentIndex = -1
             }
             generalTab.chkWifi.checked = true
         }
@@ -956,7 +967,9 @@ Window {
             generalTab.chkLocale.checked = true
             var tzidx = generalTab.fieldTimezone.find(settings.timezone)
             if (tzidx === -1) {
-                generalTab.fieldTimezone.editText = settings.timezone
+                // If timezone not found in list, log warning and default to first item
+                console.warn("Timezone not found in list:", settings.timezone)
+                generalTab.fieldTimezone.currentIndex = 0 // Default to first timezone
             } else {
                 generalTab.fieldTimezone.currentIndex = tzidx
             }
@@ -964,7 +977,12 @@ Window {
         if ('keyboardLayout' in settings) {
             generalTab.fieldKeyboardLayout.currentIndex = generalTab.fieldKeyboardLayout.find(settings.keyboardLayout)
             if (generalTab.fieldKeyboardLayout.currentIndex == -1) {
-                generalTab.fieldKeyboardLayout.editText = settings.keyboardLayout
+                // If keyboard layout not found, log warning and default to "us"
+                console.warn("Keyboard layout not found in list:", settings.keyboardLayout)
+                generalTab.fieldKeyboardLayout.currentIndex = generalTab.fieldKeyboardLayout.find("us")
+                if (generalTab.fieldKeyboardLayout.currentIndex == -1) {
+                    generalTab.fieldKeyboardLayout.currentIndex = 0 // Fallback to first item
+                }
             }
         }
         
