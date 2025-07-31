@@ -350,6 +350,12 @@ Window {
                     
                     popup.applySettings()
                     popup.saveSettings()
+                    
+                    // Save misc options (beep, eject, telemetry) to persistent storage
+                    imageWriter.setSetting("beep", optionsTab.beepEnabled)
+                    imageWriter.setSetting("eject", optionsTab.ejectEnabled)
+                    imageWriter.setSetting("telemetry", optionsTab.telemetryEnabled)
+                    
                     popup.changesAppliedInSession = true
                     popup.close()
                 }

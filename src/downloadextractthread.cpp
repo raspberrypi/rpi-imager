@@ -506,7 +506,10 @@ void DownloadExtractThread::extractMultiFileRun()
     // Give the filesystem a moment to settle after sync before ejecting
     QThread::msleep(500);
 
-    eject_disk(_filename.constData());
+    if (_ejectEnabled)
+    {
+        eject_disk(_filename.constData());
+    }
 }
 
 ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
