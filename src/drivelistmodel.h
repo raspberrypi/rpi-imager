@@ -30,6 +30,9 @@ public:
         deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole
     };
 
+signals:
+    void deviceRemoved(const QString &device);
+
 public slots:
     void processDriveList(std::vector<Drivelist::DeviceDescriptor> l);
 

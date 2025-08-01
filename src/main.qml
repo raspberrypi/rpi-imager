@@ -315,7 +315,7 @@ ApplicationWindow {
                         Layout.preferredWidth: 200
                         Layout.fillWidth: true
                         onClicked: {
-                            window.imageWriter.startDriveListPolling()
+                            // No need to start polling - it runs continuously in background
                             dstpopup.open()
                             dstpopup.dstlist.forceActiveFocus()
                         }
@@ -742,6 +742,14 @@ ApplicationWindow {
         title: qsTr("Warning")
         modal: true
         onYes: {
+            // Final validation check - device could have been removed while dialog was open
+            if (!window.imageWriter.readyToWrite()) {
+                msgpopup.title = qsTr("Storage device not available")
+                msgpopup.text = qsTr("The selected storage device is no longer available.<br>Please select a different storage device.")
+                msgpopup.open()
+                return
+            }
+            
             langbarRect.visible = false
             writebutton.visible = false
             writebutton.enabled = false
@@ -762,6 +770,14 @@ ApplicationWindow {
 
         function askForConfirmation()
         {
+            // Double-check that the selected drive is still valid before confirming
+            if (!window.imageWriter.readyToWrite()) {
+                msgpopup.title = qsTr("Storage device not available")
+                msgpopup.text = qsTr("The selected storage device is no longer available.<br>Please select a different storage device.")
+                msgpopup.open()
+                return
+            }
+            
             text = qsTr("All existing data on '%1' will be erased.<br>Are you sure you want to continue?").arg(dstbutton.text)
             open()
         }
@@ -1036,5 +1052,24 @@ ApplicationWindow {
     // Called from C++
     function fetchOSlist() {
         ospopup.fetchOSlist()
+    }
+
+    // Called from C++ when selected device is removed
+    function onSelectedDeviceRemoved() {
+        // Clear storage selection since selected device no longer exists
+        selectedStorageName = ""
+        imageWriter.setDst("")
+        
+        // Update write button state
+        writebutton.enabled = imageWriter.readyToWrite()
+        
+        // Close confirmation dialog if it's open - device is no longer available
+        if (confirmwritepopup.visible) {
+            confirmwritepopup.close()
+            // Show error message
+            msgpopup.title = qsTr("Storage device removed")
+            msgpopup.text = qsTr("The selected storage device was removed.<br>Please select a different storage device.")
+            msgpopup.open()
+        }
     }
 }
