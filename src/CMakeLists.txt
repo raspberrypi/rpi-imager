@@ -920,15 +920,14 @@ if (WIN32)
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND "${WINDEPLOYQT}" --no-translations --no-widgets --skip-plugin-types qmltooling --verbose 2 --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/rpi-imager.exe")
+        COMMAND "${WINDEPLOYQT}" --no-translations --no-widgets --skip-plugin-types qmltooling --exclude-plugins qtiff,qwebp,qgif --no-quickcontrols2fusion --no-quickcontrols2fusionstyleimpl --no-quickcontrols2universal --no-quickcontrols2universalstyleimpl --no-quickcontrols2imagine --no-quickcontrols2imaginestyleimpl --no-quickcontrols2fluentwinui3styleimpl --no-quickcontrols2windowsstyleimpl --verbose 2 --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/rpi-imager.exe")
 
-    # Remove excess files
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E remove
-            "${CMAKE_BINARY_DIR}/deploy/imageformats/qtiff.dll"
-            "${CMAKE_BINARY_DIR}/deploy/imageformats/qwebp.dll"
-            "${CMAKE_BINARY_DIR}/deploy/imageformats/qgif.dll")
+    # Note: All exclusions now handled via windeployqt flags:
+    # - Qt translations: --no-translations
+    # - QtWidgets: --no-widgets  
+    # - QML debugging tools: --skip-plugin-types qmltooling
+    # - Image format plugins: --exclude-plugins qtiff,qwebp,qgif (keeps qjpeg,qpng,qsvg)
+    # - QuickControls2 styles: --no-quickcontrols2* flags
 
 elseif(APPLE)
     find_library(Cocoa Cocoa)
@@ -1020,6 +1019,30 @@ elseif(APPLE)
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/PlugIns/qmltooling"
         COMMENT "Removing QML debugging tools if present"
+    )
+    
+    # Remove unused Qt Quick Controls 2 style libraries (size optimization)
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Fusion.framework"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Fusion.framework"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Universal.framework"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Universal.framework"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Imagine.framework"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Imagine.framework"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2FluentWinUI3.framework"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2FluentWinUI3.framework"
+        COMMENT "Removing unused QuickControls2 style frameworks if present"
+    )
+    
+    # Remove unused image format plugins (consistency with other platforms)
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove -f
+            "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqtiff.dylib"
+            "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqwebp.dylib"
+            "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqgif.dylib"
+        COMMENT "Removing unused image format plugins if present"
     )
 
     # Create explicit DMG target (similar to inno_installer on Windows)
