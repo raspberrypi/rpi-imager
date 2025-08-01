@@ -541,7 +541,7 @@ if (APPLE)
         dependencies/drivelist/src/darwin/REDiskList.m
         mac/file_operations_macos.cpp
         mac/buffer_optimization_macos.cpp
-        mac/platformquirks_macos.cpp
+        mac/platformquirks_macos.mm
         mac/nativefiledialog_macos.mm
     )
     set(DEPENDENCIES  icons/rpi-imager.icns)
@@ -1002,7 +1002,7 @@ elseif(APPLE)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Deploying Qt dependencies..."
-        COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite -no-translations
+        COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite
         COMMENT "Deploying Qt dependencies"
     )
     

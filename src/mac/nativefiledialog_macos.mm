@@ -6,7 +6,9 @@
 #include "../nativefiledialog.h"
 #include <QStandardPaths>
 #include <QDebug>
-#include <QMacAutoReleasePool>
+#include <QTimer>
+#include <QEventLoop>
+#include <QCoreApplication>
 #include <Cocoa/Cocoa.h>
 
 namespace {
@@ -22,15 +24,25 @@ QString convertQtFilterToMacOS(const QString &qtFilter)
     QStringList filters = qtFilter.split(";;");
     
     for (const QString &filter : filters) {
+        // Skip "All files (*)" entries as they don't contain specific extensions
+        QString lowerFilter = filter.toLower();
+        if (lowerFilter.contains("all files") && lowerFilter.contains("(*)")) {
+            continue;
+        }
+        
         QString extensions = filter.section('(', 1, 1).section(')', 0, 0);
         QStringList extList = extensions.split(" ", Qt::SkipEmptyParts);
         
         for (QString ext : extList) {
-            ext = ext.replace("*.", "");
-            if (!macFilter.isEmpty()) {
-                macFilter += ",";
+            if (ext.startsWith("*.")) {
+                ext = ext.mid(2); // Remove "*."
+                if (!ext.isEmpty()) {
+                    if (!macFilter.isEmpty()) {
+                        macFilter += ",";
+                    }
+                    macFilter += ext;
+                }
             }
-            macFilter += ext;
         }
     }
     
@@ -42,71 +54,97 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
                                            bool saveDialog)
 {
+    // Defer dialog presentation to avoid interfering with Qt QML object destruction
+    QString result;
+    QEventLoop loop;
     
-    QMacAutoReleasePool pool;
+    // Process events once to allow QML cleanup, then show dialog with minimal delay
+    QCoreApplication::processEvents();
     
-    NSString *nsTitle = title.isEmpty() ? nil : title.toNSString();
-    
-    // Convert initial directory
-    NSString *nsInitialDir = nil;
-    if (!initialDir.isEmpty()) {
-        nsInitialDir = initialDir.toNSString();
-    } else {
-        QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-        nsInitialDir = homeDir.toNSString();
-    }
-    
-    NSString *result = nil;
-    
-    if (saveDialog) {
-        NSSavePanel *panel = [NSSavePanel savePanel];
-        [panel setTitle:nsTitle];
+    // Use a very short timer to minimize delay while still avoiding Qt conflicts
+    QTimer::singleShot(1, [&]() {
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         
-        if (nsInitialDir) {
-            NSURL *dirUrl = [NSURL fileURLWithPath:nsInitialDir];
-            [panel setDirectoryURL:dirUrl];
+        NSString *nsTitle = title.isEmpty() ? nil : title.toNSString();
+        
+        // Convert initial directory
+        NSString *nsInitialDir = nil;
+        if (!initialDir.isEmpty()) {
+            nsInitialDir = initialDir.toNSString();
+        } else {
+            QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
+            nsInitialDir = homeDir.toNSString();
         }
         
-        // Convert and set file types if specified
-        if (!filter.isEmpty()) {
-            NSArray *fileTypes = convertQtFilterToMacOS(filter).toNSString().componentsSeparatedByString(@",");
-            [panel setAllowedFileTypes:fileTypes];
-        }
+        NSString *modalResult = nil;
         
-        NSInteger buttonPressed = [panel runModal];
-        if (buttonPressed == NSModalResponseOK) {
-            NSURL *url = [panel URL];
-            result = [url path];
-        }
-    } else {
-        NSOpenPanel *panel = [NSOpenPanel openPanel];
-        [panel setTitle:nsTitle];
-        [panel setCanChooseFiles:YES];
-        [panel setCanChooseDirectories:NO];
-        [panel setAllowsMultipleSelection:NO];
-        
-        if (nsInitialDir) {
-            NSURL *dirUrl = [NSURL fileURLWithPath:nsInitialDir];
-            [panel setDirectoryURL:dirUrl];
-        }
-        
-        // Convert and set file types if specified
-        if (!filter.isEmpty()) {
-            NSArray *fileTypes = convertQtFilterToMacOS(filter).toNSString().componentsSeparatedByString(@",");
-            [panel setAllowedFileTypes:fileTypes];
-        }
-        
-        NSInteger buttonPressed = [panel runModal];
-        if (buttonPressed == NSModalResponseOK) {
-            NSArray *urls = [panel URLs];
-            if ([urls count] > 0) {
-                NSURL *url = [urls objectAtIndex:0];
-                result = [url path];
+        if (saveDialog) {
+            NSSavePanel *panel = [NSSavePanel savePanel];
+            [panel setTitle:nsTitle];
+            
+            if (nsInitialDir) {
+                NSURL *dirUrl = [NSURL fileURLWithPath:nsInitialDir];
+                [panel setDirectoryURL:dirUrl];
+            }
+            
+            // Set file type filters - macOS will automatically add "All Files" option to the dropdown
+            if (!filter.isEmpty()) {
+                QString macFilter = convertQtFilterToMacOS(filter);
+                if (!macFilter.isEmpty()) {
+                    NSArray *fileTypes = [macFilter.toNSString() componentsSeparatedByString:@","];
+                    [panel setAllowedFileTypes:fileTypes];
+                    // macOS automatically provides "All Files" option in dropdown when allowedFileTypes is set
+                }
+            }
+            
+            NSInteger buttonPressed = [panel runModal];
+            if (buttonPressed == NSModalResponseOK) {
+                NSURL *url = [panel URL];
+                modalResult = [url path];
+            }
+        } else {
+            NSOpenPanel *panel = [NSOpenPanel openPanel];
+            [panel setTitle:nsTitle];
+            [panel setCanChooseFiles:YES];
+            [panel setCanChooseDirectories:NO];
+            [panel setAllowsMultipleSelection:NO];
+            
+            if (nsInitialDir) {
+                NSURL *dirUrl = [NSURL fileURLWithPath:nsInitialDir];
+                [panel setDirectoryURL:dirUrl];
+            }
+            
+            // Set file type filters - macOS will automatically add "All Files" option to the dropdown
+            if (!filter.isEmpty()) {
+                QString macFilter = convertQtFilterToMacOS(filter);
+                if (!macFilter.isEmpty()) {
+                    NSArray *fileTypes = [macFilter.toNSString() componentsSeparatedByString:@","];
+                    [panel setAllowedFileTypes:fileTypes];
+                    // macOS automatically provides "All Files" option in dropdown when allowedFileTypes is set
+                }
+            }
+            
+            NSInteger buttonPressed = [panel runModal];
+            if (buttonPressed == NSModalResponseOK) {
+                NSArray *urls = [panel URLs];
+                if ([urls count] > 0) {
+                    NSURL *url = [urls objectAtIndex:0];
+                    modalResult = [url path];
+                }
             }
         }
-    }
+        
+        result = modalResult ? QString::fromNSString(modalResult) : QString();
+        [pool release];
+        
+        // Exit the event loop
+        loop.quit();
+    });
     
-    return result ? QString::fromNSString(result) : QString();
+    // Wait for the dialog to complete
+    loop.exec();
+    
+    return result;
 }
 
 bool NativeFileDialog::areNativeDialogsAvailablePlatform()
@@ -114,4 +152,3 @@ bool NativeFileDialog::areNativeDialogsAvailablePlatform()
     // Native dialogs are always available on macOS
     return true;
 }
-
