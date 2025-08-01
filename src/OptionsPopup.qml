@@ -286,6 +286,8 @@ Window {
                 id: cancelButton
                 text: qsTr("CANCEL")
                 activeFocusOnTab: true
+                Layout.preferredWidth: 100
+                Layout.preferredHeight: 36
                 
                 // Add keyboard navigation
                 Keys.onPressed: (event) => {
@@ -310,6 +312,8 @@ Window {
                 text: qsTr("SAVE")
                 enabled: !popup.hasValidationErrors()
                 activeFocusOnTab: true
+                Layout.preferredWidth: 100
+                Layout.preferredHeight: 36
                 
                 // Show helpful tooltip when button is disabled
                 ToolTip.visible: hovered && !enabled
