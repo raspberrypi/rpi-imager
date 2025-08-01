@@ -259,7 +259,119 @@ int32_t GetDeviceNumber(HANDLE hDevice) {
   return diskNumber;
 }
 
-void GetMountpoints(int32_t deviceNumber,
+std::string GetVolumeEnumeratorName(const std::string& volumeName) {
+  // Get the enumerator name for a logical volume (drive letter)
+  // This helps distinguish between different storage drivers that may
+  // use the same device number (e.g., Google Drive vs SD card readers)
+  //
+  // Background: Device numbers are not globally unique across different
+  // storage drivers. For example, an SD card reader driver might assign
+  // device number 1 to an SD card, while Google Drive's driver might also
+  // use device number 1 internally. This causes Google Drive to incorrectly
+  // appear as a mountpoint on the SD card, preventing imaging.
+  //
+  // Solution: Use both device number AND driver enumerator name for matching.
+  // Different drivers will have different enumerator names (e.g., "SD" for
+  // SD card readers, something else for Google Drive), so this provides
+  // additional disambiguation.
+  
+  HDEVINFO hDeviceInfo = NULL;
+  SP_DEVINFO_DATA deviceInfoData;
+  DWORD i;
+  int32_t targetDeviceNumber = -1;
+  std::string enumeratorName;
+  
+  // First, get the device number for this volume
+  HANDLE hLogical = CreateFileA(
+    ("\\\\.\\" + volumeName + ":").c_str(), 0,
+    FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+  if (hLogical == INVALID_HANDLE_VALUE) {
+    return std::string();
+  }
+
+  targetDeviceNumber = GetDeviceNumber(hLogical);
+  CloseHandle(hLogical);
+
+  if (targetDeviceNumber == -1) {
+    return std::string();
+  }
+
+  // Now find the device with this device number in the device information set
+  hDeviceInfo = SetupDiGetClassDevsA(
+    &GUID_DEVICE_INTERFACE_DISK, NULL, NULL,
+    DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+
+  if (hDeviceInfo == INVALID_HANDLE_VALUE) {
+    return std::string();
+  }
+
+  deviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+
+  for (i = 0; SetupDiEnumDeviceInfo(hDeviceInfo, i, &deviceInfoData); i++) {
+    // For each device, check if any of its interfaces matches our target device number
+    SP_DEVICE_INTERFACE_DATA deviceInterfaceData;
+    PSP_DEVICE_INTERFACE_DETAIL_DATA_W deviceDetailData = NULL;
+    DWORD size;
+    DWORD index;
+
+    for (index = 0; ; index++) {
+      deviceInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+
+      BOOL isDisk = SetupDiEnumDeviceInterfaces(
+        hDeviceInfo, &deviceInfoData, &GUID_DEVICE_INTERFACE_DISK,
+        index, &deviceInterfaceData);
+
+      if (!isDisk) {
+        break; // No more interfaces for this device
+      }
+
+      // Get the device interface detail
+      BOOL hasDeviceInterfaceData = SetupDiGetDeviceInterfaceDetailW(
+        hDeviceInfo, &deviceInterfaceData, NULL, 0, &size, NULL);
+
+      if (!hasDeviceInterfaceData && GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+        deviceDetailData = static_cast<PSP_DEVICE_INTERFACE_DETAIL_DATA_W>(malloc(size));
+        if (deviceDetailData != NULL) {
+          deviceDetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+
+          hasDeviceInterfaceData = SetupDiGetDeviceInterfaceDetailW(
+            hDeviceInfo, &deviceInterfaceData, deviceDetailData,
+            size, NULL, NULL);
+
+          if (hasDeviceInterfaceData) {
+            // Open the device and check its device number
+            HANDLE hDevice = CreateFileW(
+              deviceDetailData->DevicePath, 0,
+              FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+            if (hDevice != INVALID_HANDLE_VALUE) {
+              int32_t deviceNumber = GetDeviceNumber(hDevice);
+              CloseHandle(hDevice);
+
+              if (deviceNumber == targetDeviceNumber) {
+                // Found matching device, get its enumerator name
+                enumeratorName = GetEnumeratorName(hDeviceInfo, deviceInfoData);
+                free(deviceDetailData);
+                SetupDiDestroyDeviceInfoList(hDeviceInfo);
+                return enumeratorName;
+              }
+            }
+          }
+          free(deviceDetailData);
+          deviceDetailData = NULL;
+        }
+      }
+    }
+  }
+
+  SetupDiDestroyDeviceInfoList(hDeviceInfo);
+  return std::string(); // Not found
+}
+
+void GetMountpoints(int32_t deviceNumber, const std::string& deviceEnumerator,
   std::vector<std::string> *mountpoints) {
   HANDLE hLogical = INVALID_HANDLE_VALUE;
   int32_t logicalVolumeDeviceNumber = -1;
@@ -307,8 +419,26 @@ void GetMountpoints(int32_t deviceNumber,
     }
 
     if (logicalVolumeDeviceNumber == deviceNumber) {
-      // printf("[INFO] Device number for logical volume %s is %i\n",
-      //   volumeName.c_str(), logicalVolumeDeviceNumber);
+      // Enhanced matching: also check the enumerator name to prevent
+      // false matches between different storage drivers that might use
+      // the same device number (e.g., Google Drive vs SD card readers)
+      //
+      // This fixes the issue where Google Drive appears as a partition on 
+      // SD cards because both might report the same device number but are
+      // handled by different drivers with different enumerator names.
+      std::string volumeEnumerator = GetVolumeEnumeratorName(volumeName);
+      
+      if (!deviceEnumerator.empty() && !volumeEnumerator.empty() && 
+          volumeEnumerator != deviceEnumerator) {
+        // Device number matches but drivers differ - skip this volume
+        // printf("[INFO] Device number matches for volume %s (%i) but enumerator differs: device=%s, volume=%s\n",
+        //   volumeName.c_str(), logicalVolumeDeviceNumber, deviceEnumerator.c_str(), volumeEnumerator.c_str());
+        continue;
+      }
+      
+      // Both device number and enumerator match (or enumerator info unavailable) - this is a valid mountpoint
+      // printf("[INFO] Device number for logical volume %s is %i, enumerator: %s\n",
+      //   volumeName.c_str(), logicalVolumeDeviceNumber, volumeEnumerator.c_str());
       mountpoints->push_back(volumeName + ":\\");
     }
   }
@@ -534,7 +664,7 @@ bool GetDetailData(DeviceDescriptor* device,
     device->raw = "\\\\.\\PhysicalDrive" + std::to_string(deviceNumber);
     device->device = device->raw;
 
-    GetMountpoints(deviceNumber, &device->mountpoints);
+    GetMountpoints(deviceNumber, device->enumerator, &device->mountpoints);
 
     // printf("[INFO] Opening handle to %s\n", device->raw.c_str());
 
