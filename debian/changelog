@@ -3,6 +3,7 @@ rpi-imager (1.9.7) unstable; urgency=medium
   * OS customisation:
     - Fixup SSH key duplication in written OS
     - Fixup 'Beep', 'Eject', 'Telemetry' option persistence
+    - Improve ComboBox behaviours
   * Storage Device Selection: Begin observing at start of day,
       improve removal notifications.
   * windows: Autogenerate manifest version information from the build
