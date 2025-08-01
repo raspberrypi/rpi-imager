@@ -38,11 +38,10 @@ QString convertQtFilterToWindows(const QString &qtFilter)
 }
 } // anonymous namespace
 
-QString NativeFileDialog::getFileNameNative(QWidget *parent, const QString &title,
-                                             const QString &initialDir, const QString &filter,
-                                             bool saveDialog)
-{
-    Q_UNUSED(parent)  // Windows dialogs will be modal to the application
+QString NativeFileDialog::getFileNameNative(const QString &title,
+                                           const QString &initialDir, const QString &filter,
+                                           bool saveDialog)
+{  // Windows dialogs will be modal to the application
     
     OPENFILENAME ofn;
     ZeroMemory(&ofn, sizeof(ofn));

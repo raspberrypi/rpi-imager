@@ -4,32 +4,31 @@
  */
 
 #include "nativefiledialog.h"
-#include <QFileDialog>
 #include <QStandardPaths>
 #include <QGuiApplication>
 #include <QCoreApplication>
 #include <QDebug>
 
-QString NativeFileDialog::getOpenFileName(QWidget *parent, const QString &title,
+QString NativeFileDialog::getOpenFileName(const QString &title,
                                           const QString &initialDir, const QString &filter)
 {
     // Check if we should use native dialogs
     if (!areNativeDialogsAvailable()) {
-        return getFileNameQt(parent, title, initialDir, filter, false);
+        return getFileNameQt(title, initialDir, filter, false);
     }
 
-    return getFileNameNative(parent, title, initialDir, filter, false);
+    return getFileNameNative(title, initialDir, filter, false);
 }
 
-QString NativeFileDialog::getSaveFileName(QWidget *parent, const QString &title,
+QString NativeFileDialog::getSaveFileName(const QString &title,
                                           const QString &initialDir, const QString &filter)
 {
     // Check if we should use native dialogs
     if (!areNativeDialogsAvailable()) {
-        return getFileNameQt(parent, title, initialDir, filter, true);
+        return getFileNameQt(title, initialDir, filter, true);
     }
 
-    return getFileNameNative(parent, title, initialDir, filter, true);
+    return getFileNameNative(title, initialDir, filter, true);
 }
 
 bool NativeFileDialog::areNativeDialogsAvailable()
@@ -56,18 +55,17 @@ bool NativeFileDialog::isEmbeddedMode()
     return (platform == "eglfs" || platform == "linuxfb");
 }
 
-QString NativeFileDialog::getFileNameQt(QWidget *parent, const QString &title,
+QString NativeFileDialog::getFileNameQt(const QString &title,
                                         const QString &initialDir, const QString &filter,
                                         bool saveDialog)
 {
-    QString dir = initialDir;
-    if (dir.isEmpty()) {
-        dir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    }
-
-    if (saveDialog) {
-        return QFileDialog::getSaveFileName(parent, title, dir, filter);
-    } else {
-        return QFileDialog::getOpenFileName(parent, title, dir, filter);
-    }
+    Q_UNUSED(title)
+    Q_UNUSED(initialDir)
+    Q_UNUSED(filter)
+    Q_UNUSED(saveDialog)
+    
+    // QtWidgets dependency removed - no fallback dialog available
+    // Native dialogs should be used on all desktop platforms
+    qWarning() << "NativeFileDialog: Qt fallback called but QtWidgets not available";
+    return QString(); // Return empty string (user cancelled)
 }

@@ -273,11 +273,11 @@ chmod +x "$APPDIR/AppRun"
 # Manual Qt deployment for embedded systems (optimized)
 echo "Deploying Qt dependencies for embedded systems..."
 
-# Copy essential Qt libraries
+# Copy essential Qt libraries (QtWidgets excluded - not used)
 mkdir -p "$APPDIR/usr/lib"
 cp -d "$QT_DIR/lib/libQt6Core.so"* "$APPDIR/usr/lib/"
 cp -d "$QT_DIR/lib/libQt6Gui.so"* "$APPDIR/usr/lib/"
-cp -d "$QT_DIR/lib/libQt6Widgets.so"* "$APPDIR/usr/lib/"
+# cp -d "$QT_DIR/lib/libQt6Widgets.so"* "$APPDIR/usr/lib/"    # QtWidgets excluded
 cp -d "$QT_DIR/lib/libQt6Quick.so"* "$APPDIR/usr/lib/"
 cp -d "$QT_DIR/lib/libQt6Qml.so"* "$APPDIR/usr/lib/"
 cp -d "$QT_DIR/lib/libQt6Network.so"* "$APPDIR/usr/lib/"
@@ -341,10 +341,26 @@ fi
 # Embedded-specific optimizations
 echo "Applying embedded system optimizations..."
 
+# Remove unused QML Controls themes (size optimization)
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Universal"
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Fusion"
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Imagine"
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/FluentWinUI3"
+
+# QtWidgets already excluded during copy phase - no removal needed
+
+# Remove QML debugging tools (development-only, especially important for embedded)
+rm -rf "$APPDIR/usr/qml/QtTest"* 2>/dev/null || true
+rm -rf "$APPDIR/usr/plugins/qmltooling" 2>/dev/null || true
+
+# Remove Qt translations (not needed on embedded systems)
+rm -rf "$APPDIR/usr/translations" 2>/dev/null || true
+rm -rf "$APPDIR/usr/share/qt6/translations" 2>/dev/null || true
+
+# Remove unnecessary image format plugins (save space on embedded systems)
+rm -f "$APPDIR/usr/plugins/imageformats/libqtiff.so" 2>/dev/null || true
+rm -f "$APPDIR/usr/plugins/imageformats/libqwebp.so" 2>/dev/null || true
+rm -f "$APPDIR/usr/plugins/imageformats/libqgif.so" 2>/dev/null || true
 
 # Remove desktop-specific libraries that may have been included
 rm -f "$APPDIR/usr/lib/libwayland"* 2>/dev/null || true

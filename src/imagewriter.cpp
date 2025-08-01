@@ -15,6 +15,7 @@
 #include "wlancredentials.h"
 #include "device_info.h"
 #include "nativefiledialog.h"
+#include "platformquirks.h"
 #include <archive.h>
 #include <archive_entry.h>
 #include <lzma.h>
@@ -43,15 +44,6 @@
 #include <QCryptographicHash>
 #include <QDesktopServices>
 #include <stdlib.h>
-#ifndef QT_NO_WIDGETS
-#include <QFileDialog>
-#include <QApplication>
-#else
-#include <QtPlatformHeaders/QEglFSFunctions>
-#endif
-#ifdef Q_OS_DARWIN
-#include <QMessageBox>
-#endif
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -945,12 +937,9 @@ void ImageWriter::onSuccess()
     stopProgressPolling();
     emit success();
 
-#ifndef QT_NO_WIDGETS
-    if (_settings.value("beep").toBool() && qobject_cast<QApplication*>(QCoreApplication::instance()) )
-    {
-        QApplication::beep();
+    if (_settings.value("beep").toBool()) {
+        PlatformQuirks::beep();
     }
-#endif
 }
 
 void ImageWriter::onError(QString msg)
@@ -959,10 +948,9 @@ void ImageWriter::onError(QString msg)
     stopProgressPolling();
     emit error(msg);
 
-#ifndef QT_NO_WIDGETS
-    if (_settings.value("beep").toBool() && qobject_cast<QApplication*>(QCoreApplication::instance()) )
-        QApplication::beep();
-#endif
+    if (_settings.value("beep").toBool()) {
+        PlatformQuirks::beep();
+    }
 }
 
 void ImageWriter::onFinalizing()
@@ -977,7 +965,6 @@ void ImageWriter::onPreparationStatusUpdate(QString msg)
 
 void ImageWriter::openFileDialog()
 {
-#ifndef QT_NO_WIDGETS
     QSettings settings;
     QString path = settings.value("lastpath").toString();
     QFileInfo fi(path);
@@ -985,9 +972,8 @@ void ImageWriter::openFileDialog()
     if (path.isEmpty() || !fi.exists() || !fi.isReadable() )
         path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
-    // Use native file dialog when available, fallback to Qt dialog in embedded mode
-    QString filename = NativeFileDialog::getOpenFileName(nullptr, 
-                                                        tr("Select image"),
+    // Use native file dialog - QtWidgets fallback removed
+    QString filename = NativeFileDialog::getOpenFileName(tr("Select image"),
                                                         path,
                                                         "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic);;All files (*)");
 
@@ -996,12 +982,10 @@ void ImageWriter::openFileDialog()
     {
         onFileSelected(filename);
     }
-#endif
 }
 
 void ImageWriter::onFileSelected(QString filename)
 {
-#ifndef QT_NO_WIDGETS
     QFileInfo fi(filename);
     QSettings settings;
 
@@ -1027,7 +1011,6 @@ void ImageWriter::onFileSelected(QString filename)
     {
         senderObj->deleteLater();
     }
-#endif
 }
 
 void ImageWriter::_parseCompressedFile()
@@ -1380,16 +1363,43 @@ QString ImageWriter::getPSK()
 {
 #ifdef Q_OS_DARWIN
     /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
-     * Ask if user wants to obtain the wlan password first to make sure this is desired and
-     * to provide the user with context. */
-    if (QMessageBox::question(nullptr, "",
-                          tr("Would you like to prefill the wifi password from the system keychain?")) != QMessageBox::Yes)
-    {
+     * Request user permission through QML dialog instead of QtWidgets QMessageBox. */
+    
+    // Set up a flag to track if permission was granted
+    _keychainPermissionGranted = false;
+    _keychainPermissionReceived = false;
+    
+    // Emit signal to show QML permission dialog
+    emit keychainPermissionRequested();
+    
+    // Wait for user response (with timeout)
+    QEventLoop loop;
+    QTimer timeout;
+    timeout.setSingleShot(true);
+    timeout.setInterval(30000); // 30 second timeout
+    
+    connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+    connect(this, &ImageWriter::keychainPermissionResponseReceived, &loop, &QEventLoop::quit);
+    
+    timeout.start();
+    loop.exec();
+    
+    if (!_keychainPermissionReceived || !_keychainPermissionGranted) {
+        qDebug() << "Keychain access denied or timed out";
         return QString();
     }
+    
+    qDebug() << "Keychain access granted by user";
 #endif
 
     return WlanCredentials::instance()->getPSK();
+}
+
+void ImageWriter::keychainPermissionResponse(bool granted)
+{
+    _keychainPermissionGranted = granted;
+    _keychainPermissionReceived = true;
+    emit keychainPermissionResponseReceived();
 }
 
 bool ImageWriter::getBoolSetting(const QString &key)
@@ -1538,12 +1548,6 @@ void ImageWriter::changeKeyboard(const QString &newKeymapLayout)
     if (newKeymapLayout.isEmpty() || newKeymapLayout == _currentKeyboard)
         return;
 
-#ifdef QT_NO_WIDGETS
-    QString kmapfile = "/usr/share/qmaps/"+newKeymapLayout+".qmap";
-
-    if (QFile::exists(kmapfile))
-        QEglFSFunctions::loadKeymap(kmapfile);
-#endif
 
     _currentKeyboard = newKeymapLayout;
 }

@@ -650,7 +650,7 @@ else()
     set(SOURCES ${SOURCES} "device_info.cpp")
 endif()
 
-find_package(Qt6 6.7 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS Widgets LinguistTools DBus WinExtras)
+find_package(Qt6 6.7 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools DBus)
 if (Qt6_FOUND)
     set(QT Qt6)
     if (APPLE)
@@ -660,17 +660,10 @@ else()
     message(FATAL_ERROR "Missing suitable Qt library (must be at least version 6.7)" )
 endif()
 
-if (${QT}Widgets_FOUND)
-    set(EXTRALIBS ${EXTRALIBS} ${QT}::Widgets)
-endif()
 if(${QT}DBus_FOUND AND UNIX AND NOT APPLE)
     set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::DBus)
     message("udisks2 support enabled")
-endif()
-if (NOT ${QT}Widgets_FOUND AND UNIX AND NOT APPLE)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(LIBDRM REQUIRED libdrm)
 endif()
 if(${QT}WinExtras_FOUND)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::WinExtras)
@@ -749,6 +742,7 @@ set(IMAGER_QML_FILES
     OptionsTabBase.qml
     Style.qml
     UseSavedSettingsPopup.qml
+    KeychainPermissionPopup.qml
     qmlcomponents/ImButton.qml
     qmlcomponents/ImButtonRed.qml
     qmlcomponents/ImCheckBox.qml
@@ -926,7 +920,7 @@ if (WIN32)
 
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND "${WINDEPLOYQT}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/rpi-imager.exe")
+        COMMAND "${WINDEPLOYQT}" --no-translations --no-widgets --skip-plugin-types qmltooling --verbose 2 --qmldir "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/deploy/rpi-imager.exe")
 
     # Remove excess files
     add_custom_command(TARGET ${PROJECT_NAME}
@@ -1009,8 +1003,23 @@ elseif(APPLE)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Deploying Qt dependencies..."
-        COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite
+        COMMAND "${MACDEPLOYQT}" "${APP_BUNDLE_PATH}" -qmldir="${CMAKE_CURRENT_SOURCE_DIR}" -always-overwrite -no-translations
         COMMENT "Deploying Qt dependencies"
+    )
+    
+    # Remove QtWidgets if macdeployqt included it despite not being needed
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtWidgets.framework"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtWidgets.framework"
+        COMMENT "Removing QtWidgets framework if present"
+    )
+    
+    # Remove QML debugging tools (qmltooling plugins) - development-only
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/PlugIns/qmltooling"
+        COMMENT "Removing QML debugging tools if present"
     )
 
     # Create explicit DMG target (similar to inno_installer on Windows)

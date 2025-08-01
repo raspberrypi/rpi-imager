@@ -13,32 +13,24 @@
 #include <QStandardPaths>
 #include <QDebug>
 #include <QGuiApplication>
+#include <QEventLoop>
+#include <QTimer>
+#include <QDBusPendingCallWatcher>
+#include <QDBusVariant>
 #include <unistd.h>
 #include <QProcess>
 
-namespace {
-QString convertQtFilterToLinux(const QString &qtFilter)
-{
-    if (qtFilter.isEmpty()) {
-        return QString();
-    }
-    
-    // Qt filter format: "Description (*.ext1 *.ext2);;Another (*.ext3)"
-    // Linux/portal format: simplified for now - just extract extensions
-    return qtFilter.section('(', 1, 1).section(')', 0, 0);
-}
-} // anonymous namespace
+// Anonymous namespace removed - filter conversion now done inline
 
-QString NativeFileDialog::getFileNameNative(QWidget *parent, const QString &title,
+QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
                                            bool saveDialog)
 {
-    Q_UNUSED(parent)
     
     QDBusConnection bus = QDBusConnection::sessionBus();
     if (!bus.isConnected()) {
         qDebug() << "NativeFileDialog: No D-Bus session bus available, falling back to Qt";
-        return getFileNameQt(parent, title, initialDir, filter, saveDialog);
+        return getFileNameQt(title, initialDir, filter, saveDialog);
     }
     
     QDBusInterface interface("org.freedesktop.portal.Desktop",
@@ -48,7 +40,7 @@ QString NativeFileDialog::getFileNameNative(QWidget *parent, const QString &titl
     
     if (!interface.isValid()) {
         qDebug() << "NativeFileDialog: XDG Desktop Portal not available, falling back to Qt";
-        return getFileNameQt(parent, title, initialDir, filter, saveDialog);
+        return getFileNameQt(title, initialDir, filter, saveDialog);
     }
     
     // Prepare arguments for the portal call
@@ -65,32 +57,128 @@ QString NativeFileDialog::getFileNameNative(QWidget *parent, const QString &titl
         options["current_folder"] = QByteArray(dirUrl.toEncoded());
     }
     
-    // Convert and set file filters
+    // Convert and set file filters - Portal expects specific format
     if (!filter.isEmpty()) {
-        QString linuxFilter = convertQtFilterToLinux(filter);
-        // Portal expects filters in a specific format - this is simplified
-        options["filters"] = QVariant::fromValue(QStringList() << linuxFilter);
+        // Parse Qt filter format: "Images (*.png *.jpg);;All files (*)"
+        QStringList filterParts = filter.split(";;");
+        QVariantList filters;
+        
+        for (const QString &filterPart : filterParts) {
+            if (filterPart.contains('(') && filterPart.contains(')')) {
+                QString name = filterPart.section('(', 0, 0).trimmed();
+                QString patterns = filterPart.section('(', 1, 1).section(')', 0, 0);
+                QStringList patternList = patterns.split(' ', Qt::SkipEmptyParts);
+                
+                // Portal filter format: [name, [[pattern1, pattern2], ...]]
+                QVariantList filterEntry;
+                filterEntry << name;
+                QVariantList patternVariants;
+                for (const QString &pattern : patternList) {
+                    patternVariants << QVariant(pattern);
+                }
+                filterEntry << QVariant(patternVariants);
+                filters << QVariant(filterEntry);
+            }
+        }
+        
+        if (!filters.isEmpty()) {
+            options["filters"] = QVariant(filters);
+        }
     }
     
-    QString method = saveDialog ? "SaveFile" : "OpenFile";
-    QString parentWindow = "";  // Could get X11 window ID if needed
+    // Generate unique request token
+    static uint requestCounter = 0;
+    QString token = QString("rpi_imager_%1_%2").arg(getpid()).arg(++requestCounter);
+    options["handle_token"] = token;
     
+    QString method = saveDialog ? "SaveFile" : "OpenFile";
+    QString parentWindow = "";  // Could be set to X11 window ID for proper modal behavior
+    
+    // Make the async call
     QDBusReply<QDBusObjectPath> reply = interface.call(method, parentWindow, title, options);
     
     if (!reply.isValid()) {
         qDebug() << "NativeFileDialog: Portal call failed:" << reply.error().message();
-        return getFileNameQt(parent, title, initialDir, filter, saveDialog);
+        return getFileNameQt(title, initialDir, filter, saveDialog);
     }
     
-    // The portal returns a path to monitor for the response
-    // This is a simplified implementation - in reality you'd need to monitor
-    // the D-Bus response asynchronously
-    QString objPath = reply.value().path();
+    QString requestPath = reply.value().path();
+    qDebug() << "NativeFileDialog: Portal request created at:" << requestPath;
     
-    // For now, fall back to Qt dialog as implementing the full async portal
-    // response handling would require significant additional code
-    qDebug() << "NativeFileDialog: Portal response handling not fully implemented, falling back to Qt";
-    return getFileNameQt(parent, title, initialDir, filter, saveDialog);
+    // Connect to the Response signal to get the result
+    QString result;
+    bool dialogFinished = false;
+    
+    QDBusConnection::sessionBus().connect(
+        "org.freedesktop.portal.Desktop",
+        requestPath,
+        "org.freedesktop.portal.Request",
+        "Response",
+        [&result, &dialogFinished](uint response, const QVariantMap &results) {
+            qDebug() << "NativeFileDialog: Portal response:" << response << results;
+            
+            if (response == 0) { // Success
+                // Extract selected files from results
+                QVariant urisVar = results.value("uris");
+                if (urisVar.isValid()) {
+                    QStringList uris = urisVar.toStringList();
+                    if (!uris.isEmpty()) {
+                        // Convert file:// URI to local path
+                        QUrl url(uris.first());
+                        result = url.toLocalFile();
+                        qDebug() << "NativeFileDialog: Selected file:" << result;
+                    }
+                }
+            } else {
+                qDebug() << "NativeFileDialog: Dialog cancelled or failed, response code:" << response;
+            }
+            
+            dialogFinished = true;
+        }
+    );
+    
+    // Run a local event loop until we get the response
+    QEventLoop loop;
+    QTimer timeoutTimer;
+    timeoutTimer.setSingleShot(true);
+    timeoutTimer.setInterval(30000); // 30 second timeout
+    
+    QObject::connect(&timeoutTimer, &QTimer::timeout, [&loop, &dialogFinished]() {
+        qWarning() << "NativeFileDialog: Portal dialog timed out";
+        dialogFinished = true;
+        loop.quit();
+    });
+    
+    // Check for completion every 100ms
+    QTimer checkTimer;
+    checkTimer.setInterval(100);
+    QObject::connect(&checkTimer, &QTimer::timeout, [&loop, &dialogFinished]() {
+        if (dialogFinished) {
+            loop.quit();
+        }
+    });
+    
+    timeoutTimer.start();
+    checkTimer.start();
+    
+    // Wait for response or timeout
+    loop.exec();
+    
+    // Clean up the request object
+    QDBusInterface requestInterface("org.freedesktop.portal.Desktop",
+                                    requestPath,
+                                    "org.freedesktop.portal.Request",
+                                    bus);
+    if (requestInterface.isValid()) {
+        requestInterface.call("Close");
+    }
+    
+    if (result.isEmpty()) {
+        qDebug() << "NativeFileDialog: No file selected or portal failed, falling back to Qt";
+        return getFileNameQt(title, initialDir, filter, saveDialog);
+    }
+    
+    return result;
 }
 
 bool NativeFileDialog::areNativeDialogsAvailablePlatform()

@@ -127,6 +127,9 @@ public:
     /* Utility function to open OS file dialog */
     Q_INVOKABLE void openFileDialog();
 
+    /* Handle keychain permission response from QML */
+    Q_INVOKABLE void keychainPermissionResponse(bool granted);
+
     /* Return filename part of URL set */
     Q_INVOKABLE QString srcFileName();
 
@@ -198,6 +201,8 @@ signals:
     void cacheVerificationStarted();
     void cacheVerificationFinished();
     void selectedDeviceRemoved();
+    void keychainPermissionRequested();
+    void keychainPermissionResponseReceived();
 
 protected slots:
     void startProgressPolling();
@@ -221,6 +226,10 @@ private:
     // Cache management
     CacheManager* _cacheManager;
     bool _waitingForCacheVerification;
+    
+    // Keychain permission tracking
+    bool _keychainPermissionGranted;
+    bool _keychainPermissionReceived;
 
     // Recursively walk all the entries with subitems and, for any which
     // refer to an external JSON list, fetch the list and put it in place.
