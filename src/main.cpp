@@ -385,6 +385,7 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(networkInfo(QVariant)), qmlwindow, SLOT(onNetworkInfo(QVariant)));
     qmlwindow->connect(&imageWriter, SIGNAL(cacheVerificationStarted()), qmlwindow, SLOT(onCacheVerificationStarted()));
     qmlwindow->connect(&imageWriter, SIGNAL(cacheVerificationFinished()), qmlwindow, SLOT(onCacheVerificationFinished()));
+    qmlwindow->connect(&imageWriter, SIGNAL(selectedDeviceRemoved()), qmlwindow, SLOT(onSelectedDeviceRemoved()));
 
 #ifndef QT_NO_WIDGETS
     /* Set window position */

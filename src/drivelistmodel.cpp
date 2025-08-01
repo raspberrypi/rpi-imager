@@ -114,8 +114,16 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
                 changes = true;
             }
 
+            // Extract device path before deleting the item
+            QString devicePath = _drivelist.value(device)->property("device").toString();
+            
+            qDebug() << "Drive removed:" << devicePath;
+            
             _drivelist.value(device)->deleteLater();
             _drivelist.remove(device);
+            
+            // Emit signal for this specific device removal
+            emit deviceRemoved(devicePath);
         }
     }
 

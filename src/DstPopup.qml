@@ -48,7 +48,7 @@ MainPopupBase {
     required property ImageWriter imageWriter
     property alias dstlist: dstlist
 
-    onClosed: imageWriter.stopDriveListPolling()
+    // No need to manage polling - it runs continuously in background
 
     title: qsTr("Storage")
 

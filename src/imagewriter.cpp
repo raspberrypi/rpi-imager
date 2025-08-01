@@ -75,6 +75,10 @@ ImageWriter::ImageWriter(QObject *parent)
       _expectedHash(), _cmdline(), _config(), _firstrun(), _cloudinit(), _cloudinitNetwork(), _initFormat(),
       _downloadLen(0), _extrLen(0), _devLen(0), _dlnow(0), _verifynow(0),
       _drivelist(DriveListModel(this)), // explicitly parented, so QML doesn't delete it
+      _selectedDeviceValid(false),
+      _isWriting(false),
+      _writeCompletedSuccessfully(false),
+      _cancelledDueToDeviceRemoval(false),
       _hwlist(HWListModel(*this)),
       _oslist(OSListModel(*this)),
       _engine(nullptr), 
@@ -247,12 +251,24 @@ ImageWriter::ImageWriter(QObject *parent)
                 emit osListPrepared();
             });
     
+    // Connect to specific device removal events
+    connect(&_drivelist, &DriveListModel::deviceRemoved,
+            this, &ImageWriter::onSelectedDeviceRemoved);
+    
     // Start background cache operations early
     _cacheManager->startBackgroundOperations();
+    
+    // Start background drive list polling 
+    qDebug() << "Starting background drive list polling";
+    _drivelist.startPolling();
 }
 
 ImageWriter::~ImageWriter()
 {
+    // Stop background drive list polling
+    qDebug() << "Stopping background drive list polling";
+    _drivelist.stopPolling();
+    
     // Ensure any running thread is properly cleaned up
     if (_thread) {
         if (_thread->isRunning()) {
@@ -316,12 +332,20 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
 {
     _dst = device;
     _devLen = deviceSize;
+    _selectedDeviceValid = !device.isEmpty();
+    
+    // Reset write completion state when device selection changes
+    if (device.isEmpty()) {
+        _writeCompletedSuccessfully = false;
+    }
+    
+    qDebug() << "Device selection changed to:" << device;
 }
 
-/* Returns true if src and dst are set */
+/* Returns true if src and dst are set and destination device is still valid */
 bool ImageWriter::readyToWrite()
 {
-    return !_src.isEmpty() && !_dst.isEmpty();
+    return !_src.isEmpty() && !_dst.isEmpty() && _selectedDeviceValid;
 }
 
 /* Returns true if running on Raspberry Pi */
@@ -366,6 +390,8 @@ void ImageWriter::startWrite()
 {
     if (!readyToWrite())
         return;
+        
+    _isWriting = true;
 
     if (_src.toString() == "internal://format")
     {
@@ -591,12 +617,20 @@ void ImageWriter::skipCacheVerification()
 
 void ImageWriter::onCancelled()
 {
+    _isWriting = false;
     sender()->deleteLater();
     if (sender() == _thread)
     {
         _thread = nullptr;
     }
-    emit cancelled();
+    
+    // Show specific error message if cancellation was due to device removal
+    if (_cancelledDueToDeviceRemoval) {
+        _cancelledDueToDeviceRemoval = false;
+        emit error(tr("Write operation cancelled: Storage device was removed during write."));
+    } else {
+        emit cancelled();
+    }
 }
 
 /* Return true if url is in our local disk cache */
@@ -866,17 +900,7 @@ void ImageWriter::setCustomCacheFile(const QString &cacheFile, const QByteArray 
     _cacheManager->setCustomCacheFile(cacheFile, sha256);
 }
 
-/* Start polling the list of available drives */
-void ImageWriter::startDriveListPolling()
-{
-    _drivelist.startPolling();
-}
-
-/* Stop polling the list of available drives */
-void ImageWriter::stopDriveListPolling()
-{
-    _drivelist.stopPolling();
-}
+/* Drive list polling runs continuously in background - no explicit start/stop needed */
 
 DriveListModel *ImageWriter::getDriveList()
 {
@@ -915,6 +939,8 @@ void ImageWriter::setVerifyEnabled(bool verify)
 /* Relay events from download thread to QML */
 void ImageWriter::onSuccess()
 {
+    _isWriting = false;
+    _writeCompletedSuccessfully = true;
     stopProgressPolling();
     emit success();
 
@@ -928,6 +954,7 @@ void ImageWriter::onSuccess()
 
 void ImageWriter::onError(QString msg)
 {
+    _isWriting = false;
     stopProgressPolling();
     emit error(msg);
 
@@ -1665,6 +1692,32 @@ void ImageWriter::onCacheVerificationComplete(bool isValid)
     
     // Continue with the rest of startWrite() logic
     _continueStartWriteAfterCacheVerification(isValid);
+}
+
+void ImageWriter::onSelectedDeviceRemoved(const QString &device)
+{
+    qDebug() << "Device removal detected:" << device << "Current selected:" << _dst << "Writing:" << _isWriting << "WriteCompleted:" << _writeCompletedSuccessfully;
+    
+    // Only react if this is the device we currently have selected
+    if (!_dst.isEmpty() && _dst == device) {
+        qDebug() << "Selected device" << device << "was removed - invalidating selection";
+        _selectedDeviceValid = false;
+        
+        // If we're currently writing to this device, cancel the write immediately
+        if (_isWriting) {
+            qDebug() << "Cancelling write operation due to device removal";
+            _cancelledDueToDeviceRemoval = true;
+            cancelWrite();
+            // Will show specific error message in onCancelled()
+        } else if (_writeCompletedSuccessfully) {
+            // Write completed successfully and now drive was ejected - this is normal
+            qDebug() << "Device removed after successful write - ignoring (likely ejected)";
+            // Don't notify UI - this is expected behavior after successful write
+        } else {
+            // Normal case - device removed when not writing
+            emit selectedDeviceRemoved();
+        }
+    }
 }
 
 void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)

@@ -3,6 +3,8 @@ rpi-imager (1.9.7) unstable; urgency=medium
   * OS customisation:
     - Fixup SSH key duplication in written OS
     - Fixup 'Beep', 'Eject', 'Telemetry' option persistence
+  * Storage Device Selection: Begin observing at start of day,
+      improve removal notifications.
   * windows: Autogenerate manifest version information from the build
   * windows, macos, linux: Add PlatformQuirks module to deal with host
       hardware quirks. Today, just used on Windows for nVidia lockups.

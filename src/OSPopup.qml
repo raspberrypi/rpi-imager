@@ -454,7 +454,7 @@ MainPopupBase {
                     selectNamedOS(imager["embedded_default_os"], osmodel)
                 }
                 if ("embedded_default_destination" in imager) {
-                    root.imageWriter.startDriveListPolling()
+                    // No need to start polling - it runs continuously in background
                     root.defaultEmbeddedDriveRequested(imager["embedded_default_destination"])
                 }
             }

@@ -83,13 +83,9 @@ public:
     /* Return true if url is in our local disk cache */
     Q_INVOKABLE bool isCached(const QUrl &url, const QByteArray &sha256);
 
-    /* Start polling the list of available drives */
-    Q_INVOKABLE void startDriveListPolling();
+    /* Drive list polling runs continuously in background */
 
-    /* Stop polling the list of available drives */
-    Q_INVOKABLE void stopDriveListPolling();
-
-    /* Return list of available drives. Call startDriveListPolling() first
+    /* Return list of available drives. Drive polling runs continuously in background.
        Note: If you mark this as Q_INVOKABLE, be sure to parent it to ImageWriter,
        to prevent GC from deleting it.
     */
@@ -201,6 +197,7 @@ signals:
     void networkInfo(QVariant msg);
     void cacheVerificationStarted();
     void cacheVerificationFinished();
+    void selectedDeviceRemoved();
 
 protected slots:
     void startProgressPolling();
@@ -218,6 +215,7 @@ protected slots:
     void onSTPdetected();
     void onCacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes);
     void onCacheVerificationComplete(bool isValid);
+    void onSelectedDeviceRemoved(const QString &device);
 
 private:
     // Cache management
@@ -239,6 +237,10 @@ protected:
     QByteArray _expectedHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
+    bool _selectedDeviceValid;
+    bool _isWriting;
+    bool _writeCompletedSuccessfully;
+    bool _cancelledDueToDeviceRemoval;
     HWListModel _hwlist;
     OSListModel _oslist;
     QQmlApplicationEngine *_engine;
