@@ -20,6 +20,42 @@
 #include <unistd.h>
 #include <QProcess>
 
+// Helper class to handle D-Bus portal response signals
+class PortalResponseHandler : public QObject
+{
+    Q_OBJECT
+public:
+    PortalResponseHandler(QString &result, bool &dialogFinished)
+        : m_result(result), m_dialogFinished(dialogFinished) {}
+
+public slots:
+    void handleResponse(uint response, const QVariantMap &results) {
+        qDebug() << "NativeFileDialog: Portal response:" << response << results;
+        
+        if (response == 0) { // Success
+            // Extract selected files from results
+            QVariant urisVar = results.value("uris");
+            if (urisVar.isValid()) {
+                QStringList uris = urisVar.toStringList();
+                if (!uris.isEmpty()) {
+                    // Convert file:// URI to local path
+                    QUrl url(uris.first());
+                    m_result = url.toLocalFile();
+                    qDebug() << "NativeFileDialog: Selected file:" << m_result;
+                }
+            }
+        } else {
+            qDebug() << "NativeFileDialog: Dialog cancelled or failed, response code:" << response;
+        }
+        
+        m_dialogFinished = true;
+    }
+
+private:
+    QString &m_result;
+    bool &m_dialogFinished;
+};
+
 // Anonymous namespace removed - filter conversion now done inline
 
 QString NativeFileDialog::getFileNameNative(const QString &title,
@@ -109,33 +145,23 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     QString result;
     bool dialogFinished = false;
     
-    QDBusConnection::sessionBus().connect(
+    // Create handler for the portal response
+    PortalResponseHandler handler(result, dialogFinished);
+    
+    // Connect to the D-Bus signal using QDBusConnection
+    bool connected = QDBusConnection::sessionBus().connect(
         "org.freedesktop.portal.Desktop",
         requestPath,
-        "org.freedesktop.portal.Request",
+        "org.freedesktop.portal.Request", 
         "Response",
-        [&result, &dialogFinished](uint response, const QVariantMap &results) {
-            qDebug() << "NativeFileDialog: Portal response:" << response << results;
-            
-            if (response == 0) { // Success
-                // Extract selected files from results
-                QVariant urisVar = results.value("uris");
-                if (urisVar.isValid()) {
-                    QStringList uris = urisVar.toStringList();
-                    if (!uris.isEmpty()) {
-                        // Convert file:// URI to local path
-                        QUrl url(uris.first());
-                        result = url.toLocalFile();
-                        qDebug() << "NativeFileDialog: Selected file:" << result;
-                    }
-                }
-            } else {
-                qDebug() << "NativeFileDialog: Dialog cancelled or failed, response code:" << response;
-            }
-            
-            dialogFinished = true;
-        }
+        &handler,
+        SLOT(handleResponse(uint, QVariantMap))
     );
+    
+    if (!connected) {
+        qDebug() << "NativeFileDialog: Could not connect to portal Response signal";
+        return getFileNameQt(title, initialDir, filter, saveDialog);
+    }
     
     // Run a local event loop until we get the response
     QEventLoop loop;
@@ -203,4 +229,6 @@ bool NativeFileDialog::areNativeDialogsAvailablePlatform()
 
     return true;
 }
+
+#include "nativefiledialog_linux.moc"
 
