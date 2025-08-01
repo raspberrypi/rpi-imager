@@ -86,7 +86,7 @@ Source: "@CMAKE_BINARY_DIR@\deploy\imageformats\*"; DestDir: "{app}\imageformats
 Source: "@CMAKE_BINARY_DIR@\deploy\networkinformation\*"; DestDir: "{app}\networkinformation"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "@CMAKE_BINARY_DIR@\deploy\platforminputcontexts\*"; DestDir: "{app}\platforminputcontexts"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "@CMAKE_BINARY_DIR@\deploy\platforms\*"; DestDir: "{app}\platforms"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "@CMAKE_BINARY_DIR@\deploy\styles\*"; DestDir: "{app}\styles"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Source: "@CMAKE_BINARY_DIR@\deploy\styles\*"; DestDir: "{app}\styles"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "@CMAKE_BINARY_DIR@\deploy\tls\*"; DestDir: "{app}\tls"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; QML directories

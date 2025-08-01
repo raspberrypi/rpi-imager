@@ -787,6 +787,16 @@ ApplicationWindow {
         }
     }
 
+    KeychainPermissionPopup {
+        id: keychainpopup
+        onAccepted: {
+            window.imageWriter.keychainPermissionResponse(true)
+        }
+        onRejected: {
+            window.imageWriter.keychainPermissionResponse(false)
+        }
+    }
+
     MsgPopup {
         id: updatepopup
         continueButton: false
@@ -1071,5 +1081,9 @@ ApplicationWindow {
             msgpopup.text = qsTr("The selected storage device was removed.<br>Please select a different storage device.")
             msgpopup.open()
         }
+    }
+
+    function onKeychainPermissionRequested() {
+        keychainpopup.askForPermission()
     }
 }

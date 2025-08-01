@@ -167,4 +167,9 @@ void applyQuirks() {
     }
 }
 
+void beep() {
+    // Use Windows MessageBeep for system beep sound
+    MessageBeep(MB_OK);
+}
+
 } // namespace PlatformQuirks

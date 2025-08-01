@@ -22,14 +22,6 @@
 #include <QSettings>
 #include <QFont>
 #include <QFontDatabase>
-#ifdef QT_NO_WIDGETS
-#include <xf86drm.h>
-#include <xf86drmMode.h>
-#include <QDir>
-#endif
-#ifndef QT_NO_WIDGETS
-#include <QtWidgets/QApplication>
-#endif
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
 #endif
@@ -53,83 +45,6 @@ static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QStri
 }
 #endif
 
-#ifdef QT_NO_WIDGETS
-/* Embedded: deal with Pi having multiple DRI devices when vc4-kms (instead of fkms) is used */
-bool handleDri()
-{
-    QByteArray driDev;
-    QDir driDir("/dev/dri");
-    QStringList entries = driDir.entryList(QDir::System, QDir::Name);
-
-    for (const QString &fn : entries)
-    {
-        QFile f("/dev/dri/"+fn);
-        if (f.open(f.ReadWrite))
-        {
-            drmModeResPtr resources = drmModeGetResources(f.handle());
-            if (resources)
-            {
-                driDev = "/dev/dri/"+fn.toLatin1();
-                cerr << "Using " << driDev << endl;
-
-                /* Get current resolution to calculate scaling factor while we are at it */
-                for (int i=0; i<resources->count_connectors; i++)
-                {
-                    drmModeConnectorPtr connector = drmModeGetConnector(f.handle(), resources->connectors[i]);
-                    if (connector)
-                    {
-                        if (connector->connection != DRM_MODE_DISCONNECTED)
-                        {
-                            drmModeEncoderPtr encoder = drmModeGetEncoder(f.handle(), connector->encoder_id);
-                            if (encoder)
-                            {
-                                drmModeModeInfo crtcMode = {0};
-                                drmModeCrtcPtr crtc = drmModeGetCrtc(f.handle(), encoder->crtc_id);
-                                if (crtc)
-                                {
-                                    if (crtc->mode_valid)
-                                    {
-                                        cerr << "Current mode: connector " << i << " crtc_id " << crtc->crtc_id << " width: " << crtc->width << "px height: " << crtc->height << "px" << endl;
-                                        /*if (crtc->height > 720)
-                                        {
-                                            qputenv("QT_SCALE_FACTOR", QByteArray::number(crtc->height / 720.0, 'f', 2));
-                                        }*/
-
-                                        break;
-                                    }
-                                    drmModeFreeCrtc(crtc);
-                                }
-                                drmModeFreeEncoder(encoder);
-                            }
-                        }
-                        drmModeFreeConnector(connector);
-                    }
-                }
-
-                drmModeFreeResources(resources);
-            }
-            f.close();
-        }
-        else
-        {
-            cerr << "Error opening /dev/dri/"+fn << endl;
-        }
-    }
-
-    if (driDev.isEmpty())
-    {
-        cerr << "No capable /dev/dri device found" << endl;
-        return false;
-    }
-    QFile f("/tmp/qt-kms-config.json");
-    f.open(f.WriteOnly);
-    f.write("{ \"device\": \""+driDev+"\", \"hwcursor\": false }\n");
-    f.close();
-    qputenv("QT_QPA_EGLFS_KMS_CONFIG", "/tmp/qt-kms-config.json");
-
-    return true;
-}
-#endif
 
 int main(int argc, char *argv[])
 {
@@ -169,31 +84,41 @@ int main(int argc, char *argv[])
     // Apply platform-specific quirks and workarounds
     PlatformQuirks::applyQuirks();
 
-#ifdef QT_NO_WIDGETS
-    if ( !handleDri() )
-        return 1;
-
     QGuiApplication app(argc, argv);
-
-    /* Set default font */
-    QStringList fontList = QFontDatabase::applicationFontFamilies(QFontDatabase::addApplicationFont(":/fonts/Roboto-Regular.ttf"));
-    QGuiApplication::setFont(QFont(fontList.first(), 10));
-    if (QFile::exists("/usr/share/fonts/truetype/droid/DroidSansFallback.ttf"))
-            QFontDatabase::addApplicationFont("/usr/share/fonts/truetype/droid/DroidSansFallback.ttf");
-
-    QLocale::Language l = QLocale::system().language();
-    if (l == QLocale::AnyLanguage || l == QLocale::C)
-        QLocale::setDefault(QLocale("en"));
     
-    qDebug() << "System locale detected:" << QLocale::system().name();
-#else
-    QApplication app(argc, argv);
-#endif
     app.setOrganizationName("Raspberry Pi");
     app.setOrganizationDomain("raspberrypi.org");
     app.setApplicationName("Imager");
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
+    
+    // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;
+
+#ifdef Q_OS_LINUX
+    if (imageWriter.isEmbeddedMode()) {
+        // Font and locale setup only needed for embedded Linux systems
+        // Desktop systems have proper font fallbacks already configured
+        
+        /* Set default font - load embedded Roboto font */
+        QStringList fontList = QFontDatabase::applicationFontFamilies(QFontDatabase::addApplicationFont(":/fonts/Roboto-Regular.ttf"));
+        if (!fontList.isEmpty()) {
+            QGuiApplication::setFont(QFont(fontList.first(), 10));
+        }
+        
+        /* Add system fallback font if available (common on Linux systems) */
+        if (QFile::exists("/usr/share/fonts/truetype/droid/DroidSansFallback.ttf")) {
+            QFontDatabase::addApplicationFont("/usr/share/fonts/truetype/droid/DroidSansFallback.ttf");
+        }
+
+        /* Set default locale for embedded systems that might not have proper locale detection */
+        QLocale::Language l = QLocale::system().language();
+        if (l == QLocale::AnyLanguage || l == QLocale::C) {
+            QLocale::setDefault(QLocale("en"));
+        }
+        
+        qDebug() << "Embedded mode detected. System locale:" << QLocale::system().name();
+    }
+#endif
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;
     QString customQm;
@@ -386,8 +311,8 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(cacheVerificationStarted()), qmlwindow, SLOT(onCacheVerificationStarted()));
     qmlwindow->connect(&imageWriter, SIGNAL(cacheVerificationFinished()), qmlwindow, SLOT(onCacheVerificationFinished()));
     qmlwindow->connect(&imageWriter, SIGNAL(selectedDeviceRemoved()), qmlwindow, SLOT(onSelectedDeviceRemoved()));
+    qmlwindow->connect(&imageWriter, SIGNAL(keychainPermissionRequested()), qmlwindow, SLOT(onKeychainPermissionRequested()));
 
-#ifndef QT_NO_WIDGETS
     /* Set window position */
     auto screensize = app.primaryScreen()->geometry();
     int x = settings.value("x", -1).toInt();
@@ -412,14 +337,12 @@ int main(int argc, char *argv[])
 
     qmlwindow->setProperty("x", x);
     qmlwindow->setProperty("y", y);
-#endif
 
     if (imageWriter.isOnline())
         imageWriter.beginOSListFetch();
 
     int rc = app.exec();
 
-#ifndef QT_NO_WIDGETS
     int newX = qmlwindow->property("x").toInt();
     int newY = qmlwindow->property("y").toInt();
     if (x != newX || y != newY)
@@ -428,7 +351,6 @@ int main(int argc, char *argv[])
         settings.setValue("y", newY);
         settings.sync();
     }
-#endif
 
     return rc;
 }

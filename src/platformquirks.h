@@ -15,6 +15,12 @@ namespace PlatformQuirks {
      * - Windows: NVIDIA graphics card detection and QSG_RHI_PREFER_SOFTWARE_RENDERER workaround
      */
     void applyQuirks();
+
+    /**
+     * Play a system beep sound.
+     * Platform-specific implementation to replace QApplication::beep().
+     */
+    void beep();
 }
 
 #endif // PLATFORMQUIRKS_H

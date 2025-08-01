@@ -249,16 +249,35 @@ export APPIMAGE_EXTRACT_AND_RUN=1
 export QMAKE="$QT_DIR/bin/qmake"
 # Set LD_LIBRARY_PATH to include Qt libraries
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
+# Optimize deployment: exclude translations and unnecessary libraries
+export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
 "$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*"
 
 # Hook for removing files before AppImage creation
 echo "Pre-packaging hook - opportunity to remove unwanted files"
-# Add your file removal commands here, for example:
-# rm -rf "$APPDIR/usr/lib/libunwanted.so"
+
+# Remove unused QML Controls themes (size optimization)
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Universal"
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Fusion"
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Imagine"
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/FluentWinUI3"
+
+# Remove QtWidgets if included (we don't use it)
+rm -f "$APPDIR/usr/lib/libQt6Widgets.so"*
+rm -f "$APPDIR/usr/lib/libQt"*"Widgets.so"*
+
+# Remove QML debugging tools (development-only)
+rm -rf "$APPDIR/usr/qml/QtTest"*
+rm -rf "$APPDIR/usr/plugins/qmltooling"
+
+# Remove Qt translations (we excluded them but remove any that might have slipped through)
+rm -rf "$APPDIR/usr/translations"
+rm -rf "$APPDIR/usr/share/qt6/translations"
+
+# Remove unnecessary image format plugins to save space (keep commonly used ones)
+rm -f "$APPDIR/usr/plugins/imageformats/libqtiff.so"
+rm -f "$APPDIR/usr/plugins/imageformats/libqwebp.so"
+rm -f "$APPDIR/usr/plugins/imageformats/libqgif.so"
 
 # Create the AppImage
 echo "Creating AppImage..."

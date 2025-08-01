@@ -5,6 +5,7 @@
 
 #include "../platformquirks.h"
 #include <cstdlib>
+#import <AppKit/AppKit.h>
 
 namespace PlatformQuirks {
 
@@ -14,6 +15,11 @@ void applyQuirks() {
     
     // Example of how to set environment variables without Qt:
     // setenv("VARIABLE_NAME", "value", 1);
+}
+
+void beep() {
+    // Use macOS NSBeep for system beep sound
+    NSBeep();
 }
 
 } // namespace PlatformQuirks

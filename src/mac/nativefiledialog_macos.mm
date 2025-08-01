@@ -38,11 +38,10 @@ QString convertQtFilterToMacOS(const QString &qtFilter)
 }
 } // anonymous namespace
 
-QString NativeFileDialog::getFileNameNative(QWidget *parent, const QString &title,
+QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
                                            bool saveDialog)
 {
-    Q_UNUSED(parent)
     
     QMacAutoReleasePool pool;
     
