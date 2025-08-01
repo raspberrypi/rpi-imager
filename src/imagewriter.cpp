@@ -14,6 +14,7 @@
 #include "downloadstatstelemetry.h"
 #include "wlancredentials.h"
 #include "device_info.h"
+#include "nativefiledialog.h"
 #include <archive.h>
 #include <archive_entry.h>
 #include <lzma.h>
@@ -984,23 +985,17 @@ void ImageWriter::openFileDialog()
     if (path.isEmpty() || !fi.exists() || !fi.isReadable() )
         path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
-    QFileDialog *fd = new QFileDialog(nullptr, tr("Select image"),
-                                      path,
-                                      "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic);;All files (*)");
-    connect(fd, SIGNAL(fileSelected(QString)), SLOT(onFileSelected(QString)));
+    // Use native file dialog when available, fallback to Qt dialog in embedded mode
+    QString filename = NativeFileDialog::getOpenFileName(nullptr, 
+                                                        tr("Select image"),
+                                                        path,
+                                                        "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic);;All files (*)");
 
-    if (_engine)
+    // Process the selected file if one was chosen
+    if (!filename.isEmpty())
     {
-        fd->createWinId();
-        QWindow *handle = fd->windowHandle();
-        QWindow *qmlwindow = qobject_cast<QWindow *>(_engine->rootObjects().value(0));
-        if (qmlwindow)
-        {
-            handle->setTransientParent(qmlwindow);
-        }
+        onFileSelected(filename);
     }
-
-    fd->show();
 #endif
 }
 
@@ -1026,7 +1021,12 @@ void ImageWriter::onFileSelected(QString filename)
         qDebug() << "Item selected is not a regular file";
     }
 
-    sender()->deleteLater();
+    // Only delete sender if called from a signal/slot connection
+    QObject *senderObj = sender();
+    if (senderObj)
+    {
+        senderObj->deleteLater();
+    }
 #endif
 }
 
