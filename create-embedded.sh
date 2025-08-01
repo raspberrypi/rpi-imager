@@ -294,7 +294,9 @@ mkdir -p "$APPDIR/usr/plugins/platforms"
 cp "$QT_DIR/plugins/platforms/libqlinuxfb.so" "$APPDIR/usr/plugins/platforms/" 2>/dev/null || true
 cp -r "$QT_DIR/plugins/tls" "$APPDIR/usr/plugins/" 2>/dev/null || true
 
-# Copy essential plugins (excluding desktop-specific ones)
+# Copy only essential image format plugins (consistency with all platforms)
+# Includes: JPEG, PNG, SVG (common formats + icons)
+# Excludes: TIFF, WebP, GIF (less common, saves space on embedded systems)
 mkdir -p "$APPDIR/usr/plugins/imageformats"
 cp "$QT_DIR/plugins/imageformats/libqjpeg.so" "$APPDIR/usr/plugins/imageformats/" 2>/dev/null || true
 cp "$QT_DIR/plugins/imageformats/libqpng.so" "$APPDIR/usr/plugins/imageformats/" 2>/dev/null || true
@@ -357,10 +359,23 @@ rm -rf "$APPDIR/usr/plugins/qmltooling" 2>/dev/null || true
 rm -rf "$APPDIR/usr/translations" 2>/dev/null || true
 rm -rf "$APPDIR/usr/share/qt6/translations" 2>/dev/null || true
 
-# Remove unnecessary image format plugins (save space on embedded systems)
+# Remove unnecessary image format plugins (consistency with all platforms)
+# Excludes: TIFF, WebP, GIF (less common formats)
+# Keeps: JPEG, PNG, SVG (common formats + icons)
 rm -f "$APPDIR/usr/plugins/imageformats/libqtiff.so" 2>/dev/null || true
 rm -f "$APPDIR/usr/plugins/imageformats/libqwebp.so" 2>/dev/null || true
 rm -f "$APPDIR/usr/plugins/imageformats/libqgif.so" 2>/dev/null || true
+
+# Remove unused Qt Quick Controls 2 style libraries (critical size optimization for embedded)
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2Fusion.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2Universal.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2Imagine.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2FluentWinUI3.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2FusionStyleImpl.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2UniversalStyleImpl.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2ImagineStyleImpl.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2FluentWinUI3StyleImpl.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2WindowsStyleImpl.so"* 2>/dev/null || true
 
 # Remove desktop-specific libraries that may have been included
 rm -f "$APPDIR/usr/lib/libwayland"* 2>/dev/null || true

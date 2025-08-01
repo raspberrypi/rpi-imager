@@ -274,10 +274,23 @@ rm -rf "$APPDIR/usr/plugins/qmltooling"
 rm -rf "$APPDIR/usr/translations"
 rm -rf "$APPDIR/usr/share/qt6/translations"
 
-# Remove unnecessary image format plugins to save space (keep commonly used ones)
+# Remove unnecessary image format plugins (consistency with all platforms)
+# Excludes: TIFF, WebP, GIF (less common formats)
+# Keeps: JPEG, PNG, SVG (common formats + icons)
 rm -f "$APPDIR/usr/plugins/imageformats/libqtiff.so"
 rm -f "$APPDIR/usr/plugins/imageformats/libqwebp.so"
 rm -f "$APPDIR/usr/plugins/imageformats/libqgif.so"
+
+# Remove unused Qt Quick Controls 2 style libraries (size optimization)
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2Fusion.so"*
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2Universal.so"*
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2Imagine.so"*
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2FluentWinUI3.so"*
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2FusionStyleImpl.so"*
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2UniversalStyleImpl.so"*
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2ImagineStyleImpl.so"*
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2FluentWinUI3StyleImpl.so"*
+rm -f "$APPDIR/usr/lib/libQt6QuickControls2WindowsStyleImpl.so"*
 
 # Create the AppImage
 echo "Creating AppImage..."
