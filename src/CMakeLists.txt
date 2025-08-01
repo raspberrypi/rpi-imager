@@ -542,6 +542,7 @@ if (APPLE)
         mac/file_operations_macos.cpp
         mac/buffer_optimization_macos.cpp
         mac/platformquirks_macos.cpp
+        mac/nativefiledialog_macos.mm
     )
     set(DEPENDENCIES  icons/rpi-imager.icns)
     enable_language(OBJC C)
@@ -558,6 +559,7 @@ elseif (UNIX)
         linux/file_operations_linux.cpp
         linux/buffer_optimization_linux.cpp
         linux/platformquirks_linux.cpp
+        linux/nativefiledialog_linux.cpp
     )
     set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
     set(DEPENDENCIES "")
@@ -599,6 +601,7 @@ elseif (WIN32)
         windows/file_operations_windows.cpp
         windows/buffer_optimization_windows.cpp
         windows/platformquirks_windows.cpp
+        windows/nativefiledialog_windows.cpp
     )
     set(DEPENDENCIES
         windows/rpi-imager.rc
@@ -639,7 +642,7 @@ set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
-    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h")
+    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h" "nativefiledialog.cpp")
 
 if(BUILD_EMBEDDED)
     set(SOURCES ${SOURCES} "embedded/device_info.cpp")
