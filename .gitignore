@@ -38,3 +38,4 @@ qt-src**
 build
 build-aarch64
 build-x86_64
+src/timezones.txt
