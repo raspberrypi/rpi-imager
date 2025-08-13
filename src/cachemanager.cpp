@@ -14,8 +14,8 @@
 #include "buffer_optimization.h"
 #include "config.h"
 
-// Hash algorithm used for cache verification
-#define CACHE_HASH_ALGORITHM QCryptographicHash::Sha256
+// Hash algorithm used for cache verification (use same as OS list verification)
+#define CACHE_HASH_ALGORITHM OSLIST_HASH_ALGORITHM
 
 CacheManager::CacheManager(bool embeddedMode, QObject *parent)
     : QObject(parent)
