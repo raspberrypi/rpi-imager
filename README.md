@@ -70,8 +70,13 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
 
 #### Get dependencies
 
-- Get the Qt online installer from: https://www.qt.io/download-open-source
-  - During installation, choose Qt 6.9.
+- Build a minimal Qt from source using our build script:
+  ```bash
+  cd src/mac
+  ./build-qt-macos.sh
+  ```
+  - This builds only what's needed for rpi-imager, resulting in faster builds and smaller size
+  - See `src/mac/README-qt-build-macos.md` for detailed instructions
 - Install Visual Studio Code (or a derivative), and the Qt Extension Pack.
 - It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store.
 
@@ -81,7 +86,7 @@ Building Raspberry Pi Imager on macOS is best done with Visual Studio Code (or a
 
 - Open Visual Studio Code, and select 'Clone repo'. Give it the git url of this project.
 - Open the CMake plugin settings, and set the following Configure Args:
-  - `-DQt6_ROOT=/opt/Qt6/6.9.0/gcc_arm64` - or the equivalent path you installed Qt 6.9 to.
+  - `-DQt6_ROOT=/opt/Qt/6.9.1/macos` - or the equivalent path you installed Qt 6.9 to.
   - `-DIMAGER_SIGNED_APP=ON` - to enable code signing.
   - `-DIMAGER_SIGNING_IDENTITY=$cn` - to specify the Developer ID Certificate Common Name.
   - `-DIMAGER_NOTARIZE_APP=ON` - to enable automatic notarization for distribution to others.

@@ -680,7 +680,12 @@ else()
     set(SOURCES ${SOURCES} "device_info.cpp")
 endif()
 
-find_package(Qt6 6.7 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools DBus)
+# Find Qt components - DBus only needed on Linux
+if(UNIX AND NOT APPLE)
+    find_package(Qt6 6.7 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools DBus)
+else()
+    find_package(Qt6 6.7 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools)
+endif()
 if (Qt6_FOUND)
     set(QT Qt6)
     if (APPLE)
@@ -1069,8 +1074,9 @@ elseif(APPLE)
 
     find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt6_ROOT}/bin")
     if (NOT MACDEPLOYQT)
-        message(FATAL_ERROR "Unable to locate macdeployqt")
+        message(FATAL_ERROR "Unable to locate macdeployqt in ${Qt6_ROOT}/bin - ensure Qt was built with tools")
     endif()
+    message(STATUS "Using macdeployqt: ${MACDEPLOYQT}")
 
     # Deploy Qt dependencies as part of the main build
     add_custom_command(TARGET ${PROJECT_NAME}
@@ -1080,43 +1086,117 @@ elseif(APPLE)
         COMMENT "Deploying Qt dependencies"
     )
     
-    # Remove QtWidgets if macdeployqt included it despite not being needed
+    
+    
+    # Remove unused Qt Quick Controls 2 style plugins (keeping Material + Basic fallback)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtWidgets.framework"
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtWidgets.framework"
-        COMMENT "Removing QtWidgets framework if present"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2fusionstyleplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2fusionstyleimplplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2universalstyleplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2universalstyleimplplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2imaginestyleimplplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2imaginestyleplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2iosstyleimplplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2iosstyleplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2macosstyleimplplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2macosstyleplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2fluentwinui3styleimplplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2fluentwinui3styleplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtquickcontrols2nativestyleplugin.dylib"
+        COMMENT "Removing unused QuickControls2 style plugins (keeping Material + Basic fallback)"
     )
     
-    # Remove QML debugging tools (qmltooling plugins) - development-only
+    # Remove virtual keyboard plugins (already disabled in code but plugins may be included)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/PlugIns/qmltooling"
-        COMMENT "Removing QML debugging tools if present"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbstylesplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbcomponentsplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbsettingsplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkblayoutsplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbpluginsplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbhangulplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbtcimeplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbbuiltinstylesplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbpinyinplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libvirtualkeyboardplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbthaiplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqtvkbopenwnnplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/platforminputcontexts/libqtvirtualkeyboardplugin.dylib"
+        COMMENT "Removing virtual keyboard plugins (already disabled at runtime)"
     )
     
-    # Remove unused Qt Quick Controls 2 style libraries (size optimization)
+    # Remove SQL driver plugins (already excluded via features but might slip through)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Fusion.framework"
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Fusion.framework"
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Universal.framework"
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Universal.framework"
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Imagine.framework"
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2Imagine.framework"
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2FluentWinUI3.framework"
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Frameworks/QtQuickControls2FluentWinUI3.framework"
-        COMMENT "Removing unused QuickControls2 style frameworks if present"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/PlugIns/sqldrivers"
+        COMMENT "Removing SQL driver plugins directory (not needed for imager)"
+    )
+    
+    # Remove unwanted TLS backend plugins (keep only native macOS SecureTransport)
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/tls/libqopensslbackend.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/tls/libqcertonlybackend.dylib"
+        COMMENT "Removing OpenSSL TLS backends (keeping native macOS SecureTransport only)"
     )
     
     # Remove unused image format plugins (consistency with other platforms)
     add_custom_command(TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E remove -f
-            "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqtiff.dylib"
-            "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqwebp.dylib"
-            "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqgif.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqtiff.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqwebp.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/imageformats/libqgif.dylib"
         COMMENT "Removing unused image format plugins if present"
+    )
+    
+    # Remove unused QML theme directories (consistency with other platforms)
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        # Remove unused QuickControls2 theme directories (keep Material + Basic fallback)
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/Fusion"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/Universal"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/Imagine"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/iOS"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/macOS"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/FluentWinUI3"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/Controls/designer"
+        # Remove virtual keyboard QML modules (already disabled at runtime)
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtQuick/VirtualKeyboard"
+        # Remove testing framework QML modules (not needed in production)
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtTest"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Qt/test"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Qt/labs"
+        COMMENT "Removing unused QML theme directories and modules (keeping Material theme + Basic fallback)"
+    )
+
+    # Remove QtWidgets and dependent style/platform plugins (not used by this QML app)
+    add_custom_command(TARGET ${PROJECT_NAME}
+        POST_BUILD
+        # QWidget style plugin (unused in Qt Quick app)
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/styles/libqmacstyle.dylib"
+        # Qt Labs Platform QML plugin and backing library (pulls in QtWidgets)
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/liblabsplatformplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsPlatform.6.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsPlatform.dylib"
+        # Other Qt Labs QML plugins and their backing libraries (unused)
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/liblabsmodelsplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/liblabsanimationplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqmlfolderlistmodelplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqmlsettingsplugin.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsQmlModels.6.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsQmlModels.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsAnimation.6.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsAnimation.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsFolderListModel.6.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsFolderListModel.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsSettings.6.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsSettings.dylib"
+        # Finally remove QtWidgets dylibs themselves
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6Widgets.6.dylib"
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6Widgets.dylib"
+        COMMENT "Removing QtWidgets and dependent plugins"
     )
 
     # Create explicit DMG target (similar to inno_installer on Windows)
