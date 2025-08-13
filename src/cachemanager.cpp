@@ -19,7 +19,7 @@
 
 CacheManager::CacheManager(bool embeddedMode, QObject *parent)
     : QObject(parent)
-    , workerThread_(new QThread(this))
+    , workerThread_(new QThread())  // Don't parent to avoid Qt's automatic deletion
     , worker_(new CacheVerificationWorker())
     , cachingEnabled_(!embeddedMode)
 {
@@ -45,12 +45,36 @@ CacheManager::CacheManager(bool embeddedMode, QObject *parent)
 
 CacheManager::~CacheManager()
 {
-    if (workerThread_->isRunning()) {
+    qDebug() << "CacheManager destructor: cleaning up background thread";
+    
+    // Disconnect all signals to prevent any further communication
+    disconnect(worker_, nullptr, this, nullptr);
+    
+    if (workerThread_ && workerThread_->isRunning()) {
+        // Request thread to quit gracefully
         workerThread_->quit();
-        workerThread_->wait(5000); // Wait up to 5 seconds
+        
+        // Wait for thread to finish
+        if (!workerThread_->wait(5000)) {
+            qDebug() << "CacheManager: Thread did not quit within 5 seconds, terminating";
+            workerThread_->terminate();
+            workerThread_->wait(2000);
+        }
     }
     
-    worker_->deleteLater();
+    // Clean up worker object
+    if (worker_) {
+        delete worker_;
+        worker_ = nullptr;
+    }
+    
+    // Clean up thread object
+    if (workerThread_) {
+        delete workerThread_;
+        workerThread_ = nullptr;
+    }
+    
+    qDebug() << "CacheManager destructor: cleanup complete";
 }
 
 void CacheManager::startBackgroundOperations()
