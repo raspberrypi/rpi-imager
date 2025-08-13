@@ -34,8 +34,10 @@ add_executable(disk_formatter_test
     target_compile_options(disk_formatter_test PRIVATE 
         -Wall -Wextra -Wpedantic
         $<$<CONFIG:Debug>:-g -O0>
-        $<$<CONFIG:Release>:-O3 -DNDEBUG>
     )
+    
+    # Global optimization flags from main CMakeLists.txt will apply automatically
+    # No need to duplicate LTO and --gc-sections settings here
     
     # For testing, we can run this manually
     add_custom_target(test_disk_formatter

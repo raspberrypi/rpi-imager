@@ -35,6 +35,36 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Apply optimization flags globally to all targets (including bundled dependencies)
+if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+    # Use -O2 instead of -O3 for better code size vs performance balance
+    # Enable function and data sections for dead code elimination
+    add_compile_options(-O2 -ffunction-sections -fdata-sections)
+    
+    # Enable dead code elimination at link time (for executables and shared libraries only)
+    if(APPLE)
+        # macOS uses -dead_strip instead of --gc-sections
+        add_link_options(-Wl,-dead_strip)
+    elseif(UNIX)
+        # Linux uses --gc-sections
+        add_link_options(-Wl,--gc-sections)
+    elseif(WIN32)
+        # Windows with MinGW uses --gc-sections
+        add_link_options(-Wl,--gc-sections)
+    endif()
+    
+    # Enable Link Time Optimization (LTO) for all targets
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    
+    # Only add build-type specific flags (optimization and sections flags are already added globally above)
+    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG")
+    set(CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_MINSIZEREL} -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -DNDEBUG")
+    # RelWithDebInfo keeps debug info, so no -DNDEBUG for that build type
+endif()
+
 #add_compile_options("-fsanitize=address")
 #add_link_options("-fsanitize=address")
 
