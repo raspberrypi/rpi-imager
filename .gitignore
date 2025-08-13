@@ -38,4 +38,6 @@ qt-src**
 build
 build-aarch64
 build-x86_64
-src/timezones.txt
+
+# IANA Timezone database generated as part of build
+timezones.txt
