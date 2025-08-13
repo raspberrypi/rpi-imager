@@ -698,6 +698,45 @@ configure_file(
 
 set(SOURCES ${SOURCES} "${CMAKE_CURRENT_BINARY_DIR}/translations.qrc" ${QM_FILES})
 
+# Generate timezone list from IANA data
+# To disable automatic timezone generation, set -DGENERATE_TIMEZONES_FROM_IANA=OFF
+# To update timezone data version, change TZDATA_VERSION below
+option(GENERATE_TIMEZONES_FROM_IANA "Generate timezone list from latest IANA data" ON)
+
+if(GENERATE_TIMEZONES_FROM_IANA)
+    set(TZDATA_VERSION "2025b") # Update this to get newer timezone data
+    set(TZDATA_URL "https://data.iana.org/time-zones/releases/tzdata${TZDATA_VERSION}.tar.gz")
+    set(TZDATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/tzdata")
+    set(GENERATED_TIMEZONES_FILE "${CMAKE_CURRENT_BINARY_DIR}/timezones_generated.txt")
+    
+    # Download and extract IANA timezone data
+    add_custom_command(
+        OUTPUT ${GENERATED_TIMEZONES_FILE}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${TZDATA_DIR}
+        COMMAND ${CMAKE_COMMAND} 
+            -DTZDATA_URL=${TZDATA_URL}
+            -DTZDATA_DIR=${TZDATA_DIR}
+            -DOUTPUT_FILE=${GENERATED_TIMEZONES_FILE}
+            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateTimezones.cmake
+        COMMENT "Generating timezone list from IANA data"
+        VERBATIM
+    )
+    
+    # Create a target for timezone generation
+    add_custom_target(generate_timezones DEPENDS ${GENERATED_TIMEZONES_FILE})
+    
+    # Copy generated file to source location for embedding in resources
+    add_custom_command(
+        TARGET generate_timezones POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${GENERATED_TIMEZONES_FILE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt
+        COMMENT "Updating timezones.txt with generated data"
+    )
+    
+endif()
+
 # Create an rpi-imager_lupdate target
 qt_add_lupdate(TS_FILES ${TRANSLATIONS} SOURCE_TARGETS ${PROJECT_NAME} OPTIONS -no-obsolete -locations none)
 
@@ -711,6 +750,11 @@ endif()
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOMOC ON)
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTORCC ON)
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOUIC ON)
+
+# Add timezone generation dependency if enabled
+if(GENERATE_TIMEZONES_FROM_IANA AND TARGET generate_timezones)
+    add_dependencies(${PROJECT_NAME} generate_timezones)
+endif()
 
 if(ENABLE_TELEMETRY)
     add_definitions(-DTELEMETRY_ENABLED_DEFAULT=true)
