@@ -71,6 +71,9 @@ int main(int argc, char *argv[])
      * of users.
      */
     qputenv("QML_DISABLE_DISK_CACHE", "true");
+    
+    // Disable virtual keyboard input method to prevent QtVirtualKeyboard dependency
+    qputenv("QT_IM_MODULE", "");
 
 #if QT_VERSION > QT_VERSION_CHECK(6, 5, 0)
     // In version 6.5, Qt implemented Google Material Design 3,

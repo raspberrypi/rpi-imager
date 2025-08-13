@@ -1,0 +1,95 @@
+# macOS-specific Qt feature exclusions for building minimal Qt
+# This file is used by src/mac/build-qt-macos.sh if present.
+# You can diverge this list from the embedded list as needed for macOS.
+
+androiddeployqt
+appstore-compliant
+assistant
+batch_test_support
+bluetooth
+calendarwidget
+clipboard
+completer
+concatenatetablesproxymodel
+designer
+dial
+distancefieldgenerator
+emojisegmenter
+example-hwr
+gestures
+graphicsframecapture
+gssapi
+hijricalendar
+identityproxymodel
+islamiccivilcalendar
+itemmodeltester
+jalalicalendar
+keysequenceedit
+lcdnumber
+localserver
+# macdeployqt - NEEDED for deployment
+movie
+nfc
+pdf
+pixeltool
+poll-exit-on-error
+printdialog
+printer
+printpreviewdialog
+printpreviewwidget
+printsupport
+qdoc
+qev
+qt3d-animation
+qt3d-extras
+qt3d-input
+qt3d-logic
+qt3d-opengl-renderer
+qt3d-render
+qt3d-rhi-renderer
+qtattributionsscanner
+qtpdf-build
+qtpdf-quick-build
+qtpdf-widgets-build
+qtplugininfo
+qtprotobufgen
+sanitize_fuzzer_no_link
+scxml
+scxml-ecmascriptdatamodel
+sizegrip
+socks5
+sql
+sqlmodel
+statemachine
+statemachine-qml
+systemsemaphore
+systemtrayicon
+tabletevent
+testlib
+testlib_selfcover
+textmarkdownreader
+textmarkdownwriter
+textodfwriter
+topleveldomain
+tuiotouch
+undocommand
+undogroup
+undostack
+undoview
+valgrind
+wasm-exceptions
+wasm-jspi
+wasm-simd128
+wayland-compositor-quick
+webengine-developer-build
+webengine-jumbo-build
+windeployqt
+# SSL/TLS backend exclusions
+openssl
+openssl-linked
+# SQLite driver exclusions
+sql-sqlite
+# Virtual keyboard feature exclusions (removed invalid feature name)
+# GIF image format support (not needed for imaging app)
+gif
+
