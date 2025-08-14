@@ -82,7 +82,9 @@
                     "url": "https://www.raspberrypi.org/software/",
                     "default_os": "Raspberry Pi OS (32-bit)",
                     "embedded_default_os": "Raspberry Pi OS (32-bit)",
-                    "embedded_default_destination": "/dev/mmcblk0p1"
+                    "embedded_default_destination": "/dev/mmcblk0p1",
+                    "refresh_interval_minutes": 1440,
+                    "refresh_jitter_minutes": 60
                 }
             ],
             "required": [
@@ -96,6 +98,26 @@
                     "default": "",
                     "examples": [
                         "1.6"
+                    ]
+                },
+                "refresh_interval_minutes": {
+                    "$id": "#/properties/imager/properties/refresh_interval_minutes",
+                    "type": "integer",
+                    "title": "Refresh interval in minutes",
+                    "description": "Optional. Instructs the Imager to periodically refresh the top-level OS list after this many minutes.",
+                    "default": 0,
+                    "examples": [
+                        1440
+                    ]
+                },
+                "refresh_jitter_minutes": {
+                    "$id": "#/properties/imager/properties/refresh_jitter_minutes",
+                    "type": "integer",
+                    "title": "Additional random jitter in minutes",
+                    "description": "Optional. A non-negative number of minutes used as an upper bound for a random extra delay added to the base refresh interval.",
+                    "default": 0,
+                    "examples": [
+                        60
                     ]
                 },
                 "url": {
