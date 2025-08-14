@@ -14,6 +14,8 @@ import RpiImager
 ImPopup {
     id: root
 
+    title: qsTr("Use OS customization?")
+
     height: msgpopupbody.implicitHeight+150
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     focus: true
@@ -27,7 +29,7 @@ ImPopup {
 
     // Provide implementation for the base popup's navigation functions
     getNextFocusableElement: function(startElement) {
-        var focusableItems = [yesButton, noButton, editButton, noAndClearButton, root.closeButton].filter(function(item) {
+        var focusableItems = [yesButton, noButton, editButton, root.closeButton].filter(function(item) {
             return item.visible && item.enabled
         })
 
@@ -41,7 +43,7 @@ ImPopup {
     }
 
     getPreviousFocusableElement: function(startElement) {
-        var focusableItems = [yesButton, noButton, editButton, noAndClearButton, root.closeButton].filter(function(item) {
+        var focusableItems = [yesButton, noButton, editButton, root.closeButton].filter(function(item) {
             return item.visible && item.enabled
         })
 
@@ -71,50 +73,56 @@ ImPopup {
         text: qsTr("Would you like to apply OS customization settings?")
     }
 
-    RowLayout {
-        Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
-        Layout.bottomMargin: 10
+    Item {
         id: buttons
+        Layout.fillWidth: true
+        Layout.alignment: Qt.AlignBottom
+        Layout.bottomMargin: 10
+        implicitHeight: 36
 
-        ImButtonRed {
+        // Left-aligned Edit button (non-destructive action separated from confirmation choices)
+        ImButton {
             id: editButton
             text: qsTr("EDIT SETTINGS")
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
+            width: 140
+            height: 36
             onClicked: {
-                // Don't close this dialog when "edit settings" is
-                // clicked, as we don't want the user to fall back to the
-                // start of the flow. After editing the settings we want
-                // then to once again have the choice about whether to use
-                // customisation or not.
+                // Don't close this dialog when "edit settings" is clicked
                 root.editSettings()
             }
         }
 
-        ImButtonRed {
-            id: noAndClearButton
-            text: qsTr("NO, CLEAR SETTINGS")
-            onClicked: {
-                root.close()
-                root.noClearSettings()
-            }
-            enabled: root.hasSavedSettings
-        }
+        // Centered YES/NO actions
+        Row {
+            id: centerButtons
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 10
 
-        ImButtonRed {
-            id: yesButton
-            text: qsTr("YES")
-            onClicked: {
-                root.close()
-                root.yes()
+            ImButton {
+                id: noButton
+                text: qsTr("NO")
+                width: 100
+                height: 36
+                onClicked: {
+                    root.close()
+                    root.no()
+                }
             }
-            enabled: root.hasSavedSettings
-        }
 
-        ImButtonRed {
-            id: noButton
-            text: qsTr("NO")
-            onClicked: {
-                root.close()
-                root.no()
+            ImButtonRed {
+                id: yesButton
+                text: qsTr("YES")
+                width: 100
+                height: 36
+                onClicked: {
+                    root.close()
+                    root.yes()
+                }
+                enabled: root.hasSavedSettings
             }
         }
     }
