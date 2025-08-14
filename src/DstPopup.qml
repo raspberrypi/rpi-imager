@@ -123,6 +123,13 @@ MainPopupBase {
                     event.accepted = true
                 }
             }
+
+            onToggled: {
+                if (!checked) {
+                    // Ask for stern confirmation before disabling filtering
+                    confirmUnfilterPopup.open()
+                }
+            }
         }
     }
 
@@ -260,15 +267,61 @@ MainPopupBase {
             onError(qsTr("SD card is write protected.<br>Push the lock switch on the left side of the card upwards, and try again."))
             return
         }
-        imageWriter.setDst(d.device)
-        window.selectedStorageName = d.description
-        if (imageWriter.readyToWrite()) {
-            writebutton.enabled = true
+        if (d.isSystem) {
+            // Show stern confirmation dialog requiring typing the name
+            systemDriveConfirm.driveName = d.description
+            systemDriveConfirm.device = d.device
+            systemDriveConfirm.sizeStr = (d.size/1000000000).toFixed(1) + " " + qsTr("GB")
+            systemDriveConfirm.mountpoints = d.mountpoints
+            systemDriveConfirm.open()
+        } else {
+            imageWriter.setDst(d.device)
+            window.selectedStorageName = d.description
+            if (imageWriter.readyToWrite()) {
+                writebutton.enabled = true
+            }
+                // After a successful selection, ensure filtering is re-enabled
+                filterSystemDrives.checked = true
+            root.close()
         }
-        root.close()
     }
 
     onOpened: {
         root.contentItem.forceActiveFocus()
+    }
+
+    ConfirmUnfilterPopup {
+        id: confirmUnfilterPopup
+        onConfirmed: {
+            // user chose to disable filter; leave checkbox unchecked
+        }
+        onCancelled: {
+            // Re-enable the filter checkbox and keep system drives hidden
+            filterSystemDrives.checked = true
+        }
+        onClosed: {
+            if (filterSystemDrives.checked === false) {
+                dstlist.forceActiveFocus()
+            } else {
+                filterSystemDrives.forceActiveFocus()
+            }
+        }
+    }
+
+    ConfirmSystemDrivePopup {
+        id: systemDriveConfirm
+        onConfirmed: {
+            imageWriter.setDst(systemDriveConfirm.device)
+            window.selectedStorageName = systemDriveConfirm.driveName
+            if (imageWriter.readyToWrite()) {
+                writebutton.enabled = true
+            }
+            // Re-enable filtering after selection via confirmation path
+            filterSystemDrives.checked = true
+            root.close()
+        }
+        onCancelled: {
+            // no-op
+        }
     }
 }

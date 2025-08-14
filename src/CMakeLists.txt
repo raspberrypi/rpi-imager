@@ -814,6 +814,9 @@ set(QT_QML_GENERATE_QMLLS_INI ON)
 set(IMAGER_QML_FILES
     main.qml
     MsgPopup.qml
+    ConfirmUnfilterPopup.qml
+    ConfirmSystemDrivePopup.qml
+    CommonStrings.qml
     OptionsGeneralTab.qml
     OptionsMiscTab.qml
     OptionsPopup.qml
@@ -837,6 +840,7 @@ set(IMAGER_QML_FILES
 )
 
 set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(CommonStrings.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 # C++ types exposed to QML
 set(IMAGER_QML_CPP_TYPES
