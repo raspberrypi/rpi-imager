@@ -19,8 +19,6 @@
 #include <QVariant>
 #include <QQmlEngine>
 #include <QNetworkReply>
-#include <qjsonarray.h>
-#include <qjsondocument.h>
 #include "config.h"
 #include "powersaveblocker.h"
 #include "drivelistmodel.h"
@@ -183,6 +181,9 @@ public:
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void openUrl(const QUrl &url);
+    
+    /* Override OS list refresh schedule (in minutes); pass negative to clear override */
+    Q_INVOKABLE void setOsListRefreshOverride(int intervalMinutes, int jitterMinutes);
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
@@ -221,6 +222,7 @@ protected slots:
     void onCacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes);
     void onCacheVerificationComplete(bool isValid);
     void onSelectedDeviceRemoved(const QString &device);
+    void onOsListRefreshTimeout();
 
 private:
     // Cache management
@@ -254,12 +256,15 @@ protected:
     OSListModel _oslist;
     QQmlApplicationEngine *_engine;
     QTimer _networkchecktimer;
+    QTimer _osListRefreshTimer;
     PowerSaveBlocker _powersave;
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _embeddedMode, _online;
     QSettings _settings;
     QMap<QString,QString> _translations;
     QTranslator *_trans;
+    int _refreshIntervalOverrideMinutes;
+    int _refreshJitterOverrideMinutes;
 
     void _parseCompressedFile();
     void _parseXZFile();
@@ -268,6 +273,7 @@ protected:
     QString _sshKeyDir();
     QString _sshKeyGen();
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
+    void scheduleOsListRefresh();
 };
 
 #endif // IMAGEWRITER_H

@@ -43,6 +43,7 @@
 #include <QVersionNumber>
 #include <QCryptographicHash>
 #include <QDesktopServices>
+#include <QRandomGenerator>
 #include <stdlib.h>
 
 #ifdef Q_OS_WIN
@@ -76,12 +77,15 @@ ImageWriter::ImageWriter(QObject *parent)
       _oslist(OSListModel(*this)),
       _engine(nullptr), 
       _networkchecktimer(),
+      _osListRefreshTimer(),
       _powersave(),
       _thread(nullptr), 
       _verifyEnabled(false), _multipleFilesInZip(false), _embeddedMode(false), _online(false),
       _settings(),
       _translations(),
-      _trans(nullptr)
+      _trans(nullptr),
+      _refreshIntervalOverrideMinutes(-1),
+      _refreshJitterOverrideMinutes(-1)
 {
     // Initialize CacheManager now that _embeddedMode is properly initialized
     _cacheManager = new CacheManager(_embeddedMode, this);
@@ -254,6 +258,10 @@ ImageWriter::ImageWriter(QObject *parent)
     // Start background drive list polling 
     qDebug() << "Starting background drive list polling";
     _drivelist.startPolling();
+
+    // Configure OS list refresh timer (single-shot; we reschedule after each fetch)
+    _osListRefreshTimer.setSingleShot(true);
+    connect(&_osListRefreshTimer, &QTimer::timeout, this, &ImageWriter::onOsListRefreshTimeout);
 }
 
 ImageWriter::~ImageWriter()
@@ -740,8 +748,13 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                 if (_completeOsList.isEmpty()) {
                     _completeOsList = QJsonDocument(response_object);
                 } else {
+                    // Preserve latest top-level imager metadata if present in the top-level fetch
                     auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url(), 1);
-                    auto imager_meta = _completeOsList["imager"].toObject();
+                    QJsonObject imager_meta = _completeOsList["imager"].toObject();
+                    if (response_object.contains("imager") && data->request().url() == constantOsListUrl()) {
+                        // Update imager metadata when this reply is for the top-level OS list
+                        imager_meta = response_object["imager"].toObject();
+                    }
                     _completeOsList = QJsonDocument(QJsonObject({
                         {"imager", imager_meta},
                         {"os_list", new_list}
@@ -750,6 +763,11 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
 
                 findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager, 1);
                 emit osListPrepared();
+
+                // After processing a top-level list fetch, (re)schedule the next refresh
+                if (data->request().url() == constantOsListUrl()) {
+                    scheduleOsListRefresh();
+                }
             } else {
                 qDebug() << "Incorrectly formatted OS list at: " << data->url();
             }
@@ -881,6 +899,75 @@ void ImageWriter::beginOSListFetch() {
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
    _networkManager.get(request);
+}
+
+void ImageWriter::onOsListRefreshTimeout()
+{
+    qDebug() << "OS list refresh timer fired - refetching";
+    beginOSListFetch();
+}
+
+void ImageWriter::scheduleOsListRefresh()
+{
+    // Default: do not refresh if we cannot read settings from current _completeOsList
+    int baseMinutes = 0;
+    int jitterMinutes = 0;
+
+    // CLI overrides take precedence when set (>= 0)
+    if (_refreshIntervalOverrideMinutes >= 0) {
+        baseMinutes = _refreshIntervalOverrideMinutes;
+    }
+    if (_refreshJitterOverrideMinutes >= 0) {
+        jitterMinutes = _refreshJitterOverrideMinutes;
+    }
+
+    if (!_completeOsList.isEmpty()) {
+        QJsonObject root = _completeOsList.object();
+        if (root.contains("imager")) {
+            QJsonObject imager = root.value("imager").toObject();
+            // New optional fields
+            if (baseMinutes <= 0 && imager.contains("refresh_interval_minutes")) {
+                baseMinutes = imager.value("refresh_interval_minutes").toInt(0);
+            }
+            if (jitterMinutes <= 0 && imager.contains("refresh_jitter_minutes")) {
+                jitterMinutes = imager.value("refresh_jitter_minutes").toInt(0);
+            }
+        }
+    }
+
+    if (baseMinutes <= 0) {
+        // No refresh configured; stop timer
+        _osListRefreshTimer.stop();
+        qDebug() << "OS list refresh disabled (no interval provided)";
+        return;
+    }
+
+    // Constrain jitter to non-negative
+    if (jitterMinutes < 0) jitterMinutes = 0;
+
+    // Compute randomized delay with second-level granularity
+    // Base is in minutes; jitter is in minutes but applied as seconds
+    const qint64 baseMs = static_cast<qint64>(baseMinutes) * 60 * 1000;
+    const int jitterSeconds = jitterMinutes * 60;
+    const int extraSeconds = (jitterSeconds > 0) ? QRandomGenerator::global()->bounded(jitterSeconds + 1) : 0;
+    qint64 msec = baseMs + static_cast<qint64>(extraSeconds) * 1000;
+
+    // Cap to a reasonable max to avoid overflow (e.g., ~30 days)
+    const qint64 maxMs = static_cast<qint64>(30) * 24 * 60 * 60 * 1000;
+    if (msec > maxMs) msec = maxMs;
+
+    _osListRefreshTimer.start(msec);
+    qDebug() << "Scheduled OS list refresh in" << (msec/1000) << "seconds (base" << (baseMs/1000) << "+ jitter" << extraSeconds << ")";
+}
+
+void ImageWriter::setOsListRefreshOverride(int intervalMinutes, int jitterMinutes)
+{
+    _refreshIntervalOverrideMinutes = intervalMinutes;
+    _refreshJitterOverrideMinutes = jitterMinutes;
+    // If we already have a list, reschedule now
+    if (!_completeOsList.isEmpty()) {
+        scheduleOsListRefresh();
+    }
 }
 
 void ImageWriter::setCustomRepo(const QUrl &repo)

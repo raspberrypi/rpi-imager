@@ -131,6 +131,8 @@ int main(int argc, char *argv[])
     QString customRepo;
     QUrl url;
     QStringList args = app.arguments();
+    int cliRefreshInterval = -1;
+    int cliRefreshJitter = -1;
     for (int i=1; i < args.size(); i++)
     {
         if (!args[i].startsWith("-") && url.isEmpty())
@@ -207,9 +209,41 @@ int main(int argc, char *argv[])
             }
 #endif
         }
+        else if (args[i] == "--refresh-interval")
+        {
+            if (args.size()-i < 2 || args[i+1].startsWith("-"))
+            {
+                cerr << "Missing minutes after --refresh-interval" << endl;
+                return 1;
+            }
+            bool ok = false;
+            int v = args[++i].toInt(&ok);
+            if (!ok || v < 0)
+            {
+                cerr << "Invalid value for --refresh-interval" << endl;
+                return 1;
+            }
+            cliRefreshInterval = v;
+        }
+        else if (args[i] == "--refresh-jitter")
+        {
+            if (args.size()-i < 2 || args[i+1].startsWith("-"))
+            {
+                cerr << "Missing minutes after --refresh-jitter" << endl;
+                return 1;
+            }
+            bool ok = false;
+            int v = args[++i].toInt(&ok);
+            if (!ok || v < 0)
+            {
+                cerr << "Invalid value for --refresh-jitter" << endl;
+                return 1;
+            }
+            cliRefreshJitter = v;
+        }
         else if (args[i] == "--help")
         {
-            cerr << "rpi-imager [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--disable-telemetry] [<image file to write>]" << endl;
+            cerr << "rpi-imager [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--refresh-interval <minutes>] [--refresh-jitter <minutes>] [--disable-telemetry] [<image file to write>]" << endl;
             cerr << "-OR- rpi-imager --cli [--disable-verify] [--sha256 <expected hash>] [--debug] [--quiet] <image file to write> <destination drive device>" << endl;
             return 0;
         }
@@ -290,6 +324,8 @@ int main(int argc, char *argv[])
 
     if (!url.isEmpty())
         imageWriter.setSrc(url);
+    if (cliRefreshInterval >= 0 || cliRefreshJitter >= 0)
+        imageWriter.setOsListRefreshOverride(cliRefreshInterval, cliRefreshJitter);
     imageWriter.setEngine(&engine);
     engine.setNetworkAccessManagerFactory(&namf);
 
