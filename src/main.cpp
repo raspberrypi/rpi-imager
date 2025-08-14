@@ -325,7 +325,23 @@ int main(int argc, char *argv[])
     if (!url.isEmpty())
         imageWriter.setSrc(url);
     if (cliRefreshInterval >= 0 || cliRefreshJitter >= 0)
-        imageWriter.setOsListRefreshOverride(cliRefreshInterval, cliRefreshJitter);
+    {
+        // Sanitize CLI overrides: enforce minimums when non-zero
+        // Base interval min: 1 day (1440 minutes)
+        // Jitter min: 3 hours (180 minutes)
+        constexpr int MIN_BASE_MINUTES = 24 * 60;   // 1440
+        constexpr int MIN_JITTER_MINUTES = 3 * 60;  // 180
+
+        int sanitizedInterval = cliRefreshInterval;
+        int sanitizedJitter = cliRefreshJitter;
+
+        if (sanitizedInterval > 0 && sanitizedInterval < MIN_BASE_MINUTES)
+            sanitizedInterval = MIN_BASE_MINUTES;
+        if (sanitizedJitter > 0 && sanitizedJitter < MIN_JITTER_MINUTES)
+            sanitizedJitter = MIN_JITTER_MINUTES;
+
+        imageWriter.setOsListRefreshOverride(sanitizedInterval, sanitizedJitter);
+    }
     imageWriter.setEngine(&engine);
     engine.setNetworkAccessManagerFactory(&namf);
 
