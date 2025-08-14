@@ -561,6 +561,7 @@ ApplicationWindow {
                             Layout.bottomMargin: 10
 
                             delegate: ItemDelegate {
+                                id: languageDelegate
                                 width: parent.width
                                 height: 30
 
@@ -573,8 +574,8 @@ ApplicationWindow {
                                 }
 
                                 background: Rectangle {
-                                    id: bgrect
-                                    color: parent.hovered ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
+                                    id: langDelegateBackground
+                                    color: languageDelegate.hovered ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
                                 }
                             }
 
@@ -614,6 +615,7 @@ ApplicationWindow {
                             Layout.rightMargin: 30
 
                             delegate: ItemDelegate {
+                                id: keyboardDelegate
                                 width: parent.width
                                 height: 30
 
@@ -626,8 +628,8 @@ ApplicationWindow {
                                 }
 
                                 background: Rectangle {
-                                    id: bgrect
-                                    color: parent.hovered ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
+                                    id: keyboardDelegateBackground
+                                    color: keyboardDelegate.hovered ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor
                                 }
                             }
                             Keys.onPressed: (event) => {
@@ -708,6 +710,13 @@ ApplicationWindow {
         id: dstpopup
         imageWriter: window.imageWriter
         windowWidth: window.width
+        onClosed: {
+            if (window.imageWriter.readyToWrite()) {
+                writebutton.forceActiveFocus()
+            } else {
+                dstbutton.forceActiveFocus()
+            }
+        }
     }
 
     MsgPopup {
