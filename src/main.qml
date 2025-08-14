@@ -942,7 +942,9 @@ ApplicationWindow {
         imageWriter.createHardwareTags();
         ospopup.fetchOSlist()
         let hardwareTag = window.imageWriter.getHardwareName();
-        console.log(hardwareTag);
+        if (hardwareTag !== "") {
+            console.log(hardwareTag);
+        }
         if (window.imageWriter.isEmbeddedMode() && hardwareTag !== ""){
                 // Limit the hardware selection button to only the specified device
                 text0.text = "Hardware Type Detected";
