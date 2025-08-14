@@ -274,26 +274,26 @@ Window {
             }
         }
 
-        RowLayout {
+        Item {
             id: buttonsRow
             Layout.fillWidth: true
+            implicitHeight: 36
 
-            Item {
-                Layout.fillWidth: true
-            }
-
+            // Destructive action isolated at the far left
             ImButton {
-                id: cancelButton
-                text: qsTr("CANCEL")
+                id: resetButton
+                text: qsTr("RESET")
+                anchors.left: parent.left
+                anchors.leftMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                width: 100
+                height: 36
                 activeFocusOnTab: true
-                Layout.preferredWidth: 100
-                Layout.preferredHeight: 36
-                
-                // Add keyboard navigation
+
                 Keys.onPressed: (event) => {
                     if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
-                        // Tab to Save button
-                        saveButton.forceActiveFocus()
+                        // Tab to Cancel button in center group
+                        cancelButton.forceActiveFocus()
                         event.accepted = true
                     } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                         // Shift+Tab back to last element in current tab
@@ -301,72 +301,111 @@ Window {
                         event.accepted = true
                     }
                 }
-                
+
                 onClicked: {
-                    popup.close()
+                    // Reset all customization UI fields to defaults
+                    clearCustomizationFields()
+
+                    // Clear any saved customization settings
+                    popup.imageWriter.clearSavedCustomizationSettings()
+
+                    // Clear any applied, in-session customization
+                    popup.imageWriter.setImageCustomization("", "", "", "", "")
+
+                    // Reset state flags
+                    popup.changesAppliedInSession = false
                 }
             }
 
-            ImButtonRed {
-                id: saveButton
-                text: qsTr("SAVE")
-                enabled: !popup.hasValidationErrors()
-                activeFocusOnTab: true
-                Layout.preferredWidth: 100
-                Layout.preferredHeight: 36
-                
-                // Show helpful tooltip when button is disabled
-                ToolTip.visible: hovered && !enabled
-                ToolTip.text: {
-                    if (popup.hasGeneralTabErrors() && popup.hasServicesTabErrors()) {
-                        return qsTr("Please fix validation errors in General and Services tabs")
-                    } else if (popup.hasGeneralTabErrors()) {
-                        return qsTr("Please fix validation errors in General tab")
-                    } else if (popup.hasServicesTabErrors()) {
-                        return qsTr("Please fix validation errors in Services tab")
-                    } else {
-                        return ""
-                    }
-                }
-                ToolTip.delay: 500
-                
-                // Add keyboard navigation  
-                Keys.onPressed: (event) => {
-                    if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
-                        // Tab wraps back to TabBar
-                        bar.forceActiveFocus()
-                        event.accepted = true
-                    } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                        // Shift+Tab to Cancel button
-                        cancelButton.forceActiveFocus()
-                        event.accepted = true
-                    }
-                }
-                
-                onClicked: {
-                    // Safety check - don't save if there are validation errors
-                    // This should rarely trigger since the button is disabled when there are errors,
-                    // but provides a fallback and focuses the first error field for better UX
-                    if (popup.hasValidationErrors()) {
-                        popup.focusFirstErrorField()
-                        return
-                    }
-                    
-                    popup.applySettings()
-                    popup.saveSettings()
-                    
-                    // Save misc options (beep, eject, telemetry) to persistent storage
-                    imageWriter.setSetting("beep", optionsTab.beepEnabled)
-                    imageWriter.setSetting("eject", optionsTab.ejectEnabled)
-                    imageWriter.setSetting("telemetry", optionsTab.telemetryEnabled)
-                    
-                    popup.changesAppliedInSession = true
-                    popup.close()
-                }
-            }
+            // Centered regular actions
+            Row {
+                id: centerButtons
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 10
 
-            Item {
-                Layout.fillWidth: true
+                ImButton {
+                    id: cancelButton
+                    text: qsTr("CANCEL")
+                    width: 100
+                    height: 36
+                    activeFocusOnTab: true
+
+                    // Keyboard navigation
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                            // Tab to Save button
+                            saveButton.forceActiveFocus()
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
+                            // Shift+Tab to Reset button at far left
+                            resetButton.forceActiveFocus()
+                            event.accepted = true
+                        }
+                    }
+
+                    onClicked: {
+                        popup.close()
+                    }
+                }
+
+                ImButtonRed {
+                    id: saveButton
+                    text: qsTr("SAVE")
+                    enabled: !popup.hasValidationErrors()
+                    width: 100
+                    height: 36
+                    activeFocusOnTab: true
+
+                    // Show helpful tooltip when button is disabled
+                    ToolTip.visible: hovered && !enabled
+                    ToolTip.text: {
+                        if (popup.hasGeneralTabErrors() && popup.hasServicesTabErrors()) {
+                            return qsTr("Please fix validation errors in General and Services tabs")
+                        } else if (popup.hasGeneralTabErrors()) {
+                            return qsTr("Please fix validation errors in General tab")
+                        } else if (popup.hasServicesTabErrors()) {
+                            return qsTr("Please fix validation errors in Services tab")
+                        } else {
+                            return ""
+                        }
+                    }
+                    ToolTip.delay: 500
+
+                    // Keyboard navigation  
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier)) {
+                            // Tab wraps back to TabBar
+                            bar.forceActiveFocus()
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
+                            // Shift+Tab to Cancel button
+                            cancelButton.forceActiveFocus()
+                            event.accepted = true
+                        }
+                    }
+
+                    onClicked: {
+                        // Safety check - don't save if there are validation errors
+                        // This should rarely trigger since the button is disabled when there are errors,
+                        // but provides a fallback and focuses the first error field for better UX
+                        if (popup.hasValidationErrors()) {
+                            popup.focusFirstErrorField()
+                            return
+                        }
+
+                        popup.applySettings()
+                        popup.saveSettings()
+
+                        // Save misc options (beep, eject, telemetry) to persistent storage
+                        popup.imageWriter.setSetting("beep", optionsTab.beepEnabled)
+                        popup.imageWriter.setSetting("eject", optionsTab.ejectEnabled)
+                        popup.imageWriter.setSetting("telemetry", optionsTab.telemetryEnabled)
+
+                        popup.changesAppliedInSession = true
+                        popup.close()
+                    }
+                }
             }
         }
     }
