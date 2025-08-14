@@ -27,7 +27,7 @@ ImPopup {
 
     // Provide implementation for the base popup's navigation functions
     getNextFocusableElement: function(startElement) {
-        var focusableItems = [noButton, yesButton, continueButton, quitButton, rebootButton, root.closeButton].filter(function(item) {
+        var focusableItems = [yesButton, noButton, continueButton, quitButton, rebootButton, root.closeButton].filter(function(item) {
             return item.visible && item.enabled
         })
 
@@ -41,7 +41,7 @@ ImPopup {
     }
 
     getPreviousFocusableElement: function(startElement) {
-        var focusableItems = [noButton, yesButton, continueButton, quitButton, rebootButton, root.closeButton].filter(function(item) {
+        var focusableItems = [yesButton, noButton, continueButton, quitButton, rebootButton, root.closeButton].filter(function(item) {
             return item.visible && item.enabled
         })
 
@@ -79,7 +79,7 @@ ImPopup {
         spacing: 20
         id: buttons
 
-        ImButtonRed {
+        ImButton {
             id: noButton
             text: qsTr("NO")
             onClicked: {
