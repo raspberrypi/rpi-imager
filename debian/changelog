@@ -9,6 +9,12 @@ rpi-imager (1.9.7) unstable; urgency=medium
   * windows: Autogenerate manifest version information from the build
   * windows, macos, linux: Add PlatformQuirks module to deal with host
       hardware quirks. Today, just used on Windows for nVidia lockups.
+  * all: Add OS list refresh jitter and override
+  * all: Generate timezone data from tzdata
+  * OS customisation: Refactor dialogs, data reset
+  * Cache Management: Fixup destruction segfault
+  * Embedded: Unified build
+  * macOS: Build custom Qt 6.9.1
 
  -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 31 Jul 2025 17:00:00 +0100
 
