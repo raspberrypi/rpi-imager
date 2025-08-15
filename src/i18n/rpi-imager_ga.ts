@@ -21,11 +21,11 @@
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">Earráid ag léamh ón stóras.&lt;br&gt;B’fhéidir go bhfuil an cárta SD briste.</translation>
+        <translation>Earráid ag léamh ón stóras.&lt;br&gt;B’fhéidir go bhfuil an cárta SD briste.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">Theip ar fhíorú an scríbhneoireachta. Tá ábhar an chárta SD difriúil ón méid a scríobhadh air.</translation>
+        <translation>Theip ar fhíorú an scríbhneoireachta. Tá ábhar an chárta SD difriúil ón méid a scríobhadh air.</translation>
     </message>
 </context>
 <context>
@@ -120,19 +120,19 @@
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>Tá an comhad taisceáilte truaillithe. Ní mheaitseálann an hais SHA256 an luach ionchais.&lt;br&gt;Bainfear an comhad taisce agus atosófar an íoslódáil.</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Tá an comhad áitiúil truaillithe nó tá hais SHA256 mícheart ann.&lt;br&gt;Imshoilsithe: %1&lt;br&gt;Iarbhír: %2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Is cosúil go bhfuil an íoslódáil truaillithe. Ní hionann an hais SHA256.&lt;br&gt;Measadh: %1&lt;br&gt;Iarbhír: %2&lt;br&gt;Seiceáil do nasc líonra agus déan iarracht arís.</translation>
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Is cosúil go bhfuil Rochtain Rialaithe ar Fhillteáin cumasaithe. Cuir rpi-imager.exe leis an liosta aipeanna ceadaithe agus déan iarracht arís.</translation>
     </message>
 </context>
 <context>
@@ -143,31 +143,31 @@
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Earráid ag oscailt an ghléis le haghaidh formáidithe</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Earráid ag scríobh chuig gléas le linn formáidithe</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Earráid ag cuardach ar an ngléas le linn formáidithe</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Paraiméadair neamhbhailí le haghaidh formáidithe</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>Easpa spáis ar an ngléas</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>Earráid formáidithe anaithnid</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
+        <translation>Ní féidir an gléas a fhormáidiú: ceadanna neamhleor agus níl udisks2 ar fáil</translation>
     </message>
 </context>
 <context>
@@ -266,19 +266,19 @@
     </message>
     <message>
         <source>starting extraction</source>
-        <translation type="unfinished"></translation>
+        <translation>ag tosú eastóscadh</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Earráid ag léamh ón gcomhad íomhá</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation type="unfinished"></translation>
+        <translation>Earráid ag scríobh chuig gléas</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Theip ar an gcomhad íomhá iomlán a léamh</translation>
     </message>
 </context>
 <context>
@@ -428,19 +428,19 @@
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished"></translation>
+        <translation>CEALAIGH</translation>
     </message>
     <message>
         <source>Please fix validation errors in General and Services tabs</source>
-        <translation type="unfinished"></translation>
+        <translation>Deisigh earráidí bailíochtaithe sna cluaisíní Ginearálta agus Seirbhísí</translation>
     </message>
     <message>
         <source>Please fix validation errors in General tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Deisigh earráidí bailíochtaithe sa chluaisín Ginearálta le do thoil</translation>
     </message>
     <message>
         <source>Please fix validation errors in Services tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Deisigh earráidí bailíochtaithe sa chluaisín Seirbhísí le do thoil</translation>
     </message>
 </context>
 <context>
@@ -477,11 +477,13 @@
         <source>Paste your SSH public key here.
 Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Greamaigh d’eochair phoiblí SSH anseo.
+Formáidí tacaithe: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, agus deimhnithe SSH
+Sampla: ssh-rsa AAAAB3NzaC1yc2E... ainm úsáideora@óstach</translation>
     </message>
     <message>
         <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation type="unfinished"></translation>
+        <translation>Formáid eochrach SSH neamhbhailí. Ní mór eochracha SSH a thosú le ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, nó teastais SSH, agus sonraí na heochrach agus trácht roghnach ina dhiaidh sin.</translation>
     </message>
 </context>
 <context>
@@ -663,23 +665,23 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <translation>SCIP FÍORÚ AN TAISCE</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>Ag tosú ag íoslódáil...</translation>
     </message>
     <message>
         <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>Ag fíorú comhad taisceáilte... %1%</translation>
     </message>
     <message>
         <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
+        <translation>Ag fíorú comhad taisceáilte...</translation>
     </message>
     <message>
         <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <translation>Ag tosú ag scríobh...</translation>
     </message>
 </context>
 </TS>
