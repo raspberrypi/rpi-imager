@@ -1195,48 +1195,9 @@ void ImageWriter::pollNetwork()
     if (_online)
     {
         _networkchecktimer.stop();
-
-        // Wait another 0.1 sec, as dhcpcd may not have set up nameservers yet
-        QTimer::singleShot(100, this, SLOT(syncTime()));
-    }
-#endif
-}
-
-void ImageWriter::syncTime()
-{
-#ifdef Q_OS_LINUX
-    qDebug() << "Network online. Synchronizing time.";
-    QNetworkAccessManager *manager = new QNetworkAccessManager(this);
-    connect(manager, SIGNAL(finished(QNetworkReply*)), SLOT(onTimeSyncReply(QNetworkReply*)));
-    manager->head(QNetworkRequest(QUrl(TIME_URL)));
-#endif
-}
-
-void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
-{
-#ifdef Q_OS_LINUX
-    if (reply->hasRawHeader("date"))
-    {
-        qDebug() << reply->rawHeader("date");
-        QDateTime dt = QDateTime::fromString(reply->rawHeader("date"), "ddd, dd MMM yyyy hh:mm:ss t");
-        qDebug() << "Received current time from server:" << dt;
-        struct timeval tv = {
-            (time_t) dt.toSecsSinceEpoch(), 0
-        };
-        ::settimeofday(&tv, NULL);
-
         beginOSListFetch();
         emit networkOnline();
     }
-    else
-    {
-        emit networkInfo(tr("Error synchronizing time. Trying again in 3 seconds"));
-        QTimer::singleShot(3000, this, SLOT(syncTime()));
-    }
-
-    reply->deleteLater();
-#else
-    Q_UNUSED(reply)
 #endif
 }
 
