@@ -1172,14 +1172,9 @@ void ImageWriter::_parseXZFile()
 
 bool ImageWriter::isOnline()
 {
-    return _online || !_embeddedMode;
-}
-
-void ImageWriter::pollNetwork()
-{
-#ifdef Q_OS_LINUX
     /* Check if we have an IP-address other than localhost */
     QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+    bool online = false;
 
     foreach (QHostAddress a, addresses)
     {
@@ -1187,18 +1182,30 @@ void ImageWriter::pollNetwork()
         {
             /* Not a loopback or IPv6 link-local address, so online */
             emit networkInfo(QString("IP: %1").arg(a.toString()));
-            _online = true;
+            online = true;
             break;
         }
     }
 
-    if (_online)
+    if (online) {
+        auto response = _networkManager.get(QNetworkRequest(QUrl(TIME_URL)));
+        if (response->hasRawHeader("date"))
+        {
+            online = true;
+        }
+    }
+
+    return online;
+}
+
+void ImageWriter::pollNetwork()
+{
+    if (isOnline())
     {
         _networkchecktimer.stop();
         beginOSListFetch();
         emit networkOnline();
     }
-#endif
 }
 
 void ImageWriter::onSTPdetected()
