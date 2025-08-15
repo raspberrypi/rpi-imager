@@ -264,7 +264,7 @@ export QT_QUICK_BACKEND=software
 export QT_QPA_FB_DRM=/dev/dri/card1
 
 # Logging (can be disabled in production)
-export QT_LOGGING_RULES="*.debug=false"
+#export QT_LOGGING_RULES="*.debug=true;*.qpa.*=false"
 
 exec "${HERE}/usr/bin/rpi-imager" "$@"
 EOF
@@ -321,15 +321,7 @@ mkdir -p "$APPDIR/usr/share/fonts/truetype/droid"
 cp src/fonts/DejaVuSans.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
 cp src/fonts/DejaVuSans-Bold.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
 cp src/fonts/FreeSans.ttf "$APPDIR/usr/share/fonts/truetype/freefont"
-cp src/fonts/DroidSansFallbackFull.ttf "$APPDIR/usr/share/fonts/truetype/droid"
-
-mkdir -p "$APPDIR/usr/share/fonts/truetype/dejavu"
-mkdir -p "$APPDIR/usr/share/fonts/truetype/freefont"
-mkdir -p "$APPDIR/usr/share/fonts/truetype/droid"
-cp src/fonts/DejaVuSans.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
-cp src/fonts/DejaVuSans-Bold.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
-cp src/fonts/FreeSans.ttf "$APPDIR/usr/share/fonts/truetype/freefont"
-cp src/fonts/DroidSansFallbackFull.ttf "$APPDIR/usr/share/fonts/truetype/droid"
+# cp src/fonts/DroidSansFallbackFull.ttf "$APPDIR/usr/share/fonts/truetype/droid"
 
 # Copy QML components
 if [ -d "$QT_DIR/qml" ]; then
@@ -376,6 +368,7 @@ rm -f "$APPDIR/usr/lib/libQt6QuickControls2UniversalStyleImpl.so"* 2>/dev/null |
 rm -f "$APPDIR/usr/lib/libQt6QuickControls2ImagineStyleImpl.so"* 2>/dev/null || true
 rm -f "$APPDIR/usr/lib/libQt6QuickControls2FluentWinUI3StyleImpl.so"* 2>/dev/null || true
 rm -f "$APPDIR/usr/lib/libQt6QuickControls2WindowsStyleImpl.so"* 2>/dev/null || true
+rm -f "$APPDIR/usr/lib/libQt6Widgets.so"* 2>/dev/null || true
 
 # Remove desktop-specific libraries that may have been included
 rm -f "$APPDIR/usr/lib/libwayland"* 2>/dev/null || true

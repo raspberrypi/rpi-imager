@@ -213,6 +213,7 @@ ApplicationWindow {
                         padding: 0
                         bottomPadding: 0
                         topPadding: 0
+                        enabled: !window.imageWriter.isEmbeddedMode()
                         Layout.minimumHeight: 40
                         Layout.fillWidth: true
                         onClicked: {
@@ -950,6 +951,9 @@ ApplicationWindow {
                 text0.text = "Hardware Type Detected";
                 hwbutton.enabled = false
                 hwbutton.text = hardwareTag;
+        }
+        else {
+            hwbutton.enabled = true;
         }
     }
 

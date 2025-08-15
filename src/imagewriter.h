@@ -209,13 +209,11 @@ protected slots:
     void startProgressPolling();
     void stopProgressPolling();
     void pollNetwork();
-    void syncTime();
     void onSuccess();
     void onError(QString msg);
     void onFileSelected(QString filename);
     void onCancelled();
     void onFinalizing();
-    void onTimeSyncReply(QNetworkReply *reply);
     void onPreparationStatusUpdate(QString msg);
     void handleNetworkRequestFinished(QNetworkReply *data);
     void onSTPdetected();
