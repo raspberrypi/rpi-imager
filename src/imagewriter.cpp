@@ -45,6 +45,7 @@
 #include <QDesktopServices>
 #include <QRandomGenerator>
 #include <stdlib.h>
+#include <QLocale>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -895,7 +896,6 @@ void ImageWriter::beginOSListFetch() {
     QNetworkRequest request = QNetworkRequest(constantOsListUrl());
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
-
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
    _networkManager.get(request);
@@ -1172,72 +1172,68 @@ void ImageWriter::_parseXZFile()
 
 bool ImageWriter::isOnline()
 {
-    return _online || !_embeddedMode;
-}
-
-void ImageWriter::pollNetwork()
-{
-#ifdef Q_OS_LINUX
     /* Check if we have an IP-address other than localhost */
     QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+    bool online = false;
 
     foreach (QHostAddress a, addresses)
     {
         if (!a.isLoopback() && a.scopeId().isEmpty())
         {
             /* Not a loopback or IPv6 link-local address, so online */
+            qDebug() << "IP DETECTED: " << a.toString();
             emit networkInfo(QString("IP: %1").arg(a.toString()));
-            _online = true;
+            online = true;
             break;
         }
     }
 
-    if (_online)
-    {
-        _networkchecktimer.stop();
+    if (online) {
+        QNetworkRequest request(QUrl(TIME_URL));
+        request.setTransferTimeout(3000); // 3 seconds
+        QNetworkReply* response = _networkManager.get(request);
+        
+        // Connect to the finished signal to ensure headers are available
+        QObject::connect(response, &QNetworkReply::finished, [response, this]() {
+            if (response->hasRawHeader("date"))
+                {
+                bool timeSet = false;                
+                // systemd-timesyncd will change the timestamp of this file to indicate that the time has been set
+                QString filePath = "/var/lib/systemd/timesync/clock";
+                QDateTime clock_time;
+                QFileInfo fileInfo(filePath);
+                
+                if (fileInfo.exists()) {clock_time = fileInfo.lastModified();}
 
-        // Wait another 0.1 sec, as dhcpcd may not have set up nameservers yet
-        QTimer::singleShot(100, this, SLOT(syncTime()));
+                filePath = "/lib/systemd/systemd-timesyncd";
+                QDateTime creation_time;
+                QFileInfo fileInfo2(filePath);
+                
+                if (fileInfo2.exists())
+                    creation_time = fileInfo2.lastModified();
+                if (clock_time > creation_time)
+                    timeSet = true;
+
+                if (timeSet)
+                {
+                    _networkchecktimer.stop();
+                    beginOSListFetch();
+                    emit networkOnline();
+                }
+            }
+            else
+            {
+                qDebug() << "Unable to access time server";
+            }
+            response->deleteLater();
+        });
     }
-#endif
+    return online;
 }
 
-void ImageWriter::syncTime()
+void ImageWriter::pollNetwork()
 {
-#ifdef Q_OS_LINUX
-    qDebug() << "Network online. Synchronizing time.";
-    QNetworkAccessManager *manager = new QNetworkAccessManager(this);
-    connect(manager, SIGNAL(finished(QNetworkReply*)), SLOT(onTimeSyncReply(QNetworkReply*)));
-    manager->head(QNetworkRequest(QUrl(TIME_URL)));
-#endif
-}
-
-void ImageWriter::onTimeSyncReply(QNetworkReply *reply)
-{
-#ifdef Q_OS_LINUX
-    if (reply->hasRawHeader("date"))
-    {
-        qDebug() << reply->rawHeader("date");
-        QDateTime dt = QDateTime::fromString(reply->rawHeader("date"), "ddd, dd MMM yyyy hh:mm:ss t");
-        qDebug() << "Received current time from server:" << dt;
-        struct timeval tv = {
-            (time_t) dt.toSecsSinceEpoch(), 0
-        };
-        ::settimeofday(&tv, NULL);
-
-        beginOSListFetch();
-        emit networkOnline();
-    }
-    else
-    {
-        emit networkInfo(tr("Error synchronizing time. Trying again in 3 seconds"));
-        QTimer::singleShot(3000, this, SLOT(syncTime()));
-    }
-
-    reply->deleteLater();
-#else
-    Q_UNUSED(reply)
-#endif
+    isOnline();
 }
 
 void ImageWriter::onSTPdetected()

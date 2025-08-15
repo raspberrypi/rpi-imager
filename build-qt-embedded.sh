@@ -251,6 +251,16 @@ else
         "includelist": [
         $JSON_INCLUDELIST
         ]
+    },
+    "featureFilters": {
+        "locales_tree": "exclude",
+        "brkitr_dictionaries": "exclude",
+        "translit": "exclude",
+        "region_tree": "exclude",
+        "lang_tree": "exclude",
+        "curr_tree": "exclude",
+        "coll_tree": "exclude",
+        "conversion_mappings": "exclude"
     }
     }
 EOF

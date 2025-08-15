@@ -1,11 +1,11 @@
 [Unit]
 Description=Start Raspberry Pi Embedded Imager on bootup
-After=sync-network-time.service
-Wants=network-online.target
 
 [Service]
 Type=oneshot
 ExecStart=/bin/rpi-imager-embedded
+StandardOutput=append:/embedded-imager.log
+StandardError=inherit
 
 [Install]
 WantedBy=multi-user.target
