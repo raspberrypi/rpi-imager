@@ -145,19 +145,10 @@ else
     echo "No custom background image found, using default"
 fi
 
-# Note: We don't add --codesign to create-dmg since we've already signed the app bundle
-# create-dmg will sign the DMG itself, but the app bundle is already properly signed
-
-# Add notarization if requested
-if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_PROFILE" != "" ]; then
-    echo "Adding notarization to create-dmg command..."
-    CREATE_DMG_CMD+=(--notarize "$KEYCHAIN_PROFILE")
-fi
-
 # Add output path and source
 CREATE_DMG_CMD+=("$FINAL_DMG_PATH" "$DMG_APP_PATH")
 
-# Execute create-dmg (this will create, sign, and notarize in one step)
+# Execute create-dmg (this will create the DMG)
 echo "Running create-dmg with command:"
 echo "${CREATE_DMG_CMD[*]}"
 "${CREATE_DMG_CMD[@]}" || {
@@ -172,6 +163,31 @@ if [ ! -f "$FINAL_DMG_PATH" ]; then
 fi
 
 echo "✓ DMG created successfully: $FINAL_DMG_PATH"
+
+# Notarize and staple if requested
+if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_PROFILE" != "" ]; then
+    echo "Submitting DMG for notarization using keychain profile '$KEYCHAIN_PROFILE'..."
+    if ! xcrun notarytool --version >/dev/null 2>&1; then
+        echo "Error: xcrun notarytool not available. Install Xcode command line tools and configure credentials."
+        exit 1
+    fi
+
+    # Submit and wait for the result
+    xcrun notarytool submit "$FINAL_DMG_PATH" --keychain-profile "$KEYCHAIN_PROFILE" --wait || {
+        echo "Error: Notarization failed"
+        exit 1
+    }
+
+    echo "Stapling notarization ticket to DMG..."
+    xcrun stapler staple "$FINAL_DMG_PATH" || {
+        echo "Error: Stapling failed"
+        exit 1
+    }
+
+    echo "Validating stapled DMG..."
+    xcrun stapler validate "$FINAL_DMG_PATH" || echo "Warning: stapler validate reported issues"
+    echo "✓ DMG notarized and stapled"
+fi
 
 # Clean up temporary app bundle copy
 echo "Cleaning up temporary app bundle..."
