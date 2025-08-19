@@ -202,6 +202,7 @@ signals:
     void cacheVerificationStarted();
     void cacheVerificationFinished();
     void selectedDeviceRemoved();
+    void writeCancelledDueToDeviceRemoval();
     void keychainPermissionRequested();
     void keychainPermissionResponseReceived();
 

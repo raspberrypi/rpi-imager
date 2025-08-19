@@ -306,16 +306,6 @@ ApplicationWindow {
         msgpopup.title = qsTr("Error")
         msgpopup.text = msg
         msgpopup.open()
-        // If the error was due to device removal during write, reset selection and return to storage step
-        if (msg && msg.indexOf(qsTr("Storage device was removed")) !== -1) {
-            imageWriter.setDst("")
-            selectedStorageName = ""
-            if (wizardContainer) {
-                wizardContainer.selectedStorageName = ""
-                wizardContainer.isWriting = false
-                wizardContainer.jumpToStep(wizardContainer.stepStorageSelection)
-            }
-        }
     }
 
     function onSuccess() {
@@ -400,6 +390,14 @@ ApplicationWindow {
         msgpopup.title = qsTr("Storage device removed")
         msgpopup.text = qsTr("The selected storage device was removed.<br>Please select a different storage device.")
         msgpopup.open()
+    }
+
+    // Called from C++ when a write was cancelled because the storage device was removed
+    function onWriteCancelledDueToDeviceRemoval() {
+        if (wizardContainer) {
+            wizardContainer.isWriting = false
+        }
+        onSelectedDeviceRemoved()
     }
 
     function onKeychainPermissionRequested() {

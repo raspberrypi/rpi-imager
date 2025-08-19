@@ -366,6 +366,7 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(cacheVerificationStarted()), qmlwindow, SLOT(onCacheVerificationStarted()));
     qmlwindow->connect(&imageWriter, SIGNAL(cacheVerificationFinished()), qmlwindow, SLOT(onCacheVerificationFinished()));
     qmlwindow->connect(&imageWriter, SIGNAL(selectedDeviceRemoved()), qmlwindow, SLOT(onSelectedDeviceRemoved()));
+    qmlwindow->connect(&imageWriter, SIGNAL(writeCancelledDueToDeviceRemoval()), qmlwindow, SLOT(onWriteCancelledDueToDeviceRemoval()));
     qmlwindow->connect(&imageWriter, SIGNAL(keychainPermissionRequested()), qmlwindow, SLOT(onKeychainPermissionRequested()));
 
     /* Set window position */

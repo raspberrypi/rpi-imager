@@ -626,10 +626,10 @@ void ImageWriter::onCancelled()
         _thread = nullptr;
     }
     
-    // Show specific error message if cancellation was due to device removal
+    // If cancellation was due to device removal, emit a dedicated signal (localization-safe for QML routing)
     if (_cancelledDueToDeviceRemoval) {
         _cancelledDueToDeviceRemoval = false;
-        emit error(tr("Write operation cancelled: Storage device was removed during write."));
+        emit writeCancelledDueToDeviceRemoval();
     } else {
         emit cancelled();
     }
