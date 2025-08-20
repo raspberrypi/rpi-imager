@@ -34,6 +34,8 @@ Item {
     property bool wifiConfigured: false
     property bool sshEnabled: false
     property bool piConnectEnabled: false
+    // Whether the selected OS supports customisation (init_format present)
+    property bool customizationSupported: true
     
     // Wizard steps enum
     readonly property int stepDeviceSelection: 0
@@ -72,6 +74,19 @@ Item {
         }
         return 0
     }
+
+    // Map sidebar index back to the first wizard step in that group
+    function getWizardStepFromSidebarIndex(sidebarIndex) {
+        switch (sidebarIndex) {
+            case 0: return stepDeviceSelection
+            case 1: return stepOSSelection
+            case 2: return stepStorageSelection
+            case 3: return stepHostnameCustomization // first customization step
+            case 4: return stepWriting
+            case 5: return stepDone
+            default: return stepDeviceSelection
+        }
+    }
     
     // Main horizontal layout
     RowLayout {
@@ -109,11 +124,25 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 35
-                        color: index === root.getSidebarIndex(root.currentStep) ? "#2196F3" : "transparent"
-                        border.color: index === root.getSidebarIndex(root.currentStep) ? "#2196F3" : "transparent"
+                        color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : "transparent"
+                        border.color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : "transparent"
                         border.width: 1
                         radius: 4
+                        property bool isClickable: index < root.getSidebarIndex(root.currentStep) && !root.isWriting
                         
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            enabled: parent.isClickable
+                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: {
+                                var targetStep = root.getWizardStepFromSidebarIndex(index)
+                                // Only allow jumping backwards
+                                if (root.currentStep > targetStep && !root.isWriting) {
+                                    root.jumpToStep(targetStep)
+                                }
+                            }
+                        }
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 12
@@ -125,7 +154,7 @@ Item {
                                 text: modelData
                                 font.pixelSize: 13
                                 font.family: Style.fontFamily
-                                color: "white"
+                                color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarTextColor : (parent.isClickable ? Style.sidebarTextColor : Style.sidebarTextDisabledColor)
                                 elide: Text.ElideRight
                             }
                         }
@@ -238,7 +267,12 @@ Item {
     // Navigation functions
     function nextStep() {
         if (root.currentStep < root.totalSteps - 1) {
-            root.currentStep++
+            var nextIndex = root.currentStep + 1
+            // If customization is not supported, skip customization steps entirely
+            if (!customizationSupported && nextIndex === stepHostnameCustomization) {
+                nextIndex = stepWriting
+            }
+            root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)
             if (nextComponent) {
                 wizardStack.push(nextComponent)
