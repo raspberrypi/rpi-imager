@@ -42,6 +42,23 @@ WizardStepBase {
         
         // Try initial load in case data is already available
         onOsListPrepared()
+
+        // Ensure focus starts on the OS list when entering this step
+        osswipeview.forceActiveFocus()
+        _focusFirstItemInCurrentView()
+    }
+
+    // Ensure the current list view has focus and a valid currentIndex
+    function _focusFirstItemInCurrentView() {
+        var currentView = osswipeview.currentItem
+        if (currentView) {
+            if (typeof currentView.currentIndex !== "undefined" && currentView.currentIndex === -1 && currentView.count > 0) {
+                currentView.currentIndex = 0
+            }
+            if (typeof currentView.forceActiveFocus === "function") {
+                currentView.forceActiveFocus()
+            }
+        }
     }
     
     // Content
@@ -79,6 +96,9 @@ WizardStepBase {
                     Layout.fillHeight: true
                     interactive: false
                     clip: true
+
+                    onActiveFocusChanged: _focusFirstItemInCurrentView()
+                    onCurrentIndexChanged: _focusFirstItemInCurrentView()
                     
                     // Main OS list
                     ListView {
@@ -87,6 +107,7 @@ WizardStepBase {
                         currentIndex: -1
                         delegate: osdelegate
                         clip: true
+                        activeFocusOnTab: true
                         
                         boundsBehavior: Flickable.StopAtBounds
                         highlight: Rectangle { 
@@ -98,12 +119,50 @@ WizardStepBase {
                             width: 10
                             policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
                         }
+                        
+                        // Keyboard navigation into sublists and selection
+                        Keys.onSpacePressed: {
+                            if (currentIndex !== -1) {
+                                var item = oslist.itemAtIndex(currentIndex)
+                                if (item) {
+                                    selectOSitem(item.model, true)
+                                }
+                            }
+                        }
+                        Keys.onReturnPressed: {
+                            if (currentIndex !== -1) {
+                                var item = oslist.itemAtIndex(currentIndex)
+                                if (item) {
+                                    selectOSitem(item.model, true)
+                                }
+                            }
+                        }
+                        Keys.onEnterPressed: {
+                            if (currentIndex !== -1) {
+                                var item = oslist.itemAtIndex(currentIndex)
+                                if (item) {
+                                    selectOSitem(item.model, true)
+                                }
+                            }
+                        }
+                        Keys.onRightPressed: {
+                            if (currentIndex !== -1) {
+                                var item = oslist.itemAtIndex(currentIndex)
+                                if (item && isOSsublist(item.model)) {
+                                    selectOSitem(item.model, true)
+                                }
+                            }
+                        }
+                        Keys.onUpPressed: {
+                            if (currentIndex > 0) currentIndex = currentIndex - 1
+                        }
+                        Keys.onDownPressed: {
+                            if (currentIndex < count - 1) currentIndex = currentIndex + 1
+                        }
                     }
                 }
             }
         }
-        
-
     }
     
     // OS delegate component
@@ -191,6 +250,20 @@ WizardStepBase {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                         }
+                        // Cache/local/online status line
+                        Text {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            color: Style.textMetadataColor
+                            font.family: Style.fontFamily
+                            visible: typeof(delegateItem.url) === "string" && delegateItem.url !== "" && delegateItem.url !== "internal://format"
+                            text: !delegateItem.url ? "" :
+                                  (typeof(delegateItem.extract_sha256) !== "undefined" && imageWriter.isCached(delegateItem.url, delegateItem.extract_sha256))
+                                  ? qsTr("Cached on your computer")
+                                  : (delegateItem.url.startsWith("file://")
+                                     ? qsTr("Local file")
+                                     : qsTr("Online - %1 GB download").arg((delegateItem.image_download_size/1073741824).toFixed(1)))
+                        }
                         
                         Text {
                             text: delegateItem.release_date
@@ -206,6 +279,75 @@ WizardStepBase {
         }
     }
     
+    // Sublist page component
+    Component {
+        id: suboslist
+        
+        ListView {
+            id: sublistview
+            model: ListModel {
+                // Back entry
+                ListElement {
+                    url: ""
+                    icon: "../icons/ic_chevron_left_40px.svg"
+                    extract_size: 0
+                    image_download_size: 0
+                    extract_sha256: ""
+                    contains_multiple_files: false
+                    release_date: ""
+                    subitems_url: "internal://back"
+                    subitems_json: ""
+                    name: qsTr("Back")
+                    description: qsTr("Go back to main menu")
+                    tooltip: ""
+                    website: ""
+                    init_format: ""
+                }
+            }
+            currentIndex: -1
+            delegate: osdelegate
+            boundsBehavior: Flickable.StopAtBounds
+            highlight: Rectangle { color: Style.listViewHighlightColor; radius: 5 }
+            ScrollBar.vertical: ScrollBar {
+                width: 10
+                policy: sublistview.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+            }
+            activeFocusOnTab: true
+            
+            // Keyboard selection and navigation
+            Keys.onSpacePressed: {
+                if (currentIndex !== -1) {
+                    selectOSitem(model.get(currentIndex))
+                }
+            }
+            Keys.onReturnPressed: {
+                if (currentIndex !== -1) {
+                    selectOSitem(model.get(currentIndex))
+                }
+            }
+            Keys.onEnterPressed: {
+                if (currentIndex !== -1) {
+                    selectOSitem(model.get(currentIndex))
+                }
+            }
+            Keys.onRightPressed: {
+                if (currentIndex !== -1 && isOSsublist(model.get(currentIndex))) {
+                    selectOSitem(model.get(currentIndex), true)
+                }
+            }
+            Keys.onLeftPressed: {
+                osswipeview.decrementCurrentIndex()
+                categorySelected = ""
+            }
+            Keys.onUpPressed: {
+                if (currentIndex > 0) currentIndex = currentIndex - 1
+            }
+            Keys.onDownPressed: {
+                if (currentIndex < count - 1) currentIndex = currentIndex + 1
+            }
+        }
+    }
+
     // OS selection functions (adapted from OSPopup.qml)
     function selectOSitem(model, navigateOnly) {
         console.log("OSSelectionStep: selectOSitem called for", model.name)
@@ -217,8 +359,14 @@ WizardStepBase {
             // Navigate to sublist (whether navigateOnly is true or false)
             console.log("OSSelectionStep: Navigating to sublist:", model.name)
             categorySelected = model.name
-            populateSublist(model)
+            var lm = newSublist()
+            populateSublistInto(lm, model)
+            // focus first sub item when navigating
+            var nextView = osswipeview.itemAt(osswipeview.currentIndex+1)
+            nextView.currentIndex = navigateOnly ? 0 : -1
             osswipeview.incrementCurrentIndex()
+            // ensure focus is on the new view
+            _focusFirstItemInCurrentView()
         } else {
             // Select this OS - use correct setSrc signature from original OSPopup
             imageWriter.setSrc(
@@ -234,6 +382,8 @@ WizardStepBase {
             
             // Store the selected OS name
             root.wizardContainer.selectedOsName = model.name
+            // Determine if customization is supported via centralized C++ logic
+            root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
             
             if (model.subitems_url === "internal://back") {
                 osswipeview.decrementCurrentIndex()
@@ -267,45 +417,71 @@ WizardStepBase {
         return isSublist
     }
     
-    function populateSublist(model) {
-        // Implementation would populate sublist - simplified for now
-        console.log("Populate sublist for:", model.name)
+    // Add or reuse sublist page and return its ListModel
+    function newSublist() {
+        if (osswipeview.currentIndex === (osswipeview.count - 1)) {
+            var newlist = suboslist.createObject(osswipeview)
+            osswipeview.addItem(newlist)
+        }
+        var m = osswipeview.itemAt(osswipeview.currentIndex+1).model
+        if (m.count > 1) {
+            m.remove(1, m.count - 1)
+        }
+        return m
     }
-    
 
+    // Populate given ListModel from a model's subitems_json, flattening nested items
+    function populateSublistInto(listModel, model) {
+        if (typeof(model.subitems_json) !== "string" || model.subitems_json === "") {
+            return
+        }
+        var subitems = []
+        try {
+            subitems = JSON.parse(model.subitems_json)
+        } catch (e) {
+            console.log("Failed to parse subitems_json:", e)
+            return
+        }
+        for (var i in subitems) {
+            var entry = subitems[i]
+            if (entry && typeof(entry) === "object") {
+                if ("subitems" in entry) {
+                    entry["subitems_json"] = JSON.stringify(entry["subitems"])
+                    delete entry["subitems"]
+                }
+                if (typeof(entry.icon) === "string" && entry.icon.indexOf("icons/") === 0) {
+                    entry.icon = "../" + entry.icon
+                }
+                listModel.append(entry)
+            }
+        }
+    }
     
     // Called when OS list data is ready from network
     function onOsListPrepared() {
-        // Only reload if we haven't loaded yet or if the model is empty
-        if (!modelLoaded || root.osmodel.rowCount() === 0) {
-            console.log("OSSelectionStep: OS list prepared, reloading OS model")
-            
-            // Reload OS model only - HW model is already loaded by DeviceSelectionStep
-            var osSuccess = root.osmodel.reload()
-            
-            if (osSuccess) {
-                modelLoaded = true
-                
-                var o = JSON.parse(root.imageWriter.getFilteredOSlist())
-                if ("imager" in o) {
-                    var imager = o["imager"]
-
-                    if (root.imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
-                        if (!root.imageWriter.isEmbeddedMode() && root.imageWriter.isVersionNewer(imager["latest_version"])) {
-                            root.updatePopupRequested(imager["url"])
-                        }
+        // Always reload to reflect cache status changes and updates from backend
+        console.log("OSSelectionStep: osListPrepared received - reloading model")
+        var osSuccess = root.osmodel.reload()
+        if (osSuccess && !modelLoaded) {
+            modelLoaded = true
+            var o = JSON.parse(root.imageWriter.getFilteredOSlist())
+            if ("imager" in o) {
+                var imager = o["imager"]
+                if (root.imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
+                    if (!root.imageWriter.isEmbeddedMode() && root.imageWriter.isVersionNewer(imager["latest_version"])) {
+                        root.updatePopupRequested(imager["url"])
                     }
-                    if ("default_os" in imager) {
-                        selectNamedOS(imager["default_os"], root.osmodel)
+                }
+                if ("default_os" in imager) {
+                    selectNamedOS(imager["default_os"], root.osmodel)
+                }
+                if (root.imageWriter.isEmbeddedMode()) {
+                    if ("embedded_default_os" in imager) {
+                        selectNamedOS(imager["embedded_default_os"], root.osmodel)
                     }
-                    if (root.imageWriter.isEmbeddedMode()) {
-                        if ("embedded_default_os" in imager) {
-                            selectNamedOS(imager["embedded_default_os"], root.osmodel)
-                        }
-                        if ("embedded_default_destination" in imager) {
-                            root.imageWriter.startDriveListPolling()
-                            root.defaultEmbeddedDriveRequested(imager["embedded_default_destination"])
-                        }
+                    if ("embedded_default_destination" in imager) {
+                        root.imageWriter.startDriveListPolling()
+                        root.defaultEmbeddedDriveRequested(imager["embedded_default_destination"])
                     }
                 }
             }
