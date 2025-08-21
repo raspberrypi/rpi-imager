@@ -68,6 +68,10 @@ set(BUILD_SHARED_LIBS OFF)
 
 include(FetchContent)
 
+find_package(LibLZMA)
+if(LIBLZMA_FOUND)
+    set(EXTRALIBS ${EXTRALIBS} LibLZMA::LibLZMA)
+else()
 # Bundled liblzma
 set(LIBLZMA_VERSION "5.8.1")
 FetchContent_Declare(xz
@@ -114,7 +118,10 @@ set(LIBLZMA_LIBRARIES ${xz_BINARY_DIR}/liblzma.a CACHE FILEPATH "" FORCE)
 set(LIBLZMA_HAS_AUTO_DECODER true CACHE BOOL "" FORCE)
 set(LIBLZMA_HAS_EASY_ENCODER true CACHE BOOL "" FORCE)
 set(LIBLZMA_HAS_LZMA_PRESET true CACHE BOOL "" FORCE)
+endif()
 
+find_package(zstd ${ZSTD_VERSION})
+if(NOT zstd_FOUND)
 # Bundled zstd
 set(ZSTD_VERSION "1.5.7")
 FetchContent_Declare(zstd
@@ -147,7 +154,12 @@ set(ZSTD_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-src/lib CACHE PATH 
 set(Zstd_LIBRARIES libzstd_static CACHE FILEPATH "" FORCE)
 set(ZSTD_LIBRARIES libzstd_static CACHE FILEPATH "" FORCE)
 set(ZSTD_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/_deps/zstd-build/lib/libzstd.a CACHE FILEPATH "" FORCE)
+endif()
 
+find_package(ZLIB)
+if(ZLIB_FOUND)
+    set(EXTRALIBS ${EXTRALIBS} ZLIB::ZLIB)
+else()
 # Bundled zlib
 set(ZLIB_VERSION "1.4.1.1")
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -211,7 +223,10 @@ endif()
 message(STATUS "ZLIB_LIBRARY set to: ${ZLIB_LIBRARY}")
 message(STATUS "ZLIB_LIBRARIES set to: ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB_INCLUDE_DIRS set to: ${ZLIB_INCLUDE_DIRS}")
+endif()
 
+find_package(LibArchive)
+if(NOT LibArchive_FOUND)
 # Bundled libarchive
 
 set(ENABLE_WERROR OFF CACHE BOOL "")
@@ -343,8 +358,11 @@ set(LibArchive_FOUND true CACHE BOOL "" FORCE)
 set(LibArchive_LIBRARIES archive_static CACHE FILEPATH "" FORCE)
 set(LibArchive_INCLUDE_DIR ${libarchive_SOURCE_DIR}/libarchive CACHE PATH "" FORCE)
 set(LibArchive_INCLUDE_DIRS ${libarchive_SOURCE_DIR}/libarchive CACHE PATH "" FORCE)
+endif()
 
 # Bundled libcurl
+find_package(CURL)
+if(NOT CURL_FOUND)
 set(CURL_VERSION "8.14.1")
 string(REPLACE "." "_" CURL_TAG ${CURL_VERSION})
 FetchContent_Declare(curl
@@ -491,6 +509,7 @@ set(CURL_FOUND true CACHE BOOL "" FORCE)
 set(CURL_LIBRARIES libcurl_static CACHE FILEPATH "" FORCE)
 set(CURL_INCLUDE_DIR ${curl_SOURCE_DIR}/include CACHE PATH "" FORCE)
 set(CURL_INCLUDE_DIRS ${curl_SOURCE_DIR}/include CACHE PATH "" FORCE)
+endif()
 
 # Adding headers explicity so they are displayed in Qt Creator
 set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h drivelistmodelpollthread.h driveformatthread.h powersaveblocker.h cli.h
