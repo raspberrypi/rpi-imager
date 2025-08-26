@@ -21,7 +21,9 @@ WizardStepBase {
     
     title: qsTr("Choose Operating System")
     subtitle: qsTr("Select the operating system to install on your Raspberry Pi")
-    showNextButton: false
+    showNextButton: true
+    // Disable Next until a concrete OS has been selected
+    nextButtonEnabled: oslist.currentIndex !== -1 && wizardContainer.selectedOsName.length > 0
     
     property alias oslist: oslist
     property alias osswipeview: osswipeview
@@ -37,15 +39,19 @@ WizardStepBase {
     }
     
     Component.onCompleted: {
-        // Connect to osListPrepared signal to reload models when data is ready
-        imageWriter.osListPrepared.connect(onOsListPrepared)
-        
         // Try initial load in case data is already available
-        onOsListPrepared()
+        onOsListPreparedHandler()
 
         // Ensure focus starts on the OS list when entering this step
         osswipeview.forceActiveFocus()
         _focusFirstItemInCurrentView()
+    }
+
+    Connections {
+        target: imageWriter
+        function onOsListPrepared() {
+            onOsListPreparedHandler()
+        }
     }
 
     // Ensure the current list view has focus and a valid currentIndex
@@ -54,6 +60,14 @@ WizardStepBase {
         if (currentView) {
             if (typeof currentView.currentIndex !== "undefined" && currentView.currentIndex === -1 && currentView.count > 0) {
                 currentView.currentIndex = 0
+                // If this is the main OS list and nothing is selected yet, select the first item implicitly
+                if (currentView === oslist && (!wizardContainer.selectedOsName || wizardContainer.selectedOsName.length === 0)) {
+                    var firstItem = oslist.itemAtIndex(0)
+                    if (firstItem && firstItem.model) {
+                        // Do not auto-advance; just set selection/state
+                        selectOSitem(firstItem.model)
+                    }
+                }
             }
             if (typeof currentView.forceActiveFocus === "function") {
                 currentView.forceActiveFocus()
@@ -62,40 +76,22 @@ WizardStepBase {
     }
     
     // Content
+    content: [
     ColumnLayout {
         anchors.fill: parent
-        spacing: 20
+        spacing: 0
         
-        // OS selection area
-        Rectangle {
+        // OS selection area - fill available space without extra chrome/padding
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Style.titleBackgroundColor
-            border.color: Style.titleSeparatorColor
-            border.width: 1
-            radius: 8
             
-            ColumnLayout {
+            // OS SwipeView for navigation between categories
+            SwipeView {
+                id: osswipeview
                 anchors.fill: parent
-                anchors.margins: 20
-                spacing: 15
-                
-                Text {
-                    text: qsTr("Select your operating system:")
-                    font.pixelSize: 16
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                }
-                
-                // OS SwipeView for navigation between categories
-                SwipeView {
-                    id: osswipeview
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    interactive: false
-                    clip: true
+                interactive: false
+                clip: true
 
                     onActiveFocusChanged: _focusFirstItemInCurrentView()
                     onCurrentIndexChanged: _focusFirstItemInCurrentView()
@@ -112,11 +108,11 @@ WizardStepBase {
                         boundsBehavior: Flickable.StopAtBounds
                         highlight: Rectangle { 
                             color: Style.listViewHighlightColor
-                            radius: 5 
+                            radius: 0 
                         }
                         
                         ScrollBar.vertical: ScrollBar {
-                            width: 10
+                            width: Style.scrollBarWidth
                             policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
                         }
                         
@@ -160,10 +156,10 @@ WizardStepBase {
                             if (currentIndex < count - 1) currentIndex = currentIndex + 1
                         }
                     }
-                }
             }
         }
     }
+    ]
     
     // OS delegate component
     Component {
@@ -188,14 +184,15 @@ WizardStepBase {
             property string subitems_url
             
             width: oslist.width
-            height: 80
+            // Let content determine height for balanced vertical padding
+            height: Math.max(80, row.implicitHeight + Style.spacingSmall + Style.spacingMedium)
             
             Rectangle {
                 id: osbgrect
                 anchors.fill: parent
-                color: osMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : 
-                       (oslist.currentIndex === index ? Style.listViewHighlightColor : Style.listViewRowBackgroundColor)
-                radius: 5
+                color: (oslist.currentIndex === index) ? Style.listViewHighlightColor :
+                       (osMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
+                radius: 0
                 
                 MouseArea {
                     id: osMouseArea
@@ -210,9 +207,13 @@ WizardStepBase {
                 }
                 
                 RowLayout {
+                    id: row
                     anchors.fill: parent
-                    anchors.margins: 15
-                    spacing: 15
+                    anchors.leftMargin: Style.listItemPadding
+                    anchors.rightMargin: Style.listItemPadding
+                    anchors.topMargin: Style.spacingSmall
+                    anchors.bottomMargin: Style.spacingMedium
+                    spacing: Style.spacingMedium
                     
                     // OS Icon
                     Image {
@@ -225,17 +226,17 @@ WizardStepBase {
                             anchors.fill: parent
                             color: Style.listViewRowBackgroundColor
                             visible: parent.status === Image.Error
-                            radius: 5
+                            radius: 0
                         }
                     }
                     
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 2
+                        spacing: Style.spacingXXSmall
                         
                         Text {
                             text: delegateItem.name
-                            font.pixelSize: 14
+                            font.pixelSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
                             font.bold: true
                             color: Style.formLabelColor
@@ -244,7 +245,7 @@ WizardStepBase {
                         
                         Text {
                             text: delegateItem.description
-                            font.pixelSize: 12
+                            font.pixelSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true
@@ -267,7 +268,7 @@ WizardStepBase {
                         
                         Text {
                             text: delegateItem.release_date
-                            font.pixelSize: 10
+                            font.pixelSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
                             color: Style.textMetadataColor
                             Layout.fillWidth: true
@@ -384,14 +385,16 @@ WizardStepBase {
             root.wizardContainer.selectedOsName = model.name
             // Determine if customization is supported via centralized C++ logic
             root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-            
+
+            // Do not auto-advance; enable Next in the container
+            root.nextButtonEnabled = true
+
             if (model.subitems_url === "internal://back") {
                 osswipeview.decrementCurrentIndex()
                 categorySelected = ""
             } else {
-                // Auto-advance to next step after selecting an OS
-                console.log("OSSelectionStep: Selected OS", model.name, "- auto-advancing to next step")
-                root.next()
+                // Stay on page; user must click Next
+                console.log("OSSelectionStep: Selected OS", model.name, "- waiting for Next")
             }
         }
     }
@@ -458,7 +461,10 @@ WizardStepBase {
     }
     
     // Called when OS list data is ready from network
-    function onOsListPrepared() {
+    function onOsListPreparedHandler() {
+        if (!root || !root.osmodel) {
+            return
+        }
         // Always reload to reflect cache status changes and updates from backend
         console.log("OSSelectionStep: osListPrepared received - reloading model")
         var osSuccess = root.osmodel.reload()
@@ -480,7 +486,6 @@ WizardStepBase {
                         selectNamedOS(imager["embedded_default_os"], root.osmodel)
                     }
                     if ("embedded_default_destination" in imager) {
-                        root.imageWriter.startDriveListPolling()
                         root.defaultEmbeddedDriveRequested(imager["embedded_default_destination"])
                     }
                 }

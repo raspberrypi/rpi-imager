@@ -13,16 +13,18 @@ import RpiImager
 
 Window {
     id: popup
-    width: 400
+    width: 520
     height: 280
     
-    minimumWidth: width
-    minimumHeight: height
+    minimumWidth: 520
+    minimumHeight: contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280
     
     title: qsTr("Advanced Options")
     modality: Qt.WindowModal
     
     required property ImageWriter imageWriter
+    // Optional reference to the wizard container for ephemeral flags
+    property var wizardContainer: null
     
     property bool initialized: false
     
@@ -38,14 +40,15 @@ Window {
         color: Style.titleBackgroundColor
         
         ColumnLayout {
+            id: contentLayout
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 20
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingLarge
             
             // Header
             Text {
                 text: qsTr("Advanced Options")
-                font.pixelSize: 18
+                font.pixelSize: Style.fontSizeLargeHeading
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.formLabelColor
@@ -54,35 +57,48 @@ Window {
             }
             
             // Options section
-            Rectangle {
+            Item {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                color: Style.titleBackgroundColor
-                border.color: Style.titleSeparatorColor
-                border.width: 1
-                radius: 8
+                Layout.preferredHeight: optionsLayout.implicitHeight + Style.cardPadding
                 
                 ColumnLayout {
+                    id: optionsLayout
                     anchors.fill: parent
-                    anchors.margins: 20
-                    spacing: 15
+                    anchors.margins: Style.cardPadding
+                    spacing: Style.spacingMedium
                     
-                    ImCheckBox {
+                    ImOptionPill {
                         id: chkBeep
                         text: qsTr("Play sound when finished")
                         Layout.fillWidth: true
                     }
                     
-                    ImCheckBox {
+                    ImOptionPill {
                         id: chkEject
                         text: qsTr("Eject media when finished")
                         Layout.fillWidth: true
                     }
                     
-                    ImCheckBox {
+                    ImOptionPill {
                         id: chkTelemetry
-                        text: qsTr("Enable telemetry")
+                        text: qsTr("Enable anonymous statistics (telemetry)")
+                        helpLabel: qsTr("What is this?")
+                        helpUrl: "https://github.com/raspberrypi/rpi-imager?tab=readme-ov-file#telemetry"
                         Layout.fillWidth: true
+                    }
+
+                    ImOptionPill {
+                        id: chkDisableWarnings
+                        text: qsTr("Disable warnings")
+                        Layout.fillWidth: true
+                        onCheckedChanged: {
+                            if (checked) {
+                                // Confirm before enabling this risky setting
+                                confirmDisableWarnings.open()
+                            } else if (popup.wizardContainer) {
+                                popup.wizardContainer.disableWarnings = false
+                            }
+                        }
                     }
                 }
             }
@@ -93,7 +109,7 @@ Window {
             // Buttons
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 15
+                spacing: Style.spacingMedium
                 
                 Item {
                     Layout.fillWidth: true
@@ -101,17 +117,17 @@ Window {
                 
                 ImButton {
                     text: qsTr("Cancel")
-                    Layout.minimumWidth: 100
+                    Layout.minimumWidth: Style.buttonWidthMinimum
                     onClicked: {
                         popup.close()
                     }
                 }
                 
-                ImButton {
+                ImButtonRed {
                     text: qsTr("Save")
-                    Layout.minimumWidth: 100
+                    Layout.minimumWidth: Style.buttonWidthMinimum
                     onClicked: {
-                        applySettings()
+                        popup.applySettings()
                         popup.close()
                     }
                 }
@@ -125,6 +141,8 @@ Window {
             chkBeep.checked = imageWriter.getBoolSetting("beep")
             chkEject.checked = imageWriter.getBoolSetting("eject")  
             chkTelemetry.checked = imageWriter.getBoolSetting("telemetry")
+            // Do not load from QSettings; keep ephemeral
+            chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false
             initialized = true
         }
     }
@@ -134,12 +152,80 @@ Window {
         imageWriter.setSetting("beep", chkBeep.checked)
         imageWriter.setSetting("eject", chkEject.checked)
         imageWriter.setSetting("telemetry", chkTelemetry.checked)
+        // Do not persist disable_warnings; set ephemeral flag only
+        if (popup.wizardContainer) popup.wizardContainer.disableWarnings = chkDisableWarnings.checked
     }
     
     onVisibilityChanged: {
         if (visible) {
             initialize()
             chkBeep.forceActiveFocus()
+            // Ensure the window is tall enough to show buttons
+            popup.height = Math.max(popup.height, popup.minimumHeight)
         }
     }
-} 
+
+    // Confirmation dialog for disabling warnings
+    Dialog {
+        id: confirmDisableWarnings
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        width: 520
+        standardButtons: Dialog.NoButton
+
+        onClosed: {
+            // If dialog was closed without confirming, revert the toggle
+            if (!confirmAccepted) {
+                chkDisableWarnings.checked = false
+            }
+            confirmAccepted = false
+        }
+
+        property bool confirmAccepted: false
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingMedium
+
+            Text {
+                text: qsTr("Disable warnings?")
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
+            }
+
+            Text {
+                textFormat: Text.StyledText
+                wrapMode: Text.WordWrap
+                font.pixelSize: Style.fontSizeDescription
+                font.family: Style.fontFamily
+                color: Style.textDescriptionColor
+                Layout.fillWidth: true
+                text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacingMedium
+                Item { Layout.fillWidth: true }
+
+                ImButton {
+                    text: qsTr("Cancel")
+                    onClicked: confirmDisableWarnings.close()
+                }
+
+                ImButtonRed {
+                    text: qsTr("Disable warnings")
+                    onClicked: {
+                        confirmDisableWarnings.confirmAccepted = true
+                        if (popup.wizardContainer) popup.wizardContainer.disableWarnings = true
+                        confirmDisableWarnings.close()
+                    }
+                }
+            }
+        }
+    }
+}

@@ -17,211 +17,89 @@ WizardStepBase {
     required property var wizardContainer
     
     title: qsTr("Write Complete!")
-    subtitle: qsTr("Your Raspberry Pi is ready to use")
     showBackButton: false
     showNextButton: false
+    readonly property bool autoEjectEnabled: imageWriter.getBoolSetting("eject")
+    readonly property bool anyCustomizationsApplied: (
+        wizardContainer.hostnameConfigured ||
+        wizardContainer.localeConfigured ||
+        wizardContainer.userConfigured ||
+        wizardContainer.wifiConfigured ||
+        wizardContainer.sshEnabled ||
+        wizardContainer.piConnectEnabled
+    )
     
     // Content
+    content: [
     ColumnLayout {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.margins: 20
-        spacing: 20
+        anchors.fill: parent
+        anchors.margins: Style.cardPadding
+        spacing: Style.spacingLarge
         
-        // Success message
-        Rectangle {
+        // What was configured (de-chromed)
+        ColumnLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: successLayout.implicitHeight + 40
-            Layout.maximumWidth: 500
-            Layout.alignment: Qt.AlignHCenter
-            color: Style.titleBackgroundColor
-            border.color: Style.progressBarVerifyForegroundColor
-            border.width: 2
-            radius: 8
+            spacing: Style.spacingMedium
             
-            ColumnLayout {
-                id: successLayout
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 15
-                
-                Text {
-                    text: qsTr("✅ Success!")
-                    font.pixelSize: 24
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.progressBarVerifyForegroundColor
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                }
-                
-                Text {
-                    text: qsTr("Your Raspberry Pi image has been successfully written to the storage device.")
-                    font.pixelSize: 14
-                    font.family: Style.fontFamily
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                }
+            Text {
+                text: qsTr("Your choices:")
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
             }
-        }
-        
-        // What was configured
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: configuredLayout.implicitHeight + 40
-            color: Style.titleBackgroundColor
-            border.color: Style.titleSeparatorColor
-            border.width: 1
-            radius: 8
             
-            ColumnLayout {
-                id: configuredLayout
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 15
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Style.formColumnSpacing
+                rowSpacing: Style.spacingSmall
                 
-                Text {
-                    text: qsTr("What was configured:")
-                    font.pixelSize: 16
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                }
-                
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 2
-                    columnSpacing: 20
-                    rowSpacing: 8
-                    
-                    Text {
-                        text: qsTr("Device:")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                    }
-                    
-                    Text {
-                        text: wizardContainer.selectedDeviceName || qsTr("No device selected")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamilyBold
-                        font.bold: true
-                        color: Style.formLabelColor
-                        Layout.fillWidth: true
-                    }
-                    
-                    Text {
-                        text: qsTr("Operating System:")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                    }
-                    
-                    Text {
-                        text: wizardContainer.selectedOsName || qsTr("No image selected")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamilyBold
-                        font.bold: true
-                        color: Style.formLabelColor
-                        Layout.fillWidth: true
-                    }
-                    
-                    Text {
-                        text: qsTr("Storage:")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                    }
-                    
-                    Text {
-                        text: wizardContainer.selectedStorageName || qsTr("No storage selected")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamilyBold
-                        font.bold: true
-                        color: Style.formLabelColor
-                        Layout.fillWidth: true
-                    }
-                }
-                
-                // Customization summary
-                Text {
-                    text: qsTr("Customizations applied:")
-                    font.pixelSize: 14
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                    Layout.topMargin: 10
-                }
-                
-                Column {
-                    Layout.fillWidth: true
-                    spacing: 5
-                    
-                    Text {
-                        text: qsTr("✓ Hostname configured")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                        visible: wizardContainer.hostnameConfigured
-                    }
-                    
-                    Text {
-                        text: qsTr("✓ User account configured")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                        visible: wizardContainer.userConfigured
-                    }
-                    
-                    Text {
-                        text: qsTr("✓ WiFi configured")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                        visible: wizardContainer.wifiConfigured
-                    }
-                    
-                    Text {
-                        text: qsTr("✓ SSH enabled")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                        visible: wizardContainer.sshEnabled
-                    }
-                    
-                    Text {
-                        text: qsTr("✓ Pi Connect enabled")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                        visible: wizardContainer.piConnectEnabled
-                    }
-                    
-                    Text {
-                        text: qsTr("✓ Locale configured")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                        visible: wizardContainer.localeConfigured
-                    }
-                }
+                Text { text: qsTr("Device:");                   font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor }
+                Text { text: wizardContainer.selectedDeviceName     || qsTr("No device selected"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamilyBold; font.bold: true; color: Style.formLabelColor; Layout.fillWidth: true }
+                Text { text: qsTr("Operating System:");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor }
+                Text { text: wizardContainer.selectedOsName         || qsTr("No image selected"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamilyBold; font.bold: true; color: Style.formLabelColor; Layout.fillWidth: true }
+                Text { text: qsTr("Storage Device:");           font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor }
+                Text { text: wizardContainer.selectedStorageName    || qsTr("No storage device selected"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamilyBold; font.bold: true; color: Style.formLabelColor; Layout.fillWidth: true }
             }
-        }
-        
+            
+            // Customization summary
+            Text {
+                text: qsTr("Customizations applied:")
+                font.pixelSize: Style.fontSizeFormLabel
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
+                Layout.topMargin: Style.spacingSmall
+                visible: root.anyCustomizationsApplied
+            }
+            
+            Column {
+                Layout.fillWidth: true
+                spacing: Style.spacingXSmall
+                visible: root.anyCustomizationsApplied
+                
+                Text { text: qsTr("✓ Hostname configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.hostnameConfigured }
+                Text { text: qsTr("✓ User account configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.userConfigured }
+                Text { text: qsTr("✓ WiFi configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.wifiConfigured }
+                Text { text: qsTr("✓ SSH enabled"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.sshEnabled }
+                Text { text: qsTr("✓ Pi Connect enabled"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.piConnectEnabled }
+                Text { text: qsTr("✓ Locale configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.localeConfigured }
+            }
+            Text { text: root.autoEjectEnabled ? qsTr("The storage device was ejected automatically. You can now remove it safely.") : qsTr("Please eject the storage device before removing it from your computer."); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.textDescriptionColor; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
+        }        
     }
+    ]
     
     // Action buttons
     RowLayout {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: 20
-        spacing: 15
+        anchors.margins: Style.cardPadding
+        spacing: Style.spacingMedium
         
         Item {
             Layout.fillWidth: true
@@ -237,7 +115,7 @@ WizardStepBase {
             }
         }
         
-        ImButton {
+        ImButtonRed {
             text: qsTr("Finish")
             enabled: true
             onClicked: {

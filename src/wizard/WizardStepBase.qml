@@ -4,11 +4,12 @@
  */
 
 import QtQuick 2.15
+import QtQuick.Window 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../qmlcomponents"
 
-Item {
+FocusScope {
     id: root
     
     property string title: ""
@@ -23,6 +24,17 @@ Item {
     property bool backButtonEnabled: true
     property bool skipButtonEnabled: true
     property alias content: contentArea.children
+    // Step may set the first item to receive focus when the step becomes visible
+    property var initialFocusItem: null
+    // Expose action buttons for KeyNavigation in child content
+    property alias nextButtonItem: nextButton
+    property alias backButtonItem: backButton
+    property alias skipButtonItem: skipButton
+
+    // Focus groups: array of { name, order, getItemsFn, enabled }
+    property var _focusGroups: []
+    // Flattened focus items after composition
+    property var _focusableItems: []
     
     signal nextClicked()
     signal backClicked()
@@ -41,6 +53,7 @@ Item {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Style.spacingSmall
+            visible: (root.title && root.title.length > 0) || (root.subtitle && root.subtitle.length > 0)
             
             Text {
                 id: titleText
@@ -48,8 +61,9 @@ Item {
                 font.pixelSize: Style.fontSizeTitle
                 font.family: Style.fontFamilyBold
                 font.bold: true
-                color: Style.subtitleColor
+                color: Style.formLabelColor
                 Layout.fillWidth: true
+                visible: root.title && root.title.length > 0
             }
             
             Text {
@@ -57,13 +71,13 @@ Item {
                 text: root.subtitle
                 font.pixelSize: Style.fontSizeSubtitle
                 font.family: Style.fontFamily
-                color: Style.subtitleColor
+                color: Style.textDescriptionColor
                 Layout.fillWidth: true
-                visible: root.subtitle.length > 0
+                visible: root.subtitle && root.subtitle.length > 0
             }
         }
         
-        // Content area
+        // Content area (no Flickable to prevent input interception)
         Item {
             id: contentArea
             Layout.fillWidth: true
@@ -83,6 +97,9 @@ Item {
                 Layout.minimumWidth: Style.buttonWidthSkip
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.skipClicked()
+                // Tab order among action buttons: next -> back -> skip -> wrap to first field
+                KeyNavigation.tab: root.initialFocusItem ? root.initialFocusItem : nextButton
+                KeyNavigation.backtab: nextButton
             }
             
             Item {
@@ -97,9 +114,12 @@ Item {
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.backClicked()
+                // After back, Tab goes to skip; Shift+Tab goes to next
+                KeyNavigation.tab: skipButton
+                KeyNavigation.backtab: nextButton
             }
             
-            ImButton {
+            ImButtonRed {
                 id: nextButton
                 text: root.nextButtonText
                 visible: root.showNextButton
@@ -107,7 +127,97 @@ Item {
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.nextClicked()
+                // After next, Tab goes to back; Shift+Tab goes to skip
+                KeyNavigation.tab: backButton
+                KeyNavigation.backtab: skipButton
             }
         }
+    }
+
+    Component.onCompleted: {
+        rebuildFocusOrder()
+        if (initialFocusItem && typeof initialFocusItem.forceActiveFocus === 'function') {
+            initialFocusItem.forceActiveFocus()
+        }
+    }
+
+    onVisibleChanged: {
+        if (visible && initialFocusItem && typeof initialFocusItem.forceActiveFocus === 'function') {
+            initialFocusItem.forceActiveFocus()
+        }
+    }
+
+    // Public API for steps
+    function registerFocusGroup(name, getItemsFn, order) {
+        if (order === undefined) order = 0
+        // Replace if exists
+        for (var i = 0; i < _focusGroups.length; i++) {
+            if (_focusGroups[i].name === name) {
+                _focusGroups[i] = { name: name, getItemsFn: getItemsFn, order: order, enabled: true }
+                rebuildFocusOrder()
+                return
+            }
+        }
+        _focusGroups.push({ name: name, getItemsFn: getItemsFn, order: order, enabled: true })
+        rebuildFocusOrder()
+    }
+
+    function setFocusGroupEnabled(name, enabled) {
+        for (var i = 0; i < _focusGroups.length; i++) {
+            if (_focusGroups[i].name === name) {
+                _focusGroups[i].enabled = enabled
+                rebuildFocusOrder()
+                return
+            }
+        }
+    }
+
+    function requestRecomputeTabOrder() {
+        rebuildFocusOrder()
+    }
+
+    function rebuildFocusOrder() {
+        // Compose enabled groups by order
+        _focusGroups.sort(function(a,b){ return a.order - b.order })
+        var items = []
+        for (var i = 0; i < _focusGroups.length; i++) {
+            var g = _focusGroups[i]
+            if (!g.enabled || !g.getItemsFn) continue
+            var arr = g.getItemsFn()
+            if (!arr || !arr.length) continue
+            for (var k = 0; k < arr.length; k++) {
+                var it = arr[k]
+                if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function') {
+                    items.push(it)
+                }
+            }
+        }
+        _focusableItems = items
+
+        // Determine first/last
+        var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
+        var lastField = _focusableItems.length > 0 ? _focusableItems[_focusableItems.length-1] : null
+
+        // Wire fields forward/backward (override to enforce consistency)
+        for (var j = 0; j < _focusableItems.length; j++) {
+            var cur = _focusableItems[j]
+            var next = (j + 1 < _focusableItems.length) ? _focusableItems[j+1] : nextButton
+            var prev = (j > 0) ? _focusableItems[j-1] : backButton
+            if (cur && cur.KeyNavigation) {
+                cur.KeyNavigation.tab = next
+                cur.KeyNavigation.backtab = prev
+            }
+        }
+
+        // Button cycle: Next -> Back -> Skip -> firstField (or Next if none)
+        nextButton.KeyNavigation.tab = backButton
+        nextButton.KeyNavigation.backtab = lastField ? lastField : backButton
+        backButton.KeyNavigation.tab = skipButton
+        backButton.KeyNavigation.backtab = nextButton
+        skipButton.KeyNavigation.tab = firstField ? firstField : nextButton
+        skipButton.KeyNavigation.backtab = nextButton
+
+        // Ensure initialFocusItem set
+        if (!initialFocusItem) initialFocusItem = firstField
     }
 } 

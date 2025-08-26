@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/">
+        <!-- Override countries.txt with generated list from build directory -->
+        <file alias="countries.txt">@GENERATED_COUNTRIES_FILE@</file>
+    </qresource>
+</RCC>
+
+
+
+

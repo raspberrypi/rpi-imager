@@ -34,6 +34,8 @@ Item {
     property bool wifiConfigured: false
     property bool sshEnabled: false
     property bool piConnectEnabled: false
+    // Ephemeral per-run setting: do not persist across runs
+    property bool disableWarnings: false
     // Whether the selected OS supports customisation (init_format present)
     property bool customizationSupported: true
     
@@ -95,26 +97,26 @@ Item {
         
         // Sidebar
         Rectangle {
-            Layout.preferredWidth: 200
+            Layout.preferredWidth: Style.sidebarWidth
             Layout.fillHeight: true
-            color: "#C51E3A"
-            border.color: "#A91B2E"
-            border.width: 1
+            color: Style.sidebarBackgroundColour
+            border.color: Style.sidebarBorderColour
+            border.width: 0
             
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 20
-                spacing: 5
+                anchors.margins: Style.cardPadding
+                spacing: Style.spacingXSmall
                 
                 // Header
                 Text {
                     text: qsTr("Setup Steps")
-                    font.pixelSize: 16
+                    font.pixelSize: Style.fontSizeHeading
                     font.family: Style.fontFamilyBold
                     font.bold: true
-                    color: "white"
+                    color: Style.sidebarTextOnInactiveColor
                     Layout.fillWidth: true
-                    Layout.bottomMargin: 10
+                    Layout.bottomMargin: Style.spacingSmall
                 }
                 
                 // Step list
@@ -123,11 +125,11 @@ Item {
                     
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 35
-                        color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : "transparent"
-                        border.color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : "transparent"
+                        Layout.preferredHeight: Style.buttonHeightStandard
+                        color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
+                        border.color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                         border.width: 1
-                        radius: 4
+                        radius: Style.sidebarItemBorderRadius
                         property bool isClickable: index < root.getSidebarIndex(root.currentStep) && !root.isWriting
                         
                         MouseArea {
@@ -145,16 +147,17 @@ Item {
                         }
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 8
+                            anchors.margins: Style.spacingSmall
+                            spacing: Style.spacingTiny
                             
                             // Step name (no numbering for cleaner look)
                             Text {
                                 Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
                                 text: modelData
-                                font.pixelSize: 13
+                                font.pixelSize: Style.fontSizeSidebarItem
                                 font.family: Style.fontFamily
-                                color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarTextColor : (parent.isClickable ? Style.sidebarTextColor : Style.sidebarTextDisabledColor)
+                                color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarTextOnActiveColor : Style.sidebarTextOnInactiveColor
                                 elide: Text.ElideRight
                             }
                         }
@@ -170,11 +173,11 @@ Item {
                 Rectangle {
                     id: optionsButtonRect
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 35
-                    color: optionsButton.containsMouse ? Qt.rgba(255,255,255,0.1) : "transparent"
-                    border.color: Qt.rgba(255,255,255,0.3)
+                    Layout.preferredHeight: Style.buttonHeightStandard - 5
+                    color: optionsButton.containsMouse ? Style.translucentWhite10 : Style.transparent
+                    border.color: Style.sidebarControlBorderColor
                     border.width: 1
-                    radius: 4
+                    radius: Style.sidebarItemBorderRadius
                     
                     MouseArea {
                         id: optionsButton
@@ -183,6 +186,10 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (root.optionsPopup) {
+                                // Provide container reference so the popup can set ephemeral flags
+                                if (!root.optionsPopup.wizardContainer) {
+                                    root.optionsPopup.wizardContainer = root
+                                }
                                 root.optionsPopup.initialize()
                                 root.optionsPopup.show()
                             }
@@ -191,8 +198,8 @@ Item {
                     
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 8
-                        spacing: 8
+                        anchors.margins: Style.spacingTiny
+                        spacing: Style.spacingTiny
                         
                         // Cog icon
                         Image {
@@ -207,16 +214,28 @@ Item {
                         Text {
                             Layout.fillWidth: true
                             text: qsTr("Advanced Options")
-                            font.pixelSize: 11
+                            font.pixelSize: Style.fontSizeCaption
                             font.family: Style.fontFamily
-                            color: "white"
+                            color: Style.sidebarTextOnInactiveColor
                             elide: Text.ElideRight
                         }
                     }
                 }
             }
         }
-        
+        // Vertical separator between sidebar and content
+        Item {
+            Layout.preferredWidth: 1
+            Layout.fillHeight: true
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+                width: 1
+                height: parent.height * 0.75
+                color: Style.titleSeparatorColor
+            }
+        }
+
         // Main content area
         StackView {
             id: wizardStack
@@ -275,6 +294,8 @@ Item {
             root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)
             if (nextComponent) {
+                // Destroy previous step to avoid lingering handlers, then show the next step
+                wizardStack.clear()
                 wizardStack.push(nextComponent)
             }
         }
@@ -282,8 +303,14 @@ Item {
     
     function previousStep() {
         if (root.currentStep > 0) {
-            root.currentStep--
-            wizardStack.pop()
+            var prevIndex = root.currentStep - 1
+            root.currentStep = prevIndex
+            var prevComponent = getStepComponent(root.currentStep)
+            if (prevComponent) {
+                // Clear and push the previous step explicitly since we keep a single-item stack
+                wizardStack.clear()
+                wizardStack.push(prevComponent)
+            }
         }
     }
     
@@ -416,7 +443,7 @@ Item {
         WritingStep {
             imageWriter: root.imageWriter
             wizardContainer: root
-            showBackButton: false
+            showBackButton: true
             // Let WritingStep handle its own button text based on state
             onNextClicked: {
                 // Only advance if the step indicates it's ready
@@ -425,6 +452,7 @@ Item {
                 }
                 // Otherwise, let the step handle the action internally
             }
+            onBackClicked: root.previousStep()
         }
     }
     

@@ -8,25 +8,21 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import RpiImager
 
-Rectangle {
+Item {
     id: root
     
     default property alias content: childrenLayout.children
     
     Layout.fillWidth: true
-    Layout.preferredHeight: childrenLayout.implicitHeight + (2 * Style.sectionMargins)
+    Layout.preferredHeight: childrenLayout.implicitHeight
     Layout.maximumWidth: Style.sectionMaxWidth
     Layout.alignment: Qt.AlignHCenter
     
-    color: Style.titleBackgroundColor
-    border.color: Style.titleSeparatorColor
-    border.width: Style.sectionBorderWidth
-    radius: Style.sectionBorderRadius
-    
     ColumnLayout {
         id: childrenLayout
-        anchors.fill: parent
-        anchors.margins: Style.sectionMargins
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         spacing: Style.stepContentSpacing
     }
 } 

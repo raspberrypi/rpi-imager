@@ -4,9 +4,10 @@
  */
 
 import QtQuick 2.15
-import QtQuick.Controls 2.15
+// import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Dialogs
+import QtCore
 import "../qmlcomponents"
 import "components"
 
@@ -18,11 +19,12 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("OS Customisation")
-    subtitle: qsTr("Configure remote access")
+    title: qsTr("Customization: SSH Authentication")
+    subtitle: qsTr("Configure SSH access.")
     showSkipButton: true
     
     // Content
+    content: [
     ColumnLayout {
         anchors.left: parent.left
         anchors.right: parent.right
@@ -39,6 +41,7 @@ WizardStepBase {
                     id: chkEnableSSH
                     text: qsTr("Enable SSH")
                     checked: false
+                    onCheckedChanged: root.requestRecomputeTabOrder()
                 }
                 
                 Item {
@@ -48,11 +51,11 @@ WizardStepBase {
             
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Style.spacingMedium
+                spacing: Style.spacingSmallPlus
                 enabled: chkEnableSSH.checked
                 
                 WizardFormLabel {
-                    text: qsTr("SSH authentication:")
+                    text: qsTr("Authentication Mechanism:")
                 }
                 
                 ImRadioButton {
@@ -65,6 +68,7 @@ WizardStepBase {
                     id: radioPublicKey
                     text: qsTr("Use public key authentication")
                     checked: false
+                    onCheckedChanged: root.requestRecomputeTabOrder()
                 }
                 
                 RowLayout {
@@ -72,7 +76,7 @@ WizardStepBase {
                     spacing: Style.spacingMedium
                     visible: radioPublicKey.checked
                     
-                    TextField {
+                    ImTextField {
                         id: fieldPublicKey
                         Layout.fillWidth: true
                         placeholderText: qsTr("Enter public key or click Browse")
@@ -80,6 +84,7 @@ WizardStepBase {
                     }
                     
                     ImButton {
+                        id: browseButton
                         text: qsTr("Browse")
                         Layout.minimumWidth: 80
                         onClicked: {
@@ -88,30 +93,51 @@ WizardStepBase {
                     }
                 }
             }
-            
-            WizardDescriptionText {
-                text: qsTr("SSH allows you to remotely access your Raspberry Pi from another computer.")
-            }
+        }
+    }
+    ]
+
+    Component.onCompleted: {
+        root.registerFocusGroup("ssh_controller", function(){ return [chkEnableSSH] }, 0)
+        root.registerFocusGroup("ssh_auth", function(){ return chkEnableSSH.checked ? [radioPassword, radioPublicKey] : [] }, 1)
+        root.registerFocusGroup("ssh_key", function(){ return chkEnableSSH.checked && radioPublicKey.checked ? [fieldPublicKey, browseButton] : [] }, 2)
+        // Prefill from saved settings
+        var saved = imageWriter.getSavedCustomizationSettings()
+        if (saved.sshEnabled === true || saved.sshEnabled === "true") {
+            chkEnableSSH.checked = true
+        }
+        if (saved.sshPublicKey) {
+            radioPublicKey.checked = true
+            radioPassword.checked = false
+            fieldPublicKey.text = saved.sshPublicKey
+        } else if (saved.sshPasswordAuth === true || saved.sshPasswordAuth === "true") {
+            radioPassword.checked = true
+            radioPublicKey.checked = false
         }
     }
     
     // Save settings when moving to next step
     onNextClicked: {
-        var settings = {}
-        
+        // Merge-and-save strategy
+        var saved = imageWriter.getSavedCustomizationSettings()
         if (chkEnableSSH.checked) {
-            settings.sshEnabled = true
-            settings.sshPasswordAuth = radioPassword.checked
-            if (radioPublicKey.checked && fieldPublicKey.text) {
-                settings.sshPublicKey = fieldPublicKey.text
+            saved.sshEnabled = true
+            saved.sshPasswordAuth = radioPassword.checked
+            if (radioPublicKey.checked && fieldPublicKey.text && fieldPublicKey.text.trim().length > 0) {
+                saved.sshPublicKey = fieldPublicKey.text.trim()
+            } else {
+                delete saved.sshPublicKey
             }
             wizardContainer.sshEnabled = true
         } else {
+            // User disabled SSH -> remove SSH settings from persistence
+            delete saved.sshEnabled
+            delete saved.sshPasswordAuth
+            delete saved.sshPublicKey
             wizardContainer.sshEnabled = false
         }
-        
-        // Store settings temporarily
-        console.log("Remote access settings:", JSON.stringify(settings))
+        imageWriter.setSavedCustomizationSettings(saved)
+        // Do not log remote access settings (may contain sensitive data)
     }
     
     // Handle skip button
@@ -134,6 +160,40 @@ WizardStepBase {
         id: sshKeyFileDialog
         title: qsTr("Select SSH Public Key")
         nameFilters: ["Public Key files (*.pub)", "All files (*)"]
+        Component.onCompleted: {
+            if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
+                // Default to ~/.ssh on macOS
+                var home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+                var url = "file://" + home + "/.ssh"
+                if (sshKeyFileDialog.hasOwnProperty("currentFolder")) {
+                    sshKeyFileDialog.currentFolder = url
+                }
+                if (sshKeyFileDialog.hasOwnProperty("folder")) {
+                    sshKeyFileDialog.folder = url
+                }
+            } else if (Qt.platform.os === "linux") {
+                // Default to ~/.ssh on Linux
+                var lhome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+                var lurl = "file://" + lhome + "/.ssh"
+                if (sshKeyFileDialog.hasOwnProperty("currentFolder")) {
+                    sshKeyFileDialog.currentFolder = lurl
+                }
+                if (sshKeyFileDialog.hasOwnProperty("folder")) {
+                    sshKeyFileDialog.folder = lurl
+                }
+            } else if (Qt.platform.os === "windows") {
+                // Default to %USERPROFILE%\.ssh on Windows
+                var whome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+                // Use file:/// prefix on Windows
+                var wurl = "file:///" + whome + "/.ssh"
+                if (sshKeyFileDialog.hasOwnProperty("currentFolder")) {
+                    sshKeyFileDialog.currentFolder = wurl
+                }
+                if (sshKeyFileDialog.hasOwnProperty("folder")) {
+                    sshKeyFileDialog.folder = wurl
+                }
+            }
+        }
         onAccepted: {
             // Load SSH key file content - simplified for now
             fieldPublicKey.text = qsTr("SSH key loaded from file")

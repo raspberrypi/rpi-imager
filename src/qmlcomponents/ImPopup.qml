@@ -33,8 +33,8 @@ Popup {
     signal reboot()
 
     background: Rectangle {
-    color: Style.listViewRowBackgroundColor
-    radius: 5
+        color: Style.listViewRowBackgroundColor
+        radius: Style.listItemBorderRadius
     }
 
     contentItem: Item {
@@ -63,14 +63,14 @@ Popup {
         color: Style.titleBackgroundColor
         anchors.left: parent.left
         anchors.top: parent.top
-        height: 35
+        height: Style.buttonHeightStandard - 5
         width: parent.width
 
         Text {
             id: msgpopupheader
             horizontalAlignment: Text.AlignHCenter
             anchors.fill: parent
-            anchors.topMargin: 10
+            anchors.topMargin: Style.spacingSmall
             font.family: Style.fontFamily
             font.bold: true
         }
@@ -93,7 +93,7 @@ Popup {
 
     ColumnLayout {
         id: contents
-        spacing: 20
+        spacing: Style.spacingLarge
         anchors.top: msgpopup_title_separator.bottom
         anchors.left: parent.left
         anchors.right: parent.right

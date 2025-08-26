@@ -143,7 +143,7 @@ telemetry=false
 On macOS, disable it by editing the property list for the application:
 
 ```sh
-defaults write org.raspberrypi.Imager.plist telemetry -bool NO
+defaults write com.raspberrypi.Imager.plist telemetry -bool NO
 ```
 
 ### License

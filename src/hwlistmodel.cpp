@@ -40,6 +40,8 @@ bool HWListModel::reload()
 
     beginResetModel();
     _currentIndex = -1;
+    // Replace contents on reload to avoid duplicate entries when re-entering the step
+    _hwDevices.clear();
 
     const QJsonArray deviceArray = devices.toArray();
     _hwDevices.reserve(deviceArray.size());

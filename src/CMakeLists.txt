@@ -1,3 +1,5 @@
+# Common helper to generate build-time resources with fallback
+include(cmake/GeneratedResource.cmake)
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2020-2025 Raspberry Pi Ltd
 
@@ -741,37 +743,49 @@ option(GENERATE_TIMEZONES_FROM_IANA "Generate timezone list from latest IANA dat
 if(GENERATE_TIMEZONES_FROM_IANA)
     set(TZDATA_VERSION "2025b") # Update this to get newer timezone data
     set(TZDATA_URL "https://data.iana.org/time-zones/releases/tzdata${TZDATA_VERSION}.tar.gz")
-    set(TZDATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/tzdata")
-    set(GENERATED_TIMEZONES_FILE "${CMAKE_CURRENT_BINARY_DIR}/timezones_generated.txt")
-    
-    # Download and extract IANA timezone data
-    add_custom_command(
-        OUTPUT ${GENERATED_TIMEZONES_FILE}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${TZDATA_DIR}
-        COMMAND ${CMAKE_COMMAND} 
+
+    # Reuse the helper to produce a generated qrc aliasing timezones.txt
+    # Create placeholder for clean builds so rcc can parse generated qrc
+    set(GENERATED_TIMEZONES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/timezones_generated.txt")
+    if(NOT EXISTS "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}")
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt"
+            "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}"
+            COPYONLY
+        )
+    endif()
+    add_generated_resource_with_fallback(GENERATED_TZ_QRC GENERATE_TIMEZONES_TGT timezones
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateTimezones.cmake
+        timezones_generated.txt timezones.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt
+        EXTRA_CMAKE_ARGS 
             -DTZDATA_URL=${TZDATA_URL}
-            -DTZDATA_DIR=${TZDATA_DIR}
-            -DOUTPUT_FILE=${GENERATED_TIMEZONES_FILE}
-            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateTimezones.cmake
-        COMMENT "Generating timezone list from IANA data"
-        VERBATIM
+            -DTZDATA_DIR=${CMAKE_CURRENT_BINARY_DIR}/tzdata
     )
-    
-    # Create a target for timezone generation
-    add_custom_target(generate_timezones DEPENDS ${GENERATED_TIMEZONES_FILE})
-    
-    # Copy generated file to source location for embedding in resources
-    add_custom_command(
-        TARGET generate_timezones POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${GENERATED_TIMEZONES_FILE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt
-        COMMENT "Updating timezones.txt with generated data"
-    )
-    
+    list(APPEND SOURCES "${GENERATED_TZ_QRC}")
 endif()
 
+option(GENERATE_COUNTRIES_FROM_REGDB "Generate countries list from latest wireless-regdb" ON)
+
+if(GENERATE_COUNTRIES_FROM_REGDB)
+    set(REGDB_URL "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain/db.txt")
+    # Create placeholder for clean builds so rcc can parse generated qrc
+    set(GENERATED_COUNTRIES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/countries_generated.txt")
+    if(NOT EXISTS "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}")
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/countries.txt"
+            "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}"
+            COPYONLY
+        )
+    endif()
+    add_generated_resource_with_fallback(GENERATED_COUNTRIES_QRC GENERATE_COUNTRIES_TGT countries
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateRegdbCountries.cmake
+        countries_generated.txt countries.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/countries.txt
+        EXTRA_CMAKE_ARGS -DREGDB_URL=${REGDB_URL}
+    )
+    list(APPEND SOURCES "${GENERATED_COUNTRIES_QRC}")
+endif()
 # Create an rpi-imager_lupdate target
 qt_add_lupdate(TS_FILES ${TRANSLATIONS} SOURCE_TARGETS ${PROJECT_NAME} OPTIONS -no-obsolete -locations none)
 
@@ -787,8 +801,13 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY AUTORCC ON)
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOUIC ON)
 
 # Add timezone generation dependency if enabled
-if(GENERATE_TIMEZONES_FROM_IANA AND TARGET generate_timezones)
-    add_dependencies(${PROJECT_NAME} generate_timezones)
+if(GENERATE_TIMEZONES_FROM_IANA AND DEFINED GENERATE_TIMEZONES_TGT)
+    add_dependencies(${PROJECT_NAME} ${GENERATE_TIMEZONES_TGT})
+endif()
+
+# Ensure countries list is generated before building resources
+if(GENERATE_COUNTRIES_FROM_REGDB AND DEFINED GENERATE_COUNTRIES_TGT)
+    add_dependencies(${PROJECT_NAME} ${GENERATE_COUNTRIES_TGT})
 endif()
 
 if(ENABLE_TELEMETRY)
@@ -832,6 +851,8 @@ set(IMAGER_QML_FILES
     qmlcomponents/ImComboBox.qml
     qmlcomponents/ImPopup.qml
     qmlcomponents/ImRadioButton.qml
+    qmlcomponents/ImOptionPill.qml
+    qmlcomponents/ImTextField.qml
     MainPopupBase.qml
     HwPopup.qml
     OSPopup.qml
@@ -1043,7 +1064,7 @@ elseif(APPLE)
     # Set all required bundle properties
     set(MACOSX_BUNDLE_BUNDLE_NAME "${APP_NAME}")
     set(MACOSX_BUNDLE_EXECUTABLE_NAME "${PROJECT_NAME}")
-    set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.raspberrypi.imagingutility")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.raspberrypi.rpi-imager")
     set(MACOSX_BUNDLE_BUNDLE_VERSION "${IMAGER_VERSION_STR}")
     set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${IMAGER_VERSION_STR}")
     set(MACOSX_BUNDLE_LONG_VERSION_STRING "${IMAGER_VERSION_STR}")
@@ -1188,6 +1209,10 @@ elseif(APPLE)
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtTest"
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Qt/test"
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Qt/labs"
+        # Remove QML Assets tooling module and stray build artifacts (not used, breaks notarization)
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Assets"
+        # Prune any 'objects-*' directories accidentally deployed with QML modules
+        COMMAND /bin/sh -c "find \"${APP_BUNDLE_PATH}/Contents/Resources/qml\" -type d -name 'objects-*' -prune -exec rm -rf {} +"
         COMMENT "Removing unused QML theme directories and modules (keeping Material theme + Basic fallback)"
     )
 
@@ -1280,8 +1305,8 @@ else()
 
     install(TARGETS ${PROJECT_NAME} DESTINATION bin)
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/rpi-imager.png" DESTINATION share/icons/hicolor/128x128/apps)
-    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/org.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
-    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/org.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/com.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/com.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
 
 add_dependencies(${PROJECT_NAME} ZLIB::ZLIB)

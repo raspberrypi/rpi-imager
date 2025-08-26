@@ -75,6 +75,50 @@ fi
 echo "Using macdeployqt: $MACDEPLOYQT_PATH"
 "$MACDEPLOYQT_PATH" "$DMG_APP_PATH" -qmldir="@CMAKE_CURRENT_SOURCE_DIR@" -always-overwrite
 
+# Validate and clean up problematic symlinks under QML tree (targets that don't exist or escape the bundle)
+echo "Validating symlinks under QML directory..."
+QML_DIR="$DMG_APP_PATH/Contents/Resources/qml"
+if [ -d "$QML_DIR" ]; then
+    find "$QML_DIR" -type l -print0 | while IFS= read -r -d '' LINK; do
+        RESOLVED=$(python3 - "$LINK" <<'PY'
+import os, sys
+link=sys.argv[1]
+try:
+    target=os.readlink(link)
+except OSError:
+    print('')
+    sys.exit(0)
+if not target:
+    print('')
+    sys.exit(0)
+if os.path.isabs(target):
+    p=os.path.normpath(target)
+else:
+    p=os.path.normpath(os.path.join(os.path.dirname(link), target))
+print(p)
+PY
+)
+        # Skip if unable to resolve
+        if [ -z "$RESOLVED" ]; then
+            continue
+        fi
+        case "$RESOLVED" in
+            "$DMG_APP_PATH"/*)
+                # Inside app bundle; remove only if broken
+                if [ ! -e "$RESOLVED" ]; then
+                    echo "Removing broken symlink: $LINK -> (missing) $RESOLVED"
+                    rm -f "$LINK"
+                fi
+                ;;
+            *)
+                # Points outside the app bundle — remove
+                echo "Removing external symlink: $LINK -> $RESOLVED"
+                rm -f "$LINK"
+                ;;
+        esac
+    done
+fi
+
 # Sign the deployed app bundle if signing identity is provided
 if [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "NONE" ] && [ "$SIGNING_IDENTITY" != "" ]; then
     echo "Signing the deployed app bundle..."
@@ -129,7 +173,7 @@ echo "Creating DMG with create-dmg..."
 # Build create-dmg command
 CREATE_DMG_CMD=(
     create-dmg
-    --volname "Raspberry Pi Imager"
+    --volname "Raspberry Pi Imager @IMAGER_VERSION_STR@"
     --window-pos 200 120
     --window-size 600 400
     --icon-size 128
@@ -172,7 +216,7 @@ if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_P
         exit 1
     fi
 
-    # Submit and wait for the result
+    echo "Submitting and waiting for notarization to complete..."
     xcrun notarytool submit "$FINAL_DMG_PATH" --keychain-profile "$KEYCHAIN_PROFILE" --wait || {
         echo "Error: Notarization failed"
         exit 1
@@ -187,10 +231,32 @@ if [ "$SHOULD_NOTARIZE" = "ON" ] && [ -n "$KEYCHAIN_PROFILE" ] && [ "$KEYCHAIN_P
     echo "Validating stapled DMG..."
     xcrun stapler validate "$FINAL_DMG_PATH" || echo "Warning: stapler validate reported issues"
     echo "✓ DMG notarized and stapled"
-fi
 
-# Clean up temporary app bundle copy
-echo "Cleaning up temporary app bundle..."
-rm -rf "$DMG_APP_PATH"
-
-exit 0 
+    echo "Assessing app inside DMG with Gatekeeper (spctl)..."
+    MOUNT_DIR=$(mktemp -d)
+    if hdiutil attach "$FINAL_DMG_PATH" -nobrowse -readonly -noverify -mountpoint "$MOUNT_DIR" >/dev/null; then
+        APP_IN_DMG="$MOUNT_DIR/${APP_NAME}.app"
+        if [ ! -d "$APP_IN_DMG" ]; then
+            echo "Error: Mounted DMG does not contain expected app at $APP_IN_DMG"
+            hdiutil detach "$MOUNT_DIR" >/dev/null || true
+            rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
+            exit 1
+        fi
+        if ! spctl -a -vvv --type execute "$APP_IN_DMG"; then
+            echo "Error: Gatekeeper assessment failed for app inside DMG"
+            hdiutil detach "$MOUNT_DIR" >/dev/null || true
+            rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
+            exit 1
+        fi
+        hdiutil detach "$MOUNT_DIR" >/dev/null || true
+        rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
+    else
+        echo "Warning: Could not mount DMG for Gatekeeper assessment"
+    fi
+ fi
+ 
+ # Clean up temporary app bundle copy
+ echo "Cleaning up temporary app bundle..."
+ rm -rf "$DMG_APP_PATH"
+ 
+ exit 0 

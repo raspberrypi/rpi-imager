@@ -18,12 +18,12 @@ WizardStepBase {
     
     readonly property HWListModel hwModel: imageWriter.getHWList()
     
-    title: qsTr("Choose Device")
-    subtitle: qsTr("Select your Raspberry Pi device to filter and optimize the available images")
-    showNextButton: false
+    title: qsTr("Select your Raspberry Pi Device")
+    showNextButton: true
     
     property alias hwlist: hwlist
     property bool modelLoaded: false
+    property bool hasDeviceSelected: false
     
     // Forward the nextClicked signal as next() function
     function next() {
@@ -31,15 +31,22 @@ WizardStepBase {
     }
     
     Component.onCompleted: {
-        // Connect to osListPrepared signal to reload models when data is ready
-        imageWriter.osListPrepared.connect(onOsListPrepared)
-        
-        // Try initial load in case data is already available
-        onOsListPrepared()
+        // Initial load only
+        if (!modelLoaded) onOsListPreparedHandler()
+    }
+
+    Connections {
+        target: imageWriter
+        function onOsListPrepared() {
+            onOsListPreparedHandler()
+        }
     }
     
     // Called when OS list data is ready from network
-    function onOsListPrepared() {
+    function onOsListPreparedHandler() {
+        if (!root || !root.hwModel) {
+            return
+        }
         // Only reload if we haven't loaded yet or if the model is empty
         if (!modelLoaded || root.hwModel.rowCount() === 0) {
             console.log("DeviceSelectionStep: OS list prepared, reloading hardware model")
@@ -51,65 +58,43 @@ WizardStepBase {
     }
     
     // Content
+    content: [
     ColumnLayout {
         anchors.fill: parent
-        spacing: 20
-        
-        // Device selection area
-        Rectangle {
+        spacing: 0
+
+        // Device list (fills available space)
+        ListView {
+            id: hwlist
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Style.titleBackgroundColor
-            border.color: Style.titleSeparatorColor
-            border.width: 1
-            radius: 8
+            model: root.hwModel
+            currentIndex: -1
             
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 15
-                
-                Text {
-                    text: qsTr("Select your Raspberry Pi device:")
-                    font.pixelSize: 16
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                }
-                
-                // Device list
-                ListView {
-                    id: hwlist
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: root.hwModel
-                    currentIndex: -1
-                    
-                    Component.onCompleted: {
-                        if (root.hwModel.defaultIndex !== undefined) {
-                            currentIndex = root.hwModel.defaultIndex
-                        }
-                    }
-                    delegate: hwdelegate
-                    clip: true
-                    
-                    boundsBehavior: Flickable.StopAtBounds
-                    highlight: Rectangle { 
-                        color: Style.listViewHighlightColor
-                        radius: 5 
-                    }
-                    
-                    ScrollBar.vertical: ScrollBar {
-                        width: 10
-                        policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-                    }
+            Component.onCompleted: {
+                if (root.hwModel && root.hwModel.currentIndex !== undefined && root.hwModel.currentIndex >= 0) {
+                    hwlist.currentIndex = root.hwModel.currentIndex
+                    root.hasDeviceSelected = true
+                    root.nextButtonEnabled = true
                 }
             }
+            onCurrentIndexChanged: {
+                root.hasDeviceSelected = currentIndex !== -1
+                root.nextButtonEnabled = root.hasDeviceSelected
+            }
+            delegate: hwdelegate
+            clip: true
+            
+            boundsBehavior: Flickable.StopAtBounds
+            highlight: Rectangle { color: Style.listViewHighlightColor; radius: 0 }
+            
+            ScrollBar.vertical: ScrollBar {
+                width: Style.scrollBarWidth
+                policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+            }
         }
-        
-
     }
+    ]
     
     // Device delegate component
     Component {
@@ -125,14 +110,15 @@ WizardStepBase {
             required property QtObject model
             
             width: hwlist.width
-            height: 60
+            // Let content determine height for balanced vertical padding
+            height: Math.max(60, row.implicitHeight + Style.spacingSmall + Style.spacingMedium)
             
             Rectangle {
                 id: hwbgrect
                 anchors.fill: parent
-                color: hwMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : 
-                       (hwlist.currentIndex === index ? Style.listViewHighlightColor : Style.listViewRowBackgroundColor)
-                radius: 5
+                color: (hwlist.currentIndex === hwitem.index) ? Style.listViewHighlightColor :
+                       (hwMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
+                radius: 0
                 
                 MouseArea {
                     id: hwMouseArea
@@ -141,18 +127,23 @@ WizardStepBase {
                     cursorShape: Qt.PointingHandCursor
                     
                     onClicked: {
-                        hwlist.currentIndex = index
-                        root.hwModel.currentIndex = index
+                        hwlist.currentIndex = hwitem.index
+                        root.hwModel.currentIndex = hwitem.index
                         root.wizardContainer.selectedDeviceName = hwitem.name
-                        // Auto-advance to next step
-                        root.next()
+                        // Enable Next; do not auto-advance
+                        root.hasDeviceSelected = true
+                        root.nextButtonEnabled = true
                     }
                 }
                 
                 RowLayout {
+                    id: row
                     anchors.fill: parent
-                    anchors.margins: 15
-                    spacing: 15
+                    anchors.leftMargin: Style.listItemPadding
+                    anchors.rightMargin: Style.listItemPadding
+                    anchors.topMargin: Style.spacingSmall
+                    anchors.bottomMargin: Style.spacingMedium
+                    spacing: Style.spacingMedium
                     
                     // Hardware Icon
                     Image {
@@ -167,14 +158,14 @@ WizardStepBase {
                             color: "transparent"
                             border.color: Style.titleSeparatorColor
                             border.width: 1
-                            radius: 4
+                            radius: 0
                             visible: parent.status === Image.Error
                         }
                     }
                     
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 2
+                        spacing: Style.spacingXXSmall
                         
                         Text {
                             text: hwitem.name
@@ -187,7 +178,7 @@ WizardStepBase {
                         
                         Text {
                             text: hwitem.description
-                            font.pixelSize: Style.fontSizeInput
+                            font.pixelSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true

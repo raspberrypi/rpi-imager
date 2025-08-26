@@ -4,5 +4,5 @@ rpi-imager-aarch64.AppImage => /usr/bin/rpi-imager
 
 debian/rpi-imager.png /usr/share/icons/hicolor/128x128/apps/
 
-debian/org.raspberrypi.rpi-imager.desktop /usr/share/applications/
-debian/org.raspberrypi.rpi-imager.metainfo.xml /usr/share/metainfo/
+debian/com.raspberrypi.rpi-imager.desktop /usr/share/applications/
+debian/com.raspberrypi.rpi-imager.metainfo.xml /usr/share/metainfo/

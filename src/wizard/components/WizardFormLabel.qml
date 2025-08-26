@@ -22,5 +22,5 @@ Text {
     
     // Default layout properties for consistent spacing
     Layout.fillWidth: false
-    Layout.alignment: Qt.AlignTop
+    Layout.alignment: Qt.AlignVCenter
 } 

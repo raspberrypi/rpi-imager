@@ -233,13 +233,13 @@ make DESTDIR="$APPDIR" install
 cd ..
 
 # Copy the desktop file from debian directory and modify for embedded use
-if [ ! -f "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager-embedded.desktop" ]; then
+if [ ! -f "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop" ]; then
     mkdir -p "$APPDIR/usr/share/applications"
-    cp "debian/org.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager-embedded.desktop"
+    cp "debian/com.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
     # Update the desktop file for embedded use
-    sed -i 's|Name=.*|Name=Raspberry Pi Imager (Embedded)|' "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager-embedded.desktop"
-    sed -i 's|Comment=.*|Comment=Raspberry Pi Imager for embedded systems |' "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager-embedded.desktop"
-    sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/org.raspberrypi.rpi-imager-embedded.desktop"
+    sed -i 's|Name=.*|Name=Raspberry Pi Imager (Embedded)|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
+    sed -i 's|Comment=.*|Comment=Raspberry Pi Imager for embedded systems |' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
+    sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
 fi
 
 # Create the AppRun file

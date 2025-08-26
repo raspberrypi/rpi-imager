@@ -23,21 +23,7 @@ ApplicationWindow {
     property string selectedOsName: ""
     property string selectedStorageName: ""
     property bool isCacheVerifying: false
-
-    Item {
-        id: focusAnchor
-        focus: true
-        Keys.onPressed: (event) => {
-            if (event.key === Qt.Key_Tab) {
-                if (event.modifiers & Qt.ShiftModifier) {
-                    window.getPreviousFocusableElement(null).forceActiveFocus()
-                } else {
-                    window.getNextFocusableElement(null).forceActiveFocus()
-                }
-                event.accepted = true;
-            }
-        }
-    }
+    property bool forceQuit: false
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 450
@@ -45,26 +31,14 @@ ApplicationWindow {
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
-    
-    Component.onCompleted: {
-        // Set initial focus to the anchor
-        focusAnchor.forceActiveFocus()
-    }
-    
-    // Helper function to get the next focusable element (now handled by wizard)
-    function getNextFocusableElement(startElement) {
-        return wizardContainer.visible ? wizardContainer : focusAnchor;
-    }
-
-    // Helper function to get the previous focusable element (now handled by wizard)
-    function getPreviousFocusableElement(startElement) {
-        return wizardContainer.visible ? wizardContainer : focusAnchor;
-    }
 
     onClosing: {
-        if (wizardContainer.isWriting) {
+        if (wizardContainer.isWriting && !forceQuit) {
             close.accepted = false
-            quitpopup.open()
+            quitDialog.open()
+        } else {
+            // allow close
+            close.accepted = true
         }
     }
     
@@ -120,15 +94,53 @@ ApplicationWindow {
         }
     }
 
-    MsgPopup {
-        id: quitpopup
-        continueButton: false
-        yesButton: true
-        noButton: true
-        title: qsTr("Are you sure you want to quit?")
-        text: qsTr("Raspberry Pi Imager is still busy.<br>Are you sure you want to quit?")
-        onYes: {
-            Qt.quit()
+    Dialog {
+        id: quitDialog
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        width: 520
+        standardButtons: Dialog.NoButton
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingMedium
+
+            Text {
+                text: qsTr("Are you sure you want to quit?")
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: qsTr("Raspberry Pi Imager is still busy. Are you sure you want to quit?")
+                font.pixelSize: Style.fontSizeDescription
+                font.family: Style.fontFamily
+                color: Style.textDescriptionColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacingMedium
+                Item { Layout.fillWidth: true }
+
+                ImButton {
+                    text: qsTr("No")
+                    onClicked: quitDialog.close()
+                }
+                ImButtonRed {
+                    text: qsTr("Yes")
+                    onClicked: {
+                        window.forceQuit = true
+                        Qt.quit()
+                    }
+                }
+            }
         }
     }
 
@@ -158,10 +170,8 @@ ApplicationWindow {
             progressText.visible = true
             progressBar.visible = true
             progressBar.indeterminate = true
-            progressBar.Material.accent = "#ffffff"
-            osbutton.enabled = false
-            dstbutton.enabled = false
-            hwbutton.enabled = false
+            progressBar.Material.accent = Style.progressBarTextColor
+            // Wizard UI manages its own navigation; legacy button disables removed
             window.imageWriter.setVerifyEnabled(true)
             window.imageWriter.startWrite()
         }
@@ -261,7 +271,7 @@ ApplicationWindow {
         continueButton: true
         rebootButton: true        
         title: qsTr("Write Successful")
-        text: qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You may now reboot").arg(osbutton.text).arg(dstbutton.text)
+        text: qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You may now reboot").arg(wizardContainer.selectedOsName).arg(wizardContainer.selectedStorageName)
 
         onReboot: {
            window.imageWriter.reboot()
@@ -299,7 +309,6 @@ ApplicationWindow {
 
     function resetWriteButton() {
         // Reset handled by wizard interface now
-        focusAnchor.forceActiveFocus()
     }
 
     function onError(msg) {
@@ -336,7 +345,6 @@ ApplicationWindow {
     function onCacheVerificationStarted() {
         // Set cache verification state
         isCacheVerifying = true
-        focusAnchor.forceActiveFocus()
     }
 
     function onCacheVerificationFinished() {

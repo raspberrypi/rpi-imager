@@ -17,8 +17,8 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("OS Customisation")
-    subtitle: qsTr("Configure locale settings")
+    title: qsTr("Customization: Choose locale")
+    subtitle: qsTr("Configure timezone and keyboard layout for your Raspberry Pi.")
     showSkipButton: true
     
     // Initialize the component
@@ -27,31 +27,33 @@ WizardStepBase {
         comboTimezone.model = imageWriter.getTimezoneList()
         comboKeyboard.model = imageWriter.getKeymapLayoutList()
         
-        // Set default timezone
-        var currentTimezone = imageWriter.getTimezone()
-        var tzIndex = comboTimezone.find(currentTimezone)
-        if (tzIndex !== -1) {
-            comboTimezone.currentIndex = tzIndex
-        } else {
-            comboTimezone.editText = currentTimezone
-        }
-        
-        // Set default keyboard layout
-        // Default to "gb" for UK timezone, "us" for everyone else
-        var defaultKeyboard = (currentTimezone === "Europe/London") ? "gb" : "us"
-        var kbIndex = comboKeyboard.find(defaultKeyboard)
-        if (kbIndex !== -1) {
-            comboKeyboard.currentIndex = kbIndex
-        } else {
-            comboKeyboard.editText = defaultKeyboard
-        }
+        // Prefill from saved settings; fallback to platform defaults
+        var saved = imageWriter.getSavedCustomizationSettings()
+        var tzToSet = saved.timezone || imageWriter.getTimezone()
+        var tzIndex = comboTimezone.find(tzToSet)
+        if (tzIndex !== -1) comboTimezone.currentIndex = tzIndex
+        else comboTimezone.editText = tzToSet
+
+        var defaultKeyboard = (tzToSet === "Europe/London") ? "gb" : "us"
+        var kbToSet = saved.keyboard || defaultKeyboard
+        var kbIndex = comboKeyboard.find(kbToSet)
+        if (kbIndex !== -1) comboKeyboard.currentIndex = kbIndex
+        else comboKeyboard.editText = kbToSet
+
+        // Register focus groups (no explicit controller checkboxes)
+        root.registerFocusGroup("locale_timezone", function(){ return [comboTimezone] }, 0)
+        root.registerFocusGroup("locale_keyboard", function(){ return [comboKeyboard] }, 1)
     }
     
+    // Set initial focus on timezone when entering step
+    initialFocusItem: comboTimezone
+
+    
+
     // Content
+    content: [
     ColumnLayout {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.fill: parent
         anchors.margins: Style.sectionPadding
         spacing: Style.stepContentSpacing
         
@@ -60,18 +62,13 @@ WizardStepBase {
                 Layout.fillWidth: true
                 spacing: Style.spacingMedium
                 
-                ImCheckBox {
-                    id: chkTimezone
-                    text: qsTr("Set timezone")
-                    checked: true
-                }
-                
-                ComboBox {
+                WizardFormLabel { text: qsTr("Timezone:") }
+                ImComboBox {
                     id: comboTimezone
                     Layout.fillWidth: true
-                    enabled: chkTimezone.checked
                     editable: true
                     selectTextByMouse: true
+                    activeFocusOnTab: true
                     font.pixelSize: Style.fontSizeInput
                 }
             }
@@ -80,46 +77,32 @@ WizardStepBase {
                 Layout.fillWidth: true
                 spacing: Style.spacingMedium
                 
-                ImCheckBox {
-                    id: chkKeyboard
-                    text: qsTr("Set keyboard layout")
-                    checked: true
-                }
-                
-                ComboBox {
+                WizardFormLabel { text: qsTr("Keyboard layout:") }
+                ImComboBox {
                     id: comboKeyboard
                     Layout.fillWidth: true
-                    enabled: chkKeyboard.checked
                     editable: true
                     selectTextByMouse: true
+                    activeFocusOnTab: true
                     font.pixelSize: Style.fontSizeInput
                 }
             }
             
-            WizardDescriptionText {
-                text: qsTr("Configure timezone and keyboard layout for your Raspberry Pi.")
-            }
         }
     }
+    ]
     
     // Save settings when moving to next step
     onNextClicked: {
-        var settings = {}
-        
-        if (chkTimezone.checked && comboTimezone.editText) {
-            settings.timezone = comboTimezone.editText
-            wizardContainer.localeConfigured = true
-        } else {
-            wizardContainer.localeConfigured = false
-        }
-        
-        if (chkKeyboard.checked && comboKeyboard.editText) {
-            settings.keyboard = comboKeyboard.editText
-            wizardContainer.localeConfigured = true
-        }
-        
-        // Store settings temporarily
-        console.log("Locale settings:", JSON.stringify(settings))
+        // Merge-and-save strategy
+        var saved = imageWriter.getSavedCustomizationSettings()
+        var tz = comboTimezone.editText ? comboTimezone.editText.trim() : ""
+        var kb = comboKeyboard.editText ? comboKeyboard.editText.trim() : ""
+        if (tz.length > 0) saved.timezone = tz; else delete saved.timezone
+        if (kb.length > 0) saved.keyboard = kb; else delete saved.keyboard
+        wizardContainer.localeConfigured = (tz.length > 0 || kb.length > 0)
+        imageWriter.setSavedCustomizationSettings(saved)
+        // Avoid logging settings to protect privacy
     }
     
     // Handle skip button

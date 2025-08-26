@@ -90,8 +90,8 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     
     app.setOrganizationName("Raspberry Pi");
-    app.setOrganizationDomain("raspberrypi.org");
-    app.setApplicationName("Imager");
+    app.setOrganizationDomain("raspberrypi.com");
+    app.setApplicationName("rpi-imager");
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
     
     // Create ImageWriter early to check embedded mode

@@ -1,82 +1,70 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2025 Raspberry Pi Ltd
 
+import QtQuick 2.15
+import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-MsgPopup {
+Dialog {
     id: root
-    title: qsTr("Remove system drive filter?")
-    continueButton: false
+    modal: true
+    anchors.centerIn: Overlay.overlay
+    width: 520
+    standardButtons: Dialog.NoButton
 
     signal confirmed()
     signal cancelled()
 
     readonly property string riskText: CommonStrings.warningRiskText
     readonly property string proceedText: CommonStrings.warningProceedText
-    // Track how the popup was dismissed so the close button/Esc acts as cancel
-    property string _result: ""
 
-    // Provide implementation for focus navigation expected by base popup
-    getNextFocusableElement: function(startElement) {
-        var focusableItems = [showButton, cancelButton, root.closeButton].filter(function(item) {
-            return item.visible && item.enabled
-        })
-        if (focusableItems.length === 0) return startElement;
-        var currentIndex = focusableItems.indexOf(startElement)
-        if (currentIndex === -1) return focusableItems[0];
-        var nextIndex = (currentIndex + 1) % focusableItems.length;
-        return focusableItems[nextIndex];
-    }
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: Style.cardPadding
+        spacing: Style.spacingMedium
 
-    getPreviousFocusableElement: function(startElement) {
-        var focusableItems = [showButton, cancelButton, root.closeButton].filter(function(item) {
-            return item.visible && item.enabled
-        })
-        if (focusableItems.length === 0) return startElement;
-        var currentIndex = focusableItems.indexOf(startElement)
-        if (currentIndex === -1) return focusableItems[0];
-        var prevIndex = (currentIndex - 1 + focusableItems.length) % focusableItems.length;
-        return focusableItems[prevIndex];
-    }
-
-    text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.") + "<br><br>" + root.riskText + "<br><br>" + root.proceedText
-
-    RowLayout {
-        Layout.alignment: Qt.AlignCenter | Qt.AlignBottom
-        Layout.bottomMargin: 10
-        spacing: 20
-
-        ImButtonRed {
-            id: cancelButton
-            text: qsTr("KEEP FILTER ON")
-            onClicked: {
-                root._result = "cancelled"
-                root.close()
-            }
+        Text {
+            text: qsTr("Remove system drive filter?")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            Layout.fillWidth: true
         }
 
-        ImButton {
-            id: showButton
-            text: qsTr("SHOW SYSTEM DRIVES")
-            onClicked: {
-                root._result = "confirmed"
-                root.close()
-            }
+        Text {
+            textFormat: Text.StyledText
+            text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.")
+                  + "<br><br>"
+                  + qsTr("System drives typically contain media essential to the operation of your computer, and usually include your personal files (photos, videos, documents).")
+                  + "<br><br>" + root.riskText + "<br><br>" + root.proceedText
+            font.pixelSize: Style.fontSizeDescription
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
         }
-    }
 
-    onOpened: {
-        _result = ""
-    }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacingMedium
+            Item { Layout.fillWidth: true }
 
-    onClosed: {
-        if (_result === "confirmed") {
-            root.confirmed()
-        } else {
-            // Close via cancel button, title close button, or Esc
-            root.cancelled()
+            ImButtonRed {
+                text: qsTr("KEEP FILTER ON")
+                onClicked: {
+                    root.close()
+                    root.cancelled()
+                }
+            }
+
+            ImButton {
+                text: qsTr("SHOW SYSTEM DRIVES")
+                onClicked: {
+                    root.close()
+                    root.confirmed()
+                }
+            }
         }
     }
 }
-
-

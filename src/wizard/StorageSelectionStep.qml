@@ -3,6 +3,8 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -16,9 +18,8 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("Choose Storage")
-    subtitle: qsTr("Select the storage device where you want to install the operating system")
-    showNextButton: false
+    title: qsTr("Select your Storage Device")
+    showNextButton: true
     
     property alias dstlist: dstlist
     property string selectedDeviceName: ""
@@ -28,91 +29,66 @@ WizardStepBase {
         root.nextClicked()
     }
     
-    Component.onCompleted: {
-        imageWriter.startDriveListPolling()
-    }
-    
-    Component.onDestruction: {
-        imageWriter.stopDriveListPolling()
-    }
+    // Removed drive list polling calls; backend handles device updates
     
     // Content
+    content: [
     ColumnLayout {
         anchors.fill: parent
-        spacing: 20
+        spacing: 0
         
-        // Storage selection area
-        Rectangle {
+        // Storage device list fills available space
+        ListView {
+            id: dstlist
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Style.titleBackgroundColor
-            border.color: Style.titleSeparatorColor
-            border.width: 1
-            radius: 8
+            model: root.imageWriter.getDriveList()
+            currentIndex: -1
+            delegate: dstdelegate
+            clip: true
             
-            ColumnLayout {
+            boundsBehavior: Flickable.StopAtBounds
+            highlight: Rectangle { color: Style.listViewHighlightColor; radius: 0 }
+            
+            ScrollBar.vertical: ScrollBar {
+                width: Style.scrollBarWidth
+                policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+            }
+            
+            // No storage devices message
+            Label {
                 anchors.fill: parent
-                anchors.margins: 20
-                spacing: 15
-                
-                Text {
-                    text: qsTr("Select your storage device:")
-                    font.pixelSize: 16
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                }
-                
-                // Storage device list
-                ListView {
-                    id: dstlist
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: root.imageWriter.getDriveList()
-                    currentIndex: -1
-                    delegate: dstdelegate
-                    clip: true
-                    
-                    boundsBehavior: Flickable.StopAtBounds
-                    highlight: Rectangle { 
-                        color: Style.listViewHighlightColor
-                        radius: 5 
-                    }
-                    
-                    ScrollBar.vertical: ScrollBar {
-                        width: 10
-                        policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-                    }
-                    
-                    // No storage devices message
-                    Label {
-                        anchors.fill: parent
-                        horizontalAlignment: Qt.AlignHCenter
-                        verticalAlignment: Qt.AlignVCenter
-                        visible: parent.count == 0
-                        text: qsTr("No storage devices found")
-                        font.bold: true
-                        color: Style.formLabelColor
-                    }
-                }
-                
-                // Filter controls
-                RowLayout {
-                    Layout.fillWidth: true
-                    
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    
-                    ImCheckBox {
-                        id: filterSystemDrives
-                        checked: true
-                        text: qsTr("Exclude System Drives")
-                        
-                        onCheckedChanged: {
-                            // Filtering is handled by shouldHide property in delegate
-                            // No need to call imageWriter function
+                horizontalAlignment: Qt.AlignHCenter
+                verticalAlignment: Qt.AlignVCenter
+                visible: parent.count == 0
+                text: qsTr("No storage devices found")
+                font.bold: true
+                color: Style.formLabelColor
+            }
+        }
+        
+        // Filter controls
+        RowLayout {
+            Layout.fillWidth: true
+            
+            Item {
+                Layout.fillWidth: true
+            }
+            
+            ImCheckBox {
+                id: filterSystemDrives
+                checked: true
+                text: qsTr("Exclude System Drives")
+
+                onToggled: {
+                    if (!checked) {
+                        // If warnings are disabled, bypass the confirmation dialog
+                        if (root.imageWriter.getBoolSetting("disable_warnings")) {
+                            // Leave checkbox unchecked and continue showing system drives
+                            dstlist.forceActiveFocus()
+                        } else {
+                            // Ask for stern confirmation before disabling filtering
+                            confirmUnfilterPopup.open()
                         }
                     }
                 }
@@ -121,6 +97,7 @@ WizardStepBase {
         
 
     }
+    ]
     
     // Storage delegate component
     Component {
@@ -150,30 +127,30 @@ WizardStepBase {
             Rectangle {
                 id: dstbgrect
                 anchors.fill: parent
-                color: dstMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : 
-                       (dstlist.currentIndex === index ? Style.listViewHighlightColor : Style.listViewRowBackgroundColor)
-                radius: 5
-                opacity: unselectable ? 0.5 : 1.0
+                color: (dstlist.currentIndex === dstitem.index) ? Style.listViewHighlightColor :
+                       (dstMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
+                radius: 0
+                opacity: dstitem.unselectable ? 0.5 : 1.0
                 
                 MouseArea {
                     id: dstMouseArea
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: unselectable ? Qt.ForbiddenCursor : Qt.PointingHandCursor
-                    enabled: !unselectable
+                    cursorShape: dstitem.unselectable ? Qt.ForbiddenCursor : Qt.PointingHandCursor
+                    enabled: !dstitem.unselectable
                     
                     onClicked: {
-                        if (!unselectable) {
-                            dstlist.currentIndex = index
-                            selectDstItem(dstitem)
+                        if (!dstitem.unselectable) {
+                            dstlist.currentIndex = dstitem.index
+                            root.selectDstItem(dstitem)
                         }
                     }
                 }
                 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 15
-                    spacing: 15
+                    anchors.margins: Style.listItemPadding
+                    spacing: Style.spacingMedium
                     
                     // Storage icon
                     Image {
@@ -188,31 +165,31 @@ WizardStepBase {
                     
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 2
+                        spacing: Style.spacingXXSmall
                         
                         Text {
                             text: dstitem.description
-                            font.pixelSize: 14
+                            font.pixelSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
                             font.bold: true
-                            color: unselectable ? Style.formLabelDisabledColor : Style.formLabelColor
+                            color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.formLabelColor
                             Layout.fillWidth: true
                         }
                         
                         Text {
                             text: (dstitem.size/1000000000).toFixed(1) + " GB"
-                            font.pixelSize: 12
+                            font.pixelSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
-                            color: unselectable ? Style.formLabelDisabledColor : Style.textDescriptionColor
+                            color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textDescriptionColor
                             Layout.fillWidth: true
                         }
                         
                         Text {
                             text: dstitem.mountpoints.length > 0 ? 
                                   qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", ")) : ""
-                            font.pixelSize: 10
+                            font.pixelSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
-                            color: unselectable ? Style.formLabelDisabledColor : Style.textMetadataColor
+                            color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textMetadataColor
                             Layout.fillWidth: true
                             visible: dstitem.mountpoints.length > 0
                         }
@@ -221,10 +198,10 @@ WizardStepBase {
                     // Read-only indicator
                     Text {
                         text: qsTr("Read-only")
-                        font.pixelSize: 12
+                        font.pixelSize: Style.fontSizeDescription
                         font.family: Style.fontFamily
                         color: Style.formLabelErrorColor
-                        visible: unselectable
+                        visible: dstitem.unselectable
                     }
                 }
             }
@@ -236,12 +213,60 @@ WizardStepBase {
         if (dstitem.unselectable) {
             return
         }
-        
+
+        if (dstitem.isSystem) {
+            // Show stern confirmation dialog requiring typing the name
+            systemDriveConfirm.driveName = dstitem.description
+            systemDriveConfirm.device = dstitem.device
+            systemDriveConfirm.sizeStr = (parseFloat(dstitem.size)/1000000000).toFixed(1) + " " + qsTr("GB")
+            systemDriveConfirm.mountpoints = dstitem.mountpoints
+            systemDriveConfirm.open()
+            return
+        }
+
         imageWriter.setDst(dstitem.device)
         selectedDeviceName = dstitem.description
         root.wizardContainer.selectedStorageName = dstitem.description
-        
-        // Auto-advance to next step
-        root.next()
+
+        // Do not auto-advance; enable Next
+        root.nextButtonEnabled = true
+    }
+
+    // Stern confirmation when disabling system drive filtering
+    ConfirmUnfilterPopup {
+        id: confirmUnfilterPopup
+        onConfirmed: {
+            // user chose to disable filter; leave checkbox unchecked
+        }
+        onCancelled: {
+            // Re-enable the filter checkbox and keep system drives hidden
+            filterSystemDrives.checked = true
+        }
+        onClosed: {
+            if (filterSystemDrives.checked === false) {
+                dstlist.forceActiveFocus()
+            } else {
+                filterSystemDrives.forceActiveFocus()
+            }
+        }
+    }
+
+    // Confirmation when selecting a system drive: type the exact name
+    ConfirmSystemDrivePopup {
+        id: systemDriveConfirm
+        onConfirmed: {
+            root.imageWriter.setDst(systemDriveConfirm.device)
+            root.selectedDeviceName = systemDriveConfirm.driveName
+            root.wizardContainer.selectedStorageName = systemDriveConfirm.driveName
+            // Re-enable filtering after selection via confirmation path
+            filterSystemDrives.checked = true
+            // Enable Next
+            root.nextButtonEnabled = true
+            // Auto-advance after explicit confirmation on a system drive
+            root.next()
+        }
+        onCancelled: {
+            // no-op
+        }
     }
 } 

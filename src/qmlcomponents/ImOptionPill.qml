@@ -1,0 +1,94 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (C) 2025 Raspberry Pi Ltd
+ */
+
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import RpiImager
+
+// A labeled switch styled for Imager; only the switch toggles, not the whole row
+Item {
+    id: pill
+    property alias text: label.text
+    property bool checked: false
+    // Optional help link next to the label
+    property string helpLabel: ""
+    property url helpUrl: ""
+    signal toggled(bool checked)
+
+    implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
+    implicitWidth: label.implicitWidth + sw.implicitWidth + Style.cardPadding
+
+    RowLayout {
+        anchors.fill: parent
+        spacing: Style.spacingMedium
+
+        // Text block (label + optional help) on the left
+        ColumnLayout {
+            id: textColumn
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+            spacing: Style.spacingXXSmall
+
+            // Main label
+            Text {
+                id: label
+                Layout.alignment: Qt.AlignVCenter
+                font.family: Style.fontFamilyBold
+                font.pixelSize: Style.fontSizeFormLabel
+                font.bold: true
+                color: Style.formLabelColor
+                elide: Text.ElideRight
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: sw.toggle()
+                }
+            }
+
+            // Optional help link under the label
+            Text {
+                id: helpText
+                Layout.alignment: Qt.AlignVCenter
+                visible: pill.helpLabel !== "" && pill.helpUrl !== ""
+                text: pill.helpLabel
+                font.family: Style.fontFamily
+                font.pixelSize: Style.fontSizeDescription
+                color: Style.buttonForegroundColor
+                font.underline: helpArea.containsMouse
+                Accessible.name: text
+            }
+            MouseArea {
+                id: helpArea
+                anchors.fill: helpText
+                enabled: helpText.visible
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Qt.openUrlExternally(pill.helpUrl)
+            }
+        }
+
+        // Flexible spacer to push the switch flush-right and align across rows
+        Item { Layout.fillWidth: true }
+
+        // Native switch on the right
+        Switch {
+            id: sw
+            Layout.alignment: Qt.AlignVCenter
+            checked: pill.checked
+            activeFocusOnTab: true
+            onToggled: {
+                pill.checked = checked
+                pill.toggled(checked)
+            }
+        }
+
+    }
+
+    function forceActiveFocus() { sw.forceActiveFocus() }
+}
+
+

@@ -17,15 +17,27 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("OS Customisation")
-    subtitle: qsTr("Configure hostname settings")
+    title: qsTr("Customization: Choose hostname")
     showSkipButton: true
     
+    
+    // Start focus directly on the hostname field
+    initialFocusItem: fieldHostname
+    
+    Component.onCompleted: {
+        root.registerFocusGroup("hostname_fields", function(){ return [fieldHostname] }, 0)
+        // Prefill from saved settings
+        var saved = imageWriter.getSavedCustomizationSettings()
+        if (saved.hostname) {
+            fieldHostname.text = saved.hostname
+            wizardContainer.hostnameConfigured = true
+        }
+    }
+
     // Content
+    content: [
     ColumnLayout {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.fill: parent
         anchors.margins: Style.sectionPadding
         spacing: Style.stepContentSpacing
         
@@ -34,22 +46,12 @@ WizardStepBase {
                 Layout.fillWidth: true
                 spacing: Style.spacingMedium
                 
-                ImCheckBox {
-                    id: chkHostname
-                    text: qsTr("Set hostname")
-                    checked: true
-                }
-                
-                TextField {
+                ImTextField {
                     id: fieldHostname
                     Layout.fillWidth: true
                     placeholderText: qsTr("raspberrypi")
-                    enabled: chkHostname.checked
                     font.pixelSize: Style.fontSizeInput
                     
-                    Component.onCompleted: {
-                        text = "raspberrypi"
-                    }
                     
                     validator: RegularExpressionValidator {
                         regularExpression: /^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$/
@@ -62,20 +64,22 @@ WizardStepBase {
             }
         }
     }
+    ]
     
     // Save settings when moving to next step
     onNextClicked: {
-        var settings = {}
-        
-        if (chkHostname.checked && fieldHostname.text) {
-            settings.hostname = fieldHostname.text
+        // Merge-and-save strategy: any non-empty hostname is a customization
+        var saved = imageWriter.getSavedCustomizationSettings()
+        var hostnameText = fieldHostname.text ? fieldHostname.text.trim() : ""
+        if (hostnameText.length > 0) {
+            saved.hostname = hostnameText
             wizardContainer.hostnameConfigured = true
         } else {
+            // Empty -> remove from persisted settings
+            delete saved.hostname
             wizardContainer.hostnameConfigured = false
         }
-        
-        // Store settings temporarily
-        console.log("Hostname settings:", JSON.stringify(settings))
+        imageWriter.setSavedCustomizationSettings(saved)
     }
     
     // Handle skip button

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity version="@IMAGER_VERSION_MAJOR@.@IMAGER_VERSION_MINOR@.@IMAGER_VERSION_PATCH@.0" processorArchitecture="AMD64" name="org.raspberry.imagingutility" type="win32" />
+  <assemblyIdentity version="@IMAGER_VERSION_MAJOR@.@IMAGER_VERSION_MINOR@.@IMAGER_VERSION_PATCH@.0" processorArchitecture="AMD64" name="com.raspberrypi.rpi-imager" type="win32" />
   <description>Raspberry Pi Imager</description>
    <dependency />
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">

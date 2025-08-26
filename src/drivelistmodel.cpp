@@ -98,7 +98,17 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
                 changes = true;
             }
 
-            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, i.isReadOnly, i.isSystem, mountpoints, this);
+            // TEMPORARY TEST ONLY: Mark Apple Disk Image Media as system drives on macOS
+            // Reason: to exercise the wizard's system-drive confirmation flow.
+            // To undo: remove this override block and pass i.isSystem directly.
+#ifdef Q_OS_DARWIN
+            const QString desc = QString::fromStdString(i.description);
+            const bool isSystemOverride = i.isSystem || desc.contains("Apple Disk Image Media", Qt::CaseInsensitive);
+#else
+            const bool isSystemOverride = i.isSystem;
+#endif
+
+            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, i.isReadOnly, isSystemOverride, mountpoints, this);
         }
     }
 

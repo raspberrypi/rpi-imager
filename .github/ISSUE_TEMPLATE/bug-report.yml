@@ -24,7 +24,8 @@ body:
       label: Version
       description: What version of our software are you running?
       options:
-        - 1.9.6 (Default)
+        - 2.0.0 (Default)
+        - 1.9.6
         - 1.9.5
         - 1.9.4
         - 1.9.0

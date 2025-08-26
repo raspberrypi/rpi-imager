@@ -13,11 +13,11 @@ RadioButton {
     // Add visual focus indicator
     Rectangle {
         anchors.fill: parent
-        anchors.margins: -4
-        color: "transparent"
-        border.color: parent.activeFocus ? "#0078d4" : "transparent"
-        border.width: 2
-        radius: 4
+        anchors.margins: Style.focusOutlineMargin
+        color: Style.transparent
+        border.color: parent.activeFocus ? Style.focusOutlineColor : Style.transparent
+        border.width: Style.focusOutlineWidth
+        radius: Style.focusOutlineRadius
         z: -1
     }
     

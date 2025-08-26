@@ -17,46 +17,53 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("OS Customisation")
-    subtitle: qsTr("Configure wireless LAN")
+    title: qsTr("Customization: Choose WiFi")
+    subtitle: qsTr("Configure wireless LAN settings.")
     showSkipButton: true
     
+    // Set initial focus on SSID
+    initialFocusItem: fieldWifiSSID
+
+    Component.onCompleted: {
+        root.registerFocusGroup("wifi_fields", function(){
+            return [fieldWifiSSID, fieldWifiPassword, fieldWifiCountry]
+        }, 0)
+        root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 1)
+        // Prefill from saved settings
+        var saved = imageWriter.getSavedCustomizationSettings()
+        if (saved.wifiSSID) {
+            fieldWifiSSID.text = saved.wifiSSID
+        }
+        if (saved.wifiCountry) {
+            // Set by text; list is populated on completed
+            fieldWifiCountry.editText = saved.wifiCountry
+        }
+        if (saved.wifiHidden !== undefined) {
+            chkWifiHidden.checked = !!saved.wifiHidden
+        }
+    }
+
     // Content
+    content: [
     ColumnLayout {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.fill: parent
         anchors.margins: Style.sectionPadding
         spacing: Style.stepContentSpacing
         
         WizardSectionContainer {
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.spacingMedium
-                
-                ImCheckBox {
-                    id: chkWifi
-                    text: qsTr("Configure wireless LAN")
-                    checked: true
-                }
-                
-                Item {
-                    Layout.fillWidth: true
-                }
-            }
+            // No explicit enable checkbox; intent is inferred from inputs
             
             GridLayout {
                 Layout.fillWidth: true
                 columns: 2
                 columnSpacing: Style.formColumnSpacing
                 rowSpacing: Style.formRowSpacing
-                enabled: chkWifi.checked
                 
                 WizardFormLabel {
                     text: qsTr("SSID:")
                 }
                 
-                TextField {
+                ImTextField {
                     id: fieldWifiSSID
                     Layout.fillWidth: true
                     placeholderText: qsTr("Network name")
@@ -67,7 +74,7 @@ WizardStepBase {
                     text: qsTr("Password:")
                 }
                 
-                TextField {
+                ImTextField {
                     id: fieldWifiPassword
                     Layout.fillWidth: true
                     placeholderText: qsTr("Network password")
@@ -79,11 +86,17 @@ WizardStepBase {
                     text: qsTr("Wireless LAN country:")
                 }
                 
-                ComboBox {
+                ImComboBox {
                     id: fieldWifiCountry
                     Layout.fillWidth: true
-                    model: ["US", "GB", "DE", "FR"] // Simplified for now
+                    model: []
                     font.pixelSize: Style.fontSizeInput
+                    Component.onCompleted: {
+                        model = root.imageWriter.getCountryList()
+                        if (model && model.length > 0) {
+                            currentIndex = 0
+                        }
+                    }
                 }
             }
             
@@ -91,39 +104,47 @@ WizardStepBase {
                 Layout.fillWidth: true
                 spacing: Style.spacingMedium
                 
-                ImCheckBox {
-                    id: chkWifiHidden
-                    text: qsTr("Hidden SSID")
-                    enabled: chkWifi.checked
-                }
+                ImCheckBox { id: chkWifiHidden; text: qsTr("Hidden SSID") }
                 
                 Item {
                     Layout.fillWidth: true
                 }
             }
-            
-            WizardDescriptionText {
-                text: qsTr("Configure wireless network settings to connect your Raspberry Pi to WiFi.")
-            }
         }
     }
+    ]
     
     // Save settings when moving to next step
     onNextClicked: {
-        var settings = {}
-        
-        if (chkWifi.checked && fieldWifiSSID.text && fieldWifiPassword.text && fieldWifiCountry.currentText) {
-            settings.wifiSSID = fieldWifiSSID.text
-            settings.wifiPassword = fieldWifiPassword.text
-            settings.wifiCountry = fieldWifiCountry.currentText
-            settings.wifiHidden = chkWifiHidden.checked
+        // Merge-and-save strategy
+        var saved = imageWriter.getSavedCustomizationSettings()
+        var ssid = fieldWifiSSID.text ? fieldWifiSSID.text.trim() : ""
+        var country = fieldWifiCountry.currentText || fieldWifiCountry.editText || ""
+        var pwd = fieldWifiPassword.text
+        var hidden = chkWifiHidden.checked
+        if (ssid.length > 0 && country.length > 0) {
+            saved.wifiSSID = ssid
+            saved.wifiCountry = country
+            if (pwd && pwd.length > 0) {
+                saved.wifiPassword = pwd
+            } else {
+                delete saved.wifiPassword
+            }
+            saved.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
+        } else if (ssid.length === 0 && (country.length === 0)) {
+            // Cleared -> remove persisted WiFi settings
+            delete saved.wifiSSID
+            delete saved.wifiPassword
+            delete saved.wifiCountry
+            delete saved.wifiHidden
+            wizardContainer.wifiConfigured = false
         } else {
+            // Partial -> do not change persisted settings
             wizardContainer.wifiConfigured = false
         }
-        
-        // Store settings temporarily
-        console.log("WiFi settings:", JSON.stringify(settings))
+        imageWriter.setSavedCustomizationSettings(saved)
+        // Do not log sensitive data
     }
     
     // Handle skip button

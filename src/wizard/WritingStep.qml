@@ -17,196 +17,186 @@ WizardStepBase {
     required property var wizardContainer
     
     title: qsTr("Write Image")
-    subtitle: qsTr("Ready to write your customized image to the storage device")
+    subtitle: qsTr("Review your choices and write the image to the storage device")
     nextButtonText: root.isWriting ? qsTr("Cancel") : (root.isComplete ? qsTr("Continue") : qsTr("Write"))
     nextButtonEnabled: true
-    showBackButton: false
+    showBackButton: true
     
     property bool isWriting: false
     property bool isComplete: false
+    property bool confirmOpen: false
+    readonly property bool anyCustomizationsApplied: (
+        wizardContainer.hostnameConfigured ||
+        wizardContainer.localeConfigured ||
+        wizardContainer.userConfigured ||
+        wizardContainer.wifiConfigured ||
+        wizardContainer.sshEnabled ||
+        wizardContainer.piConnectEnabled
+    )
     
+    // Disable back while writing
+    backButtonEnabled: !root.isWriting
+
     // Content
+    content: [
     ColumnLayout {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.margins: 20
-        spacing: 20
+        anchors.margins: Style.cardPadding
+        spacing: Style.spacingLarge
         
-        // Summary section
-        Rectangle {
+        // Summary section (de-chromed)
+        ColumnLayout {
+            id: summaryLayout
             Layout.fillWidth: true
-            Layout.preferredHeight: summaryLayout.implicitHeight + 40
-            Layout.maximumWidth: 500
+            Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
-            color: Style.titleBackgroundColor
-            border.color: Style.titleSeparatorColor
-            border.width: 1
-            radius: 8
+            spacing: Style.spacingMedium
+            visible: !root.isWriting
+
+            Text {
+                text: qsTr("Summary")
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
+            }
             
-            ColumnLayout {
-                id: summaryLayout
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 15
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Style.formColumnSpacing
+                rowSpacing: Style.spacingSmall
                 
                 Text {
-                    text: qsTr("Summary")
-                    font.pixelSize: 16
+                    text: qsTr("Device:")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.formLabelColor
+                }
+                
+                Text {
+                    text: wizardContainer.selectedDeviceName || qsTr("No device selected")
+                    font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
                 }
                 
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 2
-                    columnSpacing: 20
-                    rowSpacing: 10
-                    
-                    Text {
-                        text: qsTr("Device:")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                    }
-                    
-                    Text {
-                        text: wizardContainer.selectedDeviceName || qsTr("No device selected")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamilyBold
-                        font.bold: true
-                        color: Style.formLabelColor
-                        Layout.fillWidth: true
-                    }
-                    
-                    Text {
-                        text: qsTr("Operating System:")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                    }
-                    
-                    Text {
-                        text: wizardContainer.selectedOsName || qsTr("No image selected")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamilyBold
-                        font.bold: true
-                        color: Style.formLabelColor
-                        Layout.fillWidth: true
-                    }
-                    
-                    Text {
-                        text: qsTr("Storage:")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamily
-                        color: Style.formLabelColor
-                    }
-                    
-                    Text {
-                        text: wizardContainer.selectedStorageName || qsTr("No storage selected")
-                        font.pixelSize: 12
-                        font.family: Style.fontFamilyBold
-                        font.bold: true
-                        color: Style.formLabelColor
-                        Layout.fillWidth: true
-                    }
+                Text {
+                    text: qsTr("Operating System:")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.formLabelColor
                 }
                 
                 Text {
-                    text: qsTr("Ready to write your customized image to the storage device. All existing data will be erased.")
-                    font.pixelSize: 12
-                    font.family: Style.fontFamily
-                    color: Style.textDescriptionColor
+                    text: wizardContainer.selectedOsName || qsTr("No image selected")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamilyBold
+                    font.bold: true
+                    color: Style.formLabelColor
                     Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
                 }
+                
+                Text {
+                    text: qsTr("Storage:")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.formLabelColor
+                }
+                
+                Text {
+                    text: wizardContainer.selectedStorageName || qsTr("No storage selected")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamilyBold
+                    font.bold: true
+                    color: Style.formLabelColor
+                    Layout.fillWidth: true
+                }
+            }
+            
+            Text {
+                text: root.anyCustomizationsApplied 
+                      ? qsTr("Ready to write your customized image to the storage device. All existing data will be erased.")
+                      : qsTr("Ready to write the image to the storage device. All existing data will be erased.")
+                font.pixelSize: Style.fontSizeDescription
+                font.family: Style.fontFamily
+                color: Style.textDescriptionColor
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
             }
         }
         
-        // Progress section
-        Rectangle {
+        // Customization summary (what will be written) - de-chromed
+        ColumnLayout {
+            id: customLayout
             Layout.fillWidth: true
-            Layout.preferredHeight: progressLayout.implicitHeight + 40
-            Layout.maximumWidth: 500
+            Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
-            color: Style.titleBackgroundColor
-            border.color: Style.titleSeparatorColor
-            border.width: 1
-            radius: 8
+            spacing: Style.spacingMedium
+            visible: !root.isWriting && root.anyCustomizationsApplied
+
+            Text {
+                text: qsTr("Customizations to apply:")
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
+            }
+
+            Column {
+                Layout.fillWidth: true
+                spacing: Style.spacingXSmall
+
+                Text { text: qsTr("• Hostname configured");        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.hostnameConfigured }
+                Text { text: qsTr("• User account configured");    font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.userConfigured }
+                Text { text: qsTr("• WiFi configured");            font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured }
+                Text { text: qsTr("• SSH enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled }
+                Text { text: qsTr("• Pi Connect enabled");        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled }
+                Text { text: qsTr("• Locale configured");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.localeConfigured }
+            }
+        }
+
+        // Progress section (de-chromed)
+        ColumnLayout {
+            id: progressLayout
+            Layout.fillWidth: true
+            Layout.maximumWidth: Style.sectionMaxWidth
+            Layout.alignment: Qt.AlignHCenter
+            spacing: Style.spacingMedium
             visible: root.isWriting || root.isComplete
             
-            ColumnLayout {
-                id: progressLayout
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 15
-                
-                Text {
-                    id: progressText
-                    text: qsTr("Starting write process...")
-                    font.pixelSize: 16
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                }
-                
-                ProgressBar {
-                    id: progressBar
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 20
-                    value: 0
-                    from: 0
-                    to: 100
-                    
-                    Material.accent: Style.progressBarVerifyForegroundColor
-                    Material.background: Style.progressBarBackgroundColor
-                    visible: root.isWriting
-                }
+            Text {
+                id: progressText
+                text: qsTr("Starting write process...")
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
             }
-        }
-        
-        // Warning section
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: warningLayout.implicitHeight + 40
-            Layout.maximumWidth: 500
-            Layout.alignment: Qt.AlignHCenter
-            color: Style.listViewRowBackgroundColor
-            border.color: Style.formLabelErrorColor
-            border.width: 2
-            radius: 8
-            visible: !root.isWriting && !root.isComplete
             
-            ColumnLayout {
-                id: warningLayout
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 15
+            ProgressBar {
+                id: progressBar
+                Layout.fillWidth: true
+                Layout.preferredHeight: Style.spacingLarge
+                value: 0
+                from: 0
+                to: 100
                 
-                Text {
-                    text: qsTr("⚠️ Warning")
-                    font.pixelSize: 16
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.formLabelErrorColor
-                    Layout.fillWidth: true
-                }
-                
-                Text {
-                    text: qsTr("All existing data on '%1' will be erased.\nThis action cannot be undone.").arg(wizardContainer.selectedStorageName || qsTr("the storage device"))
-                    font.pixelSize: 12
-                    font.family: Style.fontFamily
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
+                Material.accent: Style.progressBarVerifyForegroundColor
+                Material.background: Style.progressBarBackgroundColor
+                visible: root.isWriting
             }
         }
     }
+    ]
     
     // Handle next button clicks based on current state
     onNextClicked: {
@@ -217,12 +207,13 @@ WizardStepBase {
             wizardContainer.isWriting = false
             progressText.text = qsTr("Write cancelled")
         } else if (!root.isComplete) {
-            // Start writing - prevent normal advancement
-            root.isWriting = true
-            wizardContainer.isWriting = true
-            progressText.text = qsTr("Starting write process...")
-            progressBar.value = 0
-            imageWriter.startWrite()
+            // If warnings are disabled, skip the confirmation dialog
+            if (imageWriter.getBoolSetting("disable_warnings")) {
+                beginWriteDelay.start()
+            } else {
+                // Open confirmation dialog before starting
+                confirmDialog.open()
+            }
         } else {
             // Writing is complete, advance to next step
             wizardContainer.nextStep()
@@ -232,6 +223,102 @@ WizardStepBase {
     function onFinalizing() {
         progressText.text = qsTr("Finalizing...")
         progressBar.value = 100
+    }
+
+    // Confirmation dialog
+    Dialog {
+        id: confirmDialog
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        width: 520
+        standardButtons: Dialog.NoButton
+        visible: false
+
+        property bool allowAccept: false
+        title: qsTr("Confirm destructive write")
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingMedium
+
+            Text {
+                text: qsTr("You are about to ERASE all data on: %1").arg(wizardContainer.selectedStorageName || qsTr("the storage device"))
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelErrorColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: qsTr("This action is PERMANENT and CANNOT be undone.")
+                font.pixelSize: Style.fontSizeFormLabel
+                font.family: Style.fontFamilyBold
+                color: Style.formLabelColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacingMedium
+                Item { Layout.fillWidth: true }
+
+                ImButton {
+                    text: qsTr("Cancel")
+                    onClicked: confirmDialog.close()
+                }
+
+                ImButtonRed {
+                    id: acceptBtn
+                    text: confirmDialog.allowAccept ? qsTr("I understand, erase and write") : qsTr("Please wait...")
+                    enabled: confirmDialog.allowAccept
+                    onClicked: {
+                        confirmDialog.close()
+                        beginWriteDelay.start()
+                    }
+                }
+            }
+        }
+
+        // Delay accept for 2 seconds
+        Timer {
+            id: confirmDelay
+            interval: 2000
+            running: false
+            repeat: false
+            onTriggered: confirmDialog.allowAccept = true
+        }
+
+        // Ensure disabled before showing to avoid flicker
+        onAboutToShow: {
+            allowAccept = false
+            confirmDelay.start()
+        }
+        onClosed: {
+            confirmDelay.stop()
+            allowAccept = false
+        }
+    }
+
+    // Defer starting the write slightly until after the dialog has fully closed,
+    // to avoid OS authentication prompts being cancelled by focus changes.
+    Timer {
+        id: beginWriteDelay
+        interval: 300
+        running: false
+        repeat: false
+        onTriggered: {
+            // Ensure our window regains focus before elevating privileges
+            root.forceActiveFocus()
+            root.isWriting = true
+            wizardContainer.isWriting = true
+            progressText.text = qsTr("Starting write process...")
+            progressBar.value = 0
+            Qt.callLater(function(){ imageWriter.startWrite() })
+        }
     }
     
     function onDownloadProgress(now, total) {

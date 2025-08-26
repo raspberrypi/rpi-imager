@@ -17,54 +17,33 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("OS Customisation")
-    subtitle: qsTr("Configure user account")
+    title: qsTr("Customization: Choose username")
+    subtitle: qsTr("Create a user account for your Raspberry Pi.")
     showSkipButton: true
     
     // Content
+    content: [
     ColumnLayout {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.fill: parent
         anchors.margins: Style.sectionPadding
         spacing: Style.stepContentSpacing
         
         WizardSectionContainer {
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.spacingMedium
-                
-                ImCheckBox {
-                    id: chkUsername
-                    text: qsTr("Create user account")
-                    checked: true
-                }
-                
-                Item {
-                    Layout.fillWidth: true
-                }
-            }
-            
             GridLayout {
                 Layout.fillWidth: true
                 columns: 2
                 columnSpacing: Style.formColumnSpacing
                 rowSpacing: Style.formRowSpacing
-                enabled: chkUsername.checked
                 
                 WizardFormLabel {
                     text: qsTr("Username:")
                 }
                 
-                TextField {
+                ImTextField {
                     id: fieldUsername
                     Layout.fillWidth: true
                     placeholderText: qsTr("pi")
                     font.pixelSize: Style.fontSizeInput
-                    
-                    Component.onCompleted: {
-                        text = "pi"
-                    }
                     
                     validator: RegularExpressionValidator {
                         regularExpression: /^[a-z_][a-z0-9_-]*$/
@@ -75,7 +54,7 @@ WizardStepBase {
                     text: qsTr("Password:")
                 }
                 
-                TextField {
+                ImTextField {
                     id: fieldPassword
                     Layout.fillWidth: true
                     placeholderText: qsTr("Enter password")
@@ -87,7 +66,7 @@ WizardStepBase {
                     text: qsTr("Confirm password:")
                 }
                 
-                TextField {
+                ImTextField {
                     id: fieldPasswordConfirm
                     Layout.fillWidth: true
                     placeholderText: qsTr("Re-enter password")
@@ -97,28 +76,52 @@ WizardStepBase {
             }
             
             WizardDescriptionText {
-                text: qsTr("Create a user account for your Raspberry Pi. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
+                text: qsTr("The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
             }
+        }
+    }
+    ]
+
+    Component.onCompleted: {
+        root.registerFocusGroup("user_fields", function(){
+            return [fieldUsername, fieldPassword, fieldPasswordConfirm]
+        }, 0)
+        // Prefill from saved settings (avoid showing raw passwords)
+        var saved = imageWriter.getSavedCustomizationSettings()
+        if (saved.sshUserName) {
+            fieldUsername.text = saved.sshUserName
+        }
+        if (saved.sshUserPassword) {
+            // We do not know if it's crypted; do not prefill password fields
         }
     }
     
     // Validation
-    nextButtonEnabled: !chkUsername.checked || (fieldUsername.text.length > 0 && fieldPassword.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text)
+    nextButtonEnabled: (fieldUsername.text.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0) || (fieldUsername.text.length > 0 && fieldPassword.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text)
     
     // Save settings when moving to next step
     onNextClicked: {
-        var settings = {}
-        
-        if (chkUsername.checked && fieldUsername.text.length > 0 && fieldPassword.text.length > 0) {
-            settings.username = fieldUsername.text
-            settings.password = fieldPassword.text
+        // Merge-and-save strategy
+        var saved = imageWriter.getSavedCustomizationSettings()
+        var usernameText = fieldUsername.text ? fieldUsername.text.trim() : ""
+        var defaultUsername = "pi"
+        var hasPasswords = fieldPassword.text.length > 0 && fieldPasswordConfirm.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text
+        if (usernameText.length > 0 && usernameText !== defaultUsername && hasPasswords) {
+            saved.sshUserName = usernameText
+            // Store crypted password similar to legacy flow
+            saved.sshUserPassword = imageWriter.crypt(fieldPassword.text)
             wizardContainer.userConfigured = true
+        } else if (usernameText.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0) {
+            // User cleared fields -> remove from persisted settings
+            delete saved.sshUserName
+            delete saved.sshUserPassword
+            wizardContainer.userConfigured = false
         } else {
+            // Partial/invalid -> do not change persisted settings, but do not mark configured
             wizardContainer.userConfigured = false
         }
-        
-        // Store settings temporarily
-        console.log("User settings:", JSON.stringify(settings))
+        imageWriter.setSavedCustomizationSettings(saved)
+        // Do not log sensitive data
     }
     
     // Handle skip button
