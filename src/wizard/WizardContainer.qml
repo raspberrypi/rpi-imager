@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
+pragma ComponentBehavior: Bound
 
 import QtQuick 2.15
 import QtQuick.Controls 2.15
@@ -105,13 +106,26 @@ Item {
             border.color: Style.sidebarBorderColour
             border.width: 0
             
-            ColumnLayout {
-                anchors.fill: parent
+            Flickable {
+                id: sidebarScroll
+                clip: true
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: sidebarBottom.top
                 anchors.margins: Style.cardPadding
-                spacing: Style.spacingXSmall
+                contentWidth: -1
+                contentHeight: sidebarColumn.implicitHeight
+                z: 1
+
+                ColumnLayout {
+                    id: sidebarColumn
+                    width: parent.width
+                    spacing: Style.spacingXSmall
                 
                 // Header
                 Text {
+                    id: sidebarHeader
                     text: qsTr("Setup Steps")
                     font.pixelSize: Style.fontSizeHeading
                     font.family: Style.fontFamilyBold
@@ -126,41 +140,112 @@ Item {
                     model: root.stepNames
                     
                     Rectangle {
+                        id: stepItem
+                        required property int index
+                        required property var modelData
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Style.buttonHeightStandard
-                        color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
-                        border.color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
-                        border.width: 1
-                        radius: Style.sidebarItemBorderRadius
-                        property bool isClickable: index < root.getSidebarIndex(root.currentStep) && !root.isWriting
-                        
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            enabled: parent.isClickable
-                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: {
-                                var targetStep = root.getWizardStepFromSidebarIndex(index)
-                                // Only allow jumping backwards
-                                if (root.currentStep > targetStep && !root.isWriting) {
-                                    root.jumpToStep(targetStep)
+                        Layout.preferredHeight: (function(){
+                            var base = Style.sidebarItemHeight
+                            return sublistContainer.visible ? (base + Style.spacingXXSmall + sublistContainer.implicitHeight) : base
+                        })()
+                        color: Style.transparent
+                        border.color: Style.transparent
+                        border.width: 0
+                        radius: 0
+                        property bool isClickable: stepItem.index < root.getSidebarIndex(root.currentStep) && !root.isWriting
+ 
+                        // Header band with active background/border
+                        Rectangle {
+                            id: headerRect
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            height: Style.sidebarItemHeight
+                            color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
+                            border.color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
+                            border.width: 1
+                            radius: Style.sidebarItemBorderRadius
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: stepItem.isClickable
+                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: {
+                                    var targetStep = root.getWizardStepFromSidebarIndex(stepItem.index)
+                                    if (root.currentStep > targetStep && !root.isWriting) {
+                                        root.jumpToStep(targetStep)
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: Style.spacingSmall
+                                spacing: Style.spacingTiny
+                                Text {
+                                    Layout.fillWidth: true
+                                    Layout.alignment: Qt.AlignVCenter
+                                    text: stepItem.modelData
+                                    font.pixelSize: Style.fontSizeSidebarItem
+                                    font.family: Style.fontFamily
+                                    color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarTextOnActiveColor : Style.sidebarTextOnInactiveColor
+                                    elide: Text.ElideRight
                                 }
                             }
                         }
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: Style.spacingSmall
-                            spacing: Style.spacingTiny
-                            
-                            // Step name (no numbering for cleaner look)
-                            Text {
-                                Layout.fillWidth: true
-                                Layout.alignment: Qt.AlignVCenter
-                                text: modelData
-                                font.pixelSize: Style.fontSizeSidebarItem
-                                font.family: Style.fontFamily
-                                color: index === root.getSidebarIndex(root.currentStep) ? Style.sidebarTextOnActiveColor : Style.sidebarTextOnInactiveColor
-                                elide: Text.ElideRight
+ 
+                        // Inline customization sub-steps under the 'Customization' item
+                        Column {
+                            id: sublistContainer
+                            anchors.top: headerRect.bottom
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.topMargin: Style.spacingXXSmall
+                            x: Style.spacingExtraLarge
+                            width: parent.width - Style.spacingExtraLarge
+                            spacing: Style.spacingXXSmall
+                            visible: stepItem.index === 3 && root.currentStep >= root.stepHostnameCustomization && root.currentStep <= root.stepRemoteAccess
+ 
+                            Repeater {
+                                model: [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("WiFi"), qsTr("Remote Access")]
+                                Rectangle {
+                                    id: subItem
+                                    required property int index
+                                    required property var modelData
+                                    width: parent.width
+                                    height: Style.sidebarSubItemHeight
+                                    radius: Style.sidebarItemBorderRadius
+                                    color: (root.currentStep - root.stepHostnameCustomization) === subItem.index ? Style.sidebarActiveBackgroundColor : Style.transparent
+                                    border.color: (root.currentStep - root.stepHostnameCustomization) === subItem.index ? Style.sidebarActiveBackgroundColor : Style.transparent
+                                    border.width: 1
+ 
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: !root.isWriting
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: {
+                                            var target = root.stepHostnameCustomization + subItem.index
+                                            if (root.currentStep !== target) root.jumpToStep(target)
+                                        }
+                                    }
+                                    RowLayout {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.margins: Style.spacingSmall
+                                        anchors.leftMargin: Style.spacingMedium
+                                        Text {
+                                            Layout.fillWidth: true
+                                            Layout.alignment: Qt.AlignVCenter
+                                            text: subItem.modelData
+                                            font.pixelSize: Style.fontSizeCaption
+                                            font.family: Style.fontFamily
+                                            color: (root.currentStep - root.stepHostnameCustomization) === subItem.index ? Style.sidebarTextOnActiveColor : Style.sidebarTextOnInactiveColor
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -175,7 +260,7 @@ Item {
                     id: networkInfoContainer
                     Layout.fillWidth: true
                     visible: root.imageWriter.isEmbeddedMode() && networkInfo.text.length > 0
-                    height: networkInfo.implicitHeight
+                    Layout.preferredHeight: networkInfo.implicitHeight
                     clip: true
 
                     // Scrolling row that contains two copies of the text for seamless loop
@@ -222,12 +307,27 @@ Item {
                     Component.onCompleted: marqueeAnim.start()
                 }
                 
-                // Advanced options button
+                // [moved] Advanced options lives outside the scroll area
+                }
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+            }
+            // Fixed bottom container for Advanced Options
+            Item {
+                id: sidebarBottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: Style.cardPadding
+                height: optionsButtonRect.height
+                z: 2
+
                 Rectangle {
                     id: optionsButtonRect
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Style.buttonHeightStandard - 5
-                    color: optionsButton.containsMouse ? Style.translucentWhite10 : Style.transparent
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: Style.buttonHeightStandard - 5
+                    color: optionsButton.containsMouse ? Style.translucentWhite10 : Style.mainBackgroundColor
                     border.color: Style.sidebarControlBorderColor
                     border.width: 1
                     radius: Style.sidebarItemBorderRadius
@@ -239,7 +339,6 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (root.optionsPopup) {
-                                // Provide container reference so the popup can set ephemeral flags
                                 if (!root.optionsPopup.wizardContainer) {
                                     root.optionsPopup.wizardContainer = root
                                 }
@@ -254,7 +353,6 @@ Item {
                         anchors.margins: Style.spacingTiny
                         spacing: Style.spacingTiny
                         
-                        // Cog icon
                         Image {
                             Layout.preferredWidth: 16
                             Layout.preferredHeight: 16
@@ -262,8 +360,6 @@ Item {
                             sourceSize.width: 16
                             sourceSize.height: 16
                         }
-                        
-                        // Label
                         Text {
                             Layout.fillWidth: true
                             text: qsTr("Advanced Options")
@@ -565,5 +661,32 @@ Item {
         // Navigate back to the first step
         wizardStack.clear()
         wizardStack.push(deviceSelectionStep)
+    }
+
+    // Keep customization items visible when navigating within customization
+    onCurrentStepChanged: {
+        if (!sidebarScroll) return
+        if (currentStep >= stepHostnameCustomization && currentStep <= stepRemoteAccess) {
+            var idx = currentStep - stepHostnameCustomization
+            var mainRowH = Style.sidebarItemHeight + Style.spacingXSmall
+            var subRectH = Style.sidebarSubItemHeight
+            var subRowH = subRectH + Style.spacingXXSmall
+            var baseY = sidebarHeader.y + sidebarHeader.implicitHeight + Style.spacingSmall + mainRowH * (3 + 1) + Style.spacingXXSmall
+            var target = baseY + idx * subRowH - (sidebarScroll.height/2 - subRectH/2)
+            if (target < 0) target = 0
+            var maxY = sidebarScroll.contentHeight - sidebarScroll.height
+            if (target > maxY) target = Math.max(0, maxY)
+            sidebarScroll.contentY = target
+        } else {
+            // Center main group item
+            var sidebarIdx = getSidebarIndex(currentStep)
+            var mainRowH = Style.sidebarItemHeight + Style.spacingXSmall
+            // account for header and its bottom margin
+            var target2 = sidebarHeader.y + sidebarHeader.implicitHeight + Style.spacingSmall + sidebarIdx * mainRowH - (sidebarScroll.height/2 - Style.sidebarItemHeight/2)
+            if (target2 < 0) target2 = 0
+            var maxY2 = sidebarScroll.contentHeight - sidebarScroll.height
+            if (target2 > maxY2) target2 = Math.max(0, maxY2)
+            sidebarScroll.contentY = target2
+        }
     }
 } 

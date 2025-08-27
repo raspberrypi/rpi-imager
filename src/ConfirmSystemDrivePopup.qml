@@ -21,6 +21,7 @@ Dialog {
 
     readonly property string riskText: CommonStrings.warningRiskText
     readonly property string proceedText: CommonStrings.warningProceedText
+    readonly property string systemDriveText: CommonStrings.systemDriveText
 
     ColumnLayout {
         anchors.fill: parent
@@ -43,7 +44,7 @@ Dialog {
             font.pixelSize: Style.fontSizeDescription
             color: Style.textDescriptionColor
             Layout.fillWidth: true
-            text: qsTr("You are about to select a <b>SYSTEM DRIVE</b>: <b>%1</b>.").arg(root.driveName) + "<br><br>" + root.riskText + "<br><br>" + root.proceedText
+            text: root.riskText + "<br><br>" + root.systemDriveText + "<br><br>" + root.proceedText
         }
 
         Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor }
@@ -73,7 +74,7 @@ Dialog {
         Text {
             font.family: Style.fontFamily
             font.bold: true
-            color: Style.subtitleColor
+            color: Style.textDescriptionColor
             text: root.driveName
         }
 

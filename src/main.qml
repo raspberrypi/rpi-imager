@@ -32,7 +32,7 @@ ApplicationWindow {
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
 
-    onClosing: {
+    onClosing: function(close) {
         if (wizardContainer.isWriting && !forceQuit) {
             close.accepted = false
             quitDialog.open()
@@ -91,6 +91,97 @@ ApplicationWindow {
             window.imageWriter.setDst("")
             window.selectedStorageName = ""
             window.resetWriteButton()
+        }
+    }
+
+    // Modern error dialog (replaces legacy MsgPopup for error/info cases)
+    Dialog {
+        id: errorDialog
+        modal: true
+        parent: window.contentItem
+        anchors.centerIn: parent
+        width: 520
+        standardButtons: Dialog.NoButton
+
+        property string titleText: qsTr("Error")
+        property string message: ""
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingMedium
+
+            Text {
+                text: errorDialog.titleText
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: errorDialog.message
+                wrapMode: Text.WordWrap
+                font.pixelSize: Style.fontSizeDescription
+                font.family: Style.fontFamily
+                color: Style.textDescriptionColor
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacingMedium
+                Item { Layout.fillWidth: true }
+                ImButton {
+                    text: qsTr("Continue")
+                    onClicked: errorDialog.close()
+                }
+            }
+        }
+    }
+
+    // Specific dialog for storage removal during write
+    Dialog {
+        id: storageRemovedDialog
+        modal: true
+        parent: window.contentItem
+        anchors.centerIn: parent
+        width: 520
+        standardButtons: Dialog.NoButton
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingMedium
+
+            Text {
+                text: qsTr("Storage device removed")
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelColor
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: qsTr("The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.")
+                wrapMode: Text.WordWrap
+                font.pixelSize: Style.fontSizeDescription
+                font.family: Style.fontFamily
+                color: Style.textDescriptionColor
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacingMedium
+                Item { Layout.fillWidth: true }
+                ImButton {
+                    text: qsTr("OK")
+                    onClicked: storageRemovedDialog.close()
+                }
+            }
         }
     }
 
@@ -313,9 +404,9 @@ ApplicationWindow {
     }
 
     function onError(msg) {
-        msgpopup.title = qsTr("Error")
-        msgpopup.text = msg
-        msgpopup.open()
+        errorDialog.titleText = qsTr("Error")
+        errorDialog.message = msg
+        errorDialog.open()
     }
 
     function onSuccess() {
@@ -397,18 +488,22 @@ ApplicationWindow {
             wizardContainer.jumpToStep(wizardContainer.stepStorageSelection)
         }
 
-        // Inform the user
-        msgpopup.title = qsTr("Storage device removed")
-        msgpopup.text = qsTr("The selected storage device was removed.<br>Please select a different storage device.")
-        msgpopup.open()
+        // Inform the user with the dedicated modern dialog
+        storageRemovedDialog.open()
     }
 
     // Called from C++ when a write was cancelled because the storage device was removed
     function onWriteCancelledDueToDeviceRemoval() {
         if (wizardContainer) {
             wizardContainer.isWriting = false
+            wizardContainer.selectedStorageName = ""
         }
-        onSelectedDeviceRemoved()
+        // Clear backend dst reference
+        window.imageWriter.setDst("")
+        // Navigate back to storage selection for safety
+        if (wizardContainer) wizardContainer.jumpToStep(wizardContainer.stepStorageSelection)
+        // Show dedicated dialog
+        storageRemovedDialog.open()
     }
 
     function onKeychainPermissionRequested() {

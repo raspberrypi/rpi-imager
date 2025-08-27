@@ -130,6 +130,9 @@ Item {
     readonly property int scrollBarWidth: 10
     readonly property int sidebarWidth: 200
     readonly property int sidebarItemBorderRadius: 4
+    // Sidebar item heights
+    readonly property int sidebarItemHeight: buttonHeightStandard
+    readonly property int sidebarSubItemHeight: sidebarItemHeight - 12
 
     // === LAYOUT ===
     readonly property int formColumnSpacing: 20

@@ -17,6 +17,7 @@ Dialog {
 
     readonly property string riskText: CommonStrings.warningRiskText
     readonly property string proceedText: CommonStrings.warningProceedText
+    readonly property string systemDriveText: CommonStrings.systemDriveText
 
     ColumnLayout {
         anchors.fill: parent
@@ -36,7 +37,7 @@ Dialog {
             textFormat: Text.StyledText
             text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.")
                   + "<br><br>"
-                  + qsTr("System drives typically contain media essential to the operation of your computer, and usually include your personal files (photos, videos, documents).")
+                  + root.systemDriveText
                   + "<br><br>" + root.riskText + "<br><br>" + root.proceedText
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
