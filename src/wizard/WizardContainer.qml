@@ -56,6 +56,13 @@ Item {
     
     signal wizardCompleted()
     
+    Component.onCompleted: {
+        // Default to disabling warnings in embedded mode (per-run, non-persistent)
+        if (imageWriter && imageWriter.isEmbeddedMode()) {
+            disableWarnings = true
+        }
+    }
+
     // Wizard step names for sidebar (grouped for cleaner display)
     readonly property var stepNames: [
         qsTr("Device"),
