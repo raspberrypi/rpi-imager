@@ -235,8 +235,8 @@ set(ZLIB_ROOT ${zlib_SOURCE_DIR} CACHE PATH "" FORCE)
 # On Windows with MinGW, zlib builds with .a extension, not .lib
 # Set the correct library path before find_package
 if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
-    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzlibstatic.a CACHE FILEPATH "" FORCE)
-    set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libzlibstatic.a CACHE STRING "" FORCE)
+    set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libzsd.a CACHE FILEPATH "" FORCE)
+    set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libzsd.a CACHE STRING "" FORCE)
 else()
     set(ZLIB_LIBRARY ${zlib_BINARY_DIR}/libz.a CACHE FILEPATH "" FORCE)
     set(ZLIB_LIBRARIES ${zlib_BINARY_DIR}/libz.a CACHE STRING "" FORCE)
@@ -253,7 +253,7 @@ set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
 add_library(ZLIB::ZLIB STATIC IMPORTED)
 if (WIN32 AND CMAKE_COMPILER_IS_GNUCXX)
     set_target_properties(ZLIB::ZLIB PROPERTIES
-        IMPORTED_LOCATION "${zlib_BINARY_DIR}/libzlibstatic.a"
+        IMPORTED_LOCATION "${zlib_BINARY_DIR}/libzsd.a"
         INTERFACE_INCLUDE_DIRECTORIES "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}"
     )
     add_dependencies(ZLIB::ZLIB zlibstatic)
@@ -748,11 +748,12 @@ if(GENERATE_TIMEZONES_FROM_IANA)
     # Create placeholder for clean builds so rcc can parse generated qrc
     set(GENERATED_TIMEZONES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/timezones_generated.txt")
     if(NOT EXISTS "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}")
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt"
-            "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}"
-            COPYONLY
-        )
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt")
+            file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+            file(RENAME "${CMAKE_CURRENT_BINARY_DIR}/timezones.txt" "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}")
+        else()
+            file(WRITE "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}" "# placeholder\n")
+        endif()
     endif()
     add_generated_resource_with_fallback(GENERATED_TZ_QRC GENERATE_TIMEZONES_TGT timezones
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateTimezones.cmake
@@ -1309,6 +1310,6 @@ else()
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/com.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
 
-add_dependencies(${PROJECT_NAME} ZLIB::ZLIB)
+add_dependencies(${PROJECT_NAME} zlibstatic)
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ZLIB::ZLIB ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
