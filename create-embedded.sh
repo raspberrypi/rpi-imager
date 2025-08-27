@@ -289,6 +289,9 @@ cp -d "$QT_DIR/lib/libQt6QuickControls2Impl.so"* "$APPDIR/usr/lib/" 2>/dev/null 
 cp -d "$QT_DIR/lib/libQt6QuickLayouts.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
 cp -d "$QT_DIR/lib/libQt6QuickControls2MaterialStyleImpl.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
 cp -d "$QT_DIR/lib/libQt6Svg.so.6"* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "$QT_DIR/lib/libQt6QuickDialogs2.so.6"* "$APPDIR/usr/lib/" 2>/dev/null || true
+mkdir -p "$APPDIR/usr/qml/QtCore/"
+cp -d "$QT_DIR/qml/QtCore/"* "$APPDIR/usr/qml/QtCore/" 2>/dev/null || true
 
 mkdir -p "$APPDIR/usr/plugins/platforms"
 cp "$QT_DIR/plugins/platforms/libqlinuxfb.so" "$APPDIR/usr/plugins/platforms/" 2>/dev/null || true
