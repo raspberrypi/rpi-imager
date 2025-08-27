@@ -41,12 +41,7 @@ Item {
                 font.bold: true
                 color: Style.formLabelColor
                 elide: Text.ElideRight
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: sw.toggle()
-                }
+                TapHandler { onTapped: sw.toggle() }
             }
 
             // Optional help link under the label
@@ -58,16 +53,17 @@ Item {
                 font.family: Style.fontFamily
                 font.pixelSize: Style.fontSizeDescription
                 color: Style.buttonForegroundColor
-                font.underline: helpArea.containsMouse
+                font.underline: helpHover.hovered
                 Accessible.name: text
-            }
-            MouseArea {
-                id: helpArea
-                anchors.fill: helpText
-                enabled: helpText.visible
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Qt.openUrlExternally(pill.helpUrl)
+                TapHandler {
+                    cursorShape: Qt.PointingHandCursor
+                    onTapped: Qt.openUrlExternally(pill.helpUrl)
+                }
+                HoverHandler {
+                    id: helpHover
+                    acceptedDevices: PointerDevice.Mouse
+                    cursorShape: Qt.PointingHandCursor
+                }
             }
         }
 

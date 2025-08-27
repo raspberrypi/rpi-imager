@@ -229,7 +229,8 @@ WizardStepBase {
     Dialog {
         id: confirmDialog
         modal: true
-        anchors.centerIn: Overlay.overlay
+        parent: root.Window.window ? root.Window.window.contentItem : undefined
+        anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
         visible: false

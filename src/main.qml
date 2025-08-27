@@ -97,7 +97,8 @@ ApplicationWindow {
     Dialog {
         id: quitDialog
         modal: true
-        anchors.centerIn: Overlay.overlay
+        parent: window.contentItem
+        anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
 
@@ -339,7 +340,9 @@ ApplicationWindow {
     }
 
     function onNetworkInfo(msg) {
-        networkInfo.text = msg
+        if (imageWriter.isEmbeddedMode() && wizardContainer) {
+            wizardContainer.networkInfoText = msg
+        }
     }
 
     function onCacheVerificationStarted() {

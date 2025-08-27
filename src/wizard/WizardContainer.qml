@@ -15,6 +15,8 @@ Item {
     
     required property ImageWriter imageWriter
     property var optionsPopup: null
+    // Expose network info text for embedded mode status updates
+    property alias networkInfoText: networkInfo.text
     
     property int currentStep: 0
     readonly property int totalSteps: 10  // Internal steps (unchanged)
@@ -167,6 +169,57 @@ Item {
                 // Spacer
                 Item {
                     Layout.fillHeight: true
+                }
+                // Embedded mode network info (hidden by default) with marquee scrolling
+                Item {
+                    id: networkInfoContainer
+                    Layout.fillWidth: true
+                    visible: root.imageWriter.isEmbeddedMode() && networkInfo.text.length > 0
+                    height: networkInfo.implicitHeight
+                    clip: true
+
+                    // Scrolling row that contains two copies of the text for seamless loop
+                    RowLayout {
+                        id: marqueeRow
+                        anchors.fill: parent
+                        anchors.margins: 0
+                        spacing: Style.spacingMedium
+                        // Use x animation below; disable layout's x management
+                        Layout.fillWidth: false
+
+                        Text {
+                            id: networkInfo
+                            Layout.alignment: Qt.AlignVCenter
+                            font.pixelSize: Style.fontSizeCaption
+                            font.family: Style.fontFamily
+                            color: Style.textDescriptionColor
+                            text: ""
+                        }
+                        Text {
+                            id: networkInfoCopy
+                            Layout.alignment: Qt.AlignVCenter
+                            font.pixelSize: Style.fontSizeCaption
+                            font.family: Style.fontFamily
+                            color: Style.textDescriptionColor
+                            text: networkInfo.text
+                        }
+                    }
+
+                    PropertyAnimation {
+                        id: marqueeAnim
+                        target: marqueeRow
+                        property: "x"
+                        from: 0
+                        to: -(networkInfo.width + marqueeRow.spacing)
+                        duration: Math.max(4000, Math.round((networkInfo.width + marqueeRow.spacing + networkInfoContainer.width) / 40 * 1000))
+                        loops: Animation.Infinite
+                        running: networkInfoContainer.visible && networkInfo.text.length > 0
+                    }
+
+                    onVisibleChanged: {
+                        if (visible) marqueeAnim.restart(); else marqueeAnim.stop()
+                    }
+                    Component.onCompleted: marqueeAnim.start()
                 }
                 
                 // Advanced options button

@@ -263,6 +263,14 @@ ImageWriter::ImageWriter(QObject *parent)
     // Configure OS list refresh timer (single-shot; we reschedule after each fetch)
     _osListRefreshTimer.setSingleShot(true);
     connect(&_osListRefreshTimer, &QTimer::timeout, this, &ImageWriter::onOsListRefreshTimeout);
+
+    // Belt-and-braces: ensure potentially dangerous flags are not persisted between runs
+    // If found in settings, remove them immediately
+    if (_settings.contains("disable_warnings")) {
+        _settings.remove("disable_warnings");
+        _settings.sync();
+        qDebug() << "Removed persisted disable_warnings flag from settings";
+    }
 }
 
 ImageWriter::~ImageWriter()
@@ -429,7 +437,8 @@ void ImageWriter::startWrite()
 
     if (_devLen && _extrLen > _devLen)
     {
-        emit error(tr("Storage capacity is not large enough.<br>Needs to be at least %1 GB.").arg(QString::number(_extrLen/1000000000.0, 'f', 1)));
+        emit error(tr("Storage capacity is not large enough.<br>Needs to be at least %1.")
+                   .arg(formatSize(_extrLen)));
         return;
     }
 
@@ -651,6 +660,59 @@ QString ImageWriter::fileNameFromUrl(const QUrl &url)
 QString ImageWriter::srcFileName()
 {
     return _src.isEmpty() ? "" : _src.fileName();
+}
+
+quint64 ImageWriter::getSelectedSourceSize()
+{
+    // If we know uncompressed length, prefer that; else return download length
+    if (_extrLen > 0) return _extrLen;
+    if (_downloadLen > 0) return _downloadLen;
+    return 0;
+}
+
+QString ImageWriter::formatSize(quint64 bytes, int decimals)
+{
+    const quint64 KB = 1024ULL;
+    const quint64 MB = KB * 1024ULL;
+    const quint64 GB = MB * 1024ULL;
+    const quint64 TB = GB * 1024ULL;
+
+    quint64 unit = 1;
+    QString unitStr = tr("B");
+    if (bytes >= TB) { unit = TB; unitStr = tr("TB"); }
+    else if (bytes >= GB) { unit = GB; unitStr = tr("GB"); }
+    else if (bytes >= MB) { unit = MB; unitStr = tr("MB"); }
+    else if (bytes >= KB) { unit = KB; unitStr = tr("KB"); }
+
+    // Integer rounding using quotient/remainder, avoiding floating point
+    if (decimals <= 0) {
+        quint64 rounded = (bytes + unit/2) / unit; // round-to-nearest
+        return tr("%1 %2").arg(QString::number(rounded)).arg(unitStr);
+    }
+
+    // Compute with 'decimals' fractional digits without overflow
+    quint64 scale = 1;
+    for (int i = 0; i < decimals; ++i) scale *= 10ULL; // small decimals (e.g., 1) expected
+
+    quint64 q = bytes / unit;
+    quint64 r = bytes % unit;
+    quint64 fracScaled = (r * scale + unit/2) / unit; // rounded fractional part
+
+    // Normalize carry if rounding overflowed fractional part
+    if (fracScaled >= scale) {
+        q += 1;
+        fracScaled -= scale;
+    }
+
+    if (fracScaled == 0) {
+        return tr("%1 %2").arg(QString::number(q)).arg(unitStr);
+    }
+
+    QString fracStr = QString::number(fracScaled);
+    if (fracStr.length() < decimals) {
+        fracStr = QString(decimals - fracStr.length(), QChar('0')) + fracStr;
+    }
+    return tr("%1.%2 %3").arg(QString::number(q), fracStr, unitStr);
 }
 
 /* Function to return OS list URL */
@@ -881,7 +943,7 @@ QJsonDocument ImageWriter::getFilteredOSlistDocument() {
             {"name", QCoreApplication::translate("main", "Use custom")},
             {"description", QCoreApplication::translate("main", "Select a custom .img from your computer")},
             {"icon", "../icons/use_custom.png"},
-            {"url", ""},
+            {"url", "internal://custom"},
         }));
 
     return QJsonDocument(
@@ -1560,6 +1622,31 @@ QVariantMap ImageWriter::getSavedCustomizationSettings()
         result.insert(key, _settings.value(key));
     }
     _settings.endGroup();
+
+    // Belt-and-braces: deduplicate SSH authorized keys if present.
+    // Many UIs allow pasting multiple keys; ensure unique entries using a
+    // collision-resistant hash (SHA-256) over each normalized line.
+    if (result.contains("sshAuthorizedKeys")) {
+        const QString raw = result.value("sshAuthorizedKeys").toString();
+        const QStringList lines = raw.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+        QStringList uniqueOrdered;
+        QList<QByteArray> seenHashes;
+        uniqueOrdered.reserve(lines.size());
+
+        for (const QString &line : lines) {
+            const QString trimmed = line.trimmed();
+            if (trimmed.isEmpty()) continue;
+            const QByteArray hash = QCryptographicHash::hash(trimmed.toUtf8(), QCryptographicHash::Sha256);
+            bool already = false;
+            for (const QByteArray &h : seenHashes) { if (h == hash) { already = true; break; } }
+            if (!already) {
+                seenHashes.append(hash);
+                uniqueOrdered.append(trimmed);
+            }
+        }
+
+        result.insert("sshAuthorizedKeys", uniqueOrdered.join("\n"));
+    }
 
     return result;
 }

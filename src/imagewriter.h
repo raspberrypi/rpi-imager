@@ -130,6 +130,11 @@ public:
 
     /* Return filename part of URL set */
     Q_INVOKABLE QString srcFileName();
+    
+    /* Returns size (bytes) of selected source, if known; 0 if unknown */
+    Q_INVOKABLE quint64 getSelectedSourceSize();
+    /* Format a byte size with an appropriate translated unit (KB/MB/GB/TB) */
+    Q_INVOKABLE QString formatSize(quint64 bytes, int decimals = 1);
 
     /* Returns true if online */
     Q_INVOKABLE bool isOnline();

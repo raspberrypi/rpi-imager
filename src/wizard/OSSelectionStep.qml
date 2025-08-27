@@ -29,6 +29,9 @@ WizardStepBase {
     property alias osswipeview: osswipeview
     property string categorySelected: ""
     property bool modelLoaded: false
+    // Track if a custom local image has been chosen in this step
+    property bool customSelected: false
+    property real customSelectedSize: 0
     
     signal updatePopupRequested(var url)
     signal defaultEmbeddedDriveRequested(var drive)
@@ -51,6 +54,17 @@ WizardStepBase {
         target: imageWriter
         function onOsListPrepared() {
             onOsListPreparedHandler()
+        }
+        // Handle native file selection for "Use custom"
+        function onFileSelected(fileUrl) {
+            // Ensure ImageWriter src is set to the chosen file explicitly
+            imageWriter.setSrc(fileUrl)
+            // Update selected OS name to the chosen file name
+            root.wizardContainer.selectedOsName = imageWriter.srcFileName()
+            root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
+            root.customSelected = true
+            root.customSelectedSize = imageWriter.getSelectedSourceSize()
+            root.nextButtonEnabled = true
         }
     }
 
@@ -257,13 +271,21 @@ WizardStepBase {
                             elide: Text.ElideRight
                             color: Style.textMetadataColor
                             font.family: Style.fontFamily
-                            visible: typeof(delegateItem.url) === "string" && delegateItem.url !== "" && delegateItem.url !== "internal://format"
-                            text: !delegateItem.url ? "" :
-                                  (typeof(delegateItem.extract_sha256) !== "undefined" && imageWriter.isCached(delegateItem.url, delegateItem.extract_sha256))
-                                  ? qsTr("Cached on your computer")
-                                  : (delegateItem.url.startsWith("file://")
-                                     ? qsTr("Local file")
-                                     : qsTr("Online - %1 GB download").arg((delegateItem.image_download_size/1073741824).toFixed(1)))
+                            // Hide for custom until a file is chosen; otherwise show status
+                            visible: (typeof(delegateItem.url) === "string" && delegateItem.url !== "internal://custom" && delegateItem.url !== "internal://format")
+                                     || (typeof(delegateItem.url) === "string" && delegateItem.url === "internal://custom" && root.customSelected)
+                            text:
+                                (typeof(delegateItem.url) === "string" && delegateItem.url === "internal://custom")
+                                ? (function(){
+                                    var sz = root.customSelected ? root.customSelectedSize : 0;
+                                    return sz > 0 ? qsTr("Local - %1").arg(imageWriter.formatSize(sz)) : "";
+                                  })()
+                                : (!delegateItem.url ? "" :
+                                  ((typeof(delegateItem.extract_sha256) !== "undefined" && imageWriter.isCached(delegateItem.url, delegateItem.extract_sha256))
+                                    ? qsTr("Cached on your computer")
+                                    : (delegateItem.url.startsWith("file://")
+                                       ? qsTr("Local file")
+                                       : qsTr("Online - %1 download").arg(imageWriter.formatSize(delegateItem.image_download_size)))))
                         }
                         
                         Text {
@@ -369,25 +391,45 @@ WizardStepBase {
             // ensure focus is on the new view
             _focusFirstItemInCurrentView()
         } else {
-            // Select this OS - use correct setSrc signature from original OSPopup
-            imageWriter.setSrc(
-                model.url, 
-                model.image_download_size, 
-                model.extract_size, 
-                typeof(model.extract_sha256) != "undefined" ? model.extract_sha256 : "", 
-                typeof(model.contains_multiple_files) != "undefined" ? model.contains_multiple_files : false, 
-                categorySelected, 
-                model.name, 
-                typeof(model.init_format) != "undefined" ? model.init_format : ""
-            )
-            
-            // Store the selected OS name
-            root.wizardContainer.selectedOsName = model.name
-            // Determine if customization is supported via centralized C++ logic
-            root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-
-            // Do not auto-advance; enable Next in the container
-            root.nextButtonEnabled = true
+            // Select this OS - explicit branching for clarity
+            if (typeof(model.url) === "string" && model.url === "internal://custom") {
+                // Use custom: open native file selector now and wait for onFileSelected
+                root.wizardContainer.selectedOsName = ""
+                root.nextButtonEnabled = false
+                root.customSelected = false
+                imageWriter.openFileDialog()
+            } else if (typeof(model.url) === "string" && model.url === "internal://format") {
+                // Erase/format flow
+                imageWriter.setSrc(
+                    model.url,
+                    model.image_download_size,
+                    model.extract_size,
+                    typeof(model.extract_sha256) != "undefined" ? model.extract_sha256 : "",
+                    typeof(model.contains_multiple_files) != "undefined" ? model.contains_multiple_files : false,
+                    categorySelected,
+                    model.name,
+                    typeof(model.init_format) != "undefined" ? model.init_format : ""
+                )
+                root.wizardContainer.selectedOsName = model.name
+                root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
+                root.nextButtonEnabled = true
+            } else {
+                // Normal OS selection
+                imageWriter.setSrc(
+                    model.url,
+                    model.image_download_size,
+                    model.extract_size,
+                    typeof(model.extract_sha256) != "undefined" ? model.extract_sha256 : "",
+                    typeof(model.contains_multiple_files) != "undefined" ? model.contains_multiple_files : false,
+                    categorySelected,
+                    model.name,
+                    typeof(model.init_format) != "undefined" ? model.init_format : ""
+                )
+                root.wizardContainer.selectedOsName = model.name
+                root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
+                root.customSelected = false
+                root.nextButtonEnabled = true
+            }
 
             if (model.subitems_url === "internal://back") {
                 osswipeview.decrementCurrentIndex()

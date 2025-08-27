@@ -54,6 +54,13 @@ WizardStepBase {
                 width: Style.scrollBarWidth
                 policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
             }
+
+            // Auto-select a safe default when drives appear
+            onCountChanged: {
+                if (dstlist.count > 0 && dstlist.currentIndex === -1) {
+                    selectDefaultDrive()
+                }
+            }
             
             // No storage devices message
             Label {
@@ -83,7 +90,7 @@ WizardStepBase {
                 onToggled: {
                     if (!checked) {
                         // If warnings are disabled, bypass the confirmation dialog
-                        if (root.imageWriter.getBoolSetting("disable_warnings")) {
+                        if (root.wizardContainer && root.wizardContainer.disableWarnings) {
                             // Leave checkbox unchecked and continue showing system drives
                             dstlist.forceActiveFocus()
                         } else {
@@ -177,7 +184,7 @@ WizardStepBase {
                         }
                         
                         Text {
-                            text: (dstitem.size/1000000000).toFixed(1) + " GB"
+                            text: imageWriter.formatSize(parseFloat(dstitem.size))
                             font.pixelSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textDescriptionColor
@@ -218,7 +225,7 @@ WizardStepBase {
             // Show stern confirmation dialog requiring typing the name
             systemDriveConfirm.driveName = dstitem.description
             systemDriveConfirm.device = dstitem.device
-            systemDriveConfirm.sizeStr = (parseFloat(dstitem.size)/1000000000).toFixed(1) + " " + qsTr("GB")
+            systemDriveConfirm.sizeStr = imageWriter.formatSize(parseFloat(dstitem.size))
             systemDriveConfirm.mountpoints = dstitem.mountpoints
             systemDriveConfirm.open()
             return
@@ -232,6 +239,60 @@ WizardStepBase {
         root.nextButtonEnabled = true
     }
 
+    // Select default drive by priority (never system):
+    // 1) SD cards (not USB and not SCSI)
+    // 2) USB storage devices
+    // 3) Other non-system, non-readonly devices
+    function selectDefaultDrive() {
+        var model = root.imageWriter.getDriveList()
+        if (!model || model.rowCount() === 0) return
+
+        var deviceRole = 0x101
+        var descriptionRole = 0x102
+        var sizeRole = 0x103
+        var isUsbRole = 0x104
+        var isScsiRole = 0x105
+        var isReadOnlyRole = 0x106
+        var isSystemRole = 0x107
+        var mountpointsRole = 0x108
+
+        var sdIdx = -1
+        var usbIdx = -1
+        var otherIdx = -1
+
+        for (var i = 0; i < model.rowCount(); i++) {
+            var idx = model.index(i, 0)
+            var isSystem = model.data(idx, isSystemRole)
+            if (isSystem) continue
+            var isReadOnly = model.data(idx, isReadOnlyRole)
+            if (isReadOnly) continue
+            var isUsb = model.data(idx, isUsbRole)
+            var isScsi = model.data(idx, isScsiRole)
+
+            if (!isUsb && !isScsi && sdIdx === -1) {
+                sdIdx = i
+            } else if (isUsb && usbIdx === -1) {
+                usbIdx = i
+            } else if (otherIdx === -1) {
+                otherIdx = i
+            }
+        }
+
+        var chosen = sdIdx !== -1 ? sdIdx : (usbIdx !== -1 ? usbIdx : otherIdx)
+        if (chosen === -1) return
+
+        var cidx = model.index(chosen, 0)
+        var device = model.data(cidx, deviceRole)
+        var description = model.data(cidx, descriptionRole)
+        var size = model.data(cidx, sizeRole)
+        var mountpoints = model.data(cidx, mountpointsRole)
+
+        dstlist.currentIndex = chosen
+        root.imageWriter.setDst(device)
+        root.selectedDeviceName = description
+        root.wizardContainer.selectedStorageName = description
+        root.nextButtonEnabled = true
+    }
     // Stern confirmation when disabling system drive filtering
     ConfirmUnfilterPopup {
         id: confirmUnfilterPopup
