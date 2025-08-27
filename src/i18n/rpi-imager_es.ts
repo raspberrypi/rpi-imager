@@ -2,6 +2,212 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="es_ES">
 <context>
+    <name>AdvancedOptionsPopup</name>
+    <message>
+        <source>Advanced Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play sound when finished</source>
+        <translation type="unfinished">Reproducir sonido al finalizar</translation>
+    </message>
+    <message>
+        <source>Eject media when finished</source>
+        <translation type="unfinished">Expulsar soporte al finalizar</translation>
+    </message>
+    <message>
+        <source>Enable anonymous statistics (telemetry)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>What is this?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disable warnings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disable warnings?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>CommonStrings</name>
+    <message>
+        <source>Selecting the wrong drive will permanently erase data and can render your computer UNBOOTABLE.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only proceed if you fully understand the risks.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ConfirmSystemDrivePopup</name>
+    <message>
+        <source>DANGER: System drive selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are about to select a &lt;b&gt;SYSTEM DRIVE&lt;/b&gt;: &lt;b&gt;%1&lt;/b&gt;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Size: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mounted as: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Not mounted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>To continue, type the exact drive name below:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Type drive name exactly as shown above</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CONTINUE</source>
+        <translation type="unfinished">CONTINUAR</translation>
+    </message>
+</context>
+<context>
+    <name>ConfirmUnfilterPopup</name>
+    <message>
+        <source>Remove system drive filter?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>System drives typically contain media essential to the operation of your computer, and usually include your personal files (photos, videos, documents).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KEEP FILTER ON</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SHOW SYSTEM DRIVES</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>DeviceSelectionStep</name>
+    <message>
+        <source>Select your Raspberry Pi Device</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>DoneStep</name>
+    <message>
+        <source>Write Complete!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Your choices:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No device selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating System:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No image selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage Device:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No storage device selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customizations applied:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>✓ Hostname configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>✓ User account configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>✓ WiFi configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>✓ SSH enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>✓ Pi Connect enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>✓ Locale configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The storage device was ejected automatically. You can now remove it safely.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please eject the storage device before removing it from your computer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write Another</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finish</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>DownloadExtractThread</name>
     <message>
         <source>Error extracting archive: %1</source>
@@ -37,14 +243,6 @@
     <message>
         <source>opening drive</source>
         <translation>abriendo unidad</translation>
-    </message>
-    <message>
-        <source>Error running diskpart: %1</source>
-        <translation>Error ejecutando diskpart: %1</translation>
-    </message>
-    <message>
-        <source>Error removing existing partitions</source>
-        <translation>Error eliminando las particiones existentes</translation>
     </message>
     <message>
         <source>Authentication cancelled</source>
@@ -134,6 +332,34 @@
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Error: Multiple partitions found on disk. Please ensure the disk is completely clean.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disk is full. Please use a larger storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Media error detected. The storage device may be damaged or counterfeit. Please try a different device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I/O device error. The storage device may have been disconnected or is malfunctioning.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
@@ -167,6 +393,18 @@
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preparing disk for formatting...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning disk...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing filesystem...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -217,6 +455,21 @@
     </message>
 </context>
 <context>
+    <name>HostnameCustomizationStep</name>
+    <message>
+        <source>Customization: Choose hostname</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>raspberrypi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>HwPopup</name>
     <message>
         <source>Raspberry Pi Device</source>
@@ -225,10 +478,6 @@
 </context>
 <context>
     <name>ImageWriter</name>
-    <message>
-        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
-        <translation>La capacidad de almacenamiento no es lo suficientemente grande.&lt;br&gt;Necesita ser de al menos %1 GB.</translation>
-    </message>
     <message>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>El archivo de entrada no es una imagen de disco válida.&lt;br&gt;El tamaño del archivo %1 bytes no es múltiplo de 512 bytes.</translation>
@@ -242,16 +491,63 @@
         <translation>Seleccionar imagen</translation>
     </message>
     <message>
-        <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation>Error sincronizando la hora. Vuelva a intentarlo en 3 segundos</translation>
-    </message>
-    <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
         <translation>El comutador de Ethernet tiene el STP activado. La obtención de la IP puede tardar mucho.</translation>
     </message>
     <message>
+        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>B</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1.%2 %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>KeychainPermissionPopup</name>
+    <message>
+        <source>Keychain Access</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation>¿Desea rellenar previamente la contraseña wifi desde el llavero del sistema?</translation>
+        <translation type="unfinished">¿Desea rellenar previamente la contraseña wifi desde el llavero del sistema?</translation>
+    </message>
+    <message>
+        <source>This will require administrator authentication on macOS.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -282,6 +578,25 @@
     </message>
 </context>
 <context>
+    <name>LocaleCustomizationStep</name>
+    <message>
+        <source>Customization: Choose locale</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure timezone and keyboard layout for your Raspberry Pi.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timezone:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keyboard layout:</source>
+        <translation type="unfinished">Distribución del teclado:</translation>
+    </message>
+</context>
+<context>
     <name>MsgPopup</name>
     <message>
         <source>NO</source>
@@ -298,6 +613,10 @@
     <message>
         <source>QUIT</source>
         <translation>SALIR</translation>
+    </message>
+    <message>
+        <source>REBOOT</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -340,6 +659,41 @@
     <message>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
         <translation type="unfinished">Conecte primero una memoria USB que contenga imágenes.&lt;br&gt;Las imágenes deben estar ubicadas en la carpeta raíz de la memoria USB.</translation>
+    </message>
+</context>
+<context>
+    <name>OSSelectionStep</name>
+    <message>
+        <source>Choose Operating System</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select the operating system to install on your Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Local - %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cached on your computer</source>
+        <translation type="unfinished">En caché en su ordenador</translation>
+    </message>
+    <message>
+        <source>Local file</source>
+        <translation type="unfinished">Archivo local</translation>
+    </message>
+    <message>
+        <source>Online - %1 download</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation type="unfinished">Volver</translation>
+    </message>
+    <message>
+        <source>Go back to main menu</source>
+        <translation type="unfinished">Volver al menú principal</translation>
     </message>
 </context>
 <context>
@@ -442,6 +796,10 @@
         <source>Please fix validation errors in Services tab</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>RESET</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>OptionsServicesTab</name>
@@ -485,6 +843,72 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
 </context>
 <context>
+    <name>RemoteAccessStep</name>
+    <message>
+        <source>Customization: SSH Authentication</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure SSH access.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable SSH</source>
+        <translation type="unfinished">Activar SSH</translation>
+    </message>
+    <message>
+        <source>Authentication Mechanism:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use password authentication</source>
+        <translation type="unfinished">Usar autenticación por contraseña</translation>
+    </message>
+    <message>
+        <source>Use public key authentication</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter public key or click Browse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select SSH Public Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key loaded from file</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>StorageSelectionStep</name>
+    <message>
+        <source>Select your Storage Device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No storage devices found</source>
+        <translation type="unfinished">No se han encontrado dispositivos de almacenamiento</translation>
+    </message>
+    <message>
+        <source>Exclude System Drives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mounted as %1</source>
+        <translation type="unfinished">Montado como %1</translation>
+    </message>
+    <message>
+        <source>Read-only</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>UseSavedSettingsPopup</name>
     <message>
         <source>Would you like to apply OS customization settings?</source>
@@ -495,16 +919,283 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>NO</translation>
     </message>
     <message>
-        <source>NO, CLEAR SETTINGS</source>
-        <translation>NO, BORRAR AJUSTES</translation>
-    </message>
-    <message>
         <source>YES</source>
         <translation>SÍ</translation>
     </message>
     <message>
         <source>EDIT SETTINGS</source>
         <translation>EDITAR AJUSTES</translation>
+    </message>
+    <message>
+        <source>Use OS customization?</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>UserCustomizationStep</name>
+    <message>
+        <source>Customization: Choose username</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Create a user account for your Raspberry Pi.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Username:</source>
+        <translation type="unfinished">Nombre de usuario:</translation>
+    </message>
+    <message>
+        <source>pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password:</source>
+        <translation type="unfinished">Contraseña:</translation>
+    </message>
+    <message>
+        <source>Enter password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm password:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>WifiCustomizationStep</name>
+    <message>
+        <source>Customization: Choose WiFi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure wireless LAN settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSID:</source>
+        <translation type="unfinished">SSID:</translation>
+    </message>
+    <message>
+        <source>Network name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password:</source>
+        <translation type="unfinished">Contraseña:</translation>
+    </message>
+    <message>
+        <source>Network password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wireless LAN country:</source>
+        <translation type="unfinished">País de LAN inalámbrica:</translation>
+    </message>
+    <message>
+        <source>Hidden SSID</source>
+        <translation type="unfinished">SSID oculta</translation>
+    </message>
+</context>
+<context>
+    <name>WizardContainer</name>
+    <message>
+        <source>Device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OS</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage</source>
+        <translation type="unfinished">Almacenamiento</translation>
+    </message>
+    <message>
+        <source>Customization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Setup Steps</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Advanced Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finish</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>WizardStepBase</name>
+    <message>
+        <source>Next</source>
+        <translation type="unfinished">Siguiente</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation type="unfinished">Volver</translation>
+    </message>
+    <message>
+        <source>Skip customisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>WritingStep</name>
+    <message>
+        <source>Write Image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Review your choices and write the image to the storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Summary</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No device selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating System:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No image selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No storage selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready to write your customized image to the storage device. All existing data will be erased.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready to write the image to the storage device. All existing data will be erased.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customizations to apply:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• Hostname configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• User account configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• WiFi configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• SSH enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• Pi Connect enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• Locale configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting write process...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write cancelled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finalizing...</source>
+        <translation type="unfinished">Finalizando...</translation>
+    </message>
+    <message>
+        <source>Confirm destructive write</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are about to ERASE all data on: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>the storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This action is PERMANENT and CANNOT be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I understand, erase and write</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please wait...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing... %1%</source>
+        <translation type="unfinished">Escribiendo... %1%</translation>
+    </message>
+    <message>
+        <source>Verifying... %1%</source>
+        <translation type="unfinished">Verificando... %1%</translation>
+    </message>
+    <message>
+        <source>Write completed successfully!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write failed: %1</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -514,88 +1205,8 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>Raspberry Pi Imager v%1</translation>
     </message>
     <message>
-        <source>Raspberry Pi Device</source>
-        <translation>Dispositivo Raspberry Pi</translation>
-    </message>
-    <message>
-        <source>Select this button to choose your target Raspberry Pi</source>
-        <translation>Seleccione este botón para elegir su Raspberry Pi objetivo</translation>
-    </message>
-    <message>
-        <source>Operating System</source>
-        <translation>Sistema operativo</translation>
-    </message>
-    <message>
-        <source>CHOOSE OS</source>
-        <translation>ELEGIR SO</translation>
-    </message>
-    <message>
-        <source>Select this button to change the operating system</source>
-        <translation>Seleccione este botón para cambiar el sistema operativo</translation>
-    </message>
-    <message>
-        <source>Storage</source>
-        <translation>Almacenamiento</translation>
-    </message>
-    <message>
-        <source>Network not ready yet</source>
-        <translation>La red aún no está lista</translation>
-    </message>
-    <message>
-        <source>CHOOSE STORAGE</source>
-        <translation>ELEGIR ALMACENAMIENTO</translation>
-    </message>
-    <message>
-        <source>Select this button to change the destination storage device</source>
-        <translation>Seleccione este botón para cambiar el dispositivo de almacenamiento de destino</translation>
-    </message>
-    <message>
-        <source>CANCEL WRITE</source>
-        <translation>CANCELAR ESCRITURA</translation>
-    </message>
-    <message>
-        <source>Cancelling...</source>
-        <translation>Cancelando...</translation>
-    </message>
-    <message>
-        <source>CANCEL VERIFY</source>
-        <translation>CANCELAR VERIFICACIÓN</translation>
-    </message>
-    <message>
-        <source>Finalizing...</source>
-        <translation>Finalizando...</translation>
-    </message>
-    <message>
-        <source>Next</source>
-        <translation>Siguiente</translation>
-    </message>
-    <message>
-        <source>Select this button to start writing the image</source>
-        <translation>Seleccione este botón para empezar a escribir la imagen</translation>
-    </message>
-    <message>
-        <source>Using custom repository: %1</source>
-        <translation>Usando repositorio personalizado: %1</translation>
-    </message>
-    <message>
-        <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
-        <translation>Navegación por teclado: &lt;tab&gt; navegar al botón siguiente &lt;space&gt; pulsar botón/seleccionar elemento &lt;arrow up/down&gt; subir/bajar en listas</translation>
-    </message>
-    <message>
-        <source>Language: </source>
-        <translation>Idioma: </translation>
-    </message>
-    <message>
-        <source>Keyboard: </source>
-        <translation>Teclado: </translation>
-    </message>
-    <message>
         <source>Are you sure you want to quit?</source>
         <translation>¿Está seguro de que quiere salir?</translation>
-    </message>
-    <message>
-        <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>Raspberry Pi Imager sigue ocupado.&lt;br&gt;¿Está seguro de que quiere salir?</translation>
     </message>
     <message>
         <source>Warning</source>
@@ -618,18 +1229,6 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>Hay una versión más reciente de Imager disponible.&lt;br&gt;¿Desea visitar el sitio web para descargarla?</translation>
     </message>
     <message>
-        <source>Writing... %1%</source>
-        <translation>Escribiendo... %1%</translation>
-    </message>
-    <message>
-        <source>Verifying... %1%</source>
-        <translation>Verificando... %1%</translation>
-    </message>
-    <message>
-        <source>Preparing to write... (%1)</source>
-        <translation>Preparando para escribir... (%1)</translation>
-    </message>
-    <message>
         <source>Error</source>
         <translation>Error</translation>
     </message>
@@ -640,14 +1239,6 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     <message>
         <source>Erase</source>
         <translation>Borrar</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; se ha borrado&lt;br&gt;&lt;br&gt;Ya puede retirar la tarjeta SD del lector</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; se ha escrito en &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;Ya puede retirar la tarjeta SD del lector</translation>
     </message>
     <message>
         <source>Format card as FAT32</source>
@@ -662,23 +1253,35 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>Seleccione un .img personalizado de su ordenador</translation>
     </message>
     <message>
-        <source>SKIP CACHE VERIFICATION</source>
+        <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Starting download...</source>
+        <source>No</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Verifying cached file... %1%</source>
+        <source>Yes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Verifying cached file...</source>
+        <source>Storage device not available</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Starting write...</source>
+        <source>The selected storage device is no longer available.&lt;br&gt;Please select a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You may now reboot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device removed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The selected storage device was removed.&lt;br&gt;Please select a different storage device.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
