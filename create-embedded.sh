@@ -385,6 +385,12 @@ find "$APPDIR" -name "*.prl" -delete 2>/dev/null || true
 # Strip binaries to reduce size
 find "$APPDIR" -type f -executable -exec strip {} \; 2>/dev/null || true
 
+echo "Stripping binaries..."
+pushd "$APPDIR"
+echo $(find . -name "*.so*")
+strip --strip-unneeded $(find . -name "*.so*")
+popd
+
 echo "Creating embedded AppImage..."
 # Remove old AppImage symlink
 rm -f "$PWD/rpi-imager-embedded.AppImage"
