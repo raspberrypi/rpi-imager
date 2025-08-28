@@ -833,18 +833,12 @@ set(QT_QML_GENERATE_QMLLS_INI ON)
 
 set(IMAGER_QML_FILES
     main.qml
-    MsgPopup.qml
-    ConfirmUnfilterPopup.qml
-    ConfirmSystemDrivePopup.qml
     CommonStrings.qml
-    OptionsGeneralTab.qml
-    OptionsMiscTab.qml
-    OptionsPopup.qml
-    OptionsServicesTab.qml
-    OptionsTabBase.qml
     Style.qml
-    UseSavedSettingsPopup.qml
-    KeychainPermissionPopup.qml
+    wizard/dialogs/ConfirmUnfilterDialog.qml
+    wizard/dialogs/ConfirmSystemDriveDialog.qml
+    wizard/dialogs/KeychainPermissionDialog.qml
+    wizard/dialogs/UpdateAvailableDialog.qml
     qmlcomponents/ImButton.qml
     qmlcomponents/ImButtonRed.qml
     qmlcomponents/ImCheckBox.qml
@@ -854,11 +848,6 @@ set(IMAGER_QML_FILES
     qmlcomponents/ImRadioButton.qml
     qmlcomponents/ImOptionPill.qml
     qmlcomponents/ImTextField.qml
-    MainPopupBase.qml
-    HwPopup.qml
-    OSPopup.qml
-    DstPopup.qml
-    MainPopupListViewBase.qml
     wizard/WizardStepBase.qml
     wizard/WizardContainer.qml
     wizard/AdvancedOptionsPopup.qml

@@ -457,6 +457,14 @@ Item {
             if (!customizationSupported && nextIndex === stepHostnameCustomization) {
                 nextIndex = stepWriting
             }
+            // Before entering the writing step, persist and apply customization (when supported)
+            if (nextIndex === stepWriting && customizationSupported && imageWriter) {
+                // Persist whatever is currently staged in per-step UIs
+                var settings = imageWriter.getSavedCustomizationSettings()
+                imageWriter.setSavedCustomizationSettings(settings)
+                // Build and stage customization directly in C++
+                imageWriter.applyCustomizationFromSavedSettings()
+            }
             root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)
             if (nextComponent) {

@@ -494,6 +494,10 @@ WizardStepBase {
                     entry["subitems_json"] = JSON.stringify(entry["subitems"])
                     delete entry["subitems"]
                 }
+                // Propagate init_format from parent when missing so customization remains available
+                if (typeof(entry.init_format) === "undefined" && typeof(model.init_format) === "string" && model.init_format !== "") {
+                    entry.init_format = model.init_format
+                }
                 if (typeof(entry.icon) === "string" && entry.icon.indexOf("icons/") === 0) {
                     entry.icon = "../" + entry.icon
                 }

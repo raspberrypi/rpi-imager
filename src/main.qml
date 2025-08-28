@@ -18,11 +18,7 @@ ApplicationWindow {
     visible: true
 
     required property ImageWriter imageWriter
-    readonly property DriveListModel driveListModel: imageWriter.getDriveList()
-    
-    property string selectedOsName: ""
-    property string selectedStorageName: ""
-    property bool isCacheVerifying: false
+    // Wizard manages drive list and selection state
     property bool forceQuit: false
     // Expose overlay root to child components for dialog parenting
     readonly property alias overlayRootItem: overlayRoot
@@ -44,25 +40,6 @@ ApplicationWindow {
         }
     }
     
-    Shortcut {
-        sequence: StandardKey.Quit
-        context: Qt.ApplicationShortcut
-        onActivated: {
-            if (!progressBar.visible) {
-                Qt.quit()
-            }
-        }
-    }
-
-    Shortcut {
-        sequences: ["Shift+Ctrl+X", "Shift+Meta+X"]
-        context: Qt.ApplicationShortcut
-        onActivated: {
-            advancedOptionsPopup.initialize()
-            advancedOptionsPopup.open()
-        }
-    }
-
     // Global overlay to parent/center dialogs across the whole window
     Item {
         id: overlayRoot
@@ -87,20 +64,6 @@ ApplicationWindow {
                 // Reset to start of wizard or close application
                 wizardContainer.currentStep = 0
             }
-        }
-    }
-
-    // Popups are no longer needed with the wizard interface
-
-    MsgPopup {
-        id: msgpopup
-        onOpened: {
-            forceActiveFocus()
-        }
-        onClosed: {
-            window.imageWriter.setDst("")
-            window.selectedStorageName = ""
-            window.resetWriteButton()
         }
     }
 
@@ -261,59 +224,9 @@ ApplicationWindow {
         }
     }
 
-    MsgPopup {
-        id: confirmwritepopup
-        continueButton: false
-        yesButton: true
-        noButton: true
-        title: qsTr("Warning")
-        modal: true
-        onYes: {
-            // Final validation check - device could have been removed while dialog was open
-            if (!window.imageWriter.readyToWrite()) {
-                msgpopup.title = qsTr("Storage device not available")
-                msgpopup.text = qsTr("The selected storage device is no longer available.<br>Please select a different storage device.")
-                msgpopup.open()
-                return
-            }
-            
-            langbarRect.visible = false
-            writebutton.visible = false
-            writebutton.enabled = false
-            cancelwritebutton.enabled = true
-            cancelwritebutton.visible = true
-            cancelverifybutton.enabled = true
-            progressText.text = qsTr("Preparing to write...");
-            progressText.visible = true
-            progressBar.visible = true
-            progressBar.indeterminate = true
-            progressBar.Material.accent = Style.progressBarTextColor
-            // Wizard UI manages its own navigation; legacy button disables removed
-            window.imageWriter.setVerifyEnabled(true)
-            window.imageWriter.startWrite()
-        }
-
-        function askForConfirmation()
-        {
-            // Double-check that the selected drive is still valid before confirming
-            if (!window.imageWriter.readyToWrite()) {
-                msgpopup.title = qsTr("Storage device not available")
-                msgpopup.text = qsTr("The selected storage device is no longer available.<br>Please select a different storage device.")
-                msgpopup.open()
-                return
-            }
-            
-            text = qsTr("All existing data on '%1' will be erased.<br>Are you sure you want to continue?").arg(dstbutton.text)
-            open()
-        }
-
-        onOpened: {
-            forceActiveFocus()
-        }
-    }
-
-    KeychainPermissionPopup {
+    KeychainPermissionDialog {
         id: keychainpopup
+        parent: overlayRoot
         onAccepted: {
             window.imageWriter.keychainPermissionResponse(true)
         }
@@ -322,33 +235,12 @@ ApplicationWindow {
         }
     }
 
-    MsgPopup {
+    UpdateAvailableDialog {
         id: updatepopup
-        continueButton: false
-        yesButton: true
-        noButton: true
-        property url url
-        title: qsTr("Update available")
-        text: qsTr("There is a newer version of Imager available.<br>Would you like to visit the website to download it?")
-        onYes: {
-            window.imageWriter.openUrl(url)
-        }
-    }
-
-    OptionsPopup {
-        id: optionspopup
-        minimumWidth: 450
-        minimumHeight: 400
-
-        x: window.x + (window.width - width) / 2
-        y: window.y + (window.height - height) / 2
-    
-        imageWriter: window.imageWriter
-
-        onSaveSettingsSignal: (settings) => {
-            window.imageWriter.setSavedCustomizationSettings(settings)
-            usesavedsettingspopup.hasSavedSettings = true
-        }
+        // parent can be set to overlayRoot if needed for centering above
+        parent: overlayRoot
+        onAccepted: {}
+        onRejected: {}
     }
 
     AdvancedOptionsPopup {
@@ -358,58 +250,12 @@ ApplicationWindow {
         wizardContainer: wizardContainer
     }
 
-    UseSavedSettingsPopup {
-        id: usesavedsettingspopup
-        imageWriter: window.imageWriter
-
-        onYes: {
-            optionspopup.initialize()
-            optionspopup.applySettings()
-            confirmwritepopup.askForConfirmation()
-        }
-        onNo: {
-            window.imageWriter.setImageCustomization("", "", "", "", "")
-            confirmwritepopup.askForConfirmation()
-        }
-        onNoClearSettings: {
-            hasSavedSettings = false
-            optionspopup.clearCustomizationFields()
-            window.imageWriter.clearSavedCustomizationSettings()
-            confirmwritepopup.askForConfirmation()
-        }
-        onEditSettings: {
-            optionspopup.show()
-        }
-        onCloseSettings: {
-            optionspopup.close()
-        }
-    }
-
-    MsgPopup {
-        id: embeddedFinishedPopup
-        continueButton: true
-        rebootButton: true        
-        title: qsTr("Write Successful")
-        text: qsTr("<b>%1</b> has been written to <b>%2</b><br><br>You may now reboot").arg(wizardContainer.selectedOsName).arg(wizardContainer.selectedStorageName)
-
-        onReboot: {
-           window.imageWriter.reboot()
-        }
-        onClosed: {
-            window.imageWriter.setDst("")
-            window.selectedStorageName = ""
-            window.resetWriteButton()
-        }
-    }
+    // Removed embeddedFinishedPopup; handled by Wizard Done step
 
     /* Slots for signals imagewrite emits */
     function onDownloadProgress(now,total) {
         // Forward to wizard container
         wizardContainer.onDownloadProgress(now, total)
-        
-            if (isCacheVerifying) {
-                isCacheVerifying = false
-        }
     }
 
     function onVerifyProgress(now,total) {
@@ -422,35 +268,10 @@ ApplicationWindow {
         wizardContainer.onPreparationStatusUpdate(msg)
     }
 
-    function onOsListPrepared() {
-        // OS list fetching is now handled by the wizard
-    }
-
-    function resetWriteButton() {
-        // Reset handled by wizard interface now
-    }
-
     function onError(msg) {
         errorDialog.titleText = qsTr("Error")
         errorDialog.message = msg
         errorDialog.open()
-    }
-
-    function onSuccess() {
-        // Success is now handled by the wizard's done step
-        if (imageWriter.isEmbeddedMode()) {
-            embeddedFinishedPopup.open()
-        }
-    }
-
-    function onFileSelected(file) {
-        imageWriter.setSrc(file)
-        window.selectedOsName = imageWriter.srcFileName()
-        // File selection now handled by wizard
-    }
-
-    function onCancelled() {
-        resetWriteButton()
     }
 
     function onFinalizing() {
@@ -463,48 +284,8 @@ ApplicationWindow {
         }
     }
 
-    function onCacheVerificationStarted() {
-        // Set cache verification state
-        isCacheVerifying = true
-    }
-
-    function onCacheVerificationFinished() {
-        // Clear cache verification state
-        isCacheVerifying = false
-    }
-
-    Timer {
-        /* Verify if default drive is in our list after 100 ms */
-        id: setDefaultDest
-        property string drive : ""
-        interval: 100
-        onTriggered: {
-            for (var i = 0; i < window.driveListModel.rowCount(); i++)
-            {
-                /* FIXME: there should be a better way to iterate drivelist than
-                   fetch data by numeric role number */
-                if (window.driveListModel.data(window.driveListModel.index(i,0), 0x101) === drive) {
-                    dstpopup.selectDstItem({
-                                      device: drive,
-                                      description: window.driveListModel.data(window.driveListModel.index(i,0), 0x102),
-                                      size: window.driveListModel.data(window.driveListModel.index(i,0), 0x103),
-                                      readonly: false
-                                  })
-                    break
-                }
-            }
-        }
-    }
-
-    // Called from C++
-    function fetchOSlist() {
-        // OS list fetching is now handled by the wizard
-    }
-
     // Called from C++ when selected device is removed
     function onSelectedDeviceRemoved() {
-        // Clear storage selection since selected device no longer exists
-        selectedStorageName = ""
         if (wizardContainer) {
             wizardContainer.selectedStorageName = ""
         }

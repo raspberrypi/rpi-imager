@@ -41,6 +41,13 @@ WizardStepBase {
         if (saved.wifiHidden !== undefined) {
             chkWifiHidden.checked = !!saved.wifiHidden
         }
+        // Auto-populate WiFi password from system keychain when available
+        if (!saved.wifiPassword || saved.wifiPassword.length === 0) {
+            var psk = imageWriter.getPSK()
+            if (psk && psk.length > 0) {
+                fieldWifiPassword.text = psk
+            }
+        }
     }
 
     // Content

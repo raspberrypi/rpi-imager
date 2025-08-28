@@ -3,6 +3,8 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import RpiImager
+import "../../qmlcomponents"
 
 Dialog {
     id: root
@@ -26,7 +28,6 @@ Dialog {
     readonly property string proceedText: CommonStrings.warningProceedText
     readonly property string systemDriveText: CommonStrings.systemDriveText
 
-    // Solid background to avoid transparency, with border
     background: Rectangle {
         color: Style.mainBackgroundColor
         radius: Style.sectionBorderRadius
@@ -94,7 +95,6 @@ Dialog {
             Layout.fillWidth: true
             placeholderText: qsTr("Type drive name exactly as shown above")
             text: ""
-            // Block paste via common shortcuts (Ctrl/Meta+V, Shift+Insert)
             Keys.onPressed: (event) => {
                 if ((event.key === Qt.Key_V && (event.modifiers & (Qt.ControlModifier | Qt.MetaModifier))) ||
                     (event.key === Qt.Key_Insert && (event.modifiers & Qt.ShiftModifier))) {
@@ -105,7 +105,6 @@ Dialog {
             onAccepted: {
                 if (continueButton.enabled) continueButton.clicked()
             }
-            // Swallow middle/right-click paste and context menu
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.RightButton | Qt.MiddleButton

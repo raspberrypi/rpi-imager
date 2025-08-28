@@ -1,28 +1,24 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright (C) 2025 Raspberry Pi Ltd
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (C) 2025 Raspberry Pi Ltd
+ */
 
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import RpiImager
 
 Dialog {
     id: root
     modal: true
-    // Explicit parent for overlay centering (required)
-    required property Item overlayParent
-    parent: overlayParent
+    // For overlay parenting set by caller if needed
+    property alias overlayParent: root.parent
     anchors.centerIn: parent
     width: 520
     standardButtons: Dialog.NoButton
 
-    signal confirmed()
-    signal cancelled()
+    property url url
 
-    readonly property string riskText: CommonStrings.warningRiskText
-    readonly property string proceedText: CommonStrings.warningProceedText
-    readonly property string systemDriveText: CommonStrings.systemDriveText
-
-    // Ensure solid background (avoid transparency on embedded)
     background: Rectangle {
         color: Style.mainBackgroundColor
         radius: Style.sectionBorderRadius
@@ -36,7 +32,7 @@ Dialog {
         spacing: Style.spacingMedium
 
         Text {
-            text: qsTr("Remove system drive filter?")
+            text: qsTr("Update available")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
@@ -45,15 +41,11 @@ Dialog {
         }
 
         Text {
-            textFormat: Text.StyledText
-            text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.")
-                  + "<br><br>"
-                  + root.systemDriveText
-                  + "<br><br>" + root.riskText + "<br><br>" + root.proceedText
+            text: qsTr("There is a newer version of Imager available. Would you like to visit the website to download it?")
+            wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
-            wrapMode: Text.WordWrap
             Layout.fillWidth: true
         }
 
@@ -62,21 +54,24 @@ Dialog {
             spacing: Style.spacingMedium
             Item { Layout.fillWidth: true }
 
-            ImButtonRed {
-                text: qsTr("KEEP FILTER ON")
+            ImButton {
+                text: qsTr("No")
                 onClicked: {
-                    root.close()
-                    root.cancelled()
+                    root.reject()
                 }
             }
 
-            ImButton {
-                text: qsTr("SHOW SYSTEM DRIVES")
+            ImButtonRed {
+                text: qsTr("Yes")
                 onClicked: {
-                    root.close()
-                    root.confirmed()
+                    if (root.url && root.url.toString && root.url.toString().length > 0) {
+                        Qt.openUrlExternally(root.url)
+                    }
+                    root.accept()
                 }
             }
         }
     }
 }
+
+
