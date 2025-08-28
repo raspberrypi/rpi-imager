@@ -65,8 +65,8 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     
     QDBusConnection bus = QDBusConnection::sessionBus();
     if (!bus.isConnected()) {
-        qDebug() << "NativeFileDialog: No D-Bus session bus available, falling back to Qt";
-        return getFileNameQt(title, initialDir, filter, saveDialog);
+        qDebug() << "NativeFileDialog: No D-Bus session bus available";
+        return QString(); // QML callsites will handle fallback
     }
     
     QDBusInterface interface("org.freedesktop.portal.Desktop",
@@ -75,8 +75,8 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                              bus);
     
     if (!interface.isValid()) {
-        qDebug() << "NativeFileDialog: XDG Desktop Portal not available, falling back to Qt";
-        return getFileNameQt(title, initialDir, filter, saveDialog);
+        qDebug() << "NativeFileDialog: XDG Desktop Portal not available";
+        return QString(); // QML callsites will handle fallback
     }
     
     // Prepare arguments for the portal call
@@ -135,7 +135,7 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     
     if (!reply.isValid()) {
         qDebug() << "NativeFileDialog: Portal call failed:" << reply.error().message();
-        return getFileNameQt(title, initialDir, filter, saveDialog);
+        return QString(); // QML callsites will handle fallback
     }
     
     QString requestPath = reply.value().path();
@@ -160,7 +160,7 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     
     if (!connected) {
         qDebug() << "NativeFileDialog: Could not connect to portal Response signal";
-        return getFileNameQt(title, initialDir, filter, saveDialog);
+        return QString(); // QML callsites will handle fallback
     }
     
     // Run a local event loop until we get the response
@@ -200,8 +200,8 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     }
     
     if (result.isEmpty()) {
-        qDebug() << "NativeFileDialog: No file selected or portal failed, falling back to Qt";
-        return getFileNameQt(title, initialDir, filter, saveDialog);
+        qDebug() << "NativeFileDialog: No file selected or portal failed";
+        return QString(); // QML callsites will handle fallback
     }
     
     return result;
