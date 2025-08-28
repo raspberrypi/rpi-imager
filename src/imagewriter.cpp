@@ -1615,6 +1615,23 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     if (!wifiCountry.isEmpty()) {
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
+    // Derive WPA PSK the same way as legacy QML (PBKDF2 for passphrases 8..63 chars)
+    const bool isPassphrase = (pwd.length() >= 8 && pwd.length() < 64);
+    const QString cryptedPsk = isPassphrase ? pbkdf2(pwd.toUtf8(), ssid.toUtf8()) : pwd;
+    // Prepare SSH key arguments for imager_custom
+    auto shellQuote = [](const QString &v){ QString t = v; t.replace("'", "'\"'\"'"); return QString("'") + t + QString("'"); };
+    QStringList keyList;
+    if (!sshAuthorizedKeys.isEmpty()) {
+        const QStringList lines = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+        for (const QString &k : lines) keyList.append(k.trimmed());
+    } else if (!sshPublicKey.isEmpty()) {
+        keyList.append(sshPublicKey);
+    }
+    QString pubkeyArgs;
+    for (const QString &k : keyList) {
+        pubkeyArgs += " ";
+        pubkeyArgs += shellQuote(k);
+    }
 
     const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
     const QString groups = QStringLiteral("users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo");
@@ -1623,22 +1640,44 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     line(QStringLiteral("set -e"), script);
 
     if (!hostname.isEmpty()) {
-        // Prefer raspi-config for compatibility with legacy flow
-        line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_hostname ") + QLatin1Char('\'') + hostname + QLatin1Char('\'') + QStringLiteral("; else hostnamectl set-hostname ") + QLatin1Char('\'') + hostname + QLatin1Char('\'') + QStringLiteral("; fi"), script);
-        line(QStringLiteral("if grep -q '^127.0.1.1' /etc/hosts; then sed -i 's/^127.0.1.1.*/127.0.1.1\t") + hostname + QStringLiteral("/g' /etc/hosts; else echo '127.0.1.1\t") + hostname + QStringLiteral("' >> /etc/hosts; fi"), script);
+        line(QStringLiteral("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\\t\\n\\r\"`"), script);
+        line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
+        line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_hostname ") + hostname, script);
+        line(QStringLiteral("else"), script);
+        line(QStringLiteral("   echo ") + hostname + QStringLiteral(" >/etc/hostname"), script);
+        line(QStringLiteral("   sed -i \"s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\\t") + hostname + QStringLiteral("/g\" /etc/hosts"), script);
+        line(QStringLiteral("fi"), script);
     }
 
     if (!timezone.isEmpty()) {
-        line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_change_timezone ") + QLatin1Char('\'') + timezone + QLatin1Char('\'') + QStringLiteral("; else timedatectl set-timezone ") + QLatin1Char('\'') + timezone + QLatin1Char('\'') + QStringLiteral("; fi"), script);
+        line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
+        line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_timezone ") + shellQuote(timezone), script);
+        line(QStringLiteral("else"), script);
+        line(QStringLiteral("   rm -f /etc/localtime"), script);
+        line(QStringLiteral("   echo \"") + timezone + QStringLiteral("\" >/etc/timezone"), script);
+        line(QStringLiteral("   dpkg-reconfigure -f noninteractive tzdata"), script);
+        line(QStringLiteral("fi"), script);
     }
 
     const QString keyboardLayout = s.value("keyboardLayout").toString().trimmed();
     if (!keyboardLayout.isEmpty()) {
-        // Best-effort: rely on raspi-config for keyboard config when present
-        line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_configure_keyboard ") + QLatin1Char('\'') + keyboardLayout + QLatin1Char('\'') + QStringLiteral(" || true; fi"), script);
+        line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
+        line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_keymap ") + shellQuote(keyboardLayout), script);
+        line(QStringLiteral("else"), script);
+        line(QStringLiteral("cat >/etc/default/keyboard <<'KBEOF'"), script);
+        line(QStringLiteral("XKBMODEL=\"pc105\""), script);
+        line(QStringLiteral("XKBLAYOUT=\"") + keyboardLayout + QStringLiteral("\""), script);
+        line(QStringLiteral("XKBVARIANT=\"\""), script);
+        line(QStringLiteral("XKBOPTIONS=\"\""), script);
+        line(QStringLiteral("KBEOF"), script);
+        line(QStringLiteral("   dpkg-reconfigure -f noninteractive keyboard-configuration"), script);
+        line(QStringLiteral("fi"), script);
     }
 
-    // Ensure user exists
+    // Determine first user (uid 1000) and home, for parity with legacy behavior
+    line(QStringLiteral("FIRSTUSER=`getent passwd 1000 | cut -d: -f1`"), script);
+    line(QStringLiteral("FIRSTUSERHOME=`getent passwd 1000 | cut -d: -f6`"), script);
+    // Ensure desired user exists when explicit username was provided
     line(QStringLiteral("if ! id -u ") + effectiveUser + QStringLiteral(" >/dev/null 2>&1; then useradd -m -G ") + groups + QStringLiteral(" -s /bin/bash ") + effectiveUser + QStringLiteral("; fi"), script);
 
     if (sshEnabled) {
@@ -1653,53 +1692,66 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
         line(QStringLiteral("passwd -l ") + effectiveUser + QStringLiteral(" || true"), script);
     }
 
-    if (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
-        line(QStringLiteral("install -d -m 700 -o ") + effectiveUser + QStringLiteral(" -g ") + effectiveUser + QStringLiteral(" /home/") + effectiveUser + QStringLiteral("/.ssh"), script);
-        // Write authorized_keys via here-doc to avoid escaping issues; supports multi-line
-        QString allKeys = sshAuthorizedKeys.isEmpty() ? sshPublicKey : sshAuthorizedKeys;
-        // NOTE: Potential escaping edge-cases if keys contain EOF token; handled by single-quoted heredoc
-        line(QStringLiteral("cat > /home/") + effectiveUser + QStringLiteral("/.ssh/authorized_keys <<'EOF'"), script);
+    if (!keyList.isEmpty()) {
+        line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
+        line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom enable_ssh -k") + pubkeyArgs, script);
+        line(QStringLiteral("else"), script);
+        line(QStringLiteral("   install -o \"$FIRSTUSER\" -m 700 -d \"$FIRSTUSERHOME/.ssh\""), script);
+        // Fallback: write keys with heredoc (simpler/more robust than process substitution in this context)
+        QString allKeys = keyList.join("\n");
+        line(QStringLiteral("cat > \"$FIRSTUSERHOME/.ssh/authorized_keys\" <<'EOF'"), script);
         line(allKeys, script);
         line(QStringLiteral("EOF"), script);
-        line(QStringLiteral("chown ") + effectiveUser + QLatin1Char(':') + effectiveUser + QStringLiteral(" /home/") + effectiveUser + QStringLiteral("/.ssh/authorized_keys"), script);
-        line(QStringLiteral("chmod 600 /home/") + effectiveUser + QStringLiteral("/.ssh/authorized_keys"), script);
+        line(QStringLiteral("   chown \"$FIRSTUSER:$FIRSTUSER\" \"$FIRSTUSERHOME/.ssh/authorized_keys\""), script);
+        line(QStringLiteral("   chmod 600 \"$FIRSTUSERHOME/.ssh/authorized_keys\""), script);
+        line(QStringLiteral("   echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config"), script);
+        line(QStringLiteral("   systemctl enable ssh || systemctl enable sshd || true"), script);
+        line(QStringLiteral("fi"), script);
         // Permit passwordless sudo when using SSH key
         line(QStringLiteral("bash -c 'echo \"") + effectiveUser + QStringLiteral(" ALL=(ALL) NOPASSWD:ALL\" >/etc/sudoers.d/010-") + effectiveUser, script);
     }
 
-    if (sshEnabled) {
-        if (!sshPasswordAuth) {
-            line(QStringLiteral("if grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config; then sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config; else echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config; fi"), script);
-        } else {
-            line(QStringLiteral("if grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config; then sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config; else echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config; fi"), script);
-        }
+    if (sshEnabled && sshPasswordAuth) {
+        line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
+        line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom enable_ssh"), script);
+        line(QStringLiteral("else"), script);
+        line(QStringLiteral("   echo 'PasswordAuthentication yes' >>/etc/ssh/sshd_config"), script);
+        line(QStringLiteral("   systemctl enable ssh || systemctl enable sshd || true"), script);
+        line(QStringLiteral("fi"), script);
     }
 
     if (!ssid.isEmpty()) {
-        QString epwd = pwd; epwd.replace('"', QStringLiteral("\\\""));
-        QString essid = ssid; essid.replace('"', QStringLiteral("\\\""));
-        // Set country/keyboard via raspi-config when available for parity
-        if (!wifiCountry.isEmpty()) {
-            line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_wifi_country ") + wifiCountry + QStringLiteral(" || true; fi"), script);
-        }
-        line(QStringLiteral("cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'EOF'"), script);
+        // Prefer imager_custom set_wlan; fallback to manual wpa_supplicant
+        line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
+        QString wlanCmd = QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_wlan ");
+        if (hidden) wlanCmd += QStringLiteral(" -h ");
+        wlanCmd += shellQuote(ssid) + QStringLiteral(" ") + shellQuote(cryptedPsk) + QStringLiteral(" ") + shellQuote(wifiCountry);
+        line(wlanCmd, script);
+        line(QStringLiteral("else"), script);
+        line(QStringLiteral("cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'WPAEOF'"), script);
+        if (!wifiCountry.isEmpty()) line(QStringLiteral("country=") + wifiCountry, script);
         line(QStringLiteral("ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev"), script);
+        line(QStringLiteral("ap_scan=1"), script);
+        line(QStringLiteral(""), script);
         line(QStringLiteral("update_config=1"), script);
-        if (!wifiCountry.isEmpty())
-            line(QStringLiteral("country=") + wifiCountry, script);
         line(QStringLiteral("network={"), script);
-        line(QStringLiteral("    ssid=\"") + essid + QStringLiteral("\""), script);
-        if (!pwd.isEmpty()) {
-            line(QStringLiteral("    psk=\"") + epwd + QStringLiteral("\""), script);
-        }
-        if (hidden) {
-            line(QStringLiteral("    scan_ssid=1"), script);
-        }
+        if (hidden) line(QStringLiteral("\tscan_ssid=1"), script);
+        line(QStringLiteral("\tssid=\"") + ssid + QStringLiteral("\""), script);
+        if (!cryptedPsk.isEmpty()) line(QStringLiteral("\tpsk=") + cryptedPsk, script);
         line(QStringLiteral("}"), script);
-        line(QStringLiteral("EOF"), script);
-        line(QStringLiteral("chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf || true"), script);
-        line(QStringLiteral("rfkill unblock wifi || true"), script);
+        line(QStringLiteral("WPAEOF"), script);
+        line(QStringLiteral("   chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf"), script);
+        line(QStringLiteral("   rfkill unblock wifi"), script);
+        line(QStringLiteral("   for filename in /var/lib/systemd/rfkill/*:wlan ; do"), script);
+        line(QStringLiteral("       echo 0 > $filename"), script);
+        line(QStringLiteral("   done"), script);
+        line(QStringLiteral("fi"), script);
     }
+
+    // Final cleanup to mimic legacy behavior
+    line(QStringLiteral("rm -f /boot/firstrun.sh"), script);
+    line(QStringLiteral("sed -i 's| systemd.run.*||g' /boot/cmdline.txt"), script);
+    line(QStringLiteral("exit 0"), script);
 
     setImageCustomization(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray());
 }
@@ -1715,11 +1767,29 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     if (!hostname.isEmpty()) {
         push(QStringLiteral("hostname: ") + hostname, cloud);
         push(QStringLiteral("manage_etc_hosts: true"), cloud);
+        // Parity with legacy QML: install avahi-daemon and disable apt Check-Date on first boot
+        push(QStringLiteral("packages:"), cloud);
+        push(QStringLiteral("- avahi-daemon"), cloud);
+        push(QString(), cloud);
+        push(QStringLiteral("apt:"), cloud);
+        push(QStringLiteral("  conf: |"), cloud);
+        push(QStringLiteral("    Acquire {"), cloud);
+        push(QStringLiteral("      Check-Date \"false\";"), cloud);
+        push(QStringLiteral("    };"), cloud);
+        push(QString(), cloud);
     }
 
     const QString timezone = s.value("timezone").toString().trimmed();
     if (!timezone.isEmpty()) {
         push(QStringLiteral("timezone: ") + timezone, cloud);
+    }
+
+    // Parity with legacy QML: include keyboard model/layout when locale is set
+    const QString keyboardLayout = s.value("keyboardLayout").toString().trimmed();
+    if (!keyboardLayout.isEmpty()) {
+        push(QStringLiteral("keyboard:"), cloud);
+        push(QStringLiteral("  model: pc105"), cloud);
+        push(QStringLiteral("  layout: \"") + keyboardLayout + QStringLiteral("\""), cloud);
     }
 
     const bool sshEnabled = s.value("sshEnabled").toBool();
@@ -1731,7 +1801,9 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
 
     if (sshEnabled || !userName.isEmpty()) {
         push(QStringLiteral("users:"), cloud);
-        const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
+        // Parity: legacy QML used the typed username even when not renaming the user.
+        // Fall back to getCurrentUser() when SSH is enabled and no explicit username was saved.
+        const QString effectiveUser = userName.isEmpty() && sshEnabled ? getCurrentUser() : (userName.isEmpty() ? QStringLiteral("pi") : userName);
         push(QStringLiteral("- name: ") + effectiveUser, cloud);
         push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
         push(QStringLiteral("  shell: /bin/bash"), cloud);
@@ -1772,6 +1844,8 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     if (!ssid.isEmpty()) {
         push(QStringLiteral("version: 2"), netcfg);
         push(QStringLiteral("wifis:"), netcfg);
+        // Parity: explicitly set renderer to networkd under wifis
+        push(QStringLiteral("  renderer: networkd"), netcfg);
         push(QStringLiteral("  wlan0:"), netcfg);
         push(QStringLiteral("    dhcp4: true"), netcfg);
         push(QStringLiteral("    access-points:"), netcfg);
@@ -1781,7 +1855,10 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
             push(QStringLiteral("      \"") + key + QStringLiteral("\":"), netcfg);
         }
         if (!pwd.isEmpty()) {
-            QString epwd = pwd;
+            // Parity: use PBKDF2-derived PSK for passphrases of length 8..63
+            const bool isPassphrase = (pwd.length() >= 8 && pwd.length() < 64);
+            const QString cryptedPsk = isPassphrase ? pbkdf2(pwd.toUtf8(), ssid.toUtf8()) : pwd;
+            QString epwd = cryptedPsk;
             epwd.replace('"', QStringLiteral("\\\""));
             push(QStringLiteral("        password: \"") + epwd + QStringLiteral("\""), netcfg);
         }
