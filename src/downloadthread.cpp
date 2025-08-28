@@ -1052,33 +1052,7 @@ bool DownloadThread::_customizeImage()
             fat->writeFile("config.txt", config);
         }
 
-        if (_initFormat == "auto")
-        {
-            /* Do an attempt at auto-detecting what customization format a custom
-               image provided by the user supports */
-            QByteArray issue = fat->readFile("issue.txt");
-
-            if (fat->fileExists("user-data"))
-            {
-                /* If we have user-data file on FAT partition, then it must be cloudinit */
-                _initFormat = "cloudinit";
-                qDebug() << "user-data found on FAT partition. Assuming cloudinit support";
-            }
-            else if (issue.contains("pi-gen"))
-            {
-                /* If issue.txt mentions pi-gen, and there is no user-data file assume
-                 * it is a RPI OS flavor, and use the old systemd unit firstrun script stuff */
-                _initFormat = "systemd";
-                qDebug() << "using firstrun script invoked by systemd customization method";
-            }
-            else
-            {
-                /* Fallback to writing cloudinit file, as it does not hurt having one
-                 * Will just have no customization if OS does not support it */
-                _initFormat = "cloudinit";
-                qDebug() << "Unknown what customization method image supports. Falling back to cloudinit";
-            }
-        }
+        // init_format decision is owned by ImageWriter; no auto-detection here
 
         if (!_firstrun.isEmpty() && _initFormat == "systemd")
         {

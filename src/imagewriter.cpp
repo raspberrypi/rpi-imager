@@ -1574,6 +1574,226 @@ void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArr
     qDebug() << "Cloudinit:" << cloudinit;
 }
 
+void ImageWriter::applyCustomizationFromSavedSettings()
+{
+    // Build customization payloads from saved settings
+    QVariantMap s = getSavedCustomizationSettings();
+
+    // If the selected image does not support customization, ensure nothing is staged
+    if (_initFormat.isEmpty()) {
+        setImageCustomization(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray());
+        return;
+    }
+
+    if (_initFormat == "systemd") {
+        _applySystemdCustomizationFromSettings(s);
+    } else {
+        _applyCloudInitCustomizationFromSettings(s);
+    }
+}
+
+void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
+{
+    QByteArray script;
+    auto line = [](const QString &l, QByteArray &out){ out += l.toUtf8(); out += '\n'; };
+
+    const QString hostname = s.value("hostname").toString().trimmed();
+    const QString timezone = s.value("timezone").toString().trimmed();
+    const bool sshEnabled = s.value("sshEnabled").toBool();
+    const bool sshPasswordAuth = s.value("sshPasswordAuth").toBool();
+    const QString userName = s.value("sshUserName").toString().trimmed();
+    const QString userPass = s.value("sshUserPassword").toString(); // crypted if present
+    const QString sshPublicKey = s.value("sshPublicKey").toString().trimmed();
+    const QString sshAuthorizedKeys = s.value("sshAuthorizedKeys").toString().trimmed();
+    const QString ssid = s.value("wifiSSID").toString();
+    const QString pwd = s.value("wifiPassword").toString();
+    bool hidden = s.value("wifiHidden").toBool();
+    if (!hidden)
+        hidden = s.value("wifiSSIDHidden").toBool();
+    const QString wifiCountry = s.value("wifiCountry").toString().trimmed();
+    QByteArray cmdlineAppend;
+    if (!wifiCountry.isEmpty()) {
+        cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+    }
+
+    const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
+    const QString groups = QStringLiteral("users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo");
+
+    line(QStringLiteral("#!/bin/bash"), script);
+    line(QStringLiteral("set -e"), script);
+
+    if (!hostname.isEmpty()) {
+        // Prefer raspi-config for compatibility with legacy flow
+        line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_hostname ") + QLatin1Char('\'') + hostname + QLatin1Char('\'') + QStringLiteral("; else hostnamectl set-hostname ") + QLatin1Char('\'') + hostname + QLatin1Char('\'') + QStringLiteral("; fi"), script);
+        line(QStringLiteral("if grep -q '^127.0.1.1' /etc/hosts; then sed -i 's/^127.0.1.1.*/127.0.1.1\t") + hostname + QStringLiteral("/g' /etc/hosts; else echo '127.0.1.1\t") + hostname + QStringLiteral("' >> /etc/hosts; fi"), script);
+    }
+
+    if (!timezone.isEmpty()) {
+        line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_change_timezone ") + QLatin1Char('\'') + timezone + QLatin1Char('\'') + QStringLiteral("; else timedatectl set-timezone ") + QLatin1Char('\'') + timezone + QLatin1Char('\'') + QStringLiteral("; fi"), script);
+    }
+
+    const QString keyboardLayout = s.value("keyboardLayout").toString().trimmed();
+    if (!keyboardLayout.isEmpty()) {
+        // Best-effort: rely on raspi-config for keyboard config when present
+        line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_configure_keyboard ") + QLatin1Char('\'') + keyboardLayout + QLatin1Char('\'') + QStringLiteral(" || true; fi"), script);
+    }
+
+    // Ensure user exists
+    line(QStringLiteral("if ! id -u ") + effectiveUser + QStringLiteral(" >/dev/null 2>&1; then useradd -m -G ") + groups + QStringLiteral(" -s /bin/bash ") + effectiveUser + QStringLiteral("; fi"), script);
+
+    if (sshEnabled) {
+        // Legacy uses raspi-config to enable SSH when present
+        line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_ssh 0 || true; fi"), script);
+        line(QStringLiteral("systemctl enable ssh || systemctl enable sshd || true"), script);
+    }
+
+    if (!userPass.isEmpty()) {
+        line(QStringLiteral("echo ") + QLatin1Char('\'') + effectiveUser + QLatin1Char(':') + userPass + QLatin1Char('\'') + QStringLiteral(" | chpasswd -e"), script);
+    } else if (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
+        line(QStringLiteral("passwd -l ") + effectiveUser + QStringLiteral(" || true"), script);
+    }
+
+    if (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
+        line(QStringLiteral("install -d -m 700 -o ") + effectiveUser + QStringLiteral(" -g ") + effectiveUser + QStringLiteral(" /home/") + effectiveUser + QStringLiteral("/.ssh"), script);
+        // Write authorized_keys via here-doc to avoid escaping issues; supports multi-line
+        QString allKeys = sshAuthorizedKeys.isEmpty() ? sshPublicKey : sshAuthorizedKeys;
+        // NOTE: Potential escaping edge-cases if keys contain EOF token; handled by single-quoted heredoc
+        line(QStringLiteral("cat > /home/") + effectiveUser + QStringLiteral("/.ssh/authorized_keys <<'EOF'"), script);
+        line(allKeys, script);
+        line(QStringLiteral("EOF"), script);
+        line(QStringLiteral("chown ") + effectiveUser + QLatin1Char(':') + effectiveUser + QStringLiteral(" /home/") + effectiveUser + QStringLiteral("/.ssh/authorized_keys"), script);
+        line(QStringLiteral("chmod 600 /home/") + effectiveUser + QStringLiteral("/.ssh/authorized_keys"), script);
+        // Permit passwordless sudo when using SSH key
+        line(QStringLiteral("bash -c 'echo \"") + effectiveUser + QStringLiteral(" ALL=(ALL) NOPASSWD:ALL\" >/etc/sudoers.d/010-") + effectiveUser, script);
+    }
+
+    if (sshEnabled) {
+        if (!sshPasswordAuth) {
+            line(QStringLiteral("if grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config; then sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config; else echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config; fi"), script);
+        } else {
+            line(QStringLiteral("if grep -q '^#\?PasswordAuthentication' /etc/ssh/sshd_config; then sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config; else echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config; fi"), script);
+        }
+    }
+
+    if (!ssid.isEmpty()) {
+        QString epwd = pwd; epwd.replace('"', QStringLiteral("\\\""));
+        QString essid = ssid; essid.replace('"', QStringLiteral("\\\""));
+        // Set country/keyboard via raspi-config when available for parity
+        if (!wifiCountry.isEmpty()) {
+            line(QStringLiteral("if command -v raspi-config >/dev/null 2>&1; then raspi-config nonint do_wifi_country ") + wifiCountry + QStringLiteral(" || true; fi"), script);
+        }
+        line(QStringLiteral("cat >/etc/wpa_supplicant/wpa_supplicant.conf <<'EOF'"), script);
+        line(QStringLiteral("ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev"), script);
+        line(QStringLiteral("update_config=1"), script);
+        if (!wifiCountry.isEmpty())
+            line(QStringLiteral("country=") + wifiCountry, script);
+        line(QStringLiteral("network={"), script);
+        line(QStringLiteral("    ssid=\"") + essid + QStringLiteral("\""), script);
+        if (!pwd.isEmpty()) {
+            line(QStringLiteral("    psk=\"") + epwd + QStringLiteral("\""), script);
+        }
+        if (hidden) {
+            line(QStringLiteral("    scan_ssid=1"), script);
+        }
+        line(QStringLiteral("}"), script);
+        line(QStringLiteral("EOF"), script);
+        line(QStringLiteral("chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf || true"), script);
+        line(QStringLiteral("rfkill unblock wifi || true"), script);
+    }
+
+    setImageCustomization(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray());
+}
+
+void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
+{
+    QByteArray cloud;
+    QByteArray netcfg;
+
+    auto push = [](const QString &line, QByteArray &out){ if (!line.isEmpty()) { out += line.toUtf8(); out += '\n'; } };
+
+    const QString hostname = s.value("hostname").toString().trimmed();
+    if (!hostname.isEmpty()) {
+        push(QStringLiteral("hostname: ") + hostname, cloud);
+        push(QStringLiteral("manage_etc_hosts: true"), cloud);
+    }
+
+    const QString timezone = s.value("timezone").toString().trimmed();
+    if (!timezone.isEmpty()) {
+        push(QStringLiteral("timezone: ") + timezone, cloud);
+    }
+
+    const bool sshEnabled = s.value("sshEnabled").toBool();
+    const bool sshPasswordAuth = s.value("sshPasswordAuth").toBool();
+    const QString userName = s.value("sshUserName").toString().trimmed();
+    const QString userPass = s.value("sshUserPassword").toString(); // expected crypted if present
+    const QString sshPublicKey = s.value("sshPublicKey").toString().trimmed();
+    const QString sshAuthorizedKeys = s.value("sshAuthorizedKeys").toString().trimmed();
+
+    if (sshEnabled || !userName.isEmpty()) {
+        push(QStringLiteral("users:"), cloud);
+        const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
+        push(QStringLiteral("- name: ") + effectiveUser, cloud);
+        push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
+        push(QStringLiteral("  shell: /bin/bash"), cloud);
+        if (!userPass.isEmpty()) {
+            push(QStringLiteral("  lock_passwd: false"), cloud);
+            push(QStringLiteral("  passwd: ") + userPass, cloud);
+        } else if (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
+            push(QStringLiteral("  lock_passwd: true"), cloud);
+        }
+        // Include all authorized keys (multi-line) if provided, else fall back to single key
+        if (!sshAuthorizedKeys.isEmpty() || !sshPublicKey.isEmpty()) {
+            push(QStringLiteral("  ssh_authorized_keys:"), cloud);
+            if (!sshAuthorizedKeys.isEmpty()) {
+                const QStringList keys = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+                for (const QString &k : keys) {
+                    push(QStringLiteral("    - ") + k.trimmed(), cloud);
+                }
+            } else {
+                push(QStringLiteral("    - ") + sshPublicKey, cloud);
+            }
+            push(QStringLiteral("  sudo: ALL=(ALL) NOPASSWD:ALL"), cloud);
+        }
+        push(QString(), cloud); // blank line
+    }
+
+    if (sshEnabled && sshPasswordAuth) {
+        push(QStringLiteral("ssh_pwauth: true"), cloud);
+    }
+
+    const QString ssid = s.value("wifiSSID").toString();
+    const QString pwd = s.value("wifiPassword").toString();
+    const bool hidden = s.value("wifiHidden").toBool();
+    const QString wifiCountry = s.value("wifiCountry").toString().trimmed();
+    QByteArray cmdlineAppend;
+    if (!wifiCountry.isEmpty()) {
+        cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+    }
+    if (!ssid.isEmpty()) {
+        push(QStringLiteral("version: 2"), netcfg);
+        push(QStringLiteral("wifis:"), netcfg);
+        push(QStringLiteral("  wlan0:"), netcfg);
+        push(QStringLiteral("    dhcp4: true"), netcfg);
+        push(QStringLiteral("    access-points:"), netcfg);
+        {
+            QString key = ssid;
+            key.replace('"', QStringLiteral("\\\""));
+            push(QStringLiteral("      \"") + key + QStringLiteral("\":"), netcfg);
+        }
+        if (!pwd.isEmpty()) {
+            QString epwd = pwd;
+            epwd.replace('"', QStringLiteral("\\\""));
+            push(QStringLiteral("        password: \"") + epwd + QStringLiteral("\""), netcfg);
+        }
+        if (hidden) {
+            push(QStringLiteral("        hidden: true"), netcfg);
+        }
+        push(QStringLiteral("    optional: true"), netcfg);
+    }
+
+    setImageCustomization(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg);
+}
+
 QString ImageWriter::crypt(const QByteArray &password)
 {
     QByteArray salt = "$5$";
