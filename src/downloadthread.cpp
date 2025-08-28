@@ -998,7 +998,7 @@ qint64 DownloadThread::_sectorsWritten()
     return -1;
 }
 
-void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudInitNetwork, const QByteArray &initFormat)
+void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudInitNetwork, const QByteArray &initFormat, const bool userDefinedFirstRun)
 {
     _config = config;
     _cmdline = cmdline;
@@ -1006,6 +1006,7 @@ void DownloadThread::setImageCustomization(const QByteArray &config, const QByte
     _cloudinit = cloudinit;
     _cloudinitNetwork = cloudInitNetwork;
     _initFormat = initFormat;
+    _userDefinedFirstRun = userDefinedFirstRun;
 }
 
 bool DownloadThread::_customizeImage()
@@ -1055,10 +1056,21 @@ bool DownloadThread::_customizeImage()
 
         // init_format decision is owned by ImageWriter; no auto-detection here
 
-        if (!_firstrun.isEmpty() && _initFormat == "systemd")
+        if (!_firstrun.isEmpty())
         {
-            fat->writeFile("firstrun.sh", _firstrun);
-            _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";
+            if (!_userDefinedFirstRun) {
+                _firstrun = "#!/bin/bash\n\n" + QByteArray("set +e\n\n") + _firstrun;
+
+                // Add file cleanup and exit commands
+                _firstrun.append("\nrm -f /boot/firstrun.sh\n");
+                _firstrun.append("sed -i 's| systemd.run.*||g' /boot/cmdline.txt\n");
+                _firstrun.append("exit 0\n");
+            }
+
+            if (_initFormat == "systemd") {
+                fat->writeFile("firstrun.sh", _firstrun);
+                _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";
+            }
         }
 
         if (!_cloudinit.isEmpty() && _initFormat == "cloudinit")

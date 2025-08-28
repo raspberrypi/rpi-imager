@@ -172,7 +172,7 @@ WizardStepBase {
         wizardContainer.sshEnabled = false
         
         // Jump to writing step
-        wizardContainer.jumpToStep(wizardContainer.stepWriting)
+        wizardContainer.jumpToStep(wizardContainer.stepIfAndFeatures)
     }
     
     // File dialog for SSH key selection

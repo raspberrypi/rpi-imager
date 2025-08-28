@@ -31,6 +31,9 @@ Item {
     property string selectedDeviceName: ""
     property string selectedOsName: ""
     property string selectedStorageName: ""
+
+    property bool supportsSerialConsoleOnly: false
+    property bool supportsUsbGadget: false
     
     // Track customizations that were actually configured
     property bool hostnameConfigured: false
@@ -41,6 +44,14 @@ Item {
     property bool piConnectEnabled: false
     // Whether selected OS supports Raspberry Pi Connect customization
     property bool piConnectAvailable: false
+
+    // Interfaces & Features
+    property bool ifI2cEnabled: false
+    property bool ifSpiEnabled: false
+    property bool ifSerialEnabled: false
+    // "default" | "console_hw" | "console" | "hw" | ""
+    property string ifSerialMode: ""
+
     // Ephemeral per-run setting: do not persist across runs
     property bool disableWarnings: false
     // Whether the selected OS supports customisation (init_format present)
@@ -55,7 +66,7 @@ Item {
     readonly property int stepUserCustomization: 5
     readonly property int stepWifiCustomization: 6
     readonly property int stepRemoteAccess: 7
-    readonly property int stepPiConnectCustomization: 8
+    readonly property int stepIfAndFeatures: 8
     readonly property int stepWriting: 9
     readonly property int stepDone: 10
     
@@ -103,11 +114,14 @@ Item {
         qsTr("Done")
     ]
     
+    readonly property int firstCustomizationStep: stepHostnameCustomization
+    readonly property int lastCustomizationStep:  stepIfAndFeatures
+
     // Helper function to map wizard step to sidebar index
     function getSidebarIndex(wizardStep) {
         if (wizardStep <= stepStorageSelection) {
             return wizardStep
-        } else if (wizardStep >= stepHostnameCustomization && wizardStep <= getLastCustomizationStep()) {
+        } else if (wizardStep >= firstCustomizationStep && wizardStep <= lastCustomizationStep) {
             return 3 // Customization group
         } else if (wizardStep === stepWriting) {
             return 4 // Writing
@@ -545,6 +559,7 @@ Item {
             case stepWifiCustomization: return wifiCustomizationStep
             case stepRemoteAccess: return remoteAccessStep
             case stepPiConnectCustomization: return piConnectCustomizationStep
+            case stepIfAndFeatures: return ifAndFeaturesStep
             case stepWriting: return writingStep
             case stepDone: return doneStep
             default: return null
@@ -659,6 +674,19 @@ Item {
             }
         }
     }
+
+    Component {
+        id: ifAndFeaturesStep
+        IfAndFeaturesCustomizationStep {
+            imageWriter: root.imageWriter
+            wizardContainer: root
+            onNextClicked: root.nextStep()
+            onBackClicked: root.previousStep()
+            onSkipClicked: {
+                // Skip functionality is handled in the step itself
+            }
+        }
+    }
     
     Component {
         id: writingStep
@@ -731,6 +759,16 @@ Item {
         sshEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
+
+        ifI2cEnabled = false
+        ifSpiEnabled = false
+        ifSerialEnabled = false
+        ifSerialMode = ""
+        ifPiConnectEnabled = false
+        ifUsbGadgetEnabled = false
+
+        supportsSerialConsoleOnly = false
+        supportsUsbGadget = false
         
         // Navigate back to the first step
         wizardStack.clear()
