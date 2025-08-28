@@ -839,6 +839,7 @@ set(IMAGER_QML_FILES
     wizard/dialogs/ConfirmSystemDriveDialog.qml
     wizard/dialogs/KeychainPermissionDialog.qml
     wizard/dialogs/UpdateAvailableDialog.qml
+    wizard/dialogs/AdvancedOptionsDialog.qml
     qmlcomponents/ImButton.qml
     qmlcomponents/ImButtonRed.qml
     qmlcomponents/ImCheckBox.qml
@@ -850,7 +851,6 @@ set(IMAGER_QML_FILES
     qmlcomponents/ImTextField.qml
     wizard/WizardStepBase.qml
     wizard/WizardContainer.qml
-    wizard/AdvancedOptionsPopup.qml
     wizard/DeviceSelectionStep.qml
     wizard/OSSelectionStep.qml
     wizard/StorageSelectionStep.qml
