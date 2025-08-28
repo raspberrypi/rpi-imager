@@ -64,6 +64,9 @@ Item {
     readonly property color progressBarTextColor: "white"
     readonly property color progressBarVerifyForegroundColor: "#6cc04a"
     readonly property color progressBarBackgroundColor: raspberryRed
+    // New: distinct colors for writing vs verification phases
+    readonly property color progressBarWritingForegroundColor: raspberryRed
+    readonly property color progressBarTrackColor: titleBackgroundColor
 
     readonly property color lanbarBackgroundColor: "#ffffe3"
 

@@ -5,6 +5,7 @@
 
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
 import "../qmlcomponents"
 
@@ -18,12 +19,13 @@ WizardStepBase {
     
     title: qsTr("Write Image")
     subtitle: qsTr("Review your choices and write the image to the storage device")
-    nextButtonText: root.isWriting ? qsTr("Cancel") : (root.isComplete ? qsTr("Continue") : qsTr("Write"))
+    nextButtonText: root.isWriting && root.isVerifying ? qsTr("Skip verification") : (root.isWriting ? qsTr("Cancel") : (root.isComplete ? qsTr("Continue") : qsTr("Write")))
     nextButtonEnabled: true
     showBackButton: true
     
     property bool isWriting: false
     property bool isComplete: false
+    property bool isVerifying: false
     property bool confirmOpen: false
     readonly property bool anyCustomizationsApplied: (
         wizardContainer.hostnameConfigured ||
@@ -191,10 +193,13 @@ WizardStepBase {
                 from: 0
                 to: 100
                 
-                Material.accent: Style.progressBarVerifyForegroundColor
-                Material.background: Style.progressBarBackgroundColor
+                // Default to write color; updated dynamically in onDownloadProgress/onVerifyProgress
+                Material.accent: Style.progressBarWritingForegroundColor
+                Material.background: Style.progressBarTrackColor
                 visible: root.isWriting
             }
+
+            // Separate skip button removed; main Next button switches label during verification
         }
 
         // Bottom spacer to vertically center progress section when writing/complete
@@ -206,10 +211,14 @@ WizardStepBase {
     onNextClicked: {
         if (root.isWriting) {
             // Cancel the write
-            imageWriter.cancelWrite()
-            root.isWriting = false
-            wizardContainer.isWriting = false
-            progressText.text = qsTr("Write cancelled")
+            if (root.isVerifying) {
+                imageWriter.skipCurrentVerification()
+            } else {
+                imageWriter.cancelWrite()
+                root.isWriting = false
+                wizardContainer.isWriting = false
+                progressText.text = qsTr("Write cancelled")
+            }
         } else if (!root.isComplete) {
             // If warnings are disabled, skip the confirmation dialog
             if (imageWriter.getBoolSetting("disable_warnings")) {
@@ -225,6 +234,7 @@ WizardStepBase {
     }
     
     function onFinalizing() {
+        root.isVerifying = false
         progressText.text = qsTr("Finalizing...")
         progressBar.value = 100
     }
@@ -233,7 +243,7 @@ WizardStepBase {
     Dialog {
         id: confirmDialog
         modal: true
-        parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
+        parent: wizardContainer && wizardContainer.overlayRootRef ? wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
@@ -336,16 +346,20 @@ WizardStepBase {
     function onDownloadProgress(now, total) {
         if (root.isWriting) {
             var progress = total > 0 ? (now / total) * 100 : 0
+            root.isVerifying = false
             progressBar.value = progress
             progressText.text = qsTr("Writing... %1%").arg(Math.round(progress))
+            progressBar.Material.accent = Style.progressBarWritingForegroundColor
         }
     }
     
     function onVerifyProgress(now, total) {
         if (root.isWriting) {
             var progress = total > 0 ? (now / total) * 100 : 0
+            root.isVerifying = true
             progressBar.value = progress
             progressText.text = qsTr("Verifying... %1%").arg(Math.round(progress))
+            progressBar.Material.accent = Style.progressBarVerifyForegroundColor
         }
     }
     

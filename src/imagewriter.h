@@ -79,6 +79,9 @@ public:
     /* Skip cache verification and proceed with download */
     Q_INVOKABLE void skipCacheVerification();
 
+    /* Skip only the current post-write verification pass (does not change default setting) */
+    Q_INVOKABLE void skipCurrentVerification();
+
     /* Return true if url is in our local disk cache */
     Q_INVOKABLE bool isCached(const QUrl &url, const QByteArray &sha256);
 

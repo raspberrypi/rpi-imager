@@ -81,7 +81,7 @@ ImageWriter::ImageWriter(QObject *parent)
       _osListRefreshTimer(),
       _powersave(),
       _thread(nullptr), 
-      _verifyEnabled(false), _multipleFilesInZip(false), _embeddedMode(false), _online(false),
+      _verifyEnabled(true), _multipleFilesInZip(false), _embeddedMode(false), _online(false),
       _settings(),
       _translations(),
       _trans(nullptr),
@@ -599,6 +599,17 @@ void ImageWriter::cancelWrite()
     if (!_thread || !_thread->isRunning())
     {
         emit cancelled();
+    }
+}
+
+/* Skip only the current post-write verification pass */
+void ImageWriter::skipCurrentVerification()
+{
+    if (_thread)
+    {
+        // Temporarily disable verification for the active write thread
+        _thread->setVerifyEnabled(false);
+        qDebug() << "User requested to skip current verification pass";
     }
 }
 
