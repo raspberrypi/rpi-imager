@@ -169,7 +169,8 @@ Window {
     Dialog {
         id: confirmDisableWarnings
         modal: true
-        anchors.centerIn: Overlay.overlay
+        parent: popup.contentItem
+        anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
 
@@ -182,6 +183,13 @@ Window {
         }
 
         property bool confirmAccepted: false
+
+        background: Rectangle {
+            color: Style.mainBackgroundColor
+            radius: Style.sectionBorderRadius
+            border.color: Style.popupBorderColor
+            border.width: Style.sectionBorderWidth
+        }
 
         ColumnLayout {
             anchors.fill: parent

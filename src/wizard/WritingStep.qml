@@ -229,7 +229,7 @@ WizardStepBase {
     Dialog {
         id: confirmDialog
         modal: true
-        parent: root.Window.window ? root.Window.window.contentItem : undefined
+        parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
         anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
@@ -237,6 +237,13 @@ WizardStepBase {
 
         property bool allowAccept: false
         title: qsTr("Confirm destructive write")
+
+        background: Rectangle {
+            color: Style.mainBackgroundColor
+            radius: Style.sectionBorderRadius
+            border.color: Style.popupBorderColor
+            border.width: Style.sectionBorderWidth
+        }
 
         ColumnLayout {
             anchors.fill: parent

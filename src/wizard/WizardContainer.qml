@@ -16,6 +16,8 @@ Item {
     
     required property ImageWriter imageWriter
     property var optionsPopup: null
+    // Reference to the full-window overlay root for dialog parenting
+    property var overlayRootRef: null
     // Expose network info text for embedded mode status updates
     property alias networkInfoText: networkInfo.text
     

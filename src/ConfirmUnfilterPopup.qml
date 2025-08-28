@@ -8,7 +8,10 @@ import QtQuick.Layouts 1.15
 Dialog {
     id: root
     modal: true
-    anchors.centerIn: Overlay.overlay
+    // Explicit parent for overlay centering (required)
+    required property Item overlayParent
+    parent: overlayParent
+    anchors.centerIn: parent
     width: 520
     standardButtons: Dialog.NoButton
 
@@ -18,6 +21,14 @@ Dialog {
     readonly property string riskText: CommonStrings.warningRiskText
     readonly property string proceedText: CommonStrings.warningProceedText
     readonly property string systemDriveText: CommonStrings.systemDriveText
+
+    // Ensure solid background (avoid transparency on embedded)
+    background: Rectangle {
+        color: Style.mainBackgroundColor
+        radius: Style.sectionBorderRadius
+        border.color: Style.popupBorderColor
+        border.width: Style.sectionBorderWidth
+    }
 
     ColumnLayout {
         anchors.fill: parent

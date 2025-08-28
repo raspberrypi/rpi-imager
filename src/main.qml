@@ -24,6 +24,8 @@ ApplicationWindow {
     property string selectedStorageName: ""
     property bool isCacheVerifying: false
     property bool forceQuit: false
+    // Expose overlay root to child components for dialog parenting
+    readonly property alias overlayRootItem: overlayRoot
 
     width: imageWriter.isEmbeddedMode() ? -1 : 680
     height: imageWriter.isEmbeddedMode() ? -1 : 450
@@ -61,17 +63,25 @@ ApplicationWindow {
         }
     }
 
+    // Global overlay to parent/center dialogs across the whole window
+    Item {
+        id: overlayRoot
+        anchors.fill: parent
+        z: 1000
+    }
+
     // Main wizard interface
-        Rectangle {
+    Rectangle {
         id: wizardBackground
         anchors.fill: parent
-            color: Style.mainBackgroundColor
+        color: Style.mainBackgroundColor
         
         WizardContainer {
             id: wizardContainer
                 anchors.fill: parent
             imageWriter: window.imageWriter
             optionsPopup: advancedOptionsPopup
+            overlayRootRef: overlayRoot
             
             onWizardCompleted: {
                 // Reset to start of wizard or close application
@@ -98,13 +108,20 @@ ApplicationWindow {
     Dialog {
         id: errorDialog
         modal: true
-        parent: window.contentItem
+        parent: overlayRoot
         anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
 
         property string titleText: qsTr("Error")
         property string message: ""
+
+        background: Rectangle {
+            color: Style.mainBackgroundColor
+            radius: Style.sectionBorderRadius
+            border.color: Style.popupBorderColor
+            border.width: Style.sectionBorderWidth
+        }
 
         ColumnLayout {
             anchors.fill: parent
@@ -145,10 +162,17 @@ ApplicationWindow {
     Dialog {
         id: storageRemovedDialog
         modal: true
-        parent: window.contentItem
+        parent: overlayRoot
         anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
+
+        background: Rectangle {
+            color: Style.mainBackgroundColor
+            radius: Style.sectionBorderRadius
+            border.color: Style.popupBorderColor
+            border.width: Style.sectionBorderWidth
+        }
 
         ColumnLayout {
             anchors.fill: parent
@@ -177,7 +201,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: Style.spacingMedium
                 Item { Layout.fillWidth: true }
-                ImButton {
+                ImButtonRed {
                     text: qsTr("OK")
                     onClicked: storageRemovedDialog.close()
                 }
@@ -185,10 +209,11 @@ ApplicationWindow {
         }
     }
 
+    // Quit dialog (modern style)
     Dialog {
         id: quitDialog
         modal: true
-        parent: window.contentItem
+        parent: overlayRoot
         anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
