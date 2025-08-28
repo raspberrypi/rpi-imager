@@ -16,6 +16,7 @@ WizardStepBase {
     
     required property ImageWriter imageWriter
     required property var wizardContainer
+    property bool hasSavedUserPassword: false
     
     title: qsTr("Customization: Choose username")
     subtitle: qsTr("Create a user account for your Raspberry Pi.")
@@ -59,7 +60,7 @@ WizardStepBase {
                 ImTextField {
                     id: fieldPassword
                     Layout.fillWidth: true
-                    placeholderText: qsTr("Enter password")
+                    placeholderText: root.hasSavedUserPassword ? qsTr("Saved (hidden) — leave blank to keep") : qsTr("Enter password")
                     echoMode: TextInput.Password
                     font.pixelSize: Style.fontSizeInput
                 }
@@ -71,7 +72,7 @@ WizardStepBase {
                 ImTextField {
                     id: fieldPasswordConfirm
                     Layout.fillWidth: true
-                    placeholderText: qsTr("Re-enter password")
+                    placeholderText: root.hasSavedUserPassword ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                     echoMode: TextInput.Password
                     font.pixelSize: Style.fontSizeInput
                 }
@@ -94,12 +95,21 @@ WizardStepBase {
             fieldUsername.text = saved.sshUserName
         }
         if (saved.sshUserPassword) {
-            // We do not know if it's crypted; do not prefill password fields
+            // Indicate a saved (crypted) password exists; do not prefill fields
+            root.hasSavedUserPassword = true
         }
     }
     
     // Validation
-    nextButtonEnabled: (fieldUsername.text.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0) || (fieldUsername.text.length > 0 && fieldPassword.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text)
+    // Allow proceed when:
+    // - all fields are empty (no customization), or
+    // - a new password is entered and matches confirm, or
+    // - a saved (crypted) password exists and user leaves password fields blank
+    nextButtonEnabled: (
+        (fieldUsername.text.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0)
+        || (fieldPassword.text.length > 0 && fieldPasswordConfirm.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text)
+        || (root.hasSavedUserPassword && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0)
+    )
     
     // Save settings when moving to next step
     onNextClicked: {

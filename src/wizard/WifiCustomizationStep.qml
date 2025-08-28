@@ -16,6 +16,7 @@ WizardStepBase {
     
     required property ImageWriter imageWriter
     required property var wizardContainer
+    property bool hasSavedWifiPSK: false
     
     title: qsTr("Customization: Choose WiFi")
     subtitle: qsTr("Configure wireless LAN settings.")
@@ -41,8 +42,11 @@ WizardStepBase {
         if (saved.wifiHidden !== undefined) {
             chkWifiHidden.checked = !!saved.wifiHidden
         }
+        // Remember if a crypted PSK is already saved (affects placeholder/keep semantics)
+        root.hasSavedWifiPSK = !!saved.wifiPasswordCrypt
         // Auto-populate WiFi password from system keychain when available
-        if (!saved.wifiPassword || saved.wifiPassword.length === 0) {
+        // Only when no crypted password is already saved
+        if (!root.hasSavedWifiPSK) {
             var psk = imageWriter.getPSK()
             if (psk && psk.length > 0) {
                 fieldWifiPassword.text = psk
@@ -86,7 +90,7 @@ WizardStepBase {
                 ImTextField {
                     id: fieldWifiPassword
                     Layout.fillWidth: true
-                    placeholderText: qsTr("Network password")
+                    placeholderText: root.hasSavedWifiPSK ? qsTr("Saved (hidden) — leave blank to keep") : qsTr("Network password")
                     echoMode: TextInput.Password
                     font.pixelSize: Style.fontSizeInput
                 }
@@ -123,6 +127,15 @@ WizardStepBase {
     }
     ]
     
+    // Validation: allow proceed when
+    // - SSID and country entered and either new PSK provided or a saved crypt exists; or
+    // - all WiFi fields are empty (skip)
+    nextButtonEnabled: (
+        ((fieldWifiSSID.text && fieldWifiSSID.text.trim().length > 0) && (fieldWifiCountry.currentText || fieldWifiCountry.editText))
+        ? ((fieldWifiPassword.text && fieldWifiPassword.text.length > 0) || root.hasSavedWifiPSK)
+        : true
+    )
+
     // Save settings when moving to next step
     onNextClicked: {
         // Merge-and-save strategy
@@ -130,21 +143,25 @@ WizardStepBase {
         var ssid = fieldWifiSSID.text ? fieldWifiSSID.text.trim() : ""
         var country = fieldWifiCountry.currentText || fieldWifiCountry.editText || ""
         var pwd = fieldWifiPassword.text
+        var hadCrypt = !!saved.wifiPasswordCrypt
         var hidden = chkWifiHidden.checked
         if (ssid.length > 0 && country.length > 0) {
             saved.wifiSSID = ssid
             saved.wifiCountry = country
             if (pwd && pwd.length > 0) {
-                saved.wifiPassword = pwd
-            } else {
-                delete saved.wifiPassword
+                // Persist crypted PSK; avoid storing plaintext
+                var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
+                saved.wifiPasswordCrypt = isPassphrase ? imageWriter.pbkdf2(pwd, ssid) : pwd
+            } else if (!hadCrypt) {
+                // No new password entered and none saved earlier -> ensure cleared
+                delete saved.wifiPasswordCrypt
             }
             saved.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
         } else if (ssid.length === 0 && (country.length === 0)) {
             // Cleared -> remove persisted WiFi settings
             delete saved.wifiSSID
-            delete saved.wifiPassword
+            delete saved.wifiPasswordCrypt
             delete saved.wifiCountry
             delete saved.wifiHidden
             wizardContainer.wifiConfigured = false

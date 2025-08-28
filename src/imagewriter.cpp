@@ -1627,7 +1627,7 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     const QString sshPublicKey = s.value("sshPublicKey").toString().trimmed();
     const QString sshAuthorizedKeys = s.value("sshAuthorizedKeys").toString().trimmed();
     const QString ssid = s.value("wifiSSID").toString();
-    const QString pwd = s.value("wifiPassword").toString();
+    const QString cryptedPskFromSettings = s.value("wifiPasswordCrypt").toString();
     bool hidden = s.value("wifiHidden").toBool();
     if (!hidden)
         hidden = s.value("wifiSSIDHidden").toBool();
@@ -1636,9 +1636,14 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     if (!wifiCountry.isEmpty()) {
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
-    // Derive WPA PSK the same way as legacy QML (PBKDF2 for passphrases 8..63 chars)
-    const bool isPassphrase = (pwd.length() >= 8 && pwd.length() < 64);
-    const QString cryptedPsk = isPassphrase ? pbkdf2(pwd.toUtf8(), ssid.toUtf8()) : pwd;
+    // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
+    QString cryptedPsk = cryptedPskFromSettings;
+    if (cryptedPsk.isEmpty())
+    {
+        const QString legacyPwd = s.value("wifiPassword").toString();
+        const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
+        cryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
+    }
     // Prepare SSH key arguments for imager_custom
     auto shellQuote = [](const QString &v){ QString t = v; t.replace("'", "'\"'\"'"); return QString("'") + t + QString("'"); };
     QStringList keyList;
@@ -1855,7 +1860,7 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     }
 
     const QString ssid = s.value("wifiSSID").toString();
-    const QString pwd = s.value("wifiPassword").toString();
+    const QString cryptedPskFromSettings = s.value("wifiPasswordCrypt").toString();
     const bool hidden = s.value("wifiHidden").toBool();
     const QString wifiCountry = s.value("wifiCountry").toString().trimmed();
     QByteArray cmdlineAppend;
@@ -1875,11 +1880,17 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
             key.replace('"', QStringLiteral("\\\""));
             push(QStringLiteral("      \"") + key + QStringLiteral("\":"), netcfg);
         }
-        if (!pwd.isEmpty()) {
-            // Parity: use PBKDF2-derived PSK for passphrases of length 8..63
-            const bool isPassphrase = (pwd.length() >= 8 && pwd.length() < 64);
-            const QString cryptedPsk = isPassphrase ? pbkdf2(pwd.toUtf8(), ssid.toUtf8()) : pwd;
-            QString epwd = cryptedPsk;
+        // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
+        QString effectiveCryptedPsk = cryptedPskFromSettings;
+        if (effectiveCryptedPsk.isEmpty()) {
+            const QString legacyPwd = s.value("wifiPassword").toString();
+            if (!legacyPwd.isEmpty()) {
+                const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
+                effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
+            }
+        }
+        if (!effectiveCryptedPsk.isEmpty()) {
+            QString epwd = effectiveCryptedPsk;
             epwd.replace('"', QStringLiteral("\\\""));
             push(QStringLiteral("        password: \"") + epwd + QStringLiteral("\""), netcfg);
         }
