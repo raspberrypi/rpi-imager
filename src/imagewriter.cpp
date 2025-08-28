@@ -116,10 +116,11 @@ ImageWriter::ImageWriter(QObject *parent)
         {
             QString nvmem_blconfig_path = {};
             QFile f("/sys/firmware/devicetree/base/aliases/blconfig");
-            if (f.exists() && f.open(f.ReadOnly)) {
-                nvmem_blconfig_path = f.readAll();
+            if (f.exists() && f.open(QIODevice::ReadOnly)) {
+                QByteArray fileContent = f.readAll();
+                nvmem_blconfig_path = QString::fromLatin1(fileContent.constData());
+                f.close();
             }
-            f.close();
 
             QString blconfig_link = {};
             if (!nvmem_blconfig_path.isEmpty()) {
@@ -137,7 +138,7 @@ ImageWriter::ImageWriter(QObject *parent)
                     [&blconfig_link, &findProcess](int exitCode, QProcess::ExitStatus exitStatus) { // clazy:exclude=lambda-in-connect
                         blconfig_link = findProcess->readAllStandardOutput();
                     });
-                findProcess->start();
+                findProcess->start(findCommand, findArguments);
                 findProcess->waitForFinished(); //Default timeout: 30s
                 delete findProcess;
             }
@@ -146,7 +147,7 @@ ImageWriter::ImageWriter(QObject *parent)
                 if (blconfig_of_dir.cdUp()) {
                     QFile blconfig_file = QFile(blconfig_of_dir.path() + QDir::separator() + "nvmem");
                     if (blconfig_file.exists() && blconfig_file.open(blconfig_file.ReadOnly)) {
-                        const QByteArrayList eepromSettings = f.readAll().split('\n');
+                        const QByteArrayList eepromSettings = blconfig_file.readAll().split('\n');
                         blconfig_file.close();
                         for (const QByteArray &setting : eepromSettings)
                         {
