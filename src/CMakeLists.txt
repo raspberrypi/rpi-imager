@@ -404,6 +404,7 @@ qt_add_qml_module(${PROJECT_NAME}
     OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RpiImager
     DEPENDENCIES QtQuick
     NO_PLUGIN
+    QML_FILES wizard/IfAndFeaturesCustomizationStep.qml
 )
 
 # Because dependencies are typically not available by default on Windows, build bundled code

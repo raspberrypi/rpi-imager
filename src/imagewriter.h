@@ -140,6 +140,27 @@ public:
     /** Set the HW filter, for a filtered view of the OS list */
     Q_INVOKABLE void setHWFilterList(const QJsonArray &tags, const bool &inclusive);
 
+    /* Set the capabilities supported by the hardware, for a filtered view of options that require the hardware to have certain capabilities. */
+    Q_INVOKABLE void setHWCapabilitiesList(const QByteArray &json);
+
+    /* Set the capabilities supported by the hardware, for a filtered view of options that require the software to have certain capabilities. */
+    Q_INVOKABLE void setSWCapabilitiesList(const QByteArray &json);
+
+    /* Get the HW filter list */
+    Q_INVOKABLE QJsonArray getHWFilterList();
+
+    /* Get if the HW filter is in inclusive mode */
+    Q_INVOKABLE bool getHWFilterListInclusive();
+
+    /* Get if both hard and software support a certain feature. If no differentSWCap is provided it will check for cap support in SW and HW lists. */
+    Q_INVOKABLE bool checkHWAndSWCapability(const QString &cap, const QString &differentSWCap = "");
+
+    /* Check if the hardware supports a certain feature. */
+    Q_INVOKABLE bool checkHWCapability(const QString &cap);
+
+    /* Check if the software supports a certain feature. */
+    Q_INVOKABLE bool checkSWCapability(const QString &cap);
+
     /* Utility function to open OS file dialog */
     Q_INVOKABLE void openFileDialog();
 
@@ -192,7 +213,7 @@ public:
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
-    Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork);
+    Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const bool userDefinedFirstRun);
     Q_INVOKABLE void applyCustomizationFromSavedSettings();
     Q_INVOKABLE void setSavedCustomizationSettings(const QVariantMap &map);
     Q_INVOKABLE QVariantMap getSavedCustomizationSettings();
@@ -280,7 +301,7 @@ private:
     void fillSubLists(QJsonArray &topLevel);
     QNetworkAccessManager _networkManager;
     QJsonDocument _completeOsList;
-    QJsonArray _deviceFilter;
+    QJsonArray _deviceFilter, _hwCapabilities, _swCapabilities;
     bool _deviceFilterIsInclusive;
     std::shared_ptr<DeviceInfo> _device_info;
 
@@ -288,6 +309,7 @@ protected:
     QUrl _src, _repo;
     QString _dst, _parentCategory, _osName, _currentLang, _currentLangcode, _currentKeyboard;
     QByteArray _expectedHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
+    bool _userDefinedFirstRun;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
     bool _selectedDeviceValid;

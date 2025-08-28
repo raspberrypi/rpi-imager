@@ -607,7 +607,7 @@ void ImageWriter::startWrite()
     
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _userDefinedFirstRun);
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -911,6 +911,37 @@ namespace {
 void ImageWriter::setHWFilterList(const QJsonArray &tags, const bool &inclusive) {
     _deviceFilter = tags;
     _deviceFilterIsInclusive = inclusive;
+}
+
+void ImageWriter::setHWCapabilitiesList(const QByteArray &json) {
+    QJsonDocument json_document = QJsonDocument::fromJson(json);
+    // TODO: maybe also clear the sw capabilities as in the UI the OS is unselected when this changes
+    _hwCapabilities = json_document.array();
+}
+
+void ImageWriter::setSWCapabilitiesList(const QByteArray &json) {
+    QJsonDocument json_document = QJsonDocument::fromJson(json);
+    _swCapabilities = json_document.array();
+}
+
+QJsonArray ImageWriter::getHWFilterList() {
+    return _deviceFilter;
+}
+
+bool ImageWriter::getHWFilterListInclusive() {
+    return _deviceFilterIsInclusive;
+}
+
+bool ImageWriter::checkHWAndSWCapability(const QString &cap, const QString &differentSWCap) {
+    return this->checkHWCapability(cap) && this->checkSWCapability(differentSWCap.isEmpty() ? cap : differentSWCap);
+}
+
+bool ImageWriter::checkHWCapability(const QString &cap) {
+    return _hwCapabilities.contains(cap.toLower());
+}
+
+bool ImageWriter::checkSWCapability(const QString &cap) {
+    return _swCapabilities.contains(cap.toLower());
 }
 
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
@@ -1716,18 +1747,20 @@ void ImageWriter::setSetting(const QString &key, const QVariant &value)
     _settings.sync();
 }
 
-void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork)
+void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const bool userDefinedFirstRun)
 {
     _config = config;
     _cmdline = cmdline;
     _firstrun = firstrun;
     _cloudinit = cloudinit;
     _cloudinitNetwork = cloudinitNetwork;
+    _userDefinedFirstRun = userDefinedFirstRun;
 
     qDebug() << "Custom config.txt entries:" << config;
     qDebug() << "Custom cmdline.txt entries:" << cmdline;
     qDebug() << "Custom firstrun.sh:" << firstrun;
     qDebug() << "Cloudinit:" << cloudinit;
+    qDebug() << "Is user-defined firstRun.sh:" << userDefinedFirstRun;
 }
 
 void ImageWriter::applyCustomizationFromSavedSettings()
@@ -1737,7 +1770,7 @@ void ImageWriter::applyCustomizationFromSavedSettings()
 
     // If the selected image does not support customization, ensure nothing is staged
     if (_initFormat.isEmpty()) {
-        setImageCustomization(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray());
+        setImageCustomization(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray(), false);
         return;
     }
 
@@ -1936,7 +1969,7 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     line(QStringLiteral("sed -i 's| systemd.run.*||g' /boot/cmdline.txt"), script);
     line(QStringLiteral("exit 0"), script);
 
-    setImageCustomization(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray());
+    setImageCustomization(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), false);
 }
 
 void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
@@ -2016,6 +2049,54 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
         push(QStringLiteral("ssh_pwauth: true"), cloud);
     }
 
+    const bool isRpiosCloudInit = checkSWCapability("rpios_cloudinit");
+    const bool isPiConnect = s.value("enablePiConnect").toBool();
+    const bool enableI2C = s.value("enableI2C").toBool();
+    const bool enableSPI = s.value("enableSPI").toBool();
+    const bool enableSerial = s.value("enableSerial").toBool();
+    const QString serialMode = s.value("serialMode").toString();
+    const bool armInterfaceEnabled = enableI2C || enableSPI || enableSerial;
+
+    // cc_raspberry_pi config for rpios_cloudinit capable OSs
+    if (isRpiosCloudInit && (isPiConnect || armInterfaceEnabled)) {
+        push(QStringLiteral("rpi:"), cloud);
+
+        if (isPiConnect) {
+            push(QStringLiteral("  enable_rpi_connect: true"), cloud);
+        }
+
+        // configure arm interfaces
+        if (armInterfaceEnabled) {
+            push(QStringLiteral("  interfaces:"), cloud);
+
+            if (enableI2C) {
+                push(QStringLiteral("    i2c: true"), cloud);
+            }
+            if (enableSPI) {
+                push(QStringLiteral("    spi: true"), cloud);
+            }
+            if (enableSerial) {
+                if (serialMode == "" || serialMode == "default") {
+                    push(QStringLiteral("    serial: true"), cloud);
+                } else {
+                    push(QStringLiteral("    serial:"), cloud);
+                    if (serialMode == "console_hw") {
+                        push(QStringLiteral("      console: true"), cloud);
+                        push(QStringLiteral("      hardware: true"), cloud);
+                    } else if (serialMode == "console") {
+                        push(QStringLiteral("      console: true"), cloud);
+                        push(QStringLiteral("      hardware: false"), cloud);
+                    } else if (serialMode == "hardware") {
+                        push(QStringLiteral("      console: false"), cloud);
+                        push(QStringLiteral("      hardware: true"), cloud);
+                    } else {
+                        qDebug() << "Invalid serial mode: " << serialMode;
+                    }
+                }
+            }
+        }
+    }
+
     const QString ssid = s.value("wifiSSID").toString();
     const QString cryptedPskFromSettings = s.value("wifiPasswordCrypt").toString();
     const bool hidden = s.value("wifiHidden").toBool();
@@ -2025,17 +2106,20 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
     if (!ssid.isEmpty()) {
-        push(QStringLiteral("version: 2"), netcfg);
-        push(QStringLiteral("wifis:"), netcfg);
-        // Parity: explicitly set renderer to networkd under wifis
-        push(QStringLiteral("  renderer: networkd"), netcfg);
-        push(QStringLiteral("  wlan0:"), netcfg);
-        push(QStringLiteral("    dhcp4: true"), netcfg);
-        push(QStringLiteral("    access-points:"), netcfg);
+        push(QStringLiteral("network:"), netcfg);
+        push(QStringLiteral("  version: 2"), netcfg);
+        push(QStringLiteral("  wifis:"), netcfg);
+        push(QStringLiteral("    renderer: %1")
+                 .arg(isRpiosCloudInit ? QStringLiteral("NetworkManager")
+                                       : QStringLiteral("networkd")),
+             netcfg);
+        push(QStringLiteral("    wlan0:"), netcfg);
+        push(QStringLiteral("      dhcp4: true"), netcfg);
+        push(QStringLiteral("      access-points:"), netcfg);
         {
             QString key = ssid;
             key.replace('"', QStringLiteral("\\\""));
-            push(QStringLiteral("      \"") + key + QStringLiteral("\":"), netcfg);
+            push(QStringLiteral("        \"") + key + QStringLiteral("\":"), netcfg);
         }
         // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
         QString effectiveCryptedPsk = cryptedPskFromSettings;
@@ -2049,12 +2133,12 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
         if (!effectiveCryptedPsk.isEmpty()) {
             QString epwd = effectiveCryptedPsk;
             epwd.replace('"', QStringLiteral("\\\""));
-            push(QStringLiteral("        password: \"") + epwd + QStringLiteral("\""), netcfg);
+            push(QStringLiteral("          password: \"") + epwd + QStringLiteral("\""), netcfg);
         }
         if (hidden) {
-            push(QStringLiteral("        hidden: true"), netcfg);
+            push(QStringLiteral("          hidden: true"), netcfg);
         }
-        push(QStringLiteral("    optional: true"), netcfg);
+        push(QStringLiteral("      optional: true"), netcfg);
     }
 
     // Raspberry Pi Connect token provisioning via cloud-init write_files (store in user's home)
@@ -2077,7 +2161,7 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
         push(QStringLiteral("  - [ bash, -lc, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
     }
 
-    setImageCustomization(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg);
+    setImageCustomization(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, false);
 }
 
 QString ImageWriter::crypt(const QByteArray &password)
@@ -2472,7 +2556,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _userDefinedFirstRun);
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)

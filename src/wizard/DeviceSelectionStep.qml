@@ -177,6 +177,7 @@ WizardStepBase {
                         hwlist.currentIndex = hwitem.index
                         root.hwModel.currentIndex = hwitem.index
                         root.wizardContainer.selectedDeviceName = hwitem.name
+
                         // Enable Next; do not auto-advance
                         root.hasDeviceSelected = true
                         root.nextButtonEnabled = true
