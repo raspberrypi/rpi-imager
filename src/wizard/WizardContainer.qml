@@ -58,6 +58,31 @@ Item {
     
     signal wizardCompleted()
     
+    // Focus anchor for global keyboard navigation
+    Item {
+        id: focusAnchor
+        focus: true
+        Keys.onPressed: (event) => {
+            if (event.key === Qt.Key_Tab) {
+                var currentStep = wizardStack.currentItem
+                if (currentStep && typeof currentStep.getNextFocusableElement === 'function') {
+                    if (event.modifiers & Qt.ShiftModifier) {
+                        var prevElement = currentStep.getPreviousFocusableElement(null)
+                        if (prevElement && typeof prevElement.forceActiveFocus === 'function') {
+                            prevElement.forceActiveFocus()
+                        }
+                    } else {
+                        var nextElement = currentStep.getNextFocusableElement(null)
+                        if (nextElement && typeof nextElement.forceActiveFocus === 'function') {
+                            nextElement.forceActiveFocus()
+                        }
+                    }
+                    event.accepted = true
+                }
+            }
+        }
+    }
+
     Component.onCompleted: {
         // Default to disabling warnings in embedded mode (per-run, non-persistent)
         if (imageWriter && imageWriter.isEmbeddedMode()) {
