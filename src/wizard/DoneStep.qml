@@ -116,12 +116,16 @@ WizardStepBase {
         }
         
         ImButtonRed {
-            text: qsTr("Finish")
+            text: imageWriter.isEmbeddedMode() ? qsTr("Reboot") : qsTr("Finish")
             enabled: true
             onClicked: {
-                // Close the application
-                // Advanced options settings are already saved
-                Qt.quit()
+                if (imageWriter.isEmbeddedMode()) {
+                    imageWriter.reboot()
+                } else {
+                    // Close the application
+                    // Advanced options settings are already saved
+                    Qt.quit()
+                }
             }
         }
     }
