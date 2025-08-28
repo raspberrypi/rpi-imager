@@ -40,11 +40,12 @@ WizardStepBase {
     // Content
     content: [
     ColumnLayout {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.fill: parent
         anchors.margins: Style.cardPadding
         spacing: Style.spacingLarge
+
+        // Top spacer to vertically center progress section when writing/complete
+        Item { Layout.fillHeight: true; visible: root.isWriting || root.isComplete }
         
         // Summary section (de-chromed)
         ColumnLayout {
@@ -195,6 +196,9 @@ WizardStepBase {
                 visible: root.isWriting
             }
         }
+
+        // Bottom spacer to vertically center progress section when writing/complete
+        Item { Layout.fillHeight: true; visible: root.isWriting || root.isComplete }
     }
     ]
     

@@ -172,9 +172,8 @@ FocusScope {
         }
     }
 
-    function requestRecomputeTabOrder() {
-        rebuildFocusOrder()
-    }
+    // requestRecomputeTabOrder was used when keyboard tab navigation order was dynamic.
+    // With simplified navigation and no tabbing requirement, this is no longer needed.
 
     function rebuildFocusOrder() {
         // Compose enabled groups by order

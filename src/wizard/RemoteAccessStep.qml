@@ -28,31 +28,25 @@ WizardStepBase {
     ColumnLayout {
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.verticalCenter: parent.verticalCenter
         anchors.margins: Style.sectionPadding
         spacing: Style.stepContentSpacing
         
         WizardSectionContainer {
-            RowLayout {
+            // Replace checkbox with an option pill and help link
+            ImOptionPill {
+                id: sshEnablePill
                 Layout.fillWidth: true
-                spacing: Style.spacingMedium
-                
-                ImCheckBox {
-                    id: chkEnableSSH
-                    text: qsTr("Enable SSH")
-                    checked: false
-                    onCheckedChanged: root.requestRecomputeTabOrder()
-                }
-                
-                Item {
-                    Layout.fillWidth: true
-                }
+                text: qsTr("Enable SSH")
+                helpLabel: qsTr("Learn about SSH")
+                helpUrl: "https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh"
+                checked: false
             }
-            
+
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Style.spacingSmallPlus
-                enabled: chkEnableSSH.checked
+                enabled: sshEnablePill.checked
                 
                 WizardFormLabel {
                     text: qsTr("Authentication Mechanism:")
@@ -68,7 +62,6 @@ WizardStepBase {
                     id: radioPublicKey
                     text: qsTr("Use public key authentication")
                     checked: false
-                    onCheckedChanged: root.requestRecomputeTabOrder()
                 }
                 
                 RowLayout {
@@ -98,13 +91,13 @@ WizardStepBase {
     ]
 
     Component.onCompleted: {
-        root.registerFocusGroup("ssh_controller", function(){ return [chkEnableSSH] }, 0)
-        root.registerFocusGroup("ssh_auth", function(){ return chkEnableSSH.checked ? [radioPassword, radioPublicKey] : [] }, 1)
-        root.registerFocusGroup("ssh_key", function(){ return chkEnableSSH.checked && radioPublicKey.checked ? [fieldPublicKey, browseButton] : [] }, 2)
+        root.registerFocusGroup("ssh_controller", function(){ return [sshEnablePill] }, 0)
+        root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [radioPassword, radioPublicKey] : [] }, 1)
+        root.registerFocusGroup("ssh_key", function(){ return sshEnablePill.checked && radioPublicKey.checked ? [fieldPublicKey, browseButton] : [] }, 2)
         // Prefill from saved settings
         var saved = imageWriter.getSavedCustomizationSettings()
         if (saved.sshEnabled === true || saved.sshEnabled === "true") {
-            chkEnableSSH.checked = true
+            sshEnablePill.checked = true
         }
         if (saved.sshPublicKey) {
             radioPublicKey.checked = true
@@ -120,7 +113,7 @@ WizardStepBase {
     onNextClicked: {
         // Merge-and-save strategy
         var saved = imageWriter.getSavedCustomizationSettings()
-        if (chkEnableSSH.checked) {
+        if (sshEnablePill.checked) {
             saved.sshEnabled = true
             saved.sshPasswordAuth = radioPassword.checked
             if (radioPublicKey.checked && fieldPublicKey.text && fieldPublicKey.text.trim().length > 0) {
