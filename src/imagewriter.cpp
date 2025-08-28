@@ -274,6 +274,16 @@ ImageWriter::ImageWriter(QObject *parent)
     }
 }
 
+QString ImageWriter::getNativeOpenFileName(const QString &title,
+                                           const QString &initialDir,
+                                           const QString &filter)
+{
+    if (!NativeFileDialog::areNativeDialogsAvailable()) {
+        return QString();
+    }
+    return NativeFileDialog::getOpenFileName(title, initialDir, filter);
+}
+
 ImageWriter::~ImageWriter()
 {
     // Stop background drive list polling

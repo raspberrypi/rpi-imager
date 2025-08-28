@@ -81,7 +81,21 @@ WizardStepBase {
                         text: qsTr("Browse")
                         Layout.minimumWidth: 80
                         onClicked: {
-                            sshKeyFileDialog.open()
+                            // Prefer native file dialog via Imager's wrapper, but only if available
+                            if (imageWriter.nativeFileDialogAvailable()) {
+                                var home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
+                                var startDir = home && home.length > 0 ? home + "/.ssh" : ""
+                                var filters = "Public Key files (*.pub);;All files (*)"
+                                var picked = imageWriter.getNativeOpenFileName(qsTr("Select SSH Public Key"), startDir, filters)
+                                if (picked && picked.length > 0) {
+                                    fieldPublicKey.text = qsTr("SSH key loaded from file")
+                                } else {
+                                    // User cancelled native dialog; do not auto-open fallback
+                                }
+                            } else {
+                                // Fallback to QML dialog (forced non-native)
+                                sshKeyFileDialog.open()
+                            }
                         }
                     }
                 }
@@ -153,6 +167,8 @@ WizardStepBase {
         id: sshKeyFileDialog
         title: qsTr("Select SSH Public Key")
         nameFilters: ["Public Key files (*.pub)", "All files (*)"]
+        // Force QML implementation, not native
+        options: FileDialog.DontUseNativeDialog
         Component.onCompleted: {
             if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
                 // Default to ~/.ssh on macOS

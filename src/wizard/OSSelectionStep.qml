@@ -6,6 +6,8 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Dialogs
+import QtCore
 import "../qmlcomponents"
 
 import RpiImager
@@ -68,6 +70,22 @@ WizardStepBase {
         }
     }
 
+    // Fallback FileDialog for selecting a custom image when native dialogs are unavailable
+    // Consumers should set properties before opening when needed
+    // Exposed via property alias for callsite access
+    property alias customImageFileDialog: customImageFileDialog
+    FileDialog {
+        id: customImageFileDialog
+        // Force QML implementation as fallback
+        options: FileDialog.DontUseNativeDialog
+        onAccepted: {
+            imageWriter.acceptCustomImageFromQml(selectedFile)
+        }
+        onRejected: {
+            // No-op; user cancelled
+        }
+    }
+    
     // Ensure the current list view has focus and a valid currentIndex
     function _focusFirstItemInCurrentView() {
         var currentView = osswipeview.currentItem
@@ -393,11 +411,34 @@ WizardStepBase {
         } else {
             // Select this OS - explicit branching for clarity
             if (typeof(model.url) === "string" && model.url === "internal://custom") {
-                // Use custom: open native file selector now and wait for onFileSelected
+                // Use custom: open native file selector if available, otherwise fall back to QML FileDialog
                 root.wizardContainer.selectedOsName = ""
                 root.nextButtonEnabled = false
                 root.customSelected = false
-                imageWriter.openFileDialog()
+                if (imageWriter.nativeFileDialogAvailable()) {
+                    imageWriter.openFileDialog()
+                } else if (root.hasOwnProperty("customImageFileDialog")) {
+                    // Ensure reasonable defaults
+                    customImageFileDialog.title = qsTr("Select image")
+                    customImageFileDialog.nameFilters = [
+                        "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic)",
+                        "All files (*)"
+                    ]
+                    // Default to Downloads folder
+                    var dl = StandardPaths.writableLocation(StandardPaths.DownloadLocation)
+                    if (dl && dl.length > 0) {
+                        var furl = (Qt.platform.os === "windows") ? ("file:///" + dl) : ("file://" + dl)
+                        if (customImageFileDialog.hasOwnProperty("currentFolder")) {
+                            customImageFileDialog.currentFolder = furl
+                        }
+                        if (customImageFileDialog.hasOwnProperty("folder")) {
+                            customImageFileDialog.folder = furl
+                        }
+                    }
+                    customImageFileDialog.open()
+                } else {
+                    console.warn("OSSelectionStep: No FileDialog fallback available")
+                }
             } else if (typeof(model.url) === "string" && model.url === "internal://format") {
                 // Erase/format flow
                 imageWriter.setSrc(

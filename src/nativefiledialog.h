@@ -10,10 +10,11 @@
 #include <QStringList>
 
 /**
- * @brief Native file dialog interface for all desktop platforms
+ * @brief File dialog interface for all platforms
  * 
- * This class provides native file dialogs for Windows, macOS, and Linux desktop environments.
- * QtWidgets dependency has been removed - only native dialogs are supported.
+ * Provides native file dialogs for Windows, macOS, and Linux when available.
+ * Falls back to a QML-based FileDialog (QtQuick.Dialogs) without requiring QtWidgets.
+ * See: https://doc.qt.io/qt-6/qml-qtquick-dialogs-filedialog.html
  */
 class NativeFileDialog
 {
@@ -52,11 +53,6 @@ private:
                                      const QString &initialDir, const QString &filter,
                                      bool saveDialog);
     static bool areNativeDialogsAvailablePlatform();
-
-    // Qt fallback implementation (no-op - always returns empty string)
-    static QString getFileNameQt(const QString &title,
-                                 const QString &initialDir, const QString &filter,
-                                 bool saveDialog);
 
     // Helper functions
     static bool isEmbeddedMode();

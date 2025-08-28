@@ -8,13 +8,15 @@
 #include <QGuiApplication>
 #include <QCoreApplication>
 #include <QDebug>
+// QML-side fallback is handled at callsites; no QML engine usage here
 
 QString NativeFileDialog::getOpenFileName(const QString &title,
                                           const QString &initialDir, const QString &filter)
 {
     // Check if we should use native dialogs
     if (!areNativeDialogsAvailable()) {
-        return getFileNameQt(title, initialDir, filter, false);
+        // No C++ fallback; QML callsites handle fallback
+        return QString();
     }
 
     return getFileNameNative(title, initialDir, filter, false);
@@ -25,7 +27,8 @@ QString NativeFileDialog::getSaveFileName(const QString &title,
 {
     // Check if we should use native dialogs
     if (!areNativeDialogsAvailable()) {
-        return getFileNameQt(title, initialDir, filter, true);
+        // No C++ fallback; QML callsites handle fallback
+        return QString();
     }
 
     return getFileNameNative(title, initialDir, filter, true);
@@ -55,17 +58,4 @@ bool NativeFileDialog::isEmbeddedMode()
     return (platform == "eglfs" || platform == "linuxfb");
 }
 
-QString NativeFileDialog::getFileNameQt(const QString &title,
-                                        const QString &initialDir, const QString &filter,
-                                        bool saveDialog)
-{
-    Q_UNUSED(title)
-    Q_UNUSED(initialDir)
-    Q_UNUSED(filter)
-    Q_UNUSED(saveDialog)
-    
-    // QtWidgets dependency removed - no fallback dialog available
-    // Native dialogs should be used on all desktop platforms
-    qWarning() << "NativeFileDialog: Qt fallback called but QtWidgets not available";
-    return QString(); // Return empty string (user cancelled)
-}
+// No extra helper function; return empty to signal QML fallback

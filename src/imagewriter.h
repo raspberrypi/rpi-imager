@@ -26,6 +26,7 @@
 #include "oslistmodel.h"
 #include "cachemanager.h"
 #include "device_info.h"
+#include "nativefiledialog.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
@@ -124,6 +125,17 @@ public:
 
     /* Utility function to open OS file dialog */
     Q_INVOKABLE void openFileDialog();
+
+    /* Expose native file dialog availability to QML */
+    Q_INVOKABLE bool nativeFileDialogAvailable() { return NativeFileDialog::areNativeDialogsAvailable(); }
+
+    /* Accept selection from QML fallback FileDialog */
+    Q_INVOKABLE void acceptCustomImageFromQml(const QUrl &fileUrl) { onFileSelected(fileUrl.toLocalFile()); }
+
+    /* Generic native open-file dialog for QML callsites (sync) */
+    Q_INVOKABLE QString getNativeOpenFileName(const QString &title = QString(),
+                                             const QString &initialDir = QString(),
+                                             const QString &filter = QString());
 
     /* Handle keychain permission response from QML */
     Q_INVOKABLE void keychainPermissionResponse(bool granted);
