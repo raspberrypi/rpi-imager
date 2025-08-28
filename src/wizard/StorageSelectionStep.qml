@@ -29,6 +29,16 @@ WizardStepBase {
         root.nextClicked()
     }
     
+    Component.onCompleted: {
+        // Register the ListView for keyboard navigation
+        root.registerFocusGroup("storage_list", function(){
+            return [dstlist, filterSystemDrives]
+        }, 0)
+        
+        // Set the initial focus item to the ListView
+        root.initialFocusItem = dstlist
+    }
+    
     // Removed drive list polling calls; backend handles device updates
     
     // Content
@@ -47,8 +57,40 @@ WizardStepBase {
             delegate: dstdelegate
             clip: true
             
+            // Enable keyboard navigation
+            activeFocusOnTab: true
+            
             boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle { color: Style.listViewHighlightColor; radius: 0 }
+            highlight: Rectangle { 
+                color: Style.listViewHighlightColor
+                radius: 0
+                border.color: dstlist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
+                border.width: dstlist.activeFocus ? 2 : 0
+            }
+            
+            // Keyboard navigation
+            Keys.onUpPressed: {
+                if (currentIndex > 0) {
+                    currentIndex--
+                }
+            }
+            Keys.onDownPressed: {
+                if (currentIndex < count - 1) {
+                    currentIndex++
+                }
+            }
+            Keys.onEnterPressed: selectCurrentItem()
+            Keys.onReturnPressed: selectCurrentItem()
+            Keys.onSpacePressed: selectCurrentItem()
+            
+            function selectCurrentItem() {
+                if (currentIndex >= 0 && currentIndex < count) {
+                    var item = itemAtIndex(currentIndex)
+                    if (item && typeof item.selectDrive === "function") {
+                        item.selectDrive()
+                    }
+                }
+            }
             
             ScrollBar.vertical: ScrollBar {
                 width: Style.scrollBarWidth

@@ -219,4 +219,51 @@ FocusScope {
         // Ensure initialFocusItem set
         if (!initialFocusItem) initialFocusItem = firstField
     }
+
+    // Helper functions for global Tab navigation fallback
+    function getNextFocusableElement(startElement) {
+        if (_focusableItems.length === 0) {
+            return nextButton.visible && nextButton.enabled ? nextButton : null
+        }
+
+        var allFocusable = _focusableItems.slice() // copy array
+        if (nextButton.visible && nextButton.enabled) allFocusable.push(nextButton)
+        if (backButton.visible && backButton.enabled) allFocusable.push(backButton)
+        if (skipButton.visible && skipButton.enabled) allFocusable.push(skipButton)
+
+        if (allFocusable.length === 0) {
+            return null
+        }
+
+        var currentIndex = allFocusable.indexOf(startElement)
+        if (currentIndex === -1) {
+            return allFocusable[0]
+        }
+
+        var nextIndex = (currentIndex + 1) % allFocusable.length
+        return allFocusable[nextIndex]
+    }
+
+    function getPreviousFocusableElement(startElement) {
+        if (_focusableItems.length === 0) {
+            return nextButton.visible && nextButton.enabled ? nextButton : null
+        }
+
+        var allFocusable = _focusableItems.slice() // copy array
+        if (nextButton.visible && nextButton.enabled) allFocusable.push(nextButton)
+        if (backButton.visible && backButton.enabled) allFocusable.push(backButton)
+        if (skipButton.visible && skipButton.enabled) allFocusable.push(skipButton)
+
+        if (allFocusable.length === 0) {
+            return null
+        }
+
+        var currentIndex = allFocusable.indexOf(startElement)
+        if (currentIndex === -1) {
+            return allFocusable[allFocusable.length - 1]
+        }
+        
+        var prevIndex = (currentIndex - 1 + allFocusable.length) % allFocusable.length
+        return allFocusable[prevIndex]
+    }
 } 

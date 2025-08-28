@@ -42,10 +42,31 @@ WizardStepBase {
     function next() {
         root.nextClicked()
     }
-    
+
+    function getNextFocusableElement(startElement) {
+        if (!startElement || !startElement.visible) startElement = osswipeview;
+        var order = [ osswipeview, nextButtonItem, backButtonItem ]
+        var currentIndex = order.indexOf(startElement)
+        if (currentIndex === -1) return osswipeview;
+        var nextElement = order[(currentIndex + 1) % order.length]
+        return nextElement.visible && nextElement.enabled ? nextElement : startElement
+    }
+
+    function getPreviousFocusableElement(startElement) {
+        if (!startElement || !startElement.visible) startElement = osswipeview;
+        var order = [ osswipeview, nextButtonItem, backButtonItem ]
+        var currentIndex = order.indexOf(startElement)
+        if (currentIndex === -1) return osswipeview;
+        var prevElement = order[(currentIndex - 1 + order.length) % order.length]
+        return prevElement.visible && prevElement.enabled ? prevElement : startElement
+    }
+
     Component.onCompleted: {
         // Try initial load in case data is already available
         onOsListPreparedHandler()
+
+        // Set the initial focus item to the SwipeView
+        root.initialFocusItem = osswipeview
 
         // Ensure focus starts on the OS list when entering this step
         osswipeview.forceActiveFocus()
@@ -86,21 +107,8 @@ WizardStepBase {
     // Ensure the current list view has focus and a valid currentIndex
     function _focusFirstItemInCurrentView() {
         var currentView = osswipeview.currentItem
-        if (currentView) {
-            if (typeof currentView.currentIndex !== "undefined" && currentView.currentIndex === -1 && currentView.count > 0) {
-                currentView.currentIndex = 0
-                // If this is the main OS list and nothing is selected yet, select the first item implicitly
-                if (currentView === oslist && (!wizardContainer.selectedOsName || wizardContainer.selectedOsName.length === 0)) {
-                    var firstItem = oslist.itemAtIndex(0)
-                    if (firstItem && firstItem.model) {
-                        // Do not auto-advance; just set selection/state
-                        selectOSitem(firstItem.model)
-                    }
-                }
-            }
-            if (typeof currentView.forceActiveFocus === "function") {
-                currentView.forceActiveFocus()
-            }
+        if (osswipeview.activeFocus && currentView && currentView.count > 0 && currentView.currentIndex === -1) {
+            currentView.currentIndex = 0
         }
     }
     
@@ -121,9 +129,19 @@ WizardStepBase {
                 anchors.fill: parent
                 interactive: false
                 clip: true
+                activeFocusOnTab: true
 
-                    onActiveFocusChanged: _focusFirstItemInCurrentView()
-                    onCurrentIndexChanged: _focusFirstItemInCurrentView()
+                onActiveFocusChanged: _focusFirstItemInCurrentView()
+                onCurrentIndexChanged: {
+                    _focusFirstItemInCurrentView()
+                    // Ensure the current view gets focus when SwipeView index changes
+                    Qt.callLater(function() {
+                        var currentView = osswipeview.currentItem
+                        if (currentView && typeof currentView.forceActiveFocus === "function") {
+                            currentView.forceActiveFocus()
+                        }
+                    })
+                }
                     
                     // Main OS list
                     ListView {
@@ -135,54 +153,41 @@ WizardStepBase {
                         activeFocusOnTab: true
                         
                         boundsBehavior: Flickable.StopAtBounds
-                        highlight: Rectangle { 
-                            color: Style.listViewHighlightColor
-                            radius: 0 
-                        }
+                        // No highlight property needed - using delegate-based highlighting
                         
                         ScrollBar.vertical: ScrollBar {
                             width: Style.scrollBarWidth
                             policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
                         }
                         
-                        // Keyboard navigation into sublists and selection
-                        Keys.onSpacePressed: {
-                            if (currentIndex !== -1) {
-                                var item = oslist.itemAtIndex(currentIndex)
-                                if (item) {
-                                    selectOSitem(item.model, true)
-                                }
-                            }
-                        }
-                        Keys.onReturnPressed: {
-                            if (currentIndex !== -1) {
-                                var item = oslist.itemAtIndex(currentIndex)
-                                if (item) {
-                                    selectOSitem(item.model, true)
-                                }
-                            }
-                        }
-                        Keys.onEnterPressed: {
-                            if (currentIndex !== -1) {
-                                var item = oslist.itemAtIndex(currentIndex)
-                                if (item) {
-                                    selectOSitem(item.model, true)
-                                }
-                            }
-                        }
-                        Keys.onRightPressed: {
-                            if (currentIndex !== -1) {
-                                var item = oslist.itemAtIndex(currentIndex)
-                                if (item && isOSsublist(item.model)) {
-                                    selectOSitem(item.model, true)
-                                }
-                            }
-                        }
                         Keys.onUpPressed: {
                             if (currentIndex > 0) currentIndex = currentIndex - 1
                         }
                         Keys.onDownPressed: {
                             if (currentIndex < count - 1) currentIndex = currentIndex + 1
+                        }
+                        Keys.onSpacePressed: {
+                            if (currentIndex != -1) {
+                                var item = oslist.itemAtIndex(currentIndex)
+                                if (item)
+                                    root.selectOSitem(item.model, true)
+                            }
+                        }
+                        Accessible.onPressAction: {
+                            if (currentIndex != -1) {
+                                var item = oslist.itemAtIndex(currentIndex)
+                                if (item)
+                                    root.selectOSitem(item.model, true)
+                            }
+                        }
+
+                        Keys.onRightPressed: {
+                            // Navigate into sublists but don't select an OS entry
+                            if (currentIndex != -1) {
+                                var item = oslist.itemAtIndex(currentIndex)
+                                if (item && root.isOSsublist(item.model))
+                                    root.selectOSitem(item.model, true)
+                            }
                         }
                     }
             }
@@ -219,7 +224,7 @@ WizardStepBase {
             Rectangle {
                 id: osbgrect
                 anchors.fill: parent
-                color: (oslist.currentIndex === index) ? Style.listViewHighlightColor :
+                color: (parent.ListView.view && parent.ListView.view.currentIndex === index) ? Style.listViewHighlightColor :
                        (osMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 
@@ -230,7 +235,10 @@ WizardStepBase {
                     cursorShape: Qt.PointingHandCursor
                     
                     onClicked: {
-                        oslist.currentIndex = index
+                        // Set currentIndex on the correct ListView (main list or sublist)
+                        if (parent.ListView.view) {
+                            parent.ListView.view.currentIndex = index
+                        }
                         selectOSitem(delegateItem.model)
                     }
                 }
@@ -344,67 +352,83 @@ WizardStepBase {
             }
             currentIndex: -1
             delegate: osdelegate
+            clip: true
             boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle { color: Style.listViewHighlightColor; radius: 5 }
+            // No highlight property needed - using delegate-based highlighting
             ScrollBar.vertical: ScrollBar {
-                width: 10
+                width: Style.scrollBarWidth
                 policy: sublistview.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
             }
             activeFocusOnTab: true
             
-            // Keyboard selection and navigation
+            Keys.onUpPressed: {
+                if (currentIndex > 0) {
+                    currentIndex--
+                }
+            }
+            Keys.onDownPressed: {
+                if (currentIndex < count - 1) {
+                    currentIndex++
+                }
+            }
             Keys.onSpacePressed: {
-                if (currentIndex !== -1) {
-                    selectOSitem(model.get(currentIndex))
-                }
+                if (currentIndex != -1)
+                    root.selectOSitem(model.get(currentIndex))
             }
-            Keys.onReturnPressed: {
-                if (currentIndex !== -1) {
-                    selectOSitem(model.get(currentIndex))
-                }
+            Accessible.onPressAction: {
+                if (currentIndex != -1)
+                    root.selectOSitem(model.get(currentIndex))
             }
-            Keys.onEnterPressed: {
-                if (currentIndex !== -1) {
-                    selectOSitem(model.get(currentIndex))
-                }
-            }
+            Keys.onEnterPressed: (event) => { Keys.spacePressed(event) }
+            Keys.onReturnPressed: (event) => { Keys.spacePressed(event) }
             Keys.onRightPressed: {
-                if (currentIndex !== -1 && isOSsublist(model.get(currentIndex))) {
-                    selectOSitem(model.get(currentIndex), true)
-                }
+                // Navigate into sublists but don't select an OS entry
+                if (currentIndex != -1 && root.isOSsublist(model.get(currentIndex)))
+                    root.selectOSitem(model.get(currentIndex), true)
             }
             Keys.onLeftPressed: {
                 osswipeview.decrementCurrentIndex()
-                categorySelected = ""
+                root.categorySelected = ""
             }
-            Keys.onUpPressed: {
-                if (currentIndex > 0) currentIndex = currentIndex - 1
-            }
-            Keys.onDownPressed: {
-                if (currentIndex < count - 1) currentIndex = currentIndex + 1
+            
+            Component.onCompleted: {
+                // Ensure this sublist can receive keyboard focus
+                forceActiveFocus()
+                // Set initial currentIndex if not set
+                if (currentIndex === -1 && count > 0) {
+                    currentIndex = 0
+                }
             }
         }
     }
 
     // OS selection functions (adapted from OSPopup.qml)
     function selectOSitem(model, navigateOnly) {
-        console.log("OSSelectionStep: selectOSitem called for", model.name)
         if (navigateOnly === undefined) {
             navigateOnly = false
         }
         
         if (isOSsublist(model)) {
             // Navigate to sublist (whether navigateOnly is true or false)
-            console.log("OSSelectionStep: Navigating to sublist:", model.name)
             categorySelected = model.name
             var lm = newSublist()
             populateSublistInto(lm, model)
             // focus first sub item when navigating
             var nextView = osswipeview.itemAt(osswipeview.currentIndex+1)
-            nextView.currentIndex = navigateOnly ? 0 : -1
             osswipeview.incrementCurrentIndex()
-            // ensure focus is on the new view
+            // ensure focus is on the new view and set currentIndex
             _focusFirstItemInCurrentView()
+            // Force currentIndex and focus on the new sublist
+            Qt.callLater(function() {
+                var currentView = osswipeview.currentItem
+                if (currentView) {
+                    // Always set currentIndex to 0 for sublists to ensure highlighting
+                    currentView.currentIndex = 0
+                    if (typeof currentView.forceActiveFocus === "function") {
+                        currentView.forceActiveFocus()
+                    }
+                }
+            })
         } else {
             // Select this OS - explicit branching for clarity
             if (typeof(model.url) === "string" && model.url === "internal://custom") {
@@ -470,7 +494,6 @@ WizardStepBase {
                 categorySelected = ""
             } else {
                 // Stay on page; user must click Next
-                console.log("OSSelectionStep: Selected OS", model.name, "- waiting for Next")
             }
         }
     }
@@ -487,11 +510,6 @@ WizardStepBase {
         var hasSubitemsUrl = (urlType == "string" && urlNotEmpty && urlNotBack)
         
         var isSublist = hasSubitemsJson || hasSubitemsUrl
-        
-        console.log("OSSelectionStep: DEBUG", model.name)
-        console.log("  subitems_json:", JSON.stringify(model.subitems_json), "type:", jsonType, "notEmpty:", jsonNotEmpty, "hasJson:", hasSubitemsJson)
-        console.log("  subitems_url:", JSON.stringify(model.subitems_url), "type:", urlType, "notEmpty:", urlNotEmpty, "notBack:", urlNotBack, "hasUrl:", hasSubitemsUrl)
-        console.log("  isSublist:", isSublist)
         
         return isSublist
     }

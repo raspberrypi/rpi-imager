@@ -38,8 +38,8 @@ WizardStepBase {
                 id: sshEnablePill
                 Layout.fillWidth: true
                 text: qsTr("Enable SSH")
-                helpLabel: qsTr("Learn about SSH")
-                helpUrl: "https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh"
+                helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn about SSH")
+                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh"
                 checked: false
             }
 

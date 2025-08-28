@@ -33,6 +33,14 @@ WizardStepBase {
     Component.onCompleted: {
         // Initial load only
         if (!modelLoaded) onOsListPreparedHandler()
+        
+        // Register the ListView for keyboard navigation
+        root.registerFocusGroup("device_list", function(){
+            return [hwlist]
+        }, 0)
+        
+        // Set the initial focus item to the ListView
+        root.initialFocusItem = hwlist
     }
 
     Connections {
@@ -71,6 +79,9 @@ WizardStepBase {
             model: root.hwModel
             currentIndex: -1
             
+            // Enable keyboard navigation
+            activeFocusOnTab: true
+            
             Component.onCompleted: {
                 if (root.hwModel && root.hwModel.currentIndex !== undefined && root.hwModel.currentIndex >= 0) {
                     hwlist.currentIndex = root.hwModel.currentIndex
@@ -86,7 +97,39 @@ WizardStepBase {
             clip: true
             
             boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle { color: Style.listViewHighlightColor; radius: 0 }
+            highlight: Rectangle { 
+                color: Style.listViewHighlightColor
+                radius: 0
+                border.color: hwlist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
+                border.width: hwlist.activeFocus ? 2 : 0
+            }
+            
+            // Keyboard navigation
+            Keys.onUpPressed: {
+                if (currentIndex > 0) {
+                    currentIndex--
+                }
+            }
+            Keys.onDownPressed: {
+                if (currentIndex < count - 1) {
+                    currentIndex++
+                }
+            }
+            Keys.onEnterPressed: selectCurrentItem()
+            Keys.onReturnPressed: selectCurrentItem()
+            Keys.onSpacePressed: selectCurrentItem()
+            
+            function selectCurrentItem() {
+                if (currentIndex >= 0 && currentIndex < count) {
+                    root.hwModel.currentIndex = currentIndex
+                    var item = itemAtIndex(currentIndex)
+                    if (item && item.name) {
+                        root.wizardContainer.selectedDeviceName = item.name
+                    }
+                    root.hasDeviceSelected = true
+                    root.nextButtonEnabled = true
+                }
+            }
             
             ScrollBar.vertical: ScrollBar {
                 width: Style.scrollBarWidth
