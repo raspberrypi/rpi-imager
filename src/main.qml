@@ -59,7 +59,7 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         onActivated: {
             advancedOptionsPopup.initialize()
-            advancedOptionsPopup.show()
+            advancedOptionsPopup.open()
         }
     }
 
@@ -353,7 +353,9 @@ ApplicationWindow {
 
     AdvancedOptionsPopup {
         id: advancedOptionsPopup
+        parent: overlayRoot
         imageWriter: window.imageWriter
+        wizardContainer: wizardContainer
     }
 
     UseSavedSettingsPopup {

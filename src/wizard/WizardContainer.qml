@@ -352,7 +352,7 @@ Item {
                                     root.optionsPopup.wizardContainer = root
                                 }
                                 root.optionsPopup.initialize()
-                                root.optionsPopup.show()
+                                root.optionsPopup.open()
                             }
                         }
                     }
