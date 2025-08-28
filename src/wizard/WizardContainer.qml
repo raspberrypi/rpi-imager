@@ -161,7 +161,13 @@ Item {
                         border.color: Style.transparent
                         border.width: 0
                         radius: 0
-                        property bool isClickable: stepItem.index < root.getSidebarIndex(root.currentStep) && !root.isWriting
+                        property bool isClickable: (function(){
+                            if (root.isWriting) return false
+                            var maxIndex = root.getSidebarIndex(root.currentStep)
+                            // If customization not supported, do not allow navigating back to customization group
+                            if (!root.customizationSupported && stepItem.index === 3) return false
+                            return stepItem.index < maxIndex
+                        })()
  
                         // Header band with active background/border
                         Rectangle {
@@ -182,6 +188,10 @@ Item {
                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                 onClicked: {
                                     var targetStep = root.getWizardStepFromSidebarIndex(stepItem.index)
+                                    // Guard: skip customization group when unsupported
+                                    if (!root.customizationSupported && stepItem.index === 3) {
+                                        return
+                                    }
                                     if (root.currentStep > targetStep && !root.isWriting) {
                                         root.jumpToStep(targetStep)
                                     }
@@ -217,7 +227,7 @@ Item {
                             x: Style.spacingExtraLarge
                             width: parent.width - Style.spacingExtraLarge
                             spacing: Style.spacingXXSmall
-                            visible: stepItem.index === 3 && root.currentStep >= root.stepHostnameCustomization && root.currentStep <= root.stepRemoteAccess
+                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep >= root.stepHostnameCustomization && root.currentStep <= root.stepRemoteAccess
  
                             Repeater {
                                 model: [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("WiFi"), qsTr("Remote Access")]
@@ -235,7 +245,7 @@ Item {
                                     MouseArea {
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        enabled: !root.isWriting && (root.stepHostnameCustomization + subItem.index) <= root.currentStep
+                                        enabled: root.customizationSupported && !root.isWriting && (root.stepHostnameCustomization + subItem.index) <= root.currentStep
                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         onClicked: {
                                             var target = root.stepHostnameCustomization + subItem.index
@@ -254,7 +264,7 @@ Item {
                                             text: subItem.modelData
                                             font.pixelSize: Style.fontSizeCaption
                                             font.family: Style.fontFamily
-                                            color: ((root.stepHostnameCustomization + subItem.index) > root.currentStep)
+                                            color: (!root.customizationSupported || (root.stepHostnameCustomization + subItem.index) > root.currentStep)
                                                        ? Style.formLabelDisabledColor
                                                        : (((root.currentStep - root.stepHostnameCustomization) === subItem.index)
                                                            ? Style.sidebarTextOnActiveColor
