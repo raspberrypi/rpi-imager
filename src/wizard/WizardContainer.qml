@@ -197,7 +197,11 @@ Item {
                                     text: stepItem.modelData
                                     font.pixelSize: Style.fontSizeSidebarItem
                                     font.family: Style.fontFamily
-                                    color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarTextOnActiveColor : Style.sidebarTextOnInactiveColor
+                                    color: (stepItem.index > root.getSidebarIndex(root.currentStep) || (stepItem.index === 3 && !root.customizationSupported))
+                                               ? Style.formLabelDisabledColor
+                                               : (stepItem.index === root.getSidebarIndex(root.currentStep)
+                                                   ? Style.sidebarTextOnActiveColor
+                                                   : Style.sidebarTextOnInactiveColor)
                                     elide: Text.ElideRight
                                 }
                             }
@@ -231,7 +235,7 @@ Item {
                                     MouseArea {
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        enabled: !root.isWriting
+                                        enabled: !root.isWriting && (root.stepHostnameCustomization + subItem.index) <= root.currentStep
                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         onClicked: {
                                             var target = root.stepHostnameCustomization + subItem.index
@@ -250,7 +254,11 @@ Item {
                                             text: subItem.modelData
                                             font.pixelSize: Style.fontSizeCaption
                                             font.family: Style.fontFamily
-                                            color: (root.currentStep - root.stepHostnameCustomization) === subItem.index ? Style.sidebarTextOnActiveColor : Style.sidebarTextOnInactiveColor
+                                            color: ((root.stepHostnameCustomization + subItem.index) > root.currentStep)
+                                                       ? Style.formLabelDisabledColor
+                                                       : (((root.currentStep - root.stepHostnameCustomization) === subItem.index)
+                                                           ? Style.sidebarTextOnActiveColor
+                                                           : Style.sidebarTextOnInactiveColor)
                                             elide: Text.ElideRight
                                         }
                                     }
