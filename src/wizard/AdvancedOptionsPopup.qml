@@ -11,16 +11,17 @@ import "../qmlcomponents"
 
 import RpiImager
 
-Window {
+Dialog {
     id: popup
     width: 520
     height: 280
     
-    minimumWidth: 520
-    minimumHeight: contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280
+    // Center the dialog on screen
+    x: parent ? (parent.width - width) / 2 : 0
+    y: parent ? (parent.height - height) / 2 : 0
     
-    title: qsTr("Advanced Options")
-    modality: Qt.WindowModal
+    modal: true
+    closePolicy: Popup.CloseOnEscape
     
     required property ImageWriter imageWriter
     // Optional reference to the wizard container for ephemeral flags
@@ -28,87 +29,103 @@ Window {
     
     property bool initialized: false
     
-    // Shortcut to close with Escape
-    Shortcut {
-        sequence: "Esc"
-        onActivated: popup.close()
+    // Custom modal overlay background
+    Overlay.modal: Rectangle {
+        color: Qt.rgba(0, 0, 0, 0.3)
+        Behavior on opacity {
+            NumberAnimation { duration: 150 }
+        }
     }
     
-    // Main content
-    Rectangle {
-        anchors.fill: parent
+    // Remove standard dialog buttons since we have custom ones
+    standardButtons: Dialog.NoButton
+    
+    // Set the dialog background directly
+    background: Rectangle {
         color: Style.titleBackgroundColor
+        radius: Style.sectionBorderRadius
+        border.color: Style.popupBorderColor
+        border.width: Style.sectionBorderWidth
+    }
+    
+    // Main content - direct ColumnLayout without Rectangle wrapper
+    ColumnLayout {
+        id: contentLayout
+        anchors.fill: parent
+        anchors.margins: Style.cardPadding
+        spacing: Style.spacingLarge
         
-        ColumnLayout {
-            id: contentLayout
-            anchors.fill: parent
-            anchors.margins: Style.cardPadding
-            spacing: Style.spacingLarge
+        // Header
+        Text {
+            text: qsTr("Advanced Options")
+            font.pixelSize: Style.fontSizeLargeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+        }
+        
+        // Options section
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: optionsLayout.implicitHeight + Style.cardPadding
             
-            // Header
-            Text {
-                text: qsTr("Advanced Options")
-                font.pixelSize: Style.fontSizeLargeHeading
-                font.family: Style.fontFamilyBold
-                font.bold: true
-                color: Style.formLabelColor
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-            }
-            
-            // Options section
-            Item {
-                Layout.fillWidth: true
-                Layout.preferredHeight: optionsLayout.implicitHeight + Style.cardPadding
+            ColumnLayout {
+                id: optionsLayout
+                anchors.fill: parent
+                anchors.margins: Style.cardPadding
+                spacing: Style.spacingMedium
                 
-                ColumnLayout {
-                    id: optionsLayout
-                    anchors.fill: parent
-                    anchors.margins: Style.cardPadding
-                    spacing: Style.spacingMedium
-                    
-                    ImOptionPill {
-                        id: chkBeep
-                        text: qsTr("Play sound when finished")
-                        Layout.fillWidth: true
-                    }
-                    
-                    ImOptionPill {
-                        id: chkEject
-                        text: qsTr("Eject media when finished")
-                        Layout.fillWidth: true
-                    }
-                    
-                    ImOptionPill {
-                        id: chkTelemetry
-                        text: qsTr("Enable anonymous statistics (telemetry)")
-                        helpLabel: qsTr("What is this?")
-                        helpUrl: "https://github.com/raspberrypi/rpi-imager?tab=readme-ov-file#telemetry"
-                        Layout.fillWidth: true
-                    }
+                ImOptionPill {
+                    id: chkBeep
+                    text: qsTr("Play sound when finished")
+                    Layout.fillWidth: true
+                }
+                
+                ImOptionPill {
+                    id: chkEject
+                    text: qsTr("Eject media when finished")
+                    Layout.fillWidth: true
+                }
+                
+                ImOptionPill {
+                    id: chkTelemetry
+                    text: qsTr("Enable anonymous statistics (telemetry)")
+                    helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is this?")
+                    helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-imager?tab=readme-ov-file#telemetry"
+                    Layout.fillWidth: true
+                }
 
-                    ImOptionPill {
-                        id: chkDisableWarnings
-                        text: qsTr("Disable warnings")
-                        Layout.fillWidth: true
-                        onCheckedChanged: {
-                            if (checked) {
-                                // Confirm before enabling this risky setting
-                                confirmDisableWarnings.open()
-                            } else if (popup.wizardContainer) {
-                                popup.wizardContainer.disableWarnings = false
-                            }
+                ImOptionPill {
+                    id: chkDisableWarnings
+                    text: qsTr("Disable warnings")
+                    Layout.fillWidth: true
+                    onCheckedChanged: {
+                        if (checked) {
+                            // Confirm before enabling this risky setting
+                            confirmDisableWarnings.open()
+                        } else if (popup.wizardContainer) {
+                            popup.wizardContainer.disableWarnings = false
                         }
                     }
                 }
             }
-            // Spacer
-            Item {
-                Layout.fillHeight: true
-            }
-            // Buttons
+        }
+        // Spacer
+        Item {
+            Layout.fillHeight: true
+        }
+        // Buttons section with background
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: buttonRow.implicitHeight + Style.cardPadding
+            color: Style.titleBackgroundColor
+            
             RowLayout {
-                Layout.fillWidth: true
+                id: buttonRow
+                anchors.fill: parent
+                anchors.margins: Style.cardPadding / 2
                 spacing: Style.spacingMedium
                 
                 Item {
@@ -156,13 +173,11 @@ Window {
         if (popup.wizardContainer) popup.wizardContainer.disableWarnings = chkDisableWarnings.checked
     }
     
-    onVisibilityChanged: {
-        if (visible) {
-            initialize()
-            chkBeep.forceActiveFocus()
-            // Ensure the window is tall enough to show buttons
-            popup.height = Math.max(popup.height, popup.minimumHeight)
-        }
+    onOpened: {
+        initialize()
+        chkBeep.forceActiveFocus()
+        // Ensure the dialog is tall enough to show buttons
+        popup.height = Math.max(popup.height, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280)
     }
 
     // Confirmation dialog for disabling warnings
