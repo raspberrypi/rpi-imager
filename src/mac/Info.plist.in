@@ -34,5 +34,9 @@
   <string>NSApplication</string>
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>Used to detect the current Wi‑Fi network name to prefill settings.</string>
+  <key>NSLocationUsageDescription</key>
+  <string>Used to detect the current Wi‑Fi network name to prefill settings.</string>
 </dict>
 </plist>

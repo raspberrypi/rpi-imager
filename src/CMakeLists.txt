@@ -569,6 +569,10 @@ if (APPLE)
         dependencies/mountutils/src/darwin/functions.cpp
         mac/macwlancredentials.h
         mac/macwlancredentials.cpp
+        mac/ssid_helper.h
+        mac/ssid_helper.mm
+        mac/location_helper.h
+        mac/location_helper.mm
         dependencies/drivelist/src/darwin/list.mm
         dependencies/drivelist/src/darwin/REDiskList.m
         mac/file_operations_macos.cpp
@@ -1047,7 +1051,9 @@ elseif(APPLE)
     find_library(Security Security)
     find_library(IOKit IOKit)
     find_library(SystemConfiguration SystemConfiguration)
-    set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} ${IOKit} ${SystemConfiguration} iconv)
+    find_library(CoreWLAN CoreWLAN)
+    find_library(CoreLocation CoreLocation)
+    set(EXTRALIBS ${EXTRALIBS} ${CoreFoundation} ${DiskArbitration} ${Security} ${Cocoa} ${IOKit} ${SystemConfiguration} ${CoreWLAN} ${CoreLocation} iconv)
     
     # Set application name with proper spacing
     set(APP_NAME "Raspberry Pi Imager")
