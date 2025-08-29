@@ -89,6 +89,10 @@ WizardStepBase {
         root.registerFocusGroup("user_fields", function(){
             return [fieldUsername, fieldPassword, fieldPasswordConfirm]
         }, 0)
+        
+        // Set initial focus on the username field
+        root.initialFocusItem = fieldUsername
+        
         // Prefill from saved settings (avoid showing raw passwords)
         var saved = imageWriter.getSavedCustomizationSettings()
         if (saved.sshUserName) {

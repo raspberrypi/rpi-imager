@@ -22,14 +22,15 @@ WizardStepBase {
     subtitle: qsTr("Configure wireless LAN settings.")
     showSkipButton: true
     
-    // Set initial focus on SSID
-    initialFocusItem: fieldWifiSSID
-
     Component.onCompleted: {
         root.registerFocusGroup("wifi_fields", function(){
             return [fieldWifiSSID, fieldWifiPassword, fieldWifiCountry]
         }, 0)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 1)
+        
+        // Set initial focus on SSID
+        root.initialFocusItem = fieldWifiSSID
+        
         // Prefill from saved settings
         var saved = imageWriter.getSavedCustomizationSettings()
         if (saved.wifiSSID) {

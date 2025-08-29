@@ -1,0 +1,8 @@
+{
+  "localeFilter": {
+    "filterType": "language",
+    "includelist": [
+      "bn", "ca", "de", "en", "es", "fr", "ga", "he", "it", "ja", "ka", "ko", "nl", "pl", "pt", "ru", "sk", "sl", "tr", "uk", "zh", "zh-TW"
+    ]
+  }
+}

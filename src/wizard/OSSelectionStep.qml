@@ -43,33 +43,28 @@ WizardStepBase {
         root.nextClicked()
     }
 
-    function getNextFocusableElement(startElement) {
-        if (!startElement || !startElement.visible) startElement = osswipeview;
-        var order = [ osswipeview, nextButtonItem, backButtonItem ]
-        var currentIndex = order.indexOf(startElement)
-        if (currentIndex === -1) return osswipeview;
-        var nextElement = order[(currentIndex + 1) % order.length]
-        return nextElement.visible && nextElement.enabled ? nextElement : startElement
-    }
-
-    function getPreviousFocusableElement(startElement) {
-        if (!startElement || !startElement.visible) startElement = osswipeview;
-        var order = [ osswipeview, nextButtonItem, backButtonItem ]
-        var currentIndex = order.indexOf(startElement)
-        if (currentIndex === -1) return osswipeview;
-        var prevElement = order[(currentIndex - 1 + order.length) % order.length]
-        return prevElement.visible && prevElement.enabled ? prevElement : startElement
-    }
-
     Component.onCompleted: {
         // Try initial load in case data is already available
         onOsListPreparedHandler()
 
-        // Set the initial focus item to the SwipeView
-        root.initialFocusItem = osswipeview
+        // Register the OS list for keyboard navigation
+        root.registerFocusGroup("os_list", function(){
+            var focusItems = [oslist]
+            // Include any sublists that are currently in the SwipeView
+            for (var i = 1; i < osswipeview.count; i++) {
+                var sublist = osswipeview.itemAt(i)
+                if (sublist && sublist !== oslist) {
+                    focusItems.push(sublist)
+                }
+            }
+            return focusItems
+        }, 0)
+
+        // Set the initial focus item to the OS list
+        root.initialFocusItem = oslist
 
         // Ensure focus starts on the OS list when entering this step
-        osswipeview.forceActiveFocus()
+        oslist.forceActiveFocus()
         _focusFirstItemInCurrentView()
     }
 
@@ -106,9 +101,29 @@ WizardStepBase {
     
     // Ensure the current list view has focus and a valid currentIndex
     function _focusFirstItemInCurrentView() {
+        // For the main OS list, ensure it has a valid currentIndex when focused
+        if (oslist.activeFocus && oslist.count > 0 && oslist.currentIndex === -1) {
+            oslist.currentIndex = 0
+        }
+        // For sublists, ensure they have a valid currentIndex when focused
         var currentView = osswipeview.currentItem
-        if (osswipeview.activeFocus && currentView && currentView.count > 0 && currentView.currentIndex === -1) {
+        if (currentView && currentView !== oslist && currentView.activeFocus && currentView.count > 0 && currentView.currentIndex === -1) {
             currentView.currentIndex = 0
+        }
+    }
+    
+    // Ensure the clicked selection is visually highlighted in the current list view
+    function _highlightMatchingEntryInCurrentView(selectedModel) {
+        var currentView = osswipeview.currentItem
+        if (!currentView || !currentView.model || typeof currentView.model.get !== "function") {
+            return
+        }
+        for (var i = 0; i < currentView.count; i++) {
+            var entry = currentView.model.get(i)
+            if (entry && entry.name === selectedModel.name && entry.url === selectedModel.url) {
+                currentView.currentIndex = i
+                break
+            }
         }
     }
     
@@ -129,9 +144,7 @@ WizardStepBase {
                 anchors.fill: parent
                 interactive: false
                 clip: true
-                activeFocusOnTab: true
 
-                onActiveFocusChanged: _focusFirstItemInCurrentView()
                 onCurrentIndexChanged: {
                     _focusFirstItemInCurrentView()
                     // Ensure the current view gets focus when SwipeView index changes
@@ -239,7 +252,7 @@ WizardStepBase {
                         if (parent.ListView.view) {
                             parent.ListView.view.currentIndex = index
                         }
-                        selectOSitem(delegateItem.model)
+                        selectOSitem(delegateItem.model, undefined, true)
                     }
                 }
                 
@@ -389,6 +402,8 @@ WizardStepBase {
             Keys.onLeftPressed: {
                 osswipeview.decrementCurrentIndex()
                 root.categorySelected = ""
+                // Rebuild focus order when returning to main list
+                root.rebuildFocusOrder()
             }
             
             Component.onCompleted: {
@@ -403,9 +418,12 @@ WizardStepBase {
     }
 
     // OS selection functions (adapted from OSPopup.qml)
-    function selectOSitem(model, navigateOnly) {
+    function selectOSitem(model, navigateOnly, fromMouse) {
         if (navigateOnly === undefined) {
             navigateOnly = false
+        }
+        if (fromMouse === undefined) {
+            fromMouse = false
         }
         
         if (isOSsublist(model)) {
@@ -471,6 +489,9 @@ WizardStepBase {
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.nextButtonEnabled = true
+                if (fromMouse) {
+                    Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
+                }
             } else {
                 // Normal OS selection
                 imageWriter.setSrc(
@@ -487,6 +508,9 @@ WizardStepBase {
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.customSelected = false
                 root.nextButtonEnabled = true
+                if (fromMouse) {
+                    Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
+                }
             }
 
             if (model.subitems_url === "internal://back") {
@@ -519,6 +543,8 @@ WizardStepBase {
         if (osswipeview.currentIndex === (osswipeview.count - 1)) {
             var newlist = suboslist.createObject(osswipeview)
             osswipeview.addItem(newlist)
+            // Rebuild focus order to include the new sublist
+            root.rebuildFocusOrder()
         }
         var m = osswipeview.itemAt(osswipeview.currentIndex+1).model
         if (m.count > 1) {

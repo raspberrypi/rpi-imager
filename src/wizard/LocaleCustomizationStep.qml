@@ -20,7 +20,8 @@ WizardStepBase {
     title: qsTr("Customization: Choose locale")
     subtitle: qsTr("Configure timezone and keyboard layout for your Raspberry Pi.")
     showSkipButton: true
-    
+
+
     // Initialize the component
     Component.onCompleted: {
         // Load timezone and keyboard layout data
@@ -40,16 +41,17 @@ WizardStepBase {
         if (kbIndex !== -1) comboKeyboard.currentIndex = kbIndex
         else comboKeyboard.editText = kbToSet
 
-        // Register focus groups (no explicit controller checkboxes)
-        root.registerFocusGroup("locale_timezone", function(){ return [comboTimezone] }, 0)
-        root.registerFocusGroup("locale_keyboard", function(){ return [comboKeyboard] }, 1)
+        // Register focus group for locale controls in proper tab order
+        root.registerFocusGroup("locale_controls", function(){ 
+            return [comboTimezone, comboKeyboard] 
+        }, 0)
+        
+        // Set initial focus on timezone when entering step
+        root.initialFocusItem = comboTimezone
+        
+
     }
     
-    // Set initial focus on timezone when entering step
-    initialFocusItem: comboTimezone
-
-    
-
     // Content
     content: [
     ColumnLayout {
@@ -68,9 +70,8 @@ WizardStepBase {
                 ImComboBox {
                     id: comboTimezone
                     Layout.fillWidth: true
-                    editable: true
+                    editable: false
                     selectTextByMouse: true
-                    activeFocusOnTab: true
                     font.pixelSize: Style.fontSizeInput
                 }
             }
@@ -83,10 +84,11 @@ WizardStepBase {
                 ImComboBox {
                     id: comboKeyboard
                     Layout.fillWidth: true
-                    editable: true
+                    editable: false
                     selectTextByMouse: true
-                    activeFocusOnTab: true
                     font.pixelSize: Style.fontSizeInput
+                    KeyNavigation.tab: root.nextButtonItem
+                    KeyNavigation.backtab: comboTimezone
                 }
             }
             

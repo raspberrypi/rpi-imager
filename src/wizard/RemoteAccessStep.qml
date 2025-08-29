@@ -105,7 +105,7 @@ WizardStepBase {
     ]
 
     Component.onCompleted: {
-        root.registerFocusGroup("ssh_controller", function(){ return [sshEnablePill] }, 0)
+        root.registerFocusGroup("ssh_controller", function(){ return [sshEnablePill.focusItem] }, 0)
         root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [radioPassword, radioPublicKey] : [] }, 1)
         root.registerFocusGroup("ssh_key", function(){ return sshEnablePill.checked && radioPublicKey.checked ? [fieldPublicKey, browseButton] : [] }, 2)
         // Prefill from saved settings
@@ -121,6 +121,21 @@ WizardStepBase {
             radioPassword.checked = true
             radioPublicKey.checked = false
         }
+        // Ensure focus order is built after initial state
+        root.rebuildFocusOrder()
+    }
+
+    Connections {
+        target: sshEnablePill
+        function onToggled() { root.rebuildFocusOrder() }
+    }
+    Connections {
+        target: radioPublicKey
+        function onCheckedChanged() { root.rebuildFocusOrder() }
+    }
+    Connections {
+        target: radioPassword
+        function onCheckedChanged() { root.rebuildFocusOrder() }
     }
     
     // Save settings when moving to next step

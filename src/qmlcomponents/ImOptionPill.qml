@@ -18,6 +18,9 @@ Item {
     property url helpUrl: ""
     signal toggled(bool checked)
 
+    // Expose the actual focusable control for tab navigation
+    property alias focusItem: sw
+
     implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
     implicitWidth: label.implicitWidth + sw.implicitWidth + Style.cardPadding
 
