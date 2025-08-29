@@ -21,11 +21,11 @@
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">Erro na leitura do armazenamento.&lt;br&gt;O cartão SD pode estar danificado.</translation>
+        <translation>Erro na leitura do armazenamento.&lt;br&gt;O cartão SD pode estar danificado.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">Erro ao verificar a gravação. O conteúdo do cartão SD é diferente do que foi gravado nele.</translation>
+        <translation>Erro na verificação da gravação. O conteúdo do cartão SD é diferente do que foi gravado nele.</translation>
     </message>
 </context>
 <context>
@@ -120,107 +120,107 @@
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>O ficheiro em cache está corrompido. O hash SHA256 não corresponde ao valor esperado.&lt;br&gt;O ficheiro em cache será removido e a transferência será reiniciada.</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>O ficheiro local está corrompido ou tem um hash SHA256 incorreto.&lt;br&gt;Esperado: %1&lt;br&gt;Atual: %2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>A transferência parece estar corrompida. O hash SHA256 não corresponde.&lt;br&gt;Esperado: %1&lt;br&gt;Atual: %2&lt;br&gt;Verifique a sua ligação à rede e tente novamente.</translation>
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>O Acesso Controlado a Pastas parece estar ativado. Adicione o rpi-imager.exe à lista de aplicações permitidas e tente novamente.</translation>
     </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
     <message>
         <source>Error formatting (through udisks2)</source>
-        <translation>Erro ao formatar (via udisks2)</translation>
+        <translation>Erro de formatação (através do udisks2)</translation>
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Erro ao abrir o dispositivo para formatação</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Erro ao gravar no dispositivo durante a formatação</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Erro ao procurar no dispositivo durante a formatação</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Parâmetros inválidos para formatação</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>Espaço insuficiente no dispositivo</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>Erro de formatação desconhecido</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
+        <translation>Não é possível formatar o dispositivo: permissões insuficientes e udisks2 indisponível</translation>
     </message>
 </context>
 <context>
     <name>DstPopup</name>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">Armazenamento</translation>
+        <translation>Armazenamento</translation>
     </message>
     <message>
         <source>No storage devices found</source>
-        <translation type="unfinished">Não foram encontrados dispositivos de armazenamento</translation>
+        <translation>Não foram encontrados dispositivos de armazenamento</translation>
     </message>
     <message>
         <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Excluir unidades do sistema</translation>
     </message>
     <message>
         <source>gigabytes</source>
-        <translation type="unfinished"></translation>
+        <translation>gigabytes</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
-        <translation type="unfinished">Montado como %1</translation>
+        <translation>Montado como %1</translation>
     </message>
     <message>
         <source>GB</source>
-        <translation type="unfinished"></translation>
+        <translation>GB</translation>
     </message>
     <message>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[PROTEGIDO CONTRA GRAVAÇÃO]</translation>
+        <translation>[PROTEGIDO CONTRA GRAVAÇÃO]</translation>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
+        <translation>SISTEMA</translation>
     </message>
     <message>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">O cartão SD está protegido contra a gravação.&lt;br&gt;Empurre o interrutor de bloqueio no lado esquerdo do cartão para cima e tente novamente.</translation>
+        <translation>O cartão SD está protegido contra a gravação.&lt;br&gt;Empurre o interrutor de bloqueio no lado esquerdo do cartão para cima e tente novamente.</translation>
     </message>
 </context>
 <context>
     <name>HWListModel</name>
     <message>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">ESCOLHER DISPOSITIVO</translation>
+        <translation>ESCOLHER DISPOSITIVO</translation>
     </message>
 </context>
 <context>
     <name>HwPopup</name>
     <message>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished">Dispositivo Raspberry Pi</translation>
+        <translation>Dispositivo Raspberry Pi</translation>
     </message>
 </context>
 <context>
@@ -266,19 +266,19 @@
     </message>
     <message>
         <source>starting extraction</source>
-        <translation type="unfinished"></translation>
+        <translation>a iniciar extração</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Erro ao ler o ficheiro de imagem</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation type="unfinished"></translation>
+        <translation>Erro ao gravar no dispositivo</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Falha ao ler o ficheiro de imagem completo</translation>
     </message>
 </context>
 <context>
@@ -304,104 +304,104 @@
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>Recomendado</translation>
     </message>
 </context>
 <context>
     <name>OSPopup</name>
     <message>
         <source>Operating System</source>
-        <translation type="unfinished">Sistema operativo</translation>
+        <translation>Sistema Operativo</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Voltar</translation>
+        <translation>Voltar</translation>
     </message>
     <message>
         <source>Go back to main menu</source>
-        <translation type="unfinished">Voltar ao menu principal</translation>
+        <translation>Voltar ao menu principal</translation>
     </message>
     <message>
         <source>Released: %1</source>
-        <translation type="unfinished">Lançado: %1</translation>
+        <translation>Lançado: %1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">Em cache no seu computador</translation>
+        <translation>Em cache no seu computador</translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">Ficheiro local</translation>
+        <translation>Ficheiro local</translation>
     </message>
     <message>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">Online - transferir %1 GB</translation>
+        <translation>Online - transferir %1 GB</translation>
     </message>
     <message>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">Insira primeiro uma pen USB que contenha imagens.&lt;br&gt;As imagens devem estar localizadas na pasta de raiz da pen USB.</translation>
+        <translation>Insira primeiro uma pen USB que contenha imagens.&lt;br&gt;As imagens devem estar localizadas na pasta de raiz da pen USB.</translation>
     </message>
 </context>
 <context>
     <name>OptionsGeneralTab</name>
     <message>
         <source>Set hostname:</source>
-        <translation type="unfinished">Definir o nome de anfitrião:</translation>
+        <translation>Definir o nome de anfitrião:</translation>
     </message>
     <message>
         <source>Set username and password</source>
-        <translation type="unfinished">Definir nome de utilizador e palavra-passe</translation>
+        <translation>Definir nome de utilizador e palavra-passe</translation>
     </message>
     <message>
         <source>Username:</source>
-        <translation type="unfinished">Nome de utilizador:</translation>
+        <translation>Nome de utilizador:</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Palavra-passe:</translation>
+        <translation>Palavra-passe:</translation>
     </message>
     <message>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">Configurar a rede LAN sem fios</translation>
+        <translation>Configurar a rede LAN sem fios</translation>
     </message>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation type="unfinished">SSID oculto</translation>
+        <translation>SSID oculto</translation>
     </message>
     <message>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">País da rede LAN sem fios:</translation>
+        <translation>País da rede LAN sem fios:</translation>
     </message>
     <message>
         <source>Set locale settings</source>
-        <translation type="unfinished">Definir definições de idioma e região</translation>
+        <translation>Definir definições de idioma e região</translation>
     </message>
     <message>
         <source>Time zone:</source>
-        <translation type="unfinished">Fuso horário:</translation>
+        <translation>Fuso horário:</translation>
     </message>
     <message>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">Disposição do teclado:</translation>
+        <translation>Disposição do teclado:</translation>
     </message>
 </context>
 <context>
     <name>OptionsMiscTab</name>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Reproduzir som ao terminar</translation>
+        <translation>Reproduzir som ao terminar</translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Ejetar suporte ao terminar</translation>
+        <translation>Ejetar suporte ao terminar</translation>
     </message>
     <message>
         <source>Enable telemetry</source>
-        <translation type="unfinished">Ativar telemetria</translation>
+        <translation>Ativar telemetria</translation>
     </message>
 </context>
 <context>
@@ -428,60 +428,62 @@
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished"></translation>
+        <translation>CANCELAR</translation>
     </message>
     <message>
         <source>Please fix validation errors in General and Services tabs</source>
-        <translation type="unfinished"></translation>
+        <translation>Corrija os erros de validação nos separadores Geral e Serviços</translation>
     </message>
     <message>
         <source>Please fix validation errors in General tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Corrija os erros de validação no separador Geral</translation>
     </message>
     <message>
         <source>Please fix validation errors in Services tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Corrija os erros de validação no separador Serviços</translation>
     </message>
 </context>
 <context>
     <name>OptionsServicesTab</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">Ativar SSH</translation>
+        <translation>Ativar SSH</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">Utilizar autenticação por palavra-passe</translation>
+        <translation>Utilizar autenticação por palavra-passe</translation>
     </message>
     <message>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished">Permitir apenas a autenticação por chave pública</translation>
+        <translation>Permitir apenas a autenticação por chave pública</translation>
     </message>
     <message>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">Definir authorized_keys para &apos;%1&apos;:</translation>
+        <translation>Definir authorized_keys para &apos;%1&apos;:</translation>
     </message>
     <message>
         <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Eliminar chave</translation>
     </message>
     <message>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">EXECUTAR SSH-KEYGEN</translation>
+        <translation>EXECUTAR SSH-KEYGEN</translation>
     </message>
     <message>
         <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Adicionar chave SSH</translation>
     </message>
     <message>
         <source>Paste your SSH public key here.
 Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Cole aqui a sua chave pública SSH.
+Formatos suportados: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com e certificados SSH
+Exemplo: ssh-rsa AAAAB3NzaC1yc2E... utilizador@nome de anfitrião</translation>
     </message>
     <message>
         <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation type="unfinished"></translation>
+        <translation>Formato de chave SSH inválido. As chaves SSH devem começar com ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com ou certificados SSH, seguidos pelos dados da chave e comentário opcional.</translation>
     </message>
 </context>
 <context>
@@ -523,11 +525,11 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>Operating System</source>
-        <translation>Sistema operativo</translation>
+        <translation>Sistema Operativo</translation>
     </message>
     <message>
         <source>CHOOSE OS</source>
-        <translation>ESCOLHER SO</translation>
+        <translation>ESCOLHER OS</translation>
     </message>
     <message>
         <source>Select this button to change the operating system</source>
@@ -663,23 +665,23 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <translation>IGNORAR VERIFICAÇÃO DE CACHE</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>A iniciar a transferência...</translation>
     </message>
     <message>
         <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>A verificar ficheiro em cache... %1%</translation>
     </message>
     <message>
         <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
+        <translation>A verificar ficheiro em cache...</translation>
     </message>
     <message>
         <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <translation>A iniciar a gravação...</translation>
     </message>
 </context>
 </TS>
