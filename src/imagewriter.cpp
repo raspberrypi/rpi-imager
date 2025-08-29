@@ -1516,7 +1516,13 @@ QStringList ImageWriter::getKeymapLayoutList()
 
 QString ImageWriter::getSSID()
 {
-    return WlanCredentials::instance()->getSSID();
+    QString ssid = WlanCredentials::instance()->getSSID();
+    if (!ssid.isEmpty()) {
+        qDebug() << "ImageWriter::getSSID ->" << ssid;
+    } else {
+        qDebug() << "ImageWriter::getSSID -> (empty)";
+    }
+    return ssid;
 }
 
 QString ImageWriter::getPSK()
@@ -1666,7 +1672,7 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     line(QStringLiteral("set -e"), script);
 
     if (!hostname.isEmpty()) {
-        line(QStringLiteral("CURRENT_HOSTNAME=`cat /etc/hostname | tr -d \" \\\t\\n\\r\"`"), script);
+        line(QStringLiteral("CURRENT_HOSTNAME=$(cat /etc/hostname | tr -d \" \\\t\\\n\\\r\")"), script);
         line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
         line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_hostname ") + hostname, script);
         line(QStringLiteral("else"), script);
@@ -1701,8 +1707,8 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     }
 
     // Determine first user (uid 1000) and home, for parity with legacy behavior
-    line(QStringLiteral("FIRSTUSER=`getent passwd 1000 | cut -d: -f1`"), script);
-    line(QStringLiteral("FIRSTUSERHOME=`getent passwd 1000 | cut -d: -f6`"), script);
+    line(QStringLiteral("FIRSTUSER=$(getent passwd 1000 | cut -d: -f1)"), script);
+    line(QStringLiteral("FIRSTUSERHOME=$(getent passwd 1000 | cut -d: -f6)"), script);
     // Ensure desired user exists when explicit username was provided
     line(QStringLiteral("if ! id -u ") + effectiveUser + QStringLiteral(" >/dev/null 2>&1; then useradd -m -G ") + groups + QStringLiteral(" -s /bin/bash ") + effectiveUser + QStringLiteral("; fi"), script);
 
@@ -1733,8 +1739,8 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
         line(QStringLiteral("   echo 'PasswordAuthentication no' >>/etc/ssh/sshd_config"), script);
         line(QStringLiteral("   systemctl enable ssh || systemctl enable sshd || true"), script);
         line(QStringLiteral("fi"), script);
-        // Permit passwordless sudo when using SSH key
-        line(QStringLiteral("bash -c 'echo \"") + effectiveUser + QStringLiteral(" ALL=(ALL) NOPASSWD:ALL\" >/etc/sudoers.d/010-") + effectiveUser, script);
+        // Permit passwordless sudo when using SSH key (script runs as root; no need for bash -c)
+        line(QStringLiteral("echo \"") + effectiveUser + QStringLiteral(" ALL=(ALL) NOPASSWD:ALL\" >/etc/sudoers.d/010-") + effectiveUser, script);
     }
 
     if (sshEnabled && sshPasswordAuth) {
