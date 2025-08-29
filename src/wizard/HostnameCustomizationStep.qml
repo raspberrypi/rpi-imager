@@ -20,12 +20,12 @@ WizardStepBase {
     title: qsTr("Customization: Choose hostname")
     showSkipButton: true
     
-    
-    // Start focus directly on the hostname field
-    initialFocusItem: fieldHostname
-    
     Component.onCompleted: {
         root.registerFocusGroup("hostname_fields", function(){ return [fieldHostname] }, 0)
+        
+        // Set initial focus on the hostname field
+        root.initialFocusItem = fieldHostname
+        
         // Prefill from saved settings
         var saved = imageWriter.getSavedCustomizationSettings()
         if (saved.hostname) {
