@@ -29,6 +29,7 @@ public:
         NameRole = Qt::UserRole + 1,
         DescriptionRole,
         DevicesRole,
+        CapabilitiesRole,
         ExtractSha256Role,
         ExtractSizeRole,
         IconRole,
@@ -48,6 +49,7 @@ public:
         QString name;
         QString description;
         QStringList devices; // not used by QML but present in JSON
+        QStringList capabilities;
         QString icon;
         QString initFormat;
         QString releaseDate;

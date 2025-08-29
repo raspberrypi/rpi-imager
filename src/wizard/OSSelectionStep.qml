@@ -231,6 +231,7 @@ WizardStepBase {
             required property string extract_sha256
             required property QtObject model
             required property double image_download_size
+            required property var capabilities
             
             property string website
             property string tooltip
@@ -390,6 +391,7 @@ WizardStepBase {
                     tooltip: ""
                     website: ""
                     init_format: ""
+                    capabilities: ""
                 }
             }
             currentIndex: -1
@@ -547,6 +549,8 @@ WizardStepBase {
                     model.name,
                     typeof(model.init_format) != "undefined" ? model.init_format : ""
                 )
+                imageWriter.setSWCapabilitiesList(model.capabilities)
+
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 // Gate Pi Connect availability by OS JSON field
@@ -633,6 +637,18 @@ WizardStepBase {
                 if (typeof(entry.enable_rpi_connect) === "undefined" && typeof(model.enable_rpi_connect) !== "undefined") {
                     entry.enable_rpi_connect = model.enable_rpi_connect
                 }
+
+                if (typeof entry.capabilities === "string") {
+                    // keep it
+                } else if (Array.isArray(entry.capabilities)) {
+                    entry.capabilities = JSON.stringify(entry.capabilities);
+                } else if (entry.capabilities && typeof entry.capabilities.length === "number") {
+                    // QVariantList-looking object
+                    entry.capabilities = JSON.stringify(Array.prototype.slice.call(entry.capabilities));
+                } else {
+                    entry.capabilities = "[]";
+                }
+
                 listModel.append(entry)
             }
         }

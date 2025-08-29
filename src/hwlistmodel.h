@@ -25,6 +25,7 @@ public:
     enum HWListRole {
         NameRole = Qt::UserRole + 1,
         TagsRole,
+        CapabilitiesRole,
         IconRole,
         DescriptionRole,
         MatchingTypeRole,
@@ -34,6 +35,7 @@ public:
     struct HardwareDevice {
         QString name;
         QJsonArray tags;
+        QJsonArray capabilities;
         QString icon;
         QString description;
         QString matchingType;

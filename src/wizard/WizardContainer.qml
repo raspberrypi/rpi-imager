@@ -22,7 +22,7 @@ Item {
     property alias networkInfoText: networkInfo.text
     
     property int currentStep: 0
-    readonly property int totalSteps: 11  // Includes optional Pi Connect step when available
+    readonly property int totalSteps: 12
     
     // Track writing state
     property bool isWriting: false
@@ -48,9 +48,8 @@ Item {
     // Interfaces & Features
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
-    property bool ifSerialEnabled: false
-    // "default" | "console_hw" | "console" | "hw" | ""
-    property string ifSerialMode: ""
+    // "Disabled" | "Default" | "Console & Hardware" | "Console" | "Hardware" | ""
+    property string ifSerial: ""
 
     // Ephemeral per-run setting: do not persist across runs
     property bool disableWarnings: false
@@ -139,6 +138,7 @@ Item {
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
+        labels.push(qsTr("Interfaces & Features"))
         return labels
     }
 
@@ -149,7 +149,7 @@ Item {
             case 0: return stepDeviceSelection
             case 1: return stepOSSelection
             case 2: return stepStorageSelection
-            case 3: return stepHostnameCustomization // first customization step
+            case 3: return firstCustomizationStep
             case 4: return stepWriting
             case 5: return stepDone
             default: return stepDeviceSelection
@@ -281,7 +281,7 @@ Item {
                             x: Style.spacingExtraLarge
                             width: parent.width - Style.spacingExtraLarge
                             spacing: Style.spacingXXSmall
-                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep >= root.stepHostnameCustomization && root.currentStep <= root.getLastCustomizationStep()
+                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep >= root.firstCustomizationStep && root.currentStep <= root.lastCustomizationStep
  
                             Repeater {
                                 model: root.getCustomizationSubstepLabels()
@@ -299,10 +299,10 @@ Item {
                                     MouseArea {
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        enabled: root.customizationSupported && !root.isWriting && (root.stepHostnameCustomization + subItem.index) <= root.currentStep
+                                        enabled: root.customizationSupported && !root.isWriting && (root.firstCustomizationStep + subItem.index) <= root.currentStep
                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         onClicked: {
-                                            var target = root.stepHostnameCustomization + subItem.index
+                                            var target = root.firstCustomizationStep + subItem.index
                                             if (root.currentStep !== target) root.jumpToStep(target)
                                         }
                                     }
@@ -319,8 +319,8 @@ Item {
                                             text: subItem.modelData
                                             font.pixelSize: Style.fontSizeCaption
                                             font.family: Style.fontFamily
-                                            font.underline: (root.currentStep - root.stepHostnameCustomization) === subItem.index
-                                            color: (!root.customizationSupported || (root.stepHostnameCustomization + subItem.index) > root.currentStep)
+                                            font.underline: (root.currentStep - root.firstCustomizationStep) === subItem.index
+                                            color: (!root.customizationSupported || (root.firstCustomizationStep + subItem.index) > root.currentStep)
                                                        ? Style.formLabelDisabledColor
                                                        : Style.sidebarTextOnInactiveColor
                                             elide: Text.ElideRight
@@ -488,7 +488,7 @@ Item {
         if (root.currentStep < root.totalSteps - 1) {
             var nextIndex = root.currentStep + 1
             // If customization is not supported, skip customization steps entirely
-            if (!customizationSupported && nextIndex === stepHostnameCustomization) {
+            if (!customizationSupported && nextIndex === firstCustomizationStep) {
                 nextIndex = stepWriting
             }
             // Skip optional Pi Connect step when OS does not support it
@@ -778,8 +778,8 @@ Item {
     // Keep customization items visible when navigating within customization
     onCurrentStepChanged: {
         if (!sidebarScroll) return
-        if (currentStep >= stepHostnameCustomization && currentStep <= getLastCustomizationStep()) {
-            var idx = currentStep - stepHostnameCustomization
+        if (currentStep >= firstCustomizationStep && currentStep <= lastCustomizationStep) {
+            var idx = currentStep - firstCustomizationStep
             var mainRowH = Style.sidebarItemHeight + Style.spacingXSmall
             var subRectH = Style.sidebarSubItemHeight
             var subRowH = subRectH + Style.spacingXXSmall

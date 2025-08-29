@@ -141,10 +141,10 @@ public:
     Q_INVOKABLE void setHWFilterList(const QJsonArray &tags, const bool &inclusive);
 
     /* Set the capabilities supported by the hardware, for a filtered view of options that require the hardware to have certain capabilities. */
-    Q_INVOKABLE void setHWCapabilitiesList(const QByteArray &json);
+    Q_INVOKABLE void setHWCapabilitiesList(const QJsonArray &json);
 
     /* Set the capabilities supported by the hardware, for a filtered view of options that require the software to have certain capabilities. */
-    Q_INVOKABLE void setSWCapabilitiesList(const QByteArray &json);
+    Q_INVOKABLE void setSWCapabilitiesList(const QString &json);
 
     /* Get the HW filter list */
     Q_INVOKABLE QJsonArray getHWFilterList();
