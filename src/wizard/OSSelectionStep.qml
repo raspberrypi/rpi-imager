@@ -70,21 +70,11 @@ WizardStepBase {
         }
     }
 
-    // Fallback FileDialog for selecting a custom image when native dialogs are unavailable
-    // Consumers should set properties before opening when needed
+    // Fallback custom FileDialog (styled) when native dialogs are unavailable
     // Exposed via property alias for callsite access
     property alias customImageFileDialog: customImageFileDialog
-    FileDialog {
+    ImFileDialog {
         id: customImageFileDialog
-        // Force QML implementation as fallback
-        options: FileDialog.DontUseNativeDialog
-        // Ensure visible styling on platforms without a window manager (e.g. linuxfb)
-        background: Rectangle {
-            color: Style.mainBackgroundColor
-            radius: Style.sectionBorderRadius
-            border.color: Style.popupBorderColor
-            border.width: Style.sectionBorderWidth
-        }
         onAccepted: {
             imageWriter.acceptCustomImageFromQml(selectedFile)
         }
@@ -426,7 +416,7 @@ WizardStepBase {
                     imageWriter.openFileDialog()
                 } else if (root.hasOwnProperty("customImageFileDialog")) {
                     // Ensure reasonable defaults
-                    customImageFileDialog.title = qsTr("Select image")
+                    customImageFileDialog.dialogTitle = qsTr("Select image")
                     customImageFileDialog.nameFilters = [
                         "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic)",
                         "All files (*)"
@@ -435,12 +425,8 @@ WizardStepBase {
                     var dl = StandardPaths.writableLocation(StandardPaths.DownloadLocation)
                     if (dl && dl.length > 0) {
                         var furl = (Qt.platform.os === "windows") ? ("file:///" + dl) : ("file://" + dl)
-                        if (customImageFileDialog.hasOwnProperty("currentFolder")) {
-                            customImageFileDialog.currentFolder = furl
-                        }
-                        if (customImageFileDialog.hasOwnProperty("folder")) {
-                            customImageFileDialog.folder = furl
-                        }
+                        customImageFileDialog.currentFolder = furl
+                        customImageFileDialog.folder = furl
                     }
                     customImageFileDialog.open()
                 } else {

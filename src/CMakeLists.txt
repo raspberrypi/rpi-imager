@@ -845,6 +845,7 @@ set(IMAGER_QML_FILES
     qmlcomponents/ImCheckBox.qml
     qmlcomponents/ImCloseButton.qml
     qmlcomponents/ImComboBox.qml
+    qmlcomponents/ImFileDialog.qml
     qmlcomponents/ImPopup.qml
     qmlcomponents/ImRadioButton.qml
     qmlcomponents/ImOptionPill.qml
@@ -1198,7 +1199,6 @@ elseif(APPLE)
         # Remove testing framework QML modules (not needed in production)
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/QtTest"
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Qt/test"
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Qt/labs"
         # Remove QML Assets tooling module and stray build artifacts (not used, breaks notarization)
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/qml/Assets"
         # Prune any 'objects-*' directories accidentally deployed with QML modules
@@ -1216,16 +1216,10 @@ elseif(APPLE)
         COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsPlatform.6.dylib"
         COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsPlatform.dylib"
         # Other Qt Labs QML plugins and their backing libraries (unused)
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/liblabsmodelsplugin.dylib"
         COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/liblabsanimationplugin.dylib"
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqmlfolderlistmodelplugin.dylib"
         COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/PlugIns/quick/libqmlsettingsplugin.dylib"
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsQmlModels.6.dylib"
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsQmlModels.dylib"
         COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsAnimation.6.dylib"
         COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsAnimation.dylib"
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsFolderListModel.6.dylib"
-        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsFolderListModel.dylib"
         COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsSettings.6.dylib"
         COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Frameworks/libQt6LabsSettings.dylib"
         # Finally remove QtWidgets dylibs themselves

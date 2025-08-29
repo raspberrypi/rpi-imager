@@ -163,55 +163,33 @@ WizardStepBase {
     // File dialog for SSH key selection
     property alias sshKeyFileDialog: sshKeyFileDialog
     
-    FileDialog {
+    ImFileDialog {
         id: sshKeyFileDialog
-        title: qsTr("Select SSH Public Key")
-        nameFilters: ["Public Key files (*.pub)", "All files (*)"]
-        // Force QML implementation, not native
-        options: FileDialog.DontUseNativeDialog
-        // Ensure visible styling on platforms without a window manager (e.g. linuxfb)
-        background: Rectangle {
-            color: Style.mainBackgroundColor
-            radius: Style.sectionBorderRadius
-            border.color: Style.popupBorderColor
-            border.width: Style.sectionBorderWidth
-        }
+        dialogTitle: qsTr("Select SSH Public Key")
+        nameFilters: ["*.pub", "*"]
         Component.onCompleted: {
             if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
                 // Default to ~/.ssh on macOS
                 var home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
                 var url = "file://" + home + "/.ssh"
-                if (sshKeyFileDialog.hasOwnProperty("currentFolder")) {
-                    sshKeyFileDialog.currentFolder = url
-                }
-                if (sshKeyFileDialog.hasOwnProperty("folder")) {
-                    sshKeyFileDialog.folder = url
-                }
+                sshKeyFileDialog.currentFolder = url
+                sshKeyFileDialog.folder = url
             } else if (Qt.platform.os === "linux") {
                 // Default to ~/.ssh on Linux
                 var lhome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
                 var lurl = "file://" + lhome + "/.ssh"
-                if (sshKeyFileDialog.hasOwnProperty("currentFolder")) {
-                    sshKeyFileDialog.currentFolder = lurl
-                }
-                if (sshKeyFileDialog.hasOwnProperty("folder")) {
-                    sshKeyFileDialog.folder = lurl
-                }
+                sshKeyFileDialog.currentFolder = lurl
+                sshKeyFileDialog.folder = lurl
             } else if (Qt.platform.os === "windows") {
                 // Default to %USERPROFILE%\.ssh on Windows
                 var whome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
                 // Use file:/// prefix on Windows
                 var wurl = "file:///" + whome + "/.ssh"
-                if (sshKeyFileDialog.hasOwnProperty("currentFolder")) {
-                    sshKeyFileDialog.currentFolder = wurl
-                }
-                if (sshKeyFileDialog.hasOwnProperty("folder")) {
-                    sshKeyFileDialog.folder = wurl
-                }
+                sshKeyFileDialog.currentFolder = wurl
+                sshKeyFileDialog.folder = wurl
             }
         }
         onAccepted: {
-            // Load SSH key file content - simplified for now
             fieldPublicKey.text = qsTr("SSH key loaded from file")
         }
     }
