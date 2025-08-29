@@ -48,6 +48,7 @@
 #include <QRandomGenerator>
 #include <stdlib.h>
 #include <QLocale>
+#include <QMetaType>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -913,15 +914,27 @@ void ImageWriter::setHWFilterList(const QJsonArray &tags, const bool &inclusive)
     _deviceFilterIsInclusive = inclusive;
 }
 
-void ImageWriter::setHWCapabilitiesList(const QByteArray &json) {
-    QJsonDocument json_document = QJsonDocument::fromJson(json);
+void ImageWriter::setHWCapabilitiesList(const QJsonArray &json) {
     // TODO: maybe also clear the sw capabilities as in the UI the OS is unselected when this changes
-    _hwCapabilities = json_document.array();
+    _hwCapabilities = json;
 }
 
-void ImageWriter::setSWCapabilitiesList(const QByteArray &json) {
-    QJsonDocument json_document = QJsonDocument::fromJson(json);
-    _swCapabilities = json_document.array();
+static inline void pushLower(QStringList &dst, const QString &s) {
+    const QString t = s.trimmed().toLower();
+    if (!t.isEmpty()) dst.push_back(t);
+}
+
+void ImageWriter::setSWCapabilitiesList(const QString &json) {
+    _swCapabilities = QJsonArray{};
+    QJsonParseError err{};
+    const auto doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    if (err.error == QJsonParseError::NoError && doc.isArray()) {
+        _swCapabilities = doc.array();
+    } else {
+        // optional CSV fallback ("a,b,c")
+        for (const auto &p : json.split(',', Qt::SkipEmptyParts))
+            _swCapabilities.append(p.trimmed().toLower());
+    }
 }
 
 QJsonArray ImageWriter::getHWFilterList() {
@@ -937,11 +950,14 @@ bool ImageWriter::checkHWAndSWCapability(const QString &cap, const QString &diff
 }
 
 bool ImageWriter::checkHWCapability(const QString &cap) {
-    return _hwCapabilities.contains(cap.toLower());
+    return _hwCapabilities.contains(cap.trimmed().toLower());
 }
 
 bool ImageWriter::checkSWCapability(const QString &cap) {
-    return _swCapabilities.contains(cap.toLower());
+    const auto needle = cap.trimmed().toLower();
+    for (const auto &v : _swCapabilities)
+        if (v.toString() == needle) return true;
+    return false;
 }
 
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
@@ -2053,9 +2069,8 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     const bool isPiConnect = s.value("enablePiConnect").toBool();
     const bool enableI2C = s.value("enableI2C").toBool();
     const bool enableSPI = s.value("enableSPI").toBool();
-    const bool enableSerial = s.value("enableSerial").toBool();
-    const QString serialMode = s.value("serialMode").toString();
-    const bool armInterfaceEnabled = enableI2C || enableSPI || enableSerial;
+    const QString enableSerial = s.value("enableSerial").toString();
+    const bool armInterfaceEnabled = enableI2C || enableSPI || enableSerial != "Disabled";
 
     // cc_raspberry_pi config for rpios_cloudinit capable OSs
     if (isRpiosCloudInit && (isPiConnect || armInterfaceEnabled)) {
@@ -2075,22 +2090,22 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
             if (enableSPI) {
                 push(QStringLiteral("    spi: true"), cloud);
             }
-            if (enableSerial) {
-                if (serialMode == "" || serialMode == "default") {
+            if (enableSerial != "Disabled") {
+                if (enableSerial == "" || enableSerial == "Default") {
                     push(QStringLiteral("    serial: true"), cloud);
                 } else {
                     push(QStringLiteral("    serial:"), cloud);
-                    if (serialMode == "console_hw") {
+                    if (enableSerial == "Console & Hardware") {
                         push(QStringLiteral("      console: true"), cloud);
                         push(QStringLiteral("      hardware: true"), cloud);
-                    } else if (serialMode == "console") {
+                    } else if (enableSerial == "Console") {
                         push(QStringLiteral("      console: true"), cloud);
                         push(QStringLiteral("      hardware: false"), cloud);
-                    } else if (serialMode == "hardware") {
+                    } else if (enableSerial == "Hardware") {
                         push(QStringLiteral("      console: false"), cloud);
                         push(QStringLiteral("      hardware: true"), cloud);
                     } else {
-                        qDebug() << "Invalid serial mode: " << serialMode;
+                        qDebug() << "Invalid serial mode: " << enableSerial;
                     }
                 }
             }

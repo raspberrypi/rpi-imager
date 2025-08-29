@@ -52,6 +52,7 @@ bool HWListModel::reload()
         HardwareDevice hwDevice = {
             deviceObj["name"].toString(),
             deviceObj["tags"].toArray(),
+            deviceObj["capabilities"].toArray(),
             [&]() {
                 QString iconPath = deviceObj["icon"].toString();
                 // Adjust icon path for wizard directory structure
@@ -91,6 +92,7 @@ QHash<int, QByteArray> HWListModel::roleNames() const
     return {
         {NameRole, "name"},
         {TagsRole, "tags"},
+        {CapabilitiesRole, "capabilities"},
         {IconRole, "icon"},
         {DescriptionRole, "description"},
         {MatchingTypeRole, "matching_type"},
@@ -110,6 +112,8 @@ QVariant HWListModel::data(const QModelIndex &index, int role) const {
         return device.name;
     case TagsRole:
         return device.tags;
+    case CapabilitiesRole:
+        return device.capabilities;
     case IconRole:
         return device.icon;
     case DescriptionRole:
@@ -151,6 +155,7 @@ void HWListModel::setCurrentIndex(int index) {
     const HardwareDevice &device = _hwDevices.at(index);
 
     _imageWriter.setHWFilterList(device.tags, device.isInclusive());
+    _imageWriter.setHWCapabilitiesList(device.capabilities);
     _imageWriter.setSrc({});
 
     _currentIndex = index;

@@ -254,6 +254,12 @@ bool OSListModel::reload()
             os.devices.append(device.toString());
         }
 
+        QJsonArray capsArray = obj["capabilities"].toArray();
+        os.capabilities.reserve(capsArray.size());
+        for (const auto &cap : capsArray) {
+            os.capabilities.append(cap.toString());
+        }
+
         os.extractSize = obj["extract_size"].toDouble();
         os.imageDownloadSize = obj["image_download_size"].toDouble();
 
@@ -318,6 +324,7 @@ QHash<int, QByteArray> OSListModel::roleNames() const
         { NameRole, "name" },
         { DescriptionRole, "description" },
         { DevicesRole, "devices" },
+        { CapabilitiesRole, "capabilities" },
         { ExtractSha256Role, "extract_sha256" },
         { ExtractSizeRole, "extract_size" },
         { IconRole, "icon" },
@@ -347,6 +354,8 @@ QVariant OSListModel::data(const QModelIndex &index, int role) const {
             return os.description;
         case DevicesRole:
             return os.devices;
+        case CapabilitiesRole:
+            return os.capabilities;
         case ExtractSha256Role:
             return os.extractSha256;
         case ExtractSizeRole:

@@ -51,75 +51,45 @@ WizardStepBase {
                         Label {
                             text: qsTr("Interfaces")
                             font.bold: true
+                            font.pixelSize: Style.fontSizeTitle
                             Layout.alignment: Qt.AlignLeft
                         }
 
                         // Interface toggles
+                        ImOptionPill {
+                            id: chkEnableI2C
+                            Layout.fillWidth: true
+                            text: qsTr("Enable I²C")
+                            checked: false
+                        }
+
+                        ImOptionPill {
+                            id: chkEnableSPI
+                            Layout.fillWidth: true
+                            text: qsTr("Enable SPI")
+                            checked: false
+                        }
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Style.spacingMedium
 
-                            ImCheckBox {
-                                id: chkEnableI2C
-                                text: qsTr("Enable I²C")
-                                checked: false
-                                onCheckedChanged: root.requestRecomputeTabOrder()
-                            }
-
-                            ImCheckBox {
-                                id: chkEnableSPI
-                                text: qsTr("Enable SPI")
-                                checked: false
-                                onCheckedChanged: root.requestRecomputeTabOrder()
-                            }
-
-                            ImCheckBox {
-                                id: chkEnableSerial
-                                text: qsTr("Enable Serial")
-                                checked: false
-                                onCheckedChanged: root.requestRecomputeTabOrder()
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        // Serial mode selection (enabled only when serial is enabled)
-                        ColumnLayout {
-                            spacing: Style.spacingSmall
-                            enabled: chkEnableSerial.checked
-
-                            ButtonGroup { id: serialModeGroup; exclusive: true }
-
-                            ImRadioButton {
-                                id: rbSerialDefault
-                                text: qsTr("Default")
-                                checked: true
-                                ButtonGroup.group: serialModeGroup
-                                onCheckedChanged: root.requestRecomputeTabOrder()
-                            }
-
-                            ImRadioButton {
-                                id: rbSerialConsoleAndHw
-                                text: qsTr("Console & hardware")
-                                checked: true
-                                ButtonGroup.group: serialModeGroup
-                                onCheckedChanged: root.requestRecomputeTabOrder()
-                            }
-
-                            ImRadioButton {
-                                id: rbSerialConsoleOnly
-                                text: qsTr("Console")
-                                ButtonGroup.group: serialModeGroup
-                                visible: supportsSerialConsoleOnly
-                                onCheckedChanged: root.requestRecomputeTabOrder()
-                                onVisibleChanged: if (!visible && checked) rbSerialConsoleAndHw.checked = true
-                            }
-
-                            ImRadioButton {
-                                id: rbSerialHardwareOnly
-                                text: qsTr("Hardware")
-                                ButtonGroup.group: serialModeGroup
-                                onCheckedChanged: root.requestRecomputeTabOrder()
+                            WizardFormLabel { text: qsTr("Enable Serial:"); font.bold: true; Layout.fillWidth: true }
+                            ImComboBox {
+                                id: comboSerial
+                                model: ListModel {
+                                    id: serialModel
+                                    ListElement { text: "Disabled" }
+                                    ListElement { text: "Default" }
+                                    ListElement { text: "Console & Hardware" }
+                                    ListElement { text: "Hardware" }
+                                }
+                                Layout.fillWidth: false
+                                editable: true
+                                selectTextByMouse: false
+                                activeFocusOnTab: true
+                                font.pixelSize: Style.fontSizeInput
+                                Layout.alignment: Qt.AlignRight
                             }
                         }
                     }
@@ -135,18 +105,20 @@ WizardStepBase {
                         Label {
                             text: qsTr("Features")
                             font.bold: true
+                            font.pixelSize: Style.fontSizeTitle
                             Layout.alignment: Qt.AlignLeft
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: Style.spacingMedium
 
-                            ImCheckBox {
+                            ImOptionPill {
                                 id: chkEnablePiConnect
+                                Layout.fillWidth: true
                                 text: qsTr("Enable Raspberry Pi Connect")
+                                helpLabel: qsTr("Learn more about RPi-Connect")
+                                helpUrl: "https://www.raspberrypi.com/documentation/services/connect.html"
                                 checked: false
-                                onCheckedChanged: root.requestRecomputeTabOrder()
                             }
 
                             Item { Layout.fillWidth: true }
@@ -158,19 +130,20 @@ WizardStepBase {
     ]
 
     Component.onCompleted: {
+        if (!imageWriter.checkSWCapability("rpios_cloudinit")) {
+            // skip page
+            wizardContainer.jumpToStep(wizardContainer.stepWriting)
+            return
+        }
+
         updateCaps()
 
+        if (supportsSerialConsoleOnly) {
+            serialModel.append({ text: qsTr("Console") })
+        }
+
         root.registerFocusGroup("if_section_interfaces", function() {
-            const list = [chkEnableI2C, chkEnableSPI, chkEnableSerial]
-            if (chkEnableSerial.checked) {
-                // radios become tabbable only when serial is enabled
-                list.push(rbSerialDefault)
-                list.push(rbSerialConsoleAndHw)
-                if (wizardContainer.selectedDeviceName === "Raspberry Pi 5")
-                    list.push(rbSerialConsoleOnly)
-                list.push(rbSerialHardwareOnly)
-            }
-            return list
+            return [chkEnableI2C, chkEnableSPI, comboSerial]
         }, 0)
 
         root.registerFocusGroup("if_section_features", function() {
@@ -182,15 +155,9 @@ WizardStepBase {
         // Load from persisted settings (if you store them there)…
         chkEnableI2C.checked     = saved.enableI2C === true || saved.enableI2C === "true" || wizardContainer.ifI2cEnabled
         chkEnableSPI.checked     = saved.enableSPI === true || saved.enableSPI === "true" || wizardContainer.ifSpiEnabled
-        chkEnableSerial.checked  = saved.enableSerial === true || saved.enableSerial === "true" || wizardContainer.ifSerialEnabled
-
-        // Serial mode
-        var mode = saved.serialMode || wizardContainer.ifSerialMode || "default"
-        if (mode === "console" && !supportsSerialConsoleOnly) mode = "default"
-        rbSerialDefault.cheched      = (mode === "default")
-        rbSerialConsoleAndHw.checked = (mode === "console_hw")
-        rbSerialHardwareOnly.checked = (mode === "hw")
-        rbSerialConsoleOnly.checked  = (mode === "console" && supportsSerialConsoleOnly)
+        var enableSerial         = saved.enableSerial || wizardContainer.ifSerial
+        var idx                  = comboSerial.find(enableSerial)
+        comboSerial.currentIndex = (idx >= 0 ? idx : 0)
 
         // Features
         chkEnablePiConnect.checked = saved.enablePiConnect === true || saved.enablePiConnect === "true" || wizardContainer.featPiConnectEnabled
@@ -207,20 +174,7 @@ WizardStepBase {
         // Interfaces
         saved.enableI2C    = chkEnableI2C.checked
         saved.enableSPI    = chkEnableSPI.checked
-        saved.enableSerial = chkEnableSerial.checked
-
-        let mode = ""
-        if (chkEnableSerial.checked) {
-            mode = rbSerialDefault.checked ? "default"
-                : rbSerialConsoleAndHw.checked ? "console_hw"
-                : rbSerialConsoleOnly.checked ? "console"
-                : "hw"
-            if (mode === "console" && !supportsSerialConsoleOnly)
-                mode = "default"
-            saved.serialMode = mode
-        } else {
-            delete saved.serialMode
-        }
+        saved.enableSerial = !supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText
 
         // Features
         saved.enablePiConnect = chkEnablePiConnect.checked
@@ -233,8 +187,7 @@ WizardStepBase {
         // Mirror into wizardContainer
         wizardContainer.ifI2cEnabled     = chkEnableI2C.checked
         wizardContainer.ifSpiEnabled     = chkEnableSPI.checked
-        wizardContainer.ifSerialEnabled  = chkEnableSerial.checked
-        wizardContainer.ifSerialMode     = chkEnableSerial.checked ? mode : ""
+        wizardContainer.ifSerial         = comboSerial.editText
         wizardContainer.featPiConnectEnabled = chkEnablePiConnect.checked
     }
 
@@ -243,15 +196,13 @@ WizardStepBase {
         delete saved.enableI2C
         delete saved.enableSPI
         delete saved.enableSerial
-        delete saved.serialMode
         delete saved.enablePiConnect
         imageWriter.setSavedCustomizationSettings(saved)
 
         // Clear all customization flags
         wizardContainer.ifI2cEnabled = false
         wizardContainer.ifSpiEnabled = false
-        wizardContainer.ifSerialEnabled = false
-        wizardContainer.ifSerialMode = ""
+        wizardContainer.ifSerial = "Disabled"
         wizardContainer.featPiConnectEnabled = false
 
         // Jump to writing step
@@ -264,8 +215,8 @@ WizardStepBase {
         function onSelectedDeviceNameChanged() {
             updateCaps()
             // If Console is no longer supported and was selected, fall back
-            if (!supportsSerialConsoleOnly && rbSerialConsoleOnly.checked)
-                rbSerialDefault.checked = true
+            if (!supportsSerialConsoleOnly && comboSerial.editText === qsTr("Console"))
+                comboSerial.currentIndex = 0;
         }
     }
 }
