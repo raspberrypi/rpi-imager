@@ -106,6 +106,12 @@ ComboBox {
         width: root.width
         height: Math.min(300, Math.max(150, contentItem.implicitHeight))
         closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+        background: Rectangle {
+            color: Style.mainBackgroundColor
+            radius: Style.sectionBorderRadius
+            border.color: Style.popupBorderColor
+            border.width: Style.sectionBorderWidth
+        }
         contentItem: ListView {
             id: dropdownList
             clip: true
