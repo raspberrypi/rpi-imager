@@ -1516,13 +1516,7 @@ QStringList ImageWriter::getKeymapLayoutList()
 
 QString ImageWriter::getSSID()
 {
-    QString ssid = WlanCredentials::instance()->getSSID();
-    if (!ssid.isEmpty()) {
-        qDebug() << "ImageWriter::getSSID ->" << ssid;
-    } else {
-        qDebug() << "ImageWriter::getSSID -> (empty)";
-    }
-    return ssid;
+    return WlanCredentials::instance()->getSSID();
 }
 
 QString ImageWriter::getPSK()
