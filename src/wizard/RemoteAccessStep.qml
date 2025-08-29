@@ -169,6 +169,13 @@ WizardStepBase {
         nameFilters: ["Public Key files (*.pub)", "All files (*)"]
         // Force QML implementation, not native
         options: FileDialog.DontUseNativeDialog
+        // Ensure visible styling on platforms without a window manager (e.g. linuxfb)
+        background: Rectangle {
+            color: Style.mainBackgroundColor
+            radius: Style.sectionBorderRadius
+            border.color: Style.popupBorderColor
+            border.width: Style.sectionBorderWidth
+        }
         Component.onCompleted: {
             if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
                 // Default to ~/.ssh on macOS

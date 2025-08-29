@@ -78,6 +78,13 @@ WizardStepBase {
         id: customImageFileDialog
         // Force QML implementation as fallback
         options: FileDialog.DontUseNativeDialog
+        // Ensure visible styling on platforms without a window manager (e.g. linuxfb)
+        background: Rectangle {
+            color: Style.mainBackgroundColor
+            radius: Style.sectionBorderRadius
+            border.color: Style.popupBorderColor
+            border.width: Style.sectionBorderWidth
+        }
         onAccepted: {
             imageWriter.acceptCustomImageFromQml(selectedFile)
         }
