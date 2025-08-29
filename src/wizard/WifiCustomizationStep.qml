@@ -36,6 +36,14 @@ WizardStepBase {
         if (saved.wifiSSID) {
             fieldWifiSSID.text = saved.wifiSSID
         }
+        // If not saved, try to auto-detect the current SSID from the system
+        if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
+            var detectedSsid = imageWriter.getSSID()
+            console.log("WifiCustomizationStep: detected SSID:", detectedSsid)
+            if (detectedSsid && detectedSsid.length > 0) {
+                fieldWifiSSID.text = detectedSsid
+            }
+        }
         if (saved.wifiCountry) {
             // Set by text; list is populated on completed
             fieldWifiCountry.editText = saved.wifiCountry
@@ -51,6 +59,22 @@ WizardStepBase {
             var psk = imageWriter.getPSK()
             if (psk && psk.length > 0) {
                 fieldWifiPassword.text = psk
+            }
+        }
+    }
+
+    // Retry once shortly after load in case permission prompt delayed SSID availability
+    Timer {
+        interval: 1000
+        repeat: false
+        running: true
+        onTriggered: {
+            if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
+                var retrySsid = imageWriter.getSSID()
+                console.log("WifiCustomizationStep: retry detected SSID:", retrySsid)
+                if (retrySsid && retrySsid.length > 0) {
+                    fieldWifiSSID.text = retrySsid
+                }
             }
         }
     }
@@ -146,7 +170,12 @@ WizardStepBase {
         var pwd = fieldWifiPassword.text
         var hadCrypt = !!saved.wifiPasswordCrypt
         var hidden = chkWifiHidden.checked
-        if (ssid.length > 0 && country.length > 0) {
+        if (ssid.length === 0) {
+            // SSID cleared -> remove persisted SSID and password, regardless of country
+            delete saved.wifiSSID
+            delete saved.wifiPasswordCrypt
+            wizardContainer.wifiConfigured = false
+        } else if (country.length > 0) {
             saved.wifiSSID = ssid
             saved.wifiCountry = country
             if (pwd && pwd.length > 0) {
@@ -159,13 +188,6 @@ WizardStepBase {
             }
             saved.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
-        } else if (ssid.length === 0 && (country.length === 0)) {
-            // Cleared -> remove persisted WiFi settings
-            delete saved.wifiSSID
-            delete saved.wifiPasswordCrypt
-            delete saved.wifiCountry
-            delete saved.wifiHidden
-            wizardContainer.wifiConfigured = false
         } else {
             // Partial -> do not change persisted settings
             wizardContainer.wifiConfigured = false
