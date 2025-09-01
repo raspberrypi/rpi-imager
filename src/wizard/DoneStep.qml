@@ -110,7 +110,7 @@ WizardStepBase {
             enabled: true
             onClicked: {
                 // Reset the wizard state to start over
-                // Use existing advanced options settings
+                // Use existing app options settings
                 wizardContainer.resetWizard()
             }
         }

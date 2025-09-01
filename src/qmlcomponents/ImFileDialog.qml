@@ -19,8 +19,7 @@ Dialog {
     property var nameFilters: [] // ["Images (*.png *.jpg)", "All files (*)"]
     property url selectedFile: ""
 
-    signal accepted()
-    signal rejected()
+    // Use Dialog's built-in accepted/rejected signals; do not redeclare to avoid overrides
 
     property bool _firstOpenDone: false
     function open() {

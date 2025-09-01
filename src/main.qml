@@ -57,7 +57,7 @@ ApplicationWindow {
             id: wizardContainer
                 anchors.fill: parent
             imageWriter: window.imageWriter
-            optionsPopup: advancedOptionsDialog
+            optionsPopup: appOptionsDialog
             overlayRootRef: overlayRoot
             
             onWizardCompleted: {
@@ -243,8 +243,8 @@ ApplicationWindow {
         onRejected: {}
     }
 
-    AdvancedOptionsDialog {
-        id: advancedOptionsDialog
+    AppOptionsDialog {
+        id: appOptionsDialog
         parent: overlayRoot
         imageWriter: window.imageWriter
         wizardContainer: wizardContainer

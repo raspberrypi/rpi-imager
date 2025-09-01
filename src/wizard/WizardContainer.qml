@@ -381,7 +381,7 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: Style.buttonHeightStandard
-                    text: qsTr("Advanced Options")
+                    text: qsTr("App Options")
                     onClicked: {
                         if (root.optionsPopup) {
                             if (!root.optionsPopup.wizardContainer) {

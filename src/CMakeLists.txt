@@ -850,7 +850,7 @@ set(IMAGER_QML_FILES
     wizard/dialogs/ConfirmSystemDriveDialog.qml
     wizard/dialogs/KeychainPermissionDialog.qml
     wizard/dialogs/UpdateAvailableDialog.qml
-    wizard/dialogs/AdvancedOptionsDialog.qml
+    wizard/dialogs/AppOptionsDialog.qml
     qmlcomponents/ImButton.qml
     qmlcomponents/ImButtonRed.qml
     qmlcomponents/ImCheckBox.qml

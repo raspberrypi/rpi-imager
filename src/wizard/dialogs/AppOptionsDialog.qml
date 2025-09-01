@@ -57,7 +57,7 @@ Dialog {
         
         // Header
         Text {
-            text: qsTr("Advanced Options")
+            text: qsTr("App Options")
             font.pixelSize: Style.fontSizeLargeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
@@ -161,6 +161,9 @@ Dialog {
             // Do not load from QSettings; keep ephemeral
             chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false
             initialized = true
+            // Pre-compute final height before opening to avoid first-show reflow
+            var desired = contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280
+            popup.height = Math.max(280, desired)
         }
     }
     
@@ -176,8 +179,6 @@ Dialog {
     onOpened: {
         initialize()
         chkBeep.forceActiveFocus()
-        // Ensure the dialog is tall enough to show buttons
-        popup.height = Math.max(popup.height, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280)
     }
 
     // Confirmation dialog for disabling warnings
@@ -252,3 +253,4 @@ Dialog {
         }
     }
 }
+
