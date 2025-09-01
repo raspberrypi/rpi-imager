@@ -22,15 +22,14 @@ WizardStepBase {
     subtitle: qsTr("Configure wireless LAN settings.")
     showSkipButton: true
     
+    // Set initial focus on SSID
+    initialFocusItem: fieldWifiSSID
+
     Component.onCompleted: {
         root.registerFocusGroup("wifi_fields", function(){
             return [fieldWifiSSID, fieldWifiPassword, fieldWifiCountry]
         }, 0)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 1)
-        
-        // Set initial focus on SSID
-        root.initialFocusItem = fieldWifiSSID
-        
         // Prefill from saved settings
         var saved = imageWriter.getSavedCustomizationSettings()
         if (saved.wifiSSID) {
@@ -59,22 +58,6 @@ WizardStepBase {
             var psk = imageWriter.getPSK()
             if (psk && psk.length > 0) {
                 fieldWifiPassword.text = psk
-            }
-        }
-    }
-
-    // Retry once shortly after load in case permission prompt delayed SSID availability
-    Timer {
-        interval: 1000
-        repeat: false
-        running: true
-        onTriggered: {
-            if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
-                var retrySsid = imageWriter.getSSID()
-                console.log("WifiCustomizationStep: retry detected SSID:", retrySsid)
-                if (retrySsid && retrySsid.length > 0) {
-                    fieldWifiSSID.text = retrySsid
-                }
             }
         }
     }
