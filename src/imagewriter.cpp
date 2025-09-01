@@ -20,6 +20,7 @@
 #include <archive_entry.h>
 #include <lzma.h>
 #include <qjsondocument.h>
+#include <QJsonArray>
 #include <random>
 #include <QFileInfo>
 #include <QQmlApplicationEngine>
@@ -71,8 +72,8 @@ ImageWriter::ImageWriter(QObject *parent)
       _downloadLen(0), _extrLen(0), _devLen(0), _dlnow(0), _verifynow(0),
       _drivelist(DriveListModel(this)), // explicitly parented, so QML doesn't delete it
       _selectedDeviceValid(false),
-      _isWriting(false),
-      _writeCompletedSuccessfully(false),
+      _writeState(WriteState::Idle),
+      
       _cancelledDueToDeviceRemoval(false),
       _hwlist(HWListModel(*this)),
       _oslist(OSListModel(*this)),
@@ -350,7 +351,7 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     
     // Reset write completion state when device selection changes
     if (device.isEmpty()) {
-        _writeCompletedSuccessfully = false;
+        setWriteState(WriteState::Idle);
     }
     
     qDebug() << "Device selection changed to:" << device;
@@ -419,7 +420,7 @@ void ImageWriter::startWrite()
         return;
     }
         
-    _isWriting = true;
+    setWriteState(WriteState::Preparing);
 
     if (_src.toString() == "internal://format")
     {
@@ -572,6 +573,12 @@ void ImageWriter::startWrite()
                 this, &ImageWriter::downloadProgress);
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged, 
                 this, &ImageWriter::verifyProgress);
+        // Also transition state to Verifying when verify progress first arrives
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
+                this, [this](quint64 /*now*/, quint64 /*total*/){
+                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing && _writeState != WriteState::Succeeded)
+                        setWriteState(WriteState::Verifying);
+                });
     }
     
     _thread->setVerifyEnabled(_verifyEnabled);
@@ -613,10 +620,12 @@ void ImageWriter::startWrite()
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
         connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
         dft->start();
+        setWriteState(WriteState::Writing);
     }
     else
     {
         _thread->start();
+        setWriteState(WriteState::Writing);
     }
 
     startProgressPolling();
@@ -687,7 +696,7 @@ void ImageWriter::skipCacheVerification()
 
 void ImageWriter::onCancelled()
 {
-    _isWriting = false;
+    setWriteState(WriteState::Cancelled);
     sender()->deleteLater();
     if (sender() == _thread)
     {
@@ -1130,6 +1139,14 @@ void ImageWriter::stopProgressPolling()
     _powersave.removeBlock();
 }
 
+void ImageWriter::setWriteState(WriteState state)
+{
+    if (_writeState == state)
+        return;
+    _writeState = state;
+    emit writeStateChanged();
+}
+
 void ImageWriter::setVerifyEnabled(bool verify)
 {
     _verifyEnabled = verify;
@@ -1140,8 +1157,7 @@ void ImageWriter::setVerifyEnabled(bool verify)
 /* Relay events from download thread to QML */
 void ImageWriter::onSuccess()
 {
-    _isWriting = false;
-    _writeCompletedSuccessfully = true;
+    setWriteState(WriteState::Succeeded);
     stopProgressPolling();
     emit success();
 
@@ -1152,7 +1168,7 @@ void ImageWriter::onSuccess()
 
 void ImageWriter::onError(QString msg)
 {
-    _isWriting = false;
+    setWriteState(WriteState::Failed);
     stopProgressPolling();
     emit error(msg);
 
@@ -1163,11 +1179,13 @@ void ImageWriter::onError(QString msg)
 
 void ImageWriter::onFinalizing()
 {
+    setWriteState(WriteState::Finalizing);
     emit finalizing();
 }
 
 void ImageWriter::onPreparationStatusUpdate(QString msg)
 {
+    // heuristic: entering verifying is handled via progress elsewhere
     emit preparationStatusUpdate(msg);
 }
 
@@ -2237,7 +2255,7 @@ void ImageWriter::onCacheVerificationComplete(bool isValid)
 
 void ImageWriter::onSelectedDeviceRemoved(const QString &device)
 {
-    qDebug() << "Device removal detected:" << device << "Current selected:" << _dst << "Writing:" << _isWriting << "WriteCompleted:" << _writeCompletedSuccessfully;
+    qDebug() << "Device removal detected:" << device << "Current selected:" << _dst << "State:" << static_cast<int>(_writeState);
     
     // Only react if this is the device we currently have selected
     if (!_dst.isEmpty() && _dst == device) {
@@ -2245,12 +2263,12 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
         _selectedDeviceValid = false;
         
         // If we're currently writing to this device, cancel the write immediately
-        if (_isWriting) {
+        if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing || _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing) {
             qDebug() << "Cancelling write operation due to device removal";
             _cancelledDueToDeviceRemoval = true;
             cancelWrite();
             // Will show specific error message in onCancelled()
-        } else if (_writeCompletedSuccessfully) {
+        } else if (_writeState == WriteState::Succeeded) {
             // Write completed successfully and now drive was ejected - this is normal
             qDebug() << "Device removed after successful write - ignoring (likely ejected)";
             // Don't notify UI - this is expected behavior after successful write
@@ -2329,6 +2347,12 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 this, &ImageWriter::downloadProgress);
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged, 
                 this, &ImageWriter::verifyProgress);
+        // Also transition state to Verifying when verify progress first arrives
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
+                this, [this](quint64 /*now*/, quint64 /*total*/){
+                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing && _writeState != WriteState::Succeeded)
+                        setWriteState(WriteState::Verifying);
+                });
     }
     
     _thread->setVerifyEnabled(_verifyEnabled);
@@ -2372,10 +2396,12 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
         connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
         dft->start();
+        setWriteState(WriteState::Writing);
     }
     else
     {
         _thread->start();
+        setWriteState(WriteState::Writing);
     }
 
     startProgressPolling();

@@ -40,9 +40,23 @@ class ImageWriter : public QObject
     QML_ELEMENT
     QML_UNCREATABLE("Created by C++")
 public:
+    enum class WriteState {
+        Idle,
+        Preparing,
+        Writing,
+        Verifying,
+        Finalizing,
+        Succeeded,
+        Failed,
+        Cancelled
+    };
+    Q_ENUM(WriteState)
+
     explicit ImageWriter(QObject *parent = nullptr);
     virtual ~ImageWriter();
     void setEngine(QQmlApplicationEngine *engine);
+
+    Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
 
     /* Set URL to download from, and if known download length and uncompressed length */
     Q_INVOKABLE void setSrc(const QUrl &url, quint64 downloadLen = 0, quint64 extrLen = 0, QByteArray expectedHash = "", bool multifilesinzip = false, QString parentcategory = "", QString osname = "", QByteArray initFormat = "");
@@ -226,6 +240,7 @@ signals:
     void writeCancelledDueToDeviceRemoval();
     void keychainPermissionRequested();
     void keychainPermissionResponseReceived();
+    void writeStateChanged();
 
 protected slots:
     void startProgressPolling();
@@ -245,6 +260,8 @@ protected slots:
     void onOsListRefreshTimeout();
 
 private:
+    void setWriteState(WriteState state);
+    WriteState writeState() const { return _writeState; }
     // Cache management
     CacheManager* _cacheManager;
     bool _waitingForCacheVerification;
@@ -269,8 +286,7 @@ protected:
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
     DriveListModel _drivelist;
     bool _selectedDeviceValid;
-    bool _isWriting;
-    bool _writeCompletedSuccessfully;
+    WriteState _writeState;
     bool _cancelledDueToDeviceRemoval;
     HWListModel _hwlist;
     OSListModel _oslist;
