@@ -534,6 +534,8 @@ Window {
         }
         if ('sshAuthorizedKeys' in settings) {
             var possiblePublicKeys = settings.sshAuthorizedKeys.split('\n')
+            // Clear existing keys first to prevent duplication
+            remoteAccessTab.publicKeyModel.clear()
 
             for (const publicKey of possiblePublicKeys) {
                 var pkitem = publicKey.trim()
