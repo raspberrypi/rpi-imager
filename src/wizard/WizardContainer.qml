@@ -369,56 +369,26 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                anchors.margins: Style.cardPadding
-                height: optionsButtonRect.height
+                anchors.leftMargin: Style.cardPadding
+                anchors.rightMargin: Style.cardPadding
+                anchors.bottomMargin: Style.spacingSmall
+                height: Style.buttonHeightStandard
                 z: 2
 
-                Rectangle {
-                    id: optionsButtonRect
+                ImButton {
+                    id: optionsButton
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
-                    height: Style.buttonHeightStandard - 5
-                    color: optionsButton.containsMouse ? Style.translucentWhite10 : Style.mainBackgroundColor
-                    border.color: Style.sidebarControlBorderColor
-                    border.width: 1
-                    radius: Style.sidebarItemBorderRadius
-                    
-                    MouseArea {
-                        id: optionsButton
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (root.optionsPopup) {
-                                if (!root.optionsPopup.wizardContainer) {
-                                    root.optionsPopup.wizardContainer = root
-                                }
-                                root.optionsPopup.initialize()
-                                root.optionsPopup.open()
+                    height: Style.buttonHeightStandard
+                    text: qsTr("Advanced Options")
+                    onClicked: {
+                        if (root.optionsPopup) {
+                            if (!root.optionsPopup.wizardContainer) {
+                                root.optionsPopup.wizardContainer = root
                             }
-                        }
-                    }
-                    
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: Style.spacingTiny
-                        spacing: Style.spacingTiny
-                        
-                        Image {
-                            Layout.preferredWidth: 16
-                            Layout.preferredHeight: 16
-                            source: "../icons/ic_cog_red.svg"
-                            sourceSize.width: 16
-                            sourceSize.height: 16
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: qsTr("Advanced Options")
-                            font.pixelSize: Style.fontSizeCaption
-                            font.family: Style.fontFamily
-                            color: Style.sidebarTextOnInactiveColor
-                            elide: Text.ElideRight
+                            root.optionsPopup.initialize()
+                            root.optionsPopup.open()
                         }
                     }
                 }
