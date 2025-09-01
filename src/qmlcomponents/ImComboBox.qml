@@ -88,6 +88,8 @@ ComboBox {
         onWheel: (event) => {
             if (!root.popup.visible) {
                 var dy = event.pixelDelta && Math.abs(event.pixelDelta.y) > 0 ? event.pixelDelta.y : event.angleDelta.y
+                // Respect OS natural scrolling preference
+                if (event.inverted) dy = -dy
                 if (root.wheelInvert) dy = -dy
                 if (dy > 0 && root.currentIndex > 0) {
                     root.currentIndex--
@@ -132,6 +134,8 @@ ComboBox {
             WheelHandler {
                 onWheel: (event) => {
                     var dy = event.pixelDelta && Math.abs(event.pixelDelta.y) > 0 ? event.pixelDelta.y : event.angleDelta.y
+                    // Respect OS natural scrolling preference
+                    if (event.inverted) dy = -dy
                     // Scale to a reasonable velocity; negative dy scrolls down
                     var velocity = -dy * 10
                     dropdownList.flick(0, velocity)
