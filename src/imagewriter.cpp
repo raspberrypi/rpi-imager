@@ -403,7 +403,21 @@ QString ImageWriter::getHardwareName()
 void ImageWriter::startWrite()
 {
     if (!readyToWrite())
+    {
+        // Provide a user-visible error rather than silently returning, so the UI can recover
+        QString reason;
+        if (_src.isEmpty())
+            reason = tr("No image selected.");
+        else if (_dst.isEmpty())
+            reason = tr("No storage device selected.");
+        else if (!_selectedDeviceValid)
+            reason = tr("Selected storage device is no longer available.");
+        else
+            reason = tr("Unknown precondition failure.");
+
+        emit error(tr("Cannot start write. %1").arg(reason));
         return;
+    }
         
     _isWriting = true;
 
@@ -428,6 +442,28 @@ void ImageWriter::startWrite()
                             lowercaseurl.endsWith(".7z") ||
                             lowercaseurl.endsWith(".zst") ||
                             lowercaseurl.endsWith(".cache");
+
+    // Proactive validation for local sources before spawning threads
+    if (_src.isLocalFile())
+    {
+        const QString localPath = _src.toLocalFile();
+        QFileInfo localFi(localPath);
+        if (!localFi.exists())
+        {
+            onError(tr("Source file not found: %1").arg(localPath));
+            return;
+        }
+        if (!localFi.isFile())
+        {
+            onError(tr("Source is not a regular file: %1").arg(localPath));
+            return;
+        }
+        if (!localFi.isReadable())
+        {
+            onError(tr("Source file is not readable: %1").arg(localPath));
+            return;
+        }
+    }
 
     if (!_extrLen && _src.isLocalFile())
     {
@@ -520,6 +556,14 @@ void ImageWriter::startWrite()
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+    // Ensure cleanup of thread pointer on finish in all paths
+    connect(_thread, &QThread::finished, this, [this]() {
+        if (_thread)
+        {
+            _thread->deleteLater();
+            _thread = nullptr;
+        }
+    });
     
     // Connect to progress signals if this is a DownloadExtractThread
     DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
@@ -2230,9 +2274,28 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         _cacheManager->invalidateCache();
     }
     
-    // Continue with the write operation (this is the code that was after cache verification)
+    // Proactive validation for local sources before spawning threads
     if (QUrl(urlstr).isLocalFile())
     {
+        const QString localPath = QUrl(urlstr).toLocalFile();
+        QFileInfo localFi(localPath);
+        if (!localFi.exists())
+        {
+            onError(tr("Source file not found: %1").arg(localPath));
+            return;
+        }
+        if (!localFi.isFile())
+        {
+            onError(tr("Source is not a regular file: %1").arg(localPath));
+            return;
+        }
+        if (!localFi.isReadable())
+        {
+            onError(tr("Source file is not readable: %1").arg(localPath));
+            return;
+        }
+
+        // Continue with the write operation (this is the code that was after cache verification)
         _thread = new LocalFileExtractThread(urlstr.toLatin1(), _dst.toLatin1(), _expectedHash, this);
     }
     else
@@ -2250,6 +2313,14 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
     connect(_thread, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+    // Ensure cleanup of thread pointer on finish in all paths
+    connect(_thread, &QThread::finished, this, [this]() {
+        if (_thread)
+        {
+            _thread->deleteLater();
+            _thread = nullptr;
+        }
+    });
     
     // Connect to progress signals if this is a DownloadExtractThread
     DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
