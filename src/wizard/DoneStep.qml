@@ -98,7 +98,9 @@ WizardStepBase {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: Style.cardPadding
+        anchors.leftMargin: Style.stepContentMargins
+        anchors.rightMargin: Style.stepContentMargins
+        anchors.bottomMargin: Style.spacingSmall
         spacing: Style.spacingMedium
         
         Item {
@@ -108,6 +110,8 @@ WizardStepBase {
         ImButton {
             text: qsTr("Write Another")
             enabled: true
+            Layout.minimumWidth: Style.buttonWidthMinimum
+            Layout.preferredHeight: Style.buttonHeightStandard
             onClicked: {
                 // Reset the wizard state to start over
                 // Use existing app options settings
@@ -118,6 +122,8 @@ WizardStepBase {
         ImButtonRed {
             text: imageWriter.isEmbeddedMode() ? qsTr("Reboot") : qsTr("Finish")
             enabled: true
+            Layout.minimumWidth: Style.buttonWidthMinimum
+            Layout.preferredHeight: Style.buttonHeightStandard
             onClicked: {
                 if (imageWriter.isEmbeddedMode()) {
                     imageWriter.reboot()
