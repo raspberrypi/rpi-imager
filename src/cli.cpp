@@ -148,7 +148,7 @@ int Cli::run()
         }
     }
 
-    if (!parser.value("cloudinit-userdata").isEmpty())
+    if (!parser.value("cloudinit-userdata").isEmpty() && !parser.value("cloudinit-networkconfig").isEmpty())
     {
         QByteArray userData, networkConfig;
         QFile f(parser.value("cloudinit-userdata"));
