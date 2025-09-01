@@ -749,15 +749,16 @@ if(GENERATE_TIMEZONES_FROM_IANA)
     set(TZDATA_URL "https://data.iana.org/time-zones/releases/tzdata${TZDATA_VERSION}.tar.gz")
 
     # Reuse the helper to produce a generated qrc aliasing timezones.txt
-    # Create placeholder for clean builds so rcc can parse generated qrc
+    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
     set(GENERATED_TIMEZONES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/timezones_generated.txt")
-    if(NOT EXISTS "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}")
-        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt")
-            file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
-            file(RENAME "${CMAKE_CURRENT_BINARY_DIR}/timezones.txt" "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}")
-        else()
-            file(WRITE "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}" "# placeholder\n")
-        endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt")
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt"
+            "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}"
+            COPYONLY
+        )
+    else()
+        file(WRITE "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}" "# placeholder\n")
     endif()
     add_generated_resource_with_fallback(GENERATED_TZ_QRC GENERATE_TIMEZONES_TGT timezones
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateTimezones.cmake
@@ -774,14 +775,16 @@ option(GENERATE_COUNTRIES_FROM_REGDB "Generate countries list from latest wirele
 
 if(GENERATE_COUNTRIES_FROM_REGDB)
     set(REGDB_URL "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain/db.txt")
-    # Create placeholder for clean builds so rcc can parse generated qrc
+    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
     set(GENERATED_COUNTRIES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/countries_generated.txt")
-    if(NOT EXISTS "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/countries.txt")
         configure_file(
             "${CMAKE_CURRENT_SOURCE_DIR}/countries.txt"
             "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}"
             COPYONLY
         )
+    else()
+        file(WRITE "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}" "# placeholder\n")
     endif()
     add_generated_resource_with_fallback(GENERATED_COUNTRIES_QRC GENERATE_COUNTRIES_TGT countries
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateRegdbCountries.cmake
@@ -808,11 +811,15 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOUIC ON)
 # Add timezone generation dependency if enabled
 if(GENERATE_TIMEZONES_FROM_IANA AND DEFINED GENERATE_TIMEZONES_TGT)
     add_dependencies(${PROJECT_NAME} ${GENERATE_TIMEZONES_TGT})
+    # Make sure autogen (rcc) also waits on timezone generation
+    set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_TIMEZONES_TGT})
 endif()
 
 # Ensure countries list is generated before building resources
 if(GENERATE_COUNTRIES_FROM_REGDB AND DEFINED GENERATE_COUNTRIES_TGT)
     add_dependencies(${PROJECT_NAME} ${GENERATE_COUNTRIES_TGT})
+    # Make sure autogen (rcc) also waits on countries generation
+    set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_COUNTRIES_TGT})
 endif()
 
 if(ENABLE_TELEMETRY)

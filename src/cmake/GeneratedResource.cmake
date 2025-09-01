@@ -56,11 +56,19 @@ function(add_generated_resource_with_fallback OUT_QRC_VAR OUT_TARGET_VAR NAME SC
 "<RCC>\n  <qresource prefix=\"/\">\n    <file alias=\"${ALIAS}\">${output_file}</file>\n  </qresource>\n</RCC>\n"
         NEWLINE_STYLE UNIX)
 
-    # Ensure RCC rebuilds when the generated data changes
-    set_source_files_properties("${gen_qrc}" PROPERTIES OBJECT_DEPENDS "${output_file}")
+    # Ensure RCC rebuilds when the generated data changes by generating a .cpp via rcc with explicit DEPENDS
+    set(rcc_cpp "${CMAKE_CURRENT_BINARY_DIR}/qrc_${NAME}_generated.cpp")
+    add_custom_command(
+        OUTPUT ${rcc_cpp}
+        COMMAND Qt6::rcc --no-zstd -name ${NAME}_generated -o ${rcc_cpp} ${gen_qrc}
+        DEPENDS ${gen_qrc} ${output_file}
+        VERBATIM
+        COMMENT "Running rcc for ${NAME}_generated"
+    )
+    set_source_files_properties("${rcc_cpp}" PROPERTIES GENERATED TRUE)
 
     # Return values to caller
-    set(${OUT_QRC_VAR} "${gen_qrc}" PARENT_SCOPE)
+    set(${OUT_QRC_VAR} "${rcc_cpp}" PARENT_SCOPE)
     set(${OUT_TARGET_VAR} "${gen_target}" PARENT_SCOPE)
 endfunction()
 
