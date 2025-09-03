@@ -834,6 +834,28 @@ namespace {
         return returnArray;
     }
 
+    // Centralized URL preflight validation for fetches
+    bool preflightValidateUrl(const QUrl &url, const QString &context)
+    {
+        if (!url.isValid() || url.scheme().isEmpty()) {
+            qWarning() << context << "invalid URL (missing/invalid scheme):" << url.toString();
+            return false;
+        }
+        const QString scheme = url.scheme().toLower();
+        if ((scheme == QLatin1String("http") || scheme == QLatin1String("https")) && url.host().isEmpty()) {
+            qWarning() << context << "invalid URL (no host):" << url.toString();
+            return false;
+        }
+        if (url.isLocalFile()) {
+            QFileInfo fi(url.toLocalFile());
+            if (!fi.exists() || !fi.isFile()) {
+                qWarning() << context << "invalid URL (local file missing/not regular):" << url.toString();
+                return false;
+            }
+        }
+        return true;
+    }
+
     void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager &manager, uint8_t count) {
         if (count > MAX_SUBITEMS_DEPTH) {
             qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
@@ -848,12 +870,10 @@ namespace {
             } else if (entryObject.contains("subitems_url")) {
                 const QString subUrlStr = entryObject["subitems_url"].toString();
                 const QUrl subUrl(subUrlStr);
-                if (!subUrl.isValid() || subUrl.scheme().isEmpty()) {
-                    qWarning() << "Invalid subitems_url '" << subUrlStr
-                               << "' - relative or scheme-less URLs are not supported when using a local repository."
-                               << "Use an absolute file:// or https:// URL.";
+                if (!preflightValidateUrl(subUrl, QStringLiteral("subitems_url:"))) {
                     continue;
                 }
+
                 QNetworkRequest request(subUrl);
                 request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                         QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -912,10 +932,13 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
         } else if (httpStatusCode >= 300 && httpStatusCode < 400) {
             // We should _never_ enter this branch. All requests are set to follow redirections
             // at their call sites - so the only way you got here was a logic defect.
-            auto request = QNetworkRequest(data->url());
+            const QUrl redirUrl = data->url();
+            if (!preflightValidateUrl(redirUrl, QStringLiteral("redirect:"))) {
+                return;
+            }
 
+            auto request = QNetworkRequest(redirUrl);
             request.setAttribute(QNetworkRequest::RedirectionTargetAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-
             data->manager()->get(request);
 
             // maintain manager
@@ -1044,7 +1067,12 @@ QJsonDocument ImageWriter::getFilteredOSlistDocument() {
 }
 
 void ImageWriter::beginOSListFetch() {
-    QNetworkRequest request = QNetworkRequest(constantOsListUrl());
+    const QUrl topUrl = constantOsListUrl();
+    if (!preflightValidateUrl(topUrl, QStringLiteral("repository:"))) {
+        return;
+    }
+
+    QNetworkRequest request = QNetworkRequest(topUrl);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
