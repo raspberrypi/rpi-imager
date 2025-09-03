@@ -8,6 +8,7 @@ import QtQuick.Controls 2.2
 import QtQuick.Controls.Material 2.2
 
 RadioButton {
+    Material.accent: Style.formControlActiveColor
     activeFocusOnTab: true
     
     // Add visual focus indicator

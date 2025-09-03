@@ -236,10 +236,17 @@ WizardStepBase {
             
             Rectangle {
                 id: osbgrect
-                anchors.fill: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
                 color: (parent.ListView.view && parent.ListView.view.currentIndex === index) ? Style.listViewHighlightColor :
                        (osMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
+                anchors.rightMargin: (
+                    (parent.ListView.view && parent.ListView.view.contentHeight > parent.ListView.view.height)
+                        ? Style.scrollBarWidth
+                        : 0)
                 
                 MouseArea {
                     id: osMouseArea
@@ -267,16 +274,24 @@ WizardStepBase {
                     
                     // OS Icon
                     Image {
+                        id: osicon
                         source: delegateItem.icon
                         Layout.preferredWidth: 40
                         Layout.preferredHeight: 40
                         fillMode: Image.PreserveAspectFit
-                        
+                        smooth: true
+                        mipmap: true
+                        // Rasterize vector sources at device pixel ratio to avoid aliasing/blurriness on HiDPI
+                        sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+                        visible: source.toString().length > 0
+
                         Rectangle {
                             anchors.fill: parent
-                            color: Style.listViewRowBackgroundColor
-                            visible: parent.status === Image.Error
+                            color: "transparent"
+                            border.color: Style.titleSeparatorColor
+                            border.width: 1
                             radius: 0
+                            visible: parent.status === Image.Error
                         }
                     }
                     

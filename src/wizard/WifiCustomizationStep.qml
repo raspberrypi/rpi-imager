@@ -114,8 +114,27 @@ WizardStepBase {
                     font.pixelSize: Style.fontSizeInput
                     Component.onCompleted: {
                         model = root.imageWriter.getCountryList()
-                        if (model && model.length > 0) {
-                            currentIndex = 0
+                        // Try to restore previously saved country selection
+                        var saved = root.imageWriter.getSavedCustomizationSettings()
+                        if (saved && saved.wifiCountry && model && model.length > 0) {
+                            var target = saved.wifiCountry
+                            var idx = -1
+                            for (var i = 0; i < model.length; i++) {
+                                if (model[i] === target) { idx = i; break }
+                            }
+                            if (idx >= 0) {
+                                currentIndex = idx
+                            } else {
+                                // Fallback to free text when not in list
+                                fieldWifiCountry.editText = target
+                            }
+                        } else if (model && model.length > 0) {
+                            // Default to GB if available, else first item
+                            var gbIndex = -1
+                            for (var j = 0; j < model.length; j++) {
+                                if (model[j] === "GB") { gbIndex = j; break }
+                            }
+                            currentIndex = (gbIndex >= 0) ? gbIndex : 0
                         }
                     }
                 }

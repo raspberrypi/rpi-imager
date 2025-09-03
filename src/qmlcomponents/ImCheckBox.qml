@@ -10,6 +10,7 @@ import RpiImager
 
 CheckBox {
     id: control
+    Material.accent: Style.formControlActiveColor
     activeFocusOnTab: true
     
     Rectangle {

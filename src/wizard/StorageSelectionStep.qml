@@ -61,11 +61,14 @@ WizardStepBase {
             activeFocusOnTab: true
             
             boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle { 
+            highlight: Rectangle {
                 color: Style.listViewHighlightColor
                 radius: 0
                 border.color: dstlist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
                 border.width: dstlist.activeFocus ? 2 : 0
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.rightMargin: (dstlist.contentHeight > dstlist.height ? Style.scrollBarWidth : 0)
             }
             
             // Keyboard navigation
@@ -175,11 +178,15 @@ WizardStepBase {
             
             Rectangle {
                 id: dstbgrect
-                anchors.fill: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
                 color: (dstlist.currentIndex === dstitem.index) ? Style.listViewHighlightColor :
                        (dstMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 opacity: dstitem.unselectable ? 0.5 : 1.0
+                anchors.rightMargin: (dstlist.contentHeight > dstlist.height ? Style.scrollBarWidth : 0)
                 
                 MouseArea {
                     id: dstMouseArea
@@ -203,13 +210,27 @@ WizardStepBase {
                     
                     // Storage icon
                     Image {
+                        id: storageIcon
                         source: dstitem.isUsb ? "../icons/ic_usb_40px.svg" :
                                 dstitem.isScsi ? "../icons/ic_storage_40px.svg" :
                                 "../icons/ic_sd_storage_40px.svg"
                         Layout.preferredWidth: 40
                         Layout.preferredHeight: 40
-                        sourceSize.width: 40
-                        sourceSize.height: 40
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        mipmap: true
+                        // Rasterize vector sources at device pixel ratio to avoid aliasing/blurriness on HiDPI
+                        sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+                        visible: source.toString().length > 0
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "transparent"
+                            border.color: Style.titleSeparatorColor
+                            border.width: 1
+                            radius: 0
+                            visible: parent.status === Image.Error
+                        }
                     }
                     
                     ColumnLayout {

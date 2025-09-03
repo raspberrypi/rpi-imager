@@ -36,8 +36,8 @@ Item {
 
     readonly property color listViewRowBackgroundColor: "#ffffff"
     readonly property color listViewHoverRowBackgroundColor: titleBackgroundColor
-    // Selection highlight related to Raspberry Red (soft tint)
-    readonly property color listViewHighlightColor: "#f3cad3"
+    // Selection highlight color for OS/device lists
+    readonly property color listViewHighlightColor: "#BACCE7"
 
     // Utility translucent colors
     readonly property color translucentWhite10: Qt.rgba(255, 255, 255, 0.1)
@@ -74,6 +74,8 @@ Item {
     readonly property color formLabelColor: "black"
     readonly property color formLabelErrorColor: "red"
     readonly property color formLabelDisabledColor: "grey"
+    // Active color for radio buttons, checkboxes, and switches
+    readonly property color formControlActiveColor: "#1955AE"
 
     readonly property color embeddedModeInfoTextColor: "#ffffff"
 

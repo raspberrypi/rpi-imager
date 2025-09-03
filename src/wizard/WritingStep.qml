@@ -250,7 +250,6 @@ WizardStepBase {
         visible: false
 
         property bool allowAccept: false
-        title: qsTr("Confirm destructive write")
 
         background: Rectangle {
             color: Style.mainBackgroundColor

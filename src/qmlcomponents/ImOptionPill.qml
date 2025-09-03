@@ -7,6 +7,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import RpiImager
+import QtQuick.Controls.Material 2.15
 
 // A labeled switch styled for Imager; only the switch toggles, not the whole row
 Item {
@@ -77,6 +78,7 @@ Item {
         Switch {
             id: sw
             Layout.alignment: Qt.AlignVCenter
+            Material.accent: Style.formControlActiveColor
             checked: pill.checked
             activeFocusOnTab: true
             onToggled: {

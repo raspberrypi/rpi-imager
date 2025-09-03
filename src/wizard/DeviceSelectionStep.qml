@@ -6,6 +6,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Window 2.15
 import "../qmlcomponents"
 
 import RpiImager
@@ -97,11 +98,14 @@ WizardStepBase {
             clip: true
             
             boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle { 
+            highlight: Rectangle {
                 color: Style.listViewHighlightColor
                 radius: 0
                 border.color: hwlist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
                 border.width: hwlist.activeFocus ? 2 : 0
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.rightMargin: (hwlist.contentHeight > hwlist.height ? Style.scrollBarWidth : 0)
             }
             
             // Keyboard navigation
@@ -162,6 +166,7 @@ WizardStepBase {
                 color: (hwlist.currentIndex === hwitem.index) ? Style.listViewHighlightColor :
                        (hwMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
+                anchors.rightMargin: (hwlist.contentHeight > hwlist.height ? Style.scrollBarWidth : 0)
                 
                 MouseArea {
                     id: hwMouseArea
@@ -190,10 +195,15 @@ WizardStepBase {
                     
                     // Hardware Icon
                     Image {
+                        id: hwicon
                         source: hwitem.icon || ""
                         Layout.preferredWidth: 40
                         Layout.preferredHeight: 40
                         fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        mipmap: true
+                        // Rasterize vector sources at device pixel ratio to avoid aliasing/blurriness on HiDPI
+                        sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
                         visible: source.toString().length > 0
                         
                         Rectangle {

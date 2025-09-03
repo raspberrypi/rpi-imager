@@ -263,9 +263,9 @@ Item {
                                     width: parent.width
                                     height: Style.sidebarSubItemHeight
                                     radius: Style.sidebarItemBorderRadius
-                                    color: (root.currentStep - root.stepHostnameCustomization) === subItem.index ? Style.sidebarActiveBackgroundColor : Style.transparent
-                                    border.color: (root.currentStep - root.stepHostnameCustomization) === subItem.index ? Style.sidebarActiveBackgroundColor : Style.transparent
-                                    border.width: 1
+                                    color: Style.transparent
+                                    border.color: Style.transparent
+                                    border.width: 0
  
                                     MouseArea {
                                         anchors.fill: parent
@@ -284,16 +284,16 @@ Item {
                                         anchors.margins: Style.spacingSmall
                                         anchors.leftMargin: Style.spacingMedium
                                         Text {
+                                            id: subLabel
                                             Layout.fillWidth: true
                                             Layout.alignment: Qt.AlignVCenter
                                             text: subItem.modelData
                                             font.pixelSize: Style.fontSizeCaption
                                             font.family: Style.fontFamily
+                                            font.underline: (root.currentStep - root.stepHostnameCustomization) === subItem.index
                                             color: (!root.customizationSupported || (root.stepHostnameCustomization + subItem.index) > root.currentStep)
                                                        ? Style.formLabelDisabledColor
-                                                       : (((root.currentStep - root.stepHostnameCustomization) === subItem.index)
-                                                           ? Style.sidebarTextOnActiveColor
-                                                           : Style.sidebarTextOnInactiveColor)
+                                                       : Style.sidebarTextOnInactiveColor
                                             elide: Text.ElideRight
                                         }
                                     }
@@ -483,6 +483,11 @@ Item {
     function previousStep() {
         if (root.currentStep > 0) {
             var prevIndex = root.currentStep - 1
+            // If customization is not supported, bypass customization entirely when going back
+            // from the Writing step. Jump straight to Storage Selection.
+            if (!customizationSupported && root.currentStep === stepWriting && prevIndex >= stepHostnameCustomization && prevIndex <= stepRemoteAccess) {
+                prevIndex = stepStorageSelection
+            }
             root.currentStep = prevIndex
             var prevComponent = getStepComponent(root.currentStep)
             if (prevComponent) {
