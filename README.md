@@ -30,7 +30,7 @@ git clone --depth 1 https://github.com/raspberrypi/rpi-imager
 #### Build Qt
 
 ```sh
-sudo ./build-qt.sh
+sudo ./qt/build-qt.sh
 ```
 
 This will build and install the version of Qt preferred for Raspberry Pi Imager into /opt/Qt/<version>. You must use `sudo` for the installation step to complete.
@@ -72,11 +72,10 @@ Building Raspberry Pi Imager on Windows is best done with Visual Studio Code (or
 
 - Build a minimal Qt from source using our build script:
   ```bash
-  cd src/mac
-  ./build-qt-macos.sh
+  ./qt/build-qt-macos.sh
   ```
   - This builds only what's needed for rpi-imager, resulting in faster builds and smaller size
-  - See `src/mac/README-qt-build-macos.md` for detailed instructions
+  - See `qt/README-qt-build-macos.md` for detailed instructions
 - Install Visual Studio Code (or a derivative), and the Qt Extension Pack.
 - It is assumed you have an Apple developer subscription, and already have a "Developer ID" code signing certificate for distribution outside the Mac Store.
 
@@ -97,20 +96,33 @@ Building Raspberry Pi Imager on macOS is best done with Visual Studio Code (or a
 
 ### Linux embedded (netboot) build
 
-The embedded build runs under a minimalistic Linux distribution compiled by buildroot.
-To build:
+The Raspberry Pi Network installer (embedded imager) runs inside an operating system created by [pi-gen-micro](https://github.com/raspberrypi/pi-gen-micro/tree/main/configurations/rpi-imager-embedded).
 
-- You must be running a Linux system, and have the buildroot dependencies installed as listed in the buildroot manual: https://buildroot.org/downloads/manual/manual.html#requirement
-- Run:
+To build the entire system, you must first build our customised embedded qt:
 
 ```sh
-cd rpi-imager/embedded
-./build.sh
+./qt/build-qt-embedded.sh
 ```
 
-The result will be in the "output" directory.
-The files can be copied to a FAT32 formatted SD card, and inserted in a Pi for testing.
-If you would like to build a (signed) netboot image there are tools for that at: https://github.com/raspberrypi/usbboot/tree/master/tools
+Then build the embedded AppImage:
+
+```sh
+./create-embedded.sh
+```
+
+Package the appImage for use with pi-gen-micro and other Debian systems:
+
+```sh
+dpkg-buildpackage -uc -us --profile=embedded
+```
+
+And finally, import your new embedded imager into pi-gen-micro for packaging:
+
+```sh
+rm ${pi-gen-micro-root}/packages/rpi-imager-embedded*.deb
+cp ../rpi-imager-embedded*.deb ${pi-gen-micro-root}/packages/
+pushd ${pi-gen-micro-root}/packages/ && dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz && popd
+```
 
 ## Other notes
 
@@ -121,33 +133,29 @@ So can simply create another 'start menu shortcut' to the application with that 
 
 ### Telemetry
 
-In order to understand usage of the application (e.g. uptake of Raspberry Pi Imager versions and which images and operating systems are most popular) when using the default image repository, the URL, operating system name and category (if present) of a selected image are sent along with the running version of Raspberry Pi Imager, your operating system, CPU architecture, locale and Raspberry Pi revision (if applicable) to https://rpi-imager-stats.raspberrypi.com by downloadstatstelemetry.cpp.
+#### Why and what
+In order to understand usage of the application (e.g. uptake of Raspberry Pi Imager versions and which images and operating systems are most popular), Raspberry Pi Imager collects anonymous metrics (telemetry) by default. These metrics are used to prioritise and justify work on the Raspberry Pi Imager, and contain the following information:
 
+- The URL of the OS you have selected
+- The category of the OS you have selected
+- The observed name of the OS you have selected
+- The version of Raspberry Pi Imager
+- A flag to say if Raspberry Pi Imager is being used on the Desktop or as part of the Network Installer
+- The host operating system version (e.g. Windows 11)
+- The host operating system architecture (e.g. arm64, x86_64)
+- The host operating system locale name (e.g. en-GB)
+
+If the Raspberry Pi Imager is being run a part of the Network Installer, Imager will also collect the revision of Raspberry Pi it is running on.
+
+#### Where is it stored
 This web service is hosted by [Heroku](https://www.heroku.com) and only stores an incrementing counter using a [Redis Sorted Set](https://redis.io/topics/data-types#sorted-sets) for each URL, operating system name and category per day in the `eu-west-1` region and does not associate any personal data with those counts. This allows us to query the number of downloads over time and nothing else.
 
 The last 1,500 requests to the service are logged for one week before expiring as this is the [minimum log retention period for Heroku](https://devcenter.heroku.com/articles/logging#log-history-limits).
 
-On Windows, you can opt out of telemetry by disabling it in the Registry:
+#### Opting out
 
-```pwsh
-reg add "HKCU\Software\Raspberry Pi\Imager" /v telemetry /t REG_DWORD /d 0
-```
+The most convenient way to opt-out of anonymous metric collection is via the Raspberry Pi Imager UI:
 
-On Linux, run `rpi-imager --disable-telemetry` or add the following to `~/.config/Raspberry Pi/Imager.conf`:
-
-```ini
-[General]
-telemetry=false
-```
-
-On macOS, disable it by editing the property list for the application:
-
-```sh
-defaults write com.raspberrypi.Imager.plist telemetry -bool NO
-```
-
-### License
-
-The main code of the Imaging Utility is made available under the terms of the Apache license.
-See license.txt and files in "src/dependencies" folder for more information about the various open source licenses that apply to the third-party dependencies used such as Qt, libarchive, drivelist, mountutils and libcurl.
-For the embedded (netboot) build see also "embedded/legal-info" for more information about the extra system software included in that.
+- Select "App Options"
+- Untoggle "Enable anonymous statistics (telemetry) collection"
+- Press "Save"
