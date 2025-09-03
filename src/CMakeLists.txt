@@ -137,6 +137,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
     oslistmodel.h
     disk_formatter.h file_operations.h platformquirks.h
     iconimageprovider.h
+    imageadvancedoptions.h
 )
 
 # Add dependencies
@@ -373,6 +374,7 @@ set(IMAGER_QML_FILES
     wizard/OSSelectionStep.qml
     wizard/StorageSelectionStep.qml
     wizard/HostnameCustomizationStep.qml
+    wizard/IfAndFeaturesCustomizationStep.qml
     wizard/LocaleCustomizationStep.qml
     wizard/UserCustomizationStep.qml
     wizard/WifiCustomizationStep.qml
@@ -404,7 +406,7 @@ qt_add_qml_module(${PROJECT_NAME}
     OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RpiImager
     DEPENDENCIES QtQuick
     NO_PLUGIN
-    QML_FILES wizard/IfAndFeaturesCustomizationStep.qml
+    QML_FILES
 )
 
 # Because dependencies are typically not available by default on Windows, build bundled code

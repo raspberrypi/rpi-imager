@@ -32,6 +32,7 @@
 #include <windows.h>
 #include <winnls.h>
 #endif
+#include "imageadvancedoptions.h"
 
 static QTextStream cerr(stderr);
 
@@ -96,6 +97,14 @@ int main(int argc, char *argv[])
     app.setOrganizationDomain("raspberrypi.com");
     app.setApplicationName("rpi-imager");
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
+
+    qmlRegisterUncreatableMetaObject(
+        ImageOptions::staticMetaObject, // from Q_NAMESPACE
+        "ImageOptions",    // import name in qml
+        1, 0,           // version
+        "ImageOptions",    // QML type name
+        "Namespace only"
+    );
     
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;

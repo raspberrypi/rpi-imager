@@ -33,6 +33,8 @@
 #include "windows/diskpart_util.h"
 #endif
 
+#include "imageadvancedoptions.h"
+
 #ifdef Q_OS_LINUX
 #include <sys/ioctl.h>
 #include <linux/fs.h>
@@ -998,7 +1000,7 @@ qint64 DownloadThread::_sectorsWritten()
     return -1;
 }
 
-void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudInitNetwork, const QByteArray &initFormat, const bool userDefinedFirstRun)
+void DownloadThread::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudInitNetwork, const QByteArray &initFormat, const ImageOptions::AdvancedOptions opts)
 {
     _config = config;
     _cmdline = cmdline;
@@ -1006,7 +1008,7 @@ void DownloadThread::setImageCustomization(const QByteArray &config, const QByte
     _cloudinit = cloudinit;
     _cloudinitNetwork = cloudInitNetwork;
     _initFormat = initFormat;
-    _userDefinedFirstRun = userDefinedFirstRun;
+    _advancedOptions = opts;
 }
 
 bool DownloadThread::_customizeImage()
@@ -1058,7 +1060,7 @@ bool DownloadThread::_customizeImage()
 
         if (!_firstrun.isEmpty())
         {
-            if (!_userDefinedFirstRun) {
+            if (!_advancedOptions.testFlag(ImageOptions::UserDefinedFirstRun)) {
                 _firstrun = "#!/bin/bash\n\n" + QByteArray("set +e\n\n") + _firstrun;
 
                 // Add file cleanup and exit commands
