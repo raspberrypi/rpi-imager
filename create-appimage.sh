@@ -117,9 +117,9 @@ fi
 if [ -z "$QT_DIR" ]; then
     echo "Error: No suitable Qt installation found for $ARCH"
     
-    if [ -f "./build-qt.sh" ]; then
+    if [ -f "./qt/build-qt.sh" ]; then
         echo "You can build Qt using the provided script:"
-        echo "  ./build-qt.sh --version=6.9.0"
+        echo "  ./qt/build-qt.sh --version=6.9.1"
         echo "Or specify the Qt location with:"
         echo "  $0 --qt-root=/path/to/qt"
         echo "  export Qt6_ROOT=/path/to/qt"

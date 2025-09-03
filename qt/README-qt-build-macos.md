@@ -54,7 +54,7 @@ The script supports the following options:
 --debug                Build with debug information
 --skip-dependencies    Skip installing build dependencies
 --no-mac-optimize      Disable macOS specific optimizations
---universal            Build universal binaries (Intel + Apple Silicon)
+--no-universal         Disable universal build (host architecture only)
 --verbose              Show verbose build output
 --unprivileged         Run without sudo (skips dependency installation)
 
@@ -81,10 +81,10 @@ Limit CPU usage (useful for background builds):
 ./build-qt-macos.sh --cores=4
 ```
 
-Build universal binaries (works on both Intel and Apple Silicon):
+Build single-architecture (host only):
 
 ```bash
-./build-qt-macos.sh --universal
+./build-qt-macos.sh --no-universal
 ```
 
 Run without sudo (requires pre-installed dependencies):
@@ -98,6 +98,7 @@ Run without sudo (requires pre-installed dependencies):
 This script builds a **minimal Qt** by excluding many modules and features that aren't needed for rpi-imager:
 
 ### Excluded Modules
+
 - qtwebengine, qt3d, qtmultimedia
 - qtwayland, qtspeech, qtconnectivity
 - qtcharts, qtdatavis3d, qtlocation
@@ -105,6 +106,7 @@ This script builds a **minimal Qt** by excluding many modules and features that 
 - And many more (see `../../modules_exclude.macos.list` or fallback `../../modules_exclude.list`)
 
 ### Excluded Features
+
 - PDF support, printing, WebEngine
 - Bluetooth, NFC, multimedia codecs
 - Advanced widgets (calendar, dial, LCD)
@@ -112,6 +114,7 @@ This script builds a **minimal Qt** by excluding many modules and features that 
 - And many more (see `../../features_exclude.macos.list` or fallback `../../features_exclude.list`)
 
 ### ICU Support
+
 The build uses the system ICU or Homebrew's ICU4C package, providing full internationalization support without needing a custom build.
 
 ## macOS Optimizations
@@ -125,7 +128,7 @@ The script automatically detects your Mac and applies appropriate optimizations:
 
 ### Universal Builds
 
-When using `--universal`, the script creates fat binaries containing both Intel and Apple Silicon code:
+By default, the script creates fat binaries containing both Intel and Apple Silicon code:
 
 - **Intel optimizations**: `-march=x86-64-v2 -mtune=intel` for better x86_64 performance
 - **Apple Silicon optimizations**: `-march=armv8.4-a+crypto -mtune=apple-a14` for M-series chips
@@ -170,7 +173,7 @@ arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebr
 arch -x86_64 /usr/local/bin/brew install icu4c pcre2 libpng openssl@3
 
 # Option 2: Just use the script - it will use system libraries where possible
-./build-qt-macos.sh --universal  # Works but may use more system libs
+./build-qt-macos.sh  # Universal by default (add --no-universal to opt out)
 ```
 
 **Dependency Resolution Priority:**

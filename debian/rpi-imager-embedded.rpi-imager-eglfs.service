@@ -14,13 +14,5 @@ Group=root
 Environment=HOME=/root
 Environment=XDG_RUNTIME_DIR=/run/user/0
 
-# EGLFS specific environment
-Environment=QT_QPA_PLATFORM=eglfs
-Environment=QT_QPA_EGLFS_INTEGRATION=eglfs_kms
-Environment=QT_QPA_EGLFS_KMS_DEVICE=/dev/dri/card0
-Environment=QT_QPA_EGLFS_ALWAYS_SET_MODE=1
-Environment=QT_QUICK_CONTROLS_STYLE=Material
-Environment=QT_OPENGL=es2
-
 [Install]
 WantedBy=multi-user.target 

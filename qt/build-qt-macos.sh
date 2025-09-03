@@ -19,7 +19,7 @@ SKIP_DEPENDENCIES=0   # Don't skip installing dependencies by default
 MAC_OPTIMIZE=1        # macOS optimizations enabled by default
 VERBOSE_BUILD=0       # By default, don't show verbose build output
 UNPRIVILEGED=0        # By default, allow sudo usage
-UNIVERSAL_BUILD=0     # By default, build for current architecture only
+UNIVERSAL_BUILD=1     # By default, build universal binaries (x86_64 + arm64)
 
 
 # Parse command line arguments
@@ -33,7 +33,7 @@ usage() {
     echo "  --debug              Build with debug information"
     echo "  --skip-dependencies  Skip installing build dependencies"
     echo "  --no-mac-optimize    Disable macOS specific optimizations"
-    echo "  --universal          Build universal binaries (Intel + Apple Silicon)"
+    echo "  --no-universal       Disable universal build (host architecture only)"
     echo "  --verbose            Show verbose build output"
     echo "  --unprivileged       Run without sudo (skips dependency installation)"
     echo "  -h, --help           Show this help message"
@@ -75,6 +75,9 @@ for arg in "$@"; do
             ;;
         --universal)
             UNIVERSAL_BUILD=1
+            ;;
+        --no-universal)
+            UNIVERSAL_BUILD=0
             ;;
         --verbose)
             VERBOSE_BUILD=1
@@ -302,7 +305,8 @@ fi
 # Create directories
 DOWNLOAD_DIR="$PWD/qt-src"
 BUILD_DIR="$PWD/qt-build-macos"
-BASE_DIR="$PWD"
+# Directory containing this script (resolves relative invocation)
+BASE_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 mkdir -p "$DOWNLOAD_DIR" "$BUILD_DIR"
 
 # Download Qt source code
@@ -392,11 +396,7 @@ CONFIG_OPTS="$CONFIG_OPTS -no-framework"  # Build as dylibs instead of framework
 echo "Excluding features and modules for minimal build..."
 
 # Read and apply feature exclusions (from project root)
-PROJECT_ROOT="$BASE_DIR/../.."
-FEATURES_LIST="$PROJECT_ROOT/features_exclude.macos.list"
-if [ ! -f "$FEATURES_LIST" ]; then
-    FEATURES_LIST="$PROJECT_ROOT/features_exclude.list"
-fi
+FEATURES_LIST="$BASE_DIR/features_exclude.macos.list"
 if [ -f "$FEATURES_LIST" ]; then
     echo "Using features exclusion list: $(basename \""$FEATURES_LIST"\")"
     while IFS= read -r feature || [ -n "$feature" ]; do
@@ -412,15 +412,11 @@ if [ -f "$FEATURES_LIST" ]; then
         esac
     done < "$FEATURES_LIST"
 else
-    echo "Warning: No features exclusion list found at $PROJECT_ROOT/features_exclude.macos.list or $PROJECT_ROOT/features_exclude.list"
+    echo "Warning: No features exclusion list found at $FEATURES_LIST"
 fi
 
 # Read and apply module exclusions (from project root)
-MODULES_LIST="$PROJECT_ROOT/modules_exclude.macos.list"
-if [ ! -f "$MODULES_LIST" ]; then
-    MODULES_LIST="$PROJECT_ROOT/modules_exclude.list"
-fi
-
+MODULES_LIST="$BASE_DIR/modules_exclude.macos.list"
 if [ -f "$MODULES_LIST" ]; then
     echo "Using modules exclusion list: $(basename \""$MODULES_LIST"\")"
     while IFS= read -r module || [ -n "$module" ]; do
@@ -436,7 +432,7 @@ if [ -f "$MODULES_LIST" ]; then
         esac
     done < "$MODULES_LIST"
 else
-    echo "Warning: No modules exclusion list found at $PROJECT_ROOT/modules_exclude.macos.list or $PROJECT_ROOT/modules_exclude.list"
+    echo "Warning: No modules exclusion list found at $MODULES_LIST"
 fi
 
 # Configure and build Qt
@@ -568,11 +564,3 @@ fi
 
 echo "Created CMake toolchain file at $PREFIX/qt$QT_MAJOR_VERSION-toolchain.cmake"
 echo "Use with: cmake -DCMAKE_TOOLCHAIN_FILE=$PREFIX/qt$QT_MAJOR_VERSION-toolchain.cmake ..."
-
-echo ""
-echo "✅ Qt $QT_VERSION minimal build completed successfully!"
-echo ""
-echo "Next steps:"
-echo "1. Source the environment: source $PREFIX/bin/qtenv.sh"
-echo "2. Build rpi-imager with: cmake -DCMAKE_TOOLCHAIN_FILE=$PREFIX/qt$QT_MAJOR_VERSION-toolchain.cmake ..."
-echo "3. The build excludes unnecessary modules and features for a minimal footprint"

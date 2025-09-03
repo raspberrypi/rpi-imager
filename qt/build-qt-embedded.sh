@@ -7,14 +7,13 @@
 set -e
 
 # Default values
-QT_VERSION="6.9.0"    # 6.9.0 is the latest version as of 2025-05-01
+QT_VERSION="6.9.1"    # 6.9.1 is the latest version as of 2025-08-04
 PREFIX="/opt/Qt/${QT_VERSION}"     # Default installation prefix with capital 'Q'
 CORES=$(nproc)        # Default to all available CPU cores
 CLEAN_BUILD=1         # Clean the build directory by default
-BUILD_TYPE="Release"  # Default build type
+BUILD_TYPE="MinSizeRel"  # Default build type
 SKIP_DEPENDENCIES=0   # Don't skip installing dependencies by default
 RPI_OPTIMIZED=0       # Raspberry Pi optimizations disabled by default
-USE_EGLFS=0           # Use Wayland by default, not EGLFS
 VERBOSE_BUILD=0       # By default, don't show verbose build output
 UNPRIVILEGED=0        # By default, allow sudo usage
 
@@ -29,12 +28,13 @@ usage() {
     echo "  --debug              Build with debug information"
     echo "  --skip-dependencies  Skip installing build dependencies"
     echo "  --rpi-optimize       Apply Raspberry Pi specific optimizations"
-    echo "  --use-eglfs          Configure for EGLFS (direct rendering) instead of Wayland"
     echo "  --verbose            Show verbose build output"
     echo "  --unprivileged       Run without sudo (skips dependency installation)"
     echo "  -h, --help           Show this help message"
     exit 1
 }
+
+BUILD_EXAMPLES=OFF
 
 for arg in "$@"; do
     case $arg in
@@ -47,6 +47,9 @@ for arg in "$@"; do
         --cores=*)
             CORES="${arg#*=}"
             ;;
+        --build-examples)
+            BUILD_EXAMPLES=ON
+            ;;
         --no-clean)
             CLEAN_BUILD=0
             ;;
@@ -58,9 +61,6 @@ for arg in "$@"; do
             ;;
         --rpi-optimize)
             RPI_OPTIMIZED=1
-            ;;
-        --use-eglfs)
-            USE_EGLFS=1
             ;;
         --verbose)
             VERBOSE_BUILD=1
@@ -139,7 +139,6 @@ echo "  Cores: $CORES"
 echo "  Build Type: $BUILD_TYPE"
 echo "  Clean Build: $CLEAN_BUILD"
 echo "  Raspberry Pi Optimizations: $RPI_OPTIMIZED"
-echo "  Use EGLFS: $USE_EGLFS"
 echo "  Verbose Build: $VERBOSE_BUILD"
 echo "  Unprivileged Mode: $UNPRIVILEGED"
 if [ -n "$RPI_CFLAGS" ]; then
@@ -157,27 +156,12 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
     sudo apt-get install -y \
         `# Build tools` \
         bison flex gperf \
-        `# X11 core libraries` \
-        libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev \
-        libxrender-dev libxcomposite-dev libxcursor-dev libxdamage-dev \
-        libxrandr-dev libxtst-dev \
-        `# XCB libraries` \
-        libxcb1-dev libxcb-cursor-dev libxcb-glx0-dev libxcb-icccm4-dev \
-        libxcb-image0-dev libxcb-keysyms1-dev libxcb-randr0-dev \
-        libxcb-render-util0-dev libxcb-shape0-dev libxcb-shm0-dev \
-        libxcb-sync-dev libxcb-util-dev libxcb-xfixes0-dev \
-        libxcb-xinerama0-dev libxcb-xkb-dev \
         `# Keyboard and input` \
         libinput-dev libxkbcommon-dev libxkbcommon-x11-dev \
         `# Font and text rendering` \
         libfontconfig1-dev libfreetype6-dev libicu-dev \
-        `# Graphics and OpenGL` \
-        libdrm-dev libegl1-mesa-dev libgbm-dev libgles2-mesa-dev \
-        libvulkan-dev \
         `# Image and media formats` \
         libjpeg-dev libpng-dev zlib1g-dev \
-        `# Audio` \
-        libasound2-dev libpulse-dev \
         `# Security and crypto` \
         libnss3-dev libssl-dev \
         `# System libraries` \
@@ -186,23 +170,11 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
         libdouble-conversion-dev libpcre2-dev \
         `# Accessibility` \
         libatk1.0-dev libatk-bridge2.0-dev \
-        `# Printing` \
-        libcups2-dev \
-        `# 3D and assets` \
-        libassimp-dev
 
     # Additional dependencies for Raspberry Pi
     if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_MODEL" ]; then
         echo "Installing Raspberry Pi specific dependencies..."
         sudo apt-get install -y libraspberrypi-dev
-    fi
-    
-    # Install Wayland-specific dependencies if not using EGLFS
-    if [ "$USE_EGLFS" -eq 0 ]; then
-        echo "Installing Wayland specific dependencies..."
-        sudo apt-get install -y libwayland-dev wayland-protocols \
-            libxkbcommon-dev libwayland-cursor0 libwayland-egl1 \
-            libwayland-server0 libwayland-client0 libwayland-bin
     fi
 else
     if [ "$UNPRIVILEGED" -eq 1 ]; then
@@ -216,6 +188,7 @@ fi
 # Create directories
 DOWNLOAD_DIR="$PWD/qt-src"
 BUILD_DIR="$PWD/qt-build"
+BASE_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 mkdir -p "$DOWNLOAD_DIR" "$BUILD_DIR"
 
 # Download Qt source code
@@ -242,8 +215,63 @@ if [ "$CLEAN_BUILD" -eq 1 ]; then
     mkdir -p "$BUILD_DIR"
 fi
 
+if [ -d "$BASE_DIR/icu/icu4c/source/lib" ]; then
+    echo "ICU already built"
+else
+    echo "Building ICU..."
+
+    cd "$BASE_DIR"
+    echo "Building custom ICU..."
+    # Compile Languages List
+    LANG_DIR="$BASE_DIR/src/i18n"
+
+    pushd $LANG_DIR
+    # shellcheck disable=SC2207
+    LANGUAGES=($(find . -maxdepth 1 -name "*.ts" | grep -oP 'rpi-imager_\K[^.]+' | sort -u))
+
+    JSON_INCLUDELIST=""
+    for lang in "${LANGUAGES[@]}"; do
+        if [[ -z "$JSON_INCLUDELIST" ]]; then
+            JSON_INCLUDELIST="\"$lang\""
+        else
+            JSON_INCLUDELIST="${JSON_INCLUDELIST}, \"$lang\""
+        fi
+    done
+    popd
+    cat << EOF > "$BASE_DIR/language_filters.json"
+    {
+    "localeFilter": {
+        "filterType": "language",
+        "includelist": [
+        $JSON_INCLUDELIST
+        ]
+    },
+    "featureFilters": {
+        "locales_tree": "exclude",
+        "brkitr_dictionaries": "exclude",
+        "translit": "exclude",
+        "region_tree": "exclude",
+        "lang_tree": "exclude",
+        "curr_tree": "exclude",
+        "coll_tree": "exclude",
+        "conversion_mappings": "exclude"
+    }
+    }
+EOF
+    echo "Language filters: $JSON_INCLUDELIST"
+
+    git clone https://github.com/unicode-org/icu.git
+    cd "$BASE_DIR/icu/icu4c/source"
+    git checkout release-72-1
+    rm -rf data
+    wget https://github.com/unicode-org/icu/releases/download/release-72-1/icu4c-72_1-data.zip
+    unzip icu4c-72_1-data.zip
+    ICU_DATA_FILTER_FILE="$BASE_DIR/language_filters.json" ./runConfigureICU Linux
+    make -j"$CORES"
+fi
+
 # Configure and build Qt
-cd "$BUILD_DIR"
+cd "$BASE_DIR"
 
 # Set up environment variables for compilation
 if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_CFLAGS" ]; then
@@ -258,31 +286,59 @@ CONFIG_OPTS=(
     -prefix "$PREFIX"
     -opensource
     -confirm-license
+    -no-glib
+    -optimize-size
+    -release
     -make libs
     -skip qt3d
     -skip qtandroidextras
     -skip qtwinextras
 )
 
-# Add debug/release specific options
+# Add build type specific options
 if [ "$BUILD_TYPE" = "Debug" ]; then
     CONFIG_OPTS+=(-debug)
-    CONFIG_OPTS=("${CONFIG_OPTS[@]/-release}")
+elif [ "$BUILD_TYPE" = "MinSizeRel" ]; then
+    CONFIG_OPTS+=(-release -optimize-size)
+else
+    # Default to Release
+    CONFIG_OPTS+=(-release)
 fi
 
 # Platform-specific configuration
-if [ "$USE_EGLFS" -eq 1 ]; then
-    echo "Configuring for EGLFS (direct rendering)"
-    CONFIG_OPTS+=(
-        -eglfs
-        -opengl es2
-    )
-fi
+CONFIG_OPTS+=(
+    -no-opengl
+    -qpa linuxfb
+)
+
+echo "Excluding Stage"
+# Prefer embedded-specific exclusion lists; fall back to generic if not present
+FEATURES_LIST="$BASE_DIR/features_exclude.embedded.list"
+IFS=', ' read -r -a array <<< "$(< $FEATURES_LIST tr '\n' ', ')"
+
+for feature in "${array[@]}"
+do
+    CONFIG_OPTS+=(-no-feature-"${feature}")
+    echo "Excluding -no-feature-${feature}"
+done
+MODULES_LIST="$BASE_DIR/modules_exclude.embedded.list"
+IFS=', ' read -r -a array <<< "$(< $MODULES_LIST tr '\n' ', ')"
+
+for module in "${array[@]}"
+do
+    CONFIG_OPTS+=(-skip "${module}")
+    echo "Excluding -skip ${module}"
+done
+
+# Configure and build Qt
+cd "$BUILD_DIR"
+
 
 CONFIG_OPTS+=(
         --
         -DQT_BUILD_TESTS=OFF
-        -DQT_BUILD_EXAMPLES=OFF
+        -DQT_BUILD_EXAMPLES="${BUILD_EXAMPLES}"
+        -DICU_ROOT="$BASE_DIR/icu/icu4c/source/lib"
 )
 
 # Run the configure script with verbose output if requested
@@ -355,26 +411,6 @@ export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:\$PKG_CONFIG_PATH"
 export CMAKE_PREFIX_PATH="$PREFIX:\$CMAKE_PREFIX_PATH"
 EOF
 
-# Add platform-specific settings
-if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_MODEL" ]; then
-    if [ "$USE_EGLFS" -eq 1 ]; then
-        cat >> "$PREFIX/bin/qtenv.sh" << EOF
-# EGLFS (direct rendering) settings
-export QT_QPA_PLATFORM=eglfs
-export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
-# Uncomment for full-screen applications
-# export QT_QPA_EGLFS_ALWAYS_SET_MODE=1
-EOF
-    else
-        cat >> "$PREFIX/bin/qtenv.sh" << EOF
-# Wayland desktop settings
-# By default, Qt will automatically select the appropriate platform
-# Uncomment to force Wayland
-# export QT_QPA_PLATFORM=wayland
-EOF
-    fi
-fi
-
 # Add final echo
 cat >> "$PREFIX/bin/qtenv.sh" << EOF
 echo "Qt $QT_VERSION environment initialized"
@@ -394,24 +430,3 @@ EOF
 
 echo "Created CMake toolchain file at $PREFIX/qt$QT_MAJOR_VERSION-toolchain.cmake"
 echo "Use with: cmake -DCMAKE_TOOLCHAIN_FILE=$PREFIX/qt$QT_MAJOR_VERSION-toolchain.cmake ..."
-
-# Create convenience scripts for EGLFS/Wayland switching
-cat > "$PREFIX/bin/qt-use-eglfs.sh" << EOF
-#!/bin/bash
-# Source this file to use EGLFS for direct rendering
-export QT_QPA_PLATFORM=eglfs
-export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
-echo "Qt configured to use EGLFS (direct rendering)"
-EOF
-
-cat > "$PREFIX/bin/qt-use-wayland.sh" << EOF
-#!/bin/bash
-# Source this file to use Wayland
-export QT_QPA_PLATFORM=wayland
-echo "Qt configured to use Wayland"
-EOF
-
-chmod +x "$PREFIX/bin/qt-use-eglfs.sh" "$PREFIX/bin/qt-use-wayland.sh"
-echo "Created convenience scripts for switching between EGLFS and Wayland:"
-echo "  - source $PREFIX/bin/qt-use-eglfs.sh"
-echo "  - source $PREFIX/bin/qt-use-wayland.sh"

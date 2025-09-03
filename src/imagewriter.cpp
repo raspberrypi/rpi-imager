@@ -104,7 +104,7 @@ ImageWriter::ImageWriter(QObject *parent)
     _device_info = std::make_unique<DeviceInfo>();
 
 #ifdef Q_OS_LINUX
-    if (platform == "eglfs" || platform == "linuxfb")
+    if (platform == "linuxfb")
     {
         _embeddedMode = true;
         connect(&_networkchecktimer, SIGNAL(timeout()), SLOT(pollNetwork()));

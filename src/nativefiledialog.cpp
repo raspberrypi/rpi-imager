@@ -55,7 +55,7 @@ bool NativeFileDialog::isEmbeddedMode()
     }
 
     // Only Linux typically runs in embedded mode for this application
-    return (platform == "eglfs" || platform == "linuxfb");
+    return (platform == "linuxfb");
 }
 
 // No extra helper function; return empty to signal QML fallback

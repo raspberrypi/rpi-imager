@@ -117,9 +117,9 @@ fi
 if [ -z "$QT_DIR" ]; then
     echo "Error: No suitable Qt installation found for $ARCH"
     
-    if [ -f "./build-qt.sh" ]; then
+    if [ -f "./qt/build-qt.sh" ]; then
         echo "You can build Qt using:"
-        echo "  ./build-qt.sh --version=6.9.0 --rpi-optimize"
+        echo "  ./qt/build-qt.sh --version=6.9.1"
         echo "Or specify the Qt location with:"
         echo "  $0 --qt-root=/path/to/qt"
     else
@@ -264,7 +264,7 @@ export QT_QUICK_BACKEND=software
 export QT_QPA_FB_DRM=/dev/dri/card1
 
 # Logging (can be disabled in production)
-#export QT_LOGGING_RULES="*.debug=true;*.qpa.*=false"
+# export QT_LOGGING_RULES="*.debug=true;*.qpa.*=false"
 
 exec "${HERE}/usr/bin/rpi-imager" "$@"
 EOF

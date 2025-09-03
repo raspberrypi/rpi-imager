@@ -3,13 +3,11 @@
 # Script to download and build Qt with Debian-like configuration
 # Specifically designed for Raspberry Pi OS (and other Debian-based distributions)
 #
-# Building for rpi-imager-embedded can be done using the --no-opengl option, which will use linuxfb as the renderer
-#
 
 set -e
 
 # Default values
-QT_VERSION="6.9.0"    # 6.9.0 is the latest version as of 2025-05-01
+QT_VERSION="6.9.1"    # 6.9.1 is the latest version as of 2025-08-04
 PREFIX="/opt/Qt/${QT_VERSION}"     # Default installation prefix with capital 'Q'
 CORES=$(nproc)        # Default to all available CPU cores
 CLEAN_BUILD=1         # Clean the build directory by default
@@ -18,7 +16,6 @@ SKIP_DEPENDENCIES=0   # Don't skip installing dependencies by default
 RPI_OPTIMIZED=0       # Raspberry Pi optimizations disabled by default
 VERBOSE_BUILD=0       # By default, don't show verbose build output
 UNPRIVILEGED=0        # By default, allow sudo usage
-OPENGL=1
 
 # Parse command line arguments
 usage() {
@@ -33,12 +30,9 @@ usage() {
     echo "  --rpi-optimize       Apply Raspberry Pi specific optimizations"
     echo "  --verbose            Show verbose build output"
     echo "  --unprivileged       Run without sudo (skips dependency installation)"
-    echo "  --no-opengl          Disable OpenGL support"
     echo "  -h, --help           Show this help message"
     exit 1
 }
-
-BUILD_EXAMPLES=OFF
 
 for arg in "$@"; do
     case $arg in
@@ -50,12 +44,6 @@ for arg in "$@"; do
             ;;
         --cores=*)
             CORES="${arg#*=}"
-            ;;
-        --build-examples)
-            BUILD_EXAMPLES=ON
-            ;;
-        --no-opengl)
-            OPENGL=0
             ;;
         --no-clean)
             CLEAN_BUILD=0
@@ -163,12 +151,27 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
     sudo apt-get install -y \
         `# Build tools` \
         bison flex gperf \
+        `# X11 core libraries` \
+        libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev \
+        libxrender-dev libxcomposite-dev libxcursor-dev libxdamage-dev \
+        libxrandr-dev libxtst-dev \
+        `# XCB libraries` \
+        libxcb1-dev libxcb-cursor-dev libxcb-glx0-dev libxcb-icccm4-dev \
+        libxcb-image0-dev libxcb-keysyms1-dev libxcb-randr0-dev \
+        libxcb-render-util0-dev libxcb-shape0-dev libxcb-shm0-dev \
+        libxcb-sync-dev libxcb-util-dev libxcb-xfixes0-dev \
+        libxcb-xinerama0-dev libxcb-xkb-dev \
         `# Keyboard and input` \
         libinput-dev libxkbcommon-dev libxkbcommon-x11-dev \
         `# Font and text rendering` \
         libfontconfig1-dev libfreetype6-dev libicu-dev \
+        `# Graphics and OpenGL` \
+        libdrm-dev libegl1-mesa-dev libgbm-dev libgles2-mesa-dev \
+        libvulkan-dev \
         `# Image and media formats` \
         libjpeg-dev libpng-dev zlib1g-dev \
+        `# Audio` \
+        libasound2-dev libpulse-dev \
         `# Security and crypto` \
         libnss3-dev libssl-dev \
         `# System libraries` \
@@ -177,12 +180,22 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
         libdouble-conversion-dev libpcre2-dev \
         `# Accessibility` \
         libatk1.0-dev libatk-bridge2.0-dev \
+        `# Printing` \
+        libcups2-dev \
+        `# 3D and assets` \
+        libassimp-dev
 
     # Additional dependencies for Raspberry Pi
     if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_MODEL" ]; then
         echo "Installing Raspberry Pi specific dependencies..."
         sudo apt-get install -y libraspberrypi-dev
     fi
+    
+    # Install Wayland-specific dependencies
+    echo "Installing Wayland specific dependencies..."
+    sudo apt-get install -y libwayland-dev wayland-protocols \
+        libxkbcommon-dev libwayland-cursor0 libwayland-egl1 \
+        libwayland-server0 libwayland-client0 libwayland-bin
 else
     if [ "$UNPRIVILEGED" -eq 1 ]; then
         echo "Skipping dependency installation (unprivileged mode)"
@@ -195,7 +208,8 @@ fi
 # Create directories
 DOWNLOAD_DIR="$PWD/qt-src"
 BUILD_DIR="$PWD/qt-build"
-BASE_DIR="$PWD"
+# Directory containing this script (resolves relative invocation)
+BASE_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 mkdir -p "$DOWNLOAD_DIR" "$BUILD_DIR"
 
 # Download Qt source code
@@ -222,62 +236,8 @@ if [ "$CLEAN_BUILD" -eq 1 ]; then
     mkdir -p "$BUILD_DIR"
 fi
 
-if [ -d "$BASE_DIR/icu/icu4c/source/lib" ]; then
-    echo "ICU already built"
-else
-    echo "Building ICU..."
-
-    cd "$BASE_DIR"
-    echo "Building custom ICU..."
-    # Compile Languages List
-    LANG_DIR="$BASE_DIR/src/i18n"
-
-    pushd $LANG_DIR
-    LANGUAGES=($(find . -maxdepth 1 -name "*.ts" | grep -oP 'rpi-imager_\K[^.]+' | sort -u))
-
-    JSON_INCLUDELIST=""
-    for lang in "${LANGUAGES[@]}"; do
-        if [[ -z "$JSON_INCLUDELIST" ]]; then
-            JSON_INCLUDELIST="\"$lang\""
-        else
-            JSON_INCLUDELIST="${JSON_INCLUDELIST}, \"$lang\""
-        fi
-    done
-    popd
-    cat << EOF > "$BASE_DIR/language_filters.json"
-    {
-    "localeFilter": {
-        "filterType": "language",
-        "includelist": [
-        $JSON_INCLUDELIST
-        ]
-    },
-    "featureFilters": {
-        "locales_tree": "exclude",
-        "brkitr_dictionaries": "exclude",
-        "translit": "exclude",
-        "region_tree": "exclude",
-        "lang_tree": "exclude",
-        "curr_tree": "exclude",
-        "coll_tree": "exclude",
-        "conversion_mappings": "exclude"
-    }
-    }
-EOF
-    echo "Language filters: $JSON_INCLUDELIST"
-
-    git clone https://github.com/unicode-org/icu.git
-    cd "$BASE_DIR/icu/icu4c/source"
-    git checkout release-72-1
-    rm -rf data
-    wget https://github.com/unicode-org/icu/releases/download/release-72-1/icu4c-72_1-data.zip
-    unzip icu4c-72_1-data.zip
-    ICU_DATA_FILTER_FILE="$BASE_DIR/language_filters.json" ./runConfigureICU Linux
-    make -j"$CORES"
-fi
-
 # Configure and build Qt
-cd "$BASE_DIR"
+cd "$BUILD_DIR"
 
 # Set up environment variables for compilation
 if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_CFLAGS" ]; then
@@ -292,62 +252,65 @@ CONFIG_OPTS=(
     -prefix "$PREFIX"
     -opensource
     -confirm-license
-    -no-glib
-    -optimize-size
-    -release
     -make libs
     -skip qt3d
     -skip qtandroidextras
     -skip qtwinextras
 )
 
-# Add debug/release specific options
+# Add build type specific options
 if [ "$BUILD_TYPE" = "Debug" ]; then
     CONFIG_OPTS+=(-debug)
-    CONFIG_OPTS=("${CONFIG_OPTS[@]/-release}")
+elif [ "$BUILD_TYPE" = "MinSizeRel" ]; then
+    CONFIG_OPTS+=(-release -optimize-size)
+else
+    # Default to Release
+    CONFIG_OPTS+=(-release)
 fi
 
-# Platform-specific configuration
-if [ "$OPENGL" -eq 1 ]; then
-    CONFIG_OPTS+=(
-        -opengl es2
-        -eglfs
-    )
+# Exclude features and modules for desktop packaging
+echo "Excluding features and modules for desktop build..."
+
+# Read and apply feature exclusions (Linux desktop uses generic list only)
+FEATURES_LIST="$BASE_DIR/features_exclude.list"
+if [ -f "$FEATURES_LIST" ]; then
+    echo "Using features exclusion list: $(basename \""$FEATURES_LIST"\")"
+    while IFS= read -r feature || [ -n "$feature" ]; do
+        case "$feature" in
+            ''|'#'*|' '*'#'*|$'\t'*'#'*)
+                ;;
+            *)
+                CONFIG_OPTS+=( -no-feature-"$feature" )
+                echo "Excluding feature: $feature"
+                ;;
+        esac
+    done < "$FEATURES_LIST"
+else
+    echo "Warning: No features exclusion list found at $FEATURES_LIST"
 fi
-if [ "$OPENGL" -eq 0 ]; then
-    CONFIG_OPTS+=(
-        -no-opengl
-        -qpa linuxfb
-    )
+
+# Read and apply module exclusions (Linux desktop uses generic list only)
+MODULES_LIST="$BASE_DIR/modules_exclude.list"
+if [ -f "$MODULES_LIST" ]; then
+    echo "Using modules exclusion list: $(basename \""$MODULES_LIST"\")"
+    while IFS= read -r module || [ -n "$module" ]; do
+        case "$module" in
+            ''|'#'*|' '*'#'*|$'\t'*'#'*)
+                ;;
+            *)
+                CONFIG_OPTS+=( -skip "$module" )
+                echo "Excluding module: $module"
+                ;;
+        esac
+    done < "$MODULES_LIST"
+else
+    echo "Warning: No modules exclusion list found at $MODULES_LIST"
 fi
-
-echo "Excluding Stage"
-
-IFS=', ' read -r -a array <<< "$(< $PWD/features_exclude.list tr '\n' ', ')"
-
-for feature in "${array[@]}"
-do
-    CONFIG_OPTS+=(-no-feature-"${feature}")
-    echo "Excluding -no-feature-${feature}"
-done
-
-IFS=', ' read -r -a array <<< "$(< $PWD/modules_exclude.list tr '\n' ', ')"
-
-for module in "${array[@]}"
-do
-    CONFIG_OPTS+=(-skip "${module}")
-    echo "Excluding -skip ${module}"
-done
-
-# Configure and build Qt
-cd "$BUILD_DIR"
-
 
 CONFIG_OPTS+=(
         --
         -DQT_BUILD_TESTS=OFF
-        -DQT_BUILD_EXAMPLES="${BUILD_EXAMPLES}"
-        -DICU_ROOT="$BASE_DIR/icu/icu4c/source/lib"
+        -DQT_BUILD_EXAMPLES=OFF
 )
 
 # Run the configure script with verbose output if requested

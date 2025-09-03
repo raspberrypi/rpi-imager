@@ -2,11 +2,11 @@
 Version=1.0
 Type=Application
 Name=Raspberry Pi Imager (Embedded)
-Comment=Raspberry Pi Imager for embedded systems (EGLFS)
+Comment=Raspberry Pi Imager for embedded systems
 Exec=rpi-imager-embedded
 Icon=rpi-imager
 Terminal=false
 Categories=System;Utility;Embedded;
-Keywords=raspberry;pi;imager;embedded;eglfs;headless;
+Keywords=raspberry;pi;imager;embedded;linuxfb;headless;
 X-GNOME-SingleWindow=true
 StartupNotify=false 
