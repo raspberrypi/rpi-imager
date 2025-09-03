@@ -846,8 +846,15 @@ namespace {
                 // No need to handle a return - this isn't processing a list, it's searching and queuing downloads.
                 findAndQueueUnresolvedSubitemsJson(entryObject["subitems"].toArray(), manager, count + 1);
             } else if (entryObject.contains("subitems_url")) {
-                auto url = entryObject["subitems_url"].toString();
-                auto request = QNetworkRequest(url);
+                const QString subUrlStr = entryObject["subitems_url"].toString();
+                const QUrl subUrl(subUrlStr);
+                if (!subUrl.isValid() || subUrl.scheme().isEmpty()) {
+                    qWarning() << "Invalid subitems_url '" << subUrlStr
+                               << "' - relative or scheme-less URLs are not supported when using a local repository."
+                               << "Use an absolute file:// or https:// URL.";
+                    continue;
+                }
+                QNetworkRequest request(subUrl);
                 request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                         QNetworkRequest::NoLessSafeRedirectPolicy);
                 manager.get(request);
@@ -921,8 +928,22 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
             qDebug() << "Failed to fetch URL [" << data->url() << "], got unknown response code: " << httpStatusCode;
         }
     } else {
-        // QT Error.
-        qDebug() << "Unrecognised QT error: " << data->error() << ", explainer: " << data->errorString();
+        // QT Error - provide more actionable context when common misconfigurations are detected
+        const QNetworkReply::NetworkError err = data->error();
+        const QString errStr = data->errorString();
+
+        // Detect scheme-less URL usage which commonly happens with local repo files
+        const QUrl failedUrl = data->request().url();
+        if ((err == QNetworkReply::ProtocolFailure || err == QNetworkReply::UnknownNetworkError || err == QNetworkReply::ProtocolUnknownError)
+            && (failedUrl.scheme().isEmpty() || !failedUrl.isValid()))
+        {
+            qWarning() << "Failed to fetch subitems URL '" << failedUrl.toString()
+                       << "' - the URL appears to be relative or missing a scheme."
+                       << "When using a local --repo file, ensure all subitems_url entries are absolute"
+                       << "(e.g., file:///path/to/sublist.json or https://...).";
+        }
+
+        qDebug() << "Unrecognised QT error: " << err << ", explainer: " << errStr;
     }
 }
 
