@@ -50,6 +50,7 @@ Item {
     property bool ifSpiEnabled: false
     // "Disabled" | "Default" | "Console & Hardware" | "Console" | "Hardware" | ""
     property string ifSerial: ""
+    property bool featUsbGadgetEnabled: false
 
     // Ephemeral per-run setting: do not persist across runs
     property bool disableWarnings: false
@@ -503,6 +504,10 @@ Item {
                 // Build and stage customization directly in C++
                 imageWriter.applyCustomizationFromSavedSettings()
             }
+            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
+            if (!imageWriter.checkSWCapability("rpios_cloudinit") && nextIndex == stepIfAndFeatures) {
+                nextIndex++
+            }
             root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)
             if (nextComponent) {
@@ -525,6 +530,10 @@ Item {
                 } else if (!piConnectAvailable && prevIndex === stepPiConnectCustomization) {
                     prevIndex = stepRemoteAccess
                 }
+            }
+            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
+            if (!imageWriter.checkSWCapability("rpios_cloudinit") && prevIndex == stepIfAndFeatures) {
+                prevIndex--
             }
             root.currentStep = prevIndex
             var prevComponent = getStepComponent(root.currentStep)
@@ -680,7 +689,13 @@ Item {
         IfAndFeaturesCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
-            onNextClicked: root.nextStep()
+            onNextClicked: {
+                // Only advance if the step indicates it's ready
+                if (isConfirmed) {
+                    root.nextStep()
+                }
+                // Otherwise, let the step handle the action internally
+            }
             onBackClicked: root.previousStep()
             onSkipClicked: {
                 // Skip functionality is handled in the step itself
@@ -766,6 +781,7 @@ Item {
         ifSerialMode = ""
         ifPiConnectEnabled = false
         ifUsbGadgetEnabled = false
+        featUsbGadgetEnabled = false
 
         supportsSerialConsoleOnly = false
         supportsUsbGadget = false
