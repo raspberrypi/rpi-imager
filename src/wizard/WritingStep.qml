@@ -5,7 +5,6 @@
 
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
 import "../qmlcomponents"
 
@@ -14,19 +13,18 @@ import ImageOptions
 
 WizardStepBase {
     id: root
-    
+
     required property ImageWriter imageWriter
     required property var wizardContainer
-    
+
     title: qsTr("Write Image")
     subtitle: qsTr("Review your choices and write the image to the storage device")
-    nextButtonText: root.isWriting && root.isVerifying ? qsTr("Skip verification") : (root.isWriting ? qsTr("Cancel") : (root.isComplete ? qsTr("Continue") : qsTr("Write")))
+    nextButtonText: root.isWriting ? qsTr("Cancel") : (root.isComplete ? qsTr("Continue") : qsTr("Write"))
     nextButtonEnabled: true
     showBackButton: true
-    
+
     property bool isWriting: false
     property bool isComplete: false
-    property bool isVerifying: false
     property bool confirmOpen: false
     readonly property bool anyCustomizationsApplied: (
         wizardContainer.hostnameConfigured ||
@@ -34,9 +32,9 @@ WizardStepBase {
         wizardContainer.userConfigured ||
         wizardContainer.wifiConfigured ||
         wizardContainer.sshEnabled ||
-        wizardContainer.featPiConnectEnabled
+        wizardContainer.featUsbGadgetEnabled
     )
-    
+
     // Disable back while writing
     backButtonEnabled: !root.isWriting
 
@@ -49,7 +47,7 @@ WizardStepBase {
 
         // Top spacer to vertically center progress section when writing/complete
         Item { Layout.fillHeight: true; visible: root.isWriting || root.isComplete }
-        
+
         // Summary section (de-chromed)
         ColumnLayout {
             id: summaryLayout
@@ -67,20 +65,20 @@ WizardStepBase {
                 color: Style.formLabelColor
                 Layout.fillWidth: true
             }
-            
+
             GridLayout {
                 Layout.fillWidth: true
                 columns: 2
                 columnSpacing: Style.formColumnSpacing
                 rowSpacing: Style.spacingSmall
-                
+
                 Text {
                     text: qsTr("Device:")
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                 }
-                
+
                 Text {
                     text: wizardContainer.selectedDeviceName || qsTr("No device selected")
                     font.pixelSize: Style.fontSizeDescription
@@ -89,14 +87,14 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Layout.fillWidth: true
                 }
-                
+
                 Text {
                     text: qsTr("Operating System:")
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                 }
-                
+
                 Text {
                     text: wizardContainer.selectedOsName || qsTr("No image selected")
                     font.pixelSize: Style.fontSizeDescription
@@ -105,14 +103,14 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Layout.fillWidth: true
                 }
-                
+
                 Text {
                     text: qsTr("Storage:")
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                 }
-                
+
                 Text {
                     text: wizardContainer.selectedStorageName || qsTr("No storage selected")
                     font.pixelSize: Style.fontSizeDescription
@@ -122,9 +120,9 @@ WizardStepBase {
                     Layout.fillWidth: true
                 }
             }
-            
+
             Text {
-                text: root.anyCustomizationsApplied 
+                text: root.anyCustomizationsApplied
                       ? qsTr("Ready to write your customized image to the storage device. All existing data will be erased.")
                       : qsTr("Ready to write the image to the storage device. All existing data will be erased.")
                 font.pixelSize: Style.fontSizeDescription
@@ -134,7 +132,7 @@ WizardStepBase {
                 wrapMode: Text.WordWrap
             }
         }
-        
+
         // Customization summary (what will be written) - de-chromed
         ColumnLayout {
             id: customLayout
@@ -162,6 +160,9 @@ WizardStepBase {
                 Text { text: qsTr("• WiFi configured");            font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured }
                 Text { text: qsTr("• SSH enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled }
                 Text { text: qsTr("• Pi Connect enabled"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.piConnectEnabled }
+                Text { text: qsTr("• USB Gadget enabled");          font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.featUsbGadgetEnabled }
+                Text { text: qsTr("• I2C enabled");                 font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifI2cEnabled }
+                Text { text: qsTr("• SPI enabled");                 font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSpiEnabled }
                 Text { text: qsTr("• Locale configured");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.localeConfigured }
             }
         }
@@ -174,7 +175,7 @@ WizardStepBase {
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
             visible: root.isWriting || root.isComplete
-            
+
             Text {
                 id: progressText
                 text: qsTr("Starting write process...")
@@ -185,7 +186,7 @@ WizardStepBase {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
             }
-            
+
             ProgressBar {
                 id: progressBar
                 Layout.fillWidth: true
@@ -193,33 +194,26 @@ WizardStepBase {
                 value: 0
                 from: 0
                 to: 100
-                
-                // Default to write color; updated dynamically in onDownloadProgress/onVerifyProgress
-                Material.accent: Style.progressBarWritingForegroundColor
-                Material.background: Style.progressBarTrackColor
+
+                Material.accent: Style.progressBarVerifyForegroundColor
+                Material.background: Style.progressBarBackgroundColor
                 visible: root.isWriting
             }
-
-            // Separate skip button removed; main Next button switches label during verification
         }
 
         // Bottom spacer to vertically center progress section when writing/complete
         Item { Layout.fillHeight: true; visible: root.isWriting || root.isComplete }
     }
     ]
-    
+
     // Handle next button clicks based on current state
     onNextClicked: {
         if (root.isWriting) {
             // Cancel the write
-            if (root.isVerifying) {
-                imageWriter.skipCurrentVerification()
-            } else {
-                imageWriter.cancelWrite()
-                root.isWriting = false
-                wizardContainer.isWriting = false
-                progressText.text = qsTr("Write cancelled")
-            }
+            imageWriter.cancelWrite()
+            root.isWriting = false
+            wizardContainer.isWriting = false
+            progressText.text = qsTr("Write cancelled")
         } else if (!root.isComplete) {
             // If warnings are disabled, skip the confirmation dialog
             if (imageWriter.getBoolSetting("disable_warnings")) {
@@ -233,9 +227,8 @@ WizardStepBase {
             wizardContainer.nextStep()
         }
     }
-    
+
     function onFinalizing() {
-        root.isVerifying = false
         progressText.text = qsTr("Finalizing...")
         progressBar.value = 100
     }
@@ -244,7 +237,7 @@ WizardStepBase {
     Dialog {
         id: confirmDialog
         modal: true
-        parent: wizardContainer && wizardContainer.overlayRootRef ? wizardContainer.overlayRootRef : undefined
+        parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
         anchors.centerIn: parent
         width: 520
         standardButtons: Dialog.NoButton
@@ -342,33 +335,29 @@ WizardStepBase {
             Qt.callLater(function(){ imageWriter.startWrite() })
         }
     }
-    
+
     function onDownloadProgress(now, total) {
         if (root.isWriting) {
             var progress = total > 0 ? (now / total) * 100 : 0
-            root.isVerifying = false
             progressBar.value = progress
             progressText.text = qsTr("Writing... %1%").arg(Math.round(progress))
-            progressBar.Material.accent = Style.progressBarWritingForegroundColor
         }
     }
-    
+
     function onVerifyProgress(now, total) {
         if (root.isWriting) {
             var progress = total > 0 ? (now / total) * 100 : 0
-            root.isVerifying = true
             progressBar.value = progress
             progressText.text = qsTr("Verifying... %1%").arg(Math.round(progress))
-            progressBar.Material.accent = Style.progressBarVerifyForegroundColor
         }
     }
-    
+
     function onPreparationStatusUpdate(msg) {
         if (root.isWriting) {
             progressText.text = msg
         }
     }
-    
+
     // Update isWriting state when write completes
     Connections {
         target: imageWriter
@@ -377,7 +366,7 @@ WizardStepBase {
             wizardContainer.isWriting = false
             root.isComplete = true
             progressText.text = qsTr("Write completed successfully!")
-            
+
             // Automatically advance to the done screen
             wizardContainer.nextStep()
         }
@@ -393,4 +382,4 @@ WizardStepBase {
             }
         }
     }
-} 
+}

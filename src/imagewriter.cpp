@@ -2073,19 +2073,15 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     }
 
     const bool isRpiosCloudInit = checkSWCapability("rpios_cloudinit");
-    const bool isPiConnect = s.value("enablePiConnect").toBool();
     const bool enableI2C = s.value("enableI2C").toBool();
     const bool enableSPI = s.value("enableSPI").toBool();
     const QString enableSerial = s.value("enableSerial").toString();
     const bool armInterfaceEnabled = enableI2C || enableSPI || enableSerial != "Disabled";
+    const bool isUsbGadgetEnabled = s.value("enableUsbGadget").toBool();
 
     // cc_raspberry_pi config for rpios_cloudinit capable OSs
-    if (isRpiosCloudInit && (isPiConnect || armInterfaceEnabled)) {
+    if (isRpiosCloudInit && (armInterfaceEnabled)) {
         push(QStringLiteral("rpi:"), cloud);
-
-        if (isPiConnect) {
-            push(QStringLiteral("  enable_rpi_connect: true"), cloud);
-        }
 
         // configure arm interfaces
         if (armInterfaceEnabled) {
@@ -2117,6 +2113,16 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
                 }
             }
         }
+    }
+
+    if (isRpiosCloudInit && isUsbGadgetEnabled) {
+        // TODO: maybe create configuration struct so struct.package_update to avoid duplicates and typos
+        push(QStringLiteral("package_update: true"), cloud);
+        push(QStringLiteral("package_upgrade: false"), cloud);
+        push(QStringLiteral("packages:"), cloud);
+        push(QStringLiteral("  - rpi-usb-gadget"), cloud);
+        push(QStringLiteral("runcmd:"), cloud);
+        push(QStringLiteral("  - rpi-usb-gadget on"), cloud);
     }
 
     const QString ssid = s.value("wifiSSID").toString();

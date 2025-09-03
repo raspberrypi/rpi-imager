@@ -20,10 +20,13 @@ WizardStepBase {
     required property var wizardContainer
 
     property bool supportsSerialConsoleOnly: false
+    property bool isConfirmed: false
 
     title: qsTr("Customization: Interfaces & Features")
     subtitle: qsTr("Enable hardware interfaces and connectivity options.")
     showSkipButton: true
+    nextButtonEnabled: true
+    backButtonEnabled: true
 
     function updateCaps() {
         // imageWriter knows the currently selected hardware
@@ -113,11 +116,11 @@ WizardStepBase {
                             Layout.fillWidth: true
 
                             ImOptionPill {
-                                id: chkEnablePiConnect
+                                id: chkEnableUsbGadget
                                 Layout.fillWidth: true
-                                text: qsTr("Enable Raspberry Pi Connect")
-                                helpLabel: qsTr("Learn more about RPi-Connect")
-                                helpUrl: "https://www.raspberrypi.com/documentation/services/connect.html"
+                                text: qsTr("Enable USB Gadget Mode")
+                                helpLabel: qsTr("Learn more about USB Gadget Mode")
+                                helpUrl: "https://www.raspberrypi.com/documentation/computers/usb-gadget.html"
                                 checked: false
                             }
 
@@ -131,10 +134,16 @@ WizardStepBase {
 
     Component.onCompleted: {
         if (!imageWriter.checkSWCapability("rpios_cloudinit")) {
+            root.isConfirmed = true
+            wizardContainer.ifI2cEnabled     = false
+            wizardContainer.ifSpiEnabled     = false
+            wizardContainer.ifSerial         = false
+            wizardContainer.featUsbGadgetEnabled = false
             // skip page
-            wizardContainer.jumpToStep(wizardContainer.stepWriting)
+            wizardContainer.nextStep()
             return
         }
+        root.isConfirmed = false
 
         updateCaps()
 
@@ -147,7 +156,7 @@ WizardStepBase {
         }, 0)
 
         root.registerFocusGroup("if_section_features", function() {
-            return [chkEnablePiConnect /* , chkEnableUsbGadget if we add it */]
+            return [chkEnableUsbGadget]
         }, 1)
 
         // Prefill
@@ -160,12 +169,7 @@ WizardStepBase {
         comboSerial.currentIndex = (idx >= 0 ? idx : 0)
 
         // Features
-        chkEnablePiConnect.checked = saved.enablePiConnect === true || saved.enablePiConnect === "true" || wizardContainer.featPiConnectEnabled
-
-        // If we add USB ethernet gadget:
-        //if (wizardContainer.supportsUsbGadget) {
-        //    // chkEnableUsbGadget.checked = saved.enableUsbGadget === true || saved.enableUsbGadget === "true" || wizardContainer.ifUsbGadgetEnabled
-        //}
+        chkEnableUsbGadget.checked = saved.enableUsbGadget === true || saved.enableUsbGadget === "true" || wizardContainer.featUsbGadgetEnabled
     }
 
     onNextClicked: {
@@ -177,10 +181,7 @@ WizardStepBase {
         saved.enableSerial = !supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText
 
         // Features
-        saved.enablePiConnect = chkEnablePiConnect.checked
-        // If we add USB ethernet gadget (and gate by model support):
-        // if (wizardContainer.supportsUsbGadget === true) saved.enableUsbGadget = chkEnableUsbGadget.checked
-        // else delete saved.enableUsbGadget
+        saved.enableUsbGadget = chkEnableUsbGadget.checked
 
         imageWriter.setSavedCustomizationSettings(saved)
 
@@ -188,7 +189,111 @@ WizardStepBase {
         wizardContainer.ifI2cEnabled     = chkEnableI2C.checked
         wizardContainer.ifSpiEnabled     = chkEnableSPI.checked
         wizardContainer.ifSerial         = comboSerial.editText
-        wizardContainer.featPiConnectEnabled = chkEnablePiConnect.checked
+        wizardContainer.featUsbGadgetEnabled = chkEnableUsbGadget.checked
+
+        if (chkEnableUsbGadget.checked && !imageWriter.getBoolSetting("disable_warnings")) {
+            confirmDialog.open()
+        } else {
+            root.isConfirmed = true
+        }
+    }
+
+    // Confirmation dialog
+    Dialog {
+        id: confirmDialog
+        modal: true
+        parent: wizardContainer && wizardContainer.overlayRootRef ? wizardContainer.overlayRootRef : undefined
+        anchors.centerIn: parent
+        width: 520
+        standardButtons: Dialog.NoButton
+        visible: false
+
+        property bool allowAccept: false
+        title: qsTr("Enable USB Gadget Mode")
+
+        background: Rectangle {
+            color: Style.mainBackgroundColor
+            radius: Style.sectionBorderRadius
+            border.color: Style.popupBorderColor
+            border.width: Style.sectionBorderWidth
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingMedium
+
+            Text {
+                text: qsTr("USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.")
+                font.pixelSize: Style.fontSizeHeading
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.formLabelErrorColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Text {
+                textFormat: Text.RichText
+                text: qsTr("Please review the <a href='%1'>documentation</a> before proceeding.").arg(chkEnableUsbGadget.helpUrl)
+                font.pixelSize: Style.fontSizeFormLabel
+                font.family: Style.fontFamilyBold
+                color: Style.formLabelColor
+                wrapMode: Text.WordWrap
+                onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: qsTr("Only continue if you are sure you know what you are doing.")
+                font.pixelSize: Style.fontSizeFormLabel
+                font.family: Style.fontFamilyBold
+                color: Style.formLabelErrorColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacingMedium
+                Item { Layout.fillWidth: true }
+
+                ImButton {
+                    text: qsTr("Cancel")
+                    onClicked: confirmDialog.close()
+                }
+
+                ImButtonRed {
+                    id: acceptBtn
+                    text: qsTr("I understand, continue")
+                    onClicked: {
+                        confirmDialog.close()
+                        root.isConfirmed = true
+                        // Advance to next step
+                        wizardContainer.nextStep()
+                    }
+                }
+            }
+        }
+
+        // Delay accept for 2 seconds
+        Timer {
+            id: confirmDelay
+            interval: 2000
+            running: false
+            repeat: false
+            onTriggered: confirmDialog.allowAccept = true
+        }
+
+        // Ensure disabled before showing to avoid flicker
+        onAboutToShow: {
+            allowAccept = false
+            confirmDelay.start()
+        }
+        onClosed: {
+            confirmDelay.stop()
+            allowAccept = false
+        }
     }
 
     onSkipClicked: {
@@ -196,14 +301,14 @@ WizardStepBase {
         delete saved.enableI2C
         delete saved.enableSPI
         delete saved.enableSerial
-        delete saved.enablePiConnect
+        delete saved.enableUsbGadget
         imageWriter.setSavedCustomizationSettings(saved)
 
         // Clear all customization flags
         wizardContainer.ifI2cEnabled = false
         wizardContainer.ifSpiEnabled = false
         wizardContainer.ifSerial = "Disabled"
-        wizardContainer.featPiConnectEnabled = false
+        wizardContainer.featUsbGadgetEnabled = false
 
         // Jump to writing step
         wizardContainer.jumpToStep(wizardContainer.stepWriting)
