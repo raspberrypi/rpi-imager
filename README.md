@@ -131,9 +131,10 @@ pushd ${pi-gen-micro-root}/packages/ && dpkg-scanpackages . /dev/null | gzip -9c
 If the application is started with "--repo [your own URL]" it will use a custom image repository.
 So can simply create another 'start menu shortcut' to the application with that parameter to use the application with your own images.
 
-### Telemetry
+### Anonymous metrics (telemetry)
 
 #### Why and what
+
 In order to understand usage of the application (e.g. uptake of Raspberry Pi Imager versions and which images and operating systems are most popular), Raspberry Pi Imager collects anonymous metrics (telemetry) by default. These metrics are used to prioritise and justify work on the Raspberry Pi Imager, and contain the following information:
 
 - The URL of the OS you have selected
@@ -148,9 +149,14 @@ In order to understand usage of the application (e.g. uptake of Raspberry Pi Ima
 If the Raspberry Pi Imager is being run a part of the Network Installer, Imager will also collect the revision of Raspberry Pi it is running on.
 
 #### Where is it stored
+
 This web service is hosted by [Heroku](https://www.heroku.com) and only stores an incrementing counter using a [Redis Sorted Set](https://redis.io/topics/data-types#sorted-sets) for each URL, operating system name and category per day in the `eu-west-1` region and does not associate any personal data with those counts. This allows us to query the number of downloads over time and nothing else.
 
 The last 1,500 requests to the service are logged for one week before expiring as this is the [minimum log retention period for Heroku](https://devcenter.heroku.com/articles/logging#log-history-limits).
+
+#### Viewing the data
+
+As the data is stored in aggregate form, only aggregate data is available to any viewer. See what we see at: [rpi-imager-stats](https://rpi-imager-stats.raspberrypi.com)
 
 #### Opting out
 
