@@ -14,11 +14,11 @@
 #include <QThread>
 #include <QFile>
 #include <QElapsedTimer>
-#include <fstream>
 #include <atomic>
 #include <time.h>
 #include <curl/curl.h>
 #include "acceleratedcryptographichash.h"
+#include "imageadvancedoptions.h"
 
 #ifdef Q_OS_WIN
 #include "windows/winfile.h"
@@ -116,7 +116,7 @@ public:
     /*
      * Enable image customization
      */
-    void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const bool userDefinedFirstRun);
+    void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const ImageOptions::AdvancedOptions opts);
 
     /*
      * Thread safe download progress query functions
@@ -172,7 +172,7 @@ protected:
     std::uint64_t _lastFailureOffset;
     qint64 _sectorsStart;
     QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash, _config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
-    bool _userDefinedFirstRun;
+    ImageOptions::AdvancedOptions _advancedOptions;
     char *_firstBlock;
     size_t _firstBlockSize;
     static QByteArray _proxy;

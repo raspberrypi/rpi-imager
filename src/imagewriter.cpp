@@ -49,6 +49,7 @@
 #include <stdlib.h>
 #include <QLocale>
 #include <QMetaType>
+#include "imageadvancedoptions.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -58,6 +59,8 @@
 #ifdef Q_OS_LINUX
 #include "linux/stpanalyzer.h"
 #endif
+
+using namespace ImageOptions;
 
 namespace {
     constexpr uint MAX_SUBITEMS_DEPTH = 16;
@@ -608,7 +611,7 @@ void ImageWriter::startWrite()
     
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _userDefinedFirstRun);
+    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -1763,20 +1766,20 @@ void ImageWriter::setSetting(const QString &key, const QVariant &value)
     _settings.sync();
 }
 
-void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const bool userDefinedFirstRun)
+void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts)
 {
     _config = config;
     _cmdline = cmdline;
     _firstrun = firstrun;
     _cloudinit = cloudinit;
     _cloudinitNetwork = cloudinitNetwork;
-    _userDefinedFirstRun = userDefinedFirstRun;
+    _advancedOptions = opts;
 
     qDebug() << "Custom config.txt entries:" << config;
     qDebug() << "Custom cmdline.txt entries:" << cmdline;
     qDebug() << "Custom firstrun.sh:" << firstrun;
     qDebug() << "Cloudinit:" << cloudinit;
-    qDebug() << "Is user-defined firstRun.sh:" << userDefinedFirstRun;
+    qDebug() << "Advanced options:" << opts;
 }
 
 void ImageWriter::applyCustomizationFromSavedSettings()
@@ -1786,7 +1789,7 @@ void ImageWriter::applyCustomizationFromSavedSettings()
 
     // If the selected image does not support customization, ensure nothing is staged
     if (_initFormat.isEmpty()) {
-        setImageCustomization(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray(), false);
+        setImageCustomization(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray(), NoAdvancedOptions);
         return;
     }
 
@@ -1985,7 +1988,7 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     line(QStringLiteral("sed -i 's| systemd.run.*||g' /boot/cmdline.txt"), script);
     line(QStringLiteral("exit 0"), script);
 
-    setImageCustomization(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), false);
+    setImageCustomization(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), NoAdvancedOptions);
 }
 
 void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
@@ -2031,38 +2034,42 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     const QString sshPublicKey = s.value("sshPublicKey").toString().trimmed();
     const QString sshAuthorizedKeys = s.value("sshAuthorizedKeys").toString().trimmed();
 
-    if (sshEnabled || !userName.isEmpty()) {
-        push(QStringLiteral("users:"), cloud);
-        // Parity: legacy QML used the typed username even when not renaming the user.
-        // Fall back to getCurrentUser() when SSH is enabled and no explicit username was saved.
-        const QString effectiveUser = userName.isEmpty() && sshEnabled ? getCurrentUser() : (userName.isEmpty() ? QStringLiteral("pi") : userName);
-        push(QStringLiteral("- name: ") + effectiveUser, cloud);
-        push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
-        push(QStringLiteral("  shell: /bin/bash"), cloud);
-        if (!userPass.isEmpty()) {
-            push(QStringLiteral("  lock_passwd: false"), cloud);
-            push(QStringLiteral("  passwd: ") + userPass, cloud);
-        } else if (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
-            push(QStringLiteral("  lock_passwd: true"), cloud);
-        }
-        // Include all authorized keys (multi-line) if provided, else fall back to single key
-        if (!sshAuthorizedKeys.isEmpty() || !sshPublicKey.isEmpty()) {
-            push(QStringLiteral("  ssh_authorized_keys:"), cloud);
-            if (!sshAuthorizedKeys.isEmpty()) {
-                const QStringList keys = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
-                for (const QString &k : keys) {
-                    push(QStringLiteral("    - ") + k.trimmed(), cloud);
-                }
-            } else {
-                push(QStringLiteral("    - ") + sshPublicKey, cloud);
-            }
-            push(QStringLiteral("  sudo: ALL=(ALL) NOPASSWD:ALL"), cloud);
-        }
-        push(QString(), cloud); // blank line
-    }
+    if (sshEnabled) {
+        push(QStringLiteral("enable_ssh: true"), cloud);
 
-    if (sshEnabled && sshPasswordAuth) {
-        push(QStringLiteral("ssh_pwauth: true"), cloud);
+        if (!userName.isEmpty()) {
+            push(QStringLiteral("users:"), cloud);
+            // Parity: legacy QML used the typed username even when not renaming the user.
+            // Fall back to getCurrentUser() when SSH is enabled and no explicit username was saved.
+            const QString effectiveUser = userName.isEmpty() && sshEnabled ? getCurrentUser() : (userName.isEmpty() ? QStringLiteral("pi") : userName);
+            push(QStringLiteral("- name: ") + effectiveUser, cloud);
+            push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
+            push(QStringLiteral("  shell: /bin/bash"), cloud);
+            if (!userPass.isEmpty()) {
+                push(QStringLiteral("  lock_passwd: false"), cloud);
+                push(QStringLiteral("  passwd: ") + userPass, cloud);
+            } else if (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
+                push(QStringLiteral("  lock_passwd: true"), cloud);
+            }
+            // Include all authorized keys (multi-line) if provided, else fall back to single key
+            if (!sshAuthorizedKeys.isEmpty() || !sshPublicKey.isEmpty()) {
+                push(QStringLiteral("  ssh_authorized_keys:"), cloud);
+                if (!sshAuthorizedKeys.isEmpty()) {
+                    const QStringList keys = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+                    for (const QString &k : keys) {
+                        push(QStringLiteral("    - ") + k.trimmed(), cloud);
+                    }
+                } else {
+                    push(QStringLiteral("    - ") + sshPublicKey, cloud);
+                }
+                push(QStringLiteral("  sudo: ALL=(ALL) NOPASSWD:ALL"), cloud);
+            }
+            push(QString(), cloud); // blank line
+        }
+
+        if (sshPasswordAuth) {
+            push(QStringLiteral("ssh_pwauth: true"), cloud);
+        }
     }
 
     const bool isRpiosCloudInit = checkSWCapability("rpios_cloudinit");
@@ -2176,7 +2183,7 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
         push(QStringLiteral("  - [ bash, -lc, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
     }
 
-    setImageCustomization(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, false);
+    setImageCustomization(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, NoAdvancedOptions);
 }
 
 QString ImageWriter::crypt(const QByteArray &password)
@@ -2571,7 +2578,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _userDefinedFirstRun);
+    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)

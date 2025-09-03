@@ -10,6 +10,7 @@ import QtQuick.Layouts 1.15
 import "../qmlcomponents"
 
 import RpiImager
+import ImageOptions
 
 WizardStepBase {
     id: root
