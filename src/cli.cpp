@@ -70,7 +70,7 @@ int Cli::run()
     const QStringList args = parser.positionalArguments();
     if (args.count() != 2)
     {
-        std::cerr << "Usage: --cli [--disable-verify] [--disable-eject] [--sha256 <expected hash> [--cache-file <cache file>]] [--first-run-script <script>] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
+        std::cerr << parser.helpText().toStdString() << std::endl;
         return 1;
     }
 
