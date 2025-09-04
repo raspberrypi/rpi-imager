@@ -70,12 +70,36 @@ endif()
 #add_compile_options("-fsanitize=address")
 #add_link_options("-fsanitize=address")
 
-# You _must_ set your Qt6 root for the build to progress.
-set(Qt6_ROOT "/opt/Qt/6.9.0/gcc_arm64" CACHE PATH "Your Qt6 root path")
+# Leave empty by default so we don't inject the wrong path on other platforms. (changing on every QT version)
+# Users/Kits can set Qt6_ROOT or CMAKE_PREFIX_PATH externally.
+set(Qt6_ROOT "" CACHE PATH "Path to Qt6 (optional; leave empty if using CMAKE_PREFIX_PATH)")
+
+# If provided, use it to help CMake find Qt
+if(Qt6_ROOT)
+  list(PREPEND CMAKE_PREFIX_PATH "${Qt6_ROOT}")
+endif()
 
 if (WIN32)
-    set(MINGW64_ROOT "" CACHE PATH "Your MinGW64 root path, likely provided by QtCreator")
-    set(IMAGER_SIGNED_APP OFF CACHE BOOL "Sign Imager and its installer as part of the build. Requires a valid Code Signing certificate.")
+  # Only seed the cache if not already provided by the user/kit
+  if(NOT DEFINED MINGW64_ROOT OR MINGW64_ROOT STREQUAL "")
+    # Try to guess from the C compiler location (…/mingwXXXX_64/bin/gcc.exe)
+    get_filename_component(_cc_bin_dir "${CMAKE_C_COMPILER}" DIRECTORY)
+    get_filename_component(_guess_root  "${_cc_bin_dir}" DIRECTORY)  # one level up from bin/
+
+    set(_candidate "")
+    if(EXISTS "${_guess_root}/bin/g++.exe")
+      set(_candidate "${_guess_root}")
+    elseif(EXISTS "C:/Qt/Tools/mingw1310_64/bin/g++.exe")
+      set(_candidate "C:/Qt/Tools/mingw1310_64")
+    endif()
+
+    set(MINGW64_ROOT "${_candidate}" CACHE PATH "Your MinGW64 root path, likely provided by QtCreator")
+    unset(_cc_bin_dir)
+    unset(_guess_root)
+    unset(_candidate)
+  endif()
+
+  set(IMAGER_SIGNED_APP OFF CACHE BOOL "Sign Imager and its installer as part of the build. Requires a valid Code Signing certificate.")
 endif()
 
 if (APPLE)
@@ -306,10 +330,6 @@ endif()
 
 # Create an rpi-imager_lupdate target
 qt_add_lupdate(TS_FILES ${TRANSLATIONS} SOURCE_TARGETS ${PROJECT_NAME} OPTIONS -no-obsolete -locations none)
-
-if (WIN32)
-    include(windows/PlatformPackaging.cmake)
-endif()
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOMOC ON)
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTORCC ON)
