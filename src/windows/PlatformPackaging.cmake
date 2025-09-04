@@ -3,10 +3,13 @@
 # Target Windows 10, in line with Qt requirements
 add_definitions(-DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DNTDDI_VERION=0x0A000000)
 
-# Strip debug symbols
-add_custom_command(TARGET ${PROJECT_NAME}
-    POST_BUILD
-    COMMAND ${CMAKE_STRIP} "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
+# Strip debug symbols in release mode
+if(CMAKE_STRIP AND CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND "${CMAKE_STRIP}" "$<TARGET_FILE:${PROJECT_NAME}>"
+    COMMENT "Stripping $<TARGET_FILE_NAME:${PROJECT_NAME}>"
+    VERBATIM)
+endif()
 
 # Optional code signing
 if (IMAGER_SIGNED_APP)
@@ -102,10 +105,14 @@ if(ENABLE_INNO_INSTALLER)
         message(WARNING "Inno Setup compiler not found. Install Inno Setup from https://jrsoftware.org/isinfo.php")
     endif()
 else()
-    configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi"
-        @ONLY)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in")
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi"
+            @ONLY)
+    else()
+        message(STATUS "NSIS template not found; skipping NSIS installer configuration")
+    endif()
 endif()
 
 # Manifest generation and copying
