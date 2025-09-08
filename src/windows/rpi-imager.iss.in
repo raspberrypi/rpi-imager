@@ -7,8 +7,7 @@
 #define MyAppExeName "rpi-imager.exe"
 
 [Setup]
-; NOTE: This was extracted from an NSIS installation.
-AppId={{6D809377-6AF0-444B-8957-A3773F02200E}
+AppId={{46C75BF3-E267-4834-AE1D-BEB77E05BFA1}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -16,7 +15,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#RaspberryPiSoftwareURL}
 AppSupportURL={#ImagerRepoIssuesURL}
 AppUpdatesURL={#ImagerRepoRootURL}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppPublisher}\Imager
 DefaultGroupName=Raspberry Pi
 AllowNoIcons=yes
 LicenseFile=@CMAKE_BINARY_DIR@\deploy\license.txt
@@ -90,7 +89,7 @@ Source: "@CMAKE_BINARY_DIR@\deploy\generic\*"; DestDir: "{app}\generic"; Flags: 
 Source: "@CMAKE_BINARY_DIR@\deploy\iconengines\*"; DestDir: "{app}\iconengines"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "@CMAKE_BINARY_DIR@\deploy\imageformats\*"; DestDir: "{app}\imageformats"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "@CMAKE_BINARY_DIR@\deploy\networkinformation\*"; DestDir: "{app}\networkinformation"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "@CMAKE_BINARY_DIR@\deploy\platforminputcontexts\*"; DestDir: "{app}\platforminputcontexts"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "@CMAKE_BINARY_DIR@\deploy\platforminputcontexts\*"; DestDir: "{app}\platforminputcontexts"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "@CMAKE_BINARY_DIR@\deploy\platforms\*"; DestDir: "{app}\platforms"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Source: "@CMAKE_BINARY_DIR@\deploy\styles\*"; DestDir: "{app}\styles"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "@CMAKE_BINARY_DIR@\deploy\tls\*"; DestDir: "{app}\tls"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -104,6 +103,15 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: 
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runascurrentuser
+
+[InstallDelete]
+; 64-bit Windows – old NSIS path lives in Program Files (x86)
+Type: filesandordirs; Name: "{commonpf32}\Raspberry Pi Imager\qml"; Check: IsWin64
+Type: dirifempty;      Name: "{commonpf32}\Raspberry Pi Imager";   Check: IsWin64
+
+; 32-bit Windows – old NSIS path lives in Program Files
+Type: filesandordirs; Name: "{commonpf}\Raspberry Pi Imager\qml";  Check: not IsWin64
+Type: dirifempty;      Name: "{commonpf}\Raspberry Pi Imager";     Check: not IsWin64
 
 [Code]
 
@@ -225,111 +233,182 @@ begin
   end;
 end;
 
-// Function to uninstall the NSIS version if detected
-function UninstallNSISVersion: Boolean;
+const
+  NsisKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Raspberry Pi Imager';
+  OldInnoAppIdPart = '{6D809377-6AF0-444B-8957-A3773F02200E}'; // old Inno AppId part (no _is1)
+
+function SplitExeAndArgs(const Line: string; var Exe, Params: string): Boolean;
 var
-  NSISUninstallString, NSISUninstallArgs: String;
-  ResultCode: Integer;
+  L: string; p: Integer;
+begin
+  L := Trim(Line);
+  Exe := ''; Params := '';
+
+  // Quoted path?
+  if (L <> '') and (L[1] = '"') then
+  begin
+    Delete(L, 1, 1);
+    p := Pos('"', L);
+    if p > 0 then
+    begin
+      Exe := Copy(L, 1, p-1);
+      Params := Trim(Copy(L, p+1, MaxInt));
+      Result := (Exe <> '');
+      Exit;
+    end;
+  end;
+
+  // Unquoted – split at .exe
+  p := Pos(LowerCase('.exe'), LowerCase(L));
+  if p > 0 then
+  begin
+    p := p + 3; // index at 'e' in .exe; +1 more below to include 'e'
+    Exe := Trim(Copy(L, 1, p+1));              // include full ".exe"
+    Params := Trim(Copy(L, p+2, MaxInt));      // rest (may be empty)
+    Result := (Exe <> '');
+    Exit;
+  end;
+
+  // Last resort: split on first space
+  p := Pos(' ', L);
+  if p > 0 then
+  begin
+    Exe := Copy(L, 1, p-1);
+    Params := Trim(Copy(L, p+1, MaxInt));
+  end
+  else
+    Exe := L;
+
+  Result := (Exe <> '');
+end;
+
+// Old Inno (AppId-based)
+function TryGetOldInnoUninstall(var Cmd, Args: string): Boolean;
+var
+  Roots: array[0..5] of Integer;
+  Keys: TArrayOfString;
+  i, r: Integer;
+  SubKey, KeyName, S, QUS, US: string;
 begin
   Result := False;
-  
-  // First try HKCU
-  if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Raspberry Pi Imager',
-                         'UninstallString', NSISUninstallString) then
-  begin
-    // NSIS uninstaller is typically followed by /S for silent uninstall
-    NSISUninstallArgs := '/S';
-    
-    // Run the uninstaller
-    if Exec(NSISUninstallString, NSISUninstallArgs, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  Roots[0] := HKLM;   Roots[1] := HKLM32; Roots[2] := HKLM64;
+  Roots[3] := HKCU;   Roots[4] := HKCU32; Roots[5] := HKCU64;
+
+  for r := 0 to 5 do begin
+    if RegGetSubkeyNames(Roots[r], 'Software\Microsoft\Windows\CurrentVersion\Uninstall', Keys) then
     begin
-      Result := (ResultCode = 0);
+      for i := 0 to GetArrayLength(Keys)-1 do begin
+        KeyName := Keys[i];
+        if (Pos(OldInnoAppIdPart, KeyName) = 1) and (Pos('_is1', KeyName) > 0) then begin
+          SubKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' + KeyName;
+          RegQueryStringValue(Roots[r], SubKey, 'QuietUninstallString', QUS);
+          RegQueryStringValue(Roots[r], SubKey, 'UninstallString', US);
+          S := QUS; if S = '' then S := US;
+          if (S <> '') and SplitExeAndArgs(S, Cmd, Args) then begin
+            if (QUS = '') then begin
+              if Args <> '' then Args := Args + ' ';
+              Args := Args + '/S'; // silent fallback
+            end;
+            Result := True; Exit;
+          end;
+        end;
+      end;
     end;
-  end
-  else if RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Raspberry Pi Imager',
-                              'UninstallString', NSISUninstallString) then
-  begin
-    // NSIS uninstaller is typically followed by /S for silent uninstall
-    NSISUninstallArgs := '/S';
-    
-    // Run the uninstaller
-    if Exec(NSISUninstallString, NSISUninstallArgs, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  end;
+end;
+
+// Old NSIS (name-based key)
+function TryGetOldNsisUninstall(var Cmd, Args: string): Boolean;
+var
+  Roots: array[0..5] of Integer;
+  r: Integer;
+  QUS, US: string;
+begin
+  Result := False;
+  Roots[0] := HKLM;   Roots[1] := HKLM32; Roots[2] := HKLM64;
+  Roots[3] := HKCU;   Roots[4] := HKCU32; Roots[5] := HKCU64;
+
+  for r := 0 to 5 do begin
+    if RegQueryStringValue(Roots[r], NsisKey, 'QuietUninstallString', QUS) or
+       RegQueryStringValue(Roots[r], NsisKey, 'UninstallString', US) then
     begin
-      Result := (ResultCode = 0);
+      if (QUS <> '') and SplitExeAndArgs(QUS, Cmd, Args) then begin
+        Result := True; Exit;
+      end else
+      if (US <> '') and SplitExeAndArgs(US, Cmd, Args) then begin
+        if Args <> '' then Args := Args + ' ';
+        Args := Args + '/S'; // silent fallback
+        Result := True; Exit;
+      end;
+    end;
+  end;
+end;
+
+function RemovePreviousIfAny(): Boolean;
+var
+  Cmd, Args: string;
+  RC: Integer;
+begin
+  Result := True;
+
+  // Old Inno (by old AppId)
+  if TryGetOldInnoUninstall(Cmd, Args) then begin
+    if MsgBox('A previous Raspberry Pi Imager installation will be removed before continuing. Proceed?',
+              mbConfirmation, MB_YESNO) <> IDYES then
+    begin Result := False; Exit; end;
+
+    if not Exec(Cmd, Args, '', SW_HIDE, ewWaitUntilTerminated, RC) or (RC <> 0) then begin
+      MsgBox('Uninstall of the previous version failed. Please uninstall it manually and run this setup again.',
+             mbError, MB_OK);
+      Result := False; Exit;
+    end;
+
+    Exit; // success; skip NSIS path
+  end;
+
+  // Old NSIS (name-based)
+  if TryGetOldNsisUninstall(Cmd, Args) then begin
+    if MsgBox('A previous Raspberry Pi Imager installation will be removed before continuing. Proceed?',
+              mbConfirmation, MB_YESNO) <> IDYES then
+    begin Result := False; Exit; end;
+
+    if not Exec(Cmd, Args, '', SW_HIDE, ewWaitUntilTerminated, RC) or (RC <> 0) then begin
+      MsgBox('Uninstall of the previous version failed. Please uninstall it manually and run this setup again.',
+             mbError, MB_OK);
+      Result := False; Exit;
     end;
   end;
 end;
 
 function InitializeSetup(): Boolean;
 var
-  ResultCode: Integer;
-  ResultFlag: Boolean;
-  ProcessFound: Boolean;
-  ProcessID: Integer;
-  NSISInstalled: Boolean;
-  UninstallResult: Boolean;
+  rc: Integer;
+  running: Boolean;
+  pid: Integer;
 begin
-  ResultFlag := True;
-  ProcessFound := False;
-  NSISInstalled := False;
-  
-  // More reliable way to check if rpi-imager.exe is running
-  try
-    // Try to find process with exact name
-    ProcessID := 0;
-    ProcessFound := FindProcess('rpi-imager.exe', ProcessID);
-    
-    if ProcessFound and (ProcessID > 0) then
-    begin
-      if MsgBox('Raspberry Pi Imager is running and needs to be closed before continuing. Close it now?', mbConfirmation, MB_YESNO) = IDYES then
-      begin
-        // Try to shut down gracefully first
-        ShellExec('', 'taskkill.exe', '/IM rpi-imager.exe /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-        if ResultCode <> 0 then
-        begin
-          MsgBox('Failed to close Raspberry Pi Imager. Please close it manually and try again.', mbError, MB_OK);
-          ResultFlag := False;
-        end;
-      end
-      else
-      begin
-        ResultFlag := False;
-      end;
-    end;
-  except
-    // If FindProcess fails, fall back to default behavior
-    Log('Error checking for running process');
-  end;
-
-  // Check for NSIS installation
-  if ResultFlag then
-  begin
-    NSISInstalled := IsNSISVersionInstalled;
-    if NSISInstalled then
-    begin
-      if MsgBox('A previous version of Raspberry Pi Imager was found that needs to be uninstalled first. Uninstall now?', 
-                mbConfirmation, MB_YESNO) = IDYES then
-      begin
-        UninstallResult := UninstallNSISVersion;
-        if not UninstallResult then
-        begin
-          MsgBox('Failed to uninstall the previous version. Please uninstall it manually before continuing.', mbError, MB_OK);
-          ResultFlag := False;
-        end;
-      end
-      else
-      begin
-        ResultFlag := False;
-      end;
+  // make sure app not running
+  running := FindProcess('rpi-imager.exe', pid);
+  if running then begin
+    if MsgBox('Raspberry Pi Imager is running and needs to be closed before continuing. Close it now?',
+              mbConfirmation, MB_YESNO) <> IDYES then
+    begin Result := False; Exit; end;
+    ShellExec('', 'taskkill.exe', '/IM rpi-imager.exe /F', '', SW_HIDE, ewWaitUntilTerminated, rc);
+    if rc <> 0 then begin
+      MsgBox('Failed to close Raspberry Pi Imager. Please close it manually and try again.', mbError, MB_OK);
+      Result := False; Exit;
     end;
   end;
 
-  // Check Windows version - require Windows 10
-  if ResultFlag and (not IsWindows10OrNewer) then
-  begin
+  // OS check (your IsWindows10OrNewer helper)
+  if not IsWindows10OrNewer then begin
     MsgBox('This application requires Windows 10 or later.', mbError, MB_OK);
-    ResultFlag := False;
+    Result := False; Exit;
   end;
-  
-  Result := ResultFlag;
+
+  // uninstall old, if present (Inno-old first, else NSIS)
+  if not RemovePreviousIfAny() then begin
+    Result := False; Exit;
+  end;
+
+  Result := True;
 end;
