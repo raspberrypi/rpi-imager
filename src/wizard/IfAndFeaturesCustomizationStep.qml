@@ -20,6 +20,7 @@ WizardStepBase {
     required property var wizardContainer
 
     property bool supportsSerialConsoleOnly: false
+    property bool supportsUsbOtg: false
     property bool isConfirmed: false
 
     title: qsTr("Customization: Interfaces & Features")
@@ -31,6 +32,7 @@ WizardStepBase {
     function updateCaps() {
         // imageWriter knows the currently selected hardware
         supportsSerialConsoleOnly = imageWriter.checkHWCapability("serial_on_console_only")
+        supportsUsbOtg = imageWriter.checkHWAndSWCapability("usb_otg")
     }
 
     content: [
@@ -88,7 +90,7 @@ WizardStepBase {
                                     ListElement { text: "Hardware" }
                                 }
                                 Layout.fillWidth: false
-                                editable: true
+                                editable: false
                                 selectTextByMouse: false
                                 activeFocusOnTab: true
                                 font.pixelSize: Style.fontSizeInput
@@ -114,13 +116,14 @@ WizardStepBase {
 
                         RowLayout {
                             Layout.fillWidth: true
+                            visible: supportsUsbOtg
 
                             ImOptionPill {
                                 id: chkEnableUsbGadget
                                 Layout.fillWidth: true
                                 text: qsTr("Enable USB Gadget Mode")
-                                helpLabel: qsTr("Learn more about USB Gadget Mode")
-                                helpUrl: "https://www.raspberrypi.com/documentation/computers/usb-gadget.html"
+                                helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn more about USB Gadget Mode")
+                                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/documentation/computers/usb-gadget.html"
                                 checked: false
                             }
 
@@ -169,7 +172,11 @@ WizardStepBase {
         comboSerial.currentIndex = (idx >= 0 ? idx : 0)
 
         // Features
-        chkEnableUsbGadget.checked = saved.enableUsbGadget === true || saved.enableUsbGadget === "true" || wizardContainer.featUsbGadgetEnabled
+        if (supportsUsbOtg) {
+            chkEnableUsbGadget.checked = saved.enableUsbGadget === true || saved.enableUsbGadget === "true" || wizardContainer.featUsbGadgetEnabled
+        } else {
+            chkEnableUsbGadget.checked = false
+        }
     }
 
     onNextClicked: {
@@ -181,7 +188,7 @@ WizardStepBase {
         saved.enableSerial = !supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText
 
         // Features
-        saved.enableUsbGadget = chkEnableUsbGadget.checked
+        saved.enableUsbGadget = supportsUsbOtg ? chkEnableUsbGadget.checked : false
 
         imageWriter.setSavedCustomizationSettings(saved)
 
@@ -189,9 +196,9 @@ WizardStepBase {
         wizardContainer.ifI2cEnabled     = chkEnableI2C.checked
         wizardContainer.ifSpiEnabled     = chkEnableSPI.checked
         wizardContainer.ifSerial         = comboSerial.editText
-        wizardContainer.featUsbGadgetEnabled = chkEnableUsbGadget.checked
+        wizardContainer.featUsbGadgetEnabled = saved.enableUsbGadget
 
-        if (chkEnableUsbGadget.checked && !imageWriter.getBoolSetting("disable_warnings")) {
+        if (saved.enableUsbGadget && !imageWriter.getBoolSetting("disable_warnings")) {
             confirmDialog.open()
         } else {
             root.isConfirmed = true
