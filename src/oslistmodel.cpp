@@ -260,8 +260,19 @@ bool OSListModel::reload()
         os.random = obj["random"].toBool();
 
         os.extractSha256 = obj["extract_sha256"].toString();
-        // Icon source: sanitize to avoid malformed remote/local URLs causing UI/network errors
-        os.icon = sanitizeIconSource(obj["icon"].toString());
+        // Icon source: rewrite to image provider to avoid network head-of-line blocking
+        {
+            const QString rawIcon = obj["icon"].toString();
+            const QString sanitized = sanitizeIconSource(rawIcon);
+            if (!sanitized.isEmpty()) {
+                // If already qrc or local relative, keep as-is. For http(s), route via image://icons/
+                if (sanitized.startsWith("http://") || sanitized.startsWith("https://")) {
+                    os.icon = QStringLiteral("image://icons/") + sanitized;
+                } else {
+                    os.icon = sanitized;
+                }
+            }
+        }
         os.initFormat = obj["init_format"].toString();
         os.releaseDate = obj["release_date"].toString();
         os.url = obj["url"].toString();

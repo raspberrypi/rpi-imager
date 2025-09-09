@@ -56,10 +56,13 @@ bool HWListModel::reload()
                 QString iconPath = deviceObj["icon"].toString();
                 // Adjust icon path for wizard directory structure
                 if (iconPath.startsWith("icons/")) {
-                    return "../" + iconPath;
-                } else {
-                    return iconPath;
+                    iconPath = "../" + iconPath;
                 }
+                // Route remote icons via image provider to avoid HTTP/2 errors
+                if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
+                    iconPath = QStringLiteral("image://icons/") + iconPath;
+                }
+                return iconPath;
             }(),
             deviceObj["description"].toString(),
             deviceObj["matching_type"].toString(),

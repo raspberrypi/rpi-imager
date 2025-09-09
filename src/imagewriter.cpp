@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "iconimageprovider.h"
 #include "buffer_optimization.h"
 #include "drivelistitem.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
@@ -335,6 +336,10 @@ ImageWriter::~ImageWriter()
 void ImageWriter::setEngine(QQmlApplicationEngine *engine)
 {
     _engine = engine;
+    if (_engine) {
+        // Register icon provider for image://icons/<url>
+        _engine->addImageProvider(QStringLiteral("icons"), new IconImageProvider());
+    }
 }
 
 /* Set URL to download from */
