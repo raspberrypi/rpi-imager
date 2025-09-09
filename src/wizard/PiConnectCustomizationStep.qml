@@ -39,8 +39,8 @@ WizardStepBase {
                 id: useTokenPill
                 Layout.fillWidth: true
                 text: qsTr("Enable Raspberry Pi Connect")
-                helpLabel: qsTr("What is Raspberry Pi Connect?")
-                helpUrl: "https://www.raspberrypi.com/software/connect/"
+                helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is Raspberry Pi Connect?")
+                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/software/connect/"
                 checked: false
                 onToggled: function(isChecked) { wizardContainer.piConnectEnabled = isChecked }
             }
@@ -139,13 +139,17 @@ WizardStepBase {
         imageWriter.setSavedCustomizationSettings(saved)
     }
 
+    // Handle skip button
     onSkipClicked: {
+        // Clear all customization flags
         wizardContainer.hostnameConfigured = false
         wizardContainer.localeConfigured = false
         wizardContainer.userConfigured = false
         wizardContainer.wifiConfigured = false
         wizardContainer.sshEnabled = false
         wizardContainer.piConnectEnabled = false
+
+        // Jump to writing step
         wizardContainer.jumpToStep(wizardContainer.stepWriting)
     }
 }

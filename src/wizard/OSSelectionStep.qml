@@ -529,10 +529,13 @@ WizardStepBase {
                     model.name,
                     typeof(model.init_format) != "undefined" ? model.init_format : ""
                 )
+                imageWriter.setSWCapabilitiesList("[]")
+
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 // Gate Pi Connect availability by OS JSON field
                 root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
+                root.wizardContainer.rpiosCloudInitAvailable = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
                     Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
@@ -555,6 +558,7 @@ WizardStepBase {
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 // Gate Pi Connect availability by OS JSON field
                 root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
+                root.wizardContainer.rpiosCloudInitAvailable = imageWriter.checkSWCapability("rpios_cloudinit")
                 root.customSelected = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
