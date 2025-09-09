@@ -21,12 +21,14 @@ WizardStepBase {
     showNextButton: false
     readonly property bool autoEjectEnabled: imageWriter.getBoolSetting("eject")
     readonly property bool anyCustomizationsApplied: (
-        wizardContainer.hostnameConfigured ||
-        wizardContainer.localeConfigured ||
-        wizardContainer.userConfigured ||
-        wizardContainer.wifiConfigured ||
-        wizardContainer.sshEnabled ||
-        wizardContainer.piConnectEnabled
+        wizardContainer.customizationSupported && (
+            wizardContainer.hostnameConfigured ||
+            wizardContainer.localeConfigured ||
+            wizardContainer.userConfigured ||
+            wizardContainer.wifiConfigured ||
+            wizardContainer.sshEnabled ||
+            wizardContainer.piConnectEnabled
+        )
     )
     
     // Content

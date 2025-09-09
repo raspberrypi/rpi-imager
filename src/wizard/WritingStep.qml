@@ -27,12 +27,15 @@ WizardStepBase {
     property bool isComplete: false
     property bool confirmOpen: false
     readonly property bool anyCustomizationsApplied: (
-        wizardContainer.hostnameConfigured ||
-        wizardContainer.localeConfigured ||
-        wizardContainer.userConfigured ||
-        wizardContainer.wifiConfigured ||
-        wizardContainer.sshEnabled ||
-        wizardContainer.featUsbGadgetEnabled
+        wizardContainer.customizationSupported && (
+            wizardContainer.hostnameConfigured ||
+            wizardContainer.localeConfigured ||
+            wizardContainer.userConfigured ||
+            wizardContainer.wifiConfigured ||
+            wizardContainer.sshEnabled ||
+            wizardContainer.piConnectEnabled ||
+            wizardContainer.featUsbGadgetEnabled
+        )
     )
 
     // Disable back while writing

@@ -85,6 +85,16 @@ WizardStepBase {
             // Update selected OS name to the chosen file name
             root.wizardContainer.selectedOsName = imageWriter.srcFileName()
             root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
+            // For custom images, customization is not supported; clear any staged flags
+            if (!root.wizardContainer.customizationSupported) {
+                root.wizardContainer.hostnameConfigured = false
+                root.wizardContainer.localeConfigured = false
+                root.wizardContainer.userConfigured = false
+                root.wizardContainer.wifiConfigured = false
+                root.wizardContainer.sshEnabled = false
+                root.wizardContainer.piConnectEnabled = false
+                root.wizardContainer.piConnectAvailable = false
+            }
             root.customSelected = true
             root.customSelectedSize = imageWriter.getSelectedSourceSize()
             root.nextButtonEnabled = true
@@ -559,6 +569,18 @@ WizardStepBase {
                 // Gate Pi Connect availability by OS JSON field
                 root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
                 root.wizardContainer.rpiosCloudInitAvailable = imageWriter.checkSWCapability("rpios_cloudinit")
+                // If customization is not supported for this OS, clear any previously-staged UI flags
+                if (!root.wizardContainer.customizationSupported) {
+                    root.wizardContainer.hostnameConfigured = false
+                    root.wizardContainer.localeConfigured = false
+                    root.wizardContainer.userConfigured = false
+                    root.wizardContainer.wifiConfigured = false
+                    root.wizardContainer.sshEnabled = false
+                    root.wizardContainer.piConnectEnabled = false
+                } else if (!root.wizardContainer.piConnectAvailable) {
+                    // If Pi Connect not available for this OS, ensure it's not marked enabled
+                    root.wizardContainer.piConnectEnabled = false
+                }
                 root.customSelected = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
