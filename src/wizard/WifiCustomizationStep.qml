@@ -18,7 +18,7 @@ WizardStepBase {
     required property var wizardContainer
     property bool hasSavedWifiPSK: false
     
-    title: qsTr("Customization: Choose WiFi")
+    title: qsTr("Customisation: Choose Wi‑Fi")
     subtitle: qsTr("Configure wireless LAN settings.")
     showSkipButton: true
     

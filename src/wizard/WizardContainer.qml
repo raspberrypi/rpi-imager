@@ -113,7 +113,7 @@ Item {
         qsTr("Device"),
         qsTr("OS"), 
         qsTr("Storage"),
-        qsTr("Customization"),
+        qsTr("Customisation"),
         qsTr("Writing"),
         qsTr("Done")
     ]
@@ -143,7 +143,7 @@ Item {
     }
 
     function getCustomizationSubstepLabels() {
-        var labels = [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("WiFi"), qsTr("Remote Access")]
+        var labels = [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote Access")]
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }

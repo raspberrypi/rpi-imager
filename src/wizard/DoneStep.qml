@@ -16,7 +16,7 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("Write Complete!")
+    title: qsTr("Write complete!")
     showBackButton: false
     showNextButton: false
     readonly property bool autoEjectEnabled: imageWriter.getBoolSetting("eject")
@@ -68,7 +68,7 @@ WizardStepBase {
             
             // Customization summary
             Text {
-                text: qsTr("Customizations applied:")
+                text: qsTr("Customisations applied:")
                 font.pixelSize: Style.fontSizeFormLabel
                 font.family: Style.fontFamilyBold
                 font.bold: true
@@ -87,7 +87,7 @@ WizardStepBase {
                     spacing: Style.spacingXSmall
                     Text { text: qsTr("✓ Hostname configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.hostnameConfigured }
                     Text { text: qsTr("✓ User account configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.userConfigured }
-                    Text { text: qsTr("✓ WiFi configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.wifiConfigured }
+                    Text { text: qsTr("✓ Wi‑Fi configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.wifiConfigured }
                     Text { text: qsTr("✓ SSH enabled"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.sshEnabled }
                     Text { text: qsTr("✓ Pi Connect enabled"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.piConnectEnabled }
                     Text { text: qsTr("✓ Locale configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.localeConfigured }

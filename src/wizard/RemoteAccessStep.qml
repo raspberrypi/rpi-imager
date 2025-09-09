@@ -19,7 +19,7 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("Customization: SSH Authentication")
+    title: qsTr("Customisation: SSH authentication")
     subtitle: qsTr("Configure SSH access.")
     showSkipButton: true
     

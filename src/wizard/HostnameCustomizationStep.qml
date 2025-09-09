@@ -17,7 +17,7 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("Customization: Choose hostname")
+    title: qsTr("Customisation: Choose hostname")
     showSkipButton: true
     
     Component.onCompleted: {

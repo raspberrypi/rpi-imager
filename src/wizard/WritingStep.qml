@@ -126,7 +126,7 @@ WizardStepBase {
 
             Text {
                 text: root.anyCustomizationsApplied
-                      ? qsTr("Ready to write your customized image to the storage device. All existing data will be erased.")
+                      ? qsTr("Ready to write your customised image to the storage device. All existing data will be erased.")
                       : qsTr("Ready to write the image to the storage device. All existing data will be erased.")
                 font.pixelSize: Style.fontSizeDescription
                 font.family: Style.fontFamily
@@ -146,7 +146,7 @@ WizardStepBase {
             visible: !root.isWriting && root.anyCustomizationsApplied
 
             Text {
-                text: qsTr("Customizations to apply:")
+                text: qsTr("Customisations to apply:")
                 font.pixelSize: Style.fontSizeHeading
                 font.family: Style.fontFamilyBold
                 font.bold: true
@@ -163,7 +163,7 @@ WizardStepBase {
                     spacing: Style.spacingXSmall
                     Text { text: qsTr("• Hostname configured");        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.hostnameConfigured }
                     Text { text: qsTr("• User account configured");    font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.userConfigured }
-                    Text { text: qsTr("• WiFi configured");            font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured }
+                    Text { text: qsTr("• Wi‑Fi configured");           font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured }
                     Text { text: qsTr("• SSH enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled }
                     Text { text: qsTr("• Pi Connect enabled");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled }
                     Text { text: qsTr("• USB Gadget enabled");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.featUsbGadgetEnabled }
@@ -237,7 +237,8 @@ WizardStepBase {
     }
 
     function onFinalizing() {
-        progressText.text = qsTr("Finalizing...")
+        root.isVerifying = false
+        progressText.text = qsTr("Finalising...")
         progressBar.value = 100
     }
 

@@ -18,7 +18,7 @@ WizardStepBase {
     required property var wizardContainer
     property bool hasSavedUserPassword: false
     
-    title: qsTr("Customization: Choose username")
+    title: qsTr("Customisation: Choose username")
     subtitle: qsTr("Create a user account for your Raspberry Pi.")
     showSkipButton: true
     

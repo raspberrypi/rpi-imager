@@ -18,7 +18,7 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("Select your Storage Device")
+    title: qsTr("Select your storage device")
     showNextButton: true
     
     property alias dstlist: dstlist

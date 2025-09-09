@@ -17,7 +17,7 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
-    title: qsTr("Customization: Choose locale")
+    title: qsTr("Customisation: Choose locale")
     subtitle: qsTr("Configure timezone and keyboard layout for your Raspberry Pi.")
     showSkipButton: true
 

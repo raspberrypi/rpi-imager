@@ -46,7 +46,7 @@ Dialog {
         }
 
         Text {
-            text: qsTr("Would you like to prefill the wifi password from the system keychain?")
+            text: qsTr("Would you like to prefill the Wi‑Fi password from the system keychain?")
             wrapMode: Text.WordWrap
             color: Style.textDescriptionColor
             font.pixelSize: Style.fontSizeDescription
