@@ -52,6 +52,10 @@ protected:
     bool _progressStarted;
     qint64 _lastProgressTime;
     quint64 _lastEmittedDlNow, _lastLocalVerifyNow;
+    quint64 _uncompressedTotal;
+    bool _useMemoryZip;
+    QByteArray _zipBuffer;        // compressed data (small zips only)
+    QByteArray _readChunk;        // current chunk returned to libarchive in _on_read
 
     QByteArray _popQueue();
     void _pushQueue(const char *data, size_t len);
@@ -61,6 +65,9 @@ protected:
     virtual void _onDownloadError(const QString &msg);
     void _emitProgressUpdate();
     virtual bool _verify();
+
+    void extractImageFromMemory();
+    void extractImageFromCacheFile();
 
     virtual ssize_t _on_read(struct archive *a, const void **buff);
     virtual int _on_close(struct archive *a);

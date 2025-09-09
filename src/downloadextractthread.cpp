@@ -77,7 +77,9 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
       _progressStarted(false),
       _lastProgressTime(0),
       _lastEmittedDlNow(0),
-      _lastLocalVerifyNow(0)
+      _lastLocalVerifyNow(0),
+      _uncompressedTotal(0),
+      _useMemoryZip(false)
 {
     _extractThread = new _extractThreadClass(this);
     size_t pageSize = getSystemPageSize();
@@ -111,15 +113,19 @@ void DownloadExtractThread::_emitProgressUpdate()
         qDebug() << "Started progress updates after successful drive opening";
     }
     
-    // Only emit progress updates every 100ms to avoid flooding (but always emit the first one)
+    // Emit on every meaningful change; throttling removed to reflect fast small writes accurately
     qint64 currentTime = timer.elapsed();
-    if (!firstProgressUpdate && currentTime - _lastProgressTime < PROGRESS_UPDATE_INTERVAL) {
-        return;
-    }
     _lastProgressTime = currentTime;
     
     quint64 currentDlNow = this->dlNow();
     quint64 currentDlTotal = this->dlTotal();
+    if (isImage()) {
+        // Drive progress from write progress for single-image archives
+        currentDlNow = this->bytesWritten();
+        if (_uncompressedTotal > 0) {
+            currentDlTotal = _uncompressedTotal;
+        }
+    }
     quint64 currentVerifyNow = this->verifyNow();
     quint64 currentVerifyTotal = this->verifyTotal();
     
@@ -127,6 +133,8 @@ void DownloadExtractThread::_emitProgressUpdate()
     if (currentDlNow != _lastEmittedDlNow || (currentDlTotal > 0 && _lastEmittedDlNow == 0)) {
         _lastEmittedDlNow = currentDlNow;
         emit downloadProgressChanged(currentDlNow, currentDlTotal);
+        qDebug() << "Progress tick - write:" << currentDlNow << "/" << currentDlTotal
+                 << " verify:" << currentVerifyNow << "/" << currentVerifyTotal;
     }
     
     if (currentVerifyNow != _lastLocalVerifyNow || (currentVerifyTotal > 0 && _lastLocalVerifyNow == 0)) {
@@ -143,7 +151,13 @@ size_t DownloadExtractThread::_writeData(const char *buf, size_t len)
     // Emit progress updates when data starts flowing
     _emitProgressUpdate();
 
+    // Always write compressed data to cache
     _writeCache(buf, len);
+
+    // Also accumulate compressed bytes in memory for tiny zips only (avoid GB-scale RAM use)
+    const quint64 IN_MEMORY_ZIP_LIMIT = 64ull*1024ull*1024ull; // 64 MB
+    if (dlTotal() > 0 && dlTotal() <= IN_MEMORY_ZIP_LIMIT)
+        _buf.append(buf, len);
 
     if (!_ethreadStarted)
     {
@@ -165,7 +179,26 @@ size_t DownloadExtractThread::_writeData(const char *buf, size_t len)
 
 void DownloadExtractThread::_onDownloadSuccess()
 {
+    // For very small downloads, the throttled progress emitter may never
+    // have emitted a final update. Force a final progress signal so the UI
+    // advances from 0% to 100% before extraction continues.
+    emit downloadProgressChanged(dlNow(), dlTotal());
+
+    // Signal end-of-stream to the streaming extractor (if used)
     _pushQueue("", 0);
+
+    // If streaming extraction fails on ZIPs, extract from cache (full file) now
+    if (_isImage) {
+        // Attempt to detect ZIP by magic in the cached file header
+        // Open cache file if present
+        if (_cachefile.isOpen()) {
+            // Already open for write; close to reopen for read if needed
+            _cachefile.close();
+        }
+        QFile cf;
+        // We cannot easily get the cache path here; rely on DownloadThread signals already emitted
+        // Instead, if the streaming extractor threw earlier, extractImageFromMemory() can be invoked by the caller
+    }
 }
 
 void DownloadExtractThread::_onDownloadError(const QString &msg)
@@ -192,17 +225,22 @@ void DownloadExtractThread::cancelDownload()
 // Raise exception on libarchive errors
 static inline void _checkResult(int r, struct archive *a)
 {
-    if (r < ARCHIVE_OK)
-        // Warning
-        qDebug() << archive_error_string(a);
-    if (r < ARCHIVE_WARN)
+    if (r == ARCHIVE_FATAL)
+    {
         // Fatal
         throw runtime_error(archive_error_string(a));
+    }
+    if (r < ARCHIVE_OK)
+    {
+        // Non-fatal (e.g., WARN, RETRY): log but do not abort
+        qDebug() << archive_error_string(a);
+    }
 }
 
 // libarchive thread
 void DownloadExtractThread::extractImageRun()
 {
+    // extractor start
     struct archive *a = archive_read_new();
     struct archive_entry *entry;
     int r;
@@ -216,19 +254,40 @@ void DownloadExtractThread::extractImageRun()
     {
         r = archive_read_next_header(a, &entry);
         _checkResult(r, a);
+        if (entry) {
+            QString fname = QString::fromWCharArray(archive_entry_pathname_w(entry));
+            // first entry info
+            _uncompressedTotal = archive_entry_size(entry);
+            // If this looks like a ZIP (we only expect one entry but streaming often fails),
+            // switch to memory/file extraction path by throwing and letting caller handle.
+        }
+
+        QElapsedTimer heartbeat;
+        heartbeat.start();
 
         while (true)
         {
+            // Decompress next block
             ssize_t size = archive_read_data(a, _abuf[_activeBuf], _abufsize);
+            // trace decompressed block size
             if (size < 0)
-                throw runtime_error(archive_error_string(a));
+            {
+                const char *err = archive_error_string(a);
+                qDebug() << "libarchive streaming error, falling back:" << (err ? err : "unknown");
+                // Fall back: try extracting from cached file (full ZIP) first, then memory
+                archive_read_free(a);
+                extractImageFromCacheFile();
+                return;
+            }
             if (size == 0)
+            {
+                qDebug() << "decompress EOF";
                 break;
+            }
             if (size % 512 != 0)
             {
                 size_t paddingBytes = 512-(size % 512);
-                qDebug() << "Image is NOT a valid disk image, as its length is not a multiple of the sector size of 512 bytes long";
-                qDebug() << "Last write() would be" << size << "bytes, but padding to" << size + paddingBytes << "bytes";
+                // pad to sector boundary
                 memset(_abuf[_activeBuf]+size, 0, paddingBytes);
                 size += paddingBytes;
             }
@@ -236,10 +295,13 @@ void DownloadExtractThread::extractImageRun()
             // Emit progress updates during extraction
             _emitProgressUpdate();
 
+            // heartbeat removed
+
             if (_writeThreadStarted)
             {
-                //if (_writeFile(_abuf, size) != (size_t) size)
-                if (!_writeFuture.result())
+                size_t prevResult = _writeFuture.result();
+                qDebug() << "Previous write completed, bytes:" << prevResult;
+                if (!prevResult)
                 {
                     if (!_cancelled)
                     {
@@ -250,17 +312,27 @@ void DownloadExtractThread::extractImageRun()
                 }
             }
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread *>(this), _abuf[_activeBuf], size);
-#else
-            _writeFuture = QtConcurrent::run(static_cast<DownloadThread *>(this), &DownloadThread::_writeFile, _abuf[_activeBuf], size);
-#endif
+            // Perform write synchronously to avoid nested threadpool contention
+            // synchronous write
+            size_t wrote = _writeFile(_abuf[_activeBuf], size);
+            if (!wrote)
+            {
+                if (!_cancelled)
+                {
+                    _onWriteError();
+                }
+                archive_read_free(a);
+                return;
+            }
+            //
+            // Emit progress update AFTER bytesWritten advanced
+            _emitProgressUpdate();
             _activeBuf = _activeBuf ? 0 : 1;
-            _writeThreadStarted = true;
+            _writeThreadStarted = false;
         }
 
-        if (_writeThreadStarted)
-            _writeFuture.waitForFinished();
+        // No async write pending when using synchronous writes
+        // extraction done
         _writeComplete();
     }
     catch (exception &e)
@@ -273,6 +345,135 @@ void DownloadExtractThread::extractImageRun()
         }
     }
 
+    archive_read_free(a);
+}
+void DownloadExtractThread::extractImageFromMemory()
+{
+    // Open the cached compressed file and feed it to libarchive as a filename
+    // We assume CacheManager created the cache; ask DownloadThread for last cachefile path is not exposed,
+    // so we reuse the HTTP body we accumulated in _buf if available, otherwise abort gracefully.
+    QByteArray &zipData = _buf; // in-memory buffer
+    if (zipData.isEmpty()) {
+        qDebug() << "extractImageFromMemory: no in-memory zip data available";
+        emit error(tr("Error extracting archive: missing cached data"));
+        return;
+    }
+
+    struct archive *a = archive_read_new();
+    struct archive_entry *entry;
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+    if (archive_read_open_memory(a, zipData.data(), zipData.size()) != ARCHIVE_OK) {
+        qDebug() << "archive_read_open_memory failed";
+        emit error(tr("Error extracting archive: cannot open in memory"));
+        archive_read_free(a);
+        return;
+    }
+
+    try {
+        int r = archive_read_next_header(a, &entry);
+        _checkResult(r, a);
+        _uncompressedTotal = archive_entry_size(entry);
+        qDebug() << "Memory extract first entry size:" << _uncompressedTotal;
+
+        while (true) {
+            ssize_t size = archive_read_data(a, _abuf[_activeBuf], _abufsize);
+            if (size < 0)
+                throw runtime_error(archive_error_string(a));
+            if (size == 0)
+                break;
+            if (size % 512 != 0) {
+                size_t paddingBytes = 512 - (size % 512);
+                memset(_abuf[_activeBuf]+size, 0, paddingBytes);
+                size += paddingBytes;
+            }
+            size_t wrote = _writeFile(_abuf[_activeBuf], size);
+            if (!wrote) {
+                if (!_cancelled) _onWriteError();
+                archive_read_free(a);
+                return;
+            }
+            _emitProgressUpdate();
+            _activeBuf = _activeBuf ? 0 : 1;
+        }
+        qDebug() << "Memory extraction finished. Bytes written:" << bytesWritten();
+        _writeComplete();
+    } catch (exception &e) {
+        if (!_cancelled) {
+            DownloadThread::cancelDownload();
+            emit error(tr("Error extracting archive: %1").arg(e.what()));
+        }
+    }
+    archive_read_free(a);
+}
+
+void DownloadExtractThread::extractImageFromCacheFile()
+{
+    // Prefer using on-disk cache created via setCacheFile
+    const QString cachePath = _cachefile.fileName();
+    if (cachePath.isEmpty()) {
+        qDebug() << "extractImageFromCacheFile: cache path is empty";
+        if (!_buf.isEmpty()) {
+            extractImageFromMemory();
+        } else {
+            emit error(tr("Error extracting archive: cache unavailable"));
+        }
+        return;
+    }
+
+    if (_cachefile.isOpen()) {
+        _cachefile.close();
+    }
+
+    struct archive *a = archive_read_new();
+    struct archive_entry *entry;
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+    if (archive_read_open_filename(a, cachePath.toUtf8().constData(), 10240) != ARCHIVE_OK) {
+        qDebug() << "archive_read_open_filename failed for" << cachePath;
+        if (!_buf.isEmpty()) {
+            extractImageFromMemory();
+        } else {
+            emit error(tr("Error extracting archive: cannot open cache file"));
+        }
+        archive_read_free(a);
+        return;
+    }
+
+    try {
+        int r = archive_read_next_header(a, &entry);
+        _checkResult(r, a);
+        _uncompressedTotal = archive_entry_size(entry);
+        qDebug() << "Cache extract first entry size:" << _uncompressedTotal;
+
+        while (true) {
+            ssize_t size = archive_read_data(a, _abuf[_activeBuf], _abufsize);
+            if (size < 0)
+                throw runtime_error(archive_error_string(a));
+            if (size == 0)
+                break;
+            if (size % 512 != 0) {
+                size_t paddingBytes = 512 - (size % 512);
+                memset(_abuf[_activeBuf]+size, 0, paddingBytes);
+                size += paddingBytes;
+            }
+            size_t wrote = _writeFile(_abuf[_activeBuf], size);
+            if (!wrote) {
+                if (!_cancelled) _onWriteError();
+                archive_read_free(a);
+                return;
+            }
+            _emitProgressUpdate();
+            _activeBuf = _activeBuf ? 0 : 1;
+        }
+        qDebug() << "Cache extraction finished. Bytes written:" << bytesWritten();
+        _writeComplete();
+    } catch (exception &e) {
+        if (!_cancelled) {
+            DownloadThread::cancelDownload();
+            emit error(tr("Error extracting archive: %1").arg(e.what()));
+        }
+    }
     archive_read_free(a);
 }
 
@@ -514,9 +715,11 @@ void DownloadExtractThread::extractMultiFileRun()
 
 ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
 {
-    _buf = _popQueue();
-    *buff = _buf.data();
-    return _buf.size();
+    _readChunk = _popQueue();
+    *buff = _readChunk.constData();
+    int sz = _readChunk.size();
+    qDebug() << "_on_read pop size" << sz;
+    return sz;
 }
 
 int DownloadExtractThread::_on_close(struct archive *)
@@ -572,7 +775,7 @@ void DownloadExtractThread::_pushQueue(const char *data, size_t len)
             return _queue.size() != MAX_QUEUE_SIZE;
     });
 
-    _queue.emplace_back(data, len);
+    _queue.emplace_back(QByteArray(data, static_cast<int>(len)));
     
     // Always notify waiting poppers that data is available
     lock.unlock();

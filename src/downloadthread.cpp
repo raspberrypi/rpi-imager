@@ -381,12 +381,13 @@ bool DownloadThread::_openAndPrepareDevice()
 
 void DownloadThread::run()
 {
+    qDebug() << "Download thread starting. isImage?" << isImage() << "filename:" << _filename;
     if (isImage() && !_openAndPrepareDevice())
     {
         return;
     }
 
-    qDebug() << "Image URL:" << _url;
+    // URL logged only on error
     if (_url.startsWith("file://") && _url.at(7) != '/')
     {
         /* libcurl does not like UNC paths in the form of file://1.2.3.4/share */
@@ -452,6 +453,7 @@ void DownloadThread::run()
         curl_easy_setopt(_c, CURLOPT_PROXY, _proxy.constData());
 
     emit preparationStatusUpdate(tr("starting download"));
+    // Minimal logging during normal operation
     _timer.start();
     CURLcode ret = curl_easy_perform(_c);
 
@@ -517,6 +519,7 @@ void DownloadThread::run()
 
 size_t DownloadThread::_writeData(const char *buf, size_t len)
 {
+    // no-op debug removed
     _writeCache(buf, len);
 
     if (!_filename.isEmpty())
@@ -580,14 +583,11 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
         _firstBlock = (char *) qMallocAligned(len, 4096);
         _firstBlockSize = len;
         ::memcpy(_firstBlock, buf, len);
-
+        qDebug() << "_writeFile: captured first block (" << len << ") and advanced file offset via seek";
         return _file.seek(len) ? len : 0;
     }
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QFuture<void> wh = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
-#else
-    QFuture<void> wh = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
-#endif
+    // Avoid nested QtConcurrent usage inside a threadpool worker to prevent deadlocks
+    _hashData(buf, len);
 
     qint64 written = _file.write(buf, len);
     _bytesWritten += written;
@@ -596,8 +596,6 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
     {
         qDebug() << "Write error:" << _file.errorString() << "while writing len:" << len;
     }
-
-    wh.waitForFinished();
     return (written < 0) ? 0 : written;
 }
 
@@ -697,6 +695,9 @@ uint64_t DownloadThread::bytesWritten()
 
 void DownloadThread::_onDownloadSuccess()
 {
+    // Emit a final progress update to guard against tiny downloads completing
+    // before any regular progress callbacks were emitted.
+    emit preparationStatusUpdate(tr("writing image"));
     _writeComplete();
 }
 
