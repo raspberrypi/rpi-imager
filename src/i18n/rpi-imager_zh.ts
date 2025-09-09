@@ -2,9 +2,9 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="zh_CN">
 <context>
-    <name>AdvancedOptionsPopup</name>
+    <name>AppOptionsDialog</name>
     <message>
-        <source>Advanced Options</source>
+        <source>App Options</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -47,28 +47,20 @@
 <context>
     <name>CommonStrings</name>
     <message>
-        <source>Selecting the wrong drive will permanently erase data and can render your computer UNBOOTABLE.</source>
+        <source>Only proceed if you fully understand the risks.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Only proceed if you fully understand the risks.</source>
+        <source>Selecting the wrong drive will permanently erase data and can render your computer inoperable.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>System drives typically contain files essential to the operation of your computer, and may include your personal files (photos, videos, documents).</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>ConfirmSystemDrivePopup</name>
-    <message>
-        <source>DANGER: System drive selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>You are about to select a &lt;b&gt;SYSTEM DRIVE&lt;/b&gt;: &lt;b&gt;%1&lt;/b&gt;.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Device: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
+    <name>ConfirmSystemDriveDialog</name>
     <message>
         <source>Size: %1</source>
         <translation type="unfinished"></translation>
@@ -99,17 +91,13 @@
     </message>
 </context>
 <context>
-    <name>ConfirmUnfilterPopup</name>
+    <name>ConfirmUnfilterDialog</name>
     <message>
         <source>Remove system drive filter?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>System drives typically contain media essential to the operation of your computer, and usually include your personal files (photos, videos, documents).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -130,10 +118,6 @@
 </context>
 <context>
     <name>DoneStep</name>
-    <message>
-        <source>Write Complete!</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Your choices:</source>
         <translation type="unfinished"></translation>
@@ -163,19 +147,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Customizations applied:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>✓ Hostname configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>✓ User account configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ WiFi configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -206,6 +182,22 @@
         <source>Finish</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Write complete!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customisations applied:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>✓ Wi‑Fi configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reboot</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DownloadExtractThread</name>
@@ -232,6 +224,22 @@
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>写入校验失败。SD 卡内容与写入内容不符。</translation>
+    </message>
+    <message>
+        <source>Error extracting archive: missing cached data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error extracting archive: cannot open in memory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error extracting archive: cache unavailable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error extracting archive: cannot open cache file</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -360,6 +368,10 @@
         <source>I/O device error. The storage device may have been disconnected or is malfunctioning.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>writing image</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
@@ -409,45 +421,6 @@
     </message>
 </context>
 <context>
-    <name>DstPopup</name>
-    <message>
-        <source>Storage</source>
-        <translation>储存设备</translation>
-    </message>
-    <message>
-        <source>No storage devices found</source>
-        <translation>找不到存储设备</translation>
-    </message>
-    <message>
-        <source>Exclude System Drives</source>
-        <translation>排除系统驱动器</translation>
-    </message>
-    <message>
-        <source>gigabytes</source>
-        <translation>千兆字节</translation>
-    </message>
-    <message>
-        <source>Mounted as %1</source>
-        <translation>已挂载为：%1</translation>
-    </message>
-    <message>
-        <source>GB</source>
-        <translation>GB</translation>
-    </message>
-    <message>
-        <source>[WRITE PROTECTED]</source>
-        <translation>[写保护]</translation>
-    </message>
-    <message>
-        <source>SYSTEM</source>
-        <translation>系统</translation>
-    </message>
-    <message>
-        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation>SD 卡写保护。&lt;br&gt;请尝试向上推动 SD 卡左侧的锁定开关，然后再试一次。</translation>
-    </message>
-</context>
-<context>
     <name>HWListModel</name>
     <message>
         <source>CHOOSE DEVICE</source>
@@ -457,10 +430,6 @@
 <context>
     <name>HostnameCustomizationStep</name>
     <message>
-        <source>Customization: Choose hostname</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>raspberrypi</source>
         <translation type="unfinished"></translation>
     </message>
@@ -468,12 +437,60 @@
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Customisation: Choose hostname</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
-    <name>HwPopup</name>
+    <name>ImFileDialog</name>
     <message>
-        <source>Raspberry Pi Device</source>
-        <translation>树莓派设备</translation>
+        <source>Select File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Downloads</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pictures</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Movies</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Root</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter path or URL…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -526,16 +543,48 @@
         <source>%1.%2 %3</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>No image selected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No storage device selected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Selected storage device is no longer available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown precondition failure.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot start write. %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Source file not found: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Source is not a regular file: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Source file is not readable: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
-    <name>KeychainPermissionPopup</name>
+    <name>KeychainPermissionDialog</name>
     <message>
         <source>Keychain Access</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation type="unfinished">您想要通过系统钥匙串访问自动填充 WiFi 密码吗？</translation>
+        <source>Would you like to prefill the Wi‑Fi password from the system keychain?</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>This will require administrator authentication on macOS.</source>
@@ -547,6 +596,21 @@
     </message>
     <message>
         <source>Yes</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>LanguageSelectionStep</name>
+    <message>
+        <source>Welcome</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose your language for Raspberry Pi Imager.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Language:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -580,10 +644,6 @@
 <context>
     <name>LocaleCustomizationStep</name>
     <message>
-        <source>Customization: Choose locale</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Configure timezone and keyboard layout for your Raspberry Pi.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -595,27 +655,8 @@
         <source>Keyboard layout:</source>
         <translation type="unfinished">键盘布局：</translation>
     </message>
-</context>
-<context>
-    <name>MsgPopup</name>
     <message>
-        <source>NO</source>
-        <translation>否</translation>
-    </message>
-    <message>
-        <source>YES</source>
-        <translation>确认</translation>
-    </message>
-    <message>
-        <source>CONTINUE</source>
-        <translation>继续</translation>
-    </message>
-    <message>
-        <source>QUIT</source>
-        <translation>退出</translation>
-    </message>
-    <message>
-        <source>REBOOT</source>
+        <source>Customisation: Choose locale</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -624,41 +665,6 @@
     <message>
         <source>Recommended</source>
         <translation>建议</translation>
-    </message>
-</context>
-<context>
-    <name>OSPopup</name>
-    <message>
-        <source>Operating System</source>
-        <translation>操作系统</translation>
-    </message>
-    <message>
-        <source>Back</source>
-        <translation>返回</translation>
-    </message>
-    <message>
-        <source>Go back to main menu</source>
-        <translation>回到主菜单</translation>
-    </message>
-    <message>
-        <source>Released: %1</source>
-        <translation>发布时间：%1</translation>
-    </message>
-    <message>
-        <source>Cached on your computer</source>
-        <translation>已缓存到本地磁盘</translation>
-    </message>
-    <message>
-        <source>Local file</source>
-        <translation>本地文件</translation>
-    </message>
-    <message>
-        <source>Online - %1 GB download</source>
-        <translation>还需下载：%1 GB</translation>
-    </message>
-    <message>
-        <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation>请先接入一款包含镜像的 USB 设备。&lt;br&gt;其镜像必须位于该设备的根路径下。</translation>
     </message>
 </context>
 <context>
@@ -695,159 +701,48 @@
         <source>Go back to main menu</source>
         <translation type="unfinished">回到主菜单</translation>
     </message>
-</context>
-<context>
-    <name>OptionsGeneralTab</name>
     <message>
-        <source>Set hostname:</source>
-        <translation>设置主机名：</translation>
-    </message>
-    <message>
-        <source>Set username and password</source>
-        <translation>设置用户名及密码</translation>
-    </message>
-    <message>
-        <source>Username:</source>
-        <translation>用户名：</translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation>密码：</translation>
-    </message>
-    <message>
-        <source>Configure wireless LAN</source>
-        <translation>配置 WLAN</translation>
-    </message>
-    <message>
-        <source>SSID:</source>
-        <translation>网络名称：</translation>
-    </message>
-    <message>
-        <source>Hidden SSID</source>
-        <translation>隐藏的网络</translation>
-    </message>
-    <message>
-        <source>Wireless LAN country:</source>
-        <translation>WLAN 区域：</translation>
-    </message>
-    <message>
-        <source>Set locale settings</source>
-        <translation>本地化设置</translation>
-    </message>
-    <message>
-        <source>Time zone:</source>
-        <translation>时区：</translation>
-    </message>
-    <message>
-        <source>Keyboard layout:</source>
-        <translation>键盘布局：</translation>
+        <source>Select image</source>
+        <translation type="unfinished">选择镜像</translation>
     </message>
 </context>
 <context>
-    <name>OptionsMiscTab</name>
+    <name>PiConnectCustomizationStep</name>
     <message>
-        <source>Play sound when finished</source>
-        <translation>在完成后播放提示音</translation>
-    </message>
-    <message>
-        <source>Eject media when finished</source>
-        <translation>在完成后卸载磁盘</translation>
-    </message>
-    <message>
-        <source>Enable telemetry</source>
-        <translation>启用遥测</translation>
-    </message>
-</context>
-<context>
-    <name>OptionsPopup</name>
-    <message>
-        <source>OS Customization</source>
-        <translation>自定义系统配置</translation>
-    </message>
-    <message>
-        <source>General</source>
-        <translation>通用</translation>
-    </message>
-    <message>
-        <source>Services</source>
-        <translation>服务</translation>
-    </message>
-    <message>
-        <source>Options</source>
-        <translation>可选配置</translation>
-    </message>
-    <message>
-        <source>SAVE</source>
-        <translation>保存</translation>
-    </message>
-    <message>
-        <source>CANCEL</source>
+        <source>Customisation: Raspberry Pi Connect</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Please fix validation errors in General and Services tabs</source>
+        <source>Sign in to receive a token, then enable Connect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Please fix validation errors in General tab</source>
+        <source>Enable Raspberry Pi Connect</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Please fix validation errors in Services tab</source>
+        <source>What is Raspberry Pi Connect?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>RESET</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>OptionsServicesTab</name>
-    <message>
-        <source>Enable SSH</source>
-        <translation>开启 SSH</translation>
-    </message>
-    <message>
-        <source>Use password authentication</source>
-        <translation>使用密码登录</translation>
-    </message>
-    <message>
-        <source>Allow public-key authentication only</source>
-        <translation>仅使用公钥登录</translation>
-    </message>
-    <message>
-        <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation>为用户 “%1” 设置 authorized_keys：</translation>
-    </message>
-    <message>
-        <source>Delete Key</source>
-        <translation>删除密钥</translation>
-    </message>
-    <message>
-        <source>RUN SSH-KEYGEN</source>
-        <translation>运行 SSH-KEYGEN</translation>
-    </message>
-    <message>
-        <source>Add SSH Key</source>
-        <translation>添加 SSH 密钥</translation>
-    </message>
-    <message>
-        <source>Paste your SSH public key here.
-Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
-Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
+        <source>Open Raspberry Pi Connect</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
+        <source>Status:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Token received from browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for token</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>RemoteAccessStep</name>
-    <message>
-        <source>Customization: SSH Authentication</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Configure SSH access.</source>
         <translation type="unfinished"></translation>
@@ -884,13 +779,17 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <source>SSH key loaded from file</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Customisation: SSH authentication</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Learn about SSH</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>StorageSelectionStep</name>
-    <message>
-        <source>Select your Storage Device</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>No storage devices found</source>
         <translation type="unfinished">找不到存储设备</translation>
@@ -907,36 +806,32 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <source>Read-only</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Select your storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
-    <name>UseSavedSettingsPopup</name>
+    <name>UpdateAvailableDialog</name>
     <message>
-        <source>Would you like to apply OS customization settings?</source>
-        <translation>您想应用自定义系统配置吗？</translation>
+        <source>Update available</source>
+        <translation type="unfinished">检测到更新</translation>
     </message>
     <message>
-        <source>NO</source>
-        <translation>否</translation>
+        <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>YES</source>
-        <translation>确认</translation>
+        <source>No</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>EDIT SETTINGS</source>
-        <translation>编辑设置</translation>
-    </message>
-    <message>
-        <source>Use OS customization?</source>
+        <source>Yes</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>UserCustomizationStep</name>
-    <message>
-        <source>Customization: Choose username</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Create a user account for your Raspberry Pi.</source>
         <translation type="unfinished"></translation>
@@ -969,13 +864,21 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <source>The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Customisation: Choose username</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved (hidden) — leave blank to keep</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter to change password</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WifiCustomizationStep</name>
-    <message>
-        <source>Customization: Choose WiFi</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Configure wireless LAN settings.</source>
         <translation type="unfinished"></translation>
@@ -1004,6 +907,14 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <source>Hidden SSID</source>
         <translation type="unfinished">隐藏的网络</translation>
     </message>
+    <message>
+        <source>Customisation: Choose Wi‑Fi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved (hidden) — leave blank to keep</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardContainer</name>
@@ -1020,10 +931,6 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation type="unfinished">储存设备</translation>
     </message>
     <message>
-        <source>Customization</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Writing</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1036,11 +943,39 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Advanced Options</source>
+        <source>Finish</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish</source>
+        <source>Customisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hostname</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Locale</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>User</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wi‑Fi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remote Access</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Connect</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>App Options</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1110,15 +1045,7 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Ready to write your customized image to the storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Ready to write the image to the storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Customizations to apply:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1127,10 +1054,6 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>• User account configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• WiFi configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1151,14 +1074,6 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>Write cancelled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Finalizing...</source>
-        <translation type="unfinished">正在完成...</translation>
-    </message>
-    <message>
-        <source>Confirm destructive write</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1197,6 +1112,26 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <source>Write failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Skip verification</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready to write your customised image to the storage device. All existing data will be erased.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customisations to apply:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• Wi‑Fi configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finalising...</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -1209,32 +1144,8 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>您确定要退出吗？</translation>
     </message>
     <message>
-        <source>Warning</source>
-        <translation>警告</translation>
-    </message>
-    <message>
-        <source>Preparing to write...</source>
-        <translation>准备写入……</translation>
-    </message>
-    <message>
-        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>&apos;%1&apos; 上的已有数据都将被删除。&lt;br&gt;是否继续？</translation>
-    </message>
-    <message>
-        <source>Update available</source>
-        <translation>检测到更新</translation>
-    </message>
-    <message>
-        <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation>检测到新版树莓派启动盘制作工具。&lt;br&gt; 是否转到网页进行下载？</translation>
-    </message>
-    <message>
         <source>Error</source>
         <translation>错误</translation>
-    </message>
-    <message>
-        <source>Write Successful</source>
-        <translation>写入成功</translation>
     </message>
     <message>
         <source>Erase</source>
@@ -1265,23 +1176,19 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Storage device not available</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The selected storage device is no longer available.&lt;br&gt;Please select a different storage device.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You may now reboot</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Storage device removed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The selected storage device was removed.&lt;br&gt;Please select a different storage device.</source>
+        <source>Continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OK</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
