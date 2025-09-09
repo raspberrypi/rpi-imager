@@ -530,6 +530,8 @@ WizardStepBase {
                 )
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
+                // Gate Pi Connect availability by OS JSON field
+                root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
                     Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
@@ -548,6 +550,8 @@ WizardStepBase {
                 )
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
+                // Gate Pi Connect availability by OS JSON field
+                root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
                 root.customSelected = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
@@ -626,6 +630,10 @@ WizardStepBase {
                 entry.icon = String(entry.icon || "")
                 entry.subitems_url = String(entry.subitems_url || "")
                 entry.website = String(entry.website || "")
+                // Propagate enable_rpi_connect from parent when missing
+                if (typeof(entry.enable_rpi_connect) === "undefined" && typeof(model.enable_rpi_connect) !== "undefined") {
+                    entry.enable_rpi_connect = model.enable_rpi_connect
+                }
                 listModel.append(entry)
             }
         }

@@ -63,6 +63,12 @@ Root: HKLM; Subkey: "Software\Classes\.zstd\OpenWithProgIds"; ValueType: string;
 Root: HKLM; Subkey: "Software\Classes\RPI_IMAGINGUTILITY\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Classes\RPI_IMAGINGUTILITY\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey
 
+; Register rpi-imager:// URL protocol handler
+Root: HKCR; Subkey: "rpi-imager"; ValueType: string; ValueName: ""; ValueData: "URL:Raspberry Pi Imager"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "rpi-imager"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletekey
+Root: HKCR; Subkey: "rpi-imager\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},1"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "rpi-imager\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey
+
 [Files]
 ; Main program files
 Source: "@CMAKE_BINARY_DIR@\deploy\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion signonce

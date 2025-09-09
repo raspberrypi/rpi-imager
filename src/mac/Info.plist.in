@@ -34,5 +34,16 @@
   <string>NSApplication</string>
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>Raspberry Pi Imager URL</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>rpi-imager</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>

@@ -9,3 +9,4 @@ Icon=rpi-imager
 Exec=/usr/bin/rpi-imager %F
 Categories=Utility;
 StartupNotify=false
+MimeType=x-scheme-handler/rpi-imager;

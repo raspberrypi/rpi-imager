@@ -41,6 +41,7 @@ public:
         TooltipRole,
         WebsiteRole,
         ArchitectureRole,
+        PiConnectRole,
     };
 
     struct OS {
@@ -62,6 +63,7 @@ public:
         quint64 extractSize = 0;
 
         bool random = false;
+        bool enableRPiConnect = false;
     };
 
     explicit OSListModel(ImageWriter &);

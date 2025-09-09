@@ -22,7 +22,7 @@ Item {
     property alias networkInfoText: networkInfo.text
     
     property int currentStep: 0
-    readonly property int totalSteps: 10  // Internal steps (unchanged)
+    readonly property int totalSteps: 11  // Includes optional Pi Connect step when available
     
     // Track writing state
     property bool isWriting: false
@@ -39,6 +39,8 @@ Item {
     property bool wifiConfigured: false
     property bool sshEnabled: false
     property bool piConnectEnabled: false
+    // Whether selected OS supports Raspberry Pi Connect customization
+    property bool piConnectAvailable: false
     // Ephemeral per-run setting: do not persist across runs
     property bool disableWarnings: false
     // Whether the selected OS supports customisation (init_format present)
@@ -53,8 +55,9 @@ Item {
     readonly property int stepUserCustomization: 5
     readonly property int stepWifiCustomization: 6
     readonly property int stepRemoteAccess: 7
-    readonly property int stepWriting: 8
-    readonly property int stepDone: 9
+    readonly property int stepPiConnectCustomization: 8
+    readonly property int stepWriting: 9
+    readonly property int stepDone: 10
     
     signal wizardCompleted()
     
@@ -104,7 +107,7 @@ Item {
     function getSidebarIndex(wizardStep) {
         if (wizardStep <= stepStorageSelection) {
             return wizardStep
-        } else if (wizardStep >= stepHostnameCustomization && wizardStep <= stepRemoteAccess) {
+        } else if (wizardStep >= stepHostnameCustomization && wizardStep <= getLastCustomizationStep()) {
             return 3 // Customization group
         } else if (wizardStep === stepWriting) {
             return 4 // Writing
@@ -113,6 +116,18 @@ Item {
         }
         return 0
     }
+    function getLastCustomizationStep() {
+        return piConnectAvailable ? stepPiConnectCustomization : stepRemoteAccess
+    }
+
+    function getCustomizationSubstepLabels() {
+        var labels = [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("WiFi"), qsTr("Remote Access")]
+        if (piConnectAvailable) {
+            labels.push(qsTr("Raspberry Pi Connect"))
+        }
+        return labels
+    }
+
 
     // Map sidebar index back to the first wizard step in that group
     function getWizardStepFromSidebarIndex(sidebarIndex) {
@@ -252,10 +267,10 @@ Item {
                             x: Style.spacingExtraLarge
                             width: parent.width - Style.spacingExtraLarge
                             spacing: Style.spacingXXSmall
-                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep >= root.stepHostnameCustomization && root.currentStep <= root.stepRemoteAccess
+                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep >= root.stepHostnameCustomization && root.currentStep <= root.getLastCustomizationStep()
  
                             Repeater {
-                                model: [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("WiFi"), qsTr("Remote Access")]
+                                model: root.getCustomizationSubstepLabels()
                                 Rectangle {
                                     id: subItem
                                     required property int index
@@ -462,6 +477,10 @@ Item {
             if (!customizationSupported && nextIndex === stepHostnameCustomization) {
                 nextIndex = stepWriting
             }
+            // Skip optional Pi Connect step when OS does not support it
+            if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
+                nextIndex = stepWriting
+            }
             // Before entering the writing step, persist and apply customization (when supported)
             if (nextIndex === stepWriting && customizationSupported && imageWriter) {
                 // Persist whatever is currently staged in per-step UIs
@@ -483,10 +502,15 @@ Item {
     function previousStep() {
         if (root.currentStep > 0) {
             var prevIndex = root.currentStep - 1
-            // If customization is not supported, bypass customization entirely when going back
-            // from the Writing step. Jump straight to Storage Selection.
-            if (!customizationSupported && root.currentStep === stepWriting && prevIndex >= stepHostnameCustomization && prevIndex <= stepRemoteAccess) {
-                prevIndex = stepStorageSelection
+            // From Writing step:
+            // - If customization not supported, jump straight back to Storage Selection
+            // - If Pi Connect step is not available, skip it when navigating back
+            if (root.currentStep === stepWriting) {
+                if (!customizationSupported) {
+                    prevIndex = stepStorageSelection
+                } else if (!piConnectAvailable && prevIndex === stepPiConnectCustomization) {
+                    prevIndex = stepRemoteAccess
+                }
             }
             root.currentStep = prevIndex
             var prevComponent = getStepComponent(root.currentStep)
@@ -520,6 +544,7 @@ Item {
             case stepUserCustomization: return userCustomizationStep
             case stepWifiCustomization: return wifiCustomizationStep
             case stepRemoteAccess: return remoteAccessStep
+            case stepPiConnectCustomization: return piConnectCustomizationStep
             case stepWriting: return writingStep
             case stepDone: return doneStep
             default: return null
@@ -621,6 +646,19 @@ Item {
             }
         }
     }
+
+    Component {
+        id: piConnectCustomizationStep
+        PiConnectCustomizationStep {
+            imageWriter: root.imageWriter
+            wizardContainer: root
+            onNextClicked: root.nextStep()
+            onBackClicked: root.previousStep()
+            onSkipClicked: {
+                // Skip functionality is handled in the step itself
+            }
+        }
+    }
     
     Component {
         id: writingStep
@@ -692,6 +730,7 @@ Item {
         wifiConfigured = false
         sshEnabled = false
         piConnectEnabled = false
+        piConnectAvailable = false
         
         // Navigate back to the first step
         wizardStack.clear()
@@ -701,7 +740,7 @@ Item {
     // Keep customization items visible when navigating within customization
     onCurrentStepChanged: {
         if (!sidebarScroll) return
-        if (currentStep >= stepHostnameCustomization && currentStep <= stepRemoteAccess) {
+        if (currentStep >= stepHostnameCustomization && currentStep <= getLastCustomizationStep()) {
             var idx = currentStep - stepHostnameCustomization
             var mainRowH = Style.sidebarItemHeight + Style.spacingXSmall
             var subRectH = Style.sidebarSubItemHeight

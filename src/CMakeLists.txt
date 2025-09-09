@@ -377,6 +377,7 @@ set(IMAGER_QML_FILES
     wizard/UserCustomizationStep.qml
     wizard/WifiCustomizationStep.qml
     wizard/RemoteAccessStep.qml
+    wizard/PiConnectCustomizationStep.qml
     wizard/WritingStep.qml
     wizard/DoneStep.qml
     wizard/components/WizardSectionContainer.qml

@@ -1904,6 +1904,28 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
         line(QStringLiteral("fi"), script);
     }
 
+    // Raspberry Pi Connect token provisioning (store in target user's home)
+    const bool piConnectEnabled = s.value("piConnectEnabled").toBool();
+    QString piConnectToken = _piConnectToken.trimmed();
+    if (piConnectEnabled && !piConnectToken.isEmpty()) {
+        // Determine home directory for the effective user
+        line(QStringLiteral("TARGET_USER=\"") + effectiveUser + QStringLiteral("\""), script);
+        line(QStringLiteral("TARGET_HOME=$(getent passwd \"$TARGET_USER\" | cut -d: -f6)"), script);
+        line(QStringLiteral("if [ -z \"$TARGET_HOME\" ] || [ ! -d \"$TARGET_HOME\" ]; then TARGET_HOME=\"/home/" ) + effectiveUser + QStringLiteral("\"; fi"), script);
+        line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"$TARGET_HOME/com.raspberrypi.connect\""), script);
+        line(QStringLiteral("cat > \"$TARGET_HOME/com.raspberrypi.connect/deploy.key\" <<'EOF'"), script);
+        line(piConnectToken, script);
+        line(QStringLiteral("EOF"), script);
+        line(QStringLiteral("chown \"$TARGET_USER:$TARGET_USER\" \"$TARGET_HOME/com.raspberrypi.connect/deploy.key\""), script);
+        line(QStringLiteral("chmod 600 \"$TARGET_HOME/com.raspberrypi.connect/deploy.key\""), script);
+
+        // Enable systemd user service rpi-connect-signin.service for the target user
+        line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"$TARGET_HOME/.config/systemd/user/default.target.wants\""), script);
+        line(QStringLiteral("UNIT_SRC=\"/usr/lib/systemd/user/rpi-connect-signin.service\"; [ -f \"$UNIT_SRC\" ] || UNIT_SRC=\"/lib/systemd/user/rpi-connect-signin.service\""), script);
+        line(QStringLiteral("ln -sf \"$UNIT_SRC\" \"$TARGET_HOME/.config/systemd/user/default.target.wants/rpi-connect-signin.service\""), script);
+        line(QStringLiteral("chown -R \"$TARGET_USER:$TARGET_USER\" \"$TARGET_HOME/.config/systemd\" || true"), script);
+    }
+
     // Final cleanup to mimic legacy behavior
     line(QStringLiteral("rm -f /boot/firstrun.sh"), script);
     line(QStringLiteral("sed -i 's| systemd.run.*||g' /boot/cmdline.txt"), script);
@@ -2028,6 +2050,26 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
             push(QStringLiteral("        hidden: true"), netcfg);
         }
         push(QStringLiteral("    optional: true"), netcfg);
+    }
+
+    // Raspberry Pi Connect token provisioning via cloud-init write_files (store in user's home)
+    const bool piConnectEnabled = s.value("piConnectEnabled").toBool();
+    QString piConnectToken = _piConnectToken.trimmed();
+    if (piConnectEnabled && !piConnectToken.isEmpty()) {
+        // Use the same effective user decision as above
+        const QString effectiveUser = userName.isEmpty() && sshEnabled ? getCurrentUser() : (userName.isEmpty() ? QStringLiteral("pi") : userName);
+        const QString targetPath = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect/deploy.key");
+        push(QStringLiteral("write_files:"), cloud);
+        push(QStringLiteral("  - path: ") + targetPath, cloud);
+        push(QStringLiteral("    permissions: '0600'"), cloud);
+        push(QStringLiteral("    owner: ") + effectiveUser + QStringLiteral(":") + effectiveUser, cloud);
+        push(QStringLiteral("    content: |"), cloud);
+        QString indented = QStringLiteral("      ") + piConnectToken;
+        push(indented, cloud);
+        // Ensure directory exists with correct owner
+        push(QString(), cloud);
+        push(QStringLiteral("runcmd:"), cloud);
+        push(QStringLiteral("  - [ bash, -lc, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
     }
 
     setImageCustomization(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg);
@@ -2520,4 +2562,20 @@ void ImageWriter::openUrl(const QUrl &url)
         qDebug() << "Falling back to QDesktopServices::openUrl";
         QDesktopServices::openUrl(url);
     }
+}
+
+void ImageWriter::handleIncomingUrl(const QUrl &url)
+{
+    qDebug() << "Incoming URL:" << url;
+    emit connectCallbackReceived(QVariant::fromValue(url));
+}
+
+void ImageWriter::setRuntimeConnectToken(const QString &token)
+{
+    _piConnectToken = token;
+}
+
+QString ImageWriter::getRuntimeConnectToken() const
+{
+    return _piConnectToken;
 }

@@ -22,8 +22,11 @@
 #include <QSettings>
 #include <QFont>
 #include <QFontDatabase>
+#include <QSessionManager>
+#include <QFileOpenEvent>
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
+#include <CoreServices/CoreServices.h>
 #endif
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -97,6 +100,19 @@ int main(int argc, char *argv[])
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;
 
+#ifdef Q_OS_DARWIN
+    // Ensure our app is the default handler for rpi-imager:// scheme so Safari recognizes it
+    {
+        CFStringRef scheme = CFSTR("rpi-imager");
+        CFBundleRef bundle = CFBundleGetMainBundle();
+        if (bundle) {
+            CFStringRef bundleId = (CFStringRef)CFBundleGetIdentifier(bundle);
+            if (bundleId) {
+                LSSetDefaultHandlerForURLScheme(scheme, bundleId);
+            }
+        }
+    }
+#endif
 #ifdef Q_OS_LINUX
     if (imageWriter.isEmbeddedMode()) {
         // Font and locale setup only needed for embedded Linux systems
@@ -130,6 +146,7 @@ int main(int argc, char *argv[])
     /* Parse commandline arguments (if any) */
     QString customRepo;
     QUrl url;
+    QUrl callbackUrl;
     QStringList args = app.arguments();
     int cliRefreshInterval = -1;
     int cliRefreshJitter = -1;
@@ -140,6 +157,10 @@ int main(int argc, char *argv[])
             if (args[i].startsWith("http:", Qt::CaseInsensitive) || args[i].startsWith("https:", Qt::CaseInsensitive))
             {
                 url = args[i];
+            }
+            else if (args[i].startsWith("rpi-imager:", Qt::CaseInsensitive))
+            {
+                callbackUrl = QUrl(args[i]);
             }
             else
             {
@@ -362,6 +383,33 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(selectedDeviceRemoved()), qmlwindow, SLOT(onSelectedDeviceRemoved()));
     qmlwindow->connect(&imageWriter, SIGNAL(writeCancelledDueToDeviceRemoval()), qmlwindow, SLOT(onWriteCancelledDueToDeviceRemoval()));
     qmlwindow->connect(&imageWriter, SIGNAL(keychainPermissionRequested()), qmlwindow, SLOT(onKeychainPermissionRequested()));
+#ifdef Q_OS_DARWIN
+    // Handle custom URL scheme on macOS via FileOpen events
+    struct UrlOpenFilter : public QObject {
+        ImageWriter *iw;
+        explicit UrlOpenFilter(ImageWriter *w) : iw(w) {}
+        bool eventFilter(QObject *obj, QEvent *event) override {
+            Q_UNUSED(obj)
+            if (event->type() == QEvent::FileOpen) {
+                QFileOpenEvent *foe = static_cast<QFileOpenEvent*>(event);
+                if (foe && foe->url().isValid()) {
+                    iw->handleIncomingUrl(foe->url());
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+    app.installEventFilter(new UrlOpenFilter(&imageWriter));
+#endif
+
+    // If launched via custom URL scheme on Windows/Linux, deliver it now
+    if (!callbackUrl.isEmpty()) {
+        imageWriter.handleIncomingUrl(callbackUrl);
+    }
+    // Forward platform URL open events to QML via ImageWriter (no-ops, kept for future use)
+    QObject::connect(&app, &QGuiApplication::applicationStateChanged, &imageWriter, [](Qt::ApplicationState){ /* no-op */ });
+    QObject::connect(&app, &QGuiApplication::commitDataRequest, &imageWriter, [](QSessionManager&){ /* no-op */ });
 
     /* Set window position */
     auto screensize = app.primaryScreen()->geometry();

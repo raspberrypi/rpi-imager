@@ -216,6 +216,10 @@ public:
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void openUrl(const QUrl &url);
+    Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
+    // Ephemeral session-only Connect token (never persisted)
+    Q_INVOKABLE void setRuntimeConnectToken(const QString &token);
+    Q_INVOKABLE QString getRuntimeConnectToken() const;
     
     /* Override OS list refresh schedule (in minutes); pass negative to clear override */
     Q_INVOKABLE void setOsListRefreshOverride(int intervalMinutes, int jitterMinutes);
@@ -241,6 +245,7 @@ signals:
     void keychainPermissionRequested();
     void keychainPermissionResponseReceived();
     void writeStateChanged();
+    void connectCallbackReceived(QVariant url);
 
 protected slots:
     void startProgressPolling();
@@ -301,6 +306,8 @@ protected:
     QTranslator *_trans;
     int _refreshIntervalOverrideMinutes;
     int _refreshJitterOverrideMinutes;
+    // Session-only storage for Pi Connect token
+    QString _piConnectToken;
 
     void _parseCompressedFile();
     void _parseXZFile();
