@@ -1,8 +1,0 @@
-#!/usr/bin/dh-exec
-
-rpi-imager-x86_64.AppImage => /usr/bin/rpi-imager
-
-debian/rpi-imager.png /usr/share/icons/hicolor/128x128/apps/
-
-debian/com.raspberrypi.rpi-imager.desktop /usr/share/applications/
-debian/com.raspberrypi.rpi-imager.metainfo.xml /usr/share/metainfo/
