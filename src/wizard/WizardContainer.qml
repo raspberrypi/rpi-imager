@@ -16,6 +16,8 @@ Item {
     
     required property ImageWriter imageWriter
     property var optionsPopup: null
+    // Show landing language selection step at startup
+    property bool showLanguageSelection: false
     // Reference to the full-window overlay root for dialog parenting
     property var overlayRootRef: null
     // Expose network info text for embedded mode status updates
@@ -386,10 +388,10 @@ Item {
                         target: marqueeRow
                         property: "x"
                         from: 0
-                        to: -(networkInfo.width + marqueeRow.spacing)
-                        duration: Math.max(4000, Math.round((networkInfo.width + marqueeRow.spacing + networkInfoContainer.width) / 40 * 1000))
+                        to: -(((networkInfo ? networkInfo.width : 0) + marqueeRow.spacing))
+                        duration: Math.max(4000, Math.round((((networkInfo ? networkInfo.width : 0) + marqueeRow.spacing + (networkInfoContainer ? networkInfoContainer.width : 0)) / 40) * 1000))
                         loops: Animation.Infinite
-                        running: networkInfoContainer.visible && networkInfo.text.length > 0
+                        running: networkInfoContainer.visible && networkInfo && networkInfo.text && networkInfo.text.length > 0
                     }
 
                     onVisibleChanged: {
@@ -452,7 +454,7 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             
-            initialItem: deviceSelectionStep
+            initialItem: root.showLanguageSelection ? languageSelectionStep : deviceSelectionStep
             
             // Smooth transitions between steps
             pushEnter: Transition {
@@ -585,6 +587,17 @@ Item {
     }
     
     // Step components
+    Component {
+        id: languageSelectionStep
+        LanguageSelectionStep {
+            imageWriter: root.imageWriter
+            wizardContainer: root
+            onNextClicked: {
+                // After choosing language, jump to first real wizard step
+                root.jumpToStep(root.stepDeviceSelection)
+            }
+        }
+    }
     Component {
         id: deviceSelectionStep
         DeviceSelectionStep {

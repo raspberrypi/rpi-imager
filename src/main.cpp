@@ -150,6 +150,7 @@ int main(int argc, char *argv[])
     NetworkAccessManagerFactory namf;
     QQmlApplicationEngine engine;
     QString customQm;
+    bool enableLanguageSelection = false;
     QSettings settings;
 
     /* Parse commandline arguments (if any) */
@@ -271,9 +272,13 @@ int main(int argc, char *argv[])
             }
             cliRefreshJitter = v;
         }
+        else if (args[i] == "--enable-language-selection")
+        {
+            enableLanguageSelection = true;
+        }
         else if (args[i] == "--help")
         {
-            cerr << "rpi-imager [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--refresh-interval <minutes>] [--refresh-jitter <minutes>] [--disable-telemetry] [<image file to write>]" << endl;
+            cerr << "rpi-imager [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--refresh-interval <minutes>] [--refresh-jitter <minutes>] [--disable-telemetry] [--enable-language-selection] [<image file to write>]" << endl;
             cerr << "-OR- rpi-imager --cli [--disable-verify] [--sha256 <expected hash>] [--debug] [--quiet] <image file to write> <destination drive device>" << endl;
             return 0;
         }
@@ -323,7 +328,7 @@ int main(int argc, char *argv[])
         // Use Windows API to get the actual UI language preference
         // This fixes the issue where QLocale::system() returns wrong language
         // when multiple language packs are installed
-        QString langcode = "en_US";
+        QString langcode = "en_GB";
         LANGID langId = GetUserDefaultUILanguage();
         if (langId != 0)
         {
@@ -375,7 +380,20 @@ int main(int argc, char *argv[])
     imageWriter.setEngine(&engine);
     engine.setNetworkAccessManagerFactory(&namf);
 
-    engine.setInitialProperties(QVariantMap{{"imageWriter", QVariant::fromValue(&imageWriter)}});
+    // Determine if we should show the language selection landing step
+    // Consider language undetermined if QLocale::system() is AnyLanguage or C
+    bool couldDetermineLanguage = true;
+    {
+        QLocale::Language sysLang = QLocale::system().language();
+        if (sysLang == QLocale::AnyLanguage || sysLang == QLocale::C)
+            couldDetermineLanguage = false;
+    }
+    const bool showLanguageSelection = enableLanguageSelection || !couldDetermineLanguage;
+
+    engine.setInitialProperties(QVariantMap{
+        {"imageWriter", QVariant::fromValue(&imageWriter)},
+        {"showLanguageSelection", showLanguageSelection}
+    });
     engine.load(QUrl(QStringLiteral("qrc:/qt/qml/RpiImager/main.qml")));
 
     if (engine.rootObjects().isEmpty())

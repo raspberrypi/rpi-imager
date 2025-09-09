@@ -18,6 +18,8 @@ ApplicationWindow {
     visible: true
 
     required property ImageWriter imageWriter
+    // Whether to show the landing Language Selection step (set from C++)
+    property bool showLanguageSelection: false
     // Wizard manages drive list and selection state
     property bool forceQuit: false
     // Expose overlay root to child components for dialog parenting
@@ -59,6 +61,8 @@ ApplicationWindow {
             imageWriter: window.imageWriter
             optionsPopup: appOptionsDialog
             overlayRootRef: overlayRoot
+            // Show Language step if C++ requested it
+            showLanguageSelection: window.showLanguageSelection
             
             onWizardCompleted: {
                 // Reset to start of wizard or close application

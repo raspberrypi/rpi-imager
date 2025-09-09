@@ -378,6 +378,7 @@ set(IMAGER_QML_FILES
     wizard/dialogs/KeychainPermissionDialog.qml
     wizard/dialogs/UpdateAvailableDialog.qml
     wizard/dialogs/AppOptionsDialog.qml
+    wizard/LanguageSelectionStep.qml
     qmlcomponents/ImButton.qml
     qmlcomponents/ImButtonRed.qml
     qmlcomponents/ImCheckBox.qml
