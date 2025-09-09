@@ -103,8 +103,7 @@ WizardStepBase {
                 radius: 0
                 border.color: hwlist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
                 border.width: hwlist.activeFocus ? 2 : 0
-                anchors.left: parent.left
-                anchors.right: parent.right
+                anchors.fill: parent
                 anchors.rightMargin: (hwlist.contentHeight > hwlist.height ? Style.scrollBarWidth : 0)
             }
             

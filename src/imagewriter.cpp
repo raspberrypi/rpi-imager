@@ -231,24 +231,43 @@ ImageWriter::ImageWriter(QObject *parent)
     connect(_cacheManager, &CacheManager::cacheFileUpdated,
             this, [this](const QByteArray& hash) { 
                 qDebug() << "Received cacheFileUpdated signal - refreshing UI for hash:" << hash;
-                // Emit signal to refresh UI cache status indicators
-                emit osListPrepared(); 
+                // Prefer surgical UI update: notify model rows changed (cache status text)
+                if (_engine) {
+                    // Access the OSListModel via getter and mark it dirty without reset
+                    OSListModel *m = getOSList();
+                    if (m) m->markCacheStatusDirty();
+                } else {
+                    // Fallback if no engine: emit legacy signal
+                    emit osListPrepared();
+                }
             });
     
     connect(_cacheManager, &CacheManager::cacheVerificationComplete,
             this, [this](bool isValid) { 
                 if (isValid) {
-                    qDebug() << "Cache verification completed successfully - refreshing UI";
-                    // Emit signal to refresh UI cache status indicators
-                    emit osListPrepared();
+                    // Prefer surgical UI update: notify model rows changed (cache status text)
+                    if (_engine) {
+                        // Access the OSListModel via getter and mark it dirty without reset
+                        OSListModel *m = getOSList();
+                        if (m) m->markCacheStatusDirty();
+                    } else {
+                        // Fallback if no engine: emit legacy signal
+                        emit osListPrepared();
+                    }
                 }
             });
     
     connect(_cacheManager, &CacheManager::cacheInvalidated,
             this, [this]() { 
-                qDebug() << "Cache invalidated - refreshing UI";
-                // Emit signal to refresh UI cache status indicators
-                emit osListPrepared();
+                // Prefer surgical UI update: notify model rows changed (cache status text)
+                if (_engine) {
+                    // Access the OSListModel via getter and mark it dirty without reset
+                    OSListModel *m = getOSList();
+                    if (m) m->markCacheStatusDirty();
+                } else {
+                    // Fallback if no engine: emit legacy signal
+                    emit osListPrepared();
+                }
             });
     
     // Connect to specific device removal events

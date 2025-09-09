@@ -71,7 +71,12 @@ WizardStepBase {
     Connections {
         target: imageWriter
         function onOsListPrepared() {
-            onOsListPreparedHandler()
+            // Prefer surgical refresh to avoid stealing focus during clicks
+            if (root.modelLoaded && root.osmodel && typeof root.osmodel.softRefresh === "function") {
+                root.osmodel.softRefresh()
+            } else {
+                onOsListPreparedHandler()
+            }
         }
         // Handle native file selection for "Use custom"
         function onFileSelected(fileUrl) {
@@ -99,18 +104,8 @@ WizardStepBase {
         }
     }
     
-    // Ensure the current list view has focus and a valid currentIndex
-    function _focusFirstItemInCurrentView() {
-        // For the main OS list, ensure it has a valid currentIndex when focused
-        if (oslist.activeFocus && oslist.count > 0 && oslist.currentIndex === -1) {
-            oslist.currentIndex = 0
-        }
-        // For sublists, ensure they have a valid currentIndex when focused
-        var currentView = osswipeview.currentItem
-        if (currentView && currentView !== oslist && currentView.activeFocus && currentView.count > 0 && currentView.currentIndex === -1) {
-            currentView.currentIndex = 0
-        }
-    }
+    // No-op (previous auto-focus/auto-select logic removed to avoid stealing click timing)
+    function _focusFirstItemInCurrentView() {}
     
     // Ensure the clicked selection is visually highlighted in the current list view
     function _highlightMatchingEntryInCurrentView(selectedModel) {
@@ -166,7 +161,18 @@ WizardStepBase {
                         activeFocusOnTab: true
                         
                         boundsBehavior: Flickable.StopAtBounds
-                        // No highlight property needed - using delegate-based highlighting
+                        // Provide a highlight item to ensure visible selection
+                        highlight: Rectangle {
+                            color: Style.listViewHighlightColor
+                            radius: 0
+                            border.color: oslist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
+                            border.width: oslist.activeFocus ? 2 : 0
+                            anchors.fill: parent
+                            anchors.rightMargin: (oslist.contentHeight > oslist.height ? Style.scrollBarWidth : 0)
+                        }
+                        highlightFollowsCurrentItem: true
+                        preferredHighlightBegin: 0
+                        preferredHighlightEnd: height
                         
                         ScrollBar.vertical: ScrollBar {
                             width: Style.scrollBarWidth
@@ -240,24 +246,30 @@ WizardStepBase {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
-                color: (parent.ListView.view && parent.ListView.view.currentIndex === index) ? Style.listViewHighlightColor :
+                color: (oslist.currentIndex === index) ? Style.listViewHighlightColor :
                        (osMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 anchors.rightMargin: (
-                    (parent.ListView.view && parent.ListView.view.contentHeight > parent.ListView.view.height)
-                        ? Style.scrollBarWidth
-                        : 0)
+                    (oslist.contentHeight > oslist.height) ? Style.scrollBarWidth : 0)
                 
                 MouseArea {
                     id: osMouseArea
                     anchors.fill: parent
                     hoverEnabled: true
+                    preventStealing: true
                     cursorShape: Qt.PointingHandCursor
                     
+                    onPressed: {
+                        if (!oslist.activeFocus) {
+                            oslist.forceActiveFocus()
+                        }
+                        oslist.currentIndex = index
+                    }
+
                     onClicked: {
-                        // Set currentIndex on the correct ListView (main list or sublist)
-                        if (parent.ListView.view) {
-                            parent.ListView.view.currentIndex = index
+                        // currentIndex is set on press; ensure selection is in place
+                        if (oslist.currentIndex !== index) {
+                            oslist.currentIndex = index
                         }
                         selectOSitem(delegateItem.model, undefined, true)
                     }
@@ -276,6 +288,8 @@ WizardStepBase {
                     Image {
                         id: osicon
                         source: delegateItem.icon
+                        cache: true
+                        asynchronous: true
                         Layout.preferredWidth: 40
                         Layout.preferredHeight: 40
                         fillMode: Image.PreserveAspectFit
@@ -382,7 +396,19 @@ WizardStepBase {
             delegate: osdelegate
             clip: true
             boundsBehavior: Flickable.StopAtBounds
-            // No highlight property needed - using delegate-based highlighting
+            // Provide a highlight item to ensure visible selection
+            highlight: Rectangle {
+                color: Style.listViewHighlightColor
+                radius: 0
+                border.color: sublistview.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
+                border.width: sublistview.activeFocus ? 2 : 0
+                anchors.left: sublistview.left
+                anchors.right: sublistview.right
+                anchors.rightMargin: (sublistview.contentHeight > parent.height ? Style.scrollBarWidth : 0)
+            }
+            highlightFollowsCurrentItem: true
+            preferredHighlightBegin: 0
+            preferredHighlightEnd: height
             ScrollBar.vertical: ScrollBar {
                 width: Style.scrollBarWidth
                 policy: sublistview.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
@@ -470,7 +496,8 @@ WizardStepBase {
                 root.nextButtonEnabled = false
                 root.customSelected = false
                 if (imageWriter.nativeFileDialogAvailable()) {
-                    imageWriter.openFileDialog()
+                    // Defer opening the native dialog until after the current event completes
+                    Qt.callLater(function() { imageWriter.openFileDialog() })
                 } else if (root.hasOwnProperty("customImageFileDialog")) {
                     // Ensure reasonable defaults
                     customImageFileDialog.dialogTitle = qsTr("Select image")
@@ -594,6 +621,11 @@ WizardStepBase {
                 if (typeof(entry.icon) === "string" && entry.icon.indexOf("icons/") === 0) {
                     entry.icon = "../" + entry.icon
                 }
+                // Ensure role types remain consistent across the ListModel
+                entry.url = String(entry.url || "")
+                entry.icon = String(entry.icon || "")
+                entry.subitems_url = String(entry.subitems_url || "")
+                entry.website = String(entry.website || "")
                 listModel.append(entry)
             }
         }

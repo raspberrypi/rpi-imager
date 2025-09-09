@@ -67,9 +67,15 @@ public:
     explicit OSListModel(ImageWriter &);
 
     Q_INVOKABLE bool reload();
+    // Emit dataChanged for all rows without resetting the model
+    Q_INVOKABLE void softRefresh();
 
     // Adds "(Recommended)" to the description of the first OS
     Q_INVOKABLE void markFirstAsRecommended();
+
+public slots:
+    // Mark all rows dirty for cache-status dependent text without resetting the model
+    void markCacheStatusDirty();
 
 protected:
     int rowCount(const QModelIndex &) const override;

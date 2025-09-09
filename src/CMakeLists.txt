@@ -136,6 +136,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
     hwlistmodel.h
     oslistmodel.h
     disk_formatter.h file_operations.h platformquirks.h
+    iconimageprovider.h
 )
 
 # Add dependencies
@@ -178,7 +179,7 @@ set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
-    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h" "nativefiledialog.cpp")
+    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h" "nativefiledialog.cpp" "iconimageprovider.cpp")
 
 if(BUILD_EMBEDDED)
     set(SOURCES ${SOURCES} "embedded/device_info.cpp")

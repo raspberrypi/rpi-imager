@@ -16,6 +16,8 @@
 #include <qjsonarray.h>
 #include <algorithm>
 #include <QRegularExpression>
+#include <QUrl>
+#include <QFileInfo>
 
 namespace {
 
@@ -163,6 +165,57 @@ namespace {
             }
         }
     }
+
+    // Sanitize icon source: allow known-good forms and drop malformed URLs to avoid runtime fetch errors
+    static QString sanitizeIconSource(const QString &raw)
+    {
+        if (raw.isEmpty()) return QString();
+
+        // Common local relative path used by repository JSON
+        if (raw.startsWith("icons/")) {
+            return QStringLiteral("../") + raw;
+        }
+
+        // Allow qrc resources
+        if (raw.startsWith("qrc:/") || raw.startsWith("qrc://")) {
+            return raw;
+        }
+
+        // For explicit URLs, validate scheme and host as appropriate
+        const QUrl url(raw);
+        if (url.isValid() && !url.scheme().isEmpty()) {
+            const QString scheme = url.scheme().toLower();
+
+            if (scheme == QLatin1String("http") || scheme == QLatin1String("https")) {
+                if (!url.host().isEmpty()) {
+                    return raw; // looks well-formed; allow
+                } else {
+                    qWarning() << "OSListModel: dropping icon with missing host:" << raw;
+                    return QString();
+                }
+            } else if (scheme == QLatin1String("file")) {
+                if (url.isLocalFile()) {
+                    QFileInfo fi(url.toLocalFile());
+                    if (fi.exists() && fi.isFile()) {
+                        return raw;
+                    } else {
+                        qWarning() << "OSListModel: dropping icon pointing to missing local file:" << raw;
+                        return QString();
+                    }
+                }
+                // Non-local file URL; drop
+                qWarning() << "OSListModel: dropping non-local file URL icon:" << raw;
+                return QString();
+            } else {
+                // Unknown scheme; pass through (QML may support it) but log once
+                qWarning() << "OSListModel: icon uses unrecognized scheme, passing through:" << raw;
+                return raw;
+            }
+        }
+
+        // No scheme: treat as relative path; allow as-is (QML will resolve relative to QML file)
+        return raw;
+    }
 }
 
 OSListModel::OSListModel(ImageWriter &imageWriter)
@@ -207,13 +260,8 @@ bool OSListModel::reload()
         os.random = obj["random"].toBool();
 
         os.extractSha256 = obj["extract_sha256"].toString();
-        QString iconPath = obj["icon"].toString();
-        // Adjust icon path for wizard directory structure
-        if (iconPath.startsWith("icons/")) {
-            os.icon = "../" + iconPath;
-        } else {
-            os.icon = iconPath;
-        }
+        // Icon source: sanitize to avoid malformed remote/local URLs causing UI/network errors
+        os.icon = sanitizeIconSource(obj["icon"].toString());
         os.initFormat = obj["init_format"].toString();
         os.releaseDate = obj["release_date"].toString();
         os.url = obj["url"].toString();
@@ -231,6 +279,20 @@ bool OSListModel::reload()
     endResetModel();
 
     return true;
+}
+
+void OSListModel::softRefresh()
+{
+    if (_osList.isEmpty()) return;
+    const QModelIndex first = index(0);
+    const QModelIndex last = index(_osList.size() - 1);
+    emit dataChanged(first, last);
+}
+
+void OSListModel::markCacheStatusDirty()
+{
+    // For now, same as softRefresh; could be narrowed to UrlRole-related rows
+    softRefresh();
 }
 
 int OSListModel::rowCount(const QModelIndex &) const
