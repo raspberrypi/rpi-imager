@@ -209,7 +209,7 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomization("", "", firstRunScript, "", "", ImageOptions::EnableSsh);
+        _imageWriter->setImageCustomization("", "", firstRunScript, "", "", ImageOptions::UserDefinedFirstRun);
     }
 
     _imageWriter->setDst(args[1]);
