@@ -46,6 +46,7 @@ Item {
     property bool piConnectAvailable: false
 
     // Interfaces & Features
+    property bool rpiosCloudInitAvailable: false
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
     // "Disabled" | "Default" | "Console & Hardware" | "Console" | "Hardware" | ""
@@ -66,9 +67,10 @@ Item {
     readonly property int stepUserCustomization: 5
     readonly property int stepWifiCustomization: 6
     readonly property int stepRemoteAccess: 7
-    readonly property int stepIfAndFeatures: 8
-    readonly property int stepWriting: 9
-    readonly property int stepDone: 10
+    readonly property int stepPiConnectCustomization: 8
+    readonly property int stepIfAndFeatures: 9
+    readonly property int stepWriting: 10
+    readonly property int stepDone: 11
     
     signal wizardCompleted()
     
@@ -115,13 +117,12 @@ Item {
     ]
     
     readonly property int firstCustomizationStep: stepHostnameCustomization
-    readonly property int lastCustomizationStep:  stepIfAndFeatures
 
     // Helper function to map wizard step to sidebar index
     function getSidebarIndex(wizardStep) {
         if (wizardStep <= stepStorageSelection) {
             return wizardStep
-        } else if (wizardStep >= firstCustomizationStep && wizardStep <= lastCustomizationStep) {
+        } else if (wizardStep >= firstCustomizationStep && wizardStep <= getLastCustomizationStep()) {
             return 3 // Customization group
         } else if (wizardStep === stepWriting) {
             return 4 // Writing
@@ -130,8 +131,13 @@ Item {
         }
         return 0
     }
+
     function getLastCustomizationStep() {
-        return piConnectAvailable ? stepPiConnectCustomization : stepRemoteAccess
+        return rpiosCloudInitAvailable
+            ? stepIfAndFeatures
+            : piConnectAvailable
+                ? stepPiConnectCustomization
+                : stepRemoteAccess
     }
 
     function getCustomizationSubstepLabels() {
@@ -139,7 +145,10 @@ Item {
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
-        labels.push(qsTr("Interfaces & Features"))
+        if (rpiosCloudInitAvailable) {
+            labels.push(qsTr("Interfaces & Features"))
+        }
+
         return labels
     }
 
@@ -282,7 +291,7 @@ Item {
                             x: Style.spacingExtraLarge
                             width: parent.width - Style.spacingExtraLarge
                             spacing: Style.spacingXXSmall
-                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep >= root.firstCustomizationStep && root.currentStep <= root.lastCustomizationStep
+                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep >= root.firstCustomizationStep && root.currentStep <= root.getLastCustomizationStep()
  
                             Repeater {
                                 model: root.getCustomizationSubstepLabels()
@@ -494,7 +503,11 @@ Item {
             }
             // Skip optional Pi Connect step when OS does not support it
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
-                nextIndex = stepWriting
+                nextIndex++
+            }
+            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
+            if (!rpiosCloudInitAvailable && nextIndex == stepIfAndFeatures) {
+                nextIndex++
             }
             // Before entering the writing step, persist and apply customization (when supported)
             if (nextIndex === stepWriting && customizationSupported && imageWriter) {
@@ -503,10 +516,6 @@ Item {
                 imageWriter.setSavedCustomizationSettings(settings)
                 // Build and stage customization directly in C++
                 imageWriter.applyCustomizationFromSavedSettings()
-            }
-            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-            if (!imageWriter.checkSWCapability("rpios_cloudinit") && nextIndex == stepIfAndFeatures) {
-                nextIndex++
             }
             root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)
@@ -524,16 +533,16 @@ Item {
             // From Writing step:
             // - If customization not supported, jump straight back to Storage Selection
             // - If Pi Connect step is not available, skip it when navigating back
-            if (root.currentStep === stepWriting) {
-                if (!customizationSupported) {
-                    prevIndex = stepStorageSelection
-                } else if (!piConnectAvailable && prevIndex === stepPiConnectCustomization) {
-                    prevIndex = stepRemoteAccess
+            if (root.currentStep === stepWriting && !customizationSupported) {
+                prevIndex = stepStorageSelection
+            } else {
+                // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
+                if (prevIndex == stepIfAndFeatures && !rpiosCloudInitAvailable) {
+                    prevIndex--
                 }
-            }
-            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-            if (!imageWriter.checkSWCapability("rpios_cloudinit") && prevIndex == stepIfAndFeatures) {
-                prevIndex--
+                if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
+                    prevIndex--
+                }
             }
             root.currentStep = prevIndex
             var prevComponent = getStepComponent(root.currentStep)
@@ -775,12 +784,10 @@ Item {
         piConnectEnabled = false
         piConnectAvailable = false
 
+        rpiosCloudInitAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
-        ifSerialEnabled = false
-        ifSerialMode = ""
-        ifPiConnectEnabled = false
-        ifUsbGadgetEnabled = false
+        ifSerial = ""
         featUsbGadgetEnabled = false
 
         supportsSerialConsoleOnly = false
@@ -794,7 +801,7 @@ Item {
     // Keep customization items visible when navigating within customization
     onCurrentStepChanged: {
         if (!sidebarScroll) return
-        if (currentStep >= firstCustomizationStep && currentStep <= lastCustomizationStep) {
+        if (currentStep >= firstCustomizationStep && currentStep <= getLastCustomizationStep()) {
             var idx = currentStep - firstCustomizationStep
             var mainRowH = Style.sidebarItemHeight + Style.spacingXSmall
             var subRectH = Style.sidebarSubItemHeight

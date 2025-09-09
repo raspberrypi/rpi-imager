@@ -304,14 +304,13 @@ WizardStepBase {
     }
 
     onSkipClicked: {
-        let saved = imageWriter.getSavedCustomizationSettings()
-        delete saved.enableI2C
-        delete saved.enableSPI
-        delete saved.enableSerial
-        delete saved.enableUsbGadget
-        imageWriter.setSavedCustomizationSettings(saved)
-
         // Clear all customization flags
+        wizardContainer.hostnameConfigured = false
+        wizardContainer.localeConfigured = false
+        wizardContainer.userConfigured = false
+        wizardContainer.wifiConfigured = false
+        wizardContainer.sshEnabled = false
+        wizardContainer.piConnectEnabled = false
         wizardContainer.ifI2cEnabled = false
         wizardContainer.ifSpiEnabled = false
         wizardContainer.ifSerial = "Disabled"
