@@ -41,15 +41,6 @@ Dialog {
         spacing: Style.spacingMedium
 
         Text {
-            text: qsTr("DANGER: System drive selected")
-            font.pixelSize: Style.fontSizeHeading
-            font.family: Style.fontFamilyBold
-            font.bold: true
-            color: Style.formLabelColor
-            Layout.fillWidth: true
-        }
-
-        Text {
             textFormat: Text.StyledText
             wrapMode: Text.WordWrap
             font.family: Style.fontFamily
@@ -63,7 +54,6 @@ Dialog {
 
         ColumnLayout {
             Layout.fillWidth: true
-            Text { text: qsTr("Device: %1").arg(root.device); font.family: Style.fontFamily; color: Style.textDescriptionColor }
             Text { text: qsTr("Size: %1").arg(root.sizeStr); font.family: Style.fontFamily; color: Style.textDescriptionColor }
             Text {
                 text: qsTr("Mounted as: %1").arg(root.mountpoints && root.mountpoints.length > 0 ? root.mountpoints.join(", ") : qsTr("Not mounted"))

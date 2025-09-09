@@ -402,9 +402,8 @@ WizardStepBase {
                 radius: 0
                 border.color: sublistview.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
                 border.width: sublistview.activeFocus ? 2 : 0
-                anchors.left: sublistview.left
-                anchors.right: sublistview.right
-                anchors.rightMargin: (sublistview.contentHeight > parent.height ? Style.scrollBarWidth : 0)
+                anchors.fill: parent
+                anchors.rightMargin: (sublistview.contentHeight > sublistview.height ? Style.scrollBarWidth : 0)
             }
             highlightFollowsCurrentItem: true
             preferredHighlightBegin: 0
