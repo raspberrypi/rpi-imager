@@ -231,47 +231,30 @@ QT_CONFIGURE_ARGS=(
     -no-feature-clipboard
     -no-feature-draganddrop
     
-    # Build only essential modules
-    -skip qtquick
-    -skip qtquickcontrols
-    -skip qtquicktimeline
-    -skip qtquickeffectmaker
-    -skip qtdeclarative
-    -skip qtsvg
-    -skip qtimageformats
-    -skip qtmultimedia
-    -skip qtwebengine
-    -skip qt3d
-    -skip qtwayland
-    -skip qtspeech
-    -skip qtconnectivity
-    -skip qtcharts
-    -skip qtdatavis3d
-    -skip qtdoc
-    -skip qtgraphs
-    -skip qthttpserver
-    -skip qtlocation
-    -skip qtlottie
-    -skip qtmqtt
-    -skip qtpositioning
-    -skip qtquick3d
-    -skip qtquick3dphysics
-    -skip qtserialbus
-    -skip qtserialport
-    -skip qtvirtualkeyboard
-    -skip qtwebchannel
-    -skip qtwebview
-    -skip qtremoteobjects
-    -skip qt5compat
-    -skip qtcoap
-    -skip qtlanguageserver
-    -skip qtactiveqt
-    -skip qtgrpc
-    -skip qtopcua
-    -skip qtscxml
-    -skip qtsensors
-    -skip qtwebsockets
+    # Build only essential modules - skip everything in CLI exclude list
 )
+
+# Add module exclusions from CLI-specific exclude list
+if [ -f "$BASE_DIR/modules_exclude.cli.list" ]; then
+    echo "Adding CLI-specific module exclusions..."
+    while IFS= read -r module || [ -n "$module" ]; do
+        # Skip empty lines and comments
+        if [[ -n "$module" && ! "$module" =~ ^[[:space:]]*# ]]; then
+            QT_CONFIGURE_ARGS+=(-skip "$module")
+        fi
+    done < "$BASE_DIR/modules_exclude.cli.list"
+fi
+
+# Add feature exclusions from CLI-specific exclude list  
+if [ -f "$BASE_DIR/features_exclude.cli.list" ]; then
+    echo "Adding CLI-specific feature exclusions..."
+    while IFS= read -r feature || [ -n "$feature" ]; do
+        # Skip empty lines and comments
+        if [[ -n "$feature" && ! "$feature" =~ ^[[:space:]]*# ]]; then
+            QT_CONFIGURE_ARGS+=(-no-feature-"$feature")
+        fi
+    done < "$BASE_DIR/features_exclude.cli.list"
+fi
 
 # Add verbose flag if requested
 if [ "$VERBOSE_BUILD" -eq 1 ]; then
@@ -305,7 +288,7 @@ echo "Installation details:"
 echo "  Location: $PREFIX"
 echo "  Architecture: $ARCH"
 echo "  Build type: $BUILD_TYPE"
-echo "  Modules: QtCore, QtNetwork (CLI-only, no GUI)"
+echo "  Modules: QtCore + essential CLI modules only (no GUI, multimedia, or graphics)"
 echo ""
 echo "To use this Qt installation:"
 echo "  export Qt6_ROOT=\"$PREFIX\""

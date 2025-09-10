@@ -1,0 +1,67 @@
+# Qt modules to exclude for CLI-only builds
+# This is much more aggressive than the regular exclude list
+# since we don't need ANY GUI components
+
+# GUI and graphics modules
+qtquick
+qtquickcontrols
+qtquicktimeline
+qtquickeffectmaker
+qtdeclarative
+qtsvg
+qtimageformats
+qtgui
+
+# Widgets and desktop
+qtwidgets
+
+# Multimedia and graphics
+qtmultimedia
+qt3d
+qtcharts
+qtdatavis3d
+qtgraphs
+qtquick3d
+qtquick3dphysics
+
+# Web and networking (advanced)
+qtwebengine
+qtwebchannel
+qtwebview
+qthttpserver
+
+# Platform-specific
+qtwayland
+qtactiveqt
+
+# Communication and IoT
+qtconnectivity
+qtserialbus
+qtserialport
+qtmqtt
+qtcoap
+qtgrpc
+qtopcua
+qtwebsockets
+
+# Input and interaction
+qtvirtualkeyboard
+qtspeech
+qtsensors
+
+# Location and positioning
+qtlocation
+qtpositioning
+
+# Development and documentation
+qtdoc
+qtlanguageserver
+
+# Misc specialized
+qtlottie
+qtremoteobjects
+qt5compat
+qtscxml
+
+# Database (optional - comment out if you need SQL features)
+qtbase-sql
