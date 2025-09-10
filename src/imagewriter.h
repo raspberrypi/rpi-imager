@@ -176,6 +176,9 @@ public:
                                              const QString &initialDir = QString(),
                                              const QString &filter = QString());
 
+    /* Read text file contents */
+    Q_INVOKABLE QString readFileContents(const QString &filePath);
+
     /* Handle keychain permission response from QML */
     Q_INVOKABLE void keychainPermissionResponse(bool granted);
 

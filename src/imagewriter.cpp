@@ -23,8 +23,10 @@
 #include <qjsondocument.h>
 #include <QJsonArray>
 #include <random>
+#include <QFile>
 #include <QFileInfo>
 #include <QQmlApplicationEngine>
+#include <QTextStream>
 #include <QQmlContext>
 #include <QProcess>
 #include <QRegularExpression>
@@ -307,6 +309,25 @@ QString ImageWriter::getNativeOpenFileName(const QString &title,
         return QString();
     }
     return NativeFileDialog::getOpenFileName(title, initialDir, filter);
+}
+
+QString ImageWriter::readFileContents(const QString &filePath)
+{
+    if (filePath.isEmpty()) {
+        return QString();
+    }
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qDebug() << "Failed to open file:" << filePath << "Error:" << file.errorString();
+        return QString();
+    }
+
+    QTextStream in(&file);
+    QString content = in.readAll();
+    file.close();
+
+    return content.trimmed();
 }
 
 ImageWriter::~ImageWriter()
