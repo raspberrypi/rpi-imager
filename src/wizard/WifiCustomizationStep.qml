@@ -4,7 +4,6 @@
  */
 
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../qmlcomponents"
 import "components"
@@ -98,7 +97,7 @@ WizardStepBase {
                 ImTextField {
                     id: fieldWifiPassword
                     Layout.fillWidth: true
-                    placeholderText: root.hasSavedWifiPSK ? qsTr("Saved (hidden) — leave blank to keep") : qsTr("Network password")
+                    placeholderText: root.hasSavedWifiPSK ? qsTr("Saved (hidden) — leave blank to clear") : qsTr("Network password")
                     echoMode: TextInput.Password
                     font.pixelSize: Style.fontSizeInput
                 }
@@ -154,12 +153,51 @@ WizardStepBase {
     }
     ]
     
+    // WPA2/3 PSK validation helpers
+    function isAsciiPrintable(text) {
+        for (var i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i)
+            if (code < 32 || code > 126) {
+                return false
+            }
+        }
+        return true
+    }
+
+    function isHex64(text) {
+        if (text.length !== 64) {
+            return false
+        }
+        for (var i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i)
+            var isDigit = code >= 48 && code <= 57  // 0-9
+            var isLower = code >= 97 && code <= 102 // a-f
+            var isUpper = code >= 65 && code <= 70  // A-F
+            if (!(isDigit || isLower || isUpper)) {
+                return false
+            }
+        }
+        return true
+    }
+
+    function isValidWifiPassword(text) {
+        if (!text || text.length === 0) {
+            // Allow open networks
+            return true
+        }
+        if (isHex64(text)) {
+            return true
+        }
+        // 8–63 ASCII printable characters
+        return text.length >= 8 && text.length <= 63 && isAsciiPrintable(text)
+    }
+
     // Validation: allow proceed when
     // - SSID and country entered and either new PSK provided or a saved crypt exists; or
     // - all WiFi fields are empty (skip)
     nextButtonEnabled: (
         ((fieldWifiSSID.text && fieldWifiSSID.text.trim().length > 0) && (fieldWifiCountry.currentText || fieldWifiCountry.editText))
-        ? ((fieldWifiPassword.text && fieldWifiPassword.text.length > 0) || root.hasSavedWifiPSK)
+        ? root.isValidWifiPassword(fieldWifiPassword.text)
         : true
     )
 
@@ -184,8 +222,8 @@ WizardStepBase {
                 // Persist crypted PSK; avoid storing plaintext
                 var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
                 saved.wifiPasswordCrypt = isPassphrase ? imageWriter.pbkdf2(pwd, ssid) : pwd
-            } else if (!hadCrypt) {
-                // No new password entered and none saved earlier -> ensure cleared
+            } else {
+                // Empty password -> open network; ensure any saved PSK is cleared
                 delete saved.wifiPasswordCrypt
             }
             saved.wifiHidden = hidden
