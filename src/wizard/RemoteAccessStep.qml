@@ -88,7 +88,13 @@ WizardStepBase {
                                 var filters = "Public Key files (*.pub);;All files (*)"
                                 var picked = imageWriter.getNativeOpenFileName(qsTr("Select SSH Public Key"), startDir, filters)
                                 if (picked && picked.length > 0) {
-                                    fieldPublicKey.text = qsTr("SSH key loaded from file")
+                                    var contents = imageWriter.readFileContents(picked)
+                                    if (contents && contents.length > 0) {
+                                        fieldPublicKey.text = contents
+                                    } else {
+                                        // Failed to read file contents
+                                        fieldPublicKey.text = qsTr("Failed to read SSH key file")
+                                    }
                                 } else {
                                     // User cancelled native dialog; do not auto-open fallback
                                 }
@@ -205,7 +211,15 @@ WizardStepBase {
             }
         }
         onAccepted: {
-            fieldPublicKey.text = qsTr("SSH key loaded from file")
+            if (selectedFile && selectedFile.toString().length > 0) {
+                var filePath = selectedFile.toString().replace(/^file:\/\//, "")
+                var contents = imageWriter.readFileContents(filePath)
+                if (contents && contents.length > 0) {
+                    fieldPublicKey.text = contents
+                } else {
+                    fieldPublicKey.text = qsTr("Failed to read SSH key file")
+                }
+            }
         }
     }
 } 
