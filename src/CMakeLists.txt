@@ -163,6 +163,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
     disk_formatter.h file_operations.h platformquirks.h
     iconimageprovider.h
     imageadvancedoptions.h
+    urlfmt.h
 )
 
 # Add dependencies
@@ -441,6 +442,7 @@ if(NOT BUILD_CLI_ONLY)
         imagewriter.cpp
         hwlistmodel.cpp
         oslistmodel.cpp
+        urlfmt.cpp
     )
 endif()
 

@@ -187,7 +187,7 @@ WizardStepBase {
     ImFileDialog {
         id: sshKeyFileDialog
         dialogTitle: qsTr("Select SSH Public Key")
-        nameFilters: ["*.pub", "*"]
+        nameFilters: ["Public Key files (*.pub)", "All files (*)"]
         Component.onCompleted: {
             if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
                 // Default to ~/.ssh on macOS

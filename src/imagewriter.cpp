@@ -832,6 +832,10 @@ QString ImageWriter::formatSize(quint64 bytes, int decimals)
     return tr("%1.%2 %3").arg(QString::number(q), fracStr, unitStr);
 }
 
+QString ImageWriter::osListUrlForDisplay() const {
+    return _repo.toString(QUrl::PreferLocalFile | QUrl::NormalizePathSegments);
+}
+
 /* Function to return OS list URL */
 QUrl ImageWriter::constantOsListUrl() const
 {
@@ -1175,6 +1179,13 @@ void ImageWriter::beginOSListFetch() {
    _networkManager.get(request);
 }
 
+void ImageWriter::refreshOsListFrom(const QUrl &url) {
+    setCustomRepo(url);
+    _completeOsList = QJsonDocument();
+    _osListRefreshTimer.stop();
+    beginOSListFetch();
+}
+
 void ImageWriter::onOsListRefreshTimeout()
 {
     qDebug() << "OS list refresh timer fired - refetching";
@@ -1244,6 +1255,7 @@ void ImageWriter::setOsListRefreshOverride(int intervalMinutes, int jitterMinute
     }
 }
 
+// TODO: duplicate
 void ImageWriter::setCustomRepo(const QUrl &repo)
 {
     _repo = repo;
@@ -1333,7 +1345,7 @@ void ImageWriter::onPreparationStatusUpdate(QString msg)
     emit preparationStatusUpdate(msg);
 }
 
-void ImageWriter::openFileDialog()
+void ImageWriter::openFileDialog(const QString &title, const QString &filter)
 {
     QSettings settings;
     QString path = settings.value("lastpath").toString();
@@ -1345,7 +1357,7 @@ void ImageWriter::openFileDialog()
     // Use native file dialog - QtWidgets fallback removed
     QString filename = NativeFileDialog::getOpenFileName(tr("Select image"),
                                                         path,
-                                                        "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic);;All files (*)");
+                                                        filter);
 
     // Process the selected file if one was chosen
     if (!filename.isEmpty())

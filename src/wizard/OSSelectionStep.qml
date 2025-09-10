@@ -106,6 +106,7 @@ WizardStepBase {
     property alias customImageFileDialog: customImageFileDialog
     ImFileDialog {
         id: customImageFileDialog
+        nameFilters: ["Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic)", "All files (*)"]
         onAccepted: {
             imageWriter.acceptCustomImageFromQml(selectedFile)
         }
@@ -508,7 +509,11 @@ WizardStepBase {
                 root.customSelected = false
                 if (imageWriter.nativeFileDialogAvailable()) {
                     // Defer opening the native dialog until after the current event completes
-                    Qt.callLater(function() { imageWriter.openFileDialog() })
+                    Qt.callLater(function() {
+                        imageWriter.openFileDialog(
+                            qsTr("Select image"),
+                            "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic);;All files (*)")
+                    })
                 } else if (root.hasOwnProperty("customImageFileDialog")) {
                     // Ensure reasonable defaults
                     customImageFileDialog.dialogTitle = qsTr("Select image")

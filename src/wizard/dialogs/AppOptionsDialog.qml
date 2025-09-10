@@ -3,6 +3,7 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
+import QtCore
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -28,6 +29,7 @@ Dialog {
     property var wizardContainer: null
     
     property bool initialized: false
+    property url selectedRepo: ""
     
     // Custom modal overlay background
     Overlay.modal: Rectangle {
@@ -46,6 +48,14 @@ Dialog {
         radius: Style.sectionBorderRadius
         border.color: Style.popupBorderColor
         border.width: Style.sectionBorderWidth
+    }
+
+    Connections {
+        target: imageWriter
+        // Handle native file selection for "Use custom"
+        function onFileSelected(fileUrl) {
+            popup.selectedRepo = fileUrl
+        }
     }
     
     // Main content - direct ColumnLayout without Rectangle wrapper
@@ -110,6 +120,40 @@ Dialog {
                         }
                     }
                 }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacingMedium
+                    
+                    ImTextField {
+                        id: fieldCustomRepository
+                        text: selectedRepo !== "" ? UrlFmt.display(selectedRepo) : ""
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("Select custom Repository")
+                        font.pixelSize: Style.fontSizeInput
+                        readOnly: true
+                    }
+                    
+                    ImButton {
+                        id: browseButton
+                        text: qsTr("Browse")
+                        Layout.minimumWidth: 80
+                        onClicked: {
+                            // Prefer native file dialog via Imager's wrapper, but only if available
+                            if (imageWriter.nativeFileDialogAvailable()) {
+                                // Defer opening the native dialog until after the current event completes
+                                Qt.callLater(function() {
+                                    imageWriter.openFileDialog(
+                                        qsTr("Select Repository"),
+                                        "Imager Repository Files (*.json);;All files (*)")
+                                })
+                            } else {
+                                // Fallback to QML dialog (forced non-native)
+                                repoFileDialog.open()
+                            }
+                        }
+                    }
+                }
             }
         }
         // Spacer
@@ -160,6 +204,10 @@ Dialog {
             chkTelemetry.checked = imageWriter.getBoolSetting("telemetry")
             // Do not load from QSettings; keep ephemeral
             chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false
+            if (imageWriter.customRepo()) {
+                selectedRepo = imageWriter.constantOsListUrl()
+            }
+
             initialized = true
             // Pre-compute final height before opening to avoid first-show reflow
             var desired = contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280
@@ -174,6 +222,9 @@ Dialog {
         imageWriter.setSetting("telemetry", chkTelemetry.checked)
         // Do not persist disable_warnings; set ephemeral flag only
         if (popup.wizardContainer) popup.wizardContainer.disableWarnings = chkDisableWarnings.checked
+        if (popup.selectedRepo !== "") {
+            imageWriter.refreshOsListFrom(selectedRepo)
+        }
     }
     
     onOpened: {
@@ -250,6 +301,20 @@ Dialog {
                     }
                 }
             }
+        }
+    }
+
+    property alias repoFileDialog: repoFileDialog
+
+    ImFileDialog {
+        id: repoFileDialog
+        dialogTitle: qsTr("Select custom repository")
+        nameFilters: ["Imager Repository Files (*.json)", "All files (*)"]
+        onAccepted: {
+            popup.selectedRepo = selectedFile
+        }
+        onRejected: {
+            // No-op; user cancelled
         }
     }
 }
