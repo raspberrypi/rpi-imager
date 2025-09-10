@@ -24,6 +24,7 @@ WizardStepBase {
     showBackButton: true
 
     property bool isWriting: false
+    property bool isVerifying: false
     property bool isComplete: false
     property bool confirmOpen: false
     readonly property bool anyCustomizationsApplied: (
@@ -367,6 +368,7 @@ WizardStepBase {
 
     function onVerifyProgress(now, total) {
         if (root.isWriting) {
+            root.isVerifying = true
             var progress = total > 0 ? (now / total) * 100 : 0
             progressBar.value = progress
             progressText.text = qsTr("Verifying... %1%").arg(Math.round(progress))
