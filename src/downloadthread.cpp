@@ -588,8 +588,11 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
         qDebug() << "_writeFile: captured first block (" << len << ") and advanced file offset via seek";
         return _file.seek(len) ? len : 0;
     }
-    // Avoid nested QtConcurrent usage inside a threadpool worker to prevent deadlocks
-    _hashData(buf, len);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QFuture<void> wh = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
+#else
+    QFuture<void> wh = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
+#endif
 
     qint64 written = _file.write(buf, len);
     _bytesWritten += written;
@@ -598,6 +601,8 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
     {
         qDebug() << "Write error:" << _file.errorString() << "while writing len:" << len;
     }
+
+    wh.waitForFinished();
     return (written < 0) ? 0 : written;
 }
 
