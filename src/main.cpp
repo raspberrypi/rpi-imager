@@ -3,7 +3,8 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-#include <QFileInfo>
+#include <QtCore/QFileInfo>
+#include <QtCore/QFile>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -22,6 +23,7 @@
 #include <QSettings>
 #include <QFont>
 #include <QFontDatabase>
+#include <QCommandLineParser>
 #include <QSessionManager>
 #include <QFileOpenEvent>
 #ifdef Q_OS_DARWIN
@@ -153,156 +155,152 @@ int main(int argc, char *argv[])
     bool enableLanguageSelection = false;
     QSettings settings;
 
-    /* Parse commandline arguments (if any) */
+    /* Parse commandline arguments (if any) using QCommandLineParser */
     QString customRepo;
     QUrl url;
     QUrl callbackUrl;
-    QStringList args = app.arguments();
     int cliRefreshInterval = -1;
     int cliRefreshJitter = -1;
-    for (int i=1; i < args.size(); i++)
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription("Raspberry Pi Imager GUI");
+    parser.addHelpOption();
+    parser.addVersionOption();
+    parser.addOptions({
+        {"repo", "Custom OS list repository URL or local file", "url-or-file", ""},
+        {"qm", "Custom translation .qm file", "file", ""},
+        {"debug", "Output debug messages to console"},
+        {"refresh-interval", "OS list refresh base interval (minutes)", "minutes", ""},
+        {"refresh-jitter", "OS list refresh jitter (minutes)", "minutes", ""},
+        {"enable-language-selection", "Show language selection on startup"},
+        {"disable-telemetry", "Disable telemetry (persist setting)"},
+        {"enable-telemetry", "Use default telemetry setting (clear override)"}
+    });
+
+    parser.addPositionalArgument("image", "Image file/URL or rpi-imager:// callback URL (optional)", "[image]");
+    parser.process(app);
+
+    if (parser.isSet("help"))
     {
-        if (!args[i].startsWith("-") && url.isEmpty())
-        {
-            if (args[i].startsWith("http:", Qt::CaseInsensitive) || args[i].startsWith("https:", Qt::CaseInsensitive))
-            {
-                url = args[i];
-            }
-            else if (args[i].startsWith("rpi-imager:", Qt::CaseInsensitive))
-            {
-                callbackUrl = QUrl(args[i]);
-            }
-            else
-            {
-                QFileInfo fi(args[i]);
+        cerr << parser.helpText() << endl;
+        return 0;
+    }
 
-                if (fi.isFile())
-                {
-                    url = QUrl::fromLocalFile(args[i]);
-                }
-                else
-                {
-                    cerr << "Argument ignored because it is not a regular file: " << args[i] << endl;;
-                }
-            }
-        }
-        else if (args[i] == "--repo")
-        {
-            if (args.size()-i < 2 || args[i+1].startsWith("-"))
-            {
-                cerr << "Missing URL after --repo" << endl;
-                return 1;
-            }
+    if (parser.isSet("version"))
+    {
+        cerr << "rpi-imager version " << imageWriter.constantVersion() << endl;
+        cerr << "Repository: " << imageWriter.constantOsListUrl().toString() << endl;
+        return 0;
+    }
 
-            customRepo = args[++i];
-            if (customRepo.startsWith("http://") || customRepo.startsWith("https://"))
-            {
-                imageWriter.setCustomOsListUrl(customRepo);
-            }
-            else
-            {
-                QFileInfo fi(customRepo);
-                if (!fi.isFile())
-                {
-                    cerr << "Custom repository file does not exist or is not a regular file: " << customRepo << endl;
-                    return 1;
-                }
-
-                imageWriter.setCustomOsListUrl(QUrl::fromLocalFile(customRepo));
-            }
-        }
-        else if (args[i] == "--qm")
+    const QString repoVal = parser.value("repo");
+    if (!repoVal.isEmpty())
+    {
+        customRepo = repoVal;
+        if (customRepo.startsWith("http://") || customRepo.startsWith("https://"))
         {
-            if (args.size()-i < 2 || args[i+1].startsWith("-"))
-            {
-                cerr << "Missing QM file after --qm" << endl;
-                return 1;
-            }
-            customQm = args[++i];
-
-            QFileInfo fi(customQm);
-            if (!fi.isFile())
-            {
-                cerr << "Custom QM file does not exist or is not a regular file: " << customQm << endl;
-                return 1;
-            }
-        }
-        else if (args[i] == "--debug")
-        {
-#ifdef Q_OS_WIN
-            /* Allocate console for debug messages on Windows */
-            if (::AttachConsole(ATTACH_PARENT_PROCESS) || ::AllocConsole())
-            {
-                freopen("CONOUT$", "w", stdout);
-                freopen("CONOUT$", "w", stderr);
-                std::ios::sync_with_stdio();
-                qInstallMessageHandler(consoleMsgHandler);
-            }
-#endif
-        }
-        else if (args[i] == "--refresh-interval")
-        {
-            if (args.size()-i < 2 || args[i+1].startsWith("-"))
-            {
-                cerr << "Missing minutes after --refresh-interval" << endl;
-                return 1;
-            }
-            bool ok = false;
-            int v = args[++i].toInt(&ok);
-            if (!ok || v < 0)
-            {
-                cerr << "Invalid value for --refresh-interval" << endl;
-                return 1;
-            }
-            cliRefreshInterval = v;
-        }
-        else if (args[i] == "--refresh-jitter")
-        {
-            if (args.size()-i < 2 || args[i+1].startsWith("-"))
-            {
-                cerr << "Missing minutes after --refresh-jitter" << endl;
-                return 1;
-            }
-            bool ok = false;
-            int v = args[++i].toInt(&ok);
-            if (!ok || v < 0)
-            {
-                cerr << "Invalid value for --refresh-jitter" << endl;
-                return 1;
-            }
-            cliRefreshJitter = v;
-        }
-        else if (args[i] == "--enable-language-selection")
-        {
-            enableLanguageSelection = true;
-        }
-        else if (args[i] == "--help")
-        {
-            cerr << "rpi-imager [--debug] [--version] [--repo <repository URL>] [--qm <custom qm translation file>] [--refresh-interval <minutes>] [--refresh-jitter <minutes>] [--disable-telemetry] [--enable-language-selection] [<image file to write>]" << endl;
-            cerr << "-OR- rpi-imager --cli [--disable-verify] [--sha256 <expected hash>] [--debug] [--quiet] <image file to write> <destination drive device>" << endl;
-            return 0;
-        }
-        else if (args[i] == "--version")
-        {
-            cerr << "rpi-imager version " << imageWriter.constantVersion() << endl;
-            cerr << "Repository: " << imageWriter.constantOsListUrl().toString() << endl;
-            return 0;
-        }
-        else if (args[i] == "--disable-telemetry")
-        {
-            cerr << "Disabled telemetry" << endl;
-            settings.setValue("telemetry", false);
-            settings.sync();
-        }
-        else if (args[i] == "--enable-telemetry")
-        {
-            cerr << "Using default telemetry setting" << endl;
-            settings.remove("telemetry");
-            settings.sync();
+            imageWriter.setCustomOsListUrl(customRepo);
         }
         else
         {
-            cerr << "Ignoring unknown argument: " << args[i] << endl;
+            QFileInfo fi(customRepo);
+            if (!fi.isFile())
+            {
+                cerr << "Custom repository file does not exist or is not a regular file: " << customRepo << endl;
+                return 1;
+            }
+            imageWriter.setCustomOsListUrl(QUrl::fromLocalFile(customRepo));
+        }
+    }
+
+    const QString qmVal = parser.value("qm");
+    if (!qmVal.isEmpty())
+    {
+        QFileInfo fi(qmVal);
+        if (!fi.isFile())
+        {
+            cerr << "Custom QM file does not exist or is not a regular file: " << qmVal << endl;
+            return 1;
+        }
+        customQm = qmVal;
+    }
+
+#ifdef Q_OS_WIN
+    if (parser.isSet("debug"))
+    {
+        /* Allocate console for debug messages on Windows */
+        if (::AttachConsole(ATTACH_PARENT_PROCESS) || ::AllocConsole())
+        {
+            freopen("CONOUT$", "w", stdout);
+            freopen("CONOUT$", "w", stderr);
+            std::ios::sync_with_stdio();
+            qInstallMessageHandler(consoleMsgHandler);
+        }
+    }
+#endif
+
+    if (parser.isSet("refresh-interval"))
+    {
+        bool ok = false;
+        int v = parser.value("refresh-interval").toInt(&ok);
+        if (!ok || v < 0)
+        {
+            cerr << "Invalid value for --refresh-interval" << endl;
+            return 1;
+        }
+        cliRefreshInterval = v;
+    }
+
+    if (parser.isSet("refresh-jitter"))
+    {
+        bool ok = false;
+        int v = parser.value("refresh-jitter").toInt(&ok);
+        if (!ok || v < 0)
+        {
+            cerr << "Invalid value for --refresh-jitter" << endl;
+            return 1;
+        }
+        cliRefreshJitter = v;
+    }
+
+    enableLanguageSelection = parser.isSet("enable-language-selection");
+
+    if (parser.isSet("disable-telemetry"))
+    {
+        cerr << "Disabled telemetry" << endl;
+        settings.setValue("telemetry", false);
+        settings.sync();
+    }
+    else if (parser.isSet("enable-telemetry"))
+    {
+        cerr << "Using default telemetry setting" << endl;
+        settings.remove("telemetry");
+        settings.sync();
+    }
+
+    const QStringList posArgs = parser.positionalArguments();
+    if (!posArgs.isEmpty())
+    {
+        const QString firstPos = posArgs.first();
+        if (firstPos.startsWith("http:", Qt::CaseInsensitive) || firstPos.startsWith("https:", Qt::CaseInsensitive))
+        {
+            url = firstPos;
+        }
+        else if (firstPos.startsWith("rpi-imager:", Qt::CaseInsensitive))
+        {
+            callbackUrl = QUrl(firstPos);
+        }
+        else
+        {
+            QFileInfo fi(firstPos);
+            if (fi.isFile())
+            {
+                url = QUrl::fromLocalFile(firstPos);
+            }
+            else
+            {
+                cerr << "Argument ignored because it is not a regular file: " << firstPos << endl;
+            }
         }
     }
 

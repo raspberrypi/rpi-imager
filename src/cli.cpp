@@ -50,6 +50,8 @@ Cli::~Cli()
 int Cli::run()
 {
     QCommandLineParser parser;
+    parser.addHelpOption();
+    parser.addVersionOption();
     parser.addOptions({
         {"cli", ""},
         {"disable-verify", "Disable verification"},
@@ -67,6 +69,18 @@ int Cli::run()
     parser.addPositionalArgument("src", "Image file/URL");
     parser.addPositionalArgument("dst", "Destination device");
     parser.process(*_app);
+
+    if (parser.isSet("help"))
+    {
+        std::cout << parser.helpText().toStdString() << std::endl;
+        return 0;
+    }
+    if (parser.isSet("version"))
+    {
+        std::cout << "rpi-imager version " << _imageWriter->constantVersion().toStdString() << std::endl;
+        std::cout << "Repository: " << _imageWriter->constantOsListUrl().toString().toStdString() << std::endl;
+        return 0;
+    }
 
     const QStringList args = parser.positionalArguments();
     if (args.count() != 2)
