@@ -117,6 +117,9 @@ public:
     /* Utility function to return filename part from URL */
     Q_INVOKABLE QString fileNameFromUrl(const QUrl &url);
 
+    /* Function to return current OS list URL in a displayable format */
+    Q_INVOKABLE QString osListUrlForDisplay() const;
+
     /* Function to return OS list URL */
     Q_INVOKABLE QUrl constantOsListUrl() const;
 
@@ -163,7 +166,7 @@ public:
     Q_INVOKABLE bool checkSWCapability(const QString &cap);
 
     /* Utility function to open OS file dialog */
-    Q_INVOKABLE void openFileDialog();
+    Q_INVOKABLE void openFileDialog(const QString &title, const QString &filter);
 
     /* Expose native file dialog availability to QML */
     Q_INVOKABLE bool nativeFileDialogAvailable() { return NativeFileDialog::areNativeDialogsAvailable(); }
@@ -248,6 +251,8 @@ public:
     
     /* Override OS list refresh schedule (in minutes); pass negative to clear override */
     Q_INVOKABLE void setOsListRefreshOverride(int intervalMinutes, int jitterMinutes);
+
+    Q_INVOKABLE void refreshOsListFrom(const QUrl &url);
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */

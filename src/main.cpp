@@ -484,4 +484,3 @@ int main(int argc, char *argv[])
     return rc;
 #endif /* !CLI_ONLY_BUILD */
 }
-
