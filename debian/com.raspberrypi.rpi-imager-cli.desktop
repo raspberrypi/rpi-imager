@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Raspberry Pi Imager (CLI)
+Comment=Raspberry Pi Imager command-line interface
+Exec=rpi-imager
+Icon=rpi-imager
+Categories=System;
+Terminal=true
+NoDisplay=true

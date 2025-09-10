@@ -1,0 +1,7 @@
+#!/usr/bin/dh-exec
+
+[linux-amd64] rpi-imager-cli-x86_64.AppImage => /usr/bin/rpi-imager-cli
+[linux-arm64] rpi-imager-cli-aarch64.AppImage => /usr/bin/rpi-imager-cli
+[linux-armhf] rpi-imager-cli-armhf.AppImage => /usr/bin/rpi-imager-cli
+
+debian/com.raspberrypi.rpi-imager.desktop /usr/share/applications/

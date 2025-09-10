@@ -1,26 +1,31 @@
 # macOS packaging and deployment steps
 
-# Set application name with proper spacing
-set(APP_NAME "Raspberry Pi Imager")
+if(BUILD_CLI_ONLY)
+    # CLI-only build: simple executable, no app bundle
+    message(STATUS "Building CLI-only version for macOS")
+else()
+    # GUI build: create app bundle
+    # Set application name with proper spacing
+    set(APP_NAME "Raspberry Pi Imager")
 
-# Set all required bundle properties
-set(MACOSX_BUNDLE_BUNDLE_NAME "${APP_NAME}")
-set(MACOSX_BUNDLE_EXECUTABLE_NAME "${PROJECT_NAME}")
-set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.raspberrypi.rpi-imager")
-set(MACOSX_BUNDLE_BUNDLE_VERSION "${IMAGER_VERSION_STR}")
-set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${IMAGER_VERSION_STR}")
-set(MACOSX_BUNDLE_LONG_VERSION_STRING "${IMAGER_VERSION_STR}")
-set(MACOSX_BUNDLE_ICON_FILE "rpi-imager.icns")
-string(TIMESTAMP CURRENT_YEAR "%Y")
-set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2020-${CURRENT_YEAR} Raspberry Pi Ltd")
+    # Set all required bundle properties
+    set(MACOSX_BUNDLE_BUNDLE_NAME "${APP_NAME}")
+    set(MACOSX_BUNDLE_EXECUTABLE_NAME "${PROJECT_NAME}")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.raspberrypi.rpi-imager")
+    set(MACOSX_BUNDLE_BUNDLE_VERSION "${IMAGER_VERSION_STR}")
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${IMAGER_VERSION_STR}")
+    set(MACOSX_BUNDLE_LONG_VERSION_STRING "${IMAGER_VERSION_STR}")
+    set(MACOSX_BUNDLE_ICON_FILE "rpi-imager.icns")
+    string(TIMESTAMP CURRENT_YEAR "%Y")
+    set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2020-${CURRENT_YEAR} Raspberry Pi Ltd")
 
-set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES)
+    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE YES)
 
-set(APP_BUNDLE_PATH "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app")
-set(DMG_PATH "${CMAKE_BINARY_DIR}/${APP_NAME}.dmg")
-set(FINAL_DMG_PATH "${CMAKE_BINARY_DIR}/${APP_NAME}-${IMAGER_VERSION_STR}.dmg")
+    set(APP_BUNDLE_PATH "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app")
+    set(DMG_PATH "${CMAKE_BINARY_DIR}/${APP_NAME}.dmg")
+    set(FINAL_DMG_PATH "${CMAKE_BINARY_DIR}/${APP_NAME}-${IMAGER_VERSION_STR}.dmg")
 
-configure_file(
+    configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in"
     "${CMAKE_BINARY_DIR}/Info.plist"
     @ONLY
@@ -190,6 +195,7 @@ else()
         VERBATIM)
 endif()
 
-message(STATUS "Added 'dmg' target to build the macOS DMG installer")
+    message(STATUS "Added 'dmg' target to build the macOS DMG installer")
+endif() # BUILD_CLI_ONLY
 
 

@@ -7,7 +7,7 @@ Standards-Version: 4.1.2
 Homepage: https://www.raspberrypi.com/software
 
 Package: rpi-imager
-Build-Profiles: <!embedded>
+Build-Profiles: <!embedded !cli>
 Architecture: amd64 arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37)
 Recommends: udisks2
@@ -28,8 +28,25 @@ Description: Raspberry Pi Imaging utility for embedded systems
  optimized for embedded systems.
  .
  This version is specifically designed for Raspberry Pi embedded systems:
-  - Uses EGLFS for direct rendering (no desktop environment required)
+  - Uses linuxfb for direct rendering (no desktop environment required)
   - Optimized for network-based installation
-  - Includes proper OpenGL ES dependencies for Raspberry Pi
   - Smaller memory footprint for embedded applications
-  - Supports both framebuffer and DRM/KMS rendering
+  - Supports DRM/KMS rendering
+
+Package: rpi-imager-cli
+Build-Profiles: <cli>
+Architecture: amd64 arm64 armhf
+Depends: ${shlibs:Depends}, ${misc:Depends}, 
+         dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37)
+Suggests: udisks2
+Conflicts: rpi-imager, rpi-imager-embedded
+Description: Raspberry Pi Imaging utility (command-line only)
+ A command-line tool for creating bootable media for Raspberry Pi devices.
+ .
+ This version is optimized for command-line operation:
+  - No GUI components - CLI mode only
+  - Minimal dependencies (Qt Core only)
+  - Perfect for headless servers, automation and Raspberry Pi OS Lite
+  - Smaller package size and memory footprint
+  - Most imaging functionality available via command line
+  - Ideal for scripting and CI/CD pipelines

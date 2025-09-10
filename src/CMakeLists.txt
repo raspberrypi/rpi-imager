@@ -7,6 +7,7 @@ cmake_minimum_required(VERSION 3.22)
 OPTION (ENABLE_CHECK_VERSION "Check for version updates" ON)
 OPTION (ENABLE_TELEMETRY "Enable sending telemetry" ON)
 OPTION (BUILD_EMBEDDED "Build for Embedded Imager" OFF)
+OPTION (BUILD_CLI_ONLY "Build CLI-only version without GUI components" OFF)
 
 # We use FetchContent_Populate() instead of FetchContent_MakeAvailable() to allow EXCLUDE_FROM_ALL
 # This prevents the dependencies from being built by default, which is our desired behavior
@@ -200,11 +201,19 @@ if( IS_BIG_ENDIAN )
     message( FATAL_ERROR "We currently only support 'little endian' CPU architectures" )
 endif( IS_BIG_ENDIAN )
 
-set(SOURCES ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
+# Base sources common to all builds
+set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
-    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "qml.qrc" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
-    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h" "nativefiledialog.cpp" "iconimageprovider.cpp")
+    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
+    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h")
+
+# Add GUI-specific sources only for non-CLI builds
+if(BUILD_CLI_ONLY)
+    set(SOURCES ${SOURCES_BASE})
+else()
+    set(SOURCES ${SOURCES_BASE} "qml.qrc" "nativefiledialog.cpp" "iconimageprovider.cpp")
+endif()
 
 if(BUILD_EMBEDDED)
     set(SOURCES ${SOURCES} "embedded/device_info.cpp")
@@ -212,11 +221,21 @@ else()
     set(SOURCES ${SOURCES} "device_info.cpp")
 endif()
 
-# Find Qt components - DBus only needed on Linux
-if(UNIX AND NOT APPLE)
-    find_package(Qt6 6.9 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools DBus)
+# Find Qt components - different requirements for CLI-only vs GUI builds
+if(BUILD_CLI_ONLY)
+    # CLI-only build: only need Core and optionally DBus
+    if(UNIX AND NOT APPLE)
+        find_package(Qt6 6.9 COMPONENTS Core OPTIONAL_COMPONENTS LinguistTools DBus)
+    else()
+        find_package(Qt6 6.9 COMPONENTS Core OPTIONAL_COMPONENTS LinguistTools)
+    endif()
 else()
-    find_package(Qt6 6.9 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools)
+    # Regular GUI build: need Core, Quick, Svg - DBus only needed on Linux
+    if(UNIX AND NOT APPLE)
+        find_package(Qt6 6.9 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools DBus)
+    else()
+        find_package(Qt6 6.9 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools)
+    endif()
 endif()
 if (Qt6_FOUND)
     set(QT Qt6)
@@ -361,74 +380,84 @@ else()
     add_definitions(-DCHECK_VERSION_DEFAULT=false)
 endif()
 
-qt_policy(SET QTP0001 NEW)
-
-if (QT_KNOWN_POLICY_QTP0004)
-    qt_policy(SET QTP0004 NEW)
+if(BUILD_CLI_ONLY)
+    add_definitions(-DCLI_ONLY_BUILD)
 endif()
 
-set(QT_QML_GENERATE_QMLLS_INI ON)
+# Qt policies only needed for GUI builds
+if(NOT BUILD_CLI_ONLY)
+    qt_policy(SET QTP0001 NEW)
 
-set(IMAGER_QML_FILES
-    main.qml
-    CommonStrings.qml
-    Style.qml
-    wizard/dialogs/ConfirmUnfilterDialog.qml
-    wizard/dialogs/ConfirmSystemDriveDialog.qml
-    wizard/dialogs/KeychainPermissionDialog.qml
-    wizard/dialogs/UpdateAvailableDialog.qml
-    wizard/dialogs/AppOptionsDialog.qml
-    wizard/LanguageSelectionStep.qml
-    qmlcomponents/ImButton.qml
-    qmlcomponents/ImButtonRed.qml
-    qmlcomponents/ImCheckBox.qml
-    qmlcomponents/ImCloseButton.qml
-    qmlcomponents/ImComboBox.qml
-    qmlcomponents/ImFileDialog.qml
-    qmlcomponents/ImPopup.qml
-    qmlcomponents/ImRadioButton.qml
-    qmlcomponents/ImOptionPill.qml
-    qmlcomponents/ImTextField.qml
-    wizard/WizardStepBase.qml
-    wizard/WizardContainer.qml
-    wizard/DeviceSelectionStep.qml
-    wizard/OSSelectionStep.qml
-    wizard/StorageSelectionStep.qml
-    wizard/HostnameCustomizationStep.qml
-    wizard/IfAndFeaturesCustomizationStep.qml
-    wizard/LocaleCustomizationStep.qml
-    wizard/UserCustomizationStep.qml
-    wizard/WifiCustomizationStep.qml
-    wizard/RemoteAccessStep.qml
-    wizard/PiConnectCustomizationStep.qml
-    wizard/WritingStep.qml
-    wizard/DoneStep.qml
-    wizard/components/WizardSectionContainer.qml
-    wizard/components/WizardFormLabel.qml
-    wizard/components/WizardDescriptionText.qml
-)
+    if (QT_KNOWN_POLICY_QTP0004)
+        qt_policy(SET QTP0004 NEW)
+    endif()
 
-set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
-set_source_files_properties(CommonStrings.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+    set(QT_QML_GENERATE_QMLLS_INI ON)
 
-# C++ types exposed to QML
-set(IMAGER_QML_CPP_TYPES
-    imagewriter.cpp
-    hwlistmodel.cpp
-    oslistmodel.cpp
-)
+    set(IMAGER_QML_FILES
+        main.qml
+        CommonStrings.qml
+        Style.qml
+        wizard/dialogs/ConfirmUnfilterDialog.qml
+        wizard/dialogs/ConfirmSystemDriveDialog.qml
+        wizard/dialogs/KeychainPermissionDialog.qml
+        wizard/dialogs/UpdateAvailableDialog.qml
+        wizard/dialogs/AppOptionsDialog.qml
+        wizard/LanguageSelectionStep.qml
+        qmlcomponents/ImButton.qml
+        qmlcomponents/ImButtonRed.qml
+        qmlcomponents/ImCheckBox.qml
+        qmlcomponents/ImCloseButton.qml
+        qmlcomponents/ImComboBox.qml
+        qmlcomponents/ImFileDialog.qml
+        qmlcomponents/ImPopup.qml
+        qmlcomponents/ImRadioButton.qml
+        qmlcomponents/ImOptionPill.qml
+        qmlcomponents/ImTextField.qml
+        wizard/WizardStepBase.qml
+        wizard/WizardContainer.qml
+        wizard/DeviceSelectionStep.qml
+        wizard/OSSelectionStep.qml
+        wizard/StorageSelectionStep.qml
+        wizard/HostnameCustomizationStep.qml
+        wizard/IfAndFeaturesCustomizationStep.qml
+        wizard/LocaleCustomizationStep.qml
+        wizard/UserCustomizationStep.qml
+        wizard/WifiCustomizationStep.qml
+        wizard/RemoteAccessStep.qml
+        wizard/PiConnectCustomizationStep.qml
+        wizard/WritingStep.qml
+        wizard/DoneStep.qml
+        wizard/components/WizardSectionContainer.qml
+        wizard/components/WizardFormLabel.qml
+        wizard/components/WizardDescriptionText.qml
+    )
 
-qt_add_qml_module(${PROJECT_NAME}
-    URI RpiImager
-    VERSION 1.0
-    QML_FILES ${IMAGER_QML_FILES}
-    SOURCES ${IMAGER_QML_CPP_TYPES}
-    NO_CACHEGEN
-    OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RpiImager
-    DEPENDENCIES QtQuick
-    NO_PLUGIN
-    QML_FILES
-)
+    set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+    set_source_files_properties(CommonStrings.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
+    # C++ types exposed to QML
+    set(IMAGER_QML_CPP_TYPES
+        imagewriter.cpp
+        hwlistmodel.cpp
+        oslistmodel.cpp
+    )
+endif()
+
+# Only create QML module for GUI builds
+if(NOT BUILD_CLI_ONLY)
+    qt_add_qml_module(${PROJECT_NAME}
+        URI RpiImager
+        VERSION 1.0
+        QML_FILES ${IMAGER_QML_FILES}
+        SOURCES ${IMAGER_QML_CPP_TYPES}
+        NO_CACHEGEN
+        OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/RpiImager
+        DEPENDENCIES QtQuick
+        NO_PLUGIN
+        QML_FILES
+    )
+endif()
 
 # Because dependencies are typically not available by default on Windows, build bundled code
 if (WIN32)
@@ -441,4 +470,12 @@ endif()
 
 add_dependencies(${PROJECT_NAME} zlibstatic)
 include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+
+# Link different Qt components based on build type
+if(BUILD_CLI_ONLY)
+    # CLI-only build: only link Core and essential libraries
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+else()
+    # Regular GUI build: link all GUI components
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+endif()

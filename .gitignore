@@ -13,6 +13,7 @@ obj-**
 debian/rpi-imager/**
 debian/rpi-imager-amd64/**
 debian/rpi-imager-embedded/**
+debian/rpi-imager-cli/**
 debian/.debhelper**
 debian/*.debhelper**
 debian/files
@@ -36,8 +37,10 @@ appimage-*
 qt-build**
 qt-src**
 build
-build-aarch64
-build-x86_64
+build-**
 
 # IANA Timezone database generated as part of build
 timezones.txt
+
+# build-cli-only related
+test-cli-**

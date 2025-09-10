@@ -54,6 +54,11 @@ static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QStri
 
 int main(int argc, char *argv[])
 {
+#ifdef CLI_ONLY_BUILD
+    /* Force CLI mode for CLI-only builds */
+    Cli cli(argc, argv);
+    return cli.run();
+#else
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--cli") == 0)
@@ -64,6 +69,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    /* GUI mode - all the following code is GUI-specific */
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
@@ -476,5 +482,6 @@ int main(int argc, char *argv[])
     }
 
     return rc;
+#endif /* !CLI_ONLY_BUILD */
 }
 
