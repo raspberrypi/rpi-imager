@@ -85,7 +85,7 @@ WizardStepBase {
                             if (imageWriter.nativeFileDialogAvailable()) {
                                 var home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
                                 var startDir = home && home.length > 0 ? home + "/.ssh" : ""
-                                var filters = "Public Key files (*.pub);;All files (*)"
+                                var filters = CommonStrings.sshFiltersList
                                 var picked = imageWriter.getNativeOpenFileName(qsTr("Select SSH Public Key"), startDir, filters)
                                 if (picked && picked.length > 0) {
                                     var contents = imageWriter.readFileContents(picked)
@@ -187,7 +187,7 @@ WizardStepBase {
     ImFileDialog {
         id: sshKeyFileDialog
         dialogTitle: qsTr("Select SSH Public Key")
-        nameFilters: ["Public Key files (*.pub)", "All files (*)"]
+        nameFilters: CommonStrings.sshFiltersList
         Component.onCompleted: {
             if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
                 // Default to ~/.ssh on macOS
