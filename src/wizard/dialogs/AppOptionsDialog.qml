@@ -145,7 +145,7 @@ Dialog {
                                 Qt.callLater(function() {
                                     imageWriter.openFileDialog(
                                         qsTr("Select Repository"),
-                                        "Imager Repository Files (*.json);;All files (*)")
+                                        CommonStrings.repoFiltersString)
                                 })
                             } else {
                                 // Fallback to QML dialog (forced non-native)
@@ -309,7 +309,7 @@ Dialog {
     ImFileDialog {
         id: repoFileDialog
         dialogTitle: qsTr("Select custom repository")
-        nameFilters: ["Imager Repository Files (*.json)", "All files (*)"]
+        nameFilters: CommonStrings.repoFiltersList
         onAccepted: {
             popup.selectedRepo = selectedFile
         }

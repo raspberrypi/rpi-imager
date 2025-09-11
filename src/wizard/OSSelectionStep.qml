@@ -106,7 +106,7 @@ WizardStepBase {
     property alias customImageFileDialog: customImageFileDialog
     ImFileDialog {
         id: customImageFileDialog
-        nameFilters: ["Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic)", "All files (*)"]
+        nameFilters: CommonStrings.imageFiltersList
         onAccepted: {
             imageWriter.acceptCustomImageFromQml(selectedFile)
         }
@@ -512,15 +512,12 @@ WizardStepBase {
                     Qt.callLater(function() {
                         imageWriter.openFileDialog(
                             qsTr("Select image"),
-                            "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic);;All files (*)")
+                            CommonStrings.imageFiltersString)
                     })
                 } else if (root.hasOwnProperty("customImageFileDialog")) {
                     // Ensure reasonable defaults
                     customImageFileDialog.dialogTitle = qsTr("Select image")
-                    customImageFileDialog.nameFilters = [
-                        "Image files (*.img *.zip *.iso *.gz *.xz *.zst *.wic)",
-                        "All files (*)"
-                    ]
+                    customImageFileDialog.nameFilters = CommonStrings.imageFiltersList
                     // Default to Downloads folder
                     var dl = StandardPaths.writableLocation(StandardPaths.DownloadLocation)
                     if (dl && dl.length > 0) {
