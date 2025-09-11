@@ -892,6 +892,8 @@ void DownloadThread::_writeComplete()
     _filename.replace("/dev/rdisk", "/dev/disk");
 #endif
 
+    emit success();
+
     if (_ejectEnabled)
     {
         eject_disk(_filename.constData());
@@ -903,8 +905,6 @@ void DownloadThread::_writeComplete()
 #endif
 #endif
     }
-
-    emit success();
 }
 
 bool DownloadThread::_verify()
