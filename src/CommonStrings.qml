@@ -14,24 +14,28 @@ Item {
     readonly property string systemDriveText: qsTr("System drives typically contain files essential to the operation of your computer, and may include your personal files (photos, videos, documents).")
 
     // --- New reusable filters ---
+    readonly property string allFilesLabel: qsTr("All files (*)")
+    readonly property var    allFilesList: [ allFilesLabel ]
+    readonly property string allFilesString: allFilesLabel
+
+    function withAll(list)          { return list.concat([allFilesLabel]) }
+    function toFilterString(list)   { return list.join(";;") }
+
     readonly property var imageExtensions: ["*.img","*.zip","*.iso","*.gz","*.xz","*.zst","*.wic"]
 
-    readonly property var imageFiltersList: [
-        qsTr("Image files (%1)").arg(imageExtensions.join(" ")),
-        qsTr("All files (*)")
-    ]
-    readonly property string imageFiltersString: imageFiltersList.join(";;")
+    readonly property var imageFiltersList: withAll([
+        qsTr("Image files (%1)").arg(imageExtensions.join(" "))
+    ])
+    readonly property string imageFiltersString: toFilterString(imageFiltersList)
 
-    readonly property var repoFiltersList: [
-        qsTr("Imager Repository Files (*.json)"),
-        qsTr("All files (*)")
-    ]
-    readonly property string repoFiltersString: repoFiltersList.join(";;")
+    readonly property var repoFiltersList: withAll([
+        qsTr("Imager Repository Files (*.json)")
+    ])
+    readonly property string repoFiltersString: toFilterString(repoFiltersList)
 
     // --- SSH public key filters ---
-    readonly property var sshFiltersList: [
-        qsTr("Public Key files (*.pub)"),
-        qsTr("All files (*)")
-    ]
-    readonly property string sshFiltersString: sshFiltersList.join(";;")
+    readonly property var sshFiltersList: withAll([
+        qsTr("Public Key files (*.pub)")
+    ])
+    readonly property string sshFiltersString: toFilterString(sshFiltersList)
 }
