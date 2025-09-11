@@ -2113,8 +2113,12 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     const bool isUsbGadgetEnabled = s.value("enableUsbGadget").toBool();
 
     // cc_raspberry_pi config for rpios_cloudinit capable OSs
-    if (isRpiosCloudInit && (armInterfaceEnabled)) {
+    if (isRpiosCloudInit && (isUsbGadgetEnabled || armInterfaceEnabled)) {
         push(QStringLiteral("rpi:"), cloud);
+
+        if (isUsbGadgetEnabled) {
+            push(QStringLiteral("  enable_usb_gadget: true"), cloud);
+        }
 
         // configure arm interfaces
         if (armInterfaceEnabled) {
@@ -2146,16 +2150,6 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
                 }
             }
         }
-    }
-
-    if (isRpiosCloudInit && isUsbGadgetEnabled) {
-        // TODO: maybe create configuration struct so struct.package_update to avoid duplicates and typos
-        push(QStringLiteral("package_update: true"), cloud);
-        push(QStringLiteral("package_upgrade: false"), cloud);
-        push(QStringLiteral("packages:"), cloud);
-        push(QStringLiteral("  - rpi-usb-gadget"), cloud);
-        push(QStringLiteral("runcmd:"), cloud);
-        push(QStringLiteral("  - rpi-usb-gadget on"), cloud);
     }
 
     const QString ssid = s.value("wifiSSID").toString();
