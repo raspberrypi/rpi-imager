@@ -1905,7 +1905,7 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
         line(QStringLiteral("fi"), script);
     }
 
-    const QString keyboardLayout = s.value("keyboardLayout").toString().trimmed();
+    const QString keyboardLayout = s.value("keyboard").toString().trimmed();
     if (!keyboardLayout.isEmpty()) {
         line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
         line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_keymap ") + shellQuote(keyboardLayout), script);
@@ -2053,7 +2053,7 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     }
 
     // Parity with legacy QML: include keyboard model/layout when locale is set
-    const QString keyboardLayout = s.value("keyboardLayout").toString().trimmed();
+    const QString keyboardLayout = s.value("keyboard").toString().trimmed();
     if (!keyboardLayout.isEmpty()) {
         push(QStringLiteral("keyboard:"), cloud);
         push(QStringLiteral("  model: pc105"), cloud);
