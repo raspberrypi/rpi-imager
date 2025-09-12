@@ -48,8 +48,6 @@ WizardStepBase {
         
         // Set initial focus on timezone when entering step
         root.initialFocusItem = comboTimezone
-        
-
     }
     
     // Content
