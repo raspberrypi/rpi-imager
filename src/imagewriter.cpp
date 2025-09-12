@@ -69,26 +69,26 @@ namespace {
 } // namespace anonymous
 
 ImageWriter::ImageWriter(QObject *parent)
-    : QObject(parent), 
+    : QObject(parent),
       _cacheManager(nullptr), // Initialize after _embeddedMode
       _waitingForCacheVerification(false),
       _networkManager(this),
-      _src(), _repo(QUrl(QString(OSLIST_URL))), 
+      _src(), _repo(QUrl(QString(OSLIST_URL))),
       _dst(), _parentCategory(), _osName(), _currentLang(), _currentLangcode(), _currentKeyboard(),
       _expectedHash(), _cmdline(), _config(), _firstrun(), _cloudinit(), _cloudinitNetwork(), _initFormat(),
       _downloadLen(0), _extrLen(0), _devLen(0), _dlnow(0), _verifynow(0),
       _drivelist(DriveListModel(this)), // explicitly parented, so QML doesn't delete it
       _selectedDeviceValid(false),
       _writeState(WriteState::Idle),
-      
+
       _cancelledDueToDeviceRemoval(false),
       _hwlist(HWListModel(*this)),
       _oslist(OSListModel(*this)),
-      _engine(nullptr), 
+      _engine(nullptr),
       _networkchecktimer(),
       _osListRefreshTimer(),
       _powersave(),
-      _thread(nullptr), 
+      _thread(nullptr),
       _verifyEnabled(true), _multipleFilesInZip(false), _embeddedMode(false), _online(false),
       _settings(),
       _translations(),
@@ -98,7 +98,7 @@ ImageWriter::ImageWriter(QObject *parent)
 {
     // Initialize CacheManager now that _embeddedMode is properly initialized
     _cacheManager = new CacheManager(_embeddedMode, this);
-    
+
     QString platform;
     if (qobject_cast<QGuiApplication*>(QCoreApplication::instance()) )
     {
@@ -233,10 +233,10 @@ ImageWriter::ImageWriter(QObject *parent)
 
     // Centralised network manager, for fetching OS lists
     connect(&_networkManager, SIGNAL(finished(QNetworkReply *)), this, SLOT(handleNetworkRequestFinished(QNetworkReply *)));
-    
+
     // Connect to CacheManager signals
     connect(_cacheManager, &CacheManager::cacheFileUpdated,
-            this, [this](const QByteArray& hash) { 
+            this, [this](const QByteArray& hash) {
                 qDebug() << "Received cacheFileUpdated signal - refreshing UI for hash:" << hash;
                 // Prefer surgical UI update: notify model rows changed (cache status text)
                 if (_engine) {
@@ -248,9 +248,9 @@ ImageWriter::ImageWriter(QObject *parent)
                     emit osListPrepared();
                 }
             });
-    
+
     connect(_cacheManager, &CacheManager::cacheVerificationComplete,
-            this, [this](bool isValid) { 
+            this, [this](bool isValid) {
                 if (isValid) {
                     // Prefer surgical UI update: notify model rows changed (cache status text)
                     if (_engine) {
@@ -263,9 +263,9 @@ ImageWriter::ImageWriter(QObject *parent)
                     }
                 }
             });
-    
+
     connect(_cacheManager, &CacheManager::cacheInvalidated,
-            this, [this]() { 
+            this, [this]() {
                 // Prefer surgical UI update: notify model rows changed (cache status text)
                 if (_engine) {
                     // Access the OSListModel via getter and mark it dirty without reset
@@ -276,15 +276,15 @@ ImageWriter::ImageWriter(QObject *parent)
                     emit osListPrepared();
                 }
             });
-    
+
     // Connect to specific device removal events
     connect(&_drivelist, &DriveListModel::deviceRemoved,
             this, &ImageWriter::onSelectedDeviceRemoved);
-    
+
     // Start background cache operations early
     _cacheManager->startBackgroundOperations();
-    
-    // Start background drive list polling 
+
+    // Start background drive list polling
     qDebug() << "Starting background drive list polling";
     _drivelist.startPolling();
 
@@ -335,7 +335,7 @@ ImageWriter::~ImageWriter()
     // Stop background drive list polling
     qDebug() << "Stopping background drive list polling";
     _drivelist.stopPolling();
-    
+
     // Ensure any running thread is properly cleaned up
     if (_thread) {
         if (_thread->isRunning()) {
@@ -350,7 +350,7 @@ ImageWriter::~ImageWriter()
         delete _thread;
         _thread = nullptr;
     }
-    
+
     if (_trans)
     {
         QCoreApplication::removeTranslator(_trans);
@@ -397,12 +397,12 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     _dst = device;
     _devLen = deviceSize;
     _selectedDeviceValid = !device.isEmpty();
-    
+
     // Reset write completion state when device selection changes
     if (device.isEmpty()) {
         setWriteState(WriteState::Idle);
     }
-    
+
     qDebug() << "Device selection changed to:" << device;
 }
 
@@ -468,7 +468,7 @@ void ImageWriter::startWrite()
         emit error(tr("Cannot start write. %1").arg(reason));
         return;
     }
-        
+
     setWriteState(WriteState::Preparing);
 
     if (_src.toString() == "internal://format")
@@ -485,7 +485,7 @@ void ImageWriter::startWrite()
 
     QByteArray urlstr = _src.toString(_src.FullyEncoded).toLatin1();
     QString lowercaseurl = urlstr.toLower();
-    const bool compressed = lowercaseurl.endsWith(".zip") || 
+    const bool compressed = lowercaseurl.endsWith(".zip") ||
                             lowercaseurl.endsWith(".xz") ||
                             lowercaseurl.endsWith(".bz2") ||
                             lowercaseurl.endsWith(".gz") ||
@@ -521,7 +521,7 @@ void ImageWriter::startWrite()
             _extrLen = _downloadLen;
         else if (lowercaseurl.endsWith(".xz"))
             _parseXZFile();
-        else 
+        else
             _parseCompressedFile();
     }
 
@@ -542,7 +542,7 @@ void ImageWriter::startWrite()
     {
         // Use background cache manager to check cache file integrity
         CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
-        
+
         if (cacheStatus.verificationComplete && cacheStatus.isValid)
         {
             qDebug() << "Using verified cache file (background verified):" << cacheStatus.cacheFileName;
@@ -575,13 +575,13 @@ void ImageWriter::startWrite()
             {
                 qDebug() << "Verification is already in progress. Waiting for it to complete.";
             }
-            
+
             // Set flag to indicate we're waiting for cache verification
             _waitingForCacheVerification = true;
-            
+
             // Emit signal to update UI for cache verification
             emit cacheVerificationStarted();
-            
+
             // Don't proceed with write yet - wait for cache verification to complete
             return;
         }
@@ -614,13 +614,13 @@ void ImageWriter::startWrite()
             _thread = nullptr;
         }
     });
-    
+
     // Connect to progress signals if this is a DownloadExtractThread
     DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
     if (downloadThread) {
-        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged, 
+        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
                 this, &ImageWriter::downloadProgress);
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged, 
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, &ImageWriter::verifyProgress);
         // Also transition state to Verifying when verify progress first arrives
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
@@ -629,7 +629,7 @@ void ImageWriter::startWrite()
                         setWriteState(WriteState::Verifying);
                 });
     }
-    
+
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
     _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
@@ -691,7 +691,7 @@ void ImageWriter::cancelWrite()
         skipCacheVerification();
         return;
     }
-    
+
     if (_thread)
     {
         connect(_thread, SIGNAL(finished()), SLOT(onCancelled()));
@@ -723,20 +723,20 @@ void ImageWriter::skipCacheVerification()
         qDebug() << "skipCacheVerification called but not waiting for cache verification";
         return;
     }
-    
+
     qDebug() << "User skipped cache verification, proceeding with download";
-    
+
     _waitingForCacheVerification = false;
-    
+
     // Disconnect cache verification signals
     disconnect(_cacheManager, &CacheManager::cacheVerificationProgress,
                this, &ImageWriter::onCacheVerificationProgress);
     disconnect(_cacheManager, &CacheManager::cacheVerificationComplete,
                this, &ImageWriter::onCacheVerificationComplete);
-    
+
     // Emit signal to update UI (cache verification finished)
     emit cacheVerificationFinished();
-    
+
     // Proceed with download (not using cache)
     qDebug() << "Cache verification skipped, invalidating cache and proceeding with download";
     _cacheManager->invalidateCache();
@@ -751,7 +751,7 @@ void ImageWriter::onCancelled()
     {
         _thread = nullptr;
     }
-    
+
     // If cancellation was due to device removal, emit a dedicated signal (localization-safe for QML routing)
     if (_cancelledDueToDeviceRemoval) {
         _cancelledDueToDeviceRemoval = false;
@@ -1128,7 +1128,7 @@ QJsonDocument ImageWriter::getFilteredOSlistDocument() {
     if (_device_info->hardwareTagsSet()) {
         _deviceFilter = _device_info->getHardwareTags();
     }
-    
+
     {
         if (!_completeOsList.isEmpty()) {
             if (!_deviceFilter.isEmpty()) {
@@ -1286,7 +1286,7 @@ OSListModel *ImageWriter::getOSList()
 void ImageWriter::startProgressPolling()
 {
     _powersave.applyBlock(tr("Downloading and writing image"));
-    _dlnow = 0; 
+    _dlnow = 0;
     _verifynow = 0;
 }
 
@@ -1487,23 +1487,23 @@ bool ImageWriter::isOnline()
         QNetworkRequest request(QUrl(TIME_URL));
         request.setTransferTimeout(3000); // 3 seconds
         QNetworkReply* response = _networkManager.get(request);
-        
+
         // Connect to the finished signal to ensure headers are available
         QObject::connect(response, &QNetworkReply::finished, [response, this]() {
             if (response->hasRawHeader("date"))
                 {
-                bool timeSet = false;                
+                bool timeSet = false;
                 // systemd-timesyncd will change the timestamp of this file to indicate that the time has been set
                 QString filePath = "/var/lib/systemd/timesync/clock";
                 QDateTime clock_time;
                 QFileInfo fileInfo(filePath);
-                
+
                 if (fileInfo.exists()) {clock_time = fileInfo.lastModified();}
 
                 filePath = "/lib/systemd/systemd-timesyncd";
                 QDateTime creation_time;
                 QFileInfo fileInfo2(filePath);
-                
+
                 if (fileInfo2.exists())
                     creation_time = fileInfo2.lastModified();
                 if (clock_time > creation_time)
@@ -1696,9 +1696,10 @@ QStringList ImageWriter::getTimezoneList()
 {
     QStringList timezones;
     QFile f(":/timezones.txt");
-    if ( f.open(f.ReadOnly) )
-    {
-        timezones = QString(f.readAll()).split('\n');
+    if (f.open(QFile::ReadOnly | QFile::Text)) {
+        timezones = QString::fromUtf8(f.readAll()).split('\n');
+        for (QString &s : timezones)
+            s = s.trimmed();
         f.close();
     }
 
@@ -1720,17 +1721,16 @@ QStringList ImageWriter::getCountryList()
 
 QStringList ImageWriter::getKeymapLayoutList()
 {
-    QStringList keymaps;
     QFile f(":/keymap-layouts.txt");
-    if ( f.open(f.ReadOnly) )
-    {
-        keymaps = QString(f.readAll()).trimmed().split('\n');
-        f.close();
-    }
+    if (!f.open(QFile::ReadOnly | QFile::Text))
+        return {};
 
-    return keymaps;
+    QStringList list = QString::fromUtf8(f.readAll())
+                           .split('\n', Qt::SkipEmptyParts);
+    for (QString &s : list)
+        s = s.trimmed();
+    return list;
 }
-
 
 QString ImageWriter::getSSID()
 {
@@ -1742,31 +1742,31 @@ QString ImageWriter::getPSK()
 #ifdef Q_OS_DARWIN
     /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
      * Request user permission through QML dialog instead of QtWidgets QMessageBox. */
-    
+
     // Set up a flag to track if permission was granted
     _keychainPermissionGranted = false;
     _keychainPermissionReceived = false;
-    
+
     // Emit signal to show QML permission dialog
     emit keychainPermissionRequested();
-    
+
     // Wait for user response (with timeout)
     QEventLoop loop;
     QTimer timeout;
     timeout.setSingleShot(true);
     timeout.setInterval(30000); // 30 second timeout
-    
+
     connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
     connect(this, &ImageWriter::keychainPermissionResponseReceived, &loop, &QEventLoop::quit);
-    
+
     timeout.start();
     loop.exec();
-    
+
     if (!_keychainPermissionReceived || !_keychainPermissionGranted) {
         qDebug() << "Keychain access denied or timed out";
         return QString();
     }
-    
+
     qDebug() << "Keychain access granted by user";
 #endif
 
@@ -2489,20 +2489,20 @@ void ImageWriter::onCacheVerificationComplete(bool isValid)
     if (!_waitingForCacheVerification) {
         return; // Not waiting for this verification
     }
-    
+
     _waitingForCacheVerification = false;
-    
+
     // Disconnect signals to avoid receiving future notifications
     disconnect(_cacheManager, &CacheManager::cacheVerificationProgress,
                this, &ImageWriter::onCacheVerificationProgress);
     disconnect(_cacheManager, &CacheManager::cacheVerificationComplete,
                this, &ImageWriter::onCacheVerificationComplete);
-    
+
     qDebug() << "Cache verification completed - valid:" << isValid;
-    
+
     // Emit signal to update UI (cache verification finished)
     emit cacheVerificationFinished();
-    
+
     // Continue with the rest of startWrite() logic
     _continueStartWriteAfterCacheVerification(isValid);
 }
@@ -2510,12 +2510,12 @@ void ImageWriter::onCacheVerificationComplete(bool isValid)
 void ImageWriter::onSelectedDeviceRemoved(const QString &device)
 {
     qDebug() << "Device removal detected:" << device << "Current selected:" << _dst << "State:" << static_cast<int>(_writeState);
-    
+
     // Only react if this is the device we currently have selected
     if (!_dst.isEmpty() && _dst == device) {
         qDebug() << "Selected device" << device << "was removed - invalidating selection";
         _selectedDeviceValid = false;
-        
+
         // If we're currently writing to this device, cancel the write immediately
         if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing || _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing) {
             qDebug() << "Cancelling write operation due to device removal";
@@ -2536,7 +2536,7 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
 void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
 {
     QString urlstr = _src.toString(_src.FullyEncoded);
-    
+
     if (cacheIsValid) {
         QString cacheFilePath = _cacheManager->getCacheFilePath(_expectedHash);
         qDebug() << "Using verified cache file:" << cacheFilePath;
@@ -2545,7 +2545,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         qDebug() << "Cache file invalid, invalidating and using original URL";
         _cacheManager->invalidateCache();
     }
-    
+
     // Proactive validation for local sources before spawning threads
     if (QUrl(urlstr).isLocalFile())
     {
@@ -2593,13 +2593,13 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
             _thread = nullptr;
         }
     });
-    
+
     // Connect to progress signals if this is a DownloadExtractThread
     DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
     if (downloadThread) {
-        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged, 
+        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
                 this, &ImageWriter::downloadProgress);
-        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged, 
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, &ImageWriter::verifyProgress);
         // Also transition state to Verifying when verify progress first arrives
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
@@ -2608,7 +2608,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                         setWriteState(WriteState::Verifying);
                 });
     }
-    
+
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
     _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
@@ -2675,9 +2675,9 @@ void ImageWriter::reboot()
 void ImageWriter::openUrl(const QUrl &url)
 {
     qDebug() << "Opening URL:" << url.toString();
-    
+
     bool success = false;
-    
+
 #ifdef Q_OS_LINUX
     // Use xdg-open on Linux (including AppImage environments)
     int result = QProcess::execute("xdg-open", QStringList() << url.toString());
@@ -2686,7 +2686,7 @@ void ImageWriter::openUrl(const QUrl &url)
         qWarning() << "xdg-open failed with exit code:" << result;
     }
 #elif defined(Q_OS_DARWIN)
-    // Use open on macOS  
+    // Use open on macOS
     int result = QProcess::execute("open", QStringList() << url.toString());
     success = (result == 0);
     if (!success) {
