@@ -70,7 +70,7 @@ int Cli::run()
     const QStringList args = parser.positionalArguments();
     if (args.count() != 2)
     {
-        std::cerr << "Usage: --cli [--disable-verify] [--disable-eject] [--sha256 <expected hash> [--cache-file <cache file>]] [--first-run-script <script>] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
+        std::cerr << "Usage: --cli [--enable-writing-system-drives] [--disable-verify] [--disable-eject] [--sha256 <expected hash> [--cache-file <cache file>]] [{--first-run-script <script> | --cloudinit-networkconfig <network-config file> --cloudinit-userdata <user-data file>}] [--debug] [--quiet] <image file to write> <destination drive device>" << std::endl;
         return 1;
     }
 
@@ -148,7 +148,7 @@ int Cli::run()
         }
     }
 
-    if (!parser.value("cloudinit-userdata").isEmpty())
+    if (!parser.value("cloudinit-userdata").isEmpty() && !parser.value("cloudinit-networkconfig").isEmpty())
     {
         QByteArray userData, networkConfig;
         QFile f(parser.value("cloudinit-userdata"));
