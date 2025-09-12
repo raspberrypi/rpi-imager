@@ -214,11 +214,19 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
 
                 ImButton {
+                    id: quitNoButton
                     text: qsTr("No")
+                    activeFocusOnTab: true
+                    KeyNavigation.tab: quitYesButton
+                    KeyNavigation.backtab: quitYesButton
                     onClicked: quitDialog.close()
                 }
                 ImButtonRed {
+                    id: quitYesButton
                     text: qsTr("Yes")
+                    activeFocusOnTab: true
+                    KeyNavigation.tab: quitNoButton
+                    KeyNavigation.backtab: quitNoButton
                     onClicked: {
                         window.forceQuit = true
                         Qt.quit()
@@ -226,6 +234,13 @@ ApplicationWindow {
                 }
             }
         }
+        
+        onOpened: {
+            quitNoButton.forceActiveFocus()
+        }
+        
+        // Global keyboard shortcuts
+        Keys.onEscapePressed: quitDialog.close()
     }
 
     KeychainPermissionDialog {
