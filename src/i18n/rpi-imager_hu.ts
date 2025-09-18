@@ -43,6 +43,22 @@
         <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
         <translation>Ha letiltja a figyelmeztetéseket, a Raspberry Pi Imager &lt;b&gt;nem jelenít meg megerősítést az írás előtt&lt;/b&gt;. Rendszermeghajtó kiválasztásakor továbbra is &lt;b&gt;pontosan be kell írnia&lt;/b&gt; a nevét.</translation>
     </message>
+    <message>
+        <source>Select custom Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse</source>
+        <translation type="unfinished">Böngészés</translation>
+    </message>
+    <message>
+        <source>Select Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select custom repository</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -57,6 +73,22 @@
     <message>
         <source>System drives typically contain files essential to the operation of your computer, and may include your personal files (photos, videos, documents).</source>
         <translation>A rendszermeghajtók általában a számítógép működéséhez szükséges fájlokat tartalmazzák, és személyes fájlokat (fotók, videók, dokumentumok) is tartalmazhatnak.</translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Image files (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Imager Repository Files (*.json)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Public Key files (*.pub)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -112,8 +144,8 @@
 <context>
     <name>DeviceSelectionStep</name>
     <message>
-        <source>Select your Raspberry Pi Device</source>
-        <translation>Válassza ki a Raspberry Pi eszközt</translation>
+        <source>Select your Raspberry Pi device</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -159,8 +191,8 @@
         <translation>✓ SSH engedélyezve</translation>
     </message>
     <message>
-        <source>✓ Pi Connect enabled</source>
-        <translation>✓ Pi Connect engedélyezve</translation>
+        <source>✓ Raspberry Pi Connect enabled</source>
+        <translation>✓ Raspberry Pi Connect engedélyezve</translation>
     </message>
     <message>
         <source>✓ Locale configured</source>
@@ -224,22 +256,6 @@
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Az írás ellenőrzése sikertelen. Az SD-kártya tartalma eltér a ráírt adatoktól.</translation>
-    </message>
-    <message>
-        <source>Error extracting archive: missing cached data</source>
-        <translation>Hiba az archívum kibontásakor: hiányzó gyorsítótárazott adat</translation>
-    </message>
-    <message>
-        <source>Error extracting archive: cannot open in memory</source>
-        <translation>Hiba az archívum kibontásakor: nem nyitható meg memóriában</translation>
-    </message>
-    <message>
-        <source>Error extracting archive: cache unavailable</source>
-        <translation>Hiba az archívum kibontásakor: a gyorsítótár nem érhető el</translation>
-    </message>
-    <message>
-        <source>Error extracting archive: cannot open cache file</source>
-        <translation>Hiba az archívum kibontásakor: nem nyitható meg a gyorsítótár fájl</translation>
     </message>
 </context>
 <context>
@@ -443,6 +459,69 @@
     </message>
 </context>
 <context>
+    <name>IfAndFeaturesCustomizationStep</name>
+    <message>
+        <source>Customization: Interfaces &amp; Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable hardware interfaces and connectivity options.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interfaces</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable I²C</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable SPI</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Serial:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable USB Gadget Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Learn more about USB Gadget Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Console</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only continue if you are sure you know what you are doing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Mégse</translation>
+    </message>
+    <message>
+        <source>I understand, continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ImFileDialog</name>
     <message>
         <source>Select File</source>
@@ -606,12 +685,12 @@
         <translation>Üdvözöljük</translation>
     </message>
     <message>
-        <source>Choose your language for Raspberry Pi Imager.</source>
-        <translation>Válassza ki a Raspberry Pi Imager nyelvét.</translation>
-    </message>
-    <message>
         <source>Language:</source>
         <translation>Nyelv:</translation>
+    </message>
+    <message>
+        <source>Choose your language for Raspberry Pi Imager</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -644,20 +723,20 @@
 <context>
     <name>LocaleCustomizationStep</name>
     <message>
-        <source>Configure timezone and keyboard layout for your Raspberry Pi.</source>
-        <translation>Állítsa be az időzónát és a billentyűzetkiosztást a Raspberry Pi-hez.</translation>
-    </message>
-    <message>
-        <source>Timezone:</source>
-        <translation>Időzóna:</translation>
-    </message>
-    <message>
         <source>Keyboard layout:</source>
         <translation>Billentyűzetkiosztás:</translation>
     </message>
     <message>
         <source>Customisation: Choose locale</source>
         <translation>Testreszabás: Területi beállítások</translation>
+    </message>
+    <message>
+        <source>Configure the time zone and keyboard layout for your Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Time zone:</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -669,14 +748,6 @@
 </context>
 <context>
     <name>OSSelectionStep</name>
-    <message>
-        <source>Choose Operating System</source>
-        <translation>Válasszon operációs rendszert</translation>
-    </message>
-    <message>
-        <source>Select the operating system to install on your Raspberry Pi</source>
-        <translation>Válassza ki a Raspberry Pi-re telepítendő operációs rendszert</translation>
-    </message>
     <message>
         <source>Local - %1</source>
         <translation>Helyi – %1</translation>
@@ -705,6 +776,14 @@
         <source>Select image</source>
         <translation>Kép kiválasztása</translation>
     </message>
+    <message>
+        <source>Choose operating system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an operating system to install on your Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>PiConnectCustomizationStep</name>
@@ -713,12 +792,8 @@
         <translation>Testreszabás: Raspberry Pi Connect</translation>
     </message>
     <message>
-        <source>Sign in to receive a token, then enable Connect.</source>
-        <translation>Jelentkezzen be a token fogadásához, majd engedélyezze a Connectet.</translation>
-    </message>
-    <message>
         <source>Enable Raspberry Pi Connect</source>
-        <translation>Raspberry Pi Connect engedélyezése</translation>
+        <translation>Raspberry Raspberry Pi Connect engedélyezése</translation>
     </message>
     <message>
         <source>What is Raspberry Pi Connect?</source>
@@ -726,7 +801,7 @@
     </message>
     <message>
         <source>Open Raspberry Pi Connect</source>
-        <translation>Raspberry Pi Connect megnyitása</translation>
+        <translation>Raspberry Raspberry Pi Connect megnyitása</translation>
     </message>
     <message>
         <source>Status:</source>
@@ -740,20 +815,16 @@
         <source>Waiting for token</source>
         <translation>Várakozás tokenre</translation>
     </message>
+    <message>
+        <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RemoteAccessStep</name>
     <message>
-        <source>Configure SSH access.</source>
-        <translation>SSH hozzáférés beállítása.</translation>
-    </message>
-    <message>
         <source>Enable SSH</source>
         <translation>SSH engedélyezése</translation>
-    </message>
-    <message>
-        <source>Authentication Mechanism:</source>
-        <translation>Hitelesítési mód:</translation>
     </message>
     <message>
         <source>Use password authentication</source>
@@ -764,20 +835,12 @@
         <translation>Nyilvános kulcsos hitelesítés használata</translation>
     </message>
     <message>
-        <source>Enter public key or click Browse</source>
-        <translation>Adja meg a nyilvános kulcsot vagy kattintson a Böngészésre</translation>
-    </message>
-    <message>
         <source>Browse</source>
         <translation>Böngészés</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
         <translation>SSH nyilvános kulcs kiválasztása</translation>
-    </message>
-    <message>
-        <source>SSH key loaded from file</source>
-        <translation>SSH-kulcs betöltve a fájlból</translation>
     </message>
     <message>
         <source>Customisation: SSH authentication</source>
@@ -787,16 +850,28 @@
         <source>Learn about SSH</source>
         <translation>Tudjon meg többet az SSH-ról</translation>
     </message>
+    <message>
+        <source>Configure SSH access</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Authentication mechanism:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter public key or click BROWSE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read SSH key file</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>StorageSelectionStep</name>
     <message>
         <source>No storage devices found</source>
         <translation>Nem található tárolóeszköz</translation>
-    </message>
-    <message>
-        <source>Exclude System Drives</source>
-        <translation>Rendszermeghajtók kizárása</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
@@ -809,6 +884,10 @@
     <message>
         <source>Select your storage device</source>
         <translation>Válassza ki a tárolóeszközt</translation>
+    </message>
+    <message>
+        <source>Exclude system drives</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -832,10 +911,6 @@
 </context>
 <context>
     <name>UserCustomizationStep</name>
-    <message>
-        <source>Create a user account for your Raspberry Pi.</source>
-        <translation>Hozzon létre felhasználói fiókot a Raspberry Pi-hez.</translation>
-    </message>
     <message>
         <source>Username:</source>
         <translation>Felhasználónév:</translation>
@@ -876,13 +951,13 @@
         <source>Re-enter to change password</source>
         <translation>A jelszó módosításához írja be újra</translation>
     </message>
+    <message>
+        <source>Create a user account for your Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WifiCustomizationStep</name>
-    <message>
-        <source>Configure wireless LAN settings.</source>
-        <translation>Vezeték nélküli hálózat beállítása.</translation>
-    </message>
     <message>
         <source>SSID:</source>
         <translation>SSID:</translation>
@@ -912,8 +987,12 @@
         <translation>Testreszabás: Wi‑Fi választása</translation>
     </message>
     <message>
-        <source>Saved (hidden) — leave blank to keep</source>
-        <translation>Elmentve (rejtve) — hagyja üresen a megtartáshoz</translation>
+        <source>Configure wireless LAN settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved (hidden) — leave blank to clear</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -937,10 +1016,6 @@
     <message>
         <source>Done</source>
         <translation>Kész</translation>
-    </message>
-    <message>
-        <source>Setup Steps</source>
-        <translation>Beállítási lépések</translation>
     </message>
     <message>
         <source>Finish</source>
@@ -978,6 +1053,14 @@
         <source>App Options</source>
         <translation>Alkalmazás beállításai</translation>
     </message>
+    <message>
+        <source>Interfaces &amp; Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Setup steps</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardStepBase</name>
@@ -996,10 +1079,6 @@
 </context>
 <context>
     <name>WritingStep</name>
-    <message>
-        <source>Write Image</source>
-        <translation>Kép írása</translation>
-    </message>
     <message>
         <source>Review your choices and write the image to the storage device</source>
         <translation>Ellenőrizze a választásait, majd írja a képet a tárolóeszközre</translation>
@@ -1029,10 +1108,6 @@
         <translation>Nincs eszköz kiválasztva</translation>
     </message>
     <message>
-        <source>Operating System:</source>
-        <translation>Operációs rendszer:</translation>
-    </message>
-    <message>
         <source>No image selected</source>
         <translation>Nincs kép kiválasztva</translation>
     </message>
@@ -1045,10 +1120,6 @@
         <translation>Nincs tároló kiválasztva</translation>
     </message>
     <message>
-        <source>Ready to write the image to the storage device. All existing data will be erased.</source>
-        <translation>Készen áll az image írására a tárolóeszközre. Minden meglévő adat törlődik.</translation>
-    </message>
-    <message>
         <source>• Hostname configured</source>
         <translation>• Gépnév beállítva</translation>
     </message>
@@ -1059,10 +1130,6 @@
     <message>
         <source>• SSH enabled</source>
         <translation>• SSH engedélyezve</translation>
-    </message>
-    <message>
-        <source>• Pi Connect enabled</source>
-        <translation>• Pi Connect engedélyezve</translation>
     </message>
     <message>
         <source>• Locale configured</source>
@@ -1113,14 +1180,6 @@
         <translation>Az írás sikertelen: %1</translation>
     </message>
     <message>
-        <source>Skip verification</source>
-        <translation>Ellenőrzés kihagyása</translation>
-    </message>
-    <message>
-        <source>Ready to write your customised image to the storage device. All existing data will be erased.</source>
-        <translation>Készen áll a testreszabott kép írására a tárolóeszközre. Minden meglévő adat törlődik.</translation>
-    </message>
-    <message>
         <source>Customisations to apply:</source>
         <translation>Alkalmazandó testreszabások:</translation>
     </message>
@@ -1131,6 +1190,38 @@
     <message>
         <source>Finalising...</source>
         <translation>Befejezés...</translation>
+    </message>
+    <message>
+        <source>Write image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready to write your customised image to your storage device. All existing data will be erased.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready to write the image to your storage device. All existing data will be erased.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• Raspberry Raspberry Pi Connect enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• USB Gadget enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• I2C enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>• SPI enabled</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
