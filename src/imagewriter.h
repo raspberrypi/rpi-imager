@@ -337,7 +337,7 @@ protected:
     QTranslator *_trans;
     int _refreshIntervalOverrideMinutes;
     int _refreshJitterOverrideMinutes;
-    // Session-only storage for Pi Connect token
+    // Session-only storage for Raspberry Pi Connect token
     QString _piConnectToken;
 
     void _parseCompressedFile();

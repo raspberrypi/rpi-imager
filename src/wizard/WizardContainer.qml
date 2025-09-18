@@ -26,6 +26,10 @@ Item {
     property int currentStep: 0
     readonly property int totalSteps: 12
     
+    // Track which steps have been made permissible/unlocked for navigation
+    // Each bit represents a step: bit 0 = Device, bit 1 = OS, etc.
+    property int permissibleStepsBitmap: 1  // Start with Device step (bit 0) always permissible
+    
     // Track writing state
     property bool isWriting: false
     
@@ -33,6 +37,10 @@ Item {
     property string selectedDeviceName: ""
     property string selectedOsName: ""
     property string selectedStorageName: ""
+    
+    // Track previous selections to detect changes
+    property string previousDeviceName: ""
+    property string previousOsName: ""
 
     property bool supportsSerialConsoleOnly: false
     property bool supportsUsbGadget: false
@@ -44,7 +52,7 @@ Item {
     property bool wifiConfigured: false
     property bool sshEnabled: false
     property bool piConnectEnabled: false
-    // Whether selected OS supports Raspberry Pi Connect customization
+    // Whether selected OS supports Raspberry Raspberry Pi Connect customization
     property bool piConnectAvailable: false
 
     // Interfaces & Features
@@ -143,6 +151,11 @@ Item {
     }
 
     function getCustomizationSubstepLabels() {
+        // Only return labels if customization is supported
+        if (!customizationSupported) {
+            return []
+        }
+        
         var labels = [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote Access")]
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
@@ -152,6 +165,90 @@ Item {
         }
 
         return labels
+    }
+
+    function isCustomizationSubstepConfigured(subIndex) {
+        // Map the display index to the actual step based on what's available
+        var labels = getCustomizationSubstepLabels()
+        if (subIndex >= labels.length) return false
+        
+        var stepLabel = labels[subIndex]
+        if (stepLabel === qsTr("Hostname")) return hostnameConfigured
+        if (stepLabel === qsTr("Locale")) return localeConfigured
+        if (stepLabel === qsTr("User")) return userConfigured
+        if (stepLabel === qsTr("Wi‑Fi")) return wifiConfigured
+        if (stepLabel === qsTr("Remote Access")) return sshEnabled
+        if (stepLabel === qsTr("Raspberry Pi Connect")) return piConnectEnabled
+        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || ifSerial !== "" || featUsbGadgetEnabled)
+        
+        return false
+    }
+
+    // Helper functions for managing permissible steps bitmap
+    function markStepPermissible(stepIndex) {
+        var bit = 1 << stepIndex
+        permissibleStepsBitmap |= bit
+    }
+    
+    function isStepPermissible(stepIndex) {
+        var bit = 1 << stepIndex
+        return (permissibleStepsBitmap & bit) !== 0
+    }
+    
+    function invalidateStepsFrom(fromStepIndex) {
+        // Clear all bits from the specified step onwards
+        var mask = (1 << fromStepIndex) - 1  // Keep only bits before fromStepIndex
+        permissibleStepsBitmap &= mask
+    }
+    
+    function invalidateDeviceDependentSteps() {
+        // When device changes, invalidate all steps after device selection
+        invalidateStepsFrom(stepOSSelection)
+        
+        // Clear device-dependent state
+        selectedOsName = ""
+        selectedStorageName = ""
+        customizationSupported = true  // Reset to default
+        
+        // Clear all customization flags
+        hostnameConfigured = false
+        localeConfigured = false
+        userConfigured = false
+        wifiConfigured = false
+        sshEnabled = false
+        piConnectEnabled = false
+        piConnectAvailable = false
+        rpiosCloudInitAvailable = false
+        ifI2cEnabled = false
+        ifSpiEnabled = false
+        ifSerial = ""
+        featUsbGadgetEnabled = false
+    }
+    
+    function invalidateOSDependentSteps() {
+        // When OS changes, invalidate storage and later steps
+        invalidateStepsFrom(stepStorageSelection)
+        
+        // Clear OS-dependent state
+        selectedStorageName = ""
+        
+        // Clear customization flags since they depend on the specific OS
+        // The OS selection logic will set customizationSupported appropriately
+        // and clear these again if needed, but we clear them proactively here
+        hostnameConfigured = false
+        localeConfigured = false
+        userConfigured = false
+        wifiConfigured = false
+        sshEnabled = false
+        piConnectEnabled = false
+        
+        // Reset OS capability flags - these will be set correctly by OS selection
+        piConnectAvailable = false
+        rpiosCloudInitAvailable = false
+        ifI2cEnabled = false
+        ifSpiEnabled = false
+        ifSerial = ""
+        featUsbGadgetEnabled = false
     }
 
 
@@ -197,11 +294,13 @@ Item {
                     id: sidebarColumn
                     width: parent.width
                     spacing: Style.spacingXSmall
+                    // Add right margin when scrollbar is visible to prevent overlap
+                    anchors.rightMargin: (sidebarScroll.contentHeight > sidebarScroll.height ? Style.scrollBarWidth : 0)
                 
                 // Header
                 Text {
                     id: sidebarHeader
-                    text: qsTr("Setup Steps")
+                    text: qsTr("Setup steps")
                     font.pixelSize: Style.fontSizeHeading
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -229,10 +328,14 @@ Item {
                         radius: 0
                         property bool isClickable: (function(){
                             if (root.isWriting) return false
-                            var maxIndex = root.getSidebarIndex(root.currentStep)
                             // If customization not supported, do not allow navigating back to customization group
                             if (!root.customizationSupported && stepItem.index === 3) return false
-                            return stepItem.index < maxIndex
+                            
+                            // Get the step index for this sidebar item
+                            var targetStep = root.getWizardStepFromSidebarIndex(stepItem.index)
+                            
+                            // Allow navigation to any permissible step or backward navigation
+                            return root.isStepPermissible(targetStep) || targetStep < root.currentStep
                         })()
  
                         // Header band with active background/border
@@ -258,7 +361,8 @@ Item {
                                     if (!root.customizationSupported && stepItem.index === 3) {
                                         return
                                     }
-                                    if (root.currentStep > targetStep && !root.isWriting) {
+                                    // Allow navigation to any permissible step or backward navigation
+                                    if (!root.isWriting && (root.isStepPermissible(targetStep) || root.currentStep > targetStep)) {
                                         root.jumpToStep(targetStep)
                                     }
                                 }
@@ -293,8 +397,8 @@ Item {
                             x: Style.spacingExtraLarge
                             width: parent.width - Style.spacingExtraLarge
                             spacing: Style.spacingXXSmall
-                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep >= root.firstCustomizationStep && root.currentStep <= root.getLastCustomizationStep()
- 
+                            visible: stepItem.index === 3 && root.customizationSupported && root.currentStep > root.stepOSSelection
+
                             Repeater {
                                 model: root.getCustomizationSubstepLabels()
                                 Rectangle {
@@ -307,15 +411,69 @@ Item {
                                     color: Style.transparent
                                     border.color: Style.transparent
                                     border.width: 0
- 
+
+                                    property bool isCurrentStep: {
+                                        if (root.currentStep < root.firstCustomizationStep || root.currentStep > root.getLastCustomizationStep()) {
+                                            return false
+                                        }
+                                        
+                                        // Map current step to display index by finding which label matches
+                                        var labels = root.getCustomizationSubstepLabels()
+                                        if (subItem.index >= labels.length) return false
+                                        
+                                        var currentStepLabel = ""
+                                        if (root.currentStep === root.stepHostnameCustomization) currentStepLabel = qsTr("Hostname")
+                                        else if (root.currentStep === root.stepLocaleCustomization) currentStepLabel = qsTr("Locale")
+                                        else if (root.currentStep === root.stepUserCustomization) currentStepLabel = qsTr("User")
+                                        else if (root.currentStep === root.stepWifiCustomization) currentStepLabel = qsTr("Wi‑Fi")
+                                        else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote Access")
+                                        else if (root.currentStep === root.stepPiConnectCustomization) currentStepLabel = qsTr("Raspberry Pi Connect")
+                                        else if (root.currentStep === root.stepIfAndFeatures) currentStepLabel = qsTr("Interfaces & Features")
+                                        
+                                        return labels[subItem.index] === currentStepLabel
+                                    }
+                                    property bool isConfigured: root.isCustomizationSubstepConfigured(subItem.index)
+                                    property bool isClickable: root.customizationSupported && !root.isWriting && root.currentStep > root.stepOSSelection && (
+                                        // Allow navigation to any substep if we've reached customization
+                                        root.currentStep >= root.firstCustomizationStep ||
+                                        // Or if we've been to customization before (any substep configured)
+                                        root.hostnameConfigured || root.localeConfigured || root.userConfigured || 
+                                        root.wifiConfigured || root.sshEnabled || root.piConnectEnabled ||
+                                        // Or if any customization step has been made permissible
+                                        root.isStepPermissible(root.stepHostnameCustomization) ||
+                                        root.isStepPermissible(root.stepLocaleCustomization) ||
+                                        root.isStepPermissible(root.stepUserCustomization) ||
+                                        root.isStepPermissible(root.stepWifiCustomization) ||
+                                        root.isStepPermissible(root.stepRemoteAccess) ||
+                                        root.isStepPermissible(root.stepPiConnectCustomization) ||
+                                        root.isStepPermissible(root.stepIfAndFeatures)
+                                    )
+
                                     MouseArea {
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        enabled: root.customizationSupported && !root.isWriting && (root.firstCustomizationStep + subItem.index) <= root.currentStep
+                                        enabled: subItem.isClickable
                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         onClicked: {
-                                            var target = root.firstCustomizationStep + subItem.index
-                                            if (root.currentStep !== target) root.jumpToStep(target)
+                                            // Map display index to actual step index based on available labels
+                                            var labels = root.getCustomizationSubstepLabels()
+                                            if (subItem.index >= labels.length) return
+                                            
+                                            var stepLabel = labels[subItem.index]
+                                            var target = root.firstCustomizationStep // default to hostname
+                                            
+                                            if (stepLabel === qsTr("Hostname")) target = root.stepHostnameCustomization
+                                            else if (stepLabel === qsTr("Locale")) target = root.stepLocaleCustomization
+                                            else if (stepLabel === qsTr("User")) target = root.stepUserCustomization
+                                            else if (stepLabel === qsTr("Wi‑Fi")) target = root.stepWifiCustomization
+                                            else if (stepLabel === qsTr("Remote Access")) target = root.stepRemoteAccess
+                                            else if (stepLabel === qsTr("Raspberry Pi Connect")) target = root.stepPiConnectCustomization
+                                            else if (stepLabel === qsTr("Interfaces & Features")) target = root.stepIfAndFeatures
+                                            
+                                            // Allow navigation to permissible steps or backward navigation within customization
+                                            if (root.currentStep !== target && (root.isStepPermissible(target) || target < root.currentStep)) {
+                                                root.jumpToStep(target)
+                                            }
                                         }
                                     }
                                     RowLayout {
@@ -331,8 +489,9 @@ Item {
                                             text: subItem.modelData
                                             font.pixelSize: Style.fontSizeCaption
                                             font.family: Style.fontFamily
-                                            font.underline: (root.currentStep - root.firstCustomizationStep) === subItem.index
-                                            color: (!root.customizationSupported || (root.firstCustomizationStep + subItem.index) > root.currentStep)
+                                            font.bold: subItem.isConfigured
+                                            font.underline: subItem.isCurrentStep
+                                            color: (!root.customizationSupported || !subItem.isClickable)
                                                        ? Style.formLabelDisabledColor
                                                        : Style.sidebarTextOnInactiveColor
                                             elide: Text.ElideRight
@@ -402,7 +561,10 @@ Item {
                 
                 // [moved] Advanced options lives outside the scroll area
                 }
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: ScrollBar { 
+                    width: Style.scrollBarWidth
+                    policy: ScrollBar.AsNeeded 
+                }
             }
             // Fixed bottom container for Advanced Options
             Item {
@@ -423,6 +585,7 @@ Item {
                     anchors.bottom: parent.bottom
                     height: Style.buttonHeightStandard
                     text: qsTr("App Options")
+                    activeFocusOnTab: true
                     onClicked: {
                         if (root.optionsPopup) {
                             if (!root.optionsPopup.wizardContainer) {
@@ -503,7 +666,7 @@ Item {
             if (!customizationSupported && nextIndex === firstCustomizationStep) {
                 nextIndex = stepWriting
             }
-            // Skip optional Pi Connect step when OS does not support it
+            // Skip optional Raspberry Pi Connect step when OS does not support it
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
                 nextIndex++
             }
@@ -534,7 +697,7 @@ Item {
             var prevIndex = root.currentStep - 1
             // From Writing step:
             // - If customization not supported, jump straight back to Storage Selection
-            // - If Pi Connect step is not available, skip it when navigating back
+            // - If Raspberry Pi Connect step is not available, skip it when navigating back
             if (root.currentStep === stepWriting && !customizationSupported) {
                 prevIndex = stepStorageSelection
             } else {
@@ -592,6 +755,7 @@ Item {
         LanguageSelectionStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: {
                 // After choosing language, jump to first real wizard step
                 root.jumpToStep(root.stepDeviceSelection)
@@ -604,6 +768,7 @@ Item {
             imageWriter: root.imageWriter
             wizardContainer: root
             showBackButton: false
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
         }
     }
@@ -613,6 +778,7 @@ Item {
         OSSelectionStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
         }
@@ -623,6 +789,7 @@ Item {
         StorageSelectionStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
         }
@@ -633,6 +800,7 @@ Item {
         HostnameCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
             onSkipClicked: {
@@ -646,6 +814,7 @@ Item {
         LocaleCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
             onSkipClicked: {
@@ -659,6 +828,7 @@ Item {
         UserCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
             onSkipClicked: {
@@ -672,6 +842,7 @@ Item {
         WifiCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
             onSkipClicked: {
@@ -685,6 +856,7 @@ Item {
         RemoteAccessStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
             onSkipClicked: {
@@ -698,6 +870,7 @@ Item {
         PiConnectCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
             onSkipClicked: {
@@ -711,6 +884,7 @@ Item {
         IfAndFeaturesCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            appOptionsButton: optionsButton
             onNextClicked: {
                 // Only advance if the step indicates it's ready
                 if (isConfirmed) {
@@ -731,6 +905,7 @@ Item {
             imageWriter: root.imageWriter
             wizardContainer: root
             showBackButton: true
+            appOptionsButton: optionsButton
             // Let WritingStep handle its own button text based on state
             onNextClicked: {
                 // Only advance if the step indicates it's ready
@@ -750,6 +925,7 @@ Item {
             wizardContainer: root
             showBackButton: false
             nextButtonText: qsTr("Finish")
+            appOptionsButton: optionsButton
             onNextClicked: root.wizardCompleted()
         }
     }
@@ -785,10 +961,13 @@ Item {
     function resetWizard() {
         // Reset all wizard state to initial values
         currentStep = 0
+        permissibleStepsBitmap = 1  // Reset to only Device step permissible
         isWriting = false
         selectedDeviceName = ""
         selectedOsName = ""
         selectedStorageName = ""
+        previousDeviceName = ""
+        previousOsName = ""
         hostnameConfigured = false
         localeConfigured = false
         userConfigured = false
@@ -811,8 +990,29 @@ Item {
         wizardStack.push(deviceSelectionStep)
     }
 
+    // Detect device selection changes and invalidate dependent steps
+    onSelectedDeviceNameChanged: {
+        if (previousDeviceName !== "" && previousDeviceName !== selectedDeviceName) {
+            console.log("Device changed from", previousDeviceName, "to", selectedDeviceName, "- invalidating dependent steps")
+            invalidateDeviceDependentSteps()
+        }
+        previousDeviceName = selectedDeviceName
+    }
+    
+    // Detect OS selection changes and invalidate dependent steps
+    onSelectedOsNameChanged: {
+        if (previousOsName !== "" && previousOsName !== selectedOsName) {
+            console.log("OS changed from", previousOsName, "to", selectedOsName, "- invalidating dependent steps")
+            invalidateOSDependentSteps()
+        }
+        previousOsName = selectedOsName
+    }
+
     // Keep customization items visible when navigating within customization
     onCurrentStepChanged: {
+        // Mark the current step as permissible for future navigation
+        markStepPermissible(currentStep)
+        
         if (!sidebarScroll) return
         if (currentStep >= firstCustomizationStep && currentStep <= getLastCustomizationStep()) {
             var idx = currentStep - firstCustomizationStep

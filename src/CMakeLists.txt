@@ -405,6 +405,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/dialogs/UpdateAvailableDialog.qml
         wizard/dialogs/AppOptionsDialog.qml
         wizard/LanguageSelectionStep.qml
+        qmlcomponents/BaseDialog.qml
         qmlcomponents/ImButton.qml
         qmlcomponents/ImButtonRed.qml
         qmlcomponents/ImCheckBox.qml
@@ -415,6 +416,8 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImRadioButton.qml
         qmlcomponents/ImOptionPill.qml
         qmlcomponents/ImTextField.qml
+        qmlcomponents/SelectionListView.qml
+        qmlcomponents/OSSelectionListView.qml
         wizard/WizardStepBase.qml
         wizard/WizardContainer.qml
         wizard/DeviceSelectionStep.qml

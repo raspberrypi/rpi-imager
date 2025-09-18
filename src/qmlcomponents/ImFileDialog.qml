@@ -203,10 +203,97 @@ Dialog {
         dialog.selectedFile = ""
     }
 
-    ColumnLayout {
+    FocusScope {
+        id: dialogFocusScope
         anchors.fill: parent
-        anchors.margins: Style.cardPadding
-        spacing: Style.spacingSmall
+        focus: true
+        
+        Keys.onEscapePressed: {
+            dialog.close()
+            dialog.rejected()
+        }
+        
+        // Focus management system
+        property var _focusGroups: []
+        property var _focusableItems: []
+        property var initialFocusItem: null
+        
+        function registerFocusGroup(name, getItemsFn, order) {
+            if (order === undefined) order = 0
+            // Replace if exists
+            for (var i = 0; i < _focusGroups.length; i++) {
+                if (_focusGroups[i].name === name) {
+                    _focusGroups[i] = { name: name, getItemsFn: getItemsFn, order: order, enabled: true }
+                    rebuildFocusOrder()
+                    return
+                }
+            }
+            _focusGroups.push({ name: name, getItemsFn: getItemsFn, order: order, enabled: true })
+            rebuildFocusOrder()
+        }
+        
+        function rebuildFocusOrder() {
+            // Compose enabled groups by order
+            _focusGroups.sort(function(a,b){ return a.order - b.order })
+            var items = []
+            for (var i = 0; i < _focusGroups.length; i++) {
+                var g = _focusGroups[i]
+                if (!g.enabled || !g.getItemsFn) continue
+                var arr = g.getItemsFn()
+                if (!arr || !arr.length) continue
+                for (var k = 0; k < arr.length; k++) {
+                    var it = arr[k]
+                    if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function') {
+                        items.push(it)
+                    }
+                }
+            }
+            _focusableItems = items
+
+            // Determine first/last
+            var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
+            var lastField = _focusableItems.length > 0 ? _focusableItems[_focusableItems.length-1] : null
+
+            // Wire fields forward/backward (circular navigation)
+            for (var j = 0; j < _focusableItems.length; j++) {
+                var cur = _focusableItems[j]
+                var next = (j + 1 < _focusableItems.length) ? _focusableItems[j+1] : firstField
+                var prev = (j > 0) ? _focusableItems[j-1] : lastField
+                if (cur && cur.KeyNavigation) {
+                    cur.KeyNavigation.tab = next
+                    cur.KeyNavigation.backtab = prev
+                }
+            }
+
+            // Set initial focus item
+            if (!initialFocusItem) initialFocusItem = firstField
+        }
+        
+        Component.onCompleted: {
+            // Register focus groups
+            registerFocusGroup("address", function(){ 
+                return [pathField] 
+            }, 0)
+            registerFocusGroup("places", function(){ 
+                return [placesList] 
+            }, 1)
+            registerFocusGroup("folders", function(){ 
+                return [subfoldersList] 
+            }, 2)
+            registerFocusGroup("files", function(){ 
+                return [fileListScrollView] 
+            }, 3)
+            registerFocusGroup("buttons", function(){ 
+                return [cancelButton, openButton] 
+            }, 4)
+            
+            rebuildFocusOrder()
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingSmall
 
         // Title
         Text {
@@ -225,6 +312,7 @@ Dialog {
             Layout.fillWidth: true
             text: dialog._toDisplayPath(dialog.currentFolder)
             placeholderText: qsTr("Enter path or URL…")
+            activeFocusOnTab: true
             onAccepted: {
                 var newUrl = dialog._toFileUrl(text)
                 if (newUrl && newUrl.length > 0) {
@@ -257,12 +345,33 @@ Dialog {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Math.min(contentHeight, 160)
                         clip: true
+                        activeFocusOnTab: true
                         model: placesModel
                         delegate: ItemDelegate {
                             width: (ListView.view ? ListView.view.width : 0)
                             text: model.label
                             onClicked: {
                                 dialog.currentFolder = model.url
+                            }
+                        }
+                        Keys.onUpPressed: {
+                            if (currentIndex > 0) {
+                                currentIndex--
+                            }
+                        }
+                        Keys.onDownPressed: {
+                            if (currentIndex < count - 1) {
+                                currentIndex++
+                            }
+                        }
+                        Keys.onEnterPressed: {
+                            if (currentIndex >= 0) {
+                                dialog.currentFolder = model.get(currentIndex).url
+                            }
+                        }
+                        Keys.onReturnPressed: {
+                            if (currentIndex >= 0) {
+                                dialog.currentFolder = model.get(currentIndex).url
                             }
                         }
                     }
@@ -282,6 +391,7 @@ Dialog {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
+                        activeFocusOnTab: true
                         model: dirsOnlyModel
                         delegate: ItemDelegate {
                             width: (ListView.view ? ListView.view.width : 0)
@@ -291,6 +401,26 @@ Dialog {
                             }
                         }
                         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
+                        Keys.onUpPressed: {
+                            if (currentIndex > 0) {
+                                currentIndex--
+                            }
+                        }
+                        Keys.onDownPressed: {
+                            if (currentIndex < count - 1) {
+                                currentIndex++
+                            }
+                        }
+                        Keys.onEnterPressed: {
+                            if (currentIndex >= 0) {
+                                dialog.currentFolder = model.get(currentIndex, "fileURL")
+                            }
+                        }
+                        Keys.onReturnPressed: {
+                            if (currentIndex >= 0) {
+                                dialog.currentFolder = model.get(currentIndex, "fileURL")
+                            }
+                        }
                     }
                 }
             }
@@ -303,8 +433,45 @@ Dialog {
 
                 // Unified scroll area: Up entry, then directories, then files
                 ScrollView {
+                    id: fileListScrollView
                     anchors.fill: parent
+                    activeFocusOnTab: true
                     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
+                    
+                    property int currentFileIndex: -1
+                    
+                    Keys.onUpPressed: {
+                        if (currentFileIndex > 0) {
+                            currentFileIndex--
+                            // Update selection
+                            var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
+                            if (fileItem && fileItem.fileURL) {
+                                dialog.selectedFile = fileItem.fileURL
+                            }
+                        }
+                    }
+                    Keys.onDownPressed: {
+                        if (currentFileIndex < filesOnlyModel.count - 1) {
+                            currentFileIndex++
+                            // Update selection
+                            var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
+                            if (fileItem && fileItem.fileURL) {
+                                dialog.selectedFile = fileItem.fileURL
+                            }
+                        }
+                    }
+                    Keys.onEnterPressed: {
+                        if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
+                            dialog.close()
+                            dialog.accepted()
+                        }
+                    }
+                    Keys.onReturnPressed: {
+                        if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
+                            dialog.close()
+                            dialog.accepted()
+                        }
+                    }
 
                     Column {
                         id: fileColumn
@@ -346,14 +513,25 @@ Dialog {
             spacing: Style.spacingMedium
             Item { Layout.fillWidth: true }
             ImButton {
+                id: cancelButton
                 text: qsTr("Cancel")
+                activeFocusOnTab: true
                 onClicked: { dialog.close(); dialog.rejected() }
             }
             ImButton {
+                id: openButton
                 text: qsTr("Open")
                 enabled: String(dialog.selectedFile).length > 0
+                activeFocusOnTab: true
                 onClicked: { dialog.close(); dialog.accepted() }
             }
+        }
+        }
+    }
+    
+    onOpened: {
+        if (dialogFocusScope.initialFocusItem) {
+            dialogFocusScope.initialFocusItem.forceActiveFocus()
         }
     }
 }

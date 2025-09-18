@@ -17,7 +17,7 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
 
-    title: qsTr("Write Image")
+    title: qsTr("Write image")
     subtitle: qsTr("Review your choices and write the image to the storage device")
     nextButtonText: root.isWriting ? qsTr("Cancel") : (root.isComplete ? qsTr("Continue") : qsTr("Write"))
     nextButtonEnabled: true
@@ -93,7 +93,7 @@ WizardStepBase {
                 }
 
                 Text {
-                    text: qsTr("Operating System:")
+                    text: qsTr("Operating system:")
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
@@ -127,8 +127,8 @@ WizardStepBase {
 
             Text {
                 text: root.anyCustomizationsApplied
-                      ? qsTr("Ready to write your customised image to the storage device. All existing data will be erased.")
-                      : qsTr("Ready to write the image to the storage device. All existing data will be erased.")
+                      ? qsTr("Ready to write your customised image to your storage device. All existing data will be erased.")
+                      : qsTr("Ready to write the image to your storage device. All existing data will be erased.")
                 font.pixelSize: Style.fontSizeDescription
                 font.family: Style.fontFamily
                 color: Style.textDescriptionColor
@@ -156,16 +156,30 @@ WizardStepBase {
             }
 
             ScrollView {
+                id: customizationsScrollView
                 Layout.fillWidth: true
                 // Cap height so long lists become scrollable in default window size
                 Layout.maximumHeight: Math.round(root.height * 0.4)
                 clip: true
+                activeFocusOnTab: true
                 contentItem: Flickable {
                     id: customizationsFlickable
                     contentWidth: width
                     contentHeight: customizationsColumn.implicitHeight
                     interactive: contentHeight > height
                     clip: true
+                    
+                    Keys.onUpPressed: {
+                        if (contentY > 0) {
+                            contentY = Math.max(0, contentY - 20)
+                        }
+                    }
+                    Keys.onDownPressed: {
+                        var maxY = Math.max(0, contentHeight - height)
+                        if (contentY < maxY) {
+                            contentY = Math.min(maxY, contentY + 20)
+                        }
+                    }
                     Column {
                         id: customizationsColumn
                         width: parent.width
@@ -174,7 +188,7 @@ WizardStepBase {
                         Text { text: qsTr("• User account configured");    font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.userConfigured }
                         Text { text: qsTr("• Wi‑Fi configured");           font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured }
                         Text { text: qsTr("• SSH enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled }
-                        Text { text: qsTr("• Pi Connect enabled");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled }
+                        Text { text: qsTr("• Raspberry Raspberry Pi Connect enabled");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled }
                         Text { text: qsTr("• USB Gadget enabled");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.featUsbGadgetEnabled }
                         Text { text: qsTr("• I2C enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifI2cEnabled }
                         Text { text: qsTr("• SPI enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSpiEnabled }
@@ -237,7 +251,7 @@ WizardStepBase {
             progressText.text = qsTr("Write cancelled")
         } else if (!root.isComplete) {
             // If warnings are disabled, skip the confirmation dialog
-            if (imageWriter.getBoolSetting("disable_warnings")) {
+            if (wizardContainer.disableWarnings) {
                 beginWriteDelay.start()
             } else {
                 // Open confirmation dialog before starting
@@ -404,5 +418,16 @@ WizardStepBase {
                 root.onFinalizing()
             }
         }
+    }
+    
+    // Focus management
+    Component.onCompleted: {
+        registerFocusGroup("customizations", function() {
+            // Only include the scroll view when it's visible and has content to scroll
+            if (customizationsScrollView.visible && customizationsFlickable.contentHeight > customizationsFlickable.height) {
+                return [customizationsScrollView]
+            }
+            return []
+        }, 0)
     }
 }

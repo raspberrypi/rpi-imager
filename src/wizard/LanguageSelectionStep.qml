@@ -20,7 +20,7 @@ WizardStepBase {
     property var _internalLanguages: []
 
     title: qsTr("Welcome")
-    subtitle: qsTr("Choose your language for Raspberry Pi Imager.")
+    subtitle: qsTr("Choose your language for Raspberry Pi Imager")
     showBackButton: false
 
     // Populate and preselect language on load

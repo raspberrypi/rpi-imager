@@ -17,7 +17,7 @@ WizardStepBase {
     required property var wizardContainer
 
     title: qsTr("Customisation: Raspberry Pi Connect")
-    subtitle: qsTr("Sign in to receive a token, then enable Connect.")
+    subtitle: qsTr("Sign in to receive a token and enable Raspberry PiConnect.")
     showSkipButton: true
 
     // Only visible/active when the selected OS supports it

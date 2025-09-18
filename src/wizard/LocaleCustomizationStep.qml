@@ -18,9 +18,11 @@ WizardStepBase {
     required property var wizardContainer
     
     title: qsTr("Customisation: Choose locale")
-    subtitle: qsTr("Configure timezone and keyboard layout for your Raspberry Pi.")
+    subtitle: qsTr("Configure the time zone and keyboard layout for your Raspberry Pi")
     showSkipButton: true
 
+    // Set initial focus on timezone when entering step
+    initialFocusItem: comboTimezone
 
     // Initialize the component
     Component.onCompleted: {
@@ -45,9 +47,6 @@ WizardStepBase {
         root.registerFocusGroup("locale_controls", function(){ 
             return [comboTimezone, comboKeyboard] 
         }, 0)
-        
-        // Set initial focus on timezone when entering step
-        root.initialFocusItem = comboTimezone
     }
     
     // Content
@@ -64,7 +63,7 @@ WizardStepBase {
                 Layout.fillWidth: true
                 spacing: Style.spacingMedium
                 
-                WizardFormLabel { text: qsTr("Timezone:") }
+                WizardFormLabel { text: qsTr("Time zone:") }
                 ImComboBox {
                     id: comboTimezone
                     Layout.fillWidth: true
@@ -85,8 +84,6 @@ WizardStepBase {
                     editable: false
                     selectTextByMouse: true
                     font.pixelSize: Style.fontSizeInput
-                    KeyNavigation.tab: root.nextButtonItem
-                    KeyNavigation.backtab: comboTimezone
                 }
             }
             

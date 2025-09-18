@@ -8,14 +8,11 @@ pragma ComponentBehavior: Bound
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "../../qmlcomponents"
 import RpiImager
 
-Dialog {
+BaseDialog {
     id: root
-    modal: true
-    anchors.centerIn: parent
-    width: 520
-    standardButtons: Dialog.NoButton
 
     property bool userAccepted: false
 
@@ -24,64 +21,69 @@ Dialog {
         open()
     }
 
-    background: Rectangle {
-        color: Style.mainBackgroundColor
-        radius: Style.sectionBorderRadius
-        border.color: Style.popupBorderColor
-        border.width: Style.sectionBorderWidth
+    // Custom escape handling
+    function escapePressed() {
+        root.userAccepted = false
+        root.reject()
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Style.cardPadding
+    // Register focus groups when component is ready
+    Component.onCompleted: {
+        registerFocusGroup("buttons", function(){ 
+            return [yesButton, noButton] 
+        }, 0)
+    }
+
+    // Dialog content goes directly into the BaseDialog's contentLayout
+    Text {
+        text: qsTr("Keychain Access")
+        font.pixelSize: Style.fontSizeHeading
+        font.family: Style.fontFamilyBold
+        font.bold: true
+        color: Style.formLabelColor
+        Layout.fillWidth: true
+    }
+
+    Text {
+        text: qsTr("Would you like to prefill the Wi‑Fi password from the system keychain?")
+        wrapMode: Text.WordWrap
+        color: Style.textDescriptionColor
+        font.pixelSize: Style.fontSizeDescription
+        Layout.fillWidth: true
+    }
+
+    Text {
+        text: qsTr("This will require administrator authentication on macOS.")
+        wrapMode: Text.WordWrap
+        color: Style.textMetadataColor
+        font.pixelSize: Style.fontSizeSmall
+        Layout.fillWidth: true
+    }
+
+    RowLayout {
+        Layout.fillWidth: true
         spacing: Style.spacingMedium
+        Item { Layout.fillWidth: true }
 
-        Text {
-            text: qsTr("Keychain Access")
-            font.pixelSize: Style.fontSizeHeading
-            font.family: Style.fontFamilyBold
-            font.bold: true
-            color: Style.formLabelColor
-            Layout.fillWidth: true
-        }
-
-        Text {
-            text: qsTr("Would you like to prefill the Wi‑Fi password from the system keychain?")
-            wrapMode: Text.WordWrap
-            color: Style.textDescriptionColor
-            font.pixelSize: Style.fontSizeDescription
-            Layout.fillWidth: true
-        }
-
-        Text {
-            text: qsTr("This will require administrator authentication on macOS.")
-            wrapMode: Text.WordWrap
-            color: Style.textMetadataColor
-            font.pixelSize: Style.fontSizeSmall
-            Layout.fillWidth: true
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Style.spacingMedium
-            Item { Layout.fillWidth: true }
-
-            ImButton {
-                text: qsTr("No")
-                Layout.preferredWidth: 80
-                onClicked: {
-                    root.userAccepted = false
-                    root.reject()
-                }
+        ImButton {
+            id: noButton
+            text: qsTr("No")
+            Layout.preferredWidth: 80
+            activeFocusOnTab: true
+            onClicked: {
+                root.userAccepted = false
+                root.reject()
             }
+        }
 
-            ImButtonRed {
-                text: qsTr("Yes")
-                Layout.preferredWidth: 80
-                onClicked: {
-                    root.userAccepted = true
-                    root.accept()
-                }
+        ImButtonRed {
+            id: yesButton
+            text: qsTr("Yes")
+            Layout.preferredWidth: 80
+            activeFocusOnTab: true
+            onClicked: {
+                root.userAccepted = true
+                root.accept()
             }
         }
     }
@@ -92,5 +94,3 @@ Dialog {
         }
     }
 }
-
-

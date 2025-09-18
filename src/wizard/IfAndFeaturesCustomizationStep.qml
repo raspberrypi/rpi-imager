@@ -198,7 +198,7 @@ WizardStepBase {
         wizardContainer.ifSerial         = comboSerial.editText
         wizardContainer.featUsbGadgetEnabled = saved.enableUsbGadget
 
-        if (saved.enableUsbGadget && !imageWriter.getBoolSetting("disable_warnings")) {
+        if (saved.enableUsbGadget && !wizardContainer.disableWarnings) {
             confirmDialog.open()
         } else {
             root.isConfirmed = true

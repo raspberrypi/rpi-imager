@@ -7,15 +7,18 @@ import QtQuick.Layouts 1.15
 import RpiImager
 import "../../qmlcomponents"
 
-Dialog {
+BaseDialog {
     id: root
-    modal: true
-    // Explicit parent for overlay centering (required)
+    
+    // Override positioning for overlayParent support
+    closePolicy: Popup.CloseOnEscape
     required property Item overlayParent
     parent: overlayParent
     anchors.centerIn: parent
-    width: 520
-    standardButtons: Dialog.NoButton
+    
+    // Override the default x,y positioning from BaseDialog
+    x: undefined
+    y: undefined
 
     signal confirmed()
     signal cancelled()
@@ -24,62 +27,65 @@ Dialog {
     readonly property string proceedText: CommonStrings.warningProceedText
     readonly property string systemDriveText: CommonStrings.systemDriveText
 
-    background: Rectangle {
-        color: Style.mainBackgroundColor
-        radius: Style.sectionBorderRadius
-        border.color: Style.popupBorderColor
-        border.width: Style.sectionBorderWidth
+    // Custom escape handling
+    function escapePressed() {
+        root.close()
+        root.cancelled()
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Style.cardPadding
+    // Register focus groups when component is ready
+    Component.onCompleted: {
+        registerFocusGroup("buttons", function(){ 
+            return [keepFilterButton, showSystemButton] 
+        }, 0)
+    }
+
+    // Dialog content
+    Text {
+        text: qsTr("Remove system drive filter?")
+        font.pixelSize: Style.fontSizeHeading
+        font.family: Style.fontFamilyBold
+        font.bold: true
+        color: Style.formLabelColor
+        Layout.fillWidth: true
+    }
+
+    Text {
+        textFormat: Text.StyledText
+        text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.")
+              + "<br><br>"
+              + root.systemDriveText
+              + "<br><br>" + root.riskText + "<br><br>" + root.proceedText
+        font.pixelSize: Style.fontSizeDescription
+        font.family: Style.fontFamily
+        color: Style.textDescriptionColor
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+    }
+
+    RowLayout {
+        Layout.fillWidth: true
         spacing: Style.spacingMedium
+        Item { Layout.fillWidth: true }
 
-        Text {
-            text: qsTr("Remove system drive filter?")
-            font.pixelSize: Style.fontSizeHeading
-            font.family: Style.fontFamilyBold
-            font.bold: true
-            color: Style.formLabelColor
-            Layout.fillWidth: true
-        }
-
-        Text {
-            textFormat: Text.StyledText
-            text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.")
-                  + "<br><br>"
-                  + root.systemDriveText
-                  + "<br><br>" + root.riskText + "<br><br>" + root.proceedText
-            font.pixelSize: Style.fontSizeDescription
-            font.family: Style.fontFamily
-            color: Style.textDescriptionColor
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Style.spacingMedium
-            Item { Layout.fillWidth: true }
-
-            ImButtonRed {
-                text: qsTr("KEEP FILTER ON")
-                onClicked: {
-                    root.close()
-                    root.cancelled()
-                }
+        ImButtonRed {
+            id: keepFilterButton
+            text: qsTr("KEEP FILTER ON")
+            activeFocusOnTab: true
+            onClicked: {
+                root.close()
+                root.cancelled()
             }
+        }
 
-            ImButton {
-                text: qsTr("SHOW SYSTEM DRIVES")
-                onClicked: {
-                    root.close()
-                    root.confirmed()
-                }
+        ImButton {
+            id: showSystemButton
+            text: qsTr("SHOW SYSTEM DRIVES")
+            activeFocusOnTab: true
+            onClicked: {
+                root.close()
+                root.confirmed()
             }
         }
     }
 }
-
-

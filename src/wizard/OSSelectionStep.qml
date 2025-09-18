@@ -21,8 +21,8 @@ WizardStepBase {
     readonly property HWListModel hwmodel: imageWriter.getHWList()
     readonly property OSListModel osmodel: imageWriter.getOSList()
     
-    title: qsTr("Choose Operating System")
-    subtitle: qsTr("Select the operating system to install on your Raspberry Pi")
+    title: qsTr("Choose operating system")
+    subtitle: qsTr("Select an operating system to install on your Raspberry Pi")
     showNextButton: true
     // Disable Next until a concrete OS has been selected
     nextButtonEnabled: oslist.currentIndex !== -1 && wizardContainer.selectedOsName.length > 0
@@ -42,6 +42,52 @@ WizardStepBase {
     function next() {
         root.nextClicked()
     }
+    
+    // Common handler functions for OS selection
+    function handleOSSelection(modelData, fromKeyboard) {
+        if (fromKeyboard === undefined) {
+            fromKeyboard = true  // Default to keyboard since this is called from keyboard handlers
+        }
+        
+        // Check if this is a sublist item - if so, navigate to it
+        if (modelData && root.isOSsublist(modelData)) {
+            root.selectOSitem(modelData, true, false)
+        } else {
+            // Regular OS selection
+            root.selectOSitem(modelData, false, false)
+            
+            // For keyboard selection of concrete OS items, automatically advance to next step
+            if (fromKeyboard && modelData && !root.isOSsublist(modelData)) {
+                // Use Qt.callLater to ensure the OS selection completes first
+                Qt.callLater(function() {
+                    if (root.nextButtonEnabled) {
+                        root.next()
+                    }
+                })
+            }
+        }
+    }
+    
+    function handleOSNavigation(modelData) {
+        // Right arrow key: only navigate to sublists, ignore regular OS items
+        if (modelData && root.isOSsublist(modelData)) {
+            root.selectOSitem(modelData, true, false)
+        }
+    }
+    
+    function handleBackNavigation() {
+        osswipeview.decrementCurrentIndex()
+        root.categorySelected = ""
+        // Rebuild focus order when returning to main list
+        root.rebuildFocusOrder()
+    }
+    
+    function initializeListViewFocus(listView) {
+        // Ensure we have an initial selection for keyboard navigation
+        if (listView.currentIndex === -1 && listView.count > 0) {
+            listView.currentIndex = 0
+        }
+    }
 
     Component.onCompleted: {
         // Try initial load in case data is already available
@@ -49,15 +95,9 @@ WizardStepBase {
 
         // Register the OS list for keyboard navigation
         root.registerFocusGroup("os_list", function(){
-            var focusItems = [oslist]
-            // Include any sublists that are currently in the SwipeView
-            for (var i = 1; i < osswipeview.count; i++) {
-                var sublist = osswipeview.itemAt(i)
-                if (sublist && sublist !== oslist) {
-                    focusItems.push(sublist)
-                }
-            }
-            return focusItems
+            // Only include the currently active list view
+            var currentPage = osswipeview.itemAt(osswipeview.currentIndex)
+            return currentPage ? [currentPage] : [oslist]
         }, 0)
 
         // Set the initial focus item to the OS list
@@ -153,6 +193,8 @@ WizardStepBase {
 
                 onCurrentIndexChanged: {
                     _focusFirstItemInCurrentView()
+                    // Rebuild focus order when switching between main list and sublists
+                    root.rebuildFocusOrder()
                     // Ensure the current view gets focus when SwipeView index changes
                     Qt.callLater(function() {
                         var currentView = osswipeview.currentItem
@@ -163,61 +205,25 @@ WizardStepBase {
                 }
                     
                     // Main OS list
-                    ListView {
+                    OSSelectionListView {
                         id: oslist
                         model: root.osmodel
-                        currentIndex: -1
                         delegate: osdelegate
-                        clip: true
-                        activeFocusOnTab: true
+                        autoSelectFirst: true
                         
-                        boundsBehavior: Flickable.StopAtBounds
-                        // Provide a highlight item to ensure visible selection
-                        highlight: Rectangle {
-                            color: Style.listViewHighlightColor
-                            radius: 0
-                            border.color: oslist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
-                            border.width: oslist.activeFocus ? 2 : 0
-                            anchors.fill: parent
-                            anchors.rightMargin: (oslist.contentHeight > oslist.height ? Style.scrollBarWidth : 0)
-                        }
-                        highlightFollowsCurrentItem: true
-                        preferredHighlightBegin: 0
-                        preferredHighlightEnd: height
+                        // Connect to our OS selection handler
+                        osSelectionHandler: root.handleOSSelection
                         
-                        ScrollBar.vertical: ScrollBar {
-                            width: Style.scrollBarWidth
-                            policy: oslist.contentHeight > oslist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                        onRightPressed: function(index, item, modelData) {
+                            root.handleOSNavigation(modelData)
                         }
                         
-                        Keys.onUpPressed: {
-                            if (currentIndex > 0) currentIndex = currentIndex - 1
+                        Component.onCompleted: {
+                            root.initializeListViewFocus(oslist)
                         }
-                        Keys.onDownPressed: {
-                            if (currentIndex < count - 1) currentIndex = currentIndex + 1
-                        }
-                        Keys.onSpacePressed: {
-                            if (currentIndex != -1) {
-                                var item = oslist.itemAtIndex(currentIndex)
-                                if (item)
-                                    root.selectOSitem(item.model, true)
-                            }
-                        }
-                        Accessible.onPressAction: {
-                            if (currentIndex != -1) {
-                                var item = oslist.itemAtIndex(currentIndex)
-                                if (item)
-                                    root.selectOSitem(item.model, true)
-                            }
-                        }
-
-                        Keys.onRightPressed: {
-                            // Navigate into sublists but don't select an OS entry
-                            if (currentIndex != -1) {
-                                var item = oslist.itemAtIndex(currentIndex)
-                                if (item && root.isOSsublist(item.model))
-                                    root.selectOSitem(item.model, true)
-                            }
+                        
+                        onCountChanged: {
+                            root.initializeListViewFocus(oslist)
                         }
                     }
             }
@@ -248,7 +254,14 @@ WizardStepBase {
             property string tooltip
             property string subitems_url
             
-            width: oslist.width
+            // Get reference to the containing ListView
+            // IMPORTANT: Cache ListView.view in a property for reliable access.
+            // This delegate is shared between the main OS list and dynamically created sublists.
+            // Using ListView.view directly in bindings can be unreliable, so we cache it here.
+            // This enables proper highlighting for both keyboard and mouse navigation in all lists.
+            property var parentListView: ListView.view
+            
+            width: parentListView ? parentListView.width : 200
             // Let content determine height for balanced vertical padding
             height: Math.max(80, row.implicitHeight + Style.spacingSmall + Style.spacingMedium)
             
@@ -258,11 +271,13 @@ WizardStepBase {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
-                color: (oslist.currentIndex === index) ? Style.listViewHighlightColor :
+                // Delegate highlighting: Works together with ListView's built-in highlight system
+                // DO NOT disable ListView's highlight - both systems work in harmony
+                color: (parentListView && parentListView.currentIndex === index) ? Style.listViewHighlightColor :
                        (osMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 anchors.rightMargin: (
-                    (oslist.contentHeight > oslist.height) ? Style.scrollBarWidth : 0)
+                    (parentListView && parentListView.contentHeight > parentListView.height) ? Style.scrollBarWidth : 0)
                 
                 MouseArea {
                     id: osMouseArea
@@ -272,16 +287,18 @@ WizardStepBase {
                     cursorShape: Qt.PointingHandCursor
                     
                     onPressed: {
-                        if (!oslist.activeFocus) {
-                            oslist.forceActiveFocus()
+                        if (parentListView) {
+                            if (!parentListView.activeFocus) {
+                                parentListView.forceActiveFocus()
+                            }
+                            parentListView.currentIndex = index
                         }
-                        oslist.currentIndex = index
                     }
 
                     onClicked: {
                         // currentIndex is set on press; ensure selection is in place
-                        if (oslist.currentIndex !== index) {
-                            oslist.currentIndex = index
+                        if (parentListView && parentListView.currentIndex !== index) {
+                            parentListView.currentIndex = index
                         }
                         selectOSitem(delegateItem.model, undefined, true)
                     }
@@ -383,8 +400,9 @@ WizardStepBase {
     Component {
         id: suboslist
         
-        ListView {
+        OSSelectionListView {
             id: sublistview
+            autoSelectFirst: true
             model: ListModel {
                 // Back entry
                 ListElement {
@@ -405,67 +423,21 @@ WizardStepBase {
                     capabilities: ""
                 }
             }
-            currentIndex: -1
             delegate: osdelegate
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            // Provide a highlight item to ensure visible selection
-            highlight: Rectangle {
-                color: Style.listViewHighlightColor
-                radius: 0
-                border.color: sublistview.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
-                border.width: sublistview.activeFocus ? 2 : 0
-                anchors.fill: parent
-                anchors.rightMargin: (sublistview.contentHeight > sublistview.height ? Style.scrollBarWidth : 0)
-            }
-            highlightFollowsCurrentItem: true
-            preferredHighlightBegin: 0
-            preferredHighlightEnd: height
-            ScrollBar.vertical: ScrollBar {
-                width: Style.scrollBarWidth
-                policy: sublistview.contentHeight > parent.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-            }
-            activeFocusOnTab: true
             
-            Keys.onUpPressed: {
-                if (currentIndex > 0) {
-                    currentIndex--
-                }
+            // Connect to our OS selection handler
+            osSelectionHandler: root.handleOSSelection
+            
+            onRightPressed: function(index, item, modelData) {
+                root.handleOSNavigation(modelData)
             }
-            Keys.onDownPressed: {
-                if (currentIndex < count - 1) {
-                    currentIndex++
-                }
-            }
-            Keys.onSpacePressed: {
-                if (currentIndex != -1)
-                    root.selectOSitem(model.get(currentIndex))
-            }
-            Accessible.onPressAction: {
-                if (currentIndex != -1)
-                    root.selectOSitem(model.get(currentIndex))
-            }
-            Keys.onEnterPressed: (event) => { Keys.spacePressed(event) }
-            Keys.onReturnPressed: (event) => { Keys.spacePressed(event) }
-            Keys.onRightPressed: {
-                // Navigate into sublists but don't select an OS entry
-                if (currentIndex != -1 && root.isOSsublist(model.get(currentIndex)))
-                    root.selectOSitem(model.get(currentIndex), true)
-            }
-            Keys.onLeftPressed: {
-                osswipeview.decrementCurrentIndex()
-                root.categorySelected = ""
-                // Rebuild focus order when returning to main list
-                root.rebuildFocusOrder()
-            }
+            
+            onLeftPressed: root.handleBackNavigation
             
             Component.onCompleted: {
                 // Ensure this sublist can receive keyboard focus
                 forceActiveFocus()
-                // Set initial currentIndex if not set
-                if (currentIndex === -1 && count > 0) {
-                    currentIndex = 0
-                }
+                root.initializeListViewFocus(sublistview)
             }
         }
     }
@@ -545,7 +517,7 @@ WizardStepBase {
 
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-                // Gate Pi Connect availability by OS JSON field
+                // Gate Raspberry Pi Connect availability by OS JSON field
                 root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
                 root.wizardContainer.rpiosCloudInitAvailable = false
                 root.nextButtonEnabled = true
@@ -568,7 +540,7 @@ WizardStepBase {
 
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-                // Gate Pi Connect availability by OS JSON field
+                // Gate Raspberry Pi Connect availability by OS JSON field
                 root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
                 root.wizardContainer.rpiosCloudInitAvailable = imageWriter.checkSWCapability("rpios_cloudinit")
                 // If customization is not supported for this OS, clear any previously-staged UI flags
@@ -580,7 +552,7 @@ WizardStepBase {
                     root.wizardContainer.sshEnabled = false
                     root.wizardContainer.piConnectEnabled = false
                 } else if (!root.wizardContainer.piConnectAvailable) {
-                    // If Pi Connect not available for this OS, ensure it's not marked enabled
+                    // If Raspberry Pi Connect not available for this OS, ensure it's not marked enabled
                     root.wizardContainer.piConnectEnabled = false
                 }
                 root.customSelected = false

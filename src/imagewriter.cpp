@@ -1994,7 +1994,7 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
         line(QStringLiteral("fi"), script);
     }
 
-    // Raspberry Pi Connect token provisioning (store in target user's home)
+    // Raspberry Raspberry Pi Connect token provisioning (store in target user's home)
     const bool piConnectEnabled = s.value("piConnectEnabled").toBool();
     QString piConnectToken = _piConnectToken.trimmed();
     if (piConnectEnabled && !piConnectToken.isEmpty()) {
@@ -2196,7 +2196,7 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
         push(QStringLiteral("      optional: true"), netcfg);
     }
 
-    // Raspberry Pi Connect token provisioning via cloud-init write_files (store in user's home)
+    // Raspberry Raspberry Pi Connect token provisioning via cloud-init write_files (store in user's home)
     const bool piConnectEnabled = s.value("piConnectEnabled").toBool();
     QString piConnectToken = _piConnectToken.trimmed();
     if (piConnectEnabled && !piConnectToken.isEmpty()) {

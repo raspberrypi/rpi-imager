@@ -18,7 +18,7 @@ WizardStepBase {
     property bool hasSavedWifiPSK: false
     
     title: qsTr("Customisation: Choose Wi‑Fi")
-    subtitle: qsTr("Configure wireless LAN settings.")
+    subtitle: qsTr("Configure wireless LAN settings")
     showSkipButton: true
     
     // Set initial focus on SSID

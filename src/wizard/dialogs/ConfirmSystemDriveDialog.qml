@@ -6,15 +6,17 @@ import QtQuick.Layouts 1.15
 import RpiImager
 import "../../qmlcomponents"
 
-Dialog {
+BaseDialog {
     id: root
-    modal: true
-    // Explicit parent for overlay centering (required)
+    
+    // Override positioning for overlayParent support
     required property Item overlayParent
     parent: overlayParent
     anchors.centerIn: parent
-    width: 520
-    standardButtons: Dialog.NoButton
+    
+    // Override the default x,y positioning from BaseDialog
+    x: undefined
+    y: undefined
 
     property string driveName: ""
     property string device: ""
@@ -28,110 +30,118 @@ Dialog {
     readonly property string proceedText: CommonStrings.warningProceedText
     readonly property string systemDriveText: CommonStrings.systemDriveText
 
-    background: Rectangle {
-        color: Style.mainBackgroundColor
-        radius: Style.sectionBorderRadius
-        border.color: Style.popupBorderColor
-        border.width: Style.sectionBorderWidth
+    // Custom escape handling
+    function escapePressed() {
+        root.close()
+        root.cancelled()
     }
 
+    // Register focus groups when component is ready
+    Component.onCompleted: {
+        registerFocusGroup("input", function(){ 
+            return [nameInput] 
+        }, 0)
+        registerFocusGroup("buttons", function(){ 
+            return [cancelButton, continueButton] 
+        }, 1)
+    }
+
+    // Dialog content
+    Text {
+        textFormat: Text.StyledText
+        wrapMode: Text.WordWrap
+        font.family: Style.fontFamily
+        font.pixelSize: Style.fontSizeDescription
+        color: Style.textDescriptionColor
+        Layout.fillWidth: true
+        text: root.riskText + "<br><br>" + root.systemDriveText + "<br><br>" + root.proceedText
+    }
+
+    Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor }
+
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Style.cardPadding
+        Layout.fillWidth: true
+        Text { text: qsTr("Size: %1").arg(root.sizeStr); font.family: Style.fontFamily; color: Style.textDescriptionColor }
+        Text {
+            text: qsTr("Mounted as: %1").arg(root.mountpoints && root.mountpoints.length > 0 ? root.mountpoints.join(", ") : qsTr("Not mounted"))
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+        }
+    }
+
+    Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor }
+
+    Text {
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        font.family: Style.fontFamily
+        font.pixelSize: Style.fontSizeDescription
+        color: Style.textDescriptionColor
+        text: qsTr("To continue, type the exact drive name below:")
+    }
+
+    Text {
+        font.family: Style.fontFamily
+        font.bold: true
+        color: Style.textDescriptionColor
+        text: root.driveName
+    }
+
+    TextField {
+        id: nameInput
+        Layout.fillWidth: true
+        placeholderText: qsTr("Type drive name exactly as shown above")
+        text: ""
+        activeFocusOnTab: true
+        Keys.onPressed: (event) => {
+            if ((event.key === Qt.Key_V && (event.modifiers & (Qt.ControlModifier | Qt.MetaModifier))) ||
+                (event.key === Qt.Key_Insert && (event.modifiers & Qt.ShiftModifier))) {
+                event.accepted = true
+                return
+            }
+        }
+        onAccepted: {
+            if (continueButton.enabled) continueButton.clicked()
+        }
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton | Qt.MiddleButton
+            onPressed: (mouse) => { mouse.accepted = true }
+        }
+    }
+
+    RowLayout {
+        Layout.fillWidth: true
         spacing: Style.spacingMedium
+        Item { Layout.fillWidth: true }
 
-        Text {
-            textFormat: Text.StyledText
-            wrapMode: Text.WordWrap
-            font.family: Style.fontFamily
-            font.pixelSize: Style.fontSizeDescription
-            color: Style.textDescriptionColor
-            Layout.fillWidth: true
-            text: root.riskText + "<br><br>" + root.systemDriveText + "<br><br>" + root.proceedText
-        }
-
-        Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor }
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            Text { text: qsTr("Size: %1").arg(root.sizeStr); font.family: Style.fontFamily; color: Style.textDescriptionColor }
-            Text {
-                text: qsTr("Mounted as: %1").arg(root.mountpoints && root.mountpoints.length > 0 ? root.mountpoints.join(", ") : qsTr("Not mounted"))
-                font.family: Style.fontFamily
-                color: Style.textDescriptionColor
+        ImButtonRed {
+            id: cancelButton
+            text: qsTr("CANCEL")
+            activeFocusOnTab: true
+            onClicked: {
+                root.close()
+                root.cancelled()
             }
         }
 
-        Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor }
-
-        Text {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            font.family: Style.fontFamily
-            font.pixelSize: Style.fontSizeDescription
-            color: Style.textDescriptionColor
-            text: qsTr("To continue, type the exact drive name below:")
-        }
-
-        Text {
-            font.family: Style.fontFamily
-            font.bold: true
-            color: Style.textDescriptionColor
-            text: root.driveName
-        }
-
-        TextField {
-            id: nameInput
-            Layout.fillWidth: true
-            placeholderText: qsTr("Type drive name exactly as shown above")
-            text: ""
-            Keys.onPressed: (event) => {
-                if ((event.key === Qt.Key_V && (event.modifiers & (Qt.ControlModifier | Qt.MetaModifier))) ||
-                    (event.key === Qt.Key_Insert && (event.modifiers & Qt.ShiftModifier))) {
-                    event.accepted = true
-                    return
-                }
-            }
-            onAccepted: {
-                if (continueButton.enabled) continueButton.clicked()
-            }
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.RightButton | Qt.MiddleButton
-                onPressed: (mouse) => { mouse.accepted = true }
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Style.spacingMedium
-            Item { Layout.fillWidth: true }
-
-            ImButtonRed {
-                text: qsTr("CANCEL")
-                onClicked: {
-                    root.close()
-                    root.cancelled()
-                }
-            }
-
-            ImButton {
-                id: continueButton
-                text: qsTr("CONTINUE")
-                enabled: nameInput.text === root.driveName
-                onClicked: {
-                    if (!enabled) return
-                    root.close()
-                    root.confirmed()
-                }
+        ImButton {
+            id: continueButton
+            text: qsTr("CONTINUE")
+            enabled: nameInput.text === root.driveName
+            activeFocusOnTab: true
+            onClicked: {
+                if (!enabled) return
+                root.close()
+                root.confirmed()
             }
         }
     }
 
     onOpened: {
         nameInput.text = ""
-        nameInput.forceActiveFocus()
+        
+        // Call the base dialog's onOpened behavior
+        // This is handled automatically by BaseDialog
     }
 }
-
-

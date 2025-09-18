@@ -74,17 +74,20 @@ Item {
         // Flexible spacer to push the switch flush-right and align across rows
         Item { Layout.fillWidth: true }
 
-        // Native switch on the right
+        // Native switch on the right with custom focus styling
         Switch {
             id: sw
             Layout.alignment: Qt.AlignVCenter
-            Material.accent: Style.formControlActiveColor
+            Material.accent: sw.activeFocus ? Style.raspberryRed : Style.formControlActiveColor
             checked: pill.checked
             activeFocusOnTab: true
+            
             onToggled: {
                 pill.checked = checked
                 pill.toggled(checked)
             }
+            
+            // Focus styling handled by Material.accent color change only
         }
 
     }

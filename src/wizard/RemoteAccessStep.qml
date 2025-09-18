@@ -20,7 +20,7 @@ WizardStepBase {
     required property var wizardContainer
     
     title: qsTr("Customisation: SSH authentication")
-    subtitle: qsTr("Configure SSH access.")
+    subtitle: qsTr("Configure SSH access")
     showSkipButton: true
     
     // Content
@@ -49,7 +49,7 @@ WizardStepBase {
                 enabled: sshEnablePill.checked
                 
                 WizardFormLabel {
-                    text: qsTr("Authentication Mechanism:")
+                    text: qsTr("Authentication mechanism:")
                 }
                 
                 ImRadioButton {
@@ -72,7 +72,7 @@ WizardStepBase {
                     ImTextField {
                         id: fieldPublicKey
                         Layout.fillWidth: true
-                        placeholderText: qsTr("Enter public key or click Browse")
+                        placeholderText: qsTr("Enter public key or click BROWSE")
                         font.pixelSize: Style.fontSizeInput
                     }
                     

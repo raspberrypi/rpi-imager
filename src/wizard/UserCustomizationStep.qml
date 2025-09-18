@@ -4,7 +4,6 @@
  */
 
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../qmlcomponents"
 import "components"
@@ -17,9 +16,10 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     property bool hasSavedUserPassword: false
+    property string savedUsername: ""
     
     title: qsTr("Customisation: Choose username")
-    subtitle: qsTr("Create a user account for your Raspberry Pi.")
+    subtitle: qsTr("Create a user account for your Raspberry Pi")
     showSkipButton: true
     
     // Content
@@ -45,7 +45,7 @@ WizardStepBase {
                 ImTextField {
                     id: fieldUsername
                     Layout.fillWidth: true
-                    placeholderText: qsTr("pi")
+                    placeholderText: root.hasSavedUserPassword && root.savedUsername ? root.savedUsername : qsTr("pi")
                     font.pixelSize: Style.fontSizeInput
                     
                     validator: RegularExpressionValidator {
@@ -97,6 +97,7 @@ WizardStepBase {
         var saved = imageWriter.getSavedCustomizationSettings()
         if (saved.sshUserName) {
             fieldUsername.text = saved.sshUserName
+            root.savedUsername = saved.sshUserName
         }
         if (saved.sshUserPassword) {
             // Indicate a saved (crypted) password exists; do not prefill fields
@@ -120,9 +121,8 @@ WizardStepBase {
         // Merge-and-save strategy
         var saved = imageWriter.getSavedCustomizationSettings()
         var usernameText = fieldUsername.text ? fieldUsername.text.trim() : ""
-        var defaultUsername = "pi"
-        var hasPasswords = fieldPassword.text.length > 0 && fieldPasswordConfirm.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text
-        if (usernameText.length > 0 && usernameText !== defaultUsername && hasPasswords) {
+        var hasPasswords = fieldPassword.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text
+        if (usernameText.length > 0 && hasPasswords) {
             saved.sshUserName = usernameText
             // Store crypted password similar to legacy flow
             saved.sshUserPassword = imageWriter.crypt(fieldPassword.text)

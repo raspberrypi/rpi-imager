@@ -19,17 +19,12 @@ WizardStepBase {
     
     readonly property HWListModel hwModel: imageWriter.getHWList()
     
-    title: qsTr("Select your Raspberry Pi Device")
+    title: qsTr("Select your Raspberry Pi device")
     showNextButton: true
     
     property alias hwlist: hwlist
     property bool modelLoaded: false
     property bool hasDeviceSelected: false
-    
-    // Forward the nextClicked signal as next() function
-    function next() {
-        root.nextClicked()
-    }
     
     Component.onCompleted: {
         // Initial load only
@@ -42,6 +37,9 @@ WizardStepBase {
         
         // Set the initial focus item to the ListView
         root.initialFocusItem = hwlist
+        
+        // Ensure focus starts on the device list when entering this step (same as OSSelectionStep)
+        hwlist.forceActiveFocus()
     }
 
     Connections {
@@ -62,6 +60,10 @@ WizardStepBase {
             var success = root.hwModel.reload()
             if (success) {
                 modelLoaded = true
+                // Set initial focus for keyboard navigation if no device is selected
+                if (hwlist.currentIndex === -1 && root.hwModel.rowCount() > 0) {
+                    hwlist.currentIndex = 0
+                }
             }
         }
     }
@@ -73,70 +75,37 @@ WizardStepBase {
         spacing: 0
 
         // Device list (fills available space)
-        ListView {
+        SelectionListView {
             id: hwlist
             Layout.fillWidth: true
             Layout.fillHeight: true
             model: root.hwModel
-            currentIndex: -1
-            
-            // Enable keyboard navigation
-            activeFocusOnTab: true
+            delegate: hwdelegate
+            autoSelectFirst: true
             
             Component.onCompleted: {
                 if (root.hwModel && root.hwModel.currentIndex !== undefined && root.hwModel.currentIndex >= 0) {
-                    hwlist.currentIndex = root.hwModel.currentIndex
+                    currentIndex = root.hwModel.currentIndex
                     root.hasDeviceSelected = true
                     root.nextButtonEnabled = true
                 }
+                // SelectionListView handles setting currentIndex = 0 when count > 0
             }
+            
             onCurrentIndexChanged: {
                 root.hasDeviceSelected = currentIndex !== -1
                 root.nextButtonEnabled = root.hasDeviceSelected
             }
-            delegate: hwdelegate
-            clip: true
             
-            boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle {
-                color: Style.listViewHighlightColor
-                radius: 0
-                border.color: hwlist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
-                border.width: hwlist.activeFocus ? 2 : 0
-                anchors.fill: parent
-                anchors.rightMargin: (hwlist.contentHeight > hwlist.height ? Style.scrollBarWidth : 0)
-            }
-            
-            // Keyboard navigation
-            Keys.onUpPressed: {
-                if (currentIndex > 0) {
-                    currentIndex--
-                }
-            }
-            Keys.onDownPressed: {
-                if (currentIndex < count - 1) {
-                    currentIndex++
-                }
-            }
-            Keys.onEnterPressed: selectCurrentItem()
-            Keys.onReturnPressed: selectCurrentItem()
-            Keys.onSpacePressed: selectCurrentItem()
-            
-            function selectCurrentItem() {
-                if (currentIndex >= 0 && currentIndex < count) {
-                    root.hwModel.currentIndex = currentIndex
-                    var item = itemAtIndex(currentIndex)
-                    if (item && item.name) {
-                        root.wizardContainer.selectedDeviceName = item.name
-                    }
+            onItemSelected: function(index, item) {
+                if (index >= 0 && index < model.rowCount()) {
+                    // Set the model's current index (this triggers the HWListModel logic)
+                    root.hwModel.currentIndex = index
+                    // Use the model's currentName property
+                    root.wizardContainer.selectedDeviceName = root.hwModel.currentName
                     root.hasDeviceSelected = true
                     root.nextButtonEnabled = true
                 }
-            }
-            
-            ScrollBar.vertical: ScrollBar {
-                width: Style.scrollBarWidth
-                policy: hwlist.contentHeight > hwlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
             }
         }
     }

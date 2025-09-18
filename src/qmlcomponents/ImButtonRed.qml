@@ -15,7 +15,7 @@ Button {
     background: Rectangle {
         color: control.enabled
                ? (control.activeFocus
-                   ? Style.button2FocusedBackgroundColor
+                   ? Style.button2HoveredBackgroundColor
                    : (control.hovered ? Style.button2HoveredBackgroundColor : Style.button2BackgroundColor))
                : Qt.rgba(0, 0, 0, 0.1)
         radius: 4
@@ -25,7 +25,7 @@ Button {
         text: control.text
         font: control.font
         color: control.enabled
-               ? (control.hovered ? Style.raspberryRed : Style.button2ForegroundColor)
+               ? (control.activeFocus || control.hovered ? Style.raspberryRed : Style.button2ForegroundColor)
                : Qt.rgba(0, 0, 0, 0.3)
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

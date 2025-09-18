@@ -21,13 +21,13 @@ WizardStepBase {
     title: qsTr("Select your storage device")
     showNextButton: true
     
-    property alias dstlist: dstlist
-    property string selectedDeviceName: ""
-    
     // Forward the nextClicked signal as next() function
     function next() {
         root.nextClicked()
     }
+    
+    property alias dstlist: dstlist
+    property string selectedDeviceName: ""
     
     Component.onCompleted: {
         // Register the ListView for keyboard navigation
@@ -48,56 +48,19 @@ WizardStepBase {
         spacing: 0
         
         // Storage device list fills available space
-        ListView {
+        SelectionListView {
             id: dstlist
             Layout.fillWidth: true
             Layout.fillHeight: true
             model: root.imageWriter.getDriveList()
-            currentIndex: -1
             delegate: dstdelegate
-            clip: true
+            keyboardAutoAdvance: true
+            nextFunction: root.next
             
-            // Enable keyboard navigation
-            activeFocusOnTab: true
-            
-            boundsBehavior: Flickable.StopAtBounds
-            highlight: Rectangle {
-                color: Style.listViewHighlightColor
-                radius: 0
-                border.color: dstlist.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
-                border.width: dstlist.activeFocus ? 2 : 0
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.rightMargin: (dstlist.contentHeight > dstlist.height ? Style.scrollBarWidth : 0)
-            }
-            
-            // Keyboard navigation
-            Keys.onUpPressed: {
-                if (currentIndex > 0) {
-                    currentIndex--
+            onItemSelected: function(index, item) {
+                if (index >= 0 && index < count && item && typeof item.selectDrive === "function") {
+                    item.selectDrive()
                 }
-            }
-            Keys.onDownPressed: {
-                if (currentIndex < count - 1) {
-                    currentIndex++
-                }
-            }
-            Keys.onEnterPressed: selectCurrentItem()
-            Keys.onReturnPressed: selectCurrentItem()
-            Keys.onSpacePressed: selectCurrentItem()
-            
-            function selectCurrentItem() {
-                if (currentIndex >= 0 && currentIndex < count) {
-                    var item = itemAtIndex(currentIndex)
-                    if (item && typeof item.selectDrive === "function") {
-                        item.selectDrive()
-                    }
-                }
-            }
-            
-            ScrollBar.vertical: ScrollBar {
-                width: Style.scrollBarWidth
-                policy: dstlist.contentHeight > dstlist.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
             }
 
             // Auto-select a safe default when drives appear
@@ -130,7 +93,7 @@ WizardStepBase {
             ImCheckBox {
                 id: filterSystemDrives
                 checked: true
-                text: qsTr("Exclude System Drives")
+                text: qsTr("Exclude system drives")
 
                 onToggled: {
                     if (!checked) {
@@ -220,7 +183,7 @@ WizardStepBase {
                         smooth: true
                         mipmap: true
                         // Rasterize vector sources at device pixel ratio to avoid aliasing/blurriness on HiDPI
-                        sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+                        sourceSize: Qt.size(Math.round(40 * Screen.devicePixelRatio), Math.round(40 * Screen.devicePixelRatio))
                         visible: source.toString().length > 0
 
                         Rectangle {

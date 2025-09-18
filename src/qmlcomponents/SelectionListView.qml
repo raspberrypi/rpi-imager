@@ -1,0 +1,185 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (C) 2025 Raspberry Pi Ltd
+ */
+
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+import RpiImager
+
+ListView {
+    id: root
+    
+    // Properties that can be customized
+    property bool autoSelectFirst: true
+    property bool keyboardAutoAdvance: false
+    property var nextFunction: null
+    
+    // Signals for selection actions
+    signal itemSelected(int index, var item)
+    signal spacePressed(int index, var item)
+    signal enterPressed(int index, var item) 
+    signal returnPressed(int index, var item)
+    
+    // Helper function for keyboard auto-advance
+    function handleKeyboardSelection(index, item) {
+        // Always call the itemSelected signal first
+        root.itemSelected(index, item)
+        
+        // If auto-advance is enabled and we have a next function, call it
+        if (root.keyboardAutoAdvance && root.nextFunction && typeof root.nextFunction === "function") {
+            Qt.callLater(function() {
+                root.nextFunction()
+            })
+        }
+    }
+    
+    // Standard ListView configuration for selection lists
+    clip: true
+    focus: true
+    activeFocusOnTab: true
+    boundsBehavior: Flickable.StopAtBounds
+    currentIndex: -1
+    
+    // Standard highlight configuration
+    highlight: Rectangle {
+        color: Style.listViewHighlightColor
+        radius: 0
+        border.color: root.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
+        border.width: root.activeFocus ? 2 : 0
+        anchors.fill: parent
+        anchors.rightMargin: (root.contentHeight > root.height ? Style.scrollBarWidth : 0)
+    }
+    highlightFollowsCurrentItem: true
+    highlightRangeMode: ListView.ApplyRange
+    preferredHighlightBegin: -50
+    preferredHighlightEnd: height + 50
+    
+    // Standard ScrollBar
+    ScrollBar.vertical: ScrollBar {
+        width: Style.scrollBarWidth
+        policy: root.contentHeight > root.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+    }
+    
+    // Focus management
+    onActiveFocusChanged: {
+        if (activeFocus && currentIndex === -1 && count > 0 && autoSelectFirst) {
+            currentIndex = 0
+        }
+    }
+    
+    // Ensure we have a selection when count changes
+    onCountChanged: {
+        if (count > 0 && currentIndex === -1 && autoSelectFirst) {
+            currentIndex = 0
+        }
+    }
+    
+    // Standard keyboard navigation
+    Keys.onUpPressed: {
+        if (currentIndex > 0) {
+            currentIndex--
+            positionViewAtIndex(currentIndex, ListView.Center)
+        }
+    }
+    
+    Keys.onDownPressed: {
+        if (currentIndex < count - 1) {
+            currentIndex++
+            positionViewAtIndex(currentIndex, ListView.Center)
+        }
+    }
+    
+    Keys.onSpacePressed: {
+        if (currentIndex !== -1) {
+            var item = itemAtIndex(currentIndex)
+            root.spacePressed(currentIndex, item)
+            root.handleKeyboardSelection(currentIndex, item)
+        }
+    }
+    
+    Keys.onEnterPressed: {
+        if (currentIndex !== -1) {
+            var item = itemAtIndex(currentIndex)
+            root.enterPressed(currentIndex, item)
+            root.handleKeyboardSelection(currentIndex, item)
+        }
+    }
+    
+    Keys.onReturnPressed: {
+        if (currentIndex !== -1) {
+            var item = itemAtIndex(currentIndex)
+            root.returnPressed(currentIndex, item)
+            root.handleKeyboardSelection(currentIndex, item)
+        }
+    }
+    
+    // Accessibility support
+    Accessible.onPressAction: {
+        if (currentIndex !== -1) {
+            var item = itemAtIndex(currentIndex)
+            root.itemSelected(currentIndex, item)
+        }
+    }
+    
+    // Helper function to get model data safely
+    function getModelData(index) {
+        if (!model || index < 0 || index >= count) {
+            return null
+        }
+        
+        // For QML ListModel (has get() method)
+        if (typeof model.get === "function") {
+            return model.get(index)
+        }
+        
+        // For QAbstractListModel (like OSListModel, HWListModel)
+        // Create a JavaScript object with all role data
+        var modelIndex = model.index(index, 0)
+        if (!modelIndex || !modelIndex.valid) {
+            return null
+        }
+        
+        var data = {}
+        var roles = model.roleNames ? model.roleNames() : {}
+        for (var roleKey in roles) {
+            var roleName = roles[roleKey]
+            var value = model.data(modelIndex, parseInt(roleKey))
+            // Provide sensible defaults for undefined values
+            if (value === undefined || value === null) {
+                if (roleName === "url" || roleName === "icon" || roleName === "subitems_json" || 
+                    roleName === "extract_sha256" || roleName === "init_format" || roleName === "release_date" ||
+                    roleName === "tooltip" || roleName === "website" || roleName === "architecture") {
+                    value = ""
+                } else if (roleName === "image_download_size" || roleName === "extract_size") {
+                    value = 0
+                } else if (roleName === "capabilities") {
+                    value = []
+                } else if (roleName === "contains_multiple_files" || roleName === "random" || roleName === "enable_rpi_connect") {
+                    value = false
+                }
+            }
+            data[roleName] = value
+        }
+        
+        // Add missing properties that might not be in the model but are expected by the code
+        if (!("subitems_url" in data)) {
+            data.subitems_url = ""
+        }
+        if (!("contains_multiple_files" in data)) {
+            data.contains_multiple_files = false
+        }
+        
+        return data
+    }
+    
+    // Helper function to select an item programmatically
+    function selectItem(index) {
+        if (index >= 0 && index < count) {
+            currentIndex = index
+            var item = itemAtIndex(index)
+            root.itemSelected(index, item)
+        }
+    }
+}

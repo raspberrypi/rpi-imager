@@ -79,13 +79,27 @@ WizardStepBase {
             }
             
             ScrollView {
+                id: customizationScrollView
                 Layout.fillWidth: true
                 Layout.maximumHeight: Math.round(root.height * 0.4)
                 clip: true
                 visible: root.anyCustomizationsApplied
+                activeFocusOnTab: true
                 Flickable {
                     contentWidth: parent.width
                     contentHeight: customizationColumn.height
+                    
+                    Keys.onUpPressed: {
+                        if (contentY > 0) {
+                            contentY = Math.max(0, contentY - 20)
+                        }
+                    }
+                    Keys.onDownPressed: {
+                        var maxY = Math.max(0, contentHeight - height)
+                        if (contentY < maxY) {
+                            contentY = Math.min(maxY, contentY + 20)
+                        }
+                    }
                     
                     Column {
                         id: customizationColumn
@@ -95,7 +109,7 @@ WizardStepBase {
                         Text { text: qsTr("✓ User account configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.userConfigured }
                         Text { text: qsTr("✓ Wi‑Fi configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.wifiConfigured }
                         Text { text: qsTr("✓ SSH enabled"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.sshEnabled }
-                        Text { text: qsTr("✓ Pi Connect enabled"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.piConnectEnabled }
+                        Text { text: qsTr("✓ Raspberry Pi Connect enabled"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.piConnectEnabled }
                         Text { text: qsTr("✓ Locale configured"); font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.localeConfigured }
                     }
                 }
@@ -121,8 +135,10 @@ WizardStepBase {
         }
         
         ImButton {
+            id: writeAnotherButton
             text: qsTr("Write Another")
             enabled: true
+            activeFocusOnTab: true
             Layout.minimumWidth: Style.buttonWidthMinimum
             Layout.preferredHeight: Style.buttonHeightStandard
             onClicked: {
@@ -133,8 +149,10 @@ WizardStepBase {
         }
         
         ImButtonRed {
+            id: finishButton
             text: imageWriter.isEmbeddedMode() ? qsTr("Reboot") : qsTr("Finish")
             enabled: true
+            activeFocusOnTab: true
             Layout.minimumWidth: Style.buttonWidthMinimum
             Layout.preferredHeight: Style.buttonHeightStandard
             onClicked: {
@@ -147,6 +165,21 @@ WizardStepBase {
                 }
             }
         }
+    }
+    
+    // Focus management
+    Component.onCompleted: {
+        registerFocusGroup("scrollview", function() {
+            // Only include the scroll view when it's visible and has content to scroll
+            if (customizationScrollView.visible && customizationScrollView.contentItem.contentHeight > customizationScrollView.height) {
+                return [customizationScrollView]
+            }
+            return []
+        }, 0)
+        
+        registerFocusGroup("buttons", function() {
+            return [writeAnotherButton, finishButton]
+        }, 1)
     }
 
 } 

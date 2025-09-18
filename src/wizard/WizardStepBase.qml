@@ -30,6 +30,14 @@ FocusScope {
     property alias nextButtonItem: nextButton
     property alias backButtonItem: backButton
     property alias skipButtonItem: skipButton
+    // Reference to the App Options button from the parent WizardContainer
+    property var appOptionsButton: null
+    onAppOptionsButtonChanged: {
+        // Rebuild navigation when App Options button is connected
+        if (appOptionsButton) {
+            Qt.callLater(rebuildFocusOrder)
+        }
+    }
 
     // Focus groups: array of { name, order, getItemsFn, enabled }
     property var _focusGroups: []
@@ -193,30 +201,34 @@ FocusScope {
         }
         _focusableItems = items
 
-        // Determine first/last
-        var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
-        var lastField = _focusableItems.length > 0 ? _focusableItems[_focusableItems.length-1] : null
-
-        // Wire fields forward/backward (override to enforce consistency)
-        for (var j = 0; j < _focusableItems.length; j++) {
-            var cur = _focusableItems[j]
-            var next = (j + 1 < _focusableItems.length) ? _focusableItems[j+1] : nextButton
-            var prev = (j > 0) ? _focusableItems[j-1] : backButton
-            if (cur && cur.KeyNavigation) {
-                cur.KeyNavigation.tab = next
-                cur.KeyNavigation.backtab = prev
+        // Build complete navigation chain in order: Next -> Back -> Skip -> App Options -> Fields
+        var navigationChain = []
+        
+        // Add navigation buttons in order (include if visible, regardless of enabled state)
+        if (nextButton.visible) navigationChain.push(nextButton)
+        if (backButton.visible) navigationChain.push(backButton)
+        if (skipButton.visible) navigationChain.push(skipButton)
+        if (appOptionsButton && appOptionsButton.visible) navigationChain.push(appOptionsButton)
+        
+        // Add all focusable fields
+        for (var i = 0; i < _focusableItems.length; i++) {
+            navigationChain.push(_focusableItems[i])
+        }
+        
+        // Wire the complete chain with perfect circular navigation
+        for (var j = 0; j < navigationChain.length; j++) {
+            var current = navigationChain[j]
+            var nextInChain = (j + 1 < navigationChain.length) ? navigationChain[j + 1] : navigationChain[0]
+            var prevInChain = (j > 0) ? navigationChain[j - 1] : navigationChain[navigationChain.length - 1]
+            
+            if (current && current.KeyNavigation) {
+                current.KeyNavigation.tab = nextInChain
+                current.KeyNavigation.backtab = prevInChain
             }
         }
 
-        // Button cycle: Next -> Back -> Skip -> firstField (or Next if none)
-        nextButton.KeyNavigation.tab = backButton
-        nextButton.KeyNavigation.backtab = lastField ? lastField : backButton
-        backButton.KeyNavigation.tab = skipButton
-        backButton.KeyNavigation.backtab = nextButton
-        skipButton.KeyNavigation.tab = firstField ? firstField : nextButton
-        skipButton.KeyNavigation.backtab = nextButton
-
         // Ensure initialFocusItem set
+        var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
         if (!initialFocusItem) initialFocusItem = firstField
     }
 

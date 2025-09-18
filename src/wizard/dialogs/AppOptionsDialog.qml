@@ -12,17 +12,11 @@ import "../../qmlcomponents"
 
 import RpiImager
 
-Dialog {
+BaseDialog {
     id: popup
-    width: 520
-    height: 280
     
-    // Center the dialog on screen
-    x: parent ? (parent.width - width) / 2 : 0
-    y: parent ? (parent.height - height) / 2 : 0
-    
-    modal: true
-    closePolicy: Popup.CloseOnEscape
+    // Override default height for this more complex dialog
+    height: Math.max(280, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280)
     
     required property ImageWriter imageWriter
     // Optional reference to the wizard container for ephemeral flags
@@ -30,206 +24,216 @@ Dialog {
     
     property bool initialized: false
     property url selectedRepo: ""
-    
-    // Custom modal overlay background
-    Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.3)
-        Behavior on opacity {
-            NumberAnimation { duration: 150 }
-        }
+
+    // Custom escape handling
+    function escapePressed() {
+        popup.close()
     }
-    
-    // Remove standard dialog buttons since we have custom ones
-    standardButtons: Dialog.NoButton
-    
-    // Set the dialog background directly
-    background: Rectangle {
-        color: Style.titleBackgroundColor
-        radius: Style.sectionBorderRadius
-        border.color: Style.popupBorderColor
-        border.width: Style.sectionBorderWidth
+
+    // Register focus groups when component is ready
+    Component.onCompleted: {
+        registerFocusGroup("options", function(){ 
+            return [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem, chkDisableWarnings.focusItem]
+        }, 0)
+        registerFocusGroup("repository", function(){ 
+            return [fieldCustomRepository, browseButton]
+        }, 1)
+        registerFocusGroup("buttons", function(){ 
+            return [cancelButton, saveButton]
+        }, 2)
     }
 
     Connections {
         target: imageWriter
         // Handle native file selection for "Use custom"
         function onFileSelected(fileUrl) {
-            popup.selectedRepo = fileUrl
+            popup.selectedRepo = fileUrl;
         }
     }
-    
-    // Main content - direct ColumnLayout without Rectangle wrapper
-    ColumnLayout {
-        id: contentLayout
-        anchors.fill: parent
-        anchors.margins: Style.cardPadding
-        spacing: Style.spacingLarge
-        
-        // Header
-        Text {
-            text: qsTr("App Options")
-            font.pixelSize: Style.fontSizeLargeHeading
-            font.family: Style.fontFamilyBold
-            font.bold: true
-            color: Style.formLabelColor
-            Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
-        }
-        
-        // Options section
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: optionsLayout.implicitHeight + Style.cardPadding
-            
-            ColumnLayout {
-                id: optionsLayout
-                anchors.fill: parent
-                anchors.margins: Style.cardPadding
-                spacing: Style.spacingMedium
-                
-                ImOptionPill {
-                    id: chkBeep
-                    text: qsTr("Play sound when finished")
-                    Layout.fillWidth: true
-                }
-                
-                ImOptionPill {
-                    id: chkEject
-                    text: qsTr("Eject media when finished")
-                    Layout.fillWidth: true
-                }
-                
-                ImOptionPill {
-                    id: chkTelemetry
-                    text: qsTr("Enable anonymous statistics (telemetry)")
-                    helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is this?")
-                    helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-imager?tab=readme-ov-file#telemetry"
-                    Layout.fillWidth: true
-                }
 
-                ImOptionPill {
-                    id: chkDisableWarnings
-                    text: qsTr("Disable warnings")
-                    Layout.fillWidth: true
-                    onCheckedChanged: {
-                        if (checked) {
-                            // Confirm before enabling this risky setting
-                            confirmDisableWarnings.open()
-                        } else if (popup.wizardContainer) {
-                            popup.wizardContainer.disableWarnings = false
-                        }
-                    }
-                }
+    // Header
+    Text {
+        text: qsTr("App Options")
+        font.pixelSize: Style.fontSizeLargeHeading
+        font.family: Style.fontFamilyBold
+        font.bold: true
+        color: Style.formLabelColor
+        Layout.fillWidth: true
+        horizontalAlignment: Text.AlignHCenter
+    }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.spacingMedium
-                    
-                    ImTextField {
-                        id: fieldCustomRepository
-                        text: selectedRepo !== "" ? UrlFmt.display(selectedRepo) : ""
-                        Layout.fillWidth: true
-                        placeholderText: qsTr("Select custom Repository")
-                        font.pixelSize: Style.fontSizeInput
-                        readOnly: true
-                    }
-                    
-                    ImButton {
-                        id: browseButton
-                        text: qsTr("Browse")
-                        Layout.minimumWidth: 80
-                        onClicked: {
-                            // Prefer native file dialog via Imager's wrapper, but only if available
-                            if (imageWriter.nativeFileDialogAvailable()) {
-                                // Defer opening the native dialog until after the current event completes
-                                Qt.callLater(function() {
-                                    imageWriter.openFileDialog(
-                                        qsTr("Select Repository"),
-                                        CommonStrings.repoFiltersString)
-                                })
-                            } else {
-                                // Fallback to QML dialog (forced non-native)
-                                repoFileDialog.open()
-                            }
-                        }
+    // Options section
+    Item {
+        Layout.fillWidth: true
+        Layout.preferredHeight: optionsLayout.implicitHeight + Style.cardPadding
+
+        ColumnLayout {
+            id: optionsLayout
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding
+            spacing: Style.spacingMedium
+
+            ImOptionPill {
+                id: chkBeep
+                text: qsTr("Play sound when finished")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+            }
+
+            ImOptionPill {
+                id: chkEject
+                text: qsTr("Eject media when finished")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+            }
+
+            ImOptionPill {
+                id: chkTelemetry
+                text: qsTr("Enable anonymous statistics (telemetry)")
+                helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is this?")
+                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-imager?tab=readme-ov-file#telemetry"
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+            }
+
+            ImOptionPill {
+                id: chkDisableWarnings
+                text: qsTr("Disable warnings")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+                onCheckedChanged: {
+                    if (checked) {
+                        // Confirm before enabling this risky setting
+                        confirmDisableWarnings.open();
+                    } else if (popup.wizardContainer) {
+                        popup.wizardContainer.disableWarnings = false;
                     }
                 }
             }
-        }
-        // Spacer
-        Item {
-            Layout.fillHeight: true
-        }
-        // Buttons section with background
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: buttonRow.implicitHeight + Style.cardPadding
-            color: Style.titleBackgroundColor
-            
+
             RowLayout {
-                id: buttonRow
-                anchors.fill: parent
-                anchors.margins: Style.cardPadding / 2
+                Layout.fillWidth: true
                 spacing: Style.spacingMedium
-                
-                Item {
+
+                ImTextField {
+                    id: fieldCustomRepository
+                    text: selectedRepo !== "" ? UrlFmt.display(selectedRepo) : ""
                     Layout.fillWidth: true
+                    placeholderText: qsTr("Select custom Repository")
+                    font.pixelSize: Style.fontSizeInput
+                    readOnly: true
+                    activeFocusOnTab: true
                 }
-                
+
                 ImButton {
-                    text: qsTr("Cancel")
-                    Layout.minimumWidth: Style.buttonWidthMinimum
+                    id: browseButton
+                    text: qsTr("Browse")
+                    Layout.minimumWidth: 80
+                    activeFocusOnTab: true
                     onClicked: {
-                        popup.close()
-                    }
-                }
-                
-                ImButtonRed {
-                    text: qsTr("Save")
-                    Layout.minimumWidth: Style.buttonWidthMinimum
-                    onClicked: {
-                        popup.applySettings()
-                        popup.close()
+                        // Prefer native file dialog via Imager's wrapper, but only if available
+                        if (imageWriter.nativeFileDialogAvailable()) {
+                            // Defer opening the native dialog until after the current event completes
+                            Qt.callLater(function () {
+                                imageWriter.openFileDialog(qsTr("Select Repository"), CommonStrings.repoFiltersString);
+                            });
+                        } else {
+                            // Fallback to QML dialog (forced non-native)
+                            repoFileDialog.open();
+                        }
                     }
                 }
             }
         }
     }
-    
+
+    // Spacer
+    Item {
+        Layout.fillHeight: true
+    }
+
+    // Buttons section with background
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: buttonRow.implicitHeight + Style.cardPadding
+        color: Style.titleBackgroundColor
+
+        RowLayout {
+            id: buttonRow
+            anchors.fill: parent
+            anchors.margins: Style.cardPadding / 2
+            spacing: Style.spacingMedium
+
+            Item {
+                Layout.fillWidth: true
+            }
+
+            ImButton {
+                id: cancelButton
+                text: qsTr("Cancel")
+                Layout.minimumWidth: Style.buttonWidthMinimum
+                activeFocusOnTab: true
+                onClicked: {
+                    popup.close();
+                }
+            }
+
+            ImButtonRed {
+                id: saveButton
+                text: qsTr("Save")
+                Layout.minimumWidth: Style.buttonWidthMinimum
+                activeFocusOnTab: true
+                onClicked: {
+                    popup.applySettings();
+                    popup.close();
+                }
+            }
+        }
+    }
+
     function initialize() {
         if (!initialized) {
             // Load current settings from ImageWriter
-            chkBeep.checked = imageWriter.getBoolSetting("beep")
-            chkEject.checked = imageWriter.getBoolSetting("eject")  
-            chkTelemetry.checked = imageWriter.getBoolSetting("telemetry")
+            chkBeep.checked = imageWriter.getBoolSetting("beep");
+            chkEject.checked = imageWriter.getBoolSetting("eject");
+            chkTelemetry.checked = imageWriter.getBoolSetting("telemetry");
             // Do not load from QSettings; keep ephemeral
-            chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false
+            chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false;
             if (imageWriter.customRepo()) {
-                selectedRepo = imageWriter.constantOsListUrl()
+                selectedRepo = imageWriter.constantOsListUrl();
             }
 
-            initialized = true
+            initialized = true;
             // Pre-compute final height before opening to avoid first-show reflow
-            var desired = contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280
-            popup.height = Math.max(280, desired)
+            var desired = contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280;
+            popup.height = Math.max(280, desired);
         }
     }
-    
+
     function applySettings() {
         // Save settings to ImageWriter
-        imageWriter.setSetting("beep", chkBeep.checked)
-        imageWriter.setSetting("eject", chkEject.checked)
-        imageWriter.setSetting("telemetry", chkTelemetry.checked)
+        imageWriter.setSetting("beep", chkBeep.checked);
+        imageWriter.setSetting("eject", chkEject.checked);
+        imageWriter.setSetting("telemetry", chkTelemetry.checked);
         // Do not persist disable_warnings; set ephemeral flag only
-        if (popup.wizardContainer) popup.wizardContainer.disableWarnings = chkDisableWarnings.checked
+        if (popup.wizardContainer)
+            popup.wizardContainer.disableWarnings = chkDisableWarnings.checked;
         if (popup.selectedRepo !== "") {
-            imageWriter.refreshOsListFrom(selectedRepo)
+            imageWriter.refreshOsListFrom(selectedRepo);
         }
     }
-    
+
     onOpened: {
-        initialize()
-        chkBeep.forceActiveFocus()
+        initialize();
+        // BaseDialog handles the focus management automatically
     }
 
     // Confirmation dialog for disabling warnings
@@ -244,9 +248,13 @@ Dialog {
         onClosed: {
             // If dialog was closed without confirming, revert the toggle
             if (!confirmAccepted) {
-                chkDisableWarnings.checked = false
+                chkDisableWarnings.checked = false;
             }
-            confirmAccepted = false
+            confirmAccepted = false;
+        }
+
+        onOpened: {
+            confirmCancelButton.forceActiveFocus();
         }
 
         property bool confirmAccepted: false
@@ -258,46 +266,63 @@ Dialog {
             border.width: Style.sectionBorderWidth
         }
 
-        ColumnLayout {
+        FocusScope {
             anchors.fill: parent
-            anchors.margins: Style.cardPadding
-            spacing: Style.spacingMedium
 
-            Text {
-                text: qsTr("Disable warnings?")
-                font.pixelSize: Style.fontSizeHeading
-                font.family: Style.fontFamilyBold
-                font.bold: true
-                color: Style.formLabelColor
-                Layout.fillWidth: true
-            }
+            Keys.onEscapePressed: confirmDisableWarnings.close()
 
-            Text {
-                textFormat: Text.StyledText
-                wrapMode: Text.WordWrap
-                font.pixelSize: Style.fontSizeDescription
-                font.family: Style.fontFamily
-                color: Style.textDescriptionColor
-                Layout.fillWidth: true
-                text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Style.cardPadding
                 spacing: Style.spacingMedium
-                Item { Layout.fillWidth: true }
 
-                ImButton {
-                    text: qsTr("Cancel")
-                    onClicked: confirmDisableWarnings.close()
+                Text {
+                    text: qsTr("Disable warnings?")
+                    font.pixelSize: Style.fontSizeHeading
+                    font.family: Style.fontFamilyBold
+                    font.bold: true
+                    color: Style.formLabelColor
+                    Layout.fillWidth: true
                 }
 
-                ImButtonRed {
-                    text: qsTr("Disable warnings")
-                    onClicked: {
-                        confirmDisableWarnings.confirmAccepted = true
-                        if (popup.wizardContainer) popup.wizardContainer.disableWarnings = true
-                        confirmDisableWarnings.close()
+                Text {
+                    textFormat: Text.StyledText
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.textDescriptionColor
+                    Layout.fillWidth: true
+                    text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacingMedium
+                    Item {
+                        Layout.fillWidth: true
+                    }
+
+                    ImButton {
+                        id: confirmCancelButton
+                        text: qsTr("Cancel")
+                        activeFocusOnTab: true
+                        KeyNavigation.tab: confirmDisableButton
+                        KeyNavigation.backtab: confirmDisableButton
+                        onClicked: confirmDisableWarnings.close()
+                    }
+
+                    ImButtonRed {
+                        id: confirmDisableButton
+                        text: qsTr("Disable warnings")
+                        activeFocusOnTab: true
+                        KeyNavigation.tab: confirmCancelButton
+                        KeyNavigation.backtab: confirmCancelButton
+                        onClicked: {
+                            confirmDisableWarnings.confirmAccepted = true;
+                            if (popup.wizardContainer)
+                                popup.wizardContainer.disableWarnings = true;
+                            confirmDisableWarnings.close();
+                        }
                     }
                 }
             }
@@ -311,11 +336,10 @@ Dialog {
         dialogTitle: qsTr("Select custom repository")
         nameFilters: CommonStrings.repoFiltersList
         onAccepted: {
-            popup.selectedRepo = selectedFile
+            popup.selectedRepo = selectedFile;
         }
-        onRejected: {
-            // No-op; user cancelled
-        }
+        onRejected:
+        // No-op; user cancelled
+        {}
     }
 }
-
