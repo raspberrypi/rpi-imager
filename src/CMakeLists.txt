@@ -132,10 +132,6 @@ include(dependencies/xz.cmake)
 # Bundled zstd
 include(dependencies/zstd.cmake)
 
-# Remote nghttp2
-include(dependencies/nghttp2.cmake)
-
-
 # Bundled zlib
 include(dependencies/zlib.cmake)
 
