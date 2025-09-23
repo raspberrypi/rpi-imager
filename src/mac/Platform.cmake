@@ -16,7 +16,6 @@ set(PLATFORM_SOURCES
     dependencies/drivelist/src/darwin/list.mm
     dependencies/drivelist/src/darwin/REDiskList.m
     mac/file_operations_macos.cpp
-    mac/buffer_optimization_macos.cpp
     mac/platformquirks_macos.mm
     mac/nativefiledialog_macos.mm
 )

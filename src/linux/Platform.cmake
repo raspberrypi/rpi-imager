@@ -12,7 +12,6 @@ set(PLATFORM_SOURCES
     linux/stpanalyzer.cpp
     linux/acceleratedcryptographichash_gnutls.cpp
     linux/file_operations_linux.cpp
-    linux/buffer_optimization_linux.cpp
     linux/platformquirks_linux.cpp
     linux/nativefiledialog_linux.cpp
 )

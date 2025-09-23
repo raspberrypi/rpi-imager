@@ -4,6 +4,7 @@
  */
 
 #include "systemmemorymanager.h"
+#include "config.h"
 #include <QDebug>
 #include <QFile>
 #include <QTextStream>
@@ -20,8 +21,10 @@
 #include <mach/mach_types.h>
 #include <mach/mach_init.h>
 #include <mach/mach_host.h>
+#include <unistd.h>
 #elif defined(Q_OS_LINUX)
 #include <sys/sysinfo.h>
+#include <unistd.h>
 #endif
 
 SystemMemoryManager& SystemMemoryManager::instance()
@@ -264,4 +267,130 @@ qint64 SystemMemoryManager::getPlatformAvailableMemoryMB()
     return 0; // Will use total memory
 }
 #endif
+
+// Memory-aware buffer sizing implementations
+
+size_t SystemMemoryManager::getOptimalWriteBufferSize()
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    size_t pageSize = getSystemPageSize();
+    
+    // Base buffer size calculation based on available memory
+    size_t bufferSize;
+    
+    if (totalMemMB < 1024) {
+        // Very low memory (< 1GB): Conservative 512KB
+        bufferSize = 512 * 1024;
+    } else if (totalMemMB < 2048) {
+        // Low memory (1-2GB): 1MB default
+        bufferSize = IMAGEWRITER_BLOCKSIZE;
+    } else if (totalMemMB < 4096) {
+        // Medium memory (2-4GB): 2MB for better throughput
+        bufferSize = 2 * 1024 * 1024;
+    } else if (totalMemMB < 8192) {
+        // High memory (4-8GB): 4MB
+        bufferSize = 4 * 1024 * 1024;
+    } else {
+        // Very high memory (> 8GB): 8MB for maximum throughput
+        bufferSize = 8 * 1024 * 1024;
+    }
+    
+    // Align to page boundaries for optimal performance
+    bufferSize = ((bufferSize + pageSize - 1) / pageSize) * pageSize;
+    
+    // Apply platform-specific constraints
+    const size_t minBufferSize = 256 * 1024;  // 256KB minimum
+    const size_t maxBufferSize = 16 * 1024 * 1024;  // 16MB maximum
+    bufferSize = qMax(minBufferSize, qMin(maxBufferSize, bufferSize));
+    
+    qDebug() << "Optimal write buffer size:" << (bufferSize / 1024) << "KB for" 
+             << totalMemMB << "MB system";
+    
+    return bufferSize;
+}
+
+size_t SystemMemoryManager::getAdaptiveVerifyBufferSize(qint64 fileSize)
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    
+    // Base verification buffer size based on file size
+    size_t baseBufferSize;
+    if (fileSize < 100LL * 1024 * 1024) {        // < 100MB: use 256KB
+        baseBufferSize = 256 * 1024;
+    } else if (fileSize < 1024LL * 1024 * 1024) { // 100MB-1GB: use 2MB  
+        baseBufferSize = 2 * 1024 * 1024;
+    } else if (fileSize < 4LL * 1024 * 1024 * 1024) { // 1GB-4GB: use 4MB
+        baseBufferSize = 4 * 1024 * 1024;
+    } else {                                       // > 4GB: use 8MB
+        baseBufferSize = 8 * 1024 * 1024;
+    }
+    
+    // Adjust based on available system memory
+    size_t memoryAdjustedSize = baseBufferSize;
+    
+    if (totalMemMB < 1024) {
+        // Very low memory: reduce buffer sizes by 50%
+        memoryAdjustedSize = baseBufferSize / 2;
+    } else if (totalMemMB < 2048) {
+        // Low memory: reduce buffer sizes by 25%
+        memoryAdjustedSize = (baseBufferSize * 3) / 4;
+    } else if (totalMemMB > 8192) {
+        // High memory: can afford larger buffers (up to 50% larger)
+        memoryAdjustedSize = qMin(baseBufferSize * 3 / 2, static_cast<size_t>(16 * 1024 * 1024));
+    }
+    
+    // Apply bounds
+    const size_t minVerifyBufferSize = 128 * 1024;  // 128KB minimum
+    const size_t maxVerifyBufferSize = 16 * 1024 * 1024;  // 16MB maximum
+    memoryAdjustedSize = qMax(minVerifyBufferSize, qMin(maxVerifyBufferSize, memoryAdjustedSize));
+    
+    // Align to page boundaries
+    size_t pageSize = getSystemPageSize();
+    memoryAdjustedSize = ((memoryAdjustedSize + pageSize - 1) / pageSize) * pageSize;
+    
+    return memoryAdjustedSize;
+}
+
+size_t SystemMemoryManager::getOptimalInputBufferSize()
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    
+    // Input buffer for downloads/streams - should be smaller than write buffers
+    // to avoid excessive memory usage during concurrent operations
+    size_t inputBufferSize;
+    
+    if (totalMemMB < 1024) {
+        // Very low memory: 64KB
+        inputBufferSize = 64 * 1024;
+    } else if (totalMemMB < 2048) {
+        // Low memory: 128KB
+        inputBufferSize = 128 * 1024;
+    } else if (totalMemMB < 4096) {
+        // Medium memory: 256KB
+        inputBufferSize = 256 * 1024;
+    } else {
+        // High memory: 512KB
+        inputBufferSize = 512 * 1024;
+    }
+    
+    // Align to page boundaries
+    size_t pageSize = getSystemPageSize();
+    inputBufferSize = ((inputBufferSize + pageSize - 1) / pageSize) * pageSize;
+    
+    return inputBufferSize;
+}
+
+size_t SystemMemoryManager::getSystemPageSize()
+{
+#ifdef Q_OS_WIN
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return si.dwPageSize;
+#elif defined(Q_OS_DARWIN) || defined(Q_OS_LINUX)
+    size_t pageSize = sysconf(_SC_PAGESIZE);
+    return (pageSize == (size_t)-1) ? 4096 : pageSize;
+#else
+    return 4096; // Fallback to common page size
+#endif
+}
 

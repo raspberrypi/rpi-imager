@@ -5,7 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "config.h"
-#include "buffer_optimization.h"
+#include "systemmemorymanager.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/mountutils/src/mountutils.hpp"
 #include <iostream>
@@ -33,19 +33,7 @@ using namespace std;
 
 const int DownloadExtractThread::MAX_QUEUE_SIZE = 128;
 
-// Get system page size
-static size_t getSystemPageSize()
-{
-#ifdef Q_OS_WIN
-    SYSTEM_INFO si;
-    GetSystemInfo(&si);
-    return si.dwPageSize;
-#else
-    return sysconf(_SC_PAGESIZE);
-#endif
-}
-
-// Note: Buffer optimization logic moved to centralized buffer_optimization module
+// Buffer optimization logic now handled by centralized SystemMemoryManager
 
 class _extractThreadClass : public QThread {
 public:
@@ -68,7 +56,7 @@ protected:
 
 DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
     : DownloadThread(url, localfilename, expectedHash, parent), 
-      _abufsize(getOptimalWriteBufferSize()), 
+      _abufsize(SystemMemoryManager::instance().getOptimalWriteBufferSize()), 
       _ethreadStarted(false),
       _isImage(true), 
       _inputHash(OSLIST_HASH_ALGORITHM), 
@@ -81,7 +69,7 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
       _downloadComplete(false)
 {
     _extractThread = new _extractThreadClass(this);
-    size_t pageSize = getSystemPageSize();
+    size_t pageSize = SystemMemoryManager::instance().getSystemPageSize();
     _abuf[0] = (char *) qMallocAligned(_abufsize, pageSize);
     _abuf[1] = (char *) qMallocAligned(_abufsize, pageSize);
     
@@ -638,8 +626,8 @@ bool DownloadExtractThread::_verify()
     _lastVerifyNow = 0;
     _verifyTotal = _file.pos();
     
-    // Use adaptive buffer size based on file size for optimal verification performance
-    size_t verifyBufferSize = getAdaptiveVerifyBufferSize(_verifyTotal);
+    // Use adaptive buffer size based on file size and system memory for optimal verification performance
+    size_t verifyBufferSize = SystemMemoryManager::instance().getAdaptiveVerifyBufferSize(_verifyTotal);
     char *verifyBuf = (char *) qMallocAligned(verifyBufferSize, 4096);
     
     QElapsedTimer t1;

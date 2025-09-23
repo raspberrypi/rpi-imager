@@ -5,7 +5,7 @@
 
 #include "localfileextractthread.h"
 #include "config.h"
-#include "buffer_optimization.h"
+#include "systemmemorymanager.h"
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -16,7 +16,7 @@ LocalFileExtractThread::LocalFileExtractThread(const QByteArray &url, const QByt
     : DownloadExtractThread(url, dst, expectedHash, parent)
 {
     // Use the same optimal buffer sizing as compressed files for better performance
-    size_t bufferSize = getOptimalWriteBufferSize();
+    size_t bufferSize = SystemMemoryManager::instance().getOptimalWriteBufferSize();
     _inputBuf = (char *) qMallocAligned(bufferSize, 4096);
     _inputBufSize = bufferSize;
 }

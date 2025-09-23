@@ -56,6 +56,31 @@ public:
      */
     QString getPlatformName();
 
+    /**
+     * @brief Calculate optimal write buffer size based on available memory
+     * @return Optimal buffer size for write operations in bytes
+     */
+    size_t getOptimalWriteBufferSize();
+
+    /**
+     * @brief Calculate adaptive verification buffer size based on file size and available memory
+     * @param fileSize Size of file to be verified in bytes
+     * @return Optimal buffer size for verification operations in bytes
+     */
+    size_t getAdaptiveVerifyBufferSize(qint64 fileSize);
+
+    /**
+     * @brief Calculate optimal input buffer size for downloads/streams
+     * @return Optimal buffer size for input operations in bytes
+     */
+    size_t getOptimalInputBufferSize();
+
+    /**
+     * @brief Get system page size for memory alignment
+     * @return System page size in bytes
+     */
+    size_t getSystemPageSize();
+
 private:
     SystemMemoryManager() = default;
     ~SystemMemoryManager() = default;

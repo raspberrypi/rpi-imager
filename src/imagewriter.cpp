@@ -6,7 +6,6 @@
 #include "downloadextractthread.h"
 #include "imagewriter.h"
 #include "iconimageprovider.h"
-#include "buffer_optimization.h"
 #include "drivelistitem.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/sha256crypt/sha256crypt.h"

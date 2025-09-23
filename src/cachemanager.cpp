@@ -11,7 +11,7 @@
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <functional>
-#include "buffer_optimization.h"
+#include "systemmemorymanager.h"
 #include "config.h"
 
 // Hash algorithm used for cache verification (use same as OS list verification)
@@ -453,8 +453,8 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
             
             qint64 fileSize = cacheFile.size();
             
-            // Use centralized buffer optimization module for consistent buffer sizing
-            qint64 bufferSize = getAdaptiveVerifyBufferSize(fileSize);
+            // Use centralized SystemMemoryManager for consistent buffer sizing
+            qint64 bufferSize = SystemMemoryManager::instance().getAdaptiveVerifyBufferSize(fileSize);
             
             // Allocate buffer on heap for large sizes
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(bufferSize);

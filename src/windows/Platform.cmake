@@ -35,7 +35,6 @@ set(PLATFORM_SOURCES
     windows/winwlancredentials.h
     windows/winwlancredentials.cpp
     windows/file_operations_windows.cpp
-    windows/buffer_optimization_windows.cpp
     windows/platformquirks_windows.cpp
     windows/nativefiledialog_windows.cpp
 )

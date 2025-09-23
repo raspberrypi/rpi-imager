@@ -5,7 +5,6 @@
 
 #include "downloadthread.h"
 #include "config.h"
-#include "buffer_optimization.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include "systemmemorymanager.h"
@@ -53,7 +52,7 @@ int DownloadThread::_curlCount = 0;
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
-    _inputBufferSize(0), _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _cachehash(OSLIST_HASH_ALGORITHM)
+    _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _file(NULL), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _cachehash(OSLIST_HASH_ALGORITHM)
 {
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -925,8 +924,8 @@ bool DownloadThread::_verify()
     _lastVerifyNow = 0;
     _verifyTotal = _file.pos();
     
-    // Use adaptive buffer size based on file size for optimal verification performance
-    size_t verifyBufferSize = getAdaptiveVerifyBufferSize(_verifyTotal);
+    // Use adaptive buffer size based on file size and system memory for optimal verification performance
+    size_t verifyBufferSize = SystemMemoryManager::instance().getAdaptiveVerifyBufferSize(_verifyTotal);
     char *verifyBuf = (char *) qMallocAligned(verifyBufferSize, 4096);
     
     QElapsedTimer t1;
@@ -1038,7 +1037,13 @@ bool DownloadThread::isImage()
 
 void DownloadThread::setInputBufferSize(int len)
 {
-    _inputBufferSize = len;
+    if (len <= 0) {
+        // Use memory-aware optimal input buffer size
+        _inputBufferSize = SystemMemoryManager::instance().getOptimalInputBufferSize();
+        qDebug() << "Using adaptive input buffer size:" << _inputBufferSize << "bytes";
+    } else {
+        _inputBufferSize = len;
+    }
 }
 
 qint64 DownloadThread::_sectorsWritten()
