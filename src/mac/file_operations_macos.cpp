@@ -163,6 +163,94 @@ FileError MacOSFileOperations::OpenInternal(const char* path, int flags, mode_t 
   return FileError::kSuccess;
 }
 
+// Streaming I/O operations
+FileError MacOSFileOperations::WriteSequential(const std::uint8_t* data, std::size_t size) {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  std::size_t bytes_written = 0;
+  while (bytes_written < size) {
+    ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
+    if (result <= 0) {
+      if (result == 0 || errno != EINTR) {
+        return FileError::kWriteError;
+      }
+      // EINTR - retry the write
+      continue;
+    }
+    bytes_written += static_cast<std::size_t>(result);
+  }
+
+  return FileError::kSuccess;
+}
+
+FileError MacOSFileOperations::ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  ssize_t result = read(fd_, data, size);
+  if (result < 0) {
+    bytes_read = 0;
+    return FileError::kReadError;
+  }
+
+  bytes_read = static_cast<std::size_t>(result);
+  return FileError::kSuccess;
+}
+
+FileError MacOSFileOperations::Seek(std::uint64_t position) {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1) {
+    return FileError::kSeekError;
+  }
+
+  return FileError::kSuccess;
+}
+
+std::uint64_t MacOSFileOperations::Tell() const {
+  if (!IsOpen()) {
+    return 0;
+  }
+
+  off_t pos = lseek(fd_, 0, SEEK_CUR);
+  return (pos == -1) ? 0 : static_cast<std::uint64_t>(pos);
+}
+
+FileError MacOSFileOperations::ForceSync() {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  // Force filesystem sync using fsync - same logic as MacFile::forceSync()
+  if (::fsync(fd_) != 0) {
+    return FileError::kSyncError;
+  }
+
+  return FileError::kSuccess;
+}
+
+FileError MacOSFileOperations::Flush() {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  // On macOS, use fsync for both flush and sync operations
+  if (::fsync(fd_) != 0) {
+    return FileError::kFlushError;
+  }
+
+  return FileError::kSuccess;
+}
+
+int MacOSFileOperations::GetHandle() const {
+  return fd_;
+}
+
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
   return std::make_unique<MacOSFileOperations>();

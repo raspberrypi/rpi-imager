@@ -35,6 +35,21 @@ class WindowsFileOperations : public FileOperations {
   FileError Close() override;
   bool IsOpen() const override;
 
+  // Streaming I/O operations
+  FileError WriteSequential(const std::uint8_t* data, std::size_t size) override;
+  FileError ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) override;
+  
+  // File positioning
+  FileError Seek(std::uint64_t position) override;
+  std::uint64_t Tell() const override;
+  
+  // Sync operations
+  FileError ForceSync() override;
+  FileError Flush() override;
+  
+  // Handle access (Windows uses HANDLE, so we return a cast to int)
+  int GetHandle() const override;
+
  private:
   HANDLE handle_;
   std::string current_path_;

@@ -17,10 +17,13 @@ enum class FileError {
   kSuccess,
   kOpenError,
   kWriteError,
+  kReadError,
   kSeekError,
   kSizeError,
   kCloseError,
-  kLockError
+  kLockError,
+  kSyncError,
+  kFlushError
 };
 
 // Abstract interface for platform-specific file operations
@@ -48,6 +51,21 @@ class FileOperations {
   
   // Check if a file/device is currently open
   virtual bool IsOpen() const = 0;
+
+  // Streaming I/O operations (for sequential writing like image downloads)
+  virtual FileError WriteSequential(const std::uint8_t* data, std::size_t size) = 0;
+  virtual FileError ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) = 0;
+  
+  // File positioning for streaming operations
+  virtual FileError Seek(std::uint64_t position) = 0;
+  virtual std::uint64_t Tell() const = 0;
+  
+  // Force filesystem sync (for page cache management)
+  virtual FileError ForceSync() = 0;
+  virtual FileError Flush() = 0;
+  
+  // Get platform-specific file handle (for compatibility with existing code)
+  virtual int GetHandle() const = 0;
 
   // Factory method to create platform-specific implementation
   static std::unique_ptr<FileOperations> Create();

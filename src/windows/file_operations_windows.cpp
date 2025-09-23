@@ -286,6 +286,112 @@ FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD acc
   return FileError::kSuccess;
 }
 
+// Streaming I/O operations
+FileError WindowsFileOperations::WriteSequential(const std::uint8_t* data, std::size_t size) {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  DWORD bytes_written = 0;
+  DWORD total_written = 0;
+  
+  while (total_written < size) {
+    BOOL result = WriteFile(handle_, 
+                           data + total_written, 
+                           static_cast<DWORD>(size - total_written), 
+                           &bytes_written, 
+                           nullptr);
+    
+    if (!result) {
+      return FileError::kWriteError;
+    }
+    
+    total_written += bytes_written;
+  }
+
+  return FileError::kSuccess;
+}
+
+FileError WindowsFileOperations::ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  DWORD win_bytes_read = 0;
+  BOOL result = ReadFile(handle_, data, static_cast<DWORD>(size), &win_bytes_read, nullptr);
+  
+  if (!result) {
+    bytes_read = 0;
+    return FileError::kReadError;
+  }
+
+  bytes_read = static_cast<std::size_t>(win_bytes_read);
+  return FileError::kSuccess;
+}
+
+FileError WindowsFileOperations::Seek(std::uint64_t position) {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  LARGE_INTEGER pos;
+  pos.QuadPart = static_cast<LONGLONG>(position);
+  
+  LARGE_INTEGER new_pos;
+  if (!SetFilePointerEx(handle_, pos, &new_pos, FILE_BEGIN)) {
+    return FileError::kSeekError;
+  }
+
+  return FileError::kSuccess;
+}
+
+std::uint64_t WindowsFileOperations::Tell() const {
+  if (!IsOpen()) {
+    return 0;
+  }
+
+  LARGE_INTEGER zero = {};
+  LARGE_INTEGER current_pos;
+  
+  if (!SetFilePointerEx(handle_, zero, &current_pos, FILE_CURRENT)) {
+    return 0;
+  }
+
+  return static_cast<std::uint64_t>(current_pos.QuadPart);
+}
+
+FileError WindowsFileOperations::ForceSync() {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  // Force filesystem sync using FlushFileBuffers - same logic as WinFile::forceSync()
+  if (!FlushFileBuffers(handle_)) {
+    return FileError::kSyncError;
+  }
+
+  return FileError::kSuccess;
+}
+
+FileError WindowsFileOperations::Flush() {
+  if (!IsOpen()) {
+    return FileError::kOpenError;
+  }
+
+  // On Windows, FlushFileBuffers handles both buffer flush and disk sync
+  if (!FlushFileBuffers(handle_)) {
+    return FileError::kFlushError;
+  }
+
+  return FileError::kSuccess;
+}
+
+int WindowsFileOperations::GetHandle() const {
+  // Note: This is a compatibility method. Windows HANDLE cannot be safely cast to int.
+  // For proper Windows code, use the handle_ member directly or add a GetWindowsHandle() method.
+  return static_cast<int>(reinterpret_cast<intptr_t>(handle_));
+}
+
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
   return std::make_unique<WindowsFileOperations>();

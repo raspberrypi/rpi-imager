@@ -624,7 +624,7 @@ bool DownloadExtractThread::_verify()
 {
     qDebug() << "DownloadExtractThread::_verify() called (child class implementation with progress updates)";
     _lastVerifyNow = 0;
-    _verifyTotal = _file.pos();
+    _verifyTotal = _file->Tell();
     
     // Use adaptive buffer size based on file size and system memory for optimal verification performance
     size_t verifyBufferSize = SystemMemoryManager::instance().getAdaptiveVerifyBufferSize(_verifyTotal);
@@ -643,19 +643,21 @@ bool DownloadExtractThread::_verify()
 
     if (!_firstBlock)
     {
-        _file.seek(0);
+        _file->Seek(0);
     }
     else
     {
         _verifyhash.addData(_firstBlock, _firstBlockSize);
-        _file.seek(_firstBlockSize);
+        _file->Seek(_firstBlockSize);
         _lastVerifyNow += _firstBlockSize;
     }
 
     while (_verifyEnabled && _lastVerifyNow < _verifyTotal && !_cancelled)
     {
-        qint64 lenRead = _file.read(verifyBuf, qMin((qint64) verifyBufferSize, (qint64) (_verifyTotal-_lastVerifyNow) ));
-        if (lenRead == -1)
+        size_t bytes_to_read = qMin((qint64) verifyBufferSize, (qint64) (_verifyTotal-_lastVerifyNow));
+        size_t lenRead = 0;
+        rpi_imager::FileError read_result = _file->ReadSequential(reinterpret_cast<std::uint8_t*>(verifyBuf), bytes_to_read, lenRead);
+        if (read_result != rpi_imager::FileError::kSuccess)
         {
             DownloadThread::_onDownloadError(tr("Error reading from storage.<br>"
                                                 "SD card may be broken."));
@@ -663,8 +665,8 @@ bool DownloadExtractThread::_verify()
             return false;
         }
 
-        _verifyhash.addData(verifyBuf, lenRead);
-        _lastVerifyNow += lenRead;
+        _verifyhash.addData(verifyBuf, static_cast<qint64>(lenRead));
+        _lastVerifyNow += static_cast<qint64>(lenRead);
         
         // Emit progress updates during verification
         _emitProgressUpdate();

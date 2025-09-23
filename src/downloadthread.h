@@ -20,14 +20,7 @@
 #include "acceleratedcryptographichash.h"
 #include "imageadvancedoptions.h"
 #include "systemmemorymanager.h"
-
-#ifdef Q_OS_WIN
-#include "windows/winfile.h"
-#elif defined(Q_OS_DARWIN)
-#include "mac/macfile.h"
-#elif defined(Q_OS_LINUX)
-#include "linux/linuxfile.h"
-#endif
+#include "file_operations.h"
 
 
 class DownloadThread : public QThread
@@ -185,17 +178,15 @@ protected:
     QElapsedTimer _timer;
     int _inputBufferSize;
 
-#ifdef Q_OS_WIN
-    WinFile _file, _volumeFile;
-    QByteArray _nr;
-#elif defined(Q_OS_DARWIN)
-    MacFile _file;
-#elif defined(Q_OS_LINUX)
-    LinuxFile _file;
-#else
-    QFile _file;
-#endif
+    // Unified cross-platform file operations
+    std::unique_ptr<rpi_imager::FileOperations> _file;
     QFile _cachefile;
+
+#ifdef Q_OS_WIN
+    // Windows-specific volume file for legacy compatibility
+    std::unique_ptr<rpi_imager::FileOperations> _volumeFile;
+    QByteArray _nr;
+#endif
 
     AcceleratedCryptographicHash _writehash, _verifyhash;
     AcceleratedCryptographicHash _cachehash;
