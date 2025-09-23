@@ -163,6 +163,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
     disk_formatter.h file_operations.h platformquirks.h
     iconimageprovider.h
     imageadvancedoptions.h
+    systemmemorymanager.h
     urlfmt.h
 )
 
@@ -207,7 +208,7 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
-    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "buffer_optimization.h")
+    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "buffer_optimization.h")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)

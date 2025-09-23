@@ -5,6 +5,7 @@ find_package(GnuTLS REQUIRED)
 set(PLATFORM_SOURCES
     dependencies/mountutils/src/linux/functions.cpp
     linux/linuxdrivelist.cpp
+    linux/linuxfile.cpp
     linux/networkmanagerapi.h
     linux/networkmanagerapi.cpp
     linux/stpanalyzer.h

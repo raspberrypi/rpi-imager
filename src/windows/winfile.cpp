@@ -161,6 +161,23 @@ bool WinFile::flush()
     return true;
 }
 
+bool WinFile::forceSync()
+{
+    if (!isOpen()) {
+        qDebug() << "Warning: Cannot sync closed file";
+        return false;
+    }
+    
+    // On Windows, FlushFileBuffers does both Qt buffer flush and filesystem sync
+    if (!FlushFileBuffers(_h)) {
+        DWORD error = GetLastError();
+        qDebug() << "Warning: FlushFileBuffers() failed during forceSync, error:" << error;
+        return false;
+    }
+    
+    return true;
+}
+
 bool WinFile::lockVolume()
 {
     DWORD bytesRet;

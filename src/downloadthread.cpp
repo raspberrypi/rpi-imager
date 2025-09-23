@@ -8,6 +8,7 @@
 #include "buffer_optimization.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
+#include "systemmemorymanager.h"
 #include "dependencies/mountutils/src/mountutils.hpp"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include <fstream>
@@ -18,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <regex>
 #include <QDebug>
 #include <QProcess>
@@ -25,6 +27,8 @@
 #include <QFuture>
 #include <QtConcurrent/qtconcurrentrun.h>
 #include <QtNetwork/QNetworkProxy>
+#include <QTextStream>
+#include <QRegularExpression>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -57,6 +61,11 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
 
     QSettings settings;
     _ejectEnabled = settings.value("eject", true).toBool();
+
+    // Initialize cross-platform adaptive sync configuration
+    _lastSyncBytes = 0;
+    _lastSyncTime.start();
+    _initializeSyncConfiguration();
 }
 
 DownloadThread::~DownloadThread()
@@ -603,6 +612,10 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
     }
 
     wh.waitForFinished();
+
+    // Cross-platform periodic sync to prevent page cache buildup
+    _periodicSync();
+
     return (written < 0) ? 0 : written;
 }
 
@@ -968,6 +981,49 @@ bool DownloadThread::_verify()
     }
 
     return false;
+}
+
+void DownloadThread::_initializeSyncConfiguration()
+{
+    _syncConfig = SystemMemoryManager::instance().calculateSyncConfiguration();
+}
+
+void DownloadThread::_periodicSync()
+{
+    qint64 currentBytes = _bytesWritten;
+    qint64 bytesSinceLastSync = currentBytes - _lastSyncBytes;
+    qint64 timeSinceLastSync = _lastSyncTime.elapsed();
+    
+    // Sync if we've written more than the configured sync interval
+    // OR if it's been more than the time interval since last sync
+    // AND we've written at least some data since last sync
+    if ((bytesSinceLastSync >= _syncConfig.syncIntervalBytes || 
+         (timeSinceLastSync >= _syncConfig.syncIntervalMs && bytesSinceLastSync > 0)) &&
+        !_cancelled)
+    {
+        qDebug() << "Performing periodic sync at" << currentBytes << "bytes written"
+                 << "(" << bytesSinceLastSync << "bytes since last sync,"
+                 << timeSinceLastSync << "ms elapsed)"
+                 << "on" << SystemMemoryManager::instance().getPlatformName();
+        
+        // Flush Qt's internal buffers first
+        if (!_file.flush()) {
+            qDebug() << "Warning: flush() failed during periodic sync:" << _file.errorString();
+            return;
+        }
+        
+        // Force filesystem sync using platform-specific implementation
+        if (!_file.forceSync()) {
+            qDebug() << "Warning: forceSync() failed during periodic sync";
+            return;
+        }
+        
+        // Update tracking variables
+        _lastSyncBytes = currentBytes;
+        _lastSyncTime.restart();
+        
+        qDebug() << "Periodic sync completed successfully";
+    }
 }
 
 void DownloadThread::setVerifyEnabled(bool verify)

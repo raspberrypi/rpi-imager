@@ -19,12 +19,14 @@
 #include <curl/curl.h>
 #include "acceleratedcryptographichash.h"
 #include "imageadvancedoptions.h"
+#include "systemmemorymanager.h"
 
 #ifdef Q_OS_WIN
 #include "windows/winfile.h"
-#endif
-#ifdef Q_OS_DARWIN
+#elif defined(Q_OS_DARWIN)
 #include "mac/macfile.h"
+#elif defined(Q_OS_LINUX)
+#include "linux/linuxfile.h"
 #endif
 
 
@@ -154,6 +156,7 @@ protected:
     void _closeFiles();
     QByteArray _fileGetContentsTrimmed(const QString &filename);
     bool _customizeImage();
+    void _periodicSync();
 
     /*
      * libcurl callbacks
@@ -187,6 +190,8 @@ protected:
     QByteArray _nr;
 #elif defined(Q_OS_DARWIN)
     MacFile _file;
+#elif defined(Q_OS_LINUX)
+    LinuxFile _file;
 #else
     QFile _file;
 #endif
@@ -194,6 +199,13 @@ protected:
 
     AcceleratedCryptographicHash _writehash, _verifyhash;
     AcceleratedCryptographicHash _cachehash;
+
+    // Cross-platform adaptive page cache flushing
+    qint64 _lastSyncBytes;
+    QElapsedTimer _lastSyncTime;
+    SystemMemoryManager::SyncConfiguration _syncConfig;
+    
+    void _initializeSyncConfiguration();
 };
 
 #endif // DOWNLOADTHREAD_H

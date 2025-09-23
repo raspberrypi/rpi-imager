@@ -26,6 +26,7 @@ public:
     QString errorString() const;
     int errorCode() const;
     bool flush();
+    bool forceSync();
     bool seek(qint64 pos);
     qint64 pos();
     bool lockVolume();

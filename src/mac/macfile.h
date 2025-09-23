@@ -17,6 +17,7 @@ public:
     MacFile(QObject *parent = nullptr);
     virtual bool isSequential() const;
     authOpenResult authOpen(const QByteArray &filename);
+    bool forceSync();
 };
 
 #endif // MACFILE_H
