@@ -22,9 +22,9 @@ Dialog {
     // Dynamic height based on content (can be overridden)
     height: Math.max(200, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 200)
     
-    // Positioning - can be overridden by child dialogs
-    x: parent ? (parent.width - width) / 2 : 0
-    y: parent ? (parent.height - height) / 2 : 0
+    // Positioning - only set if no anchors are used
+    x: anchors.centerIn ? 0 : (parent ? (parent.width - width) / 2 : 0)
+    y: anchors.centerIn ? 0 : (parent ? (parent.height - height) / 2 : 0)
     
     // Content layout reference for dynamic sizing
     property alias contentLayout: contentLayout
@@ -116,17 +116,9 @@ Dialog {
                 }
             }
 
-            // Set initial focus item to first button instead of first field
-            var firstButton = null
-            for (var i = 0; i < _focusableItems.length; i++) {
-                var item = _focusableItems[i]
-                // Look for buttons (they typically have "Button" in their objectName or are ImButton types)
-                if (item && (item.toString().indexOf("Button") !== -1)) {
-                    firstButton = item
-                    break
-                }
-            }
-            if (!initialFocusItem) initialFocusItem = firstButton || firstField
+            // Set initial focus item to first focusable item (respecting focus group order)
+            var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
+            if (!initialFocusItem) initialFocusItem = firstField
         }
         
         // Main content layout

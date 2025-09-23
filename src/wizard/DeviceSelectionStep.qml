@@ -26,6 +26,11 @@ WizardStepBase {
     property bool modelLoaded: false
     property bool hasDeviceSelected: false
     
+    // Forward the nextClicked signal as next() function for keyboard auto-advance
+    function next() {
+        root.nextClicked()
+    }
+    
     Component.onCompleted: {
         // Initial load only
         if (!modelLoaded) onOsListPreparedHandler()
@@ -82,6 +87,8 @@ WizardStepBase {
             model: root.hwModel
             delegate: hwdelegate
             autoSelectFirst: true
+            keyboardAutoAdvance: true
+            nextFunction: root.next
             
             Component.onCompleted: {
                 if (root.hwModel && root.hwModel.currentIndex !== undefined && root.hwModel.currentIndex >= 0) {

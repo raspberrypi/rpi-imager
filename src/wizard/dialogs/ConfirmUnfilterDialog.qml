@@ -15,10 +15,6 @@ BaseDialog {
     required property Item overlayParent
     parent: overlayParent
     anchors.centerIn: parent
-    
-    // Override the default x,y positioning from BaseDialog
-    x: undefined
-    y: undefined
 
     signal confirmed()
     signal cancelled()

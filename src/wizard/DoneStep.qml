@@ -167,7 +167,9 @@ WizardStepBase {
         }
     }
     
-    // Focus management
+    // Focus management - rebuild when customization visibility changes
+    onAnyCustomizationsAppliedChanged: rebuildFocusOrder()
+    
     Component.onCompleted: {
         registerFocusGroup("scrollview", function() {
             // Only include the scroll view when it's visible and has content to scroll

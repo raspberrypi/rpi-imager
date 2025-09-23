@@ -22,7 +22,23 @@ WizardStepBase {
     showNextButton: true
     
     // Forward the nextClicked signal as next() function
+    // Only auto-advance if no system drive confirmation dialog is needed
     function next() {
+        root.nextClicked()
+    }
+    
+    // Conditional next function for keyboard auto-advance
+    // Only auto-advance for non-system drives
+    function conditionalNext() {
+        // Check if current selection is a system drive
+        if (dstlist.currentIndex >= 0) {
+            var currentItem = dstlist.itemAtIndex(dstlist.currentIndex)
+            if (currentItem && currentItem.isSystem) {
+                // Don't auto-advance for system drives - let the confirmation dialog handle it
+                return
+            }
+        }
+        // Safe to auto-advance for non-system drives
         root.nextClicked()
     }
     
@@ -55,7 +71,7 @@ WizardStepBase {
             model: root.imageWriter.getDriveList()
             delegate: dstdelegate
             keyboardAutoAdvance: true
-            nextFunction: root.next
+            nextFunction: root.conditionalNext
             
             onItemSelected: function(index, item) {
                 if (index >= 0 && index < count && item && typeof item.selectDrive === "function") {
@@ -134,6 +150,13 @@ WizardStepBase {
             
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
             readonly property bool unselectable: isReadOnly
+            
+            // Function called by keyboard selection
+            function selectDrive() {
+                if (!unselectable) {
+                    root.selectDstItem(dstitem)
+                }
+            }
             
             width: dstlist.width
             height: shouldHide ? 0 : 80

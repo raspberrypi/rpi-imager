@@ -224,6 +224,9 @@ FocusScope {
             if (current && current.KeyNavigation) {
                 current.KeyNavigation.tab = nextInChain
                 current.KeyNavigation.backtab = prevInChain
+            } else {
+                // Only log exceptional cases where KeyNavigation is missing
+                console.log("WizardStepBase: WARNING - Failed to wire KeyNavigation for item:", current)
             }
         }
 

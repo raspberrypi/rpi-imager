@@ -13,10 +13,6 @@ BaseDialog {
     required property Item overlayParent
     parent: overlayParent
     anchors.centerIn: parent
-    
-    // Override the default x,y positioning from BaseDialog
-    x: undefined
-    y: undefined
 
     property string driveName: ""
     property string device: ""
@@ -44,6 +40,12 @@ BaseDialog {
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, continueButton] 
         }, 1)
+    }
+    
+    onOpened: {
+        nameInput.text = ""
+        // Let BaseDialog handle the focus management through the focus groups
+        // The BaseDialog will automatically set focus to the first focusable item
     }
 
     // Dialog content
@@ -135,13 +137,19 @@ BaseDialog {
                 root.close()
                 root.confirmed()
             }
+            // Rebuild focus order when enabled state changes
+            onEnabledChanged: {
+                // Use Qt.callLater to ensure the change is processed
+                Qt.callLater(function() {
+                    if (root.registerFocusGroup) {
+                        // Re-register the buttons focus group to update the focus navigation
+                        root.registerFocusGroup("buttons", function(){ 
+                            return [cancelButton, continueButton] 
+                        }, 1)
+                    }
+                })
+            }
         }
     }
 
-    onOpened: {
-        nameInput.text = ""
-        
-        // Call the base dialog's onOpened behavior
-        // This is handled automatically by BaseDialog
-    }
 }

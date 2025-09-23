@@ -24,6 +24,7 @@ BaseDialog {
     
     property bool initialized: false
     property url selectedRepo: ""
+    property url originalRepo: ""
 
     // Custom escape handling
     function escapePressed() {
@@ -209,6 +210,10 @@ BaseDialog {
             chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false;
             if (imageWriter.customRepo()) {
                 selectedRepo = imageWriter.constantOsListUrl();
+                originalRepo = selectedRepo;
+            } else {
+                selectedRepo = "";
+                originalRepo = "";
             }
 
             initialized = true;
@@ -226,8 +231,15 @@ BaseDialog {
         // Do not persist disable_warnings; set ephemeral flag only
         if (popup.wizardContainer)
             popup.wizardContainer.disableWarnings = chkDisableWarnings.checked;
-        if (popup.selectedRepo !== "") {
-            imageWriter.refreshOsListFrom(selectedRepo);
+        // Only save repository setting if it has actually changed
+        if (popup.selectedRepo !== popup.originalRepo) {
+            if (popup.selectedRepo !== "") {
+                imageWriter.refreshOsListFrom(selectedRepo);
+            } else {
+                // User cleared the repository - reset to default
+                // Note: setCustomRepo with the default URL will reset to default behavior
+                imageWriter.setCustomRepo(Qt.resolvedUrl("https://downloads.raspberrypi.org/os_list_imagingutility_v4.json"));
+            }
         }
     }
 

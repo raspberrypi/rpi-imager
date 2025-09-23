@@ -270,81 +270,36 @@ WizardStepBase {
     }
 
     // Confirmation dialog
-    Dialog {
+    BaseDialog {
         id: confirmDialog
-        modal: true
         parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
         anchors.centerIn: parent
-        width: 520
-        standardButtons: Dialog.NoButton
-        visible: false
+
+        // Dynamic height calculation based on actual content
+        height: {
+            var totalHeight = Style.cardPadding * 2  // Top and bottom padding
+            totalHeight += (warningText ? warningText.implicitHeight : 0) || 30
+            totalHeight += (permanentText ? permanentText.implicitHeight : 0) || 20
+            totalHeight += (confirmButtonRow ? confirmButtonRow.implicitHeight : 0) || 40
+            totalHeight += Style.spacingMedium * 2  // Spacing between elements
+            return Math.max(160, totalHeight)
+        }
 
         property bool allowAccept: false
 
-        background: Rectangle {
-            color: Style.mainBackgroundColor
-            radius: Style.sectionBorderRadius
-            border.color: Style.popupBorderColor
-            border.width: Style.sectionBorderWidth
+        // Custom escape handling
+        function escapePressed() {
+            confirmDialog.close()
         }
 
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Style.cardPadding
-            spacing: Style.spacingMedium
-
-            Text {
-                text: qsTr("You are about to ERASE all data on: %1").arg(wizardContainer.selectedStorageName || qsTr("the storage device"))
-                font.pixelSize: Style.fontSizeHeading
-                font.family: Style.fontFamilyBold
-                font.bold: true
-                color: Style.formLabelErrorColor
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-
-            Text {
-                text: qsTr("This action is PERMANENT and CANNOT be undone.")
-                font.pixelSize: Style.fontSizeFormLabel
-                font.family: Style.fontFamilyBold
-                color: Style.formLabelColor
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.spacingMedium
-                Item { Layout.fillWidth: true }
-
-                ImButton {
-                    text: qsTr("Cancel")
-                    onClicked: confirmDialog.close()
-                }
-
-                ImButtonRed {
-                    id: acceptBtn
-                    text: confirmDialog.allowAccept ? qsTr("I understand, erase and write") : qsTr("Please wait...")
-                    enabled: confirmDialog.allowAccept
-                    onClicked: {
-                        confirmDialog.close()
-                        beginWriteDelay.start()
-                    }
-                }
-            }
+        // Register focus groups when component is ready
+        Component.onCompleted: {
+            registerFocusGroup("buttons", function(){ 
+                return [cancelButton, acceptBtn] 
+            }, 0)
         }
 
-        // Delay accept for 2 seconds
-        Timer {
-            id: confirmDelay
-            interval: 2000
-            running: false
-            repeat: false
-            onTriggered: confirmDialog.allowAccept = true
-        }
-
-        // Ensure disabled before showing to avoid flicker
-        onAboutToShow: {
+        onOpened: {
             allowAccept = false
             confirmDelay.start()
         }
@@ -352,6 +307,63 @@ WizardStepBase {
             confirmDelay.stop()
             allowAccept = false
         }
+
+        // Dialog content - now using BaseDialog's contentLayout
+        Text {
+            id: warningText
+            text: qsTr("You are about to ERASE all data on: %1").arg(wizardContainer.selectedStorageName || qsTr("the storage device"))
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelErrorColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+        }
+
+        Text {
+            id: permanentText
+            text: qsTr("This action is PERMANENT and CANNOT be undone.")
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamilyBold
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+        }
+
+        RowLayout {
+            id: confirmButtonRow
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            spacing: Style.spacingMedium
+            Item { Layout.fillWidth: true }
+
+            ImButton {
+                id: cancelButton
+                text: qsTr("Cancel")
+                activeFocusOnTab: true
+                onClicked: confirmDialog.close()
+            }
+
+            ImButtonRed {
+                id: acceptBtn
+                text: confirmDialog.allowAccept ? qsTr("I understand, erase and write") : qsTr("Please wait...")
+                enabled: confirmDialog.allowAccept
+                activeFocusOnTab: true
+                onClicked: {
+                    confirmDialog.close()
+                    beginWriteDelay.start()
+                }
+            }
+        }
+    }
+
+    // Delay accept for 2 seconds - moved outside dialog content
+    Timer {
+        id: confirmDelay
+        interval: 2000
+        running: false
+        repeat: false
+        onTriggered: confirmDialog.allowAccept = true
     }
 
     // Defer starting the write slightly until after the dialog has fully closed,
@@ -420,14 +432,30 @@ WizardStepBase {
         }
     }
     
-    // Focus management
+    // Focus management - rebuild when visibility changes between phases
+    onIsWritingChanged: rebuildFocusOrder()
+    onIsCompleteChanged: rebuildFocusOrder()
+    onAnyCustomizationsAppliedChanged: rebuildFocusOrder()
+    
     Component.onCompleted: {
         registerFocusGroup("customizations", function() {
-            // Only include the scroll view when it's visible and has content to scroll
-            if (customizationsScrollView.visible && customizationsFlickable.contentHeight > customizationsFlickable.height) {
+            // Include the scroll view when it's visible, regardless of whether it needs scrolling
+            if (customizationsScrollView.visible) {
                 return [customizationsScrollView]
             }
             return []
         }, 0)
+        
+        // Ensure focus order is built when component completes
+        Qt.callLater(function() {
+            rebuildFocusOrder()
+            // Try to set initial focus
+            if (initialFocusItem) {
+                console.log("WritingStep: Setting initial focus to:", initialFocusItem)
+                initialFocusItem.forceActiveFocus()
+            } else {
+                console.log("WritingStep: No initialFocusItem available")
+            }
+        })
     }
 }
