@@ -217,9 +217,6 @@ ImageWriter::ImageWriter(QObject *parent)
     for (const QString &tf : transFiles)
     {
         QString langcode = tf.mid(11, tf.length()-14);
-        /* FIXME: we currently lack a font with support for Chinese characters in embedded mode */
-        //if (isEmbeddedMode() && langcode == "zh")
-        //    continue;
 
         QLocale loc(langcode);
         /* Use "English" for "en" and not "American English" */
@@ -231,7 +228,6 @@ ImageWriter::ImageWriter(QObject *parent)
             _currentLangcode = currentlangcode;
         }
     }
-    //_currentKeyboard = "us";
 
     // Centralised network manager, for fetching OS lists
     connect(&_networkManager, SIGNAL(finished(QNetworkReply *)), this, SLOT(handleNetworkRequestFinished(QNetworkReply *)));
