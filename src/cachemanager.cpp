@@ -4,6 +4,7 @@
  */
 
 #include "cachemanager.h"
+#include "embedded_config.h"
 #include <QCryptographicHash>
 #include <QFile>
 #include <QDir>
@@ -17,11 +18,11 @@
 // Hash algorithm used for cache verification (use same as OS list verification)
 #define CACHE_HASH_ALGORITHM OSLIST_HASH_ALGORITHM
 
-CacheManager::CacheManager(bool embeddedMode, QObject *parent)
+CacheManager::CacheManager(QObject *parent)
     : QObject(parent)
     , workerThread_(new QThread())  // Don't parent to avoid Qt's automatic deletion
     , worker_(new CacheVerificationWorker())
-    , cachingEnabled_(!embeddedMode)
+    , cachingEnabled_(!::isEmbeddedMode())
 {
     // Move worker to background thread
     worker_->moveToThread(workerThread_);

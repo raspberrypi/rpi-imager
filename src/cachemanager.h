@@ -50,7 +50,7 @@ public:
         bool customCacheFile = false;
     };
 
-    explicit CacheManager(bool embeddedMode = false, QObject *parent = nullptr);
+    explicit CacheManager(QObject *parent = nullptr);
     ~CacheManager();
 
     // Start background operations (call at app startup)

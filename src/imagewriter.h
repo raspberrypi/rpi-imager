@@ -197,7 +197,7 @@ public:
     Q_INVOKABLE bool isOnline();
 
     /* Returns true if run on embedded Linux platform */
-    Q_INVOKABLE bool isEmbeddedMode();
+    Q_INVOKABLE bool isEmbeddedMode() const;
 
     /* Mount any USB sticks that can contain source images under /media
        Returns true if at least one device was mounted */
@@ -331,7 +331,7 @@ protected:
     QTimer _osListRefreshTimer;
     PowerSaveBlocker _powersave;
     DownloadThread *_thread;
-    bool _verifyEnabled, _multipleFilesInZip, _embeddedMode, _online;
+    bool _verifyEnabled, _multipleFilesInZip, _online;
     QSettings _settings;
     QMap<QString,QString> _translations;
     QTranslator *_trans;

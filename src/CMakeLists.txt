@@ -218,6 +218,7 @@ else()
 endif()
 
 if(BUILD_EMBEDDED)
+    add_definitions(-DBUILD_EMBEDDED=1)
     set(SOURCES ${SOURCES} "embedded/device_info.cpp")
 else()
     set(SOURCES ${SOURCES} "device_info.cpp")

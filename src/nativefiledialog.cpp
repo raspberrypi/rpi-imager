@@ -4,6 +4,7 @@
  */
 
 #include "nativefiledialog.h"
+#include "embedded_config.h"
 #include <QStandardPaths>
 #include <QGuiApplication>
 #include <QCoreApplication>
@@ -37,25 +38,11 @@ QString NativeFileDialog::getSaveFileName(const QString &title,
 bool NativeFileDialog::areNativeDialogsAvailable()
 {
     // Always use Qt dialogs in embedded mode
-    if (isEmbeddedMode()) {
+    if (::isEmbeddedMode()) {
         return false;
     }
 
     return areNativeDialogsAvailablePlatform();
-}
-
-bool NativeFileDialog::isEmbeddedMode()
-{
-    // Check if we're running in an embedded environment
-    QString platform;
-    if (qobject_cast<QGuiApplication*>(QCoreApplication::instance())) {
-        platform = QGuiApplication::platformName();
-    } else {
-        platform = "cli";
-    }
-
-    // Only Linux typically runs in embedded mode for this application
-    return (platform == "linuxfb");
 }
 
 // No extra helper function; return empty to signal QML fallback

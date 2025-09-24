@@ -54,8 +54,6 @@ private:
                                      bool saveDialog);
     static bool areNativeDialogsAvailablePlatform();
 
-    // Helper functions
-    static bool isEmbeddedMode();
 };
 
 #endif // NATIVEFILEDIALOG_H

@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "embedded_config.h"
 #include "iconimageprovider.h"
 #include "drivelistitem.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
@@ -69,7 +70,7 @@ namespace {
 
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent),
-      _cacheManager(nullptr), // Initialize after _embeddedMode
+      _cacheManager(nullptr),
       _waitingForCacheVerification(false),
       _networkManager(this),
       _src(), _repo(QUrl(QString(OSLIST_URL))),
@@ -88,15 +89,15 @@ ImageWriter::ImageWriter(QObject *parent)
       _osListRefreshTimer(),
       _powersave(),
       _thread(nullptr),
-      _verifyEnabled(true), _multipleFilesInZip(false), _embeddedMode(false), _online(false),
+      _verifyEnabled(true), _multipleFilesInZip(false), _online(false),
       _settings(),
       _translations(),
       _trans(nullptr),
       _refreshIntervalOverrideMinutes(-1),
       _refreshJitterOverrideMinutes(-1)
 {
-    // Initialize CacheManager now that _embeddedMode is properly initialized
-    _cacheManager = new CacheManager(_embeddedMode, this);
+    // Initialize CacheManager
+    _cacheManager = new CacheManager(this);
 
     QString platform;
     if (qobject_cast<QGuiApplication*>(QCoreApplication::instance()) )
@@ -109,10 +110,8 @@ ImageWriter::ImageWriter(QObject *parent)
     }
     _device_info = std::make_unique<DeviceInfo>();
 
-#ifdef Q_OS_LINUX
-    if (platform == "linuxfb")
+    if (::isEmbeddedMode())
     {
-        _embeddedMode = true;
         connect(&_networkchecktimer, SIGNAL(timeout()), SLOT(pollNetwork()));
         _networkchecktimer.start(100);
         changeKeyboard(detectPiKeyboard());
@@ -169,11 +168,15 @@ ImageWriter::ImageWriter(QObject *parent)
             }
         }
 
+        // The STP analyzer is only built for embedded mode, so
+        // unlike the block above that can be selected at runtime,
+        // this must be selected at build time.
+#ifdef BUILD_EMBEDDED
         StpAnalyzer *stpAnalyzer = new StpAnalyzer(5, this);
         connect(stpAnalyzer, SIGNAL(detected()), SLOT(onSTPdetected()));
         stpAnalyzer->startListening("eth0");
-    }
 #endif
+    }
 
     if (!_settings.isWritable() && !_settings.fileName().isEmpty())
     {
@@ -595,7 +598,7 @@ void ImageWriter::startWrite()
         _thread = new DownloadExtractThread(urlstr, _dst.toLatin1(), _expectedHash, this);
         if (_repo.toString() == OSLIST_URL)
         {
-            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), _embeddedMode, _currentLangcode, this);
+            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
             connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
             tele->start();
         }
@@ -1535,9 +1538,9 @@ void ImageWriter::onSTPdetected()
     emit networkInfo(tr("STP is enabled on your Ethernet switch. Getting IP will take long time."));
 }
 
-bool ImageWriter::isEmbeddedMode()
+bool ImageWriter::isEmbeddedMode() const
 {
-    return _embeddedMode;
+    return ::isEmbeddedMode();
 }
 
 /* Mount any USB sticks that can contain source images under /media */
@@ -1659,7 +1662,7 @@ bool ImageWriter::hasSshKeyGen()
 #ifdef Q_OS_WIN
     return QFile::exists(_sshKeyGen());
 #else
-    return !_embeddedMode;
+    return !isEmbeddedMode();
 #endif
 }
 
@@ -2462,7 +2465,7 @@ QString ImageWriter::getCurrentUser()
 
 bool ImageWriter::hasMouse()
 {
-    return !_embeddedMode || QFile::exists("/dev/input/mouse0");
+    return !isEmbeddedMode() || QFile::exists("/dev/input/mouse0");
 }
 
 bool ImageWriter::customRepo()
@@ -2574,7 +2577,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         _thread = new DownloadExtractThread(urlstr.toLatin1(), _dst.toLatin1(), _expectedHash, this);
         if (_repo.toString() == OSLIST_URL)
         {
-            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr.toLatin1(), _parentCategory.toLatin1(), _osName.toLatin1(), _embeddedMode, _currentLangcode, this);
+            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr.toLatin1(), _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
             connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
             tele->start();
         }
