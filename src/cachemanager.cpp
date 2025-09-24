@@ -434,7 +434,9 @@ void CacheManager::saveCacheSettings()
 
 QString CacheManager::getDefaultCacheFilePath() const
 {
-    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + 
+    return QStandardPaths::writableLocation(QStandardPaths::TempLocation) + 
+           QDir::separator() + QCoreApplication::applicationName() + 
+           QDir::separator() + "cache" + 
            QDir::separator() + "lastdownload.cache";
 }
 

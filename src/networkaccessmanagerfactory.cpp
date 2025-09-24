@@ -5,6 +5,7 @@
 
 #include "networkaccessmanagerfactory.h"
 #include "config.h"
+#include <QCoreApplication>
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
 #include <QStandardPaths>
@@ -22,7 +23,13 @@ QNetworkAccessManager *NetworkAccessManagerFactory::create(QObject *parent)
 {
     QNetworkAccessManager *nam = new QNetworkAccessManager(parent);
     auto c = new QNetworkDiskCache(nam);
-    c->setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)+QDir::separator()+"oslistcache"+QString::number(_nr++));
+    c->setCacheDirectory(
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation) + 
+        QDir::separator() + QCoreApplication::applicationName() + 
+        QDir::separator() + "cache" + 
+        QDir::separator() + "oslistcache" + 
+        QString::number(_nr++)
+        );
     c->clear();
     nam->setCache(c);
     return nam;
