@@ -92,9 +92,9 @@ private:
     qint64 getPlatformAvailableMemoryMB();
 
     // Configuration constants
-    static const qint64 MIN_SYNC_INTERVAL_BYTES = 16 * 1024 * 1024;   // 16MB minimum
-    static const qint64 MAX_SYNC_INTERVAL_BYTES = 256 * 1024 * 1024;  // 256MB maximum
-    static const qint64 DEFAULT_SYNC_INTERVAL_MS = 5000;              // 5 seconds default
+    static constexpr qint64 MIN_SYNC_INTERVAL_BYTES = 16 * 1024 * 1024;   // 16MB minimum
+    static constexpr qint64 MAX_SYNC_INTERVAL_BYTES = 256 * 1024 * 1024;  // 256MB maximum
+    static constexpr qint64 DEFAULT_SYNC_INTERVAL_MS = 5000;              // 5 seconds default
     
     // Memory tier thresholds
     static const qint64 LOW_MEMORY_THRESHOLD_MB = 2048;     // 2GB
