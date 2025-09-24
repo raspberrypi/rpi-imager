@@ -308,12 +308,15 @@ void CacheManager::onVerificationComplete(bool isValid, const QString& fileName,
 {
     qDebug() << "Cache verification complete for" << fileName << "- Valid:" << isValid;
     
+    QByteArray uncompressedHashForUI;
+    
     updateCacheStatus([&](CacheStatus& status) {
         status.isValid = isValid;
         status.verificationComplete = true;
         status.cacheFileName = fileName;
-        // Don't update cachedHash here - keep the compressed hash for UI queries
-        // The 'hash' parameter is the uncompressed hash used for verification
+        // Don't overwrite cachedHash - it already contains the uncompressed hash for UI matching
+        // The 'hash' parameter is the compressed hash used for verification
+        uncompressedHashForUI = status.cachedHash; // Get the uncompressed hash for UI update
     });
     
     qDebug() << "Updated cache status after verification:";
@@ -325,6 +328,12 @@ void CacheManager::onVerificationComplete(bool isValid, const QString& fileName,
     qDebug() << "  verified against hash:" << hash;
     
     emit cacheVerificationComplete(isValid);
+    
+    // Also emit cacheFileUpdated when verification succeeds to trigger UI update
+    if (isValid && !uncompressedHashForUI.isEmpty()) {
+        qDebug() << "Emitting cacheFileUpdated signal after successful verification";
+        emit cacheFileUpdated(uncompressedHashForUI); // UI matches against uncompressed hash
+    }
     
     if (getCacheStatus().diskSpaceCheckComplete) {
         emit cacheOperationsReady();

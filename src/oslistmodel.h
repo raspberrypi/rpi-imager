@@ -78,8 +78,6 @@ public:
     Q_INVOKABLE void markFirstAsRecommended();
 
 public slots:
-    // Mark all rows dirty for cache-status dependent text without resetting the model
-    void markCacheStatusDirty();
 
 protected:
     int rowCount(const QModelIndex &) const override;

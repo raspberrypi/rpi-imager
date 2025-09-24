@@ -307,11 +307,6 @@ void OSListModel::softRefresh()
     emit dataChanged(first, last);
 }
 
-void OSListModel::markCacheStatusDirty()
-{
-    // For now, same as softRefresh; could be narrowed to UrlRole-related rows
-    softRefresh();
-}
 
 int OSListModel::rowCount(const QModelIndex &) const
 {

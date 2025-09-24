@@ -236,43 +236,21 @@ ImageWriter::ImageWriter(QObject *parent)
     connect(_cacheManager, &CacheManager::cacheFileUpdated,
             this, [this](const QByteArray& hash) {
                 qDebug() << "Received cacheFileUpdated signal - refreshing UI for hash:" << hash;
-                // Prefer surgical UI update: notify model rows changed (cache status text)
-                if (_engine) {
-                    // Access the OSListModel via getter and mark it dirty without reset
-                    OSListModel *m = getOSList();
-                    if (m) m->markCacheStatusDirty();
-                } else {
-                    // Fallback if no engine: emit legacy signal
-                    emit osListPrepared();
-                }
+                emit cacheStatusChanged();
             });
 
     connect(_cacheManager, &CacheManager::cacheVerificationComplete,
             this, [this](bool isValid) {
                 if (isValid) {
-                    // Prefer surgical UI update: notify model rows changed (cache status text)
-                    if (_engine) {
-                        // Access the OSListModel via getter and mark it dirty without reset
-                        OSListModel *m = getOSList();
-                        if (m) m->markCacheStatusDirty();
-                    } else {
-                        // Fallback if no engine: emit legacy signal
-                        emit osListPrepared();
-                    }
+                    // Emit cache status changed signal for QML to react to
+                    emit cacheStatusChanged();
                 }
             });
 
     connect(_cacheManager, &CacheManager::cacheInvalidated,
             this, [this]() {
-                // Prefer surgical UI update: notify model rows changed (cache status text)
-                if (_engine) {
-                    // Access the OSListModel via getter and mark it dirty without reset
-                    OSListModel *m = getOSList();
-                    if (m) m->markCacheStatusDirty();
-                } else {
-                    // Fallback if no engine: emit legacy signal
-                    emit osListPrepared();
-                }
+                // Emit cache status changed signal when cache is invalidated
+                emit cacheStatusChanged();
             });
 
     // Connect to specific device removal events

@@ -35,6 +35,17 @@ WizardStepBase {
     property bool customSelected: false
     property real customSelectedSize: 0
     
+    // Property to trigger cache status re-evaluation when cache changes
+    property int cacheStatusVersion: 0
+    
+    // Connect to cache status changes
+    Connections {
+        target: imageWriter
+        function onCacheStatusChanged() {
+            root.cacheStatusVersion++
+        }
+    }
+    
     signal updatePopupRequested(var url)
     signal defaultEmbeddedDriveRequested(var drive)
     
@@ -375,7 +386,9 @@ WizardStepBase {
                                     return sz > 0 ? qsTr("Local - %1").arg(imageWriter.formatSize(sz)) : "";
                                   })()
                                 : (!delegateItem.url ? "" :
-                                  ((typeof(delegateItem.extract_sha256) !== "undefined" && imageWriter.isCached(delegateItem.url, delegateItem.extract_sha256))
+                                  ((typeof(delegateItem.extract_sha256) !== "undefined" && 
+                                    root.cacheStatusVersion >= 0 && // Force re-evaluation when cache status changes
+                                    imageWriter.isCached(delegateItem.url, delegateItem.extract_sha256))
                                     ? qsTr("Cached on your computer")
                                     : (delegateItem.url.startsWith("file://")
                                        ? qsTr("Local file")

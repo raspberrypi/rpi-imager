@@ -276,6 +276,7 @@ signals:
     void keychainPermissionResponseReceived();
     void writeStateChanged();
     void connectCallbackReceived(QVariant url);
+    void cacheStatusChanged();
 
 protected slots:
     void startProgressPolling();
