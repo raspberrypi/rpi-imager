@@ -18,90 +18,114 @@ namespace rpi_imager {
 
 LinuxFileOperations::LinuxFileOperations() : fd_(-1), last_error_code_(0) {}
 
-LinuxFileOperations::~LinuxFileOperations() {
-  Close();
-}
-
-FileError LinuxFileOperations::OpenDevice(const std::string& path) {
-  return OpenInternal(path.c_str(), O_RDWR | O_SYNC);
-}
-
-FileError LinuxFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
-  // First create/truncate the file
-  FileError result = OpenInternal(path.c_str(), 
-                                  O_CREAT | O_RDWR | O_TRUNC, 
-                                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  if (result != FileError::kSuccess) {
-    return result;
-  }
-
-  // Set the file size
-  if (ftruncate(fd_, static_cast<off_t>(size)) != 0) {
-    Close();
-    return FileError::kSizeError;
-  }
-
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::WriteAtOffset(
-    std::uint64_t offset,
-    const std::uint8_t* data,
-    std::size_t size) {
-  
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  if (lseek(fd_, static_cast<off_t>(offset), SEEK_SET) == -1) {
-    return FileError::kSeekError;
-  }
-
-  std::size_t bytes_written = 0;
-  while (bytes_written < size) {
-    ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
-    if (result <= 0) {
-      return FileError::kWriteError;
+    LinuxFileOperations::~LinuxFileOperations()
+    {
+        Close();
     }
-    bytes_written += static_cast<std::size_t>(result);
-  }
 
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::GetSize(std::uint64_t& size) {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
-
-  struct stat st;
-  if (fstat(fd_, &st) != 0) {
-    return FileError::kSizeError;
-  }
-
-  size = static_cast<std::uint64_t>(st.st_size);
-  return FileError::kSuccess;
-}
-
-FileError LinuxFileOperations::Close() {
-  if (fd_ >= 0) {
-    if (close(fd_) != 0) {
-      fd_ = -1;
-      return FileError::kCloseError;
+    // Map a few common errno values to cross-platform details
+    DetailedError LinuxFileOperations::MapErrnoDetail(int e) {
+        switch (e) {
+        case ENOSPC:  return DetailedError::kNoSpace;          // no space left
+        case EROFS:   return DetailedError::kWriteProtected;    // read-only FS
+        case EBUSY:   return DetailedError::kBusy;              // device/file busy
+        case EACCES:
+        case EPERM:   return DetailedError::kAccessDenied;      // permissions
+        case EINVAL:  return DetailedError::kInvalidParameter;  // bad arg/offset
+        case EIO:
+        case ENXIO:   return DetailedError::kIoDevice;          // I/O error
+        default:      return DetailedError::kNoDetails;
+        }
     }
-    fd_ = -1;
-  }
-  current_path_.clear();
-  return FileError::kSuccess;
-}
 
-bool LinuxFileOperations::IsOpen() const {
-  return fd_ >= 0;
-}
+    // Helpers to record/clear error state
+    #define SET_LAST_ERR_FROM_ERRNO(_coarse_) do { \
+        int _e = errno; \
+        last_error_ = { (_coarse_), MapErrnoDetail(_e), _e}; \
+    } while(0)
 
-FileError LinuxFileOperations::OpenInternal(const char* path, int flags, mode_t mode) {
-  // Close any existing file
-  Close();
+    #define SET_LAST_ERR(_coarse_, _detail_) do { \
+        last_error_ = { (_coarse_), (_detail_), 0 }; \
+    } while(0)
+
+    #define CLEAR_LAST_ERR() do { last_error_ = {}; } while(0)
+
+    FileError LinuxFileOperations::OpenDevice(const std::string &path)
+    {
+        return OpenInternal(path.c_str(), O_RDWR | O_SYNC);
+    }
+
+    FileError LinuxFileOperations::CreateTestFile(const std::string &path, std::uint64_t size)
+    {
+        // First create/truncate the file
+        FileError result = OpenInternal(path.c_str(),
+                                        O_CREAT | O_RDWR | O_TRUNC,
+                                        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        if (result != FileError::kSuccess)
+        {
+            return result;
+        }
+
+        // Set the file size
+        if (ftruncate(fd_, static_cast<off_t>(size)) != 0)
+        {
+            SET_LAST_ERR_FROM_ERRNO(FileError::kSizeError);
+            Close();
+            return FileError::kSizeError;
+        }
+
+        CLEAR_LAST_ERR();
+        return FileError::kSuccess;
+    }
+
+    FileError LinuxFileOperations::WriteAtOffset(
+        std::uint64_t offset,
+        const std::uint8_t *data,
+        std::size_t size)
+    {
+
+        if (!IsOpen())
+        {
+            last_error_ = {FileError::kOpenError, DetailedError::kNoDetails, 0};
+            return FileError::kOpenError;
+        }
+
+        if (lseek(fd_, static_cast<off_t>(offset), SEEK_SET) == -1)
+        {
+            SET_LAST_ERR_FROM_ERRNO(FileError::kSeekError);
+            return FileError::kSeekError;
+        }
+
+        std::size_t bytes_written = 0;
+        while (bytes_written < size)
+        {
+            ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
+            if (result <= 0)
+            {
+                SET_LAST_ERR_FROM_ERRNO(FileError::kWriteError);
+                return FileError::kWriteError;
+            }
+            bytes_written += static_cast<std::size_t>(result);
+        }
+
+        CLEAR_LAST_ERR();
+        return FileError::kSuccess;
+    }
+
+    FileError LinuxFileOperations::GetSize(std::uint64_t &size)
+    {
+        if (!IsOpen())
+        {
+            last_error_ = {FileError::kOpenError, DetailedError::kNoDetails, 0};
+            return FileError::kOpenError;
+        }
+
+        struct stat st;
+        if (fstat(fd_, &st) != 0)
+        {
+            SET_LAST_ERR_FROM_ERRNO(FileError::kSizeError);
+            return FileError::kSizeError;
+        }
 
   fd_ = open(path, flags, mode);
   if (fd_ < 0) {
@@ -114,11 +138,10 @@ FileError LinuxFileOperations::OpenInternal(const char* path, int flags, mode_t 
   return FileError::kSuccess;
 }
 
-// Streaming I/O operations
-FileError LinuxFileOperations::WriteSequential(const std::uint8_t* data, std::size_t size) {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
+    bool LinuxFileOperations::IsOpen() const
+    {
+        return fd_ >= 0;
+    }
 
   std::size_t bytes_written = 0;
   while (bytes_written < size) {
@@ -131,66 +154,97 @@ FileError LinuxFileOperations::WriteSequential(const std::uint8_t* data, std::si
       // EINTR - retry the write
       continue;
     }
-    bytes_written += static_cast<std::size_t>(result);
-  }
 
   last_error_code_ = 0;
   return FileError::kSuccess;
 }
 
-FileError LinuxFileOperations::ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
+        std::size_t bytes_written = 0;
+        while (bytes_written < size)
+        {
+            ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
+            if (result <= 0)
+            {
+                if (result == 0 || errno != EINTR)
+                {
+                    SET_LAST_ERR_FROM_ERRNO(FileError::kWriteError);
+                    return FileError::kWriteError;
+                }
+                // EINTR - retry the write
+                continue;
+            }
+            bytes_written += static_cast<std::size_t>(result);
+        }
 
-  ssize_t result = read(fd_, data, size);
-  if (result < 0) {
-    bytes_read = 0;
-    return FileError::kReadError;
-  }
+        CLEAR_LAST_ERR();
+        return FileError::kSuccess;
+    }
 
-  bytes_read = static_cast<std::size_t>(result);
-  return FileError::kSuccess;
-}
+    FileError LinuxFileOperations::ReadSequential(std::uint8_t *data, std::size_t size, std::size_t &bytes_read)
+    {
+        if (!IsOpen())
+        {
+            last_error_ = {FileError::kOpenError, DetailedError::kNoDetails, 0};
+            return FileError::kOpenError;
+        }
 
-FileError LinuxFileOperations::Seek(std::uint64_t position) {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
+        ssize_t result = read(fd_, data, size);
+        if (result < 0)
+        {
+            bytes_read = 0;
+            SET_LAST_ERR_FROM_ERRNO(FileError::kReadError);
+            return FileError::kReadError;
+        }
 
-  if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1) {
-    return FileError::kSeekError;
-  }
+        bytes_read = static_cast<std::size_t>(result);
+        CLEAR_LAST_ERR();
+        return FileError::kSuccess;
+    }
 
-  return FileError::kSuccess;
-}
+    FileError LinuxFileOperations::Seek(std::uint64_t position)
+    {
+        if (!IsOpen())
+        {
+            last_error_ = {FileError::kOpenError, DetailedError::kNoDetails, 0};
+            return FileError::kOpenError;
+        }
 
-std::uint64_t LinuxFileOperations::Tell() const {
-  if (!IsOpen()) {
-    return 0;
-  }
+        if (lseek(fd_, static_cast<off_t>(position), SEEK_SET) == -1)
+        {
+            SET_LAST_ERR_FROM_ERRNO(FileError::kSeekError);
+            return FileError::kSeekError;
+        }
 
-  off_t pos = lseek(fd_, 0, SEEK_CUR);
-  return (pos == -1) ? 0 : static_cast<std::uint64_t>(pos);
-}
+        CLEAR_LAST_ERR();
+        return FileError::kSuccess;
+    }
 
-FileError LinuxFileOperations::ForceSync() {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
+    std::uint64_t LinuxFileOperations::Tell() const
+    {
+        if (!IsOpen())
+        {
+            return 0;
+        }
 
   // Force filesystem sync using fsync - same logic as LinuxFile::forceSync()
   if (fsync(fd_) != 0) {
     return FileError::kSyncError;
   }
 
-  return FileError::kSuccess;
-}
+    FileError LinuxFileOperations::ForceSync()
+    {
+        if (!IsOpen())
+        {
+            last_error_ = {FileError::kOpenError, DetailedError::kNoDetails, 0};
+            return FileError::kOpenError;
+        }
 
-FileError LinuxFileOperations::Flush() {
-  if (!IsOpen()) {
-    return FileError::kOpenError;
-  }
+        // Force filesystem sync using fsync - same logic as LinuxFile::forceSync()
+        if (::fsync(fd_) != 0)
+        {
+            SET_LAST_ERR_FROM_ERRNO(FileError::kSyncError);
+            return FileError::kSyncError;
+        }
 
   // On Linux, fsync handles both buffer flush and disk sync
   // For streaming operations, we can use fdatasync for better performance
@@ -198,12 +252,21 @@ FileError LinuxFileOperations::Flush() {
     return FileError::kFlushError;
   }
 
-  return FileError::kSuccess;
-}
+    FileError LinuxFileOperations::Flush()
+    {
+        if (!IsOpen())
+        {
+            last_error_ = {FileError::kOpenError, DetailedError::kNoDetails, 0};
+            return FileError::kOpenError;
+        }
 
-int LinuxFileOperations::GetHandle() const {
-  return fd_;
-}
+        // On Linux, fsync handles both buffer flush and disk sync
+        // For streaming operations, we can use fdatasync for better performance
+        if (::fdatasync(fd_) != 0)
+        {
+            SET_LAST_ERR_FROM_ERRNO(FileError::kFlushError);
+            return FileError::kFlushError;
+        }
 
 int LinuxFileOperations::GetLastErrorCode() const {
   return last_error_code_;
@@ -214,4 +277,15 @@ std::unique_ptr<FileOperations> CreatePlatformFileOperations() {
   return std::make_unique<LinuxFileOperations>();
 }
 
-} // namespace rpi_imager 
+    int LinuxFileOperations::GetHandle() const
+    {
+        return fd_;
+    }
+
+    // Platform-specific factory function implementation
+    std::unique_ptr<FileOperations> CreatePlatformFileOperations()
+    {
+        return std::make_unique<LinuxFileOperations>();
+    }
+
+} // namespace rpi_imager
