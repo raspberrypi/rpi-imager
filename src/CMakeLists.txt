@@ -162,7 +162,7 @@ set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelist
     oslistmodel.h
     disk_formatter.h file_operations.h platformquirks.h
     iconimageprovider.h
-    imageadvancedoptions.h
+
     systemmemorymanager.h
     urlfmt.h
 )
@@ -426,7 +426,6 @@ if(NOT BUILD_CLI_ONLY)
         wizard/OSSelectionStep.qml
         wizard/StorageSelectionStep.qml
         wizard/HostnameCustomizationStep.qml
-        wizard/IfAndFeaturesCustomizationStep.qml
         wizard/LocaleCustomizationStep.qml
         wizard/UserCustomizationStep.qml
         wizard/WifiCustomizationStep.qml

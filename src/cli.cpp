@@ -11,7 +11,6 @@
 #include <QFileInfo>
 #include "drivelistmodel.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
-#include "imageadvancedoptions.h"
 
 /* Message handler to discard qDebug() output if using cli (unless --debug is set) */
 static void devnullMsgHandler(QtMsgType, const QMessageLogContext &, const QString &)
@@ -201,7 +200,7 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomization("", "", "", userData, networkConfig, ImageOptions::NoAdvancedOptions);
+        _imageWriter->setImageCustomization("", "", "", userData, networkConfig);
     }
     else if (!parser.value("first-run-script").isEmpty())
     {
@@ -223,7 +222,7 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomization("", "", firstRunScript, "", "", ImageOptions::UserDefinedFirstRun);
+        _imageWriter->setImageCustomization("", "", firstRunScript, "", "");
     }
 
     _imageWriter->setDst(args[1]);

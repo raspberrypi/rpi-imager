@@ -24,7 +24,7 @@ Item {
     property alias networkInfoText: networkInfo.text
     
     property int currentStep: 0
-    readonly property int totalSteps: 12
+    readonly property int totalSteps: 11
     
     // Track which steps have been made permissible/unlocked for navigation
     // Each bit represents a step: bit 0 = Device, bit 1 = OS, etc.
@@ -41,9 +41,6 @@ Item {
     // Track previous selections to detect changes
     property string previousDeviceName: ""
     property string previousOsName: ""
-
-    property bool supportsSerialConsoleOnly: false
-    property bool supportsUsbGadget: false
     
     // Track customizations that were actually configured
     property bool hostnameConfigured: false
@@ -54,14 +51,6 @@ Item {
     property bool piConnectEnabled: false
     // Whether selected OS supports Raspberry Raspberry Pi Connect customization
     property bool piConnectAvailable: false
-
-    // Interfaces & Features
-    property bool rpiosCloudInitAvailable: false
-    property bool ifI2cEnabled: false
-    property bool ifSpiEnabled: false
-    // "Disabled" | "Default" | "Console & Hardware" | "Console" | "Hardware" | ""
-    property string ifSerial: ""
-    property bool featUsbGadgetEnabled: false
 
     // Ephemeral per-run setting: do not persist across runs
     property bool disableWarnings: false
@@ -78,9 +67,8 @@ Item {
     readonly property int stepWifiCustomization: 6
     readonly property int stepRemoteAccess: 7
     readonly property int stepPiConnectCustomization: 8
-    readonly property int stepIfAndFeatures: 9
-    readonly property int stepWriting: 10
-    readonly property int stepDone: 11
+    readonly property int stepWriting: 9
+    readonly property int stepDone: 10
     
     signal wizardCompleted()
     
@@ -143,9 +131,7 @@ Item {
     }
 
     function getLastCustomizationStep() {
-        return rpiosCloudInitAvailable
-            ? stepIfAndFeatures
-            : piConnectAvailable
+        return piConnectAvailable
                 ? stepPiConnectCustomization
                 : stepRemoteAccess
     }
@@ -159,9 +145,6 @@ Item {
         var labels = [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote Access")]
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
-        }
-        if (rpiosCloudInitAvailable) {
-            labels.push(qsTr("Interfaces & Features"))
         }
 
         return labels
@@ -218,11 +201,6 @@ Item {
         sshEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
-        rpiosCloudInitAvailable = false
-        ifI2cEnabled = false
-        ifSpiEnabled = false
-        ifSerial = ""
-        featUsbGadgetEnabled = false
     }
     
     function invalidateOSDependentSteps() {
@@ -244,11 +222,6 @@ Item {
         
         // Reset OS capability flags - these will be set correctly by OS selection
         piConnectAvailable = false
-        rpiosCloudInitAvailable = false
-        ifI2cEnabled = false
-        ifSpiEnabled = false
-        ifSerial = ""
-        featUsbGadgetEnabled = false
     }
 
 
@@ -428,7 +401,6 @@ Item {
                                         else if (root.currentStep === root.stepWifiCustomization) currentStepLabel = qsTr("Wi‑Fi")
                                         else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote Access")
                                         else if (root.currentStep === root.stepPiConnectCustomization) currentStepLabel = qsTr("Raspberry Pi Connect")
-                                        else if (root.currentStep === root.stepIfAndFeatures) currentStepLabel = qsTr("Interfaces & Features")
                                         
                                         return labels[subItem.index] === currentStepLabel
                                     }
@@ -445,8 +417,7 @@ Item {
                                         root.isStepPermissible(root.stepUserCustomization) ||
                                         root.isStepPermissible(root.stepWifiCustomization) ||
                                         root.isStepPermissible(root.stepRemoteAccess) ||
-                                        root.isStepPermissible(root.stepPiConnectCustomization) ||
-                                        root.isStepPermissible(root.stepIfAndFeatures)
+                                        root.isStepPermissible(root.stepPiConnectCustomization)
                                     )
 
                                     MouseArea {
@@ -468,7 +439,6 @@ Item {
                                             else if (stepLabel === qsTr("Wi‑Fi")) target = root.stepWifiCustomization
                                             else if (stepLabel === qsTr("Remote Access")) target = root.stepRemoteAccess
                                             else if (stepLabel === qsTr("Raspberry Pi Connect")) target = root.stepPiConnectCustomization
-                                            else if (stepLabel === qsTr("Interfaces & Features")) target = root.stepIfAndFeatures
                                             
                                             // Allow navigation to permissible steps or backward navigation within customization
                                             if (root.currentStep !== target && (root.isStepPermissible(target) || target < root.currentStep)) {
@@ -670,10 +640,6 @@ Item {
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
                 nextIndex++
             }
-            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-            if (!rpiosCloudInitAvailable && nextIndex == stepIfAndFeatures) {
-                nextIndex++
-            }
             // Before entering the writing step, persist and apply customization (when supported)
             if (nextIndex === stepWriting && customizationSupported && imageWriter) {
                 // Persist whatever is currently staged in per-step UIs
@@ -701,10 +667,6 @@ Item {
             if (root.currentStep === stepWriting && !customizationSupported) {
                 prevIndex = stepStorageSelection
             } else {
-                // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-                if (prevIndex == stepIfAndFeatures && !rpiosCloudInitAvailable) {
-                    prevIndex--
-                }
                 if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
                     prevIndex--
                 }
@@ -742,7 +704,6 @@ Item {
             case stepWifiCustomization: return wifiCustomizationStep
             case stepRemoteAccess: return remoteAccessStep
             case stepPiConnectCustomization: return piConnectCustomizationStep
-            case stepIfAndFeatures: return ifAndFeaturesStep
             case stepWriting: return writingStep
             case stepDone: return doneStep
             default: return null
@@ -878,26 +839,6 @@ Item {
             }
         }
     }
-
-    Component {
-        id: ifAndFeaturesStep
-        IfAndFeaturesCustomizationStep {
-            imageWriter: root.imageWriter
-            wizardContainer: root
-            appOptionsButton: optionsButton
-            onNextClicked: {
-                // Only advance if the step indicates it's ready
-                if (isConfirmed) {
-                    root.nextStep()
-                }
-                // Otherwise, let the step handle the action internally
-            }
-            onBackClicked: root.previousStep()
-            onSkipClicked: {
-                // Skip functionality is handled in the step itself
-            }
-        }
-    }
     
     Component {
         id: writingStep
@@ -975,15 +916,6 @@ Item {
         sshEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
-
-        rpiosCloudInitAvailable = false
-        ifI2cEnabled = false
-        ifSpiEnabled = false
-        ifSerial = ""
-        featUsbGadgetEnabled = false
-
-        supportsSerialConsoleOnly = false
-        supportsUsbGadget = false
         
         // Navigate back to the first step
         wizardStack.clear()

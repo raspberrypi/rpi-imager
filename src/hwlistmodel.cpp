@@ -155,7 +155,6 @@ void HWListModel::setCurrentIndex(int index) {
     const HardwareDevice &device = _hwDevices.at(index);
 
     _imageWriter.setHWFilterList(device.tags, device.isInclusive());
-    _imageWriter.setHWCapabilitiesList(device.capabilities);
     _imageWriter.setSrc({});
 
     _currentIndex = index;
