@@ -435,6 +435,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/dialogs/ConfirmSystemDriveDialog.qml
         wizard/dialogs/KeychainPermissionDialog.qml
         wizard/dialogs/UpdateAvailableDialog.qml
+        wizard/dialogs/RepositoryDialog.qml
         wizard/dialogs/AppOptionsDialog.qml
         wizard/LanguageSelectionStep.qml
         qmlcomponents/BaseDialog.qml
@@ -447,6 +448,7 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImPopup.qml
         qmlcomponents/ImRadioButton.qml
         qmlcomponents/ImOptionPill.qml
+        qmlcomponents/ImOptionButton.qml
         qmlcomponents/ImTextField.qml
         qmlcomponents/SelectionListView.qml
         qmlcomponents/OSSelectionListView.qml
