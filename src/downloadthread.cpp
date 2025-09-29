@@ -821,7 +821,7 @@ void DownloadThread::_onWriteError()
         _onDownloadError(tr("I/O device error - The storage device may have been disconnected or is malfunctioning."));
         return;
     case rpi_imager::DetailedError::kBusy:
-        _onDownloadError(tr("The device is busy. Close apps that might use it and try again."));
+        _onDownloadError(tr("The storage device is busy. Close any apps that might be using it and try again."));
         return;
     case rpi_imager::DetailedError::kAccessDenied:
         // Windows handled above; other platforms fall through to coarse
