@@ -34,11 +34,9 @@ BaseDialog {
     // Register focus groups when component is ready
     Component.onCompleted: {
         registerFocusGroup("options", function(){ 
-            return [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem, chkDisableWarnings.focusItem]
+            return [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem,
+                    chkDisableWarnings.focusItem, editRepoButton.focusItem]
         }, 0)
-        registerFocusGroup("repository", function(){ 
-            return [fieldCustomRepository, browseButton]
-        }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, saveButton]
         }, 2)
@@ -120,37 +118,26 @@ BaseDialog {
                 }
             }
 
-            RowLayout {
+            ImOptionButton {
+                id: editRepoButton
+                text: qsTr("Content Repository")
+                btnText: qsTr("Edit")
                 Layout.fillWidth: true
-                spacing: Style.spacingMedium
-
-                ImTextField {
-                    id: fieldCustomRepository
-                    text: selectedRepo !== "" ? UrlFmt.display(selectedRepo) : ""
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("Select custom Repository")
-                    font.pixelSize: Style.fontSizeInput
-                    readOnly: true
-                    activeFocusOnTab: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
                 }
-
-                ImButton {
-                    id: browseButton
-                    text: qsTr("Browse")
-                    Layout.minimumWidth: 80
-                    activeFocusOnTab: true
-                    onClicked: {
-                        // Prefer native file dialog via Imager's wrapper, but only if available
-                        if (imageWriter.nativeFileDialogAvailable()) {
-                            // Defer opening the native dialog until after the current event completes
-                            Qt.callLater(function () {
-                                imageWriter.openFileDialog(qsTr("Select Repository"), CommonStrings.repoFiltersString);
-                            });
-                        } else {
-                            // Fallback to QML dialog (forced non-native)
-                            repoFileDialog.open();
-                        }
+                onClicked: {
+                    // TODO: close this dialog - open sub dialog - show optin between default hardcoded and custom repo and for custom repo browser local or url
+                    // verify repo on save - don't persist longer then app is running
+                    //popup.close()
+                    //Qt.callLater(function () {
+                    //open
+                    //});
+                    if (!repoDialog.wizardContainer) {
+                        repoDialog.wizardContainer = popup.wizardContainer
                     }
+                    //repoDialog.initialize()
+                    repoDialog.open()
                 }
             }
         }
@@ -198,6 +185,13 @@ BaseDialog {
                 }
             }
         }
+    }
+
+    RepositoryDialog {
+        id: repoDialog
+        parent: popup.parent
+        imageWriter: popup.imageWriter
+        wizardContainer: popup.wizardContainer
     }
 
     function initialize() {
@@ -322,21 +316,5 @@ BaseDialog {
                 }
             }
         }
-    }
-
-    property alias repoFileDialog: repoFileDialog
-
-    ImFileDialog {
-        id: repoFileDialog
-        parent: popup.parent  // Inherit parent from AppOptionsDialog (which is overlayRoot)
-        anchors.centerIn: parent
-        dialogTitle: qsTr("Select custom repository")
-        nameFilters: CommonStrings.repoFiltersList
-        onAccepted: {
-            popup.selectedRepo = selectedFile;
-        }
-        onRejected:
-        // No-op; user cancelled
-        {}
     }
 }
