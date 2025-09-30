@@ -24,13 +24,6 @@ enum class FileError {
     kLockError,
     kSyncError,
     kFlushError,
-
-    kNoSpace,
-    kWriteProtected,
-    kBadSector,
-    kCrcError,
-    kInvalidParameter,
-    kIoDevice
 };
 
 enum class DetailedError {

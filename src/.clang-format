@@ -1,0 +1,23 @@
+BasedOnStyle: LLVM   # or Google, Mozilla, WebKit, etc. (choose one as baseline)
+IndentWidth: 4       # optional, just an example
+
+BraceWrapping:
+  AfterFunction: false
+  AfterNamespace: false
+  AfterClass: false
+  AfterControlStatement: false
+  AfterStruct: false
+  AfterEnum: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeElse: false
+  BeforeCatch: false
+  BeforeLambdaBody: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+AllowShortFunctionsOnASingleLine: None
+AllowShortLambdasOnASingleLine: None
+AllowShortCaseLabelsOnASingleLine: false
+AlignTrailingComments: false
