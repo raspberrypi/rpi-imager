@@ -47,12 +47,21 @@ public:
      */
     static bool areNativeDialogsAvailable();
 
+    /**
+     * @brief Force the use of QML file dialogs instead of native ones
+     * @param force If true, always use QML dialogs regardless of platform support
+     */
+    static void setForceQmlDialogs(bool force);
+
 private:
     // Platform-specific implementations (implemented in platform-specific files)
     static QString getFileNameNative(const QString &title,
                                      const QString &initialDir, const QString &filter,
                                      bool saveDialog);
     static bool areNativeDialogsAvailablePlatform();
+
+    // Flag to force QML dialogs
+    static bool s_forceQmlDialogs;
 
 };
 

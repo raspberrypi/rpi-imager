@@ -11,6 +11,9 @@
 #include <QDebug>
 // QML-side fallback is handled at callsites; no QML engine usage here
 
+// Initialize static member
+bool NativeFileDialog::s_forceQmlDialogs = false;
+
 QString NativeFileDialog::getOpenFileName(const QString &title,
                                           const QString &initialDir, const QString &filter)
 {
@@ -37,12 +40,22 @@ QString NativeFileDialog::getSaveFileName(const QString &title,
 
 bool NativeFileDialog::areNativeDialogsAvailable()
 {
+    // Force QML dialogs if requested via command-line flag
+    if (s_forceQmlDialogs) {
+        return false;
+    }
+
     // Always use Qt dialogs in embedded mode
     if (::isEmbeddedMode()) {
         return false;
     }
 
     return areNativeDialogsAvailablePlatform();
+}
+
+void NativeFileDialog::setForceQmlDialogs(bool force)
+{
+    s_forceQmlDialogs = force;
 }
 
 // No extra helper function; return empty to signal QML fallback

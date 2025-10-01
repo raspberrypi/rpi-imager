@@ -15,6 +15,7 @@
 #include "networkaccessmanagerfactory.h"
 #include "cli.h"
 #include "platformquirks.h"
+#include "nativefiledialog.h"
 #include <QMessageLogContext>
 #include <QQuickWindow>
 #include <QTranslator>
@@ -180,7 +181,8 @@ int main(int argc, char *argv[])
         {"refresh-jitter", "OS list refresh jitter (minutes)", "minutes", ""},
         {"enable-language-selection", "Show language selection on startup"},
         {"disable-telemetry", "Disable telemetry (persist setting)"},
-        {"enable-telemetry", "Use default telemetry setting (clear override)"}
+        {"enable-telemetry", "Use default telemetry setting (clear override)"},
+        {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"}
     });
 
     parser.addPositionalArgument("image", "Image file/URL or rpi-imager:// callback URL (optional)", "[image]");
@@ -282,6 +284,11 @@ int main(int argc, char *argv[])
         cerr << "Using default telemetry setting" << endl;
         settings.remove("telemetry");
         settings.sync();
+    }
+
+    if (parser.isSet("qml-file-dialogs"))
+    {
+        NativeFileDialog::setForceQmlDialogs(true);
     }
 
     const QStringList posArgs = parser.positionalArguments();
