@@ -134,6 +134,10 @@ Dialog {
     function registerFocusGroup(name, getItemsFn, order) {
         dialogFocusScope.registerFocusGroup(name, getItemsFn, order)
     }
+
+    function rebuildFocusOrder() {
+        dialogFocusScope.rebuildFocusOrder()
+    }
     
     function rebuildFocusOrder() {
         dialogFocusScope.rebuildFocusOrder()

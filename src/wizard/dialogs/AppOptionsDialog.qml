@@ -23,8 +23,6 @@ BaseDialog {
     property var wizardContainer: null
     
     property bool initialized: false
-    property url selectedRepo: ""
-    property url originalRepo: ""
 
     // Custom escape handling
     function escapePressed() {
@@ -40,14 +38,6 @@ BaseDialog {
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, saveButton]
         }, 2)
-    }
-
-    Connections {
-        target: imageWriter
-        // Handle native file selection for "Use custom"
-        function onFileSelected(fileUrl) {
-            popup.selectedRepo = fileUrl;
-        }
     }
 
     // Header
@@ -202,13 +192,6 @@ BaseDialog {
             chkTelemetry.checked = imageWriter.getBoolSetting("telemetry");
             // Do not load from QSettings; keep ephemeral
             chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false;
-            if (imageWriter.customRepo()) {
-                selectedRepo = imageWriter.osListUrl();
-                originalRepo = selectedRepo;
-            } else {
-                selectedRepo = "";
-                originalRepo = "";
-            }
 
             initialized = true;
             // Pre-compute final height before opening to avoid first-show reflow
@@ -225,16 +208,6 @@ BaseDialog {
         // Do not persist disable_warnings; set ephemeral flag only
         if (popup.wizardContainer)
             popup.wizardContainer.disableWarnings = chkDisableWarnings.checked;
-        // Only save repository setting if it has actually changed
-        if (popup.selectedRepo !== popup.originalRepo) {
-            if (popup.selectedRepo !== "") {
-                imageWriter.refreshOsListFrom(selectedRepo);
-            } else {
-                // User cleared the repository - reset to default
-                // Note: setCustomRepo with the default URL will reset to default behavior
-                imageWriter.setCustomRepo(Qt.resolvedUrl("https://downloads.raspberrypi.org/os_list_imagingutility_v4.json"));
-            }
-        }
     }
 
     onOpened: {

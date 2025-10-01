@@ -22,7 +22,15 @@ BaseDialog {
         registerFocusGroup("sourceTypes", function(){
             return [radioOfficial, radioCustomFile, radioCustomUri]
         }, 0)
-        // TODO: add better focuse groups also for the file and url inputs
+        registerFocusGroup("customFile", function(){
+            return radioCustomFile.checked ? [fieldCustomRepository, browseButton] : []
+        }, 1)
+        registerFocusGroup("customUri", function(){
+            return radioCustomUri.checked ? [fieldCustomUri] : []
+        }, 2)
+        registerFocusGroup("buttons", function(){
+            return [cancelButton, saveButton]
+        }, 3)
     }
 
     Connections {
@@ -156,13 +164,16 @@ BaseDialog {
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
                 onClicked: {
+                    popup.initialized = false
                     popup.close();
                 }
             }
 
             ImButtonRed {
                 id: saveButton
-                enabled: radioOfficial.checked || (radioCustomFile.checked && selectedRepo !== "") || (radioCustomUri.checked && fieldCustomUri.acceptableInput)
+                enabled: radioOfficial.checked
+                         || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
+                         || (radioCustomUri.checked && fieldCustomUri.acceptableInput)
                 text: qsTr("Save")
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
@@ -174,12 +185,27 @@ BaseDialog {
         }
     }
 
+    Connections {
+        target: radioOfficial
+        function onToggled() { popup.rebuildFocusOrder() }
+    }
+
+    Connections {
+        target: radioCustomFile
+        function onToggled() { popup.rebuildFocusOrder() }
+    }
+
+    Connections {
+        target: radioCustomUri
+        function onToggled() { popup.rebuildFocusOrder() }
+    }
+
     function initialize() {
         if (!initialized) {
             initialized = true
 
             if (imageWriter.customRepo()) {
-                var repo = imageWriter.constantOsListUrl()
+                var repo = new URL(imageWriter.constantOsListUrl())
                 if (repo.protocol === "file:") {
                     radioOfficial.checked = false
                     radioCustomFile.checked = true
@@ -207,7 +233,7 @@ BaseDialog {
             }
 
             // Ensure focus order is built after initial state
-            popup.parent.rebuildFocusOrder()
+            popup.rebuildFocusOrder()
         }
     }
 
