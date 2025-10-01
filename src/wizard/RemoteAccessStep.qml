@@ -1,11 +1,11 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2020 Raspberry Pi Ltd
+ * Copyright (C) 2020-2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-// import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtCore
 import "../qmlcomponents"
@@ -51,17 +51,21 @@ WizardStepBase {
                 WizardFormLabel {
                     text: qsTr("Authentication mechanism:")
                 }
+
+                ButtonGroup { id: authGroup }
                 
                 ImRadioButton {
                     id: radioPassword
                     text: qsTr("Use password authentication")
                     checked: true
+                    ButtonGroup.group: authGroup
                 }
                 
                 ImRadioButton {
                     id: radioPublicKey
                     text: qsTr("Use public key authentication")
                     checked: false
+                    ButtonGroup.group: authGroup
                 }
                 
                 RowLayout {
@@ -136,12 +140,10 @@ WizardStepBase {
         function onToggled() { root.rebuildFocusOrder() }
     }
     Connections {
-        target: radioPublicKey
-        function onCheckedChanged() { root.rebuildFocusOrder() }
-    }
-    Connections {
-        target: radioPassword
-        function onCheckedChanged() { root.rebuildFocusOrder() }
+        target: authGroup
+        function onCheckedButtonChanged() {
+            root.rebuildFocusOrder()
+        }
     }
     
     // Save settings when moving to next step
