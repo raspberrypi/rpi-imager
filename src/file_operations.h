@@ -67,6 +67,9 @@ class FileOperations {
   // Get platform-specific file handle (for compatibility with existing code)
   virtual int GetHandle() const = 0;
 
+  // Get the last platform-specific error code (Windows error code, errno on Unix)
+  virtual int GetLastErrorCode() const = 0;
+
   // Factory method to create platform-specific implementation
   static std::unique_ptr<FileOperations> Create();
 };

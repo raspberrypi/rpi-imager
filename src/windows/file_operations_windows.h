@@ -50,9 +50,13 @@ class WindowsFileOperations : public FileOperations {
   // Handle access (Windows uses HANDLE, so we return a cast to int)
   int GetHandle() const override;
 
+  // Get the last Windows error code
+  int GetLastErrorCode() const override;
+
  private:
   HANDLE handle_;
   std::string current_path_;
+  int last_error_code_;
   
    FileError LockVolume();
    FileError UnlockVolume();

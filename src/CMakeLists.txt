@@ -57,8 +57,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebI
         add_link_options(-Wl,--gc-sections)
     endif()
     
-    # Enable Link Time Optimization (LTO) for all targets
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    # Enable Link Time Optimization (LTO) for non-Windows targets
+    if(NOT WIN32)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif()
     
     # Only add build-type specific flags (optimization and sections flags are already added globally above)
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG")

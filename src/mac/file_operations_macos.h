@@ -47,9 +47,13 @@ class MacOSFileOperations : public FileOperations {
   // Handle access
   int GetHandle() const override;
 
+  // Get the last errno error code
+  int GetLastErrorCode() const override;
+
  private:
   int fd_;
   std::string current_path_;
+  int last_error_code_;
   
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
 };

@@ -15,7 +15,7 @@
 
 namespace rpi_imager {
 
-MacOSFileOperations::MacOSFileOperations() : fd_(-1) {}
+MacOSFileOperations::MacOSFileOperations() : fd_(-1), last_error_code_(0) {}
 
 MacOSFileOperations::~MacOSFileOperations() {
   Close();
@@ -154,11 +154,13 @@ FileError MacOSFileOperations::OpenInternal(const char* path, int flags, mode_t 
 
   fd_ = open(path, flags, mode);
   if (fd_ < 0) {
+    last_error_code_ = errno;
     std::cout << "OpenInternal: Failed to open " << path << ", errno=" << errno << std::endl;
     return FileError::kOpenError;
   }
 
   current_path_ = path;
+  last_error_code_ = 0;
   std::cout << "OpenInternal: Successfully opened " << path << ", fd=" << fd_ << std::endl;
   return FileError::kSuccess;
 }
@@ -174,6 +176,7 @@ FileError MacOSFileOperations::WriteSequential(const std::uint8_t* data, std::si
     ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
     if (result <= 0) {
       if (result == 0 || errno != EINTR) {
+        last_error_code_ = errno;
         return FileError::kWriteError;
       }
       // EINTR - retry the write
@@ -182,6 +185,7 @@ FileError MacOSFileOperations::WriteSequential(const std::uint8_t* data, std::si
     bytes_written += static_cast<std::size_t>(result);
   }
 
+  last_error_code_ = 0;
   return FileError::kSuccess;
 }
 
@@ -249,6 +253,10 @@ FileError MacOSFileOperations::Flush() {
 
 int MacOSFileOperations::GetHandle() const {
   return fd_;
+}
+
+int MacOSFileOperations::GetLastErrorCode() const {
+  return last_error_code_;
 }
 
 // Platform-specific factory function implementation

@@ -10,9 +10,13 @@
 #include <sys/stat.h>
 #include <errno.h>
 
+#ifndef O_SYNC
+#define O_SYNC O_DSYNC
+#endif
+
 namespace rpi_imager {
 
-LinuxFileOperations::LinuxFileOperations() : fd_(-1) {}
+LinuxFileOperations::LinuxFileOperations() : fd_(-1), last_error_code_(0) {}
 
 LinuxFileOperations::~LinuxFileOperations() {
   Close();
@@ -101,10 +105,12 @@ FileError LinuxFileOperations::OpenInternal(const char* path, int flags, mode_t 
 
   fd_ = open(path, flags, mode);
   if (fd_ < 0) {
+    last_error_code_ = errno;
     return FileError::kOpenError;
   }
 
   current_path_ = path;
+  last_error_code_ = 0;
   return FileError::kSuccess;
 }
 
@@ -119,6 +125,7 @@ FileError LinuxFileOperations::WriteSequential(const std::uint8_t* data, std::si
     ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
     if (result <= 0) {
       if (result == 0 || errno != EINTR) {
+        last_error_code_ = errno;
         return FileError::kWriteError;
       }
       // EINTR - retry the write
@@ -127,6 +134,7 @@ FileError LinuxFileOperations::WriteSequential(const std::uint8_t* data, std::si
     bytes_written += static_cast<std::size_t>(result);
   }
 
+  last_error_code_ = 0;
   return FileError::kSuccess;
 }
 
@@ -172,7 +180,7 @@ FileError LinuxFileOperations::ForceSync() {
   }
 
   // Force filesystem sync using fsync - same logic as LinuxFile::forceSync()
-  if (::fsync(fd_) != 0) {
+  if (fsync(fd_) != 0) {
     return FileError::kSyncError;
   }
 
@@ -186,7 +194,7 @@ FileError LinuxFileOperations::Flush() {
 
   // On Linux, fsync handles both buffer flush and disk sync
   // For streaming operations, we can use fdatasync for better performance
-  if (::fdatasync(fd_) != 0) {
+  if (fdatasync(fd_) != 0) {
     return FileError::kFlushError;
   }
 
@@ -195,6 +203,10 @@ FileError LinuxFileOperations::Flush() {
 
 int LinuxFileOperations::GetHandle() const {
   return fd_;
+}
+
+int LinuxFileOperations::GetLastErrorCode() const {
+  return last_error_code_;
 }
 
 // Platform-specific factory function implementation

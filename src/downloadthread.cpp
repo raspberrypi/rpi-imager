@@ -800,29 +800,28 @@ void DownloadThread::_onWriteError()
         }
         _onDownloadError(msg);
     }
-    else if (_file.errorCode() == ERROR_DISK_FULL)
+    else if (_file->GetLastErrorCode() == ERROR_DISK_FULL)
     {
         _onDownloadError(tr("Disk is full. Please use a larger storage device."));
     }
-    else if (_file.errorCode() == ERROR_WRITE_PROTECT)
+    else if (_file->GetLastErrorCode() == ERROR_WRITE_PROTECT)
     {
         _onDownloadError(tr("The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only."));
     }
-    else if (_file.errorCode() == ERROR_SECTOR_NOT_FOUND || _file.errorCode() == ERROR_CRC)
+    else if (_file->GetLastErrorCode() == ERROR_SECTOR_NOT_FOUND || _file->GetLastErrorCode() == ERROR_CRC)
     {
         _onDownloadError(tr("Media error detected. The storage device may be damaged or counterfeit. Please try a different device."));
     }
-    else if (_file.errorCode() == ERROR_INVALID_PARAMETER)
+    else if (_file->GetLastErrorCode() == ERROR_INVALID_PARAMETER)
     {
         _onDownloadError(tr("Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device."));
     }
-    else if (_file.errorCode() == ERROR_IO_DEVICE)
+    else if (_file->GetLastErrorCode() == ERROR_IO_DEVICE)
     {
         _onDownloadError(tr("I/O device error. The storage device may have been disconnected or is malfunctioning."));
     }
     else
     {
-        // Generic error message until platform-specific error handling is implemented
         _onDownloadError(tr("Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected."));
     }
 #endif

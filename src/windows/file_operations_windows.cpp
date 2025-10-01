@@ -10,7 +10,7 @@
 
 namespace rpi_imager {
 
-WindowsFileOperations::WindowsFileOperations() : handle_(INVALID_HANDLE_VALUE) {}
+WindowsFileOperations::WindowsFileOperations() : handle_(INVALID_HANDLE_VALUE), last_error_code_(0) {}
 
 WindowsFileOperations::~WindowsFileOperations() {
   Close();
@@ -279,10 +279,12 @@ FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD acc
                         nullptr);
 
   if (handle_ == INVALID_HANDLE_VALUE) {
+    last_error_code_ = static_cast<int>(GetLastError());
     return FileError::kOpenError;
   }
 
   current_path_ = path;
+  last_error_code_ = 0;
   return FileError::kSuccess;
 }
 
@@ -303,12 +305,14 @@ FileError WindowsFileOperations::WriteSequential(const std::uint8_t* data, std::
                            nullptr);
     
     if (!result) {
+      last_error_code_ = static_cast<int>(GetLastError());
       return FileError::kWriteError;
     }
     
     total_written += bytes_written;
   }
 
+  last_error_code_ = 0;
   return FileError::kSuccess;
 }
 
@@ -390,6 +394,10 @@ int WindowsFileOperations::GetHandle() const {
   // Note: This is a compatibility method. Windows HANDLE cannot be safely cast to int.
   // For proper Windows code, use the handle_ member directly or add a GetWindowsHandle() method.
   return static_cast<int>(reinterpret_cast<intptr_t>(handle_));
+}
+
+int WindowsFileOperations::GetLastErrorCode() const {
+  return last_error_code_;
 }
 
 // Platform-specific factory function implementation
