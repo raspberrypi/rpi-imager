@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2022 Raspberry Pi Ltd
+ * Copyright (C) 2022-2025 Raspberry Pi Ltd
  */
 
 #include "devicewrapper.h"
@@ -9,8 +9,10 @@
 #include "devicewrapperfatpartition.h"
 #include <QDebug>
 
-DeviceWrapper::DeviceWrapper(DeviceWrapperFile *file, QObject *parent)
-    : QObject(parent), _dirty(false), _file(file)
+using rpi_imager::FileError;
+
+DeviceWrapper::DeviceWrapper(std::unique_ptr<rpi_imager::FileOperations> file, QObject *parent)
+    : QObject(parent), _dirty(false), _file(std::move(file))
 {
 
 }
@@ -22,7 +24,7 @@ DeviceWrapper::~DeviceWrapper()
 
 void DeviceWrapper::_seekToBlock(quint64 blockNr)
 {
-    if (!_file->seek(blockNr*4096))
+    if (_file->Seek(blockNr*4096) != FileError::kSuccess)
     {
         throw std::runtime_error("Error seeking device");
     }
@@ -45,9 +47,10 @@ void DeviceWrapper::sync()
             continue;
 
         _seekToBlock(blockNr);
-        if (_file->write(block->block, 4096) != 4096)
+        if (_file->WriteSequential(reinterpret_cast<const std::uint8_t*>(block->block), 4096) != FileError::kSuccess)
         {
-            std::string errmsg = "Error writing to device: "+_file->errorString().toStdString();
+            std::string errmsg = std::string("Error writing to device: ") +
+                                 rpi_imager::DetailedErrorToString(_file->LastError().detailed);
             throw std::runtime_error(errmsg);
         }
         block->dirty = false;
@@ -61,9 +64,10 @@ void DeviceWrapper::sync()
         if (block->dirty)
         {
             _seekToBlock(0);
-            if (_file->write(block->block, 4096) != 4096)
+            if (_file->WriteSequential(reinterpret_cast<const std::uint8_t*>(block->block), 4096) != FileError::kSuccess)
             {
-                std::string errmsg = "Error writing MBR to device: "+_file->errorString().toStdString();
+                std::string errmsg = std::string("Error writing MBR to device: ") +
+                                     rpi_imager::DetailedErrorToString(_file->LastError().detailed);
                 throw std::runtime_error(errmsg);
             }
             block->dirty = false;
@@ -80,6 +84,7 @@ void DeviceWrapper::_readIntoBlockCacheIfNeeded(quint64 offset, quint64 size)
 
     quint64 firstBlock = offset/4096;
     quint64 lastBlock = (offset+size)/4096;
+    size_t bytesRead;
 
     for (auto i = firstBlock; i <= lastBlock; i++)
     {
@@ -88,10 +93,11 @@ void DeviceWrapper::_readIntoBlockCacheIfNeeded(quint64 offset, quint64 size)
             _seekToBlock(i);
 
             auto cacheEntry = new DeviceWrapperBlockCacheEntry(this);
-            int bytesRead = _file->read(cacheEntry->block, 4096);
-            if (bytesRead != 4096)
+            FileError result = _file->ReadSequential(reinterpret_cast<std::uint8_t *>(cacheEntry->block), 4096, bytesRead);
+            if (result != FileError::kSuccess || bytesRead != 4096)
             {
-                std::string errmsg = "Error reading from device: "+_file->errorString().toStdString();
+                std::string errmsg = std::string("Error reading from device: ") +
+                                     rpi_imager::DetailedErrorToString(_file->LastError().detailed);
                 throw std::runtime_error(errmsg);
             }
             _blockcache.insert(i, cacheEntry);

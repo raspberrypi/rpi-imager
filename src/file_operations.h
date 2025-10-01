@@ -44,6 +44,21 @@ struct ErrorInfo {
     int os_code = 0;                // errno or GetLastError()
 };
 
+static const char* DetailedErrorToString(DetailedError e) {
+    switch (e) {
+    case DetailedError::kNoDetails:        return "NoDetails";
+    case DetailedError::kNoSpace:          return "NoSpace";
+    case DetailedError::kWriteProtected:   return "WriteProtected";
+    case DetailedError::kBadSector:        return "BadSector";
+    case DetailedError::kCrcError:         return "CrcError";
+    case DetailedError::kInvalidParameter: return "InvalidParameter";
+    case DetailedError::kIoDevice:         return "IoDevice";
+    case DetailedError::kAccessDenied:     return "AccessDenied";
+    case DetailedError::kBusy:             return "Busy";
+    }
+    return "UnknownDetailedError";
+}
+
 // Abstract interface for platform-specific file operations
 class FileOperations {
 public:
