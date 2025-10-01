@@ -431,15 +431,28 @@ void ImageWriter::startWrite()
     if (!readyToWrite())
     {
         // Provide a user-visible error rather than silently returning, so the UI can recover
-        QString reason;
+        // Check all conditions and provide comprehensive error messages
+        QStringList missingItems;
+        
         if (_src.isEmpty())
-            reason = tr("No image selected.");
-        else if (_dst.isEmpty())
-            reason = tr("No storage device selected.");
+            missingItems.append(tr("image"));
+        if (_dst.isEmpty())
+            missingItems.append(tr("storage device"));
         else if (!_selectedDeviceValid)
-            reason = tr("Selected storage device is no longer available.");
+            missingItems.append(tr("valid storage device (device no longer available)"));
+        
+        QString reason;
+        if (!missingItems.isEmpty())
+        {
+            if (missingItems.size() == 1)
+                reason = tr("No %1 selected.").arg(missingItems.first());
+            else
+                reason = tr("No %1 selected.").arg(missingItems.join(tr(" or ")));
+        }
         else
+        {
             reason = tr("Unknown precondition failure.");
+        }
 
         emit error(tr("Cannot start write. %1").arg(reason));
         return;
