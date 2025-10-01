@@ -1,8 +1,8 @@
 import QtCore
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Window 2.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Window
 import "../../qmlcomponents"
 
 import RpiImager
@@ -66,22 +66,27 @@ BaseDialog {
                 text: qsTr("Repository source:")
             }
 
+            ButtonGroup { id: repoGroup }
+
             ImRadioButton {
                 id: radioOfficial
                 text: "Raspberry Pi (default)"
                 checked: true
+                ButtonGroup.group: repoGroup
             }
 
             ImRadioButton {
                 id: radioCustomFile
                 text: qsTr("Use custom file")
                 checked: false
+                ButtonGroup.group: repoGroup
             }
 
             ImRadioButton {
                 id: radioCustomUri
                 text: qsTr("Use custom URI")
                 checked: false
+                ButtonGroup.group: repoGroup
             }
 
             RowLayout {
@@ -186,18 +191,10 @@ BaseDialog {
     }
 
     Connections {
-        target: radioOfficial
-        function onToggled() { popup.rebuildFocusOrder() }
-    }
-
-    Connections {
-        target: radioCustomFile
-        function onToggled() { popup.rebuildFocusOrder() }
-    }
-
-    Connections {
-        target: radioCustomUri
-        function onToggled() { popup.rebuildFocusOrder() }
+        target: repoGroup
+        function onCheckedButtonChanged() {
+            popup.rebuildFocusOrder()
+        }
     }
 
     function initialize() {
