@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     
     app.setOrganizationName("Raspberry Pi");
     app.setOrganizationDomain("raspberrypi.com");
-    app.setApplicationName("rpi-imager");
+    app.setApplicationName("Raspberry Pi Imager");
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
 
     qmlRegisterUncreatableMetaObject(
