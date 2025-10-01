@@ -275,16 +275,6 @@ WizardStepBase {
         parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
         anchors.centerIn: parent
 
-        // Dynamic height calculation based on actual content
-        height: {
-            var totalHeight = Style.cardPadding * 2  // Top and bottom padding
-            totalHeight += (warningText ? warningText.implicitHeight : 0) || 30
-            totalHeight += (permanentText ? permanentText.implicitHeight : 0) || 20
-            totalHeight += (confirmButtonRow ? confirmButtonRow.implicitHeight : 0) || 40
-            totalHeight += Style.spacingMedium * 2  // Spacing between elements
-            return Math.max(160, totalHeight)
-        }
-
         property bool allowAccept: false
 
         // Custom escape handling

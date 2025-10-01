@@ -14,17 +14,6 @@ import RpiImager
 BaseDialog {
     id: root
 
-    // Dynamic height calculation based on actual content
-    height: {
-        var totalHeight = Style.cardPadding * 2  // Top and bottom padding
-        totalHeight += (titleText ? titleText.implicitHeight : 0) || 25
-        totalHeight += (descriptionText ? descriptionText.implicitHeight : 0) || 20
-        totalHeight += (subText ? subText.implicitHeight : 0) || 15
-        totalHeight += (buttonRow ? buttonRow.implicitHeight : 0) || 40
-        totalHeight += Style.spacingMedium * 3  // Spacing between elements
-        return Math.max(160, totalHeight)
-    }
-
     property bool userAccepted: false
 
     function askForPermission() {
