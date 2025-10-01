@@ -10,7 +10,7 @@
 set -e
 
 # Default values
-QT_VERSION="6.9.1"    # 6.9.1 is the latest version as of 2025-08-04
+QT_VERSION="6.9.3"    # 6.9.3 is the latest version as of 2025-10-01
 PREFIX="/opt/Qt/${QT_VERSION}"     # Default installation prefix with capital 'Q'
 CORES=$(sysctl -n hw.ncpu)        # Default to all available CPU cores
 CLEAN_BUILD=1         # Clean the build directory by default
