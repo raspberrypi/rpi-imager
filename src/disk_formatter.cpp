@@ -70,12 +70,17 @@ FormatError ConvertFileError(FileError error) {
       return FormatError::kFileOpenError;
     case FileError::kWriteError:
       return FormatError::kFileWriteError;
+    case FileError::kReadError:
+      return FormatError::kFileOpenError;
     case FileError::kSeekError:
       return FormatError::kFileSeekError;
     case FileError::kSizeError:
     case FileError::kCloseError:
     case FileError::kLockError:
       return FormatError::kFileOpenError;
+    case FileError::kSyncError:
+    case FileError::kFlushError:
+      return FormatError::kFileWriteError;
   }
   return FormatError::kFileOpenError;
 }
