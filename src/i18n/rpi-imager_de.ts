@@ -5,39 +5,39 @@
     <name>AppOptionsDialog</name>
     <message>
         <source>App Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Programm Optionen</translation>
     </message>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Tonsignal nach Beenden abspielen</translation>
+        <translation>Tonsignal nach Beenden abspielen</translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Medien nach Beenden auswerfen</translation>
+        <translation>Medien nach Beenden auswerfen</translation>
     </message>
     <message>
         <source>Enable anonymous statistics (telemetry)</source>
-        <translation type="unfinished"></translation>
+        <translation>Anonyme Statistiken aktivieren (Telemetrie)</translation>
     </message>
     <message>
         <source>What is this?</source>
-        <translation type="unfinished"></translation>
+        <translation>Was ist das?</translation>
     </message>
     <message>
         <source>Disable warnings</source>
-        <translation type="unfinished"></translation>
+        <translation>Warnungen ausschalten</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished"></translation>
+        <translation>Speichern</translation>
     </message>
     <message>
         <source>Disable warnings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Warnungen ausschalten?</translation>
     </message>
     <message>
         <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
@@ -119,7 +119,7 @@
     </message>
     <message>
         <source>CONTINUE</source>
-        <translation type="unfinished">WEITER</translation>
+        <translation>WEITER</translation>
     </message>
 </context>
 <context>
@@ -145,7 +145,7 @@
     <name>DeviceSelectionStep</name>
     <message>
         <source>Select your Raspberry Pi device</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie Ihr Raspberry Pi-Gerät aus</translation>
     </message>
 </context>
 <context>
@@ -228,7 +228,7 @@
     </message>
     <message>
         <source>Reboot</source>
-        <translation type="unfinished"></translation>
+        <translation>Neustart</translation>
     </message>
 </context>
 <context>
@@ -251,11 +251,11 @@
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">Fehler beim Lesen vom Speicher.&lt;br&gt;Die SD-Karte könnte defekt sein.</translation>
+        <translation>Fehler beim Lesen vom Speicher.&lt;br&gt;Die SD-Karte könnte defekt sein.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">Verifizierung fehlgeschlagen. Der Inhalt der SD-Karte weicht von dem Inhalt ab, der geschrieben werden sollte.</translation>
+        <translation>Verifizierung fehlgeschlagen. Der Inhalt der SD-Karte weicht von dem Inhalt ab, der geschrieben werden sollte.</translation>
     </message>
 </context>
 <context>
@@ -448,7 +448,7 @@
     <name>HostnameCustomizationStep</name>
     <message>
         <source>raspberrypi</source>
-        <translation type="unfinished"></translation>
+        <translation>raspberrypi</translation>
     </message>
     <message>
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
@@ -499,7 +499,7 @@
     </message>
     <message>
         <source>Console</source>
-        <translation type="unfinished"></translation>
+        <translation>Konsole</translation>
     </message>
     <message>
         <source>USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.</source>
@@ -515,7 +515,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <source>I understand, continue</source>
@@ -534,23 +534,23 @@
     </message>
     <message>
         <source>Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>Dokumente</translation>
     </message>
     <message>
         <source>Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Downloads</translation>
     </message>
     <message>
         <source>Pictures</source>
-        <translation type="unfinished"></translation>
+        <translation>Bilder</translation>
     </message>
     <message>
         <source>Music</source>
-        <translation type="unfinished"></translation>
+        <translation>Musik</translation>
     </message>
     <message>
         <source>Movies</source>
-        <translation type="unfinished"></translation>
+        <translation>Filme</translation>
     </message>
     <message>
         <source>Root</source>
@@ -562,15 +562,15 @@
     </message>
     <message>
         <source>Folders</source>
-        <translation type="unfinished"></translation>
+        <translation>Ordner</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffnen</translation>
     </message>
 </context>
 <context>
@@ -597,23 +597,23 @@
     </message>
     <message>
         <source>B</source>
-        <translation type="unfinished"></translation>
+        <translation>B</translation>
     </message>
     <message>
         <source>TB</source>
-        <translation type="unfinished"></translation>
+        <translation>TB</translation>
     </message>
     <message>
         <source>GB</source>
-        <translation type="unfinished">GB</translation>
+        <translation>GB</translation>
     </message>
     <message>
         <source>MB</source>
-        <translation type="unfinished"></translation>
+        <translation>MB</translation>
     </message>
     <message>
         <source>KB</source>
-        <translation type="unfinished"></translation>
+        <translation>KB</translation>
     </message>
     <message>
         <source>%1 %2</source>
@@ -672,26 +672,26 @@
     </message>
     <message>
         <source>No</source>
-        <translation type="unfinished"></translation>
+        <translation>Nein</translation>
     </message>
     <message>
         <source>Yes</source>
-        <translation type="unfinished"></translation>
+        <translation>Ja</translation>
     </message>
 </context>
 <context>
     <name>LanguageSelectionStep</name>
     <message>
         <source>Welcome</source>
-        <translation type="unfinished"></translation>
+        <translation>Willkommen</translation>
     </message>
     <message>
         <source>Language:</source>
-        <translation type="unfinished"></translation>
+        <translation>Sprache:</translation>
     </message>
     <message>
         <source>Choose your language for Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie die Sprache für Raspberry Pi Imager</translation>
     </message>
 </context>
 <context>
@@ -725,7 +725,7 @@
     <name>LocaleCustomizationStep</name>
     <message>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">Tastaturlayout:</translation>
+        <translation>Tastaturlayout:</translation>
     </message>
     <message>
         <source>Customisation: Choose locale</source>
@@ -737,7 +737,7 @@
     </message>
     <message>
         <source>Time zone:</source>
-        <translation type="unfinished"></translation>
+        <translation>Zeitzone:</translation>
     </message>
 </context>
 <context>
@@ -755,11 +755,11 @@
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">Auf Ihrem Computer zwischengespeichert</translation>
+        <translation>Auf Ihrem Computer zwischengespeichert</translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">Lokale Datei</translation>
+        <translation>Lokale Datei</translation>
     </message>
     <message>
         <source>Online - %1 download</source>
@@ -767,23 +767,23 @@
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Zurück</translation>
+        <translation>Zurück</translation>
     </message>
     <message>
         <source>Go back to main menu</source>
-        <translation type="unfinished">Zurück zum Hauptmenü</translation>
+        <translation>Zurück zum Hauptmenü</translation>
     </message>
     <message>
         <source>Select image</source>
-        <translation type="unfinished">Image wählen</translation>
+        <translation>Image wählen</translation>
     </message>
     <message>
         <source>Choose operating system</source>
-        <translation type="unfinished"></translation>
+        <translation>Betriebssystem auswählen</translation>
     </message>
     <message>
         <source>Select an operating system to install on your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie ein Betriebssystem zur Installation auf Ihrem Raspberry Pi aus</translation>
     </message>
 </context>
 <context>
@@ -825,11 +825,11 @@
     <name>RemoteAccessStep</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">SSH aktivieren</translation>
+        <translation>SSH aktivieren</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">Passwort zur Authentifizierung verwenden</translation>
+        <translation>Passwort zur Authentifizierung verwenden</translation>
     </message>
     <message>
         <source>Use public key authentication</source>
@@ -895,19 +895,19 @@
     <name>UpdateAvailableDialog</name>
     <message>
         <source>Update available</source>
-        <translation type="unfinished">Update verfügbar</translation>
+        <translation>Update verfügbar</translation>
     </message>
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Es ist eine neuere Version von Imager verfügbar. Möchten Sie die Website besuchen, um sie herunterzuladen?</translation>
     </message>
     <message>
         <source>No</source>
-        <translation type="unfinished"></translation>
+        <translation>Nein</translation>
     </message>
     <message>
         <source>Yes</source>
-        <translation type="unfinished"></translation>
+        <translation>Ja</translation>
     </message>
 </context>
 <context>
@@ -969,19 +969,19 @@
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Passwort:</translation>
+        <translation>Passwort:</translation>
     </message>
     <message>
         <source>Network password</source>
-        <translation type="unfinished"></translation>
+        <translation>Netzwerk Passwort</translation>
     </message>
     <message>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">Wifi-Land:</translation>
+        <translation>Wifi-Land:</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation type="unfinished">Verborgene SSID</translation>
+        <translation>Verborgene SSID</translation>
     </message>
     <message>
         <source>Customisation: Choose Wi‑Fi</source>
@@ -1067,15 +1067,15 @@
     <name>WizardStepBase</name>
     <message>
         <source>Next</source>
-        <translation type="unfinished">Weiter</translation>
+        <translation>Weiter</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Zurück</translation>
+        <translation>Zurück</translation>
     </message>
     <message>
         <source>Skip customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Anpassung überspringen</translation>
     </message>
 </context>
 <context>
@@ -1257,15 +1257,15 @@
     </message>
     <message>
         <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imager ist noch beschäftigt. Möchten Sie wirklich beenden?</translation>
     </message>
     <message>
         <source>No</source>
-        <translation type="unfinished"></translation>
+        <translation>Nein</translation>
     </message>
     <message>
         <source>Yes</source>
-        <translation type="unfinished"></translation>
+        <translation>Ja</translation>
     </message>
     <message>
         <source>Storage device removed</source>
@@ -1273,7 +1273,7 @@
     </message>
     <message>
         <source>Continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Weiter</translation>
     </message>
     <message>
         <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>
