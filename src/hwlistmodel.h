@@ -73,6 +73,7 @@ private:
     QVector<HardwareDevice> _hwDevices;
     ImageWriter &_imageWriter;
     int _currentIndex = -1;
+    QString _lastSelectedDeviceName;  // Track actual device to detect changes
 };
 
 #endif
