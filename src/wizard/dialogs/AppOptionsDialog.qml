@@ -96,7 +96,7 @@ BaseDialog {
                 id: chkTelemetry
                 text: qsTr("Enable anonymous statistics (telemetry)")
                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is this?")
-                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-imager?tab=readme-ov-file#telemetry"
+                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-imager?tab=readme-ov-file#anonymous-metrics-telemetry"
                 Layout.fillWidth: true
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true

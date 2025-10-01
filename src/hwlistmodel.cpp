@@ -154,9 +154,19 @@ void HWListModel::setCurrentIndex(int index) {
 
     const HardwareDevice &device = _hwDevices.at(index);
 
+    // Only clear image source if the device actually changed (not just re-selecting same device)
+    bool deviceChanged = (_lastSelectedDeviceName != device.name);
+    
     _imageWriter.setHWFilterList(device.tags, device.isInclusive());
     _imageWriter.setHWCapabilitiesList(device.capabilities);
-    _imageWriter.setSrc({});
+    
+    if (deviceChanged) {
+        qDebug() << "Hardware device changed from" << _lastSelectedDeviceName << "to" << device.name << "- clearing image selection";
+        _imageWriter.setSrc({});
+        _lastSelectedDeviceName = device.name;
+    } else {
+        qDebug() << "Hardware device re-selected (" << device.name << ") - preserving image selection";
+    }
 
     _currentIndex = index;
 
