@@ -145,7 +145,7 @@
     <name>DeviceSelectionStep</name>
     <message>
         <source>Select your Raspberry Pi device</source>
-        <translation>Wählen Sie Ihr Raspberry Pi-Gerät aus</translation>
+        <translation>Wählen Sie Ihr Raspberry Pi-Modell aus</translation>
     </message>
 </context>
 <context>
@@ -156,27 +156,27 @@
     </message>
     <message>
         <source>Device:</source>
-        <translation type="unfinished"></translation>
+        <translation>Modell:</translation>
     </message>
     <message>
         <source>No device selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Modell ausgewählt</translation>
     </message>
     <message>
         <source>Operating System:</source>
-        <translation type="unfinished"></translation>
+        <translation>Betriebssystem:</translation>
     </message>
     <message>
         <source>No image selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Image ausgewählt</translation>
     </message>
     <message>
         <source>Storage Device:</source>
-        <translation type="unfinished"></translation>
+        <translation>Speichergerät:</translation>
     </message>
     <message>
         <source>No storage device selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Speichergerät ausgewählt</translation>
     </message>
     <message>
         <source>✓ Hostname configured</source>
@@ -751,7 +751,7 @@
     <name>OSSelectionStep</name>
     <message>
         <source>Local - %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Lokal - %1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
@@ -763,7 +763,7 @@
     </message>
     <message>
         <source>Online - %1 download</source>
-        <translation type="unfinished"></translation>
+        <translation>Online - %1 download</translation>
     </message>
     <message>
         <source>Back</source>
@@ -872,11 +872,11 @@
     <name>StorageSelectionStep</name>
     <message>
         <source>No storage devices found</source>
-        <translation type="unfinished">Keine SD-Karte gefunden</translation>
+        <translation>Kein Speichergerät gefunden</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
-        <translation type="unfinished">Als %1 eingebunden</translation>
+        <translation>Als %1 eingebunden</translation>
     </message>
     <message>
         <source>Read-only</source>
@@ -914,7 +914,7 @@
     <name>UserCustomizationStep</name>
     <message>
         <source>Username:</source>
-        <translation type="unfinished">Benutzername:</translation>
+        <translation>Benutzername:</translation>
     </message>
     <message>
         <source>pi</source>
@@ -922,7 +922,7 @@
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Passwort:</translation>
+        <translation>Passwort:</translation>
     </message>
     <message>
         <source>Enter password</source>
@@ -961,7 +961,7 @@
     <name>WifiCustomizationStep</name>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <source>Network name</source>
@@ -1000,15 +1000,15 @@
     <name>WizardContainer</name>
     <message>
         <source>Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Modell</translation>
     </message>
     <message>
         <source>OS</source>
-        <translation type="unfinished"></translation>
+        <translation>Betriebssystem</translation>
     </message>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">SD-Karte</translation>
+        <translation>Speicher</translation>
     </message>
     <message>
         <source>Writing</source>
@@ -1086,23 +1086,23 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <source>Continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Fortsetzen</translation>
     </message>
     <message>
         <source>Write</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreiben</translation>
     </message>
     <message>
         <source>Summary</source>
-        <translation type="unfinished"></translation>
+        <translation>Zusammenfassung</translation>
     </message>
     <message>
         <source>Device:</source>
-        <translation type="unfinished"></translation>
+        <translation>Modell:</translation>
     </message>
     <message>
         <source>No device selected</source>
@@ -1110,7 +1110,7 @@
     </message>
     <message>
         <source>No image selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Image ausgewählt</translation>
     </message>
     <message>
         <source>Storage:</source>
@@ -1142,7 +1142,7 @@
     </message>
     <message>
         <source>Write cancelled</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreiben abgebrochen</translation>
     </message>
     <message>
         <source>You are about to ERASE all data on: %1</source>
@@ -1162,15 +1162,15 @@
     </message>
     <message>
         <source>Please wait...</source>
-        <translation type="unfinished"></translation>
+        <translation>Bitte warten...</translation>
     </message>
     <message>
         <source>Writing... %1%</source>
-        <translation type="unfinished">Schreiben... %1%</translation>
+        <translation>Schreiben... %1%</translation>
     </message>
     <message>
         <source>Verifying... %1%</source>
-        <translation type="unfinished">Verifizieren... %1%</translation>
+        <translation>Verifizieren... %1%</translation>
     </message>
     <message>
         <source>Write completed successfully!</source>
@@ -1269,7 +1269,7 @@
     </message>
     <message>
         <source>Storage device removed</source>
-        <translation type="unfinished"></translation>
+        <translation>Speichergerät entfernt</translation>
     </message>
     <message>
         <source>Continue</source>
@@ -1281,7 +1281,7 @@
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished"></translation>
+        <translation>OK</translation>
     </message>
 </context>
 </TS>
