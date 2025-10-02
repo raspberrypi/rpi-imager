@@ -269,14 +269,6 @@
         <translation>открытие диска</translation>
     </message>
     <message>
-        <source>Authentication cancelled</source>
-        <translation>Аутентификация отменена</translation>
-    </message>
-    <message>
-        <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
-        <translation>Ошибка выполнения authopen для получения доступа к дисковому устройству «%1»</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Убедитесь, что в параметрах настройки конфиденциальности (privacy settings) в разделе «файлы и папки» («files and folders») программе Raspberry Pi Imager разрешён доступ к съёмным томам (removable volumes). Либо можно предоставить программе доступ ко всему диску (full disk access).</translation>
     </message>
@@ -386,6 +378,30 @@
     </message>
     <message>
         <source>writing image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error opening disk device &apos;%1&apos;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot open storage device &apos;%1&apos; after authorization.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot open storage device &apos;%1&apos; with udisks2 authorization.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error getting device size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing first block to device</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -623,18 +639,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No image selected.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No storage device selected.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Selected storage device is no longer available.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Unknown precondition failure.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -652,6 +656,26 @@
     </message>
     <message>
         <source>Source file is not readable: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>valid storage device (device no longer available)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No %1 selected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> or </source>
         <translation type="unfinished"></translation>
     </message>
 </context>

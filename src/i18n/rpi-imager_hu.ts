@@ -269,14 +269,6 @@
         <translation>meghajtó megnyitása</translation>
     </message>
     <message>
-        <source>Authentication cancelled</source>
-        <translation>Hitelesítés megszakítva</translation>
-    </message>
-    <message>
-        <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
-        <translation>Hiba az authopen futtatásakor a(z) &apos;%1&apos; lemezhez való hozzáféréshez</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Ellenőrizze, hogy a &apos;Raspberry Pi Imager&apos; hozzáférhet-e az &apos;eltávolítható kötetekhez&apos; az adatvédelmi beállításokban (a &apos;fájlok és mappák&apos; alatt), vagy adjon &apos;teljes lemezhozzáférést&apos;.</translation>
     </message>
@@ -387,6 +379,30 @@
     <message>
         <source>writing image</source>
         <translation>kép írása</translation>
+    </message>
+    <message>
+        <source>Error opening disk device &apos;%1&apos;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot open storage device &apos;%1&apos; after authorization.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot open storage device &apos;%1&apos; with udisks2 authorization.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error getting device size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing first block to device</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -623,18 +639,6 @@
         <translation>%1.%2 %3</translation>
     </message>
     <message>
-        <source>No image selected.</source>
-        <translation>Nincs kép kiválasztva.</translation>
-    </message>
-    <message>
-        <source>No storage device selected.</source>
-        <translation>Nincs tárolóeszköz kiválasztva.</translation>
-    </message>
-    <message>
-        <source>Selected storage device is no longer available.</source>
-        <translation>A kiválasztott tárolóeszköz már nem érhető el.</translation>
-    </message>
-    <message>
         <source>Unknown precondition failure.</source>
         <translation>Ismeretlen előfeltétel-hiba.</translation>
     </message>
@@ -653,6 +657,26 @@
     <message>
         <source>Source file is not readable: %1</source>
         <translation>A forrásfájl nem olvasható: %1</translation>
+    </message>
+    <message>
+        <source>image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>valid storage device (device no longer available)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No %1 selected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> or </source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

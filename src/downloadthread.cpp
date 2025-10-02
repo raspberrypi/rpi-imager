@@ -1147,13 +1147,12 @@ bool DownloadThread::_customizeImage()
 {
     emit preparationStatusUpdate(tr("Customizing image"));
 
-    // TODO: Integrate DeviceWrapper with unified FileOperations
-    // For now, disable advanced device wrapper functionality
-    if (false) // Temporarily disabled
+    // Use DeviceWrapper with existing FileOperations for image customization
     try
     {
-        /*
-        // DeviceWrapper dw(&_file); // Disabled until FileOperations integration
+        // Create DeviceWrapper using our existing FileOperations instance directly
+        // This avoids opening the device twice and triggering authorization dialogs
+        DeviceWrapper dw(_file.get());
         if (_firstBlock)
         {
             // Outsource first block handling to DeviceWrapper.
@@ -1231,32 +1230,11 @@ bool DownloadThread::_customizeImage()
             fat->writeFile("cmdline.txt", cmdline);
         }
         dw.sync();
-        */
     }
     catch (std::runtime_error &err)
     {
         emit error(err.what());
         return false;
-    }
-    else
-    {
-        // Simple fallback when DeviceWrapper is disabled
-        if (_firstBlock)
-        {
-            // Write the first block directly using FileOperations
-            if (_file->Seek(0) != rpi_imager::FileError::kSuccess ||
-                _file->WriteSequential(reinterpret_cast<const std::uint8_t*>(_firstBlock), _firstBlockSize) != rpi_imager::FileError::kSuccess)
-            {
-                emit error(tr("Error writing first block to device"));
-                return false;
-            }
-            _bytesWritten += _firstBlockSize;
-            qFreeAligned(_firstBlock);
-            _firstBlock = nullptr;
-        }
-        
-        // Skip advanced customization features for now
-        qDebug() << "Skipping advanced image customization (DeviceWrapper disabled)";
     }
 
     emit finalizing();
