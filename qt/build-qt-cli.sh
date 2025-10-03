@@ -6,29 +6,20 @@
 
 set -e
 
-# Default values
-QT_VERSION="6.9.1"    # 6.9.1 is the latest version as of 2025-08-04
-PREFIX="/opt/Qt/${QT_VERSION}"     # Default installation prefix with capital 'Q'
-CORES=$(nproc)        # Default to all available CPU cores
-CLEAN_BUILD=1         # Clean the build directory by default
-BUILD_TYPE="MinSizeRel"  # Default build type
-SKIP_DEPENDENCIES=0   # Don't skip installing dependencies by default
-VERBOSE_BUILD=0       # By default, don't show verbose build output
-UNPRIVILEGED=0        # By default, allow sudo usage
+# Source common configuration and functions
+BASE_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+source "$BASE_DIR/qt-build-common.sh"
+
+# Initialize common variables
+init_common_variables
+
+# CLI-specific defaults (MinSizeRel is already the default)
 
 # Parse command line arguments
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --version=VERSION    Qt version to build (default: $QT_VERSION)"
-    echo "  --prefix=PREFIX      Installation prefix (default: $PREFIX)"
-    echo "  --cores=CORES        Number of CPU cores to use (default: $CORES)"
-    echo "  --no-clean           Don't clean the build directory"
-    echo "  --debug              Build with debug information"
-    echo "  --skip-dependencies  Skip installing build dependencies"
-    echo "  --verbose            Show verbose build output"
-    echo "  --unprivileged       Run without sudo (skips dependency installation)"
-    echo "  -h, --help           Show this help message"
+    print_common_usage_options
     echo ""
     echo "This script builds a minimal Qt installation for CLI-only applications:"
     echo "  - Only QtCore and essential network/file components"
@@ -38,33 +29,12 @@ usage() {
     exit 1
 }
 
-for arg in "$@"; do
+# Parse common arguments (CLI script has no additional arguments)
+remaining_args=($(parse_common_args "$@"))
+
+# Check for any remaining unknown arguments
+for arg in "${remaining_args[@]}"; do
     case $arg in
-        --version=*)
-            QT_VERSION="${arg#*=}"
-            ;;
-        --prefix=*)
-            PREFIX="${arg#*=}"
-            ;;
-        --cores=*)
-            CORES="${arg#*=}"
-            ;;
-        --no-clean)
-            CLEAN_BUILD=0
-            ;;
-        --debug)
-            BUILD_TYPE="Debug"
-            ;;
-        --skip-dependencies)
-            SKIP_DEPENDENCIES=1
-            ;;
-        --verbose)
-            VERBOSE_BUILD=1
-            ;;
-        --unprivileged)
-            UNPRIVILEGED=1
-            SKIP_DEPENDENCIES=1  # Automatically skip dependencies in unprivileged mode
-            ;;
         -h|--help)
             usage
             ;;
@@ -75,52 +45,24 @@ for arg in "$@"; do
     esac
 done
 
-# Validate inputs
-if ! [[ $CORES =~ ^[0-9]+$ ]]; then
-    echo "Error: Cores must be a number"
-    exit 1
-fi
+# Validate common inputs
+validate_common_inputs
 
-# In unprivileged mode, suggest a user-writable prefix if using default
-if [ "$UNPRIVILEGED" -eq 1 ] && [ "$PREFIX" = "/opt/Qt/${QT_VERSION}" ]; then
-    PREFIX="$HOME/Qt/${QT_VERSION}"
-    echo "Unprivileged mode: Using user-writable prefix: $PREFIX"
-fi
+# Set architecture-specific prefix with CLI suffix
+set_arch_prefix_suffix "cli"
 
-# Major version (for directory structure)
-QT_MAJOR_VERSION=$(echo "$QT_VERSION" | cut -d. -f1)
-
-# Detect system architecture and set appropriate directory suffix
-ARCH=$(uname -m)
-if [ "$ARCH" = "x86_64" ]; then
-    PREFIX="$PREFIX/gcc_64_cli"
-elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-    PREFIX="$PREFIX/gcc_arm64_cli"
-elif [[ "$ARCH" == arm* ]]; then
-    PREFIX="$PREFIX/gcc_arm32_cli"
-fi
-
-echo "Qt CLI build configuration:"
-echo "  Version: $QT_VERSION"
-echo "  Prefix: $PREFIX"
-echo "  Cores: $CORES"
-echo "  Build Type: $BUILD_TYPE"
-echo "  Clean Build: $CLEAN_BUILD"
-echo "  Verbose Build: $VERBOSE_BUILD"
-echo "  Unprivileged Mode: $UNPRIVILEGED"
+# Print configuration
+print_common_config "Qt CLI build"
 echo "  Target: CLI-only (no GUI modules)"
 
 # Install dependencies if not skipped
 if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
     echo "Installing minimal build dependencies for CLI-only Qt..."
-    # Basic build tools
-    sudo apt-get update
-    sudo apt-get install -y build-essential perl python3 git cmake ninja-build pkg-config
+    # Install basic Linux dependencies
+    install_linux_basic_deps
 
     # Minimal Qt dependencies - only what's needed for QtCore
     sudo apt-get install -y \
-        `# Build tools` \
-        bison flex gperf \
         `# Font and text rendering (for QtCore text processing)` \
         libfontconfig1-dev libfreetype6-dev libicu-dev \
         `# Security and crypto (for QtNetwork)` \
@@ -140,33 +82,16 @@ else
     fi
 fi
 
-# Create directories
-DOWNLOAD_DIR="$PWD/qt-src"
-BUILD_DIR="$PWD/qt-build-cli"
-BASE_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
-mkdir -p "$DOWNLOAD_DIR" "$BUILD_DIR"
+# Create build directories
+create_build_directories "cli"
 
 # Download Qt source code
-echo "Downloading Qt $QT_VERSION source code..."
-cd "$DOWNLOAD_DIR"
-if [ ! -d "qt-everywhere-src-$QT_VERSION" ]; then
-    if [ ! -f "qt-everywhere-src-$QT_VERSION.tar.xz" ]; then
-        echo "Downloading Qt source archive..."
-        curl -L -o "qt-everywhere-src-$QT_VERSION.tar.xz" \
-            "https://download.qt.io/archive/qt/${QT_MAJOR_VERSION}.${QT_VERSION%.*}/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz"
-    fi
-    
-    echo "Extracting Qt source code..."
-    tar -xf "qt-everywhere-src-$QT_VERSION.tar.xz"
-fi
+download_qt_source
+
+# Clean build directory if requested
+clean_build_directory
 
 cd "$BUILD_DIR"
-
-# Clean previous build if requested
-if [ "$CLEAN_BUILD" -eq 1 ]; then
-    echo "Cleaning previous build..."
-    rm -rf ./*
-fi
 
 # Configure Qt with CLI-only options
 echo "Configuring Qt for CLI-only build..."
@@ -234,53 +159,28 @@ QT_CONFIGURE_ARGS=(
     # Build only essential modules - skip everything in CLI exclude list
 )
 
-# Add module exclusions from CLI-specific exclude list
-if [ -f "$BASE_DIR/modules_exclude.cli.list" ]; then
-    echo "Adding CLI-specific module exclusions..."
-    while IFS= read -r module || [ -n "$module" ]; do
-        # Skip empty lines and comments
-        if [[ -n "$module" && ! "$module" =~ ^[[:space:]]*# ]]; then
-            QT_CONFIGURE_ARGS+=(-skip "$module")
-        fi
-    done < "$BASE_DIR/modules_exclude.cli.list"
-fi
-
-# Add feature exclusions from CLI-specific exclude list  
-if [ -f "$BASE_DIR/features_exclude.cli.list" ]; then
-    echo "Adding CLI-specific feature exclusions..."
-    while IFS= read -r feature || [ -n "$feature" ]; do
-        # Skip empty lines and comments
-        if [[ -n "$feature" && ! "$feature" =~ ^[[:space:]]*# ]]; then
-            QT_CONFIGURE_ARGS+=(-no-feature-"$feature")
-        fi
-    done < "$BASE_DIR/features_exclude.cli.list"
-fi
+# Apply CLI-specific exclusions
+apply_exclusions QT_CONFIGURE_ARGS "$BASE_DIR/features_exclude.cli.list" "$BASE_DIR/modules_exclude.cli.list"
 
 # Add verbose flag if requested
 if [ "$VERBOSE_BUILD" -eq 1 ]; then
     QT_CONFIGURE_ARGS+=(-verbose)
 fi
 
-# Run configure
-echo "Running Qt configure with CLI-only options..."
-../qt-src/qt-everywhere-src-$QT_VERSION/configure "${QT_CONFIGURE_ARGS[@]}"
+# Run Qt configure
+run_qt_configure QT_CONFIGURE_ARGS
 
 # Build Qt
-echo "Building Qt CLI-only (this will take a while, but much faster than full Qt)..."
-if [ "$VERBOSE_BUILD" -eq 1 ]; then
-    cmake --build . --parallel "$CORES"
-else
-    cmake --build . --parallel "$CORES" | grep -E "(Building|Linking|Installing|Error|error|warning|Warning)" || true
-fi
+build_qt
 
 # Install Qt
-echo "Installing Qt to $PREFIX..."
-if [ "$UNPRIVILEGED" -eq 0 ]; then
-    sudo cmake --install .
-else
-    cmake --install .
-fi
+install_qt
 
+# Create environment and toolchain files
+create_qt_env_script "cli"
+create_cmake_toolchain "cli"
+
+# Print final usage instructions
 echo ""
 echo "Qt CLI-only build completed successfully!"
 echo ""
@@ -290,10 +190,7 @@ echo "  Architecture: $ARCH"
 echo "  Build type: $BUILD_TYPE"
 echo "  Modules: QtCore + essential CLI modules only (no GUI, multimedia, or graphics)"
 echo ""
-echo "To use this Qt installation:"
-echo "  export Qt6_ROOT=\"$PREFIX\""
-echo "  export PATH=\"$PREFIX/bin:\$PATH\""
-echo ""
+print_usage_instructions "Qt CLI"
 echo "This Qt build is optimized for CLI applications and has a much smaller footprint"
 echo "than a full Qt installation. It includes only essential components needed for"
 echo "command-line applications with network and file system capabilities."
