@@ -135,6 +135,10 @@ Dialog {
         dialogFocusScope.registerFocusGroup(name, getItemsFn, order)
     }
     
+    function rebuildFocusOrder() {
+        dialogFocusScope.rebuildFocusOrder()
+    }
+    
     // Default escape handler - child dialogs can override
     function escapePressed() {
         root.close()

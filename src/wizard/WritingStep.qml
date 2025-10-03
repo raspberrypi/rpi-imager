@@ -353,7 +353,11 @@ WizardStepBase {
         interval: 2000
         running: false
         repeat: false
-        onTriggered: confirmDialog.allowAccept = true
+        onTriggered: {
+            confirmDialog.allowAccept = true
+            // Rebuild focus order now that accept button is enabled
+            confirmDialog.rebuildFocusOrder()
+        }
     }
 
     // Defer starting the write slightly until after the dialog has fully closed,
