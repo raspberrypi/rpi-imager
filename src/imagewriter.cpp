@@ -10,6 +10,7 @@
 #include "drivelistitem.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/sha256crypt/sha256crypt.h"
+#include "dependencies/yescrypt/yescrypt_wrapper.h"
 #include "driveformatthread.h"
 #include "localfileextractthread.h"
 #include "downloadstatstelemetry.h"
@@ -74,7 +75,7 @@ ImageWriter::ImageWriter(QObject *parent)
       _waitingForCacheVerification(false),
       _networkManager(this),
       _src(), _repo(QUrl(QString(OSLIST_URL))),
-      _dst(), _parentCategory(), _osName(), _currentLang(), _currentLangcode(), _currentKeyboard(),
+      _dst(), _parentCategory(), _osName(), _osReleaseDate(), _currentLang(), _currentLangcode(), _currentKeyboard(),
       _expectedHash(), _cmdline(), _config(), _firstrun(), _cloudinit(), _cloudinitNetwork(), _initFormat(),
       _downloadLen(0), _extrLen(0), _devLen(0), _dlnow(0), _verifynow(0),
       _drivelist(DriveListModel(this)), // explicitly parented, so QML doesn't delete it
@@ -344,7 +345,7 @@ void ImageWriter::setEngine(QQmlApplicationEngine *engine)
 }
 
 /* Set URL to download from */
-void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, QByteArray initFormat)
+void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, QByteArray initFormat, QString releaseDate)
 {
     _src = url;
     _downloadLen = downloadLen;
@@ -354,6 +355,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _parentCategory = parentcategory;
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
+    _osReleaseDate = releaseDate;
 
     if (!_downloadLen && url.isLocalFile())
     {
@@ -2283,17 +2285,39 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
 
 QString ImageWriter::crypt(const QByteArray &password)
 {
-    QByteArray salt = "$5$";
     QByteArray saltchars =
       "./0123456789ABCDEFGHIJKLMNOPQRST"
       "UVWXYZabcdefghijklmnopqrstuvwxyz";
     std::mt19937 gen(static_cast<unsigned>(QDateTime::currentMSecsSinceEpoch()));
     std::uniform_int_distribution<> uid(0, saltchars.length()-1);
 
-    for (int i=0; i<10; i++)
-        salt += saltchars[uid(gen)];
+    // Determine whether to use yescrypt (for OS released after Jan 1, 2023) or sha256crypt
+    bool useYescrypt = false;
+    if (!_osReleaseDate.isEmpty()) {
+        // Parse release date in format "YYYY-MM-DD"
+        QDate releaseDate = QDate::fromString(_osReleaseDate, "yyyy-MM-dd");
+        QDate cutoffDate(2023, 1, 1);
+        if (releaseDate.isValid() && releaseDate >= cutoffDate) {
+            useYescrypt = true;
+        }
+    }
 
-    return sha256_crypt(password.constData(), salt.constData());
+    if (useYescrypt) {
+        // Use yescrypt for newer OS releases
+        QByteArray salt;
+        for (int i=0; i<16; i++)  // yescrypt uses longer salts
+            salt += saltchars[uid(gen)];
+        
+        char *result = yescrypt_crypt(password.constData(), salt.constData());
+        return result ? QString(result) : QString();
+    } else {
+        // Use sha256crypt for older OS releases
+        QByteArray salt = "$5$";
+        for (int i=0; i<10; i++)
+            salt += saltchars[uid(gen)];
+        
+        return sha256_crypt(password.constData(), salt.constData());
+    }
 }
 
 QString ImageWriter::pbkdf2(const QByteArray &psk, const QByteArray &ssid)

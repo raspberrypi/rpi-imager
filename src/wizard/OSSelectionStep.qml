@@ -547,7 +547,8 @@ WizardStepBase {
                     typeof(model.contains_multiple_files) != "undefined" ? model.contains_multiple_files : false,
                     categorySelected,
                     model.name,
-                    typeof(model.init_format) != "undefined" ? model.init_format : ""
+                    typeof(model.init_format) != "undefined" ? model.init_format : "",
+                    typeof(model.release_date) != "undefined" ? model.release_date : ""
                 )
                 imageWriter.setSWCapabilitiesList(model.capabilities)
 
