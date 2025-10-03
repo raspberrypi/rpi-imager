@@ -49,7 +49,7 @@
     </message>
     <message>
         <source>Browse</source>
-        <translation type="unfinished"></translation>
+        <translation>Durchsuchen</translation>
     </message>
     <message>
         <source>Select Repository</source>
@@ -152,7 +152,7 @@
     <name>DoneStep</name>
     <message>
         <source>Your choices:</source>
-        <translation type="unfinished"></translation>
+        <translation>Ihr Auswahl:</translation>
     </message>
     <message>
         <source>Device:</source>
@@ -468,7 +468,7 @@
     </message>
     <message>
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ein Hostname ist ein eindeutiger Name, der Ihren Raspberry Pi im Netzwerk identifiziert. Er sollte nur Buchstaben, Zahlen und Bindestriche enthalten.</translation>
     </message>
     <message>
         <source>Customisation: Choose hostname</source>
@@ -665,7 +665,7 @@
     </message>
     <message>
         <source>storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Speichergerät</translation>
     </message>
     <message>
         <source>valid storage device (device no longer available)</source>
@@ -677,7 +677,7 @@
     </message>
     <message>
         <source> or </source>
-        <translation type="unfinished"></translation>
+        <translation> oder </translation>
     </message>
 </context>
 <context>
@@ -734,11 +734,11 @@
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Imagedatei wird geöffnet</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Schreiben auf das Gerät</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
@@ -757,7 +757,7 @@
     </message>
     <message>
         <source>Configure the time zone and keyboard layout for your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Konfigurieren Sie die Zeitzone und das Tastaturlayout für Ihren Raspberry Pi</translation>
     </message>
     <message>
         <source>Time zone:</source>
@@ -830,7 +830,7 @@
     </message>
     <message>
         <source>Status:</source>
-        <translation type="unfinished"></translation>
+        <translation>Status:</translation>
     </message>
     <message>
         <source>Token received from browser</source>
@@ -861,7 +861,7 @@
     </message>
     <message>
         <source>Browse</source>
-        <translation type="unfinished"></translation>
+        <translation>Durchsuchen</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
@@ -896,7 +896,7 @@
     <name>StorageSelectionStep</name>
     <message>
         <source>No storage devices found</source>
-        <translation>Kein Speichergerät gefunden</translation>
+        <translation>Keine Speichergeräte gefunden</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
@@ -904,15 +904,15 @@
     </message>
     <message>
         <source>Read-only</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibgeschützt</translation>
     </message>
     <message>
         <source>Select your storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie ihr Speichergerät aus</translation>
     </message>
     <message>
         <source>Exclude system drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Systemlaufwerke ausschließen</translation>
     </message>
 </context>
 <context>
@@ -942,7 +942,7 @@
     </message>
     <message>
         <source>pi</source>
-        <translation type="unfinished"></translation>
+        <translation>pi</translation>
     </message>
     <message>
         <source>Password:</source>
@@ -950,19 +950,19 @@
     </message>
     <message>
         <source>Enter password</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort eingeben</translation>
     </message>
     <message>
         <source>Confirm password:</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort bestätigen:</translation>
     </message>
     <message>
         <source>Re-enter password</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort wiederholen</translation>
     </message>
     <message>
         <source>The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
-        <translation type="unfinished"></translation>
+        <translation>Der Benutzername muss in Kleinbuchstaben geschrieben sein und darf nur Buchstaben, Zahlen, Unterstriche und Bindestriche enthalten.</translation>
     </message>
     <message>
         <source>Customisation: Choose username</source>
@@ -989,7 +989,7 @@
     </message>
     <message>
         <source>Network name</source>
-        <translation type="unfinished"></translation>
+        <translation>Netzwerk Name</translation>
     </message>
     <message>
         <source>Password:</source>
@@ -1036,15 +1036,15 @@
     </message>
     <message>
         <source>Writing</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreiben</translation>
     </message>
     <message>
         <source>Done</source>
-        <translation type="unfinished"></translation>
+        <translation>Fertig</translation>
     </message>
     <message>
         <source>Finish</source>
-        <translation type="unfinished"></translation>
+        <translation>Beenden</translation>
     </message>
     <message>
         <source>Customisation</source>
@@ -1060,7 +1060,7 @@
     </message>
     <message>
         <source>User</source>
-        <translation type="unfinished"></translation>
+        <translation>Benutzer</translation>
     </message>
     <message>
         <source>Wi‑Fi</source>
@@ -1130,7 +1130,7 @@
     </message>
     <message>
         <source>No device selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Modell ausgewählt</translation>
     </message>
     <message>
         <source>No image selected</source>
@@ -1138,11 +1138,11 @@
     </message>
     <message>
         <source>Storage:</source>
-        <translation type="unfinished"></translation>
+        <translation>Speicher:</translation>
     </message>
     <message>
         <source>No storage selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Speichergerät ausgewählt</translation>
     </message>
     <message>
         <source>• Hostname configured</source>
@@ -1154,7 +1154,7 @@
     </message>
     <message>
         <source>• SSH enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>• SSH aktiviert</translation>
     </message>
     <message>
         <source>• Locale configured</source>
@@ -1242,11 +1242,11 @@
     </message>
     <message>
         <source>• I2C enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>• I2C enabled</translation>
     </message>
     <message>
         <source>• SPI enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>• SPI enabled</translation>
     </message>
 </context>
 <context>
@@ -1301,7 +1301,8 @@
     </message>
     <message>
         <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>
-        <translation type="unfinished"></translation>
+        <translation>Der Vorgang wurde abgebrochen, da das Speichergerät während des Schreibvorgangs entfernt wurde. Bitte legen Sie das Gerät erneut ein oder wählen Sie ein anderes aus um fortzufahren.
+</translation>
     </message>
     <message>
         <source>OK</source>
