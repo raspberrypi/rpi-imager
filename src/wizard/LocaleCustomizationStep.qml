@@ -44,7 +44,8 @@ WizardStepBase {
             if (cityIndex !== -1) {
                 comboCapitalCity.currentIndex = cityIndex
                 // Ensure WiFi country recommendation is always up to date
-                Qt.callLater(root.onCapitalCityChanged)
+                // Call immediately (not deferred) so subsequent steps can see the value
+                root.onCapitalCityChanged()
             }
         }
         
@@ -94,6 +95,7 @@ WizardStepBase {
             var saved = imageWriter.getSavedCustomizationSettings()
             saved.recommendedWifiCountry = localeData.countryCode
             imageWriter.setSavedCustomizationSettings(saved)
+            console.log("LocaleCustomizationStep: Saved recommendedWifiCountry:", localeData.countryCode)
         }
     }
     
