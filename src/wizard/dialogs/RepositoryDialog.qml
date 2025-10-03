@@ -179,7 +179,7 @@ BaseDialog {
                 enabled: radioOfficial.checked
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
                          || (radioCustomUri.checked && fieldCustomUri.acceptableInput)
-                text: qsTr("Save")
+                text: qsTr("Apply & Restart")
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
                 onClicked: {
@@ -240,10 +240,16 @@ BaseDialog {
         if (radioOfficial.checked && originalRepo !== "") {
             // TODO: helper function in imageWriter that retrieves the original url from static property
             imageWriter.refreshOsListFrom(new URL("https://downloads.raspberrypi.org/os_list_imagingutility_v4.json"))
+            // reset wizard to device selection because the repository changed
+            wizardContainer.resetWizard()
         } else if (radioCustomFile.checked && originalRepo !== selectedRepo) {
             imageWriter.refreshOsListFrom(selectedRepo)
+            // reset wizard to device selection because the repository changed
+            wizardContainer.resetWizard()
         } else if (radioCustomUri.checked && originalRepo.toString() !== customRepoUri) {
             imageWriter.refreshOsListFrom(new URL(fieldCustomUri.text))
+            // reset wizard to device selection because the repository changed
+            wizardContainer.resetWizard()
         }
     }
 
