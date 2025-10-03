@@ -156,7 +156,7 @@ Item {
             return []
         }
         
-        var labels = [qsTr("Hostname"), qsTr("Locale"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote Access")]
+        var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote Access")]
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
@@ -174,7 +174,7 @@ Item {
         
         var stepLabel = labels[subIndex]
         if (stepLabel === qsTr("Hostname")) return hostnameConfigured
-        if (stepLabel === qsTr("Locale")) return localeConfigured
+        if (stepLabel === qsTr("Localisation")) return localeConfigured
         if (stepLabel === qsTr("User")) return userConfigured
         if (stepLabel === qsTr("Wi‑Fi")) return wifiConfigured
         if (stepLabel === qsTr("Remote Access")) return sshEnabled
@@ -423,7 +423,7 @@ Item {
                                         
                                         var currentStepLabel = ""
                                         if (root.currentStep === root.stepHostnameCustomization) currentStepLabel = qsTr("Hostname")
-                                        else if (root.currentStep === root.stepLocaleCustomization) currentStepLabel = qsTr("Locale")
+                                        else if (root.currentStep === root.stepLocaleCustomization) currentStepLabel = qsTr("Localisation")
                                         else if (root.currentStep === root.stepUserCustomization) currentStepLabel = qsTr("User")
                                         else if (root.currentStep === root.stepWifiCustomization) currentStepLabel = qsTr("Wi‑Fi")
                                         else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote Access")
@@ -463,7 +463,7 @@ Item {
                                             var target = root.firstCustomizationStep // default to hostname
                                             
                                             if (stepLabel === qsTr("Hostname")) target = root.stepHostnameCustomization
-                                            else if (stepLabel === qsTr("Locale")) target = root.stepLocaleCustomization
+                                            else if (stepLabel === qsTr("Localisation")) target = root.stepLocaleCustomization
                                             else if (stepLabel === qsTr("User")) target = root.stepUserCustomization
                                             else if (stepLabel === qsTr("Wi‑Fi")) target = root.stepWifiCustomization
                                             else if (stepLabel === qsTr("Remote Access")) target = root.stepRemoteAccess

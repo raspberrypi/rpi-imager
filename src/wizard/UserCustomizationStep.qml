@@ -45,7 +45,7 @@ WizardStepBase {
                 ImTextField {
                     id: fieldUsername
                     Layout.fillWidth: true
-                    placeholderText: root.hasSavedUserPassword && root.savedUsername ? root.savedUsername : qsTr("pi")
+                    placeholderText: root.hasSavedUserPassword && root.savedUsername ? root.savedUsername : qsTr("Enter your username")
                     font.pixelSize: Style.fontSizeInput
                     
                     validator: RegularExpressionValidator {
