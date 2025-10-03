@@ -88,6 +88,9 @@ Item {
             }
             
             // Focus styling handled by Material.accent color change only
+
+            Keys.onReturnPressed: toggle()
+            Keys.onEnterPressed: toggle()
         }
 
     }

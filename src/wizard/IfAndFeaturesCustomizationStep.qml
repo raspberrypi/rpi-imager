@@ -64,7 +64,7 @@ WizardStepBase {
                         ImOptionPill {
                             id: chkEnableI2C
                             Layout.fillWidth: true
-                            text: qsTr("Enable I²C")
+                            text: qsTr("Enable I2C")
                             checked: false
                         }
 
@@ -102,6 +102,8 @@ WizardStepBase {
 
                 // === Features ===
                 WizardSectionContainer {
+                    visible: supportsUsbOtg
+
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: Style.spacingSmall
@@ -116,14 +118,13 @@ WizardStepBase {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            visible: supportsUsbOtg
 
                             ImOptionPill {
                                 id: chkEnableUsbGadget
                                 Layout.fillWidth: true
                                 text: qsTr("Enable USB Gadget Mode")
                                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn more about USB Gadget Mode")
-                                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/documentation/computers/usb-gadget.html"
+                                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-usb-gadget?tab=readme-ov-file"
                                 checked: false
                             }
 
@@ -155,11 +156,11 @@ WizardStepBase {
         }
 
         root.registerFocusGroup("if_section_interfaces", function() {
-            return [chkEnableI2C, chkEnableSPI, comboSerial]
+            return [chkEnableI2C.focusItem, chkEnableSPI.focusItem, comboSerial]
         }, 0)
 
         root.registerFocusGroup("if_section_features", function() {
-            return [chkEnableUsbGadget]
+            return supportsUsbOtg ? [chkEnableUsbGadget.focusItem] : []
         }, 1)
 
         // Prefill
