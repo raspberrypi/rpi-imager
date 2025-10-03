@@ -109,7 +109,7 @@ WizardStepBase {
     // Allow proceed when:
     // - all fields are empty (no customization), or
     // - a new password is entered and matches confirm, or
-    // - a saved (crypted) password exists and user leaves password fields blank
+    // - a saved (crypted) password exists and user leaves password fields blank (with or without username)
     nextButtonEnabled: (
         (fieldUsername.text.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0)
         || (fieldPassword.text.length > 0 && fieldPasswordConfirm.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text)
@@ -123,12 +123,18 @@ WizardStepBase {
         var usernameText = fieldUsername.text ? fieldUsername.text.trim() : ""
         var hasPasswords = fieldPassword.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text
         if (usernameText.length > 0 && hasPasswords) {
+            // User entered both username and new password
             saved.sshUserName = usernameText
             // Store crypted password similar to legacy flow
             saved.sshUserPassword = imageWriter.crypt(fieldPassword.text)
             wizardContainer.userConfigured = true
+        } else if (usernameText.length > 0 && root.hasSavedUserPassword && fieldPassword.text.length === 0) {
+            // User has a username (entered or kept from saved) and saved password (keeping it)
+            saved.sshUserName = usernameText
+            // Keep existing saved.sshUserPassword
+            wizardContainer.userConfigured = true
         } else if (usernameText.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0) {
-            // User cleared fields -> remove from persisted settings
+            // User cleared all fields -> remove from persisted settings (allows opting out)
             delete saved.sshUserName
             delete saved.sshUserPassword
             wizardContainer.userConfigured = false
