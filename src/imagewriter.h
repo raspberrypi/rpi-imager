@@ -215,6 +215,8 @@ public:
     Q_INVOKABLE QStringList getTimezoneList();
     Q_INVOKABLE QStringList getCountryList();
     Q_INVOKABLE QStringList getKeymapLayoutList();
+    Q_INVOKABLE QStringList getCapitalCitiesList();
+    Q_INVOKABLE QVariantMap getLocaleDataForCapital(const QString &capitalCity);
     Q_INVOKABLE QString getSSID();
     Q_INVOKABLE QString getPSK();
 

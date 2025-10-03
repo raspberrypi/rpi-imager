@@ -1721,6 +1721,79 @@ QStringList ImageWriter::getKeymapLayoutList()
     return list;
 }
 
+QStringList ImageWriter::getCapitalCitiesList()
+{
+    QStringList cities;
+    QFile f(":/capital-cities.txt");
+    if (f.open(QFile::ReadOnly | QFile::Text))
+    {
+        QTextStream in(&f);
+        while (!in.atEnd())
+        {
+            QString line = in.readLine().trimmed();
+            // Skip empty lines and comments
+            if (line.isEmpty() || line.startsWith('#'))
+                continue;
+            
+            // Parse: CityName|CountryName|CountryCode|Timezone|Language|KeyboardLayout
+            QStringList parts = line.split('|');
+            if (parts.size() >= 2)
+            {
+                QString cityName = parts[0];
+                QString countryName = parts[1];
+                // Format as "City (Country)"
+                QString displayName = cityName + " (" + countryName + ")";
+                cities.append(displayName);
+            }
+        }
+        f.close();
+    }
+    
+    return cities;
+}
+
+QVariantMap ImageWriter::getLocaleDataForCapital(const QString &capitalCity)
+{
+    QVariantMap result;
+    QFile f(":/capital-cities.txt");
+    
+    if (!f.open(QFile::ReadOnly | QFile::Text))
+        return result;
+    
+    // Extract just the city name from "City (Country)" format
+    QString cityNameOnly = capitalCity;
+    int parenIndex = capitalCity.indexOf(" (");
+    if (parenIndex > 0)
+    {
+        cityNameOnly = capitalCity.left(parenIndex);
+    }
+    
+    QTextStream in(&f);
+    while (!in.atEnd())
+    {
+        QString line = in.readLine().trimmed();
+        // Skip empty lines and comments
+        if (line.isEmpty() || line.startsWith('#'))
+            continue;
+        
+        // Parse: CityName|CountryName|CountryCode|Timezone|Language|KeyboardLayout
+        QStringList parts = line.split('|');
+        if (parts.size() >= 6 && parts[0] == cityNameOnly)
+        {
+            result["cityName"] = parts[0];
+            result["countryName"] = parts[1];
+            result["countryCode"] = parts[2];
+            result["timezone"] = parts[3];
+            result["language"] = parts[4];
+            result["keyboard"] = parts[5];
+            break;
+        }
+    }
+    f.close();
+    
+    return result;
+}
+
 QString ImageWriter::getSSID()
 {
     return WlanCredentials::instance()->getSSID();

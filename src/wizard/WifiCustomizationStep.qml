@@ -42,8 +42,12 @@ WizardStepBase {
                 fieldWifiSSID.text = detectedSsid
             }
         }
-        if (saved.wifiCountry) {
-            // Set by text; list is populated on completed
+        // Always prefer recommended country from capital city selection
+        // User can still change it manually, but it resets to recommendation each time
+        if (saved.recommendedWifiCountry) {
+            fieldWifiCountry.editText = saved.recommendedWifiCountry
+        } else if (saved.wifiCountry) {
+            // Fallback to previously saved country if no recommendation
             fieldWifiCountry.editText = saved.wifiCountry
         }
         if (saved.wifiHidden !== undefined) {
@@ -127,6 +131,18 @@ WizardStepBase {
                                 // Fallback to free text when not in list
                                 fieldWifiCountry.editText = target
                             }
+                        } else if (saved && saved.recommendedWifiCountry && model && model.length > 0) {
+                            // Use recommended country from capital city selection
+                            var target = saved.recommendedWifiCountry
+                            var idx = -1
+                            for (var i = 0; i < model.length; i++) {
+                                if (model[i] === target) { idx = i; break }
+                            }
+                            if (idx >= 0) {
+                                currentIndex = idx
+                            } else {
+                                fieldWifiCountry.editText = target
+                            }
                         } else if (model && model.length > 0) {
                             // Default to GB if available, else first item
                             var gbIndex = -1
@@ -136,6 +152,36 @@ WizardStepBase {
                             currentIndex = (gbIndex >= 0) ? gbIndex : 0
                         }
                     }
+                    onCurrentTextChanged: {
+                        // Update visibility when selection changes
+                        recommendedLabel.updateVisibility()
+                    }
+                }
+                
+                // Empty label to maintain grid alignment
+                Item { width: 1; height: 1 }
+                
+                Text {
+                    id: recommendedLabel
+                    Layout.fillWidth: true
+                    Layout.columnSpan: 1
+                    color: "#4CAF50"
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                    
+                    function updateVisibility() {
+                        var saved = root.imageWriter.getSavedCustomizationSettings()
+                        if (saved && saved.recommendedWifiCountry) {
+                            var currentCountry = fieldWifiCountry.currentText || fieldWifiCountry.editText
+                            visible = (currentCountry === saved.recommendedWifiCountry)
+                            text = visible ? qsTr("✓ Recommended based on your capital city selection") : ""
+                        } else {
+                            visible = false
+                            text = ""
+                        }
+                    }
+                    
+                    Component.onCompleted: updateVisibility()
                 }
             }
             

@@ -5,6 +5,7 @@
         <file>qtquickcontrols2.conf</file>
         <file alias="countries.txt">countries.txt</file>
         <file>keymap-layouts.txt</file>
+        <file>capital-cities.txt</file>
     </qresource>
 
     <!-- Resources used by QML: -->

@@ -1,0 +1,196 @@
+# Capital Cities Database
+# Format: CityName|CountryName|CountryCode|Timezone|Language|KeyboardLayout
+# Sorted alphabetically by capital city name for easy lookup
+Abu Dhabi|United Arab Emirates|AE|Asia/Dubai|English|us
+Accra|Ghana|GH|Africa/Accra|English|us
+Addis Ababa|Ethiopia|ET|Africa/Addis_Ababa|English|us
+Algiers|Algeria|DZ|Africa/Algiers|French|fr
+Amman|Jordan|JO|Asia/Amman|English|us
+Amsterdam|Netherlands|NL|Europe/Amsterdam|Dutch|nl
+Andorra la Vella|Andorra|AD|Europe/Andorra|Spanish|es
+Ankara|Turkey|TR|Europe/Istanbul|Turkish|tr
+Antananarivo|Madagascar|MG|Indian/Antananarivo|French|fr
+Apia|Samoa|WS|Pacific/Apia|English|us
+Ashgabat|Turkmenistan|TM|Asia/Ashgabat|English|us
+Asmara|Eritrea|ER|Africa/Asmara|English|us
+Astana|Kazakhstan|KZ|Asia/Almaty|English|us
+Athens|Greece|GR|Europe/Athens|Greek|gr
+Baghdad|Iraq|IQ|Asia/Baghdad|Arabic|ara
+Baku|Azerbaijan|AZ|Asia/Baku|English|az
+Bamako|Mali|ML|Africa/Bamako|French|fr
+Bandar Seri Begawan|Brunei|BN|Asia/Brunei|English|us
+Bangkok|Thailand|TH|Asia/Bangkok|Thai|th
+Bangui|Central African Republic|CF|Africa/Bangui|French|fr
+Banjul|Gambia|GM|Africa/Banjul|English|gb
+Basseterre|Saint Kitts and Nevis|KN|America/St_Kitts|English|us
+Beijing|China|CN|Asia/Shanghai|Chinese|cn
+Beirut|Lebanon|LB|Asia/Beirut|Arabic|ara
+Belgrade|Serbia|RS|Europe/Belgrade|English|rs
+Belmopan|Belize|BZ|America/Belize|English|us
+Berlin|Germany|DE|Europe/Berlin|German|de
+Bern|Switzerland|CH|Europe/Zurich|German|ch
+Bishkek|Kyrgyzstan|KG|Asia/Bishkek|English|us
+Bissau|Guinea-Bissau|GW|Africa/Bissau|Portuguese|pt
+Bogotá|Colombia|CO|America/Bogota|Spanish|es
+Brasília|Brazil|BR|America/Sao_Paulo|Portuguese|br
+Bratislava|Slovakia|SK|Europe/Bratislava|Slovak|sk
+Brazzaville|Republic of the Congo|CG|Africa/Brazzaville|French|fr
+Bridgetown|Barbados|BB|America/Barbados|English|us
+Brussels|Belgium|BE|Europe/Brussels|French|be
+Bucharest|Romania|RO|Europe/Bucharest|Romanian|ro
+Budapest|Hungary|HU|Europe/Budapest|Hungarian|hu
+Buenos Aires|Argentina|AR|America/Argentina/Buenos_Aires|Spanish|es
+Bujumbura|Burundi|BI|Africa/Bujumbura|French|fr
+Cairo|Egypt|EG|Africa/Cairo|Arabic|ara
+Canberra|Australia|AU|Australia/Sydney|English|au
+Caracas|Venezuela|VE|America/Caracas|Spanish|es
+Castries|Saint Lucia|LC|America/St_Lucia|English|us
+Chisinau|Moldova|MD|Europe/Chisinau|Romanian|ro
+Colombo|Sri Lanka|LK|Asia/Colombo|English|us
+Conakry|Guinea|GN|Africa/Conakry|French|fr
+Copenhagen|Denmark|DK|Europe/Copenhagen|Danish|dk
+Dakar|Senegal|SN|Africa/Dakar|French|fr
+Damascus|Syria|SY|Asia/Damascus|Arabic|ara
+Dhaka|Bangladesh|BD|Asia/Dhaka|Bengali|bd
+Dili|Timor-Leste|TL|Asia/Dili|Portuguese|pt
+Djibouti|Djibouti|DJ|Africa/Djibouti|French|fr
+Dodoma|Tanzania|TZ|Africa/Dar_es_Salaam|English|us
+Doha|Qatar|QA|Asia/Qatar|Arabic|ara
+Dublin|Ireland|IE|Europe/Dublin|English|ie
+Dushanbe|Tajikistan|TJ|Asia/Dushanbe|English|us
+Freetown|Sierra Leone|SL|Africa/Freetown|English|gb
+Funafuti|Tuvalu|TV|Pacific/Funafuti|English|us
+Gaborone|Botswana|BW|Africa/Gaborone|English|gb
+Georgetown|Guyana|GY|America/Guyana|English|us
+Guatemala City|Guatemala|GT|America/Guatemala|Spanish|es
+Hanoi|Vietnam|VN|Asia/Ho_Chi_Minh|Vietnamese|vn
+Harare|Zimbabwe|ZW|Africa/Harare|English|gb
+Havana|Cuba|CU|America/Havana|Spanish|es
+Helsinki|Finland|FI|Europe/Helsinki|Finnish|fi
+Honiara|Solomon Islands|SB|Pacific/Guadalcanal|English|us
+Islamabad|Pakistan|PK|Asia/Karachi|English|pk
+Jakarta|Indonesia|ID|Asia/Jakarta|Indonesian|id
+Jerusalem|Israel|IL|Asia/Jerusalem|Hebrew|il
+Kabul|Afghanistan|AF|Asia/Kabul|English|af
+Kampala|Uganda|UG|Africa/Kampala|English|gb
+Kathmandu|Nepal|NP|Asia/Kathmandu|English|np
+Khartoum|Sudan|SD|Africa/Khartoum|Arabic|ara
+Kigali|Rwanda|RW|Africa/Kigali|French|fr
+Kingston|Jamaica|JM|America/Jamaica|English|us
+Kingstown|Saint Vincent and the Grenadines|VC|America/St_Vincent|English|us
+Kinshasa|Democratic Republic of the Congo|CD|Africa/Kinshasa|French|cd
+Kuala Lumpur|Malaysia|MY|Asia/Kuala_Lumpur|English|my
+Kuwait City|Kuwait|KW|Asia/Kuwait|Arabic|ara
+Kyiv|Ukraine|UA|Europe/Kiev|Ukrainian|uk
+La Paz|Bolivia|BO|America/La_Paz|Spanish|es
+Libreville|Gabon|GA|Africa/Libreville|French|fr
+Lilongwe|Malawi|MW|Africa/Blantyre|English|gb
+Lima|Peru|PE|America/Lima|Spanish|es
+Lisbon|Portugal|PT|Europe/Lisbon|Portuguese|pt
+Ljubljana|Slovenia|SI|Europe/Ljubljana|Slovenian|si
+Lomé|Togo|TG|Africa/Lome|French|fr
+London|United Kingdom|GB|Europe/London|English|gb
+Luanda|Angola|AO|Africa/Luanda|Portuguese|pt
+Lusaka|Zambia|ZM|Africa/Lusaka|English|gb
+Luxembourg|Luxembourg|LU|Europe/Luxembourg|French|lu
+Madrid|Spain|ES|Europe/Madrid|Spanish|es
+Majuro|Marshall Islands|MH|Pacific/Majuro|English|us
+Malabo|Equatorial Guinea|GQ|Africa/Malabo|Spanish|es
+Malé|Maldives|MV|Indian/Maldives|English|mv
+Managua|Nicaragua|NI|America/Managua|Spanish|es
+Manama|Bahrain|BH|Asia/Bahrain|Arabic|ara
+Manila|Philippines|PH|Asia/Manila|English|ph
+Maputo|Mozambique|MZ|Africa/Maputo|Portuguese|pt
+Maseru|Lesotho|LS|Africa/Maseru|English|gb
+Mbabane|Eswatini|SZ|Africa/Mbabane|English|gb
+Mexico City|Mexico|MX|America/Mexico_City|Spanish|mx
+Minsk|Belarus|BY|Europe/Minsk|Belarusian|by
+Mogadishu|Somalia|SO|Africa/Mogadishu|English|us
+Monaco|Monaco|MC|Europe/Monaco|French|fr
+Monrovia|Liberia|LR|Africa/Monrovia|English|us
+Montevideo|Uruguay|UY|America/Montevideo|Spanish|es
+Moroni|Comoros|KM|Indian/Comoro|French|fr
+Moscow|Russia|RU|Europe/Moscow|Russian|ru
+Muscat|Oman|OM|Asia/Muscat|Arabic|ara
+Nairobi|Kenya|KE|Africa/Nairobi|English|ke
+Nassau|Bahamas|BS|America/Nassau|English|us
+Naypyidaw|Myanmar|MM|Asia/Yangon|English|us
+N'Djamena|Chad|TD|Africa/Ndjamena|French|fr
+New Delhi|India|IN|Asia/Kolkata|English|in
+Niamey|Niger|NE|Africa/Niamey|French|fr
+Nicosia|Cyprus|CY|Asia/Nicosia|Greek|gr
+Nouakchott|Mauritania|MR|Africa/Nouakchott|Arabic|ara
+Nuku'alofa|Tonga|TO|Pacific/Tongatapu|English|us
+Nur-Sultan|Kazakhstan|KZ|Asia/Almaty|English|us
+Oslo|Norway|NO|Europe/Oslo|Norwegian|no
+Ottawa|Canada|CA|America/Toronto|English|ca
+Ouagadougou|Burkina Faso|BF|Africa/Ouagadougou|French|fr
+Palikir|Micronesia|FM|Pacific/Pohnpei|English|us
+Panama City|Panama|PA|America/Panama|Spanish|es
+Paramaribo|Suriname|SR|America/Paramaribo|Dutch|sr
+Paris|France|FR|Europe/Paris|French|fr
+Phnom Penh|Cambodia|KH|Asia/Phnom_Penh|Khmer|kh
+Podgorica|Montenegro|ME|Europe/Podgorica|English|me
+Port Louis|Mauritius|MU|Indian/Mauritius|English|mu
+Port Moresby|Papua New Guinea|PG|Pacific/Port_Moresby|English|us
+Port of Spain|Trinidad and Tobago|TT|America/Port_of_Spain|English|us
+Port Vila|Vanuatu|VU|Pacific/Efate|English|us
+Port-au-Prince|Haiti|HT|America/Port-au-Prince|French|fr
+Porto-Novo|Benin|BJ|Africa/Porto-Novo|French|fr
+Prague|Czech Republic|CZ|Europe/Prague|Czech|cz
+Praia|Cabo Verde|CV|Atlantic/Cape_Verde|Portuguese|pt
+Pretoria|South Africa|ZA|Africa/Johannesburg|English|za
+Pristina|Kosovo|XK|Europe/Belgrade|English|us
+Pyongyang|North Korea|KP|Asia/Pyongyang|Korean|kr
+Quito|Ecuador|EC|America/Guayaquil|Spanish|es
+Rabat|Morocco|MA|Africa/Casablanca|Arabic|ara
+Reykjavik|Iceland|IS|Atlantic/Reykjavik|Icelandic|is
+Riga|Latvia|LV|Europe/Riga|Latvian|lv
+Riyadh|Saudi Arabia|SA|Asia/Riyadh|Arabic|ara
+Rome|Italy|IT|Europe/Rome|Italian|it
+Roseau|Dominica|DM|America/Dominica|English|us
+San José|Costa Rica|CR|America/Costa_Rica|Spanish|es
+San Marino|San Marino|SM|Europe/San_Marino|Italian|it
+San Salvador|El Salvador|SV|America/El_Salvador|Spanish|es
+Sana'a|Yemen|YE|Asia/Aden|Arabic|ara
+Santiago|Chile|CL|America/Santiago|Spanish|es
+Santo Domingo|Dominican Republic|DO|America/Santo_Domingo|Spanish|es
+São Tomé|São Tomé and Príncipe|ST|Africa/Sao_Tome|Portuguese|pt
+Sarajevo|Bosnia and Herzegovina|BA|Europe/Sarajevo|English|ba
+Seoul|South Korea|KR|Asia/Seoul|Korean|kr
+Singapore|Singapore|SG|Asia/Singapore|English|us
+Skopje|North Macedonia|MK|Europe/Skopje|English|mk
+Sofia|Bulgaria|BG|Europe/Sofia|Bulgarian|bg
+Sri Jayawardenepura Kotte|Sri Lanka|LK|Asia/Colombo|English|us
+Stockholm|Sweden|SE|Europe/Stockholm|Swedish|se
+Suva|Fiji|FJ|Pacific/Fiji|English|us
+Taipei|Taiwan|TW|Asia/Taipei|Chinese|tw
+Tallinn|Estonia|EE|Europe/Tallinn|Estonian|ee
+Tarawa|Kiribati|KI|Pacific/Tarawa|English|us
+Tashkent|Uzbekistan|UZ|Asia/Tashkent|English|uz
+Tbilisi|Georgia|GE|Asia/Tbilisi|Georgian|ge
+Tegucigalpa|Honduras|HN|America/Tegucigalpa|Spanish|es
+Tehran|Iran|IR|Asia/Tehran|Persian|ir
+Thimphu|Bhutan|BT|Asia/Thimphu|English|bt
+Tirana|Albania|AL|Europe/Tirane|Albanian|al
+Tokyo|Japan|JP|Asia/Tokyo|Japanese|jp
+Tripoli|Libya|LY|Africa/Tripoli|Arabic|ara
+Tunis|Tunisia|TN|Africa/Tunis|Arabic|ara
+Ulaanbaatar|Mongolia|MN|Asia/Ulaanbaatar|English|mn
+Vaduz|Liechtenstein|LI|Europe/Vaduz|German|de
+Valletta|Malta|MT|Europe/Malta|English|mt
+Vatican City|Vatican City|VA|Europe/Vatican|Italian|it
+Victoria|Seychelles|SC|Indian/Mahe|English|us
+Vienna|Austria|AT|Europe/Vienna|German|at
+Vientiane|Laos|LA|Asia/Vientiane|English|us
+Vilnius|Lithuania|LT|Europe/Vilnius|Lithuanian|lt
+Warsaw|Poland|PL|Europe/Warsaw|Polish|pl
+Washington, D.C.|United States|US|America/New_York|English|us
+Wellington|New Zealand|NZ|Pacific/Auckland|English|nz
+Windhoek|Namibia|NA|Africa/Windhoek|English|us
+Yamoussoukro|Ivory Coast|CI|Africa/Abidjan|French|ci
+Yaoundé|Cameroon|CM|Africa/Douala|French|cm
+Yaren|Nauru|NR|Pacific/Nauru|English|us
+Yerevan|Armenia|AM|Asia/Yerevan|Armenian|am
+Zagreb|Croatia|HR|Europe/Zagreb|Croatian|hr
+

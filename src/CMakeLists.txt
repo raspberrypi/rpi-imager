@@ -344,6 +344,32 @@ if(GENERATE_COUNTRIES_FROM_REGDB)
     )
     list(APPEND SOURCES "${GENERATED_COUNTRIES_QRC}")
 endif()
+
+option(GENERATE_CAPITAL_CITIES "Generate capital cities list from REST Countries API" ON)
+
+if(GENERATE_CAPITAL_CITIES)
+    set(REST_COUNTRIES_URL "https://restcountries.com/v3.1/all?fields=name,capital,cca2,timezones")
+    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
+    set(GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/capital-cities_generated.txt")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/capital-cities.txt")
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/capital-cities.txt"
+            "${GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER}"
+            COPYONLY
+        )
+    else()
+        file(WRITE "${GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER}" "# placeholder\n")
+    endif()
+    add_generated_resource_with_fallback(GENERATED_CAPITAL_CITIES_QRC GENERATE_CAPITAL_CITIES_TGT capital-cities
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateCapitalCities.cmake
+        capital-cities_generated.txt capital-cities.txt
+        ${CMAKE_CURRENT_SOURCE_DIR}/capital-cities.txt
+        EXTRA_CMAKE_ARGS 
+            -DAPI_URL=${REST_COUNTRIES_URL}
+            -DKEYMAP_FILE=${CMAKE_CURRENT_SOURCE_DIR}/keymap-layouts.txt
+    )
+    list(APPEND SOURCES "${GENERATED_CAPITAL_CITIES_QRC}")
+endif()
 # Create the application target before tools reference it
 if (WIN32)
     # Adding WIN32 prevents a console window being opened on Windows
