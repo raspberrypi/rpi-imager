@@ -95,15 +95,15 @@
     <name>ConfirmSystemDriveDialog</name>
     <message>
         <source>Size: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Größe: %1</translation>
     </message>
     <message>
         <source>Mounted as: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Als %1 eingebunden</translation>
     </message>
     <message>
         <source>Not mounted</source>
-        <translation type="unfinished"></translation>
+        <translation>Nicht eingebunden</translation>
     </message>
     <message>
         <source>To continue, type the exact drive name below:</source>
@@ -115,7 +115,7 @@
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished"></translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <source>CONTINUE</source>
@@ -212,7 +212,7 @@
     </message>
     <message>
         <source>Finish</source>
-        <translation type="unfinished"></translation>
+        <translation>Beenden</translation>
     </message>
     <message>
         <source>Write complete!</source>
@@ -450,7 +450,7 @@
     </message>
     <message>
         <source>Writing filesystem...</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibe Dateisystem...</translation>
     </message>
 </context>
 <context>
@@ -542,7 +542,7 @@
     <name>ImFileDialog</name>
     <message>
         <source>Select File</source>
-        <translation type="unfinished"></translation>
+        <translation>Datei auswählen</translation>
     </message>
     <message>
         <source>Home</source>
@@ -601,7 +601,7 @@
     </message>
     <message>
         <source>Select image</source>
-        <translation>Image wählen</translation>
+        <translation>Image auswählen</translation>
     </message>
     <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
@@ -799,7 +799,7 @@
     </message>
     <message>
         <source>Select image</source>
-        <translation>Image wählen</translation>
+        <translation>Image auswählen</translation>
     </message>
     <message>
         <source>Choose operating system</source>
@@ -1114,7 +1114,7 @@
     </message>
     <message>
         <source>Continue</source>
-        <translation>Fortsetzen</translation>
+        <translation>Weiter</translation>
     </message>
     <message>
         <source>Write</source>
