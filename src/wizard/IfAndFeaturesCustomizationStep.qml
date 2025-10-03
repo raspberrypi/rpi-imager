@@ -206,79 +206,79 @@ WizardStepBase {
     }
 
     // Confirmation dialog
-    Dialog {
+    BaseDialog {
         id: confirmDialog
-        modal: true
         parent: wizardContainer && wizardContainer.overlayRootRef ? wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
-        width: 520
-        standardButtons: Dialog.NoButton
         visible: false
 
         property bool allowAccept: false
-        title: qsTr("Enable USB Gadget Mode")
 
-        background: Rectangle {
-            color: Style.mainBackgroundColor
-            radius: Style.sectionBorderRadius
-            border.color: Style.popupBorderColor
-            border.width: Style.sectionBorderWidth
+        // Custom escape handling
+        function escapePressed() {
+            confirmDialog.close()
         }
 
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Style.cardPadding
+        // Register focus groups when component is ready
+        Component.onCompleted: {
+            registerFocusGroup("buttons", function(){ 
+                return [cancelBtn, acceptBtn] 
+            }, 0)
+        }
+
+        // Dialog content
+        Text {
+            text: qsTr("USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelErrorColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+        }
+
+        Text {
+            textFormat: Text.RichText
+            text: qsTr("Please review the <a href='%1'>documentation</a> before proceeding.").arg(chkEnableUsbGadget.helpUrl)
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamilyBold
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+            Layout.fillWidth: true
+        }
+
+        Text {
+            text: qsTr("Only continue if you are sure you know what you are doing.")
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamilyBold
+            color: Style.formLabelErrorColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
             spacing: Style.spacingMedium
+            Item { Layout.fillWidth: true }
 
-            Text {
-                text: qsTr("USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.")
-                font.pixelSize: Style.fontSizeHeading
-                font.family: Style.fontFamilyBold
-                font.bold: true
-                color: Style.formLabelErrorColor
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
+            ImButton {
+                id: cancelBtn
+                text: qsTr("Cancel")
+                activeFocusOnTab: true
+                onClicked: confirmDialog.close()
             }
 
-            Text {
-                textFormat: Text.RichText
-                text: qsTr("Please review the <a href='%1'>documentation</a> before proceeding.").arg(chkEnableUsbGadget.helpUrl)
-                font.pixelSize: Style.fontSizeFormLabel
-                font.family: Style.fontFamilyBold
-                color: Style.formLabelColor
-                wrapMode: Text.WordWrap
-                onLinkActivated: function(link) { Qt.openUrlExternally(link) }
-                Layout.fillWidth: true
-            }
-
-            Text {
-                text: qsTr("Only continue if you are sure you know what you are doing.")
-                font.pixelSize: Style.fontSizeFormLabel
-                font.family: Style.fontFamilyBold
-                color: Style.formLabelErrorColor
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.spacingMedium
-                Item { Layout.fillWidth: true }
-
-                ImButton {
-                    text: qsTr("Cancel")
-                    onClicked: confirmDialog.close()
-                }
-
-                ImButtonRed {
-                    id: acceptBtn
-                    text: qsTr("I understand, continue")
-                    onClicked: {
-                        confirmDialog.close()
-                        root.isConfirmed = true
-                        // Advance to next step
-                        wizardContainer.nextStep()
-                    }
+            ImButtonRed {
+                id: acceptBtn
+                text: qsTr("I understand, continue")
+                enabled: confirmDialog.allowAccept
+                activeFocusOnTab: true
+                onClicked: {
+                    confirmDialog.close()
+                    root.isConfirmed = true
+                    // Advance to next step
+                    wizardContainer.nextStep()
                 }
             }
         }

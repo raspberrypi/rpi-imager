@@ -249,13 +249,10 @@ BaseDialog {
     }
 
     // Confirmation dialog for disabling warnings
-    Dialog {
+    BaseDialog {
         id: confirmDisableWarnings
-        modal: true
         parent: popup.contentItem
         anchors.centerIn: parent
-        width: 520
-        standardButtons: Dialog.NoButton
 
         onClosed: {
             // If dialog was closed without confirming, revert the toggle
@@ -265,77 +262,63 @@ BaseDialog {
             confirmAccepted = false;
         }
 
-        onOpened: {
-            confirmCancelButton.forceActiveFocus();
-        }
-
         property bool confirmAccepted: false
 
-        background: Rectangle {
-            color: Style.mainBackgroundColor
-            radius: Style.sectionBorderRadius
-            border.color: Style.popupBorderColor
-            border.width: Style.sectionBorderWidth
+        // Custom escape handling
+        function escapePressed() {
+            confirmDisableWarnings.close()
         }
 
-        FocusScope {
-            anchors.fill: parent
+        // Register focus groups when component is ready
+        Component.onCompleted: {
+            registerFocusGroup("buttons", function(){ 
+                return [confirmCancelButton, confirmDisableButton] 
+            }, 0)
+        }
 
-            Keys.onEscapePressed: confirmDisableWarnings.close()
+        // Dialog content
+        Text {
+            text: qsTr("Disable warnings?")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            Layout.fillWidth: true
+        }
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: Style.cardPadding
-                spacing: Style.spacingMedium
+        Text {
+            textFormat: Text.StyledText
+            wrapMode: Text.WordWrap
+            font.pixelSize: Style.fontSizeDescription
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+            Layout.fillWidth: true
+            text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
+        }
 
-                Text {
-                    text: qsTr("Disable warnings?")
-                    font.pixelSize: Style.fontSizeHeading
-                    font.family: Style.fontFamilyBold
-                    font.bold: true
-                    color: Style.formLabelColor
-                    Layout.fillWidth: true
-                }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacingMedium
+            Item {
+                Layout.fillWidth: true
+            }
 
-                Text {
-                    textFormat: Text.StyledText
-                    wrapMode: Text.WordWrap
-                    font.pixelSize: Style.fontSizeDescription
-                    font.family: Style.fontFamily
-                    color: Style.textDescriptionColor
-                    Layout.fillWidth: true
-                    text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
-                }
+            ImButton {
+                id: confirmCancelButton
+                text: qsTr("Cancel")
+                activeFocusOnTab: true
+                onClicked: confirmDisableWarnings.close()
+            }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.spacingMedium
-                    Item {
-                        Layout.fillWidth: true
-                    }
-
-                    ImButton {
-                        id: confirmCancelButton
-                        text: qsTr("Cancel")
-                        activeFocusOnTab: true
-                        KeyNavigation.tab: confirmDisableButton
-                        KeyNavigation.backtab: confirmDisableButton
-                        onClicked: confirmDisableWarnings.close()
-                    }
-
-                    ImButtonRed {
-                        id: confirmDisableButton
-                        text: qsTr("Disable warnings")
-                        activeFocusOnTab: true
-                        KeyNavigation.tab: confirmCancelButton
-                        KeyNavigation.backtab: confirmCancelButton
-                        onClicked: {
-                            confirmDisableWarnings.confirmAccepted = true;
-                            if (popup.wizardContainer)
-                                popup.wizardContainer.disableWarnings = true;
-                            confirmDisableWarnings.close();
-                        }
-                    }
+            ImButtonRed {
+                id: confirmDisableButton
+                text: qsTr("Disable warnings")
+                activeFocusOnTab: true
+                onClicked: {
+                    confirmDisableWarnings.confirmAccepted = true;
+                    if (popup.wizardContainer)
+                        popup.wizardContainer.disableWarnings = true;
+                    confirmDisableWarnings.close();
                 }
             }
         }
