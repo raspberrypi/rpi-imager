@@ -179,6 +179,7 @@ BaseDialog {
                 enabled: radioOfficial.checked
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
                          || (radioCustomUri.checked && fieldCustomUri.acceptableInput)
+                // TODO: only show or enable when settings changed
                 text: qsTr("Apply & Restart")
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
