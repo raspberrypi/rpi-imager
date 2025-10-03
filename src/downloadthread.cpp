@@ -782,23 +782,23 @@ void DownloadThread::_onDownloadError(const QString &msg)
 
 void DownloadThread::_onWriteError()
 {
-    const rpi_imager::ErrorInfo info = _file ? _file->LastError()
-                                             : rpi_imager::ErrorInfo{rpi_imager::FileError::kWriteError, rpi_imager::DetailedError::kNoDetails, 0};
-
 #ifdef Q_OS_WIN
-    // Windows-specific hint when access is denied (e.g., Controlled Folder Access)
-    if (info.detailed == rpi_imager::DetailedError::kAccessDenied) {
-        QString msg = tr("Access denied while writing to the disk.");
-        QSettings registry(
-            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
-            QSettings::Registry64Format);
-        if (registry.value("EnableControlledFolderAccess").toInt() == 1) {
-            msg += "<br>" + tr("Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.");
-        } else {
-            msg += "<br>" + tr("The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.");
+    // TODO: Implement platform-specific error handling in FileOperations
+    // For now, provide generic error message instead of: if (_file.errorCode() == ERROR_ACCESS_DENIED)
+    if (false) // Temporarily disabled
+    {
+        QString msg = tr("Access denied error while writing file to disk.");
+        QSettings registry("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
+                           QSettings::Registry64Format);
+        if (registry.value("EnableControlledFolderAccess").toInt() == 1)
+        {
+            msg += "<br>"+tr("Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.");
+        }
+        else
+        {
+            msg += "<br>"+tr("The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.");
         }
         _onDownloadError(msg);
-        return;
     }
     else if (_file->GetLastErrorCode() == ERROR_DISK_FULL)
     {
@@ -815,19 +815,6 @@ void DownloadThread::_onWriteError()
     else if (_file->GetLastErrorCode() == ERROR_INVALID_PARAMETER)
     {
         _onDownloadError(tr("Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device."));
-        return;
-    case rpi_imager::DetailedError::kIoDevice:
-        _onDownloadError(tr("I/O device error - The storage device may have been disconnected or is malfunctioning."));
-        return;
-    case rpi_imager::DetailedError::kBusy:
-        _onDownloadError(tr("The device is busy. Close apps that might use it and try again."));
-        return;
-    case rpi_imager::DetailedError::kAccessDenied:
-        // Windows handled above; other platforms fall through to coarse
-        break;
-    case rpi_imager::DetailedError::kNoDetails:
-    default:
-        break; // fall back to coarse
     }
     else if (_file->GetLastErrorCode() == ERROR_IO_DEVICE)
     {
