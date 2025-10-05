@@ -37,7 +37,7 @@
     </message>
     <message>
         <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
-        <translation type="unfinished"></translation>
+        <translation>Wenn Sie Warnungen deaktivieren, wird Raspberry Pi Imager vor dem Schreiben von Images &lt;b&gt;keine Bestätigungsaufforderungen anzeigen&lt;/b&gt;. Sie werden bei der Auswahl eines Systemlaufwerks weiterhin &lt;b&gt;den genauen Namen eingeben&lt;/b&gt; müssen.</translation>
     </message>
     <message>
         <source>Content Repository</source>
@@ -45,130 +45,130 @@
     </message>
     <message>
         <source>Edit</source>
-        <translation type="unfinished"></translation>
+        <translation>Bearbeiten</translation>
     </message>
 </context>
 <context>
     <name>CommonStrings</name>
     <message>
         <source>Only proceed if you fully understand the risks.</source>
-        <translation type="unfinished"></translation>
+        <translation>Fahren Sie nur fort, wenn Sie die Risiken vollständig verstehen.</translation>
     </message>
     <message>
         <source>Selecting the wrong drive will permanently erase data and can render your computer inoperable.</source>
-        <translation type="unfinished"></translation>
+        <translation>Durch die Auswahl eines falschen Laufwerks werden die Daten dauerhaft gelöscht und Ihr Computer kann funktionsunfähig werden.</translation>
     </message>
     <message>
         <source>System drives typically contain files essential to the operation of your computer, and may include your personal files (photos, videos, documents).</source>
-        <translation type="unfinished"></translation>
+        <translation>Systemlaufwerke enthalten normalerweise Dateien, die für den Betrieb Ihres Computers unerlässlich sind, und können auch Ihre persönlichen Dateien (Fotos, Videos, Dokumente) enthalten.</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>Alle Dateien (*)</translation>
     </message>
     <message>
         <source>Image files (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Abbilddateien (%1)</translation>
     </message>
     <message>
         <source>Imager Repository Files (*.json)</source>
-        <translation type="unfinished"></translation>
+        <translation>Imager Repository-Dateien (*.json)</translation>
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffentliche Schlüssel (*.pub)</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Abbrechen</translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <source>Yes</source>
-        <translation type="unfinished">Ja</translation>
+        <translation>Ja</translation>
     </message>
     <message>
         <source>No</source>
-        <translation type="unfinished">Nein</translation>
+        <translation>Nein</translation>
     </message>
     <message>
         <source>Browse</source>
-        <translation type="unfinished">Durchsuchen</translation>
+        <translation>Durchsuchen</translation>
     </message>
     <message>
         <source>Continue</source>
-        <translation type="unfinished">Weiter</translation>
+        <translation>Weiter</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Zurück</translation>
+        <translation>Zurück</translation>
     </message>
     <message>
         <source>Finish</source>
-        <translation type="unfinished">Beenden</translation>
+        <translation>Beenden</translation>
     </message>
     <message>
         <source>Select image</source>
-        <translation type="unfinished">Image auswählen</translation>
+        <translation>Image auswählen</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Passwort:</translation>
+        <translation>Passwort:</translation>
     </message>
     <message>
         <source>Device:</source>
-        <translation type="unfinished">Modell:</translation>
+        <translation>Modell:</translation>
     </message>
     <message>
         <source>Storage:</source>
-        <translation type="unfinished">Speicher:</translation>
+        <translation>Speicher:</translation>
     </message>
     <message>
         <source>No device selected</source>
-        <translation type="unfinished">Kein Modell ausgewählt</translation>
+        <translation>Kein Modell ausgewählt</translation>
     </message>
     <message>
         <source>No image selected</source>
-        <translation type="unfinished">Kein Image ausgewählt</translation>
+        <translation>Kein Image ausgewählt</translation>
     </message>
     <message>
         <source>No storage selected</source>
-        <translation type="unfinished">Kein Speichergerät ausgewählt</translation>
+        <translation>Kein Speichergerät ausgewählt</translation>
     </message>
     <message>
         <source>Hostname configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Hostname konfiguriert</translation>
     </message>
     <message>
         <source>User account configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Benutzerkonto konfiguriert</translation>
     </message>
     <message>
         <source>SSH enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH aktiviert</translation>
     </message>
     <message>
         <source>Locale configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Lokalisierung konfiguriert</translation>
     </message>
     <message>
         <source>Wi‑Fi configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Wi-Fi konfiguriert</translation>
     </message>
     <message>
         <source>Raspberry Pi Connect enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Connect aktiviert</translation>
     </message>
     <message>
         <source>USB Gadget enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>USB Gadget aktiviert</translation>
     </message>
     <message>
         <source>I2C enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>I2C aktiviert</translation>
     </message>
     <message>
         <source>SPI enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>SPI aktiviert</translation>
     </message>
 </context>
 <context>
@@ -187,11 +187,11 @@
     </message>
     <message>
         <source>To continue, type the exact drive name below:</source>
-        <translation type="unfinished"></translation>
+        <translation>Um fortzufahren, geben Sie unten den exakten Laufwerksnamen ein:</translation>
     </message>
     <message>
         <source>Type drive name exactly as shown above</source>
-        <translation type="unfinished"></translation>
+        <translation>Geben Sie den Laufwerksnamen genau wie oben angezeigt ein</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -206,19 +206,19 @@
     <name>ConfirmUnfilterDialog</name>
     <message>
         <source>Remove system drive filter?</source>
-        <translation type="unfinished"></translation>
+        <translation>Filter für Systemlaufwerk ausschalten?</translation>
     </message>
     <message>
         <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
-        <translation type="unfinished"></translation>
+        <translation>Durch Deaktivieren des Filters für Systemlaufwerke werden in der Liste &lt;b&gt;Systemlaufwerke angezeigt&lt;/b&gt;.</translation>
     </message>
     <message>
         <source>KEEP FILTER ON</source>
-        <translation type="unfinished"></translation>
+        <translation>FILTER EINGESCHALTET LASSEN</translation>
     </message>
     <message>
         <source>SHOW SYSTEM DRIVES</source>
-        <translation type="unfinished"></translation>
+        <translation>SYSTEMLAUFWERKE ANZEIGEN</translation>
     </message>
 </context>
 <context>
@@ -236,23 +236,23 @@
     </message>
     <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
-        <translation type="unfinished"></translation>
+        <translation>Das Speichergerät wurde automatisch ausgeworfen. Sie können es jetzt sicher entfernen.</translation>
     </message>
     <message>
         <source>Please eject the storage device before removing it from your computer.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bitte werfen Sie das Speichergerät aus, bevor Sie es von Ihrem Computer entfernen.</translation>
     </message>
     <message>
         <source>Write Another</source>
-        <translation type="unfinished"></translation>
+        <translation>Neuen Schreibvorgang beginnen</translation>
     </message>
     <message>
         <source>Write complete!</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibvorgang beendet!</translation>
     </message>
     <message>
         <source>Customisations applied:</source>
-        <translation type="unfinished"></translation>
+        <translation>Angewendete Anpassungen:</translation>
     </message>
     <message>
         <source>Reboot</source>
@@ -260,11 +260,11 @@
     </message>
     <message>
         <source>Operating system:</source>
-        <translation type="unfinished"></translation>
+        <translation>Betriebssystem:</translation>
     </message>
     <message>
         <source>Storage:</source>
-        <translation type="unfinished">Speicher:</translation>
+        <translation>Speicher:</translation>
     </message>
 </context>
 <context>
@@ -504,7 +504,7 @@
     </message>
     <message>
         <source>Customisation: Choose hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Anpassung: Hostnamen auswählen</translation>
     </message>
 </context>
 <context>
@@ -519,7 +519,7 @@
     </message>
     <message>
         <source>Enable SPI</source>
-        <translation type="unfinished"></translation>
+        <translation>SPI aktivieren</translation>
     </message>
     <message>
         <source>Enable Serial:</source>
@@ -563,7 +563,7 @@
     </message>
     <message>
         <source>Enable I2C</source>
-        <translation type="unfinished"></translation>
+        <translation>I2C aktivieren</translation>
     </message>
 </context>
 <context>
@@ -617,7 +617,7 @@
     </message>
     <message>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1.</source>
-        <translation type="unfinished"></translation>
+        <translation>Die Speicherkapazität ist nicht groß genug.&lt;br&gt;Muss mindestens %1 betragen.</translation>
     </message>
     <message>
         <source>B</source>
@@ -641,11 +641,11 @@
     </message>
     <message>
         <source>%1 %2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 %2</translation>
     </message>
     <message>
         <source>%1.%2 %3</source>
-        <translation type="unfinished"></translation>
+        <translation>%1.%2 %3</translation>
     </message>
     <message>
         <source>Unknown precondition failure.</source>
@@ -669,7 +669,7 @@
     </message>
     <message>
         <source>image</source>
-        <translation type="unfinished"></translation>
+        <translation>image</translation>
     </message>
     <message>
         <source>storage device</source>
@@ -681,7 +681,7 @@
     </message>
     <message>
         <source>No %1 selected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein:e %1 ausgewählt.</translation>
     </message>
     <message>
         <source> or </source>
@@ -692,15 +692,15 @@
     <name>KeychainPermissionDialog</name>
     <message>
         <source>Keychain Access</source>
-        <translation type="unfinished"></translation>
+        <translation>Schlüsselbundzugriff</translation>
     </message>
     <message>
         <source>Would you like to prefill the Wi‑Fi password from the system keychain?</source>
-        <translation type="unfinished"></translation>
+        <translation>Möchten Sie das Wi-Fi-Passwort aus dem Schlüsselbund des Systems befüllen?</translation>
     </message>
     <message>
         <source>This will require administrator authentication on macOS.</source>
-        <translation type="unfinished"></translation>
+        <translation>Dies erfordert Administratorrechte unter macOS.</translation>
     </message>
 </context>
 <context>
@@ -726,7 +726,7 @@
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation>Imagedatei wird geöffnet</translation>
+        <translation>Fehler beim Lesen der Imagedatei</translation>
     </message>
     <message>
         <source>Error writing to device</source>
@@ -734,15 +734,15 @@
     </message>
     <message>
         <source>Failed to read complete image file</source>
-        <translation type="unfinished"></translation>
+        <translation>Imagedatei konnte nicht komplett gelesen werden</translation>
     </message>
     <message>
         <source>Opening image file...</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffne Imagedatei...</translation>
     </message>
     <message>
         <source>Starting extraction...</source>
-        <translation type="unfinished"></translation>
+        <translation>Starte Extraktion...</translation>
     </message>
 </context>
 <context>
@@ -757,15 +757,15 @@
     </message>
     <message>
         <source>Customisation: Localisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Anpassung: Ländereinstellungen</translation>
     </message>
     <message>
         <source>Select your location for suggested time zone and keyboard layout</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie Ihren Standort aus, um einen Vorschlag für die Zeitzone und das Tastaturlayout zu erhalten</translation>
     </message>
     <message>
         <source>Capital city:</source>
-        <translation type="unfinished"></translation>
+        <translation>Hauptstadt:</translation>
     </message>
 </context>
 <context>
@@ -814,19 +814,19 @@
     <name>PiConnectCustomizationStep</name>
     <message>
         <source>Customisation: Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Anpassung: Raspberry Pi Connect</translation>
     </message>
     <message>
         <source>Enable Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Connect aktivieren</translation>
     </message>
     <message>
         <source>What is Raspberry Pi Connect?</source>
-        <translation type="unfinished"></translation>
+        <translation>Was ist Raspberry Pi Connect?</translation>
     </message>
     <message>
         <source>Open Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffne Raspberry Pi Connect</translation>
     </message>
     <message>
         <source>Status:</source>
@@ -834,22 +834,15 @@
     </message>
     <message>
         <source>Token received from browser</source>
-        <translation type="unfinished"></translation>
+        <translation>Token vom Browser erhalten</translation>
     </message>
     <message>
         <source>Waiting for token</source>
-        <translation type="unfinished"></translation>
+        <translation>Warten auf das Token</translation>
     </message>
     <message>
         <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>QObject</name>
-    <message>
-        <source>Internal SD card reader</source>
-        <translation type="unfinished"></translation>
+        <translation>Melden Sie sich an, um ein Token zu erhalten und Raspberry Pi Connect zu aktivieren.</translation>
     </message>
 </context>
 <context>
@@ -864,35 +857,35 @@
     </message>
     <message>
         <source>Use public key authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffentlicher Schlüssel zur Authentifizierung verwenden</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffentlicher SSH Schlüssel auswählen</translation>
     </message>
     <message>
         <source>Customisation: SSH authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Anpassung: SSH Authentifizierung</translation>
     </message>
     <message>
         <source>Learn about SSH</source>
-        <translation type="unfinished"></translation>
+        <translation>Erfahren Sie mehr über SSH</translation>
     </message>
     <message>
         <source>Configure SSH access</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH Zugang konfigurieren</translation>
     </message>
     <message>
         <source>Authentication mechanism:</source>
-        <translation type="unfinished"></translation>
+        <translation>Authentifzierungsmechanismus:</translation>
     </message>
     <message>
         <source>Enter public key or click BROWSE</source>
-        <translation type="unfinished"></translation>
+        <translation>Geben Sie den öffentlichen Schlüssel ein oder klicken Sie auf DURCHSUCHEN</translation>
     </message>
     <message>
         <source>Failed to read SSH key file</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-Schlüsseldatei konnte nicht gelesen werden</translation>
     </message>
 </context>
 <context>
@@ -907,7 +900,7 @@
     </message>
     <message>
         <source>Use custom file</source>
-        <translation type="unfinished"></translation>
+        <translation>Eigene Datei verwenden</translation>
     </message>
     <message>
         <source>Use custom URI</source>
@@ -919,15 +912,15 @@
     </message>
     <message>
         <source>Select Repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Repository auswählen</translation>
     </message>
     <message>
         <source>Apply &amp; Restart</source>
-        <translation type="unfinished"></translation>
+        <translation>Anwenden &amp; Neu starten</translation>
     </message>
     <message>
         <source>Select custom repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Benutzerdefiniertes Repository auswählen</translation>
     </message>
 </context>
 <context>
@@ -988,7 +981,7 @@
     </message>
     <message>
         <source>Customisation: Choose username</source>
-        <translation type="unfinished"></translation>
+        <translation>Anpassung: Benutzernamen auswählen</translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
@@ -996,15 +989,15 @@
     </message>
     <message>
         <source>Re-enter to change password</source>
-        <translation type="unfinished"></translation>
+        <translation>Zur Bestätigung des Passworts erneut eingeben</translation>
     </message>
     <message>
         <source>Create a user account for your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Erstellen Sie ein Benutzerkonto für Ihren Raspberry Pi</translation>
     </message>
     <message>
         <source>Enter your username</source>
-        <translation type="unfinished"></translation>
+        <translation>Benutzername eingeben</translation>
     </message>
 </context>
 <context>
@@ -1031,11 +1024,11 @@
     </message>
     <message>
         <source>Customisation: Choose Wi‑Fi</source>
-        <translation type="unfinished"></translation>
+        <translation>Anpassung: Wifi auswählen</translation>
     </message>
     <message>
         <source>Configure wireless LAN settings</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to clear</source>
@@ -1043,7 +1036,7 @@
     </message>
     <message>
         <source>✓ Recommended based on your capital city selection</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Empfohlen basierend auf Ihrer Hauptstadtauswahl</translation>
     </message>
 </context>
 <context>
@@ -1070,11 +1063,11 @@
     </message>
     <message>
         <source>Customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Anpassung</translation>
     </message>
     <message>
         <source>Hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Hostname</translation>
     </message>
     <message>
         <source>User</source>
@@ -1082,15 +1075,15 @@
     </message>
     <message>
         <source>Wi‑Fi</source>
-        <translation type="unfinished"></translation>
+        <translation>Wi-Fi</translation>
     </message>
     <message>
         <source>Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Connect</translation>
     </message>
     <message>
         <source>App Options</source>
-        <translation type="unfinished">Programm Optionen</translation>
+        <translation>Programm Optionen</translation>
     </message>
     <message>
         <source>Interfaces &amp; Features</source>
@@ -1102,11 +1095,11 @@
     </message>
     <message>
         <source>Localisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Lokalisierung</translation>
     </message>
     <message>
         <source>Remote access</source>
-        <translation type="unfinished"></translation>
+        <translation>Fernzugriff</translation>
     </message>
 </context>
 <context>
@@ -1124,7 +1117,7 @@
     <name>WritingStep</name>
     <message>
         <source>Review your choices and write the image to the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Überprüfen Sie Ihre Auswahl und schreiben Sie das Image auf das Speichergerät</translation>
     </message>
     <message>
         <source>Write</source>
@@ -1136,7 +1129,7 @@
     </message>
     <message>
         <source>Starting write process...</source>
-        <translation type="unfinished"></translation>
+        <translation>Starte Schreibvorgang...</translation>
     </message>
     <message>
         <source>Write cancelled</source>
@@ -1144,19 +1137,19 @@
     </message>
     <message>
         <source>You are about to ERASE all data on: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Sie sind dabei, alle Daten auf %1 zu LÖSCHEN</translation>
     </message>
     <message>
         <source>the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>das Speichergerät</translation>
     </message>
     <message>
         <source>This action is PERMANENT and CANNOT be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Diese Aktion ist PERMANENT und KANN NICHT rückgängig gemacht werden.</translation>
     </message>
     <message>
         <source>I understand, erase and write</source>
-        <translation type="unfinished"></translation>
+        <translation>Ich verstehe. Lösche und schreibe.</translation>
     </message>
     <message>
         <source>Please wait...</source>
@@ -1172,35 +1165,35 @@
     </message>
     <message>
         <source>Write completed successfully!</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibvorgang erfolgreich beendet!</translation>
     </message>
     <message>
         <source>Write failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreiben fehlgeschlagen: %1</translation>
     </message>
     <message>
         <source>Customisations to apply:</source>
-        <translation type="unfinished"></translation>
+        <translation>Anzuwendende Anpassungen:</translation>
     </message>
     <message>
         <source>Finalising...</source>
-        <translation type="unfinished"></translation>
+        <translation>Finalisiere...</translation>
     </message>
     <message>
         <source>Write image</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibe Image</translation>
     </message>
     <message>
         <source>Operating system:</source>
-        <translation type="unfinished"></translation>
+        <translation>Betriebssystem:</translation>
     </message>
     <message>
         <source>Ready to write your customised image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bereit, Ihr benutzerdefiniertes Image auf Ihr Speichergerät zu schreiben. Alle vorhandenen Daten werden gelöscht.</translation>
     </message>
     <message>
         <source>Ready to write the image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bereit, das Image auf Ihr Speichergerät zu schreiben. Alle vorhandenen Daten werden gelöscht.</translation>
     </message>
 </context>
 <context>
@@ -1243,8 +1236,7 @@
     </message>
     <message>
         <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>
-        <translation>Der Vorgang wurde abgebrochen, da das Speichergerät während des Schreibvorgangs entfernt wurde. Bitte legen Sie das Gerät erneut ein oder wählen Sie ein anderes aus um fortzufahren.
-</translation>
+        <translation>Der Vorgang wurde abgebrochen, da das Speichergerät während des Schreibvorgangs entfernt wurde. Bitte schließen Sie das Gerät erneut an oder wählen Sie ein anderes aus um fortzufahren.</translation>
     </message>
     <message>
         <source>OK</source>
