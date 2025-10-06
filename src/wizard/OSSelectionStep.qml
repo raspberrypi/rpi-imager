@@ -149,6 +149,28 @@ WizardStepBase {
             root.customSelected = true
             root.customSelectedSize = imageWriter.getSelectedSourceSize()
             root.nextButtonEnabled = true
+            
+            // Scroll back to the "Use custom" option so user can see their selection
+            Qt.callLater(function() {
+                console.log("Attempting to scroll to 'Use custom' item")
+                console.log("oslist exists:", !!oslist)
+                console.log("oslist.model exists:", oslist && !!oslist.model)
+                console.log("oslist.count:", oslist ? oslist.count : "N/A")
+                
+                if (oslist && oslist.model) {
+                    // Find the "Use custom" item (url === "internal://custom")
+                    for (var i = 0; i < oslist.count; i++) {
+                        var itemData = oslist.getModelData(i)
+                        console.log("Item", i, "url:", itemData ? itemData.url : "null")
+                        if (itemData && itemData.url === "internal://custom") {
+                            console.log("Found 'Use custom' at index", i, "- scrolling to it")
+                            oslist.currentIndex = i
+                            oslist.positionViewAtIndex(i, ListView.Center)
+                            break
+                        }
+                    }
+                }
+            })
         }
     }
 
@@ -157,6 +179,8 @@ WizardStepBase {
     property alias customImageFileDialog: customImageFileDialog
     ImFileDialog {
         id: customImageFileDialog
+        parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
+        anchors.centerIn: parent
         nameFilters: CommonStrings.imageFiltersList
         onAccepted: {
             imageWriter.acceptCustomImageFromQml(selectedFile)

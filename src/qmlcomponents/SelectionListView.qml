@@ -53,8 +53,8 @@ ListView {
     }
     highlightFollowsCurrentItem: true
     highlightRangeMode: ListView.ApplyRange
-    preferredHighlightBegin: -50
-    preferredHighlightEnd: height + 50
+    preferredHighlightBegin: 0
+    preferredHighlightEnd: height
     
     // Standard ScrollBar
     ScrollBar.vertical: ScrollBar {

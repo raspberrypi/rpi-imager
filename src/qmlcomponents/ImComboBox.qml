@@ -169,13 +169,15 @@ ComboBox {
         onWheel: (event) => {
             if (!root.popup.visible) {
                 var dy = event.pixelDelta && Math.abs(event.pixelDelta.y) > 0 ? event.pixelDelta.y : event.angleDelta.y
-                // Respect OS natural scrolling preference
-                if (event.inverted) dy = -dy
+                // Apply wheelInvert option if needed
                 if (root.wheelInvert) dy = -dy
-                if (dy > 0 && root.currentIndex > 0) {
-                    root.currentIndex--
-                } else if (dy < 0 && root.currentIndex < root.model.length - 1) {
+                // Negative delta = scroll down = move down list = increase index
+                // Positive delta = scroll up = move up list = decrease index
+                // (Qt already handles natural scrolling, so we use the raw delta)
+                if (dy < 0 && root.currentIndex < root.model.length - 1) {
                     root.currentIndex++
+                } else if (dy > 0 && root.currentIndex > 0) {
+                    root.currentIndex--
                 }
                 event.accepted = true
             }
@@ -233,13 +235,14 @@ ComboBox {
                 policy: dropdownList.contentHeight > dropdownList.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
                 width: Style.scrollBarWidth
             }
-            // Wheel inertia inside the popup: convert wheel delta to a flick velocity (OS-aware)
+            // Wheel inertia inside the popup: convert wheel delta to a flick velocity
             WheelHandler {
                 onWheel: (event) => {
                     var dy = event.pixelDelta && Math.abs(event.pixelDelta.y) > 0 ? event.pixelDelta.y : event.angleDelta.y
-                    // Respect OS natural scrolling preference
-                    if (event.inverted) dy = -dy
                     // Scale velocity based on OS wheel scroll lines setting
+                    // Note: Qt already handles natural scrolling in the delta values
+                    // flick() expects positive velocity to scroll down, negative to scroll up
+                    // angleDelta.y is negative for scroll down, so we negate to match flick() API
                     var baseVelocity = -dy * 10
                     var osAwareVelocity = baseVelocity * root.keyboardSpeedMultiplier
                     dropdownList.flick(0, osAwareVelocity)

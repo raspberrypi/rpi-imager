@@ -429,7 +429,15 @@ WizardStepBase {
     // Focus management - rebuild when visibility changes between phases
     onIsWritingChanged: rebuildFocusOrder()
     onIsCompleteChanged: rebuildFocusOrder()
-    onAnyCustomizationsAppliedChanged: rebuildFocusOrder()
+    onAnyCustomizationsAppliedChanged: {
+        // Update initialFocusItem based on whether customizations are present
+        if (root.anyCustomizationsApplied) {
+            root.initialFocusItem = customizationsScrollView
+        } else {
+            root.initialFocusItem = nextButtonItem
+        }
+        rebuildFocusOrder()
+    }
     
     Component.onCompleted: {
         registerFocusGroup("customizations", function() {
@@ -440,15 +448,20 @@ WizardStepBase {
             return []
         }, 0)
         
+        // Set initial focus item to the customizations scroll view if customizations are present,
+        // otherwise default to the next button so tab navigation works
+        if (root.anyCustomizationsApplied) {
+            root.initialFocusItem = customizationsScrollView
+        } else {
+            root.initialFocusItem = nextButtonItem
+        }
+        
         // Ensure focus order is built when component completes
         Qt.callLater(function() {
             rebuildFocusOrder()
             // Try to set initial focus
             if (initialFocusItem) {
-                console.log("WritingStep: Setting initial focus to:", initialFocusItem)
                 initialFocusItem.forceActiveFocus()
-            } else {
-                console.log("WritingStep: No initialFocusItem available")
             }
         })
     }

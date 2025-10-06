@@ -328,6 +328,8 @@ BaseDialog {
 
     ImFileDialog {
         id: repoFileDialog
+        parent: popup.parent  // Inherit parent from AppOptionsDialog (which is overlayRoot)
+        anchors.centerIn: parent
         dialogTitle: qsTr("Select custom repository")
         nameFilters: CommonStrings.repoFiltersList
         onAccepted: {

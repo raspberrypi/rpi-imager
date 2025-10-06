@@ -188,6 +188,8 @@ WizardStepBase {
     
     ImFileDialog {
         id: sshKeyFileDialog
+        parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
+        anchors.centerIn: parent
         dialogTitle: qsTr("Select SSH Public Key")
         nameFilters: CommonStrings.sshFiltersList
         Component.onCompleted: {

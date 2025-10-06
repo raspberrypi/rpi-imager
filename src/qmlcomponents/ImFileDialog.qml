@@ -8,8 +8,9 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import Qt.labs.folderlistmodel 2.15
+import RpiImager
 
-Dialog {
+BaseDialog {
     id: dialog
 
     // Public API (aligning loosely with FileDialog)
@@ -33,22 +34,9 @@ Dialog {
     }
     function close() { dialog.visible = false }
 
-    modal: true
-    standardButtons: Dialog.NoButton
+    // Override BaseDialog defaults for file dialog specific sizing
     width: Math.min(720, Math.max(520, parent ? parent.width - 80 : 720))
     height: Math.min(540, Math.max(360, parent ? parent.height - 80 : 540))
-    anchors.centerIn: parent
-
-    // Center the dialog on screen
-    x: parent ? (parent.width - width) / 2 : 0
-    y: parent ? (parent.height - height) / 2 : 0
-
-    background: Rectangle {
-        color: Style.mainBackgroundColor
-        radius: Style.sectionBorderRadius
-        border.color: Style.popupBorderColor
-        border.width: Style.sectionBorderWidth
-    }
 
     // Convert Qt-style nameFilters to FolderListModel.nameFilters
     function _extractGlobs(filters) {
@@ -172,30 +160,6 @@ Dialog {
     // Places model for left pane
     ListModel { id: placesModel }
 
-    Component.onCompleted: {
-        // Populate common places (only add if available)
-        function addPlace(label, locEnum) {
-            try {
-                var loc = StandardPaths.writableLocation(locEnum)
-                if (loc && String(loc).length > 0) {
-                    placesModel.append({ label: label, url: loc })
-                }
-            } catch (e) {
-                // ignore missing locations
-            }
-        }
-        addPlace(qsTr("Home"), StandardPaths.HomeLocation)
-        addPlace(qsTr("Documents"), StandardPaths.DocumentsLocation)
-        addPlace(qsTr("Downloads"), StandardPaths.DownloadLocation)
-        addPlace(qsTr("Pictures"), StandardPaths.PicturesLocation)
-        addPlace(qsTr("Music"), StandardPaths.MusicLocation)
-        addPlace(qsTr("Movies"), StandardPaths.MoviesLocation)
-        // Add root folder explicitly
-        placesModel.append({ label: qsTr("Root"), url: "file:///" })
-        // Initialize path field text
-        pathField.text = dialog._toDisplayPath(dialog.currentFolder)
-    }
-
     onCurrentFolderChanged: {
         // Ensure address bar follows folder changes
         pathField.text = dialog._toDisplayPath(dialog.currentFolder)
@@ -203,110 +167,74 @@ Dialog {
         dialog.selectedFile = ""
     }
 
-    FocusScope {
-        id: dialogFocusScope
-        anchors.fill: parent
-        focus: true
-        
-        Keys.onEscapePressed: {
-            dialog.close()
-            dialog.rejected()
+    // Override escape handler to call rejected signal
+    function escapePressed() {
+        dialog.close()
+        dialog.rejected()
+    }
+    
+    // Initialize and register focus groups when component is ready
+    Component.onCompleted: {
+        // Override contentLayout padding to maximize space
+        if (contentLayout) {
+            contentLayout.anchors.margins = 10
+            contentLayout.spacing = 4
         }
         
-        // Focus management system
-        property var _focusGroups: []
-        property var _focusableItems: []
-        property var initialFocusItem: null
-        
-        function registerFocusGroup(name, getItemsFn, order) {
-            if (order === undefined) order = 0
-            // Replace if exists
-            for (var i = 0; i < _focusGroups.length; i++) {
-                if (_focusGroups[i].name === name) {
-                    _focusGroups[i] = { name: name, getItemsFn: getItemsFn, order: order, enabled: true }
-                    rebuildFocusOrder()
-                    return
-                }
-            }
-            _focusGroups.push({ name: name, getItemsFn: getItemsFn, order: order, enabled: true })
-            rebuildFocusOrder()
+        // Add removable drives shortcut based on platform
+        var removableDrivesPath = ""
+        if (Qt.platform.os === "linux") {
+            removableDrivesPath = "file:///mnt"
+        } else if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
+            removableDrivesPath = "file:///Volumes"
+        } else if (Qt.platform.os === "windows") {
+            // On Windows, show root which lists all drives
+            removableDrivesPath = "file:///"
+        } else {
+            // Fallback to root for other platforms
+            removableDrivesPath = "file:///"
         }
+        placesModel.append({ label: qsTr("Removable drives"), url: removableDrivesPath })
         
-        function rebuildFocusOrder() {
-            // Compose enabled groups by order
-            _focusGroups.sort(function(a,b){ return a.order - b.order })
-            var items = []
-            for (var i = 0; i < _focusGroups.length; i++) {
-                var g = _focusGroups[i]
-                if (!g.enabled || !g.getItemsFn) continue
-                var arr = g.getItemsFn()
-                if (!arr || !arr.length) continue
-                for (var k = 0; k < arr.length; k++) {
-                    var it = arr[k]
-                    if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function') {
-                        items.push(it)
-                    }
-                }
-            }
-            _focusableItems = items
-
-            // Determine first/last
-            var firstField = _focusableItems.length > 0 ? _focusableItems[0] : null
-            var lastField = _focusableItems.length > 0 ? _focusableItems[_focusableItems.length-1] : null
-
-            // Wire fields forward/backward (circular navigation)
-            for (var j = 0; j < _focusableItems.length; j++) {
-                var cur = _focusableItems[j]
-                var next = (j + 1 < _focusableItems.length) ? _focusableItems[j+1] : firstField
-                var prev = (j > 0) ? _focusableItems[j-1] : lastField
-                if (cur && cur.KeyNavigation) {
-                    cur.KeyNavigation.tab = next
-                    cur.KeyNavigation.backtab = prev
-                }
-            }
-
-            // Set initial focus item
-            if (!initialFocusItem) initialFocusItem = firstField
-        }
+        // Initialize path field text
+        pathField.text = dialog._toDisplayPath(dialog.currentFolder)
         
-        Component.onCompleted: {
-            // Register focus groups
-            registerFocusGroup("address", function(){ 
-                return [pathField] 
-            }, 0)
-            registerFocusGroup("places", function(){ 
-                return [placesList] 
-            }, 1)
-            registerFocusGroup("folders", function(){ 
-                return [subfoldersList] 
-            }, 2)
-            registerFocusGroup("files", function(){ 
-                return [fileListScrollView] 
-            }, 3)
-            registerFocusGroup("buttons", function(){ 
-                return [cancelButton, openButton] 
-            }, 4)
-            
-            rebuildFocusOrder()
-        }
-        
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Style.cardPadding
-            spacing: Style.spacingSmall
+        // Register focus groups
+        registerFocusGroup("address", function(){ 
+            return [pathField] 
+        }, 0)
+        registerFocusGroup("places", function(){ 
+            return [placesList] 
+        }, 1)
+        registerFocusGroup("folders", function(){ 
+            return [subfoldersList] 
+        }, 2)
+        registerFocusGroup("navigation", function(){ 
+            return [upEntry] 
+        }, 3)
+        registerFocusGroup("files", function(){ 
+            return [filesList] 
+        }, 4)
+        registerFocusGroup("buttons", function(){ 
+            return [cancelButton, openButton] 
+        }, 5)
+    }
 
-        // Title
+    // Title and address bar on same row
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.bottomMargin: 6
+        spacing: 12
+        
         Text {
             id: titleText
-            Layout.fillWidth: true
             text: dialog.dialogTitle
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
         }
-
-        // Address bar (editable)
+        
         TextField {
             id: pathField
             Layout.fillWidth: true
@@ -320,218 +248,389 @@ Dialog {
                 }
             }
         }
+    }
 
-        // Main content with left navigation and file list
-        RowLayout {
-            id: mainRow
-            Layout.fillWidth: true
+    // Main content with left navigation and file list
+    RowLayout {
+        id: mainRow
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        spacing: 6
+
+        // Left navigation pane
+        Frame {
+            id: leftPane
+            Layout.preferredWidth: 180
             Layout.fillHeight: true
-            spacing: Style.spacingSmall
+            clip: true
+            padding: 8
+            background: Rectangle { color: Style.mainBackgroundColor; radius: Style.sectionBorderRadius; border.color: Style.popupBorderColor; border.width: Style.sectionBorderWidth }
 
-            // Left navigation pane
-            Frame {
-                id: leftPane
-                Layout.preferredWidth: 220
-                Layout.fillHeight: true
-                background: Rectangle { color: Style.mainBackgroundColor; radius: Style.sectionBorderRadius; border.color: Style.popupBorderColor; border.width: Style.sectionBorderWidth }
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 4
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Style.cardPadding
-                    spacing: Style.spacingSmall
-
-                    ListView {
-                        id: placesList
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(contentHeight, 160)
-                        clip: true
-                        activeFocusOnTab: true
-                        model: placesModel
-                        delegate: ItemDelegate {
-                            width: (ListView.view ? ListView.view.width : 0)
-                            text: model.label
-                            onClicked: {
-                                dialog.currentFolder = model.url
-                            }
-                        }
-                        Keys.onUpPressed: {
-                            if (currentIndex > 0) {
-                                currentIndex--
-                            }
-                        }
-                        Keys.onDownPressed: {
-                            if (currentIndex < count - 1) {
-                                currentIndex++
-                            }
-                        }
-                        Keys.onEnterPressed: {
-                            if (currentIndex >= 0) {
-                                dialog.currentFolder = model.get(currentIndex).url
-                            }
-                        }
-                        Keys.onReturnPressed: {
-                            if (currentIndex >= 0) {
-                                dialog.currentFolder = model.get(currentIndex).url
-                            }
-                        }
-                    }
-
-                    Text { text: qsTr("Folders"); font.pixelSize: Style.fontSizeDescription; color: Style.textDescriptionColor; Layout.fillWidth: true }
-
-                    // Up entry in left folders pane
-                    ItemDelegate {
-                        Layout.fillWidth: true
-                        visible: dialog._canGoUp()
-                        text: "../"
-                        onClicked: dialog._goUp()
-                    }
-
-                    ListView {
-                        id: subfoldersList
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        activeFocusOnTab: true
-                        model: dirsOnlyModel
-                        delegate: ItemDelegate {
-                            width: (ListView.view ? ListView.view.width : 0)
-                            text: fileName
-                            onClicked: {
-                                dialog.currentFolder = fileURL
-                            }
-                        }
-                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
-                        Keys.onUpPressed: {
-                            if (currentIndex > 0) {
-                                currentIndex--
-                            }
-                        }
-                        Keys.onDownPressed: {
-                            if (currentIndex < count - 1) {
-                                currentIndex++
-                            }
-                        }
-                        Keys.onEnterPressed: {
-                            if (currentIndex >= 0) {
-                                dialog.currentFolder = model.get(currentIndex, "fileURL")
-                            }
-                        }
-                        Keys.onReturnPressed: {
-                            if (currentIndex >= 0) {
-                                dialog.currentFolder = model.get(currentIndex, "fileURL")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // File list
-            Frame {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                background: Rectangle { color: Style.mainBackgroundColor; radius: Style.sectionBorderRadius; border.color: Style.popupBorderColor; border.width: Style.sectionBorderWidth }
-
-                // Unified scroll area: Up entry, then directories, then files
-                ScrollView {
-                    id: fileListScrollView
-                    anchors.fill: parent
+                ListView {
+                    id: placesList
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: contentHeight
+                    clip: true
                     activeFocusOnTab: true
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
+                    model: placesModel
+                    currentIndex: -1  // No item selected by default
+                    highlightFollowsCurrentItem: true
+                    highlight: Rectangle {
+                        color: placesList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
+                        radius: Style.listItemBorderRadius
+                        visible: placesList.currentIndex >= 0
+                    }
                     
-                    property int currentFileIndex: -1
-                    
-                    Keys.onUpPressed: {
-                        if (currentFileIndex > 0) {
-                            currentFileIndex--
-                            // Update selection
-                            var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
-                            if (fileItem && fileItem.fileURL) {
-                                dialog.selectedFile = fileItem.fileURL
+                    // Set focus to first item when list receives focus
+                    onActiveFocusChanged: {
+                        if (activeFocus && currentIndex < 0 && count > 0) {
+                            currentIndex = 0
+                        }
+                    }
+                    delegate: ItemDelegate {
+                        required property int index
+                        required property var model
+                        
+                        width: (ListView.view ? ListView.view.width : 0)
+                        text: model.label
+                        highlighted: ListView.isCurrentItem
+                        background: Rectangle {
+                            color: {
+                                if (ListView.isCurrentItem && placesList.activeFocus)
+                                    return Style.listViewHighlightColor
+                                else if (hovered)
+                                    return Style.listViewHoverRowBackgroundColor
+                                else
+                                    return "transparent"
                             }
+                            radius: Style.listItemBorderRadius
+                        }
+                        onClicked: {
+                            placesList.currentIndex = index
+                            dialog.currentFolder = model.url
+                        }
+                    }
+                    Keys.onUpPressed: {
+                        if (currentIndex > 0) {
+                            currentIndex--
                         }
                     }
                     Keys.onDownPressed: {
-                        if (currentFileIndex < filesOnlyModel.count - 1) {
-                            currentFileIndex++
-                            // Update selection
-                            var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
-                            if (fileItem && fileItem.fileURL) {
-                                dialog.selectedFile = fileItem.fileURL
-                            }
+                        if (currentIndex < count - 1) {
+                            currentIndex++
                         }
                     }
                     Keys.onEnterPressed: {
-                        if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
-                            dialog.close()
-                            dialog.accepted()
+                        if (currentIndex >= 0) {
+                            dialog.currentFolder = model.get(currentIndex).url
                         }
                     }
                     Keys.onReturnPressed: {
-                        if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
-                            dialog.close()
-                            dialog.accepted()
+                        if (currentIndex >= 0) {
+                            dialog.currentFolder = model.get(currentIndex).url
                         }
                     }
+                }
 
-                    Column {
-                        id: fileColumn
-                        width: parent.width
-                        spacing: 0
+                Text { 
+                    text: qsTr("Folders")
+                    font.pixelSize: Style.fontSizeDescription
+                    color: Style.textDescriptionColor
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    Layout.bottomMargin: 2
+                }
 
-                        // Up entry at top of right pane
-                        ItemDelegate {
-                            id: upEntry
-                            width: parent.width
-                            visible: dialog._canGoUp()
-                            text: "../"
-                            onClicked: dialog._goUp()
+                ListView {
+                    id: subfoldersList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    activeFocusOnTab: true
+                    model: dirsOnlyModel
+                    spacing: 2
+                    currentIndex: -1  // No item selected by default
+                    highlightFollowsCurrentItem: true
+                    highlight: Rectangle {
+                        color: subfoldersList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
+                        radius: Style.listItemBorderRadius
+                        visible: subfoldersList.currentIndex >= 0
+                    }
+                    
+                    // Set focus to first item when list receives focus
+                    onActiveFocusChanged: {
+                        if (activeFocus && currentIndex < 0 && count > 0) {
+                            currentIndex = 0
                         }
-
-                        // Files
-                        Repeater {
-                            model: filesOnlyModel
-                            delegate: ItemDelegate {
-                                width: fileColumn.width
-                                text: fileName
-                                background: Rectangle {
-                                    color: dialog.selectedFile === fileURL ? Style.listViewHighlightColor : "transparent"
-                                    radius: Style.listItemBorderRadius
-                                }
-                                onClicked: {
-                                    dialog.selectedFile = fileURL
-                                }
+                    }
+                    
+                    // Reset to first item when folder changes while we have focus
+                    onCountChanged: {
+                        if (activeFocus && count > 0) {
+                            currentIndex = 0
+                        }
+                    }
+                    
+                    delegate: ItemDelegate {
+                        required property int index
+                        required property string fileName
+                        required property string fileURL
+                        
+                        width: (ListView.view ? ListView.view.width : 0)
+                        text: "📁 " + fileName
+                        highlighted: ListView.isCurrentItem
+                        background: Rectangle {
+                            color: {
+                                if (ListView.isCurrentItem && subfoldersList.activeFocus)
+                                    return Style.listViewHighlightColor
+                                else if (hovered)
+                                    return Style.listViewHoverRowBackgroundColor
+                                else
+                                    return "transparent"
                             }
+                            radius: Style.listItemBorderRadius
+                        }
+                        onClicked: {
+                            subfoldersList.currentIndex = index
+                            dialog.currentFolder = fileURL
+                        }
+                    }
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
+                    Keys.onUpPressed: {
+                        if (currentIndex > 0) {
+                            currentIndex--
+                        }
+                    }
+                    Keys.onDownPressed: {
+                        if (currentIndex < count - 1) {
+                            currentIndex++
+                        }
+                    }
+                    Keys.onEnterPressed: {
+                        if (currentIndex >= 0) {
+                            dialog.currentFolder = model.get(currentIndex, "fileURL")
+                        }
+                    }
+                    Keys.onReturnPressed: {
+                        if (currentIndex >= 0) {
+                            dialog.currentFolder = model.get(currentIndex, "fileURL")
                         }
                     }
                 }
             }
         }
 
-        // Buttons
-        RowLayout {
+        // File list
+        Frame {
             Layout.fillWidth: true
-            spacing: Style.spacingMedium
-            Item { Layout.fillWidth: true }
-            ImButton {
-                id: cancelButton
-                text: qsTr("Cancel")
-                activeFocusOnTab: true
-                onClicked: { dialog.close(); dialog.rejected() }
+            Layout.fillHeight: true
+            padding: 8
+            background: Rectangle { color: Style.mainBackgroundColor; radius: Style.sectionBorderRadius; border.color: Style.popupBorderColor; border.width: Style.sectionBorderWidth }
+
+            // Unified scroll area: Up entry, then directories, then files
+            ScrollView {
+                id: fileListScrollView
+                anchors.fill: parent
+                activeFocusOnTab: false  // Don't focus the ScrollView itself, only its children
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
+                
+                property int currentFileIndex: -1
+                
+                Keys.onUpPressed: {
+                    if (currentFileIndex > 0) {
+                        currentFileIndex--
+                        // Update selection
+                        var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
+                        if (fileItem && fileItem.fileURL) {
+                            dialog.selectedFile = fileItem.fileURL
+                        }
+                    }
+                }
+                Keys.onDownPressed: {
+                    if (currentFileIndex < filesOnlyModel.count - 1) {
+                        currentFileIndex++
+                        // Update selection
+                        var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
+                        if (fileItem && fileItem.fileURL) {
+                            dialog.selectedFile = fileItem.fileURL
+                        }
+                    }
+                }
+                Keys.onEnterPressed: {
+                    if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
+                        dialog.close()
+                        dialog.accepted()
+                    }
+                }
+                Keys.onReturnPressed: {
+                    if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
+                        dialog.close()
+                        dialog.accepted()
+                    }
+                }
+
+                Column {
+                    id: fileColumn
+                    width: parent.width
+                    spacing: 0
+
+                    // Up entry at top of right pane - always show when not at root
+                    ImButton {
+                        id: upEntry
+                        width: parent.width
+                        visible: dialog._canGoUp()
+                        height: visible ? implicitHeight : 0
+                        text: "↑ " + qsTr("Go up a folder")
+                        activeFocusOnTab: true
+                        onClicked: dialog._goUp()
+                        
+                        // Rebuild focus order when visibility changes
+                        onVisibleChanged: {
+                            if (dialog.rebuildFocusOrder) {
+                                Qt.callLater(dialog.rebuildFocusOrder)
+                            }
+                        }
+                        
+                        // Custom styling to make it look like a navigation item
+                        background: Rectangle {
+                            color: upEntry.hovered ? Qt.rgba(0, 0, 0, 0.1) : Qt.rgba(0, 0, 0, 0.03)
+                            radius: Style.listItemBorderRadius
+                            border.width: upEntry.activeFocus ? 2 : 1
+                            border.color: upEntry.activeFocus ? Style.focusOutlineColor : Qt.rgba(0, 0, 0, 0.1)
+                        }
+                        
+                        contentItem: Text {
+                            text: upEntry.text
+                            font.pixelSize: Style.fontSizeDescription
+                            font.family: Style.fontFamily
+                            font.italic: true
+                            color: Style.textDescriptionColor
+                            verticalAlignment: Text.AlignVCenter
+                            horizontalAlignment: Text.AlignLeft
+                            leftPadding: 4
+                        }
+                    }
+
+                    // Files list with focus support
+                    ListView {
+                        id: filesList
+                        width: fileColumn.width
+                        height: Math.max(contentHeight, filesOnlyModel.count === 0 ? 60 : 0)
+                        model: filesOnlyModel
+                        activeFocusOnTab: filesOnlyModel.count > 0
+                        currentIndex: -1
+                        highlightFollowsCurrentItem: true
+                        interactive: false
+                        
+                        highlight: Rectangle {
+                            color: filesList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
+                            radius: Style.listItemBorderRadius
+                            visible: filesList.currentIndex >= 0
+                        }
+                        
+                        // Set focus to first item when list receives focus
+                        onActiveFocusChanged: {
+                            if (activeFocus && currentIndex < 0 && count > 0) {
+                                currentIndex = 0
+                                // Set the selected file to the first file
+                                if (count > 0) {
+                                    dialog.selectedFile = model.get(0, "fileURL")
+                                }
+                            }
+                        }
+                        
+                        // Navigate with arrow keys
+                        Keys.onUpPressed: {
+                            if (currentIndex > 0) {
+                                currentIndex--
+                                dialog.selectedFile = model.get(currentIndex, "fileURL")
+                            }
+                        }
+                        Keys.onDownPressed: {
+                            if (currentIndex < count - 1) {
+                                currentIndex++
+                                dialog.selectedFile = model.get(currentIndex, "fileURL")
+                            }
+                        }
+                        
+                        delegate: ItemDelegate {
+                            required property int index
+                            required property string fileName
+                            required property string fileURL
+                            
+                            width: fileColumn.width
+                            text: "📄 " + fileName
+                            highlighted: ListView.isCurrentItem
+                            background: Rectangle {
+                                color: {
+                                    if (dialog.selectedFile === fileURL)
+                                        return Style.listViewHighlightColor
+                                    else if (ListView.isCurrentItem && filesList.activeFocus)
+                                        return Style.listViewHighlightColor
+                                    else if (hovered)
+                                        return Style.listViewHoverRowBackgroundColor
+                                    else
+                                        return "transparent"
+                                }
+                                radius: Style.listItemBorderRadius
+                            }
+                            onClicked: {
+                                filesList.currentIndex = index
+                                dialog.selectedFile = fileURL
+                            }
+                        }
+                        
+                        Keys.onReturnPressed: {
+                            if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
+                                dialog.close()
+                                dialog.accepted()
+                            }
+                        }
+                        Keys.onEnterPressed: {
+                            if (dialog.selectedFile && String(dialog.selectedFile).length > 0) {
+                                dialog.close()
+                                dialog.accepted()
+                            }
+                        }
+                        
+                        // Show message when no files are available
+                        Text {
+                            anchors.centerIn: parent
+                            visible: filesOnlyModel.count === 0
+                            text: qsTr("No files in this folder")
+                            font.pixelSize: Style.fontSizeDescription
+                            font.family: Style.fontFamily
+                            font.italic: true
+                            color: Style.textDescriptionColor
+                        }
+                    }
+                }
             }
-            ImButton {
-                id: openButton
-                text: qsTr("Open")
-                enabled: String(dialog.selectedFile).length > 0
-                activeFocusOnTab: true
-                onClicked: { dialog.close(); dialog.accepted() }
-            }
-        }
         }
     }
-    
-    onOpened: {
-        if (dialogFocusScope.initialFocusItem) {
-            dialogFocusScope.initialFocusItem.forceActiveFocus()
+
+    // Buttons
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: 6
+        spacing: Style.spacingMedium
+        Item { Layout.fillWidth: true }
+        ImButton {
+            id: cancelButton
+            text: qsTr("Cancel")
+            activeFocusOnTab: true
+            onClicked: { dialog.close(); dialog.rejected() }
+        }
+        ImButton {
+            id: openButton
+            text: qsTr("Open")
+            enabled: String(dialog.selectedFile).length > 0
+            activeFocusOnTab: true
+            onClicked: { dialog.close(); dialog.accepted() }
         }
     }
 }
