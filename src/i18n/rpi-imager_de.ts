@@ -401,10 +401,6 @@
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>Error writing first block to device</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
@@ -545,34 +541,6 @@
         <translation>Datei auswählen</translation>
     </message>
     <message>
-        <source>Home</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Documents</source>
-        <translation>Dokumente</translation>
-    </message>
-    <message>
-        <source>Downloads</source>
-        <translation>Downloads</translation>
-    </message>
-    <message>
-        <source>Pictures</source>
-        <translation>Bilder</translation>
-    </message>
-    <message>
-        <source>Music</source>
-        <translation>Musik</translation>
-    </message>
-    <message>
-        <source>Movies</source>
-        <translation>Filme</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Enter path or URL…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -587,6 +555,18 @@
     <message>
         <source>Open</source>
         <translation>Öffnen</translation>
+    </message>
+    <message>
+        <source>Removable drives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Go up a folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No files in this folder</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -752,16 +732,20 @@
         <translation>Tastaturlayout:</translation>
     </message>
     <message>
-        <source>Customisation: Choose locale</source>
+        <source>Time zone:</source>
+        <translation>Zeitzone:</translation>
+    </message>
+    <message>
+        <source>Customisation: Localisation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Configure the time zone and keyboard layout for your Raspberry Pi</source>
-        <translation>Konfigurieren Sie die Zeitzone und das Tastaturlayout für Ihren Raspberry Pi</translation>
+        <source>Select your location for suggested time zone and keyboard layout</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Time zone:</source>
-        <translation>Zeitzone:</translation>
+        <source>Capital city:</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -941,10 +925,6 @@
         <translation>Benutzername:</translation>
     </message>
     <message>
-        <source>pi</source>
-        <translation>pi</translation>
-    </message>
-    <message>
         <source>Password:</source>
         <translation>Passwort:</translation>
     </message>
@@ -978,6 +958,10 @@
     </message>
     <message>
         <source>Create a user account for your Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter your username</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1019,6 +1003,10 @@
         <source>Saved (hidden) — leave blank to clear</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>✓ Recommended based on your capital city selection</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardContainer</name>
@@ -1055,10 +1043,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Locale</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>User</source>
         <translation>Benutzer</translation>
     </message>
@@ -1076,7 +1060,7 @@
     </message>
     <message>
         <source>App Options</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Programm Optionen</translation>
     </message>
     <message>
         <source>Interfaces &amp; Features</source>
@@ -1084,6 +1068,10 @@
     </message>
     <message>
         <source>Setup steps</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Localisation</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1233,10 +1221,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>• Raspberry Raspberry Pi Connect enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>• USB Gadget enabled</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1247,6 +1231,10 @@
     <message>
         <source>• SPI enabled</source>
         <translation>• SPI enabled</translation>
+    </message>
+    <message>
+        <source>• Raspberry Pi Connect enabled</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
