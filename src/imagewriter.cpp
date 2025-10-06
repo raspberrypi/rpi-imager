@@ -2266,7 +2266,7 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     if (piConnectEnabled && !piConnectToken.isEmpty()) {
         // Use the same effective user decision as above
         const QString effectiveUser = userName.isEmpty() && sshEnabled ? getCurrentUser() : (userName.isEmpty() ? QStringLiteral("pi") : userName);
-        const QString targetPath = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect/deploy.key");
+        const QString targetPath = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect/auth.key");
         push(QStringLiteral("write_files:"), cloud);
         push(QStringLiteral("  - path: ") + targetPath, cloud);
         push(QStringLiteral("    permissions: '0600'"), cloud);
