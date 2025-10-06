@@ -83,7 +83,7 @@ WizardStepBase {
     property string connectToken: ""
 
     function parseTokenFromUrl(u) {
-        // Handle QUrl or string, accept token/code/deploy_key
+        // Handle QUrl or string, accept token/code/deploy_key/auth_key
         var s = ""
         try {
             if (u && typeof u.toString === 'function') s = u.toString(); else s = String(u)
@@ -99,7 +99,7 @@ WizardStepBase {
             if (kv.length >= 2) {
                 var key = decodeURIComponent(kv[0])
                 var val = decodeURIComponent(kv.slice(1).join('='))
-                if (key === 'token' || key === 'code' || key === 'deploy_key') {
+                if (key === 'token' || key === 'code' || key === 'deploy_key' || key === 'auth_key') {
                     token = val
                     break
                 }
