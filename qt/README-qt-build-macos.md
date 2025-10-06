@@ -30,7 +30,7 @@ Before running the script, ensure you have:
 To build Qt with default options:
 
 ```bash
-cd src/mac
+cd qt
 ./build-qt-macos.sh
 ```
 
