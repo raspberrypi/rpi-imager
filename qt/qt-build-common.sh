@@ -364,10 +364,27 @@ run_qt_configure() {
 build_qt() {
     echo "Building Qt (this may take a while)..."
     
+    # Map BUILD_TYPE to CMAKE_BUILD_TYPE
+    local cmake_build_type=""
+    case "${BUILD_TYPE}" in
+        "Release")
+            cmake_build_type="Release"
+            ;;
+        "Debug")
+            cmake_build_type="Debug"
+            ;;
+        "MinSizeRel")
+            cmake_build_type="MinSizeRel"
+            ;;
+        *)
+            cmake_build_type="Release"
+            ;;
+    esac
+    
     if [ "$VERBOSE_BUILD" -eq 1 ]; then
-        cmake --build . --parallel "$CORES" --verbose
+        cmake --build . --parallel "$CORES" --config "$cmake_build_type" --verbose
     else
-        cmake --build . --parallel "$CORES"
+        cmake --build . --parallel "$CORES" --config "$cmake_build_type"
     fi
     
     if [ $? -ne 0 ]; then

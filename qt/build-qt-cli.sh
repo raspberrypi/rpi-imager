@@ -102,7 +102,7 @@ QT_CONFIGURE_ARGS=(
     -prefix "$PREFIX"
     -opensource
     -confirm-license
-    -${BUILD_TYPE,,}  # Convert to lowercase (release, debug, etc.)
+    -release  # Qt configure only accepts -release or -debug
     -nomake examples
     -nomake tests
     -no-compile-examples
