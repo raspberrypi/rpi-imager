@@ -36,6 +36,7 @@
 #include <QStorageInfo>
 #include <QTimeZone>
 #include <QNetworkInterface>
+#include <QCoreApplication>
 #ifndef CLI_ONLY_BUILD
 #include <QQmlContext>
 #include <QWindow>
@@ -107,11 +108,13 @@ ImageWriter::ImageWriter(QObject *parent)
     _cacheManager = new CacheManager(this);
 
     QString platform;
+#ifndef CLI_ONLY_BUILD
     if (qobject_cast<QGuiApplication*>(QCoreApplication::instance()) )
     {
         platform = QGuiApplication::platformName();
     }
     else
+#endif
     {
         platform = "cli";
     }
@@ -350,11 +353,15 @@ ImageWriter::~ImageWriter()
 
 void ImageWriter::setEngine(QQmlApplicationEngine *engine)
 {
+#ifndef CLI_ONLY_BUILD
     _engine = engine;
     if (_engine) {
         // Register icon provider for image://icons/<url>
         _engine->addImageProvider(QStringLiteral("icons"), new IconImageProvider());
     }
+#else
+    Q_UNUSED(engine);
+#endif
 }
 
 /* Set URL to download from */
@@ -2476,10 +2483,12 @@ void ImageWriter::replaceTranslator(QTranslator *trans)
     _trans = trans;
     QCoreApplication::installTranslator(_trans);
 
+#ifndef CLI_ONLY_BUILD
     if (_engine)
     {
         _engine->retranslate();
     }
+#endif
 
     // Regenerate the OS list, because it has some localised items
     emit osListPrepared();
