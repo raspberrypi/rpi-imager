@@ -24,9 +24,9 @@
 #include "config.h"
 #include "powersaveblocker.h"
 #include "drivelistmodel.h"
-#ifndef CLI_ONLY_BUILD
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
+#ifndef CLI_ONLY_BUILD
 #include "nativefiledialog.h"
 #endif
 #include "cachemanager.h"
@@ -39,8 +39,6 @@ class DownloadExtractThread;
 class QNetworkReply;
 class QTranslator;
 #ifndef CLI_ONLY_BUILD
-class HWListModel;
-class OSListModel;
 class NativeFileDialog;
 #endif
 

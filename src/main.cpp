@@ -5,28 +5,31 @@
 
 #include <QtCore/QFileInfo>
 #include <QtCore/QFile>
+#include <QDebug>
+#include <QTextStream>
+#include <QMessageLogContext>
+#include <QTranslator>
+#include <QLocale>
+#include <QSettings>
+#include <QCommandLineParser>
+#include "cli.h"
+
+#ifndef CLI_ONLY_BUILD
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QIcon>
-#include <QDebug>
-#include <QTextStream>
 #include "imagewriter.h"
 #include "networkaccessmanagerfactory.h"
-#include "cli.h"
 #include "platformquirks.h"
 #include "nativefiledialog.h"
-#include <QMessageLogContext>
 #include <QQuickWindow>
-#include <QTranslator>
-#include <QLocale>
 #include <QScreen>
-#include <QSettings>
 #include <QFont>
 #include <QFontDatabase>
-#include <QCommandLineParser>
 #include <QSessionManager>
 #include <QFileOpenEvent>
+#endif
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreServices/CoreServices.h>
