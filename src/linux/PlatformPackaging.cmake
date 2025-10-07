@@ -16,13 +16,13 @@ install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
 if(BUILD_CLI_ONLY)
     # CLI-only build: install CLI-specific desktop file (marked as NoDisplay)
-    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/com.raspberrypi.rpi-imager-cli.desktop" DESTINATION share/applications)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager-cli.desktop" DESTINATION share/applications)
     # Note: No icon or metainfo needed for CLI-only builds
 else()
     # GUI build: install full desktop integration
-    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/rpi-imager.png" DESTINATION share/icons/hicolor/128x128/apps)
-    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/com.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
-    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../debian/com.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/rpi-imager.png" DESTINATION share/icons/hicolor/128x128/apps)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
 
 
