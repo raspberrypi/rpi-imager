@@ -159,18 +159,6 @@ else()
     include(dependencies/curl.cmake)
 endif()
 
-# Adding headers explicity so they are displayed in Qt Creator
-set(HEADERS config.h imagewriter.h networkaccessmanagerfactory.h nan.h drivelistitem.h drivelistmodel.h drivelistmodelpollthread.h driveformatthread.h powersaveblocker.h cli.h
-    devicewrapper.h devicewrapperblockcacheentry.h devicewrapperpartition.h devicewrapperstructs.h devicewrapperfatpartition.h wlancredentials.h
-    downloadthread.h downloadextractthread.h localfileextractthread.h downloadstatstelemetry.h dependencies/mountutils/src/mountutils.hpp dependencies/sha256crypt/sha256crypt.h
-    hwlistmodel.h
-    oslistmodel.h
-    disk_formatter.h file_operations.h platformquirks.h
-    iconimageprovider.h
-    imageadvancedoptions.h
-    systemmemorymanager.h
-    urlfmt.h
-)
 
 # Add dependencies
 if (APPLE)
@@ -377,9 +365,9 @@ endif()
 # Create the application target before tools reference it
 if (WIN32)
     # Adding WIN32 prevents a console window being opened on Windows
-    add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS} ${DEPENDENCIES})
+    add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${DEPENDENCIES})
 else()
-    add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${DEPENDENCIES})
+    add_executable(${PROJECT_NAME} ${SOURCES} ${DEPENDENCIES})
 endif()
 
 # Create an rpi-imager_lupdate target
