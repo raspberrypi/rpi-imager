@@ -178,7 +178,13 @@ public:
     Q_INVOKABLE void openFileDialog(const QString &title, const QString &filter);
 
     /* Expose native file dialog availability to QML */
-    Q_INVOKABLE bool nativeFileDialogAvailable() { return NativeFileDialog::areNativeDialogsAvailable(); }
+    Q_INVOKABLE bool nativeFileDialogAvailable() {
+#ifndef CLI_ONLY_BUILD
+        return NativeFileDialog::areNativeDialogsAvailable();
+#else
+        return false;
+#endif
+    }
 
     /* Accept selection from QML fallback FileDialog */
     Q_INVOKABLE void acceptCustomImageFromQml(const QUrl &fileUrl) { onFileSelected(fileUrl.toLocalFile()); }
