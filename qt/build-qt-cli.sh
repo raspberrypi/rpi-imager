@@ -105,7 +105,6 @@ QT_CONFIGURE_ARGS=(
     -release  # Qt configure only accepts -release or -debug
     -nomake examples
     -nomake tests
-    -no-compile-examples
     
     # CLI-only: Disable ALL GUI-related modules
     -no-gui
