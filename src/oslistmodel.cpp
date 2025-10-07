@@ -11,7 +11,6 @@
 #include <QDebug>
 #include <QJsonValue>
 #include <QLocale>
-#include <QGuiApplication>
 #include <QRandomGenerator>
 #include <qjsonarray.h>
 #include <algorithm>
