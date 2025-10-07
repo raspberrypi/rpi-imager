@@ -638,7 +638,7 @@ bool DownloadExtractThread::_verify()
 
 #ifdef Q_OS_LINUX
     /* Make sure we are reading from the drive and not from cache */
-    posix_fadvise(_file.handle(), 0, 0, POSIX_FADV_DONTNEED);
+    posix_fadvise(_file->GetHandle(), 0, 0, POSIX_FADV_DONTNEED);
 #endif
 
     if (!_firstBlock)
