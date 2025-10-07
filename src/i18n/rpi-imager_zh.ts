@@ -180,7 +180,7 @@
     </message>
     <message>
         <source>✓ Hostname configured</source>
-        <translation>✓ 已配置域名</translation>
+        <translation>✓ 已配置主机名</translation>
     </message>
     <message>
         <source>✓ User account configured</source>
