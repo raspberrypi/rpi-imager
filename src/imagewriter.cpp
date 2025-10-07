@@ -6,7 +6,6 @@
 #include "downloadextractthread.h"
 #include "imagewriter.h"
 #include "embedded_config.h"
-#include "iconimageprovider.h"
 #include "drivelistitem.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/sha256crypt/sha256crypt.h"
@@ -16,8 +15,12 @@
 #include "downloadstatstelemetry.h"
 #include "wlancredentials.h"
 #include "device_info.h"
-#include "nativefiledialog.h"
 #include "platformquirks.h"
+#ifndef CLI_ONLY_BUILD
+#include "iconimageprovider.h"
+#include "nativefiledialog.h"
+#include <QQmlApplicationEngine>
+#endif
 #include <archive.h>
 #include <archive_entry.h>
 #include <lzma.h>
@@ -26,17 +29,18 @@
 #include <random>
 #include <QFile>
 #include <QFileInfo>
-#include <QQmlApplicationEngine>
 #include <QTextStream>
-#include <QQmlContext>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTimeZone>
+#include <QNetworkInterface>
+#ifndef CLI_ONLY_BUILD
+#include <QQmlContext>
 #include <QWindow>
 #include <QGuiApplication>
-#include <QNetworkInterface>
+#endif
 #include <QHostAddress>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -47,8 +51,10 @@
 #include <QPasswordDigestor>
 #include <QVersionNumber>
 #include <QCryptographicHash>
-#include <QDesktopServices>
 #include <QRandomGenerator>
+#ifndef CLI_ONLY_BUILD
+#include <QDesktopServices>
+#endif
 #include <stdlib.h>
 #include <QLocale>
 #include <QMetaType>
@@ -2801,8 +2807,12 @@ void ImageWriter::openUrl(const QUrl &url)
 
     // Fallback to Qt's method if platform command failed or platform is unsupported
     if (!success) {
+#ifndef CLI_ONLY_BUILD
         qDebug() << "Falling back to QDesktopServices::openUrl";
         QDesktopServices::openUrl(url);
+#else
+        qWarning() << "Unable to open URL in CLI mode:" << url.toString();
+#endif
     }
 }
 
