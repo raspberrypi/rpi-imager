@@ -7,7 +7,9 @@
 #define HWLISTMODEL_H
 
 #include <QAbstractItemModel>
+#ifndef CLI_ONLY_BUILD
 #include <QQmlEngine>
+#endif
 #include <QJsonArray>
 
 class ImageWriter;
@@ -15,8 +17,10 @@ class ImageWriter;
 class HWListModel : public QAbstractListModel
 {
     Q_OBJECT
+#ifndef CLI_ONLY_BUILD
     QML_ELEMENT
     QML_UNCREATABLE("Created by C++")
+#endif
     Q_PROPERTY(QString currentName READ currentName NOTIFY currentNameChanged)
     Q_PROPERTY(QString currentArchitecture READ currentArchitecture NOTIFY currentArchitectureChanged)
     Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY currentIndexChanged)

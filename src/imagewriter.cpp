@@ -282,10 +282,17 @@ QString ImageWriter::getNativeOpenFileName(const QString &title,
                                            const QString &initialDir,
                                            const QString &filter)
 {
+#ifndef CLI_ONLY_BUILD
     if (!NativeFileDialog::areNativeDialogsAvailable()) {
         return QString();
     }
     return NativeFileDialog::getOpenFileName(title, initialDir, filter);
+#else
+    Q_UNUSED(title);
+    Q_UNUSED(initialDir);
+    Q_UNUSED(filter);
+    return QString();
+#endif
 }
 
 QString ImageWriter::readFileContents(const QString &filePath)
@@ -1338,6 +1345,7 @@ void ImageWriter::onPreparationStatusUpdate(QString msg)
 
 void ImageWriter::openFileDialog(const QString &title, const QString &filter)
 {
+#ifndef CLI_ONLY_BUILD
     QSettings settings;
     QString path = settings.value("lastpath").toString();
     QFileInfo fi(path);
@@ -1355,6 +1363,10 @@ void ImageWriter::openFileDialog(const QString &title, const QString &filter)
     {
         onFileSelected(filename);
     }
+#else
+    Q_UNUSED(title);
+    Q_UNUSED(filter);
+#endif
 }
 
 void ImageWriter::onFileSelected(QString filename)

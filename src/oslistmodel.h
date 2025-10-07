@@ -7,7 +7,9 @@
 #define OSLISTMODEL_H
 
 #include <QAbstractItemModel>
+#ifndef CLI_ONLY_BUILD
 #include <QQmlEngine>
+#endif
 
 class ImageWriter;
 
@@ -21,8 +23,10 @@ class ImageWriter;
 class OSListModel : public QAbstractListModel
 {
     Q_OBJECT
+#ifndef CLI_ONLY_BUILD
     QML_ELEMENT
     QML_UNCREATABLE("Created by C++")
+#endif
 public:
 
     enum OSListRole {

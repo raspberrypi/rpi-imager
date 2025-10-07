@@ -17,16 +17,20 @@
 #include <QSettings>
 #include <QString>
 #include <QVariant>
+#ifndef CLI_ONLY_BUILD
 #include <QQmlEngine>
+#endif
 #include <QNetworkReply>
 #include "config.h"
 #include "powersaveblocker.h"
 #include "drivelistmodel.h"
+#ifndef CLI_ONLY_BUILD
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
+#include "nativefiledialog.h"
+#endif
 #include "cachemanager.h"
 #include "device_info.h"
-#include "nativefiledialog.h"
 #include "imageadvancedoptions.h"
 
 class QQmlApplicationEngine;
@@ -34,12 +38,19 @@ class DownloadThread;
 class DownloadExtractThread;
 class QNetworkReply;
 class QTranslator;
+#ifndef CLI_ONLY_BUILD
+class HWListModel;
+class OSListModel;
+class NativeFileDialog;
+#endif
 
 class ImageWriter : public QObject
 {
     Q_OBJECT
+#ifndef CLI_ONLY_BUILD
     QML_ELEMENT
     QML_UNCREATABLE("Created by C++")
+#endif
 public:
     enum class WriteState {
         Idle,

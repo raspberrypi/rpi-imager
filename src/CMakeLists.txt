@@ -209,7 +209,7 @@ if( IS_BIG_ENDIAN )
 endif( IS_BIG_ENDIAN )
 
 # Base sources common to all builds
-set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp"
+set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
@@ -217,9 +217,10 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp" "networkaccessmanagerfactory.cpp
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
-    set(SOURCES ${SOURCES_BASE})
+    # CLI builds need imagewriter but not the GUI components
+    set(SOURCES ${SOURCES_BASE} "imagewriter.cpp" "hwlistmodel.cpp" "oslistmodel.cpp")
 else()
-    set(SOURCES ${SOURCES_BASE} "qml.qrc" "nativefiledialog.cpp" "iconimageprovider.cpp")
+    set(SOURCES ${SOURCES_BASE} "networkaccessmanagerfactory.cpp" "qml.qrc" "nativefiledialog.cpp" "iconimageprovider.cpp")
 endif()
 
 if(BUILD_EMBEDDED)
@@ -231,18 +232,18 @@ endif()
 
 # Find Qt components - different requirements for CLI-only vs GUI builds
 if(BUILD_CLI_ONLY)
-    # CLI-only build: only need Core and optionally DBus
+    # CLI-only build: need Core and Network for downloading, optionally DBus
     if(UNIX AND NOT APPLE)
-        find_package(Qt6 6.9 COMPONENTS Core OPTIONAL_COMPONENTS LinguistTools DBus)
+        find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools DBus)
     else()
-        find_package(Qt6 6.9 COMPONENTS Core OPTIONAL_COMPONENTS LinguistTools)
+        find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
     endif()
 else()
-    # Regular GUI build: need Core, Quick, Svg - DBus only needed on Linux
+    # Regular GUI build: need Core, Quick, Svg, Network - DBus only needed on Linux
     if(UNIX AND NOT APPLE)
-        find_package(Qt6 6.9 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools DBus)
+        find_package(Qt6 6.9 COMPONENTS Core Quick Svg Network OPTIONAL_COMPONENTS LinguistTools DBus)
     else()
-        find_package(Qt6 6.9 COMPONENTS Core Quick Svg OPTIONAL_COMPONENTS LinguistTools)
+        find_package(Qt6 6.9 COMPONENTS Core Quick Svg Network OPTIONAL_COMPONENTS LinguistTools)
     endif()
 endif()
 if (Qt6_FOUND)
@@ -511,9 +512,9 @@ include_directories(${CURL_INCLUDE_DIR} ${LibArchive_INCLUDE_DIR} ${LIBLZMA_INCL
 
 # Link different Qt components based on build type
 if(BUILD_CLI_ONLY)
-    # CLI-only build: only link Core and essential libraries
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    # CLI-only build: link Core, Network and essential libraries
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
 else()
     # Regular GUI build: link all GUI components
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
 endif()

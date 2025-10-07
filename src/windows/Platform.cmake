@@ -32,12 +32,23 @@ set(PLATFORM_SOURCES
     windows/winfile.h
     windows/diskpart_util.cpp
     windows/diskpart_util.h
-    windows/winwlancredentials.h
-    windows/winwlancredentials.cpp
     windows/file_operations_windows.cpp
     windows/platformquirks_windows.cpp
-    windows/nativefiledialog_windows.cpp
 )
+
+# Only include GUI-specific components for non-CLI builds
+if(NOT BUILD_CLI_ONLY)
+    list(APPEND PLATFORM_SOURCES
+        windows/winwlancredentials.h
+        windows/winwlancredentials.cpp
+        windows/nativefiledialog_windows.cpp
+    )
+else()
+    # Use stub implementation for CLI builds
+    list(APPEND PLATFORM_SOURCES
+        linux/wlancredentials_stub.cpp
+    )
+endif()
 
 set(DEPENDENCIES
     windows/rpi-imager.rc
