@@ -132,7 +132,7 @@
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>似乎已启用受控文件夹访问。请将 rpi-imager.exe 添加到允许的应用列表，然后再重试。</translation>
     </message>
 </context>
 <context>
@@ -167,7 +167,7 @@
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
+        <translation>无法格式化设备：权限不足，且 udisks2 不可用</translation>
     </message>
 </context>
 <context>
@@ -270,15 +270,15 @@
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation type="unfinished"></translation>
+        <translation>读取镜像文件时出错</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation type="unfinished"></translation>
+        <translation>写入设备时出错</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
-        <translation type="unfinished"></translation>
+        <translation>未能读取完整的镜像文件</translation>
     </message>
 </context>
 <context>
@@ -428,19 +428,19 @@
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished"></translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Please fix validation errors in General and Services tabs</source>
-        <translation type="unfinished"></translation>
+        <translation>请在修复“常规”和“服务”选项卡中的验证错误</translation>
     </message>
     <message>
         <source>Please fix validation errors in General tab</source>
-        <translation type="unfinished"></translation>
+        <translation>请修复在“常规”选项卡中的验证错误</translation>
     </message>
     <message>
         <source>Please fix validation errors in Services tab</source>
-        <translation type="unfinished"></translation>
+        <translation>请修复在“服务”选项卡中的验证错误</translation>
     </message>
 </context>
 <context>
@@ -477,11 +477,13 @@
         <source>Paste your SSH public key here.
 Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>在此粘贴你的 SSH 公钥。
+支持的格式：ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com，以及 SSH 证书
+示例：ssh-rsa AAAAB3NzaC1yc2E... 用户@主机名</translation>
     </message>
     <message>
         <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH 密钥格式无效。SSH 密钥必须以 ssh-rsa、ssh-ed25519、ssh-dss、ecdsa-sha2-nistp、sk-ssh-ed25519@openssh.com、sk-ecdsa-sha2-nistp256@openssh.com 或 SSH 证书开头，后面跟密钥数据和可选的注释。</translation>
     </message>
 </context>
 <context>
