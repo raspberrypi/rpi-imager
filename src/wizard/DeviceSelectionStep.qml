@@ -21,6 +21,7 @@ WizardStepBase {
     
     title: qsTr("Select your Raspberry Pi device")
     showNextButton: true
+    nextButtonEnabled: false  // Disabled until device is selected or auto-selected
     
     property alias hwlist: hwlist
     property bool modelLoaded: false
