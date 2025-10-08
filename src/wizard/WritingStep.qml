@@ -20,7 +20,7 @@ WizardStepBase {
     title: qsTr("Write image")
     subtitle: qsTr("Review your choices and write the image to the storage device")
     nextButtonText: root.isWriting ? qsTr("Cancel") : (root.isComplete ? qsTr("Continue") : qsTr("Write"))
-    nextButtonEnabled: true
+    nextButtonEnabled: root.isWriting || root.isComplete || imageWriter.readyToWrite()
     showBackButton: true
 
     property bool isWriting: false
