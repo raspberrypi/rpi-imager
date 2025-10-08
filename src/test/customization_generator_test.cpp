@@ -370,11 +370,18 @@ TEST_CASE("CustomisationGenerator handles backslashes in WiFi SSID", "[customiza
 TEST_CASE("CustomisationGenerator handles non-ASCII UTF-8 WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
     settings["wifiSSID"] = "Café ☕ 日本語";
-    settings["wifiPasswordCrypt"] = "fakehash";
+    settings["wifiPasswordCrypt"] = "fakehash";  // Pre-computed PSK (passwords are ASCII-only per WPA2 spec)
     settings["wifiCountry"] = "FR";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
+    
+    // NOTE: SSIDs support full UTF-8 per WiFi spec. Passwords are ASCII-only (8-63 chars) or
+    // pre-computed 64-char hex PSK per WPA2/WPA3 spec. The UI enforces this correctly.
+    // This test validates the generator handles UTF-8 SSIDs robustly for:
+    // - Edge cases that bypass UI validation
+    // - Future WPA standards that may allow UTF-8 passphrases
+    // - Programmatic/CLI usage
     
     // UTF-8 characters should pass through correctly in both paths
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("wpa_supplicant.conf"));
