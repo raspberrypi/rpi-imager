@@ -122,7 +122,11 @@ if (APPLE)
 endif(APPLE)
 
 # Bundled code will occasionally use identical options - eg, BUILD_TESTING.
-set(BUILD_TESTING OFF)
+# Save our BUILD_TESTING value before forcing it OFF for dependencies
+if(DEFINED BUILD_TESTING)
+    set(_IMAGER_BUILD_TESTING ${BUILD_TESTING})
+endif()
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(BUILD_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
 
@@ -201,7 +205,8 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
-    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp")
+    "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
+    "customization_generator.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
@@ -510,4 +515,17 @@ if(BUILD_CLI_ONLY)
 else()
     # Regular GUI build: link all GUI components
     target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+endif()
+
+# Testing
+# Restore our testing option after dependencies are configured
+if(DEFINED _IMAGER_BUILD_TESTING)
+    set(BUILD_TESTING ${_IMAGER_BUILD_TESTING} CACHE BOOL "Build the testing tree" FORCE)
+else()
+    option(BUILD_TESTING "Build the testing tree" OFF)
+endif()
+
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(test)
 endif()
