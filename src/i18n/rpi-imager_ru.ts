@@ -5,230 +5,230 @@
     <name>AppOptionsDialog</name>
     <message>
         <source>App Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Параметры приложения</translation>
     </message>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Воспроизводить звук после завершения</translation>
+        <translation>Воспроизводить звук после завершения</translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Извлекать носитель после завершения</translation>
+        <translation>Извлекать носитель после завершения</translation>
     </message>
     <message>
         <source>Enable anonymous statistics (telemetry)</source>
-        <translation type="unfinished"></translation>
+        <translation>Включить анонимную статистику (телеметрию)</translation>
     </message>
     <message>
         <source>What is this?</source>
-        <translation type="unfinished"></translation>
+        <translation>Что это?</translation>
     </message>
     <message>
         <source>Disable warnings</source>
-        <translation type="unfinished"></translation>
+        <translation>Отключить предупреждения</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Отмена</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished"></translation>
+        <translation>Сохранить</translation>
     </message>
     <message>
         <source>Disable warnings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Отключить предупреждения?</translation>
     </message>
     <message>
         <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
-        <translation type="unfinished"></translation>
+        <translation>Если отключить предупреждения, Raspberry Pi Imager &lt;b&gt;не будет выводить запросы на подтверждение перед записью образов&lt;/b&gt;. Вам всё равно потребуется &lt;b&gt;ввести точное имя&lt;/b&gt; при выборе системного диска.</translation>
     </message>
     <message>
         <source>Select custom Repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите пользовательский репозиторий</translation>
     </message>
     <message>
         <source>Browse</source>
-        <translation type="unfinished"></translation>
+        <translation>Просматреть</translation>
     </message>
     <message>
         <source>Select Repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Выбрать репозиторий</translation>
     </message>
     <message>
         <source>Select custom repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите пользовательский репозиторий</translation>
     </message>
 </context>
 <context>
     <name>CommonStrings</name>
     <message>
         <source>Only proceed if you fully understand the risks.</source>
-        <translation type="unfinished"></translation>
+        <translation>Действуйте только в том случае, если вы полностью осознаете риски.</translation>
     </message>
     <message>
         <source>Selecting the wrong drive will permanently erase data and can render your computer inoperable.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выбор неправильного диска приведет к безвозвратному удалению данных и может сделать компьютер неработоспособным.</translation>
     </message>
     <message>
         <source>System drives typically contain files essential to the operation of your computer, and may include your personal files (photos, videos, documents).</source>
-        <translation type="unfinished"></translation>
+        <translation>Системные диски обычно содержат файлы, необходимые для работы вашего компьютера, и могут включать ваши личные файлы (фотографии, видео, документы).</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>Все файлы (*)</translation>
     </message>
     <message>
         <source>Image files (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Файлы изображений (%1)</translation>
     </message>
     <message>
         <source>Imager Repository Files (*.json)</source>
-        <translation type="unfinished"></translation>
+        <translation>Файлы репозитория Imager (*.json)</translation>
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
-        <translation type="unfinished"></translation>
+        <translation>Файлы открытых ключей (*.pub)</translation>
     </message>
 </context>
 <context>
     <name>ConfirmSystemDriveDialog</name>
     <message>
         <source>Size: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Размер: %1</translation>
     </message>
     <message>
         <source>Mounted as: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Смонтировано как: %1</translation>
     </message>
     <message>
         <source>Not mounted</source>
-        <translation type="unfinished"></translation>
+        <translation>Не смонтировано</translation>
     </message>
     <message>
         <source>To continue, type the exact drive name below:</source>
-        <translation type="unfinished"></translation>
+        <translation>Чтобы продолжить, введите точное имя диска ниже:</translation>
     </message>
     <message>
         <source>Type drive name exactly as shown above</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите имя диска точно так, как указано выше</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ОТМЕНА</translation>
+        <translation>ОТМЕНА</translation>
     </message>
     <message>
         <source>CONTINUE</source>
-        <translation type="unfinished">ПРОДОЛЖИТЬ</translation>
+        <translation>ПРОДОЛЖИТЬ</translation>
     </message>
 </context>
 <context>
     <name>ConfirmUnfilterDialog</name>
     <message>
         <source>Remove system drive filter?</source>
-        <translation type="unfinished"></translation>
+        <translation>Удалить фильтр системного диска?</translation>
     </message>
     <message>
         <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
-        <translation type="unfinished"></translation>
+        <translation>При отключении фильтрации системных дисков &lt;b&gt;системные диски будут отображаться&lt;/b&gt; в списке.</translation>
     </message>
     <message>
         <source>KEEP FILTER ON</source>
-        <translation type="unfinished"></translation>
+        <translation>ВКЛЮЧИТЬ ФИЛЬТР</translation>
     </message>
     <message>
         <source>SHOW SYSTEM DRIVES</source>
-        <translation type="unfinished"></translation>
+        <translation>ПОКАЗАТЬ СИСТЕМНЫЕ ДИСКИ</translation>
     </message>
 </context>
 <context>
     <name>DeviceSelectionStep</name>
     <message>
         <source>Select your Raspberry Pi device</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите ваше устройство Raspberry Pi</translation>
     </message>
 </context>
 <context>
     <name>DoneStep</name>
     <message>
         <source>Your choices:</source>
-        <translation type="unfinished"></translation>
+        <translation>Ваш выбор:</translation>
     </message>
     <message>
         <source>Device:</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство:</translation>
     </message>
     <message>
         <source>No device selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство не выбрано</translation>
     </message>
     <message>
         <source>Operating System:</source>
-        <translation type="unfinished"></translation>
+        <translation>Операционная система:</translation>
     </message>
     <message>
         <source>No image selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Изображение не выбрано</translation>
     </message>
     <message>
         <source>Storage Device:</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство хранения:</translation>
     </message>
     <message>
         <source>No storage device selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство хранения не выбрано</translation>
     </message>
     <message>
         <source>✓ Hostname configured</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Имя хоста настроено</translation>
     </message>
     <message>
         <source>✓ User account configured</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Учетная запись пользователя настроена</translation>
     </message>
     <message>
         <source>✓ SSH enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ SSH включен</translation>
     </message>
     <message>
         <source>✓ Raspberry Pi Connect enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Raspberry Pi Connect включен</translation>
     </message>
     <message>
         <source>✓ Locale configured</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Региональные настройки</translation>
     </message>
     <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство хранения данных было автоматически извлечено. Теперь вы можете безопасно извлечь его.</translation>
     </message>
     <message>
         <source>Please eject the storage device before removing it from your computer.</source>
-        <translation type="unfinished"></translation>
+        <translation>Перед извлечением устройства хранения данных из компьютера извлеките его.</translation>
     </message>
     <message>
         <source>Write Another</source>
-        <translation type="unfinished"></translation>
+        <translation>Записать еще</translation>
     </message>
     <message>
         <source>Finish</source>
-        <translation type="unfinished"></translation>
+        <translation>Закончить</translation>
     </message>
     <message>
         <source>Write complete!</source>
-        <translation type="unfinished"></translation>
+        <translation>Запись завершена!</translation>
     </message>
     <message>
         <source>Customisations applied:</source>
-        <translation type="unfinished"></translation>
+        <translation>Примененные настройки:</translation>
     </message>
     <message>
         <source>✓ Wi‑Fi configured</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Wi-Fi настроен</translation>
     </message>
     <message>
         <source>Reboot</source>
-        <translation type="unfinished"></translation>
+        <translation>Перезагрузить</translation>
     </message>
 </context>
 <context>
@@ -350,59 +350,59 @@
     </message>
     <message>
         <source>Error: Multiple partitions found on disk. Please ensure the disk is completely clean.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: На диске обнаружено несколько разделов. Убедитесь, что диск полностью чист.</translation>
     </message>
     <message>
         <source>The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Возможно, диск защищён от записи или используется другим приложением. Убедитесь, что диск не смонтирован, и повторите попытку.</translation>
     </message>
     <message>
         <source>Disk is full. Please use a larger storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Диск заполнен. Используйте устройство хранения большего объёма.</translation>
     </message>
     <message>
         <source>The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only.</source>
-        <translation type="unfinished"></translation>
+        <translation>Диск защищён от записи. Проверьте, оснащён ли диск физическим переключателем защиты от записи или доступен только для чтения.</translation>
     </message>
     <message>
         <source>Media error detected. The storage device may be damaged or counterfeit. Please try a different device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Обнаружена ошибка носителя. Возможно, накопитель повреждён или поддельный. Попробуйте использовать другое устройство.</translation>
     </message>
     <message>
         <source>Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Неверный параметр диска. Устройство хранения данных может быть некорректно распознано. Попробуйте переподключить устройство.</translation>
     </message>
     <message>
         <source>I/O device error. The storage device may have been disconnected or is malfunctioning.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка устройства ввода-вывода. Возможно, устройство хранения данных отключено или неисправно.</translation>
     </message>
     <message>
         <source>writing image</source>
-        <translation type="unfinished"></translation>
+        <translation>запись изображения</translation>
     </message>
     <message>
         <source>Error opening disk device &apos;%1&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка открытия дискового устройства &apos;%1&apos;</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos; after authorization.</source>
-        <translation type="unfinished"></translation>
+        <translation>Невозможно открыть устройство хранения данных «%1» после авторизации.</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos; with udisks2 authorization.</source>
-        <translation type="unfinished"></translation>
+        <translation>Невозможно открыть устройство хранения данных «%1» с авторизацией udisks2.</translation>
     </message>
     <message>
         <source>Error getting device size</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка получения размера устройства</translation>
     </message>
     <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка записи на устройство хранения данных. Проверьте, доступно ли устройство для записи, достаточно ли на нём места и не защищено ли оно от записи.</translation>
     </message>
     <message>
         <source>Error writing first block to device</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка записи первого блока на устройство</translation>
     </message>
 </context>
 <context>
@@ -441,15 +441,15 @@
     </message>
     <message>
         <source>Preparing disk for formatting...</source>
-        <translation type="unfinished"></translation>
+        <translation>Подготовка диска к форматированию...</translation>
     </message>
     <message>
         <source>Cleaning disk...</source>
-        <translation type="unfinished"></translation>
+        <translation>Очистка диска...</translation>
     </message>
     <message>
         <source>Writing filesystem...</source>
-        <translation type="unfinished"></translation>
+        <translation>Запись файловой системы...</translation>
     </message>
 </context>
 <context>
@@ -463,129 +463,129 @@
     <name>HostnameCustomizationStep</name>
     <message>
         <source>raspberrypi</source>
-        <translation type="unfinished"></translation>
+        <translation>raspberrypi</translation>
     </message>
     <message>
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
-        <translation type="unfinished"></translation>
+        <translation>Имя хоста - это уникальное имя, идентифицирующее ваше устройство Raspberry Pi в сети. Оно должно содержать только буквы, цифры и дефисы.</translation>
     </message>
     <message>
         <source>Customisation: Choose hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка: выберите имя хоста</translation>
     </message>
 </context>
 <context>
     <name>IfAndFeaturesCustomizationStep</name>
     <message>
         <source>Customization: Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка: интерфейсы и функции</translation>
     </message>
     <message>
         <source>Enable hardware interfaces and connectivity options.</source>
-        <translation type="unfinished"></translation>
+        <translation>Включите аппаратные интерфейсы и возможности подключения.</translation>
     </message>
     <message>
         <source>Interfaces</source>
-        <translation type="unfinished"></translation>
+        <translation>Интерфейсы</translation>
     </message>
     <message>
         <source>Enable I²C</source>
-        <translation type="unfinished"></translation>
+        <translation>Включить I²C</translation>
     </message>
     <message>
         <source>Enable SPI</source>
-        <translation type="unfinished"></translation>
+        <translation>Включить SPI</translation>
     </message>
     <message>
         <source>Enable Serial:</source>
-        <translation type="unfinished"></translation>
+        <translation>Включить последовательный порт:</translation>
     </message>
     <message>
         <source>Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Функции</translation>
     </message>
     <message>
         <source>Enable USB Gadget Mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Включить режим USB-гаджета</translation>
     </message>
     <message>
         <source>Learn more about USB Gadget Mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Узнайте больше о режиме USB-гаджета</translation>
     </message>
     <message>
         <source>Console</source>
-        <translation type="unfinished"></translation>
+        <translation>Консоль</translation>
     </message>
     <message>
         <source>USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.</source>
-        <translation type="unfinished"></translation>
+        <translation>Режим USB-гаджета может изменить поведение вашего устройства и повлиять на подключение и взаимодействие с хостом.</translation>
     </message>
     <message>
         <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
-        <translation type="unfinished"></translation>
+        <translation>Прежде чем продолжить, ознакомьтесь с &lt;a href=&apos;%1&apos;&gt;документацией&lt;/a&gt;.</translation>
     </message>
     <message>
         <source>Only continue if you are sure you know what you are doing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Продолжайте только в том случае, если вы уверены, что знаете, что делаете.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Отмена</translation>
     </message>
     <message>
         <source>I understand, continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Я понимаю, продолжить</translation>
     </message>
 </context>
 <context>
     <name>ImFileDialog</name>
     <message>
         <source>Select File</source>
-        <translation type="unfinished"></translation>
+        <translation>Выбрать файл</translation>
     </message>
     <message>
         <source>Home</source>
-        <translation type="unfinished"></translation>
+        <translation>Домой</translation>
     </message>
     <message>
         <source>Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>Документы</translation>
     </message>
     <message>
         <source>Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Загрузки</translation>
     </message>
     <message>
         <source>Pictures</source>
-        <translation type="unfinished"></translation>
+        <translation>Изображения</translation>
     </message>
     <message>
         <source>Music</source>
-        <translation type="unfinished"></translation>
+        <translation>Музыка</translation>
     </message>
     <message>
         <source>Movies</source>
-        <translation type="unfinished"></translation>
+        <translation>Фильмы</translation>
     </message>
     <message>
         <source>Root</source>
-        <translation type="unfinished"></translation>
+        <translation>Корень</translation>
     </message>
     <message>
         <source>Enter path or URL…</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите путь или URL…</translation>
     </message>
     <message>
         <source>Folders</source>
-        <translation type="unfinished"></translation>
+        <translation>Папки</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Отмена</translation>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished"></translation>
+        <translation>Открыть</translation>
     </message>
 </context>
 <context>
@@ -608,113 +608,113 @@
     </message>
     <message>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1.</source>
-        <translation type="unfinished"></translation>
+        <translation>Емкость хранилища недостаточно велика.&lt;br&gt;Должна быть не менее %1.</translation>
     </message>
     <message>
         <source>B</source>
-        <translation type="unfinished"></translation>
+        <translation>B</translation>
     </message>
     <message>
         <source>TB</source>
-        <translation type="unfinished"></translation>
+        <translation>TB</translation>
     </message>
     <message>
         <source>GB</source>
-        <translation type="unfinished">ГБ</translation>
+        <translation>GB</translation>
     </message>
     <message>
         <source>MB</source>
-        <translation type="unfinished"></translation>
+        <translation>MB</translation>
     </message>
     <message>
         <source>KB</source>
-        <translation type="unfinished"></translation>
+        <translation>KB</translation>
     </message>
     <message>
         <source>%1 %2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 %2</translation>
     </message>
     <message>
         <source>%1.%2 %3</source>
-        <translation type="unfinished"></translation>
+        <translation>%1.%2 %3</translation>
     </message>
     <message>
         <source>Unknown precondition failure.</source>
-        <translation type="unfinished"></translation>
+        <translation>Неизвестная предварительная ошибка.</translation>
     </message>
     <message>
         <source>Cannot start write. %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Невозможно начать запись. %1</translation>
     </message>
     <message>
         <source>Source file not found: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Исходный файл не найден: %1</translation>
     </message>
     <message>
         <source>Source is not a regular file: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Источник не является обычным файлом: %1</translation>
     </message>
     <message>
         <source>Source file is not readable: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Исходный файл не может быть прочитан: %1</translation>
     </message>
     <message>
         <source>image</source>
-        <translation type="unfinished"></translation>
+        <translation>образ</translation>
     </message>
     <message>
         <source>storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>устройство хранения данных</translation>
     </message>
     <message>
         <source>valid storage device (device no longer available)</source>
-        <translation type="unfinished"></translation>
+        <translation>допустимое устройство хранения данных (устройство больше не доступно)</translation>
     </message>
     <message>
         <source>No %1 selected.</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 не выбран.</translation>
     </message>
     <message>
         <source> or </source>
-        <translation type="unfinished"></translation>
+        <translation> или </translation>
     </message>
 </context>
 <context>
     <name>KeychainPermissionDialog</name>
     <message>
         <source>Keychain Access</source>
-        <translation type="unfinished"></translation>
+        <translation>Доступ к связке ключей</translation>
     </message>
     <message>
         <source>Would you like to prefill the Wi‑Fi password from the system keychain?</source>
-        <translation type="unfinished"></translation>
+        <translation>Хотите ли вы предварительно ввести пароль Wi-Fi из системной связки ключей?</translation>
     </message>
     <message>
         <source>This will require administrator authentication on macOS.</source>
-        <translation type="unfinished"></translation>
+        <translation>Для этого потребуется аутентификация администратора в macOS.</translation>
     </message>
     <message>
         <source>No</source>
-        <translation type="unfinished"></translation>
+        <translation>Нет</translation>
     </message>
     <message>
         <source>Yes</source>
-        <translation type="unfinished"></translation>
+        <translation>Да</translation>
     </message>
 </context>
 <context>
     <name>LanguageSelectionStep</name>
     <message>
         <source>Welcome</source>
-        <translation type="unfinished"></translation>
+        <translation>Добро пожаловать</translation>
     </message>
     <message>
         <source>Language:</source>
-        <translation type="unfinished"></translation>
+        <translation>Язык:</translation>
     </message>
     <message>
         <source>Choose your language for Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите язык для Raspberry Pi Imager</translation>
     </message>
 </context>
 <context>
@@ -748,19 +748,19 @@
     <name>LocaleCustomizationStep</name>
     <message>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">Раскладка клавиатуры:</translation>
+        <translation>Раскладка клавиатуры:</translation>
     </message>
     <message>
         <source>Customisation: Choose locale</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка: выберите локаль</translation>
     </message>
     <message>
         <source>Configure the time zone and keyboard layout for your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройте часовой пояс и раскладку клавиатуры для вашего Raspberry Pi</translation>
     </message>
     <message>
         <source>Time zone:</source>
-        <translation type="unfinished"></translation>
+        <translation>Часовой пояс:</translation>
     </message>
 </context>
 <context>
@@ -774,478 +774,478 @@
     <name>OSSelectionStep</name>
     <message>
         <source>Local - %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Местный - %1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">Кэшировано на вашем компьютере</translation>
+        <translation>Кэшировано на вашем компьютере</translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">Локальный файл</translation>
+        <translation>Локальный файл</translation>
     </message>
     <message>
         <source>Online - %1 download</source>
-        <translation type="unfinished"></translation>
+        <translation>Онлайн - %1 загрузка</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Назад</translation>
+        <translation>Назад</translation>
     </message>
     <message>
         <source>Go back to main menu</source>
-        <translation type="unfinished">Вернуться в главное меню</translation>
+        <translation>Вернуться в главное меню</translation>
     </message>
     <message>
         <source>Select image</source>
-        <translation type="unfinished">Выбор образа</translation>
+        <translation>Выбор образа</translation>
     </message>
     <message>
         <source>Choose operating system</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите операционную систему</translation>
     </message>
     <message>
         <source>Select an operating system to install on your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите операционную систему для установки на Raspberry Pi</translation>
     </message>
 </context>
 <context>
     <name>PiConnectCustomizationStep</name>
     <message>
         <source>Customisation: Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка: Raspberry Pi Connect</translation>
     </message>
     <message>
         <source>Enable Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Включить Raspberry Pi Connect</translation>
     </message>
     <message>
         <source>What is Raspberry Pi Connect?</source>
-        <translation type="unfinished"></translation>
+        <translation>Что такое Raspberry Pi Connect?</translation>
     </message>
     <message>
         <source>Open Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Открыть Raspberry Pi Connect</translation>
     </message>
     <message>
         <source>Status:</source>
-        <translation type="unfinished"></translation>
+        <translation>Статус:</translation>
     </message>
     <message>
         <source>Token received from browser</source>
-        <translation type="unfinished"></translation>
+        <translation>Токен получен от браузера</translation>
     </message>
     <message>
         <source>Waiting for token</source>
-        <translation type="unfinished"></translation>
+        <translation>Ожидание токена</translation>
     </message>
     <message>
         <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
-        <translation type="unfinished"></translation>
+        <translation>Войдите, чтобы получить токен и включить Raspberry PiConnect.</translation>
     </message>
 </context>
 <context>
     <name>RemoteAccessStep</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">Включить SSH</translation>
+        <translation>Включить SSH</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">Использовать аутентификацию по паролю</translation>
+        <translation>Использовать аутентификацию по паролю</translation>
     </message>
     <message>
         <source>Use public key authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Использовать аутентификацию с открытым ключом</translation>
     </message>
     <message>
         <source>Browse</source>
-        <translation type="unfinished"></translation>
+        <translation>Обзор</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите открытый ключ SSH</translation>
     </message>
     <message>
         <source>Customisation: SSH authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка: аутентификация SSH</translation>
     </message>
     <message>
         <source>Learn about SSH</source>
-        <translation type="unfinished"></translation>
+        <translation>Узнайте о SSH</translation>
     </message>
     <message>
         <source>Configure SSH access</source>
-        <translation type="unfinished"></translation>
+        <translation>Настроить SSH-доступ</translation>
     </message>
     <message>
         <source>Authentication mechanism:</source>
-        <translation type="unfinished"></translation>
+        <translation>Механизм аутентификации:</translation>
     </message>
     <message>
         <source>Enter public key or click BROWSE</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите открытый ключ или нажмите ОБЗОР</translation>
     </message>
     <message>
         <source>Failed to read SSH key file</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось прочитать файл ключа SSH</translation>
     </message>
 </context>
 <context>
     <name>StorageSelectionStep</name>
     <message>
         <source>No storage devices found</source>
-        <translation type="unfinished">Устройства хранения данных не найдены</translation>
+        <translation>Устройства хранения данных не найдены</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
-        <translation type="unfinished">Подключено как %1</translation>
+        <translation>Подключено как %1</translation>
     </message>
     <message>
         <source>Read-only</source>
-        <translation type="unfinished"></translation>
+        <translation>Только для чтения</translation>
     </message>
     <message>
         <source>Select your storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите устройство хранения данных</translation>
     </message>
     <message>
         <source>Exclude system drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Исключить системные диски</translation>
     </message>
 </context>
 <context>
     <name>UpdateAvailableDialog</name>
     <message>
         <source>Update available</source>
-        <translation type="unfinished">Доступно обновление</translation>
+        <translation>Доступно обновление</translation>
     </message>
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Доступна новая версия Imager. Хотите посетить сайт и скачать её?</translation>
     </message>
     <message>
         <source>No</source>
-        <translation type="unfinished"></translation>
+        <translation>Нет</translation>
     </message>
     <message>
         <source>Yes</source>
-        <translation type="unfinished"></translation>
+        <translation>Да</translation>
     </message>
 </context>
 <context>
     <name>UserCustomizationStep</name>
     <message>
         <source>Username:</source>
-        <translation type="unfinished">Имя пользователя:</translation>
+        <translation>Имя пользователя:</translation>
     </message>
     <message>
         <source>pi</source>
-        <translation type="unfinished"></translation>
+        <translation>pi</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Пароль:</translation>
+        <translation>Пароль:</translation>
     </message>
     <message>
         <source>Enter password</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите пароль</translation>
     </message>
     <message>
         <source>Confirm password:</source>
-        <translation type="unfinished"></translation>
+        <translation>Подтвердите пароль:</translation>
     </message>
     <message>
         <source>Re-enter password</source>
-        <translation type="unfinished"></translation>
+        <translation>Повторно введите пароль</translation>
     </message>
     <message>
         <source>The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
-        <translation type="unfinished"></translation>
+        <translation>Имя пользователя должно быть строчным и содержать только буквы, цифры, подчеркивания и дефисы.</translation>
     </message>
     <message>
         <source>Customisation: Choose username</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка: выберите имя пользователя</translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
-        <translation type="unfinished"></translation>
+        <translation>Сохранено (скрыто) — оставьте поле пустым, чтобы сохранить</translation>
     </message>
     <message>
         <source>Re-enter to change password</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите еще раз, чтобы изменить пароль</translation>
     </message>
     <message>
         <source>Create a user account for your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Создайте учетную запись пользователя для вашего Raspberry Pi</translation>
     </message>
 </context>
 <context>
     <name>WifiCustomizationStep</name>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <source>Network name</source>
-        <translation type="unfinished"></translation>
+        <translation>Имя сети</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Пароль:</translation>
+        <translation>Пароль:</translation>
     </message>
     <message>
         <source>Network password</source>
-        <translation type="unfinished"></translation>
+        <translation>Сетевой пароль</translation>
     </message>
     <message>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">Страна Wi-Fi:</translation>
+        <translation>Страна Wi-Fi:</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation type="unfinished">Скрытый идентификатор SSID</translation>
+        <translation>Скрытый идентификатор SSID</translation>
     </message>
     <message>
         <source>Customisation: Choose Wi‑Fi</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка: выберите Wi-Fi</translation>
     </message>
     <message>
         <source>Configure wireless LAN settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройте параметры беспроводной локальной сети</translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to clear</source>
-        <translation type="unfinished"></translation>
+        <translation>Сохранено (скрыто) — оставьте поле пустым, чтобы очистить</translation>
     </message>
 </context>
 <context>
     <name>WizardContainer</name>
     <message>
         <source>Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство</translation>
     </message>
     <message>
         <source>OS</source>
-        <translation type="unfinished"></translation>
+        <translation>ОС</translation>
     </message>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">Запоминающее устройство</translation>
+        <translation>Запоминающее устройство</translation>
     </message>
     <message>
         <source>Writing</source>
-        <translation type="unfinished"></translation>
+        <translation>Запись</translation>
     </message>
     <message>
         <source>Done</source>
-        <translation type="unfinished"></translation>
+        <translation>Готово</translation>
     </message>
     <message>
         <source>Finish</source>
-        <translation type="unfinished"></translation>
+        <translation>Закончить</translation>
     </message>
     <message>
         <source>Customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Настройка</translation>
     </message>
     <message>
         <source>Hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Имя хоста</translation>
     </message>
     <message>
         <source>Locale</source>
-        <translation type="unfinished"></translation>
+        <translation>Локаль</translation>
     </message>
     <message>
         <source>User</source>
-        <translation type="unfinished"></translation>
+        <translation>Пользователь</translation>
     </message>
     <message>
         <source>Wi‑Fi</source>
-        <translation type="unfinished"></translation>
+        <translation>Wi‑Fi</translation>
     </message>
     <message>
         <source>Remote Access</source>
-        <translation type="unfinished"></translation>
+        <translation>Удаленный доступ</translation>
     </message>
     <message>
         <source>Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Connect</translation>
     </message>
     <message>
         <source>App Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Параметры приложения</translation>
     </message>
     <message>
         <source>Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Интерфейсы и функции</translation>
     </message>
     <message>
         <source>Setup steps</source>
-        <translation type="unfinished"></translation>
+        <translation>Шаги настройки</translation>
     </message>
 </context>
 <context>
     <name>WizardStepBase</name>
     <message>
         <source>Next</source>
-        <translation type="unfinished">Далее</translation>
+        <translation>Далее</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Назад</translation>
+        <translation>Назад</translation>
     </message>
     <message>
         <source>Skip customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Пропустить настройку</translation>
     </message>
 </context>
 <context>
     <name>WritingStep</name>
     <message>
         <source>Review your choices and write the image to the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Проверьте свой выбор и запишите изображение на устройство хранения</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Отмена</translation>
     </message>
     <message>
         <source>Continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Продолжить</translation>
     </message>
     <message>
         <source>Write</source>
-        <translation type="unfinished"></translation>
+        <translation>Запись</translation>
     </message>
     <message>
         <source>Summary</source>
-        <translation type="unfinished"></translation>
+        <translation>Краткое содержание</translation>
     </message>
     <message>
         <source>Device:</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство:</translation>
     </message>
     <message>
         <source>No device selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство не выбрано</translation>
     </message>
     <message>
         <source>No image selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Изображение не выбрано</translation>
     </message>
     <message>
         <source>Storage:</source>
-        <translation type="unfinished"></translation>
+        <translation>Хранилище:</translation>
     </message>
     <message>
         <source>No storage selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Хранилище не выбрано</translation>
     </message>
     <message>
         <source>• Hostname configured</source>
-        <translation type="unfinished"></translation>
+        <translation>• Имя хоста настроено</translation>
     </message>
     <message>
         <source>• User account configured</source>
-        <translation type="unfinished"></translation>
+        <translation>• Настроена учетная запись пользователя</translation>
     </message>
     <message>
         <source>• SSH enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>• SSH включен</translation>
     </message>
     <message>
         <source>• Locale configured</source>
-        <translation type="unfinished"></translation>
+        <translation>• Настроена локаль</translation>
     </message>
     <message>
         <source>Starting write process...</source>
-        <translation type="unfinished"></translation>
+        <translation>Начинаем процесс записи...</translation>
     </message>
     <message>
         <source>Write cancelled</source>
-        <translation type="unfinished"></translation>
+        <translation>Запись отменена</translation>
     </message>
     <message>
         <source>You are about to ERASE all data on: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Вы собираетесь УДАЛИТЬ все данные на: %1</translation>
     </message>
     <message>
         <source>the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>устройство хранения данных</translation>
     </message>
     <message>
         <source>This action is PERMANENT and CANNOT be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Это действие является ПОСТОЯННЫМ и НЕ МОЖЕТ быть отменено.</translation>
     </message>
     <message>
         <source>I understand, erase and write</source>
-        <translation type="unfinished"></translation>
+        <translation>Я понимаю, стереть и записать</translation>
     </message>
     <message>
         <source>Please wait...</source>
-        <translation type="unfinished"></translation>
+        <translation>Пожалуйста, подождите...</translation>
     </message>
     <message>
         <source>Writing... %1%</source>
-        <translation type="unfinished">Запись... %1%</translation>
+        <translation>Запись... %1%</translation>
     </message>
     <message>
         <source>Verifying... %1%</source>
-        <translation type="unfinished">Проверка... %1%</translation>
+        <translation>Проверка... %1%</translation>
     </message>
     <message>
         <source>Write completed successfully!</source>
-        <translation type="unfinished"></translation>
+        <translation>Запись успешно завершена!</translation>
     </message>
     <message>
         <source>Write failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка записи: %1</translation>
     </message>
     <message>
         <source>Customisations to apply:</source>
-        <translation type="unfinished"></translation>
+        <translation>Применяемые настройки:</translation>
     </message>
     <message>
         <source>• Wi‑Fi configured</source>
-        <translation type="unfinished"></translation>
+        <translation>• Wi-Fi настроен</translation>
     </message>
     <message>
         <source>Finalising...</source>
-        <translation type="unfinished"></translation>
+        <translation>Завершение...</translation>
     </message>
     <message>
         <source>Write image</source>
-        <translation type="unfinished"></translation>
+        <translation>Запись образа</translation>
     </message>
     <message>
         <source>Operating system:</source>
-        <translation type="unfinished"></translation>
+        <translation>Операционная система:</translation>
     </message>
     <message>
         <source>Ready to write your customised image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
+        <translation>Готово к записи вашего персонализированного изображения на накопитель. Все существующие данные будут удалены.</translation>
     </message>
     <message>
         <source>Ready to write the image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
+        <translation>Готово к записи образа на накопитель. Все данные будут удалены.</translation>
     </message>
     <message>
         <source>• Raspberry Raspberry Pi Connect enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>• Raspberry Raspberry Pi Connect включен</translation>
     </message>
     <message>
         <source>• USB Gadget enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>• USB-гаджет включен</translation>
     </message>
     <message>
         <source>• I2C enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>• I2C включен</translation>
     </message>
     <message>
         <source>• SPI enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>• SPI включен</translation>
     </message>
 </context>
 <context>
@@ -1280,31 +1280,31 @@
     </message>
     <message>
         <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imager всё ещё работает. Вы уверены, что хотите выйти?</translation>
     </message>
     <message>
         <source>No</source>
-        <translation type="unfinished"></translation>
+        <translation>Нет</translation>
     </message>
     <message>
         <source>Yes</source>
-        <translation type="unfinished"></translation>
+        <translation>Да</translation>
     </message>
     <message>
         <source>Storage device removed</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство хранения данных удалено</translation>
     </message>
     <message>
         <source>Continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Продолжить</translation>
     </message>
     <message>
         <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>
-        <translation type="unfinished"></translation>
+        <translation>Устройство хранения данных было извлечено во время записи, поэтому операция была отменена. Пожалуйста, переподключите устройство или выберите другое, чтобы продолжить.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished"></translation>
+        <translation>Хорошо</translation>
     </message>
 </context>
 </TS>
