@@ -191,18 +191,6 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument("image", "Image file/URL or rpi-imager:// callback URL (optional)", "[image]");
     parser.process(app);
 
-    if (parser.isSet("help"))
-    {
-        cerr << parser.helpText() << endl;
-        return 0;
-    }
-
-    if (parser.isSet("version"))
-    {
-        cerr << "rpi-imager version " << imageWriter.constantVersion() << endl;
-        cerr << "Repository: " << imageWriter.constantOsListUrl().toString() << endl;
-        return 0;
-    }
 
     const QString repoVal = parser.value("repo");
     if (!repoVal.isEmpty())

@@ -129,11 +129,14 @@ public:
     /* Function to return current OS list URL in a displayable format */
     Q_INVOKABLE QString osListUrlForDisplay() const;
 
-    /* Function to return OS list URL */
-    Q_INVOKABLE QUrl constantOsListUrl() const;
+    /* Function to return current OS list URL (may be customized) */
+    Q_INVOKABLE QUrl osListUrl() const;
 
-    /* Function to return version */
+    /* Function to return version (for QML - C++ code should use staticVersion()) */
     Q_INVOKABLE QString constantVersion() const;
+
+    /* Static version - for use without creating an instance */
+    static QString staticVersion();
 
     /* Returns true if version argument is newer than current program */
     Q_INVOKABLE bool isVersionNewer(const QString &version);

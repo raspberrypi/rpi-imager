@@ -209,7 +209,7 @@ BaseDialog {
             // Do not load from QSettings; keep ephemeral
             chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false;
             if (imageWriter.customRepo()) {
-                selectedRepo = imageWriter.constantOsListUrl();
+                selectedRepo = imageWriter.osListUrl();
                 originalRepo = selectedRepo;
             } else {
                 selectedRepo = "";

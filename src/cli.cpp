@@ -18,7 +18,7 @@ static void devnullMsgHandler(QtMsgType, const QMessageLogContext &, const QStri
 {
 }
 
-Cli::Cli(int &argc, char *argv[]) : QObject(nullptr)
+Cli::Cli(int &argc, char *argv[]) : QObject(nullptr), _imageWriter(nullptr)
 {
 #ifdef Q_OS_WIN
     /* Allocate console on Windows (only needed if compiled as GUI program) */
@@ -33,12 +33,8 @@ Cli::Cli(int &argc, char *argv[]) : QObject(nullptr)
     _app->setOrganizationName("Raspberry Pi");
     _app->setOrganizationDomain("raspberrypi.com");
     _app->setApplicationName("Raspberry Pi Imager");
-    _imageWriter = new ImageWriter;
-    connect(_imageWriter, &ImageWriter::success, this, &Cli::onSuccess);
-    connect(_imageWriter, &ImageWriter::error, this, &Cli::onError);
-    connect(_imageWriter, &ImageWriter::preparationStatusUpdate, this, &Cli::onPreparationStatusUpdate);
-    connect(_imageWriter, &ImageWriter::downloadProgress, this, &Cli::onDownloadProgress);
-    connect(_imageWriter, &ImageWriter::verifyProgress, this, &Cli::onVerifyProgress);
+    _app->setApplicationVersion(ImageWriter::staticVersion());
+    // Don't create ImageWriter here - defer until we know we need it
 }
 
 Cli::~Cli()
@@ -53,7 +49,9 @@ int Cli::run()
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOptions({
-        {"cli", ""},
+#ifndef CLI_ONLY_BUILD
+        {"cli", ""},  // Only relevant when running GUI build in CLI mode
+#endif
         {"disable-verify", "Disable verification"},
         {"enable-writing-system-drives", "Only use this if you know what you are doing"},
         {"sha256", "Expected hash", "sha256", ""},
@@ -70,17 +68,6 @@ int Cli::run()
     parser.addPositionalArgument("dst", "Destination device");
     parser.process(*_app);
 
-    if (parser.isSet("help"))
-    {
-        std::cout << parser.helpText().toStdString() << std::endl;
-        return 0;
-    }
-    if (parser.isSet("version"))
-    {
-        std::cout << "rpi-imager version " << _imageWriter->constantVersion().toStdString() << std::endl;
-        std::cout << "Repository: " << _imageWriter->constantOsListUrl().toString().toStdString() << std::endl;
-        return 0;
-    }
 
     const QStringList args = parser.positionalArguments();
     if (args.count() != 2)
@@ -88,6 +75,14 @@ int Cli::run()
         std::cerr << parser.helpText().toStdString() << std::endl;
         return 1;
     }
+
+    // Now create ImageWriter for actual write operations
+    _imageWriter = new ImageWriter;
+    connect(_imageWriter, &ImageWriter::success, this, &Cli::onSuccess);
+    connect(_imageWriter, &ImageWriter::error, this, &Cli::onError);
+    connect(_imageWriter, &ImageWriter::preparationStatusUpdate, this, &Cli::onPreparationStatusUpdate);
+    connect(_imageWriter, &ImageWriter::downloadProgress, this, &Cli::onDownloadProgress);
+    connect(_imageWriter, &ImageWriter::verifyProgress, this, &Cli::onVerifyProgress);
 
     if (!parser.isSet("debug"))
     {

@@ -6,6 +6,7 @@
 #include "downloadextractthread.h"
 #include "imagewriter.h"
 #include "embedded_config.h"
+#include "config.h"
 #include "drivelistitem.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/sha256crypt/sha256crypt.h"
@@ -329,6 +330,14 @@ ImageWriter::~ImageWriter()
     qDebug() << "Stopping background drive list polling";
     _drivelist.stopPolling();
 
+    // Stop and cleanup CacheManager background thread before Qt's automatic cleanup
+    // This ensures the background thread is properly terminated before ImageWriter is destroyed
+    if (_cacheManager) {
+        qDebug() << "Cleaning up CacheManager";
+        delete _cacheManager;
+        _cacheManager = nullptr;
+    }
+
     // Ensure any running thread is properly cleaned up
     if (_thread) {
         if (_thread->isRunning()) {
@@ -642,7 +651,7 @@ void ImageWriter::startWrite()
     }
 
     _thread->setVerifyEnabled(_verifyEnabled);
-    _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
+    _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
     _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 
     // Only set up cache operations for remote downloads, not when using cached files as source
@@ -847,16 +856,22 @@ QString ImageWriter::osListUrlForDisplay() const {
     return _repo.toString(QUrl::PreferLocalFile | QUrl::NormalizePathSegments);
 }
 
-/* Function to return OS list URL */
-QUrl ImageWriter::constantOsListUrl() const
+/* Function to return current OS list URL (may be customized) */
+QUrl ImageWriter::osListUrl() const
 {
     return _repo;
 }
 
-/* Function to return version */
-QString ImageWriter::constantVersion() const
+/* Static version - for use without creating an instance */
+QString ImageWriter::staticVersion()
 {
     return IMAGER_VERSION_STR;
+}
+
+/* Instance method - delegates to static version (needed for QML Q_INVOKABLE) */
+QString ImageWriter::constantVersion() const
+{
+    return staticVersion();
 }
 
 /* Returns true if version argument is newer than current program */
@@ -1019,7 +1034,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     // Preserve latest top-level imager metadata if present in the top-level fetch
                     auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url(), 1);
                     QJsonObject imager_meta = _completeOsList["imager"].toObject();
-                    if (response_object.contains("imager") && data->request().url() == constantOsListUrl()) {
+                    if (response_object.contains("imager") && data->request().url() == osListUrl()) {
                         // Update imager metadata when this reply is for the top-level OS list
                         imager_meta = response_object["imager"].toObject();
                     }
@@ -1033,7 +1048,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                 emit osListPrepared();
 
                 // After processing a top-level list fetch, (re)schedule the next refresh
-                if (data->request().url() == constantOsListUrl()) {
+                if (data->request().url() == osListUrl()) {
                     scheduleOsListRefresh();
                 }
             } else {
@@ -1177,7 +1192,7 @@ QJsonDocument ImageWriter::getFilteredOSlistDocument() {
 }
 
 void ImageWriter::beginOSListFetch() {
-    const QUrl topUrl = constantOsListUrl();
+    const QUrl topUrl = osListUrl();
     if (!preflightValidateUrl(topUrl, QStringLiteral("repository:"))) {
         return;
     }
@@ -2723,7 +2738,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     }
 
     _thread->setVerifyEnabled(_verifyEnabled);
-    _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(constantVersion()).toUtf8());
+    _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
     _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 
     // Handle caching setup for downloads using CacheManager
