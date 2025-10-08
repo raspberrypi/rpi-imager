@@ -20,6 +20,7 @@ WizardStepBase {
     
     title: qsTr("Select your storage device")
     showNextButton: true
+    nextButtonEnabled: wizardContainer && wizardContainer.selectedStorageName && wizardContainer.selectedStorageName.length > 0  // Disabled until user selects a storage device
     
     // Forward the nextClicked signal as next() function
     // Only auto-advance if no system drive confirmation dialog is needed
