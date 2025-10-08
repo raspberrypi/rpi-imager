@@ -2,8 +2,7 @@
 Type=Application
 Name=Raspberry Pi Imager (CLI)
 Comment=Raspberry Pi Imager command-line interface
-Exec=rpi-imager
-Icon=rpi-imager
+Exec=rpi-imager-cli
 Categories=System;
 Terminal=true
 NoDisplay=true

@@ -230,19 +230,8 @@ echo "Creating CLI-only AppDir..."
 make DESTDIR="$APPDIR" install
 cd ..
 
-# Create a CLI-specific desktop file
-mkdir -p "$APPDIR/usr/share/applications"
-cat > "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-cli.desktop" << 'EOF'
-[Desktop Entry]
-Type=Application
-Name=Raspberry Pi Imager (CLI)
-Comment=Raspberry Pi Imager command-line interface
-Exec=rpi-imager --cli
-Icon=rpi-imager
-Categories=System;
-Terminal=true
-NoDisplay=true
-EOF
+# Desktop file is already installed by CMake from debian/com.raspberrypi.rpi-imager-cli.desktop
+# No need to create it here
 
 # Create the AppRun file for CLI operation
 cat > "$APPDIR/AppRun" << 'EOF'
@@ -253,22 +242,8 @@ HERE="$(dirname "$(readlink -f "${0}")")"
 export PATH="${HERE}/usr/bin:${PATH}"
 export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
 
-# Force CLI mode - always add --cli flag if not already present
-CLI_FLAG_FOUND=0
-for arg in "$@"; do
-    if [ "$arg" = "--cli" ]; then
-        CLI_FLAG_FOUND=1
-        break
-    fi
-done
-
-if [ "$CLI_FLAG_FOUND" -eq 0 ]; then
-    # Add --cli flag to force CLI mode
-    exec "${HERE}/usr/bin/rpi-imager" --cli "$@"
-else
-    # --cli flag already present
-    exec "${HERE}/usr/bin/rpi-imager" "$@"
-fi
+# Execute the CLI-only binary directly (no --cli flag needed, it's built-in)
+exec "${HERE}/usr/bin/rpi-imager-cli" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 

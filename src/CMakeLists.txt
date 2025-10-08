@@ -370,6 +370,11 @@ else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${DEPENDENCIES})
 endif()
 
+# Set output name based on build type
+if(BUILD_CLI_ONLY)
+    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "rpi-imager-cli")
+endif()
+
 # Create an rpi-imager_lupdate target
 qt_add_lupdate(TS_FILES ${TRANSLATIONS} SOURCE_TARGETS ${PROJECT_NAME} OPTIONS -no-obsolete -locations none)
 
