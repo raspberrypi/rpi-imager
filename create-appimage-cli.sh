@@ -233,6 +233,10 @@ cd ..
 # Desktop file is already installed by CMake from debian/com.raspberrypi.rpi-imager-cli.desktop
 # No need to create it here
 
+# Copy the icon for AppImage tools (required even though NoDisplay=true)
+mkdir -p "$APPDIR/usr/share/icons/hicolor/128x128/apps"
+cp "debian/rpi-imager.png" "$APPDIR/usr/share/icons/hicolor/128x128/apps/com.raspberrypi.rpi-imager.png"
+
 # Create the AppRun file for CLI operation
 cat > "$APPDIR/AppRun" << 'EOF'
 #!/bin/sh
