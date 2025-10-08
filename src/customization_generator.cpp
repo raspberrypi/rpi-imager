@@ -71,7 +71,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     line(QStringLiteral(""), script);
 
     if (!hostname.isEmpty()) {
-        line(QStringLiteral("CURRENT_HOSTNAME=$(cat /etc/hostname | tr -d \" \\\t\\\n\\\r\")"), script);
+        line(QStringLiteral("CURRENT_HOSTNAME=$(cat /etc/hostname | tr -d \" \\t\\n\\r\")"), script);
         line(QStringLiteral("if [ -f /usr/lib/raspberrypi-sys-mods/imager_custom ]; then"), script);
         line(QStringLiteral("   /usr/lib/raspberrypi-sys-mods/imager_custom set_hostname ") + hostname, script);
         line(QStringLiteral("else"), script);
@@ -150,8 +150,12 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         line(QStringLiteral("update_config=1"), script);
         line(QStringLiteral("network={"), script);
         if (hidden) line(QStringLiteral("\tscan_ssid=1"), script);
-        line(QStringLiteral("\tssid=\"") + ssid + QStringLiteral("\""), script);
-        if (!cryptedPsk.isEmpty()) line(QStringLiteral("\tpsk=") + cryptedPsk, script);
+        // Escape quotes and backslashes for wpa_supplicant.conf quoted strings
+        QString escapedSsid = ssid;
+        escapedSsid.replace("\\", "\\\\");  // Backslash must be escaped first
+        escapedSsid.replace("\"", "\\\"");  // Then escape quotes
+        line(QStringLiteral("\tssid=\"") + escapedSsid + QStringLiteral("\""), script);
+        line(QStringLiteral("\tpsk=") + cryptedPsk, script);
         line(QStringLiteral("}"), script);
         line(QStringLiteral("WPAEOF"), script);
         line(QStringLiteral("   chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf"), script);

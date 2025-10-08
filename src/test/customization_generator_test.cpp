@@ -228,6 +228,22 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("country=GB"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"TestNetwork\""));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("scan_ssid=1"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("psk=hashed_password_here"));
+}
+
+TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customization]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "OpenNetwork";
+    settings["wifiPasswordCrypt"] = "";  // Empty PSK for open network
+    settings["wifiCountry"] = "US";
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // Should still include psk= line even when empty (matching old Imager behavior)
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("wpa_supplicant.conf"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"OpenNetwork\""));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("\tpsk="));
 }
 
 TEST_CASE("CustomisationGenerator Raspberry Pi Connect", "[customization]") {
@@ -318,9 +334,53 @@ TEST_CASE("CustomisationGenerator handles special characters in WiFi SSID", "[cu
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
     
-    // SSID with special chars should be properly escaped
+    // SSID with parentheses and spaces should work fine
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("wpa_supplicant.conf"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"Test Network (5GHz)\""));
+}
+
+TEST_CASE("CustomisationGenerator handles quotes in WiFi SSID", "[customization][negative]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "My \"Quoted\" Network";
+    settings["wifiPasswordCrypt"] = "fakehash";
+    settings["wifiCountry"] = "US";
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // Quotes should be escaped in wpa_supplicant.conf
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"My \\\"Quoted\\\" Network\""));
+    // Should still be properly shell-quoted for imager_custom
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("set_wlan"));
+}
+
+TEST_CASE("CustomisationGenerator handles backslashes in WiFi SSID", "[customization][negative]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "Network\\With\\Backslashes";
+    settings["wifiPasswordCrypt"] = "fakehash";
+    settings["wifiCountry"] = "US";
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // Backslashes should be escaped in wpa_supplicant.conf
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"Network\\\\With\\\\Backslashes\""));
+}
+
+TEST_CASE("CustomisationGenerator handles non-ASCII UTF-8 WiFi SSID", "[customization][negative]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "Café ☕ 日本語";
+    settings["wifiPasswordCrypt"] = "fakehash";
+    settings["wifiCountry"] = "FR";
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // UTF-8 characters should pass through correctly in both paths
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("wpa_supplicant.conf"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("Café ☕ 日本語"));
+    // Also verify shell-quoted path works
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("set_wlan"));
 }
 
 TEST_CASE("CustomisationGenerator handles multiline SSH key", "[customization][negative]") {
