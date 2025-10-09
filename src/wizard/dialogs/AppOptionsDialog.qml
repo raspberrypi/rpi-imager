@@ -117,17 +117,13 @@ BaseDialog {
                     focusItem.activeFocusOnTab = true
                 }
                 onClicked: {
-                    // TODO: close this dialog - open sub dialog - show optin between default hardcoded and custom repo and for custom repo browser local or url
-                    // verify repo on save - don't persist longer then app is running
-                    //popup.close()
-                    //Qt.callLater(function () {
-                    //open
-                    //});
                     if (!repoDialog.wizardContainer) {
                         repoDialog.wizardContainer = popup.wizardContainer
                     }
-                    //repoDialog.initialize()
-                    repoDialog.open()
+                    popup.close()
+                    Qt.callLater(function () {
+                        repoDialog.open()
+                    });
                 }
             }
         }
