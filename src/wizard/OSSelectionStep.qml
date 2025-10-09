@@ -554,9 +554,8 @@ WizardStepBase {
 
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-                // Gate Raspberry Pi Connect availability by OS JSON field
-                root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
-                root.wizardContainer.rpiosCloudInitAvailable = false
+                root.wizardContainer.piConnectAvailable = false
+                root.wizardContainer.ccRpiAvailable = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
                     Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
@@ -578,9 +577,8 @@ WizardStepBase {
 
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-                // Gate Raspberry Pi Connect availability by OS JSON field
-                root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
-                root.wizardContainer.rpiosCloudInitAvailable = imageWriter.checkSWCapability("rpios_cloudinit")
+                root.wizardContainer.piConnectAvailable = imageWriter.checkSWCapability("rpi_connect")
+                root.wizardContainer.ccRpiAvailable = imageWriter.imageSupportsCcRpi()
                 // If customization is not supported for this OS, clear any previously-staged UI flags
                 if (!root.wizardContainer.customizationSupported) {
                     root.wizardContainer.hostnameConfigured = false
@@ -592,7 +590,13 @@ WizardStepBase {
                 } else if (!root.wizardContainer.piConnectAvailable) {
                     // If Raspberry Pi Connect not available for this OS, ensure it's not marked enabled
                     root.wizardContainer.piConnectEnabled = false
+                } else if (!root.wizardContainer.ccRpiAvailable) {
+                    root.wizardContainer.ifI2cEnabled = false
+                    root.wizardContainer.ifSpiEnabled = false
+                    root.wizardContainer.ifSerial = "Disabled"
+                    root.wizardContainer.featUsbGadgetEnabled = false
                 }
+
                 root.customSelected = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
@@ -671,10 +675,6 @@ WizardStepBase {
                 entry.icon = String(entry.icon || "")
                 entry.subitems_url = String(entry.subitems_url || "")
                 entry.website = String(entry.website || "")
-                // Propagate enable_rpi_connect from parent when missing
-                if (typeof(entry.enable_rpi_connect) === "undefined" && typeof(model.enable_rpi_connect) !== "undefined") {
-                    entry.enable_rpi_connect = model.enable_rpi_connect
-                }
 
                 if (typeof entry.capabilities === "string") {
                     // keep it

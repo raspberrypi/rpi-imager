@@ -1203,13 +1203,14 @@ bool DownloadThread::_customizeImage()
             }
         }
 
-        if (!_cloudinit.isEmpty() && _initFormat == "cloudinit")
+        auto initCloud = _initFormat == "cloudinit" || _initFormat == "cloudinit-rpi";
+        if (!_cloudinit.isEmpty() && initCloud)
         {
             _cloudinit = "#cloud-config\n"+_cloudinit;
             fat->writeFile("user-data", _cloudinit);
         }
 
-        if (!_cloudinitNetwork.isEmpty() && _initFormat == "cloudinit")
+        if (!_cloudinitNetwork.isEmpty() && initCloud)
         {
             fat->writeFile("network-config", _cloudinitNetwork);
         }

@@ -56,7 +56,7 @@ Item {
     property bool piConnectAvailable: false
 
     // Interfaces & Features
-    property bool rpiosCloudInitAvailable: false
+    property bool ccRpiAvailable: false
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
     // "Disabled" | "Default" | "Console & Hardware" | "Console" | "Hardware" | ""
@@ -143,7 +143,7 @@ Item {
     }
 
     function getLastCustomizationStep() {
-        return rpiosCloudInitAvailable
+        return ccRpiAvailable
             ? stepIfAndFeatures
             : piConnectAvailable
                 ? stepPiConnectCustomization
@@ -160,7 +160,7 @@ Item {
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
-        if (rpiosCloudInitAvailable) {
+        if (ccRpiAvailable) {
             labels.push(qsTr("Interfaces & Features"))
         }
 
@@ -218,7 +218,7 @@ Item {
         sshEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
-        rpiosCloudInitAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
         ifSerial = ""
@@ -244,7 +244,7 @@ Item {
         
         // Reset OS capability flags - these will be set correctly by OS selection
         piConnectAvailable = false
-        rpiosCloudInitAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
         ifSerial = ""
@@ -672,8 +672,8 @@ Item {
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
                 nextIndex++
             }
-            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-            if (!rpiosCloudInitAvailable && nextIndex == stepIfAndFeatures) {
+            // skip interfaces and features for Operating Systems that don't support the cc_raspberry_pi cloud-init module
+            if (!ccRpiAvailable && nextIndex == stepIfAndFeatures) {
                 nextIndex++
             }
             // Before entering the writing step, persist and apply customization (when supported)
@@ -703,8 +703,8 @@ Item {
             if (root.currentStep === stepWriting && !customizationSupported) {
                 prevIndex = stepStorageSelection
             } else {
-                // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-                if (prevIndex == stepIfAndFeatures && !rpiosCloudInitAvailable) {
+                // skip interfaces and features for Operating Systems that don't support the cc_raspberry_pi cloud-init module
+                if (prevIndex == stepIfAndFeatures && !ccRpiAvailable) {
                     prevIndex--
                 }
                 if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
@@ -978,7 +978,7 @@ Item {
         piConnectEnabled = false
         piConnectAvailable = false
 
-        rpiosCloudInitAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
         ifSerial = ""

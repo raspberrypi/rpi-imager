@@ -1934,6 +1934,7 @@ void ImageWriter::applyCustomizationFromSavedSettings()
     if (_initFormat == "systemd") {
         _applySystemdCustomizationFromSettings(s);
     } else {
+        // customization for cloudinit and cloudinit-rpi
         _applyCloudInitCustomizationFromSettings(s);
     }
 }
@@ -1956,14 +1957,14 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
 void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
 {
     // Use CustomisationGenerator for cloud-init YAML generation
-    const bool isRpiosCloudInit = checkSWCapability("rpios_cloudinit");
     const bool sshEnabled = s.value("sshEnabled").toBool();
+    const bool hasCcRpi = imageSupportsCcRpi();
     
     QByteArray cloud = rpi_imager::CustomisationGenerator::generateCloudInitUserData(
-        s, _piConnectToken, isRpiosCloudInit, sshEnabled, getCurrentUser());
+        s, _piConnectToken, hasCcRpi, sshEnabled, getCurrentUser());
     
     QByteArray netcfg = rpi_imager::CustomisationGenerator::generateCloudInitNetworkConfig(
-        s, isRpiosCloudInit);
+        s, hasCcRpi);
     
     // Extract wifiCountry for cmdline append
     QByteArray cmdlineAppend;
@@ -2089,6 +2090,11 @@ bool ImageWriter::hasSavedCustomizationSettings()
 bool ImageWriter::imageSupportsCustomization()
 {
     return !_initFormat.isEmpty();
+}
+
+bool ImageWriter::imageSupportsCcRpi()
+{
+    return _initFormat == "cloudinit-rpi";
 }
 
 QStringList ImageWriter::getTranslations()
