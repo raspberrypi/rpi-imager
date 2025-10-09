@@ -203,7 +203,7 @@ BaseDialog {
             initialized = true
 
             if (imageWriter.customRepo()) {
-                var repo = new URL(imageWriter.constantOsListUrl())
+                var repo = new URL(imageWriter.osListUrl())
                 if (repo.protocol === "file:") {
                     radioOfficial.checked = false
                     radioCustomFile.checked = true
