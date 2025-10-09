@@ -90,16 +90,16 @@ else
             
             # Find appropriate compiler directory for the architecture
             if [ "$ARCH" = "x86_64" ]; then
-                if [ -d "$NEWEST_QT/gcc_64" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_64"
+                if [ -d "$NEWEST_QT/gcc_64_embedded" ]; then
+                    QT_DIR="$NEWEST_QT/gcc_64_embedded"
                 fi
             elif [ "$ARCH" = "aarch64" ]; then
-                if [ -d "$NEWEST_QT/gcc_arm64" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_arm64"
+                if [ -d "$NEWEST_QT/gcc_arm64_embedded" ]; then
+                    QT_DIR="$NEWEST_QT/gcc_arm64_embedded"
                 fi
             elif [ "$ARCH" = "armv7l" ]; then
-                if [ -d "$NEWEST_QT/gcc_arm32" ]; then
-                    QT_DIR="$NEWEST_QT/gcc_arm32"
+                if [ -d "$NEWEST_QT/gcc_arm32_embedded" ]; then
+                    QT_DIR="$NEWEST_QT/gcc_arm32_embedded"
                 fi
             fi
             
@@ -319,7 +319,7 @@ cp "$QT_DIR/qml/QtQuick/Controls/Basic/impl/libqtquickcontrols2basicstyleimplplu
 cp "$QT_DIR/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Basic/" 2>/dev/null || true
 cp "$QT_DIR/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Material/" 2>/dev/null || true
 
-cp "$PWD/icu/icu4c/source/lib/libicudata.so.72" "$APPDIR/usr/lib/libicudata.so.72"
+cp "$PWD/qt/icu/icu4c/source/lib/libicudata.so.72" "$APPDIR/usr/lib/libicudata.so.72"
 
 mkdir -p "$APPDIR/usr/share/fonts/truetype/dejavu"
 mkdir -p "$APPDIR/usr/share/fonts/truetype/freefont"
@@ -475,4 +475,5 @@ if [ -f "$OUTPUT_FILE" ]; then
 else
     echo "AppImage creation completed, but output file verification failed."
     echo "Check the build process for any errors."
-fi 
+fi
+
