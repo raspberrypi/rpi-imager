@@ -18,6 +18,7 @@ Item {
     property string helpLabel: ""
     property url helpUrl: ""
     property string btnText: ""
+    property alias enabled: optionButton.enabled
     signal clicked()
 
     // Expose the actual focusable control for tab navigation
@@ -44,7 +45,7 @@ Item {
                 font.family: Style.fontFamilyBold
                 font.pixelSize: Style.fontSizeFormLabel
                 font.bold: true
-                color: Style.formLabelColor
+                color: optionButton.enabled ? Style.formLabelColor : Style.textDescriptionColor
                 elide: Text.ElideRight
                 TapHandler { onTapped: sw.toggle() }
             }

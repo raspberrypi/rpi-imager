@@ -113,6 +113,11 @@ BaseDialog {
                 text: qsTr("Content Repository")
                 btnText: qsTr("Edit")
                 Layout.fillWidth: true
+                // Disable while write is in progress to prevent changing source during write
+                enabled: imageWriter.writeState === ImageWriter.Idle ||
+                         imageWriter.writeState === ImageWriter.Succeeded ||
+                         imageWriter.writeState === ImageWriter.Failed ||
+                         imageWriter.writeState === ImageWriter.Cancelled
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
                 }

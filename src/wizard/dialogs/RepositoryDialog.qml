@@ -176,9 +176,14 @@ BaseDialog {
 
             ImButtonRed {
                 id: saveButton
-                enabled: radioOfficial.checked
+                enabled: (radioOfficial.checked
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
-                         || (radioCustomUri.checked && fieldCustomUri.acceptableInput)
+                         || (radioCustomUri.checked && fieldCustomUri.acceptableInput))
+                         // Disable while write is in progress to prevent restarting during write
+                         && (imageWriter.writeState === ImageWriter.Idle ||
+                             imageWriter.writeState === ImageWriter.Succeeded ||
+                             imageWriter.writeState === ImageWriter.Failed ||
+                             imageWriter.writeState === ImageWriter.Cancelled)
                 // TODO: only show or enable when settings changed
                 text: qsTr("Apply & Restart")
                 Layout.minimumWidth: Style.buttonWidthMinimum
