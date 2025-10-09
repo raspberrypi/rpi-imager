@@ -60,16 +60,15 @@ WizardStepBase {
         if (!root || !root.hwModel) {
             return
         }
-        // Only reload if we haven't loaded yet or if the model is empty
-        if (!modelLoaded || root.hwModel.rowCount() === 0) {
-            console.log("DeviceSelectionStep: OS list prepared, reloading hardware model")
-            var success = root.hwModel.reload()
-            if (success) {
-                modelLoaded = true
-                // Set initial focus for keyboard navigation if no device is selected
-                if (hwlist.currentIndex === -1 && root.hwModel.rowCount() > 0) {
-                    hwlist.currentIndex = 0
-                }
+
+        // Don't guard with modelLoaded to support reloading when repo changed
+        console.log("DeviceSelectionStep: OS list prepared, reloading hardware model")
+        var success = root.hwModel.reload()
+        if (success) {
+            modelLoaded = true
+            // Set initial focus for keyboard navigation if no device is selected
+            if (hwlist.currentIndex === -1 && root.hwModel.rowCount() > 0) {
+                hwlist.currentIndex = 0
             }
         }
     }

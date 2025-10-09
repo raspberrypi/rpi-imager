@@ -591,6 +591,8 @@ Item {
                             if (!root.optionsPopup.wizardContainer) {
                                 root.optionsPopup.wizardContainer = root
                             }
+                            // TODO: actually duplicate
+                            // as onOpen in it already calls initialize()
                             root.optionsPopup.initialize()
                             root.optionsPopup.open()
                         }

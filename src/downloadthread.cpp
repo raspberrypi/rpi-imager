@@ -1195,15 +1195,8 @@ bool DownloadThread::_customizeImage()
 
         if (!_firstrun.isEmpty())
         {
-            if (!_advancedOptions.testFlag(ImageOptions::UserDefinedFirstRun)) {
-                _firstrun = "#!/bin/bash\n\n" + QByteArray("set +e\n\n") + _firstrun;
-
-                // Add file cleanup and exit commands
-                _firstrun.append("\nrm -f /boot/firstrun.sh\n");
-                _firstrun.append("sed -i 's| systemd.run.*||g' /boot/cmdline.txt\n");
-                _firstrun.append("exit 0\n");
-            }
-
+            // CustomisationGenerator now creates complete scripts with header and footer
+            // No need to add them here anymore
             if (_initFormat == "systemd") {
                 fat->writeFile("firstrun.sh", _firstrun);
                 _cmdline += " systemd.run=/boot/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target";

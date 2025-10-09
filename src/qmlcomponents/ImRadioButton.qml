@@ -1,11 +1,11 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2022 Raspberry Pi Ltd
+ * Copyright (C) 2022-2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.9
-import QtQuick.Controls 2.2
-import QtQuick.Controls.Material 2.2
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Controls.Material
 
 RadioButton {
     Material.accent: Style.formControlActiveColor
@@ -24,10 +24,20 @@ RadioButton {
     
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_Space) {
-            toggle()
+            if (!checked)            // prevent unchecking the current one
+                click()              // goes through the normal “mouse click” path
             event.accepted = true
         }
     }
-    Keys.onEnterPressed: toggle()
-    Keys.onReturnPressed: toggle()
+    Keys.onEnterPressed: (event) => {
+        if (!checked)
+            click()
+        event.accepted = true
+    }
+
+    Keys.onReturnPressed: (event) => {
+        if (!checked)
+          click()
+        event.accepted = true
+    }
 }

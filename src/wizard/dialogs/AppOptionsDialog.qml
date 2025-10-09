@@ -23,8 +23,6 @@ BaseDialog {
     property var wizardContainer: null
     
     property bool initialized: false
-    property url selectedRepo: ""
-    property url originalRepo: ""
 
     // Custom escape handling
     function escapePressed() {
@@ -34,22 +32,12 @@ BaseDialog {
     // Register focus groups when component is ready
     Component.onCompleted: {
         registerFocusGroup("options", function(){ 
-            return [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem, chkDisableWarnings.focusItem]
+            return [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem,
+                    chkDisableWarnings.focusItem, editRepoButton.focusItem]
         }, 0)
-        registerFocusGroup("repository", function(){ 
-            return [fieldCustomRepository, browseButton]
-        }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, saveButton]
         }, 2)
-    }
-
-    Connections {
-        target: imageWriter
-        // Handle native file selection for "Use custom"
-        function onFileSelected(fileUrl) {
-            popup.selectedRepo = fileUrl;
-        }
     }
 
     // Header
@@ -120,37 +108,22 @@ BaseDialog {
                 }
             }
 
-            RowLayout {
+            ImOptionButton {
+                id: editRepoButton
+                text: qsTr("Content Repository")
+                btnText: qsTr("Edit")
                 Layout.fillWidth: true
-                spacing: Style.spacingMedium
-
-                ImTextField {
-                    id: fieldCustomRepository
-                    text: selectedRepo !== "" ? UrlFmt.display(selectedRepo) : ""
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("Select custom Repository")
-                    font.pixelSize: Style.fontSizeInput
-                    readOnly: true
-                    activeFocusOnTab: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
                 }
-
-                ImButton {
-                    id: browseButton
-                    text: qsTr("Browse")
-                    Layout.minimumWidth: 80
-                    activeFocusOnTab: true
-                    onClicked: {
-                        // Prefer native file dialog via Imager's wrapper, but only if available
-                        if (imageWriter.nativeFileDialogAvailable()) {
-                            // Defer opening the native dialog until after the current event completes
-                            Qt.callLater(function () {
-                                imageWriter.openFileDialog(qsTr("Select Repository"), CommonStrings.repoFiltersString);
-                            });
-                        } else {
-                            // Fallback to QML dialog (forced non-native)
-                            repoFileDialog.open();
-                        }
+                onClicked: {
+                    if (!repoDialog.wizardContainer) {
+                        repoDialog.wizardContainer = popup.wizardContainer
                     }
+                    popup.close()
+                    Qt.callLater(function () {
+                        repoDialog.open()
+                    });
                 }
             }
         }
@@ -200,6 +173,13 @@ BaseDialog {
         }
     }
 
+    RepositoryDialog {
+        id: repoDialog
+        parent: popup.parent
+        imageWriter: popup.imageWriter
+        wizardContainer: popup.wizardContainer
+    }
+
     function initialize() {
         if (!initialized) {
             // Load current settings from ImageWriter
@@ -208,13 +188,6 @@ BaseDialog {
             chkTelemetry.checked = imageWriter.getBoolSetting("telemetry");
             // Do not load from QSettings; keep ephemeral
             chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false;
-            if (imageWriter.customRepo()) {
-                selectedRepo = imageWriter.osListUrl();
-                originalRepo = selectedRepo;
-            } else {
-                selectedRepo = "";
-                originalRepo = "";
-            }
 
             initialized = true;
             // Pre-compute final height before opening to avoid first-show reflow
@@ -231,16 +204,6 @@ BaseDialog {
         // Do not persist disable_warnings; set ephemeral flag only
         if (popup.wizardContainer)
             popup.wizardContainer.disableWarnings = chkDisableWarnings.checked;
-        // Only save repository setting if it has actually changed
-        if (popup.selectedRepo !== popup.originalRepo) {
-            if (popup.selectedRepo !== "") {
-                imageWriter.refreshOsListFrom(selectedRepo);
-            } else {
-                // User cleared the repository - reset to default
-                // Note: setCustomRepo with the default URL will reset to default behavior
-                imageWriter.setCustomRepo(Qt.resolvedUrl("https://downloads.raspberrypi.org/os_list_imagingutility_v4.json"));
-            }
-        }
     }
 
     onOpened: {
@@ -322,21 +285,5 @@ BaseDialog {
                 }
             }
         }
-    }
-
-    property alias repoFileDialog: repoFileDialog
-
-    ImFileDialog {
-        id: repoFileDialog
-        parent: popup.parent  // Inherit parent from AppOptionsDialog (which is overlayRoot)
-        anchors.centerIn: parent
-        dialogTitle: qsTr("Select custom repository")
-        nameFilters: CommonStrings.repoFiltersList
-        onAccepted: {
-            popup.selectedRepo = selectedFile;
-        }
-        onRejected:
-        // No-op; user cancelled
-        {}
     }
 }

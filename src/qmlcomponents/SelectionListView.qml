@@ -3,6 +3,8 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 
@@ -44,10 +46,12 @@ ListView {
     
     // Standard highlight configuration
     highlight: Rectangle {
-        color: Style.listViewHighlightColor
+        // When focused: use stronger highlight color
+        // When not focused (default selected): use focus border style to show it's the default choice
+        color: root.activeFocus ? Style.listViewHighlightColor : Style.listViewRowBackgroundColor
         radius: 0
-        border.color: root.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
-        border.width: root.activeFocus ? 2 : 0
+        border.color: root.activeFocus ? Style.buttonFocusedBackgroundColor : Style.buttonFocusedBackgroundColor
+        border.width: root.activeFocus ? 2 : 2
         anchors.fill: parent
         anchors.rightMargin: (root.contentHeight > root.height ? Style.scrollBarWidth : 0)
     }

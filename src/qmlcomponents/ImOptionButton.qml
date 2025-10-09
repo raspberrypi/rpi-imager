@@ -9,21 +9,22 @@ import QtQuick.Layouts 1.15
 import RpiImager
 import QtQuick.Controls.Material 2.15
 
-// A labeled switch styled for Imager; only the switch toggles, not the whole row
+// A labeled button styled for Imager; only the button clicks, not the whole row
 Item {
-    id: pill
+    id: control
     property alias text: label.text
     property bool checked: false
     // Optional help link next to the label
     property string helpLabel: ""
     property url helpUrl: ""
-    signal toggled(bool checked)
+    property string btnText: ""
+    signal clicked()
 
     // Expose the actual focusable control for tab navigation
-    property alias focusItem: sw
+    property alias focusItem: optionButton
 
     implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
-    implicitWidth: label.implicitWidth + sw.implicitWidth + Style.cardPadding
+    implicitWidth: label.implicitWidth + optionButton.implicitWidth + Style.cardPadding
 
     RowLayout {
         anchors.fill: parent
@@ -52,8 +53,8 @@ Item {
             Text {
                 id: helpText
                 Layout.alignment: Qt.AlignVCenter
-                visible: pill.helpLabel !== "" && pill.helpUrl !== ""
-                text: pill.helpLabel
+                visible: control.helpLabel !== "" && control.helpUrl !== ""
+                text: control.helpLabel
                 font.family: Style.fontFamily
                 font.pixelSize: Style.fontSizeDescription
                 color: Style.buttonForegroundColor
@@ -74,28 +75,17 @@ Item {
         // Flexible spacer to push the switch flush-right and align across rows
         Item { Layout.fillWidth: true }
 
-        // Native switch on the right with custom focus styling
-        Switch {
-            id: sw
+        ImButton {
+            id: optionButton
             Layout.alignment: Qt.AlignVCenter
-            Material.accent: sw.activeFocus ? Style.raspberryRed : Style.formControlActiveColor
-            checked: pill.checked
             activeFocusOnTab: true
-            
-            onToggled: {
-                pill.checked = checked
-                pill.toggled(checked)
+            text: btnText
+
+            onClicked: {
+                control.clicked()
             }
-            
-            // Focus styling handled by Material.accent color change only
-
-            Keys.onReturnPressed: toggle()
-            Keys.onEnterPressed: toggle()
         }
-
     }
 
-    function forceActiveFocus() { sw.forceActiveFocus() }
+    function forceActiveFocus() { optionButton.forceActiveFocus() }
 }
-
-

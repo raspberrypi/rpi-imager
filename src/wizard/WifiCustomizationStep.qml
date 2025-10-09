@@ -42,14 +42,8 @@ WizardStepBase {
                 fieldWifiSSID.text = detectedSsid
             }
         }
-        // Always prefer recommended country from capital city selection
-        // User can still change it manually, but it resets to recommendation each time
-        if (saved.recommendedWifiCountry) {
-            fieldWifiCountry.editText = saved.recommendedWifiCountry
-        } else if (saved.wifiCountry) {
-            // Fallback to previously saved country if no recommendation
-            fieldWifiCountry.editText = saved.wifiCountry
-        }
+        // Note: WiFi country is initialized by fieldWifiCountry's Component.onCompleted
+        // after the model is loaded, which properly handles recommended/saved/default values
         if (saved.wifiHidden !== undefined) {
             chkWifiHidden.checked = !!saved.wifiHidden
         }
@@ -117,12 +111,13 @@ WizardStepBase {
                     font.pixelSize: Style.fontSizeInput
                     Component.onCompleted: {
                         model = root.imageWriter.getCountryList()
-                        // Try to restore country selection
-                        // Priority: recommendation from capital city > previously saved country > default
+                        // Always use recommended country from capital city selection
+                        // Priority: recommendation from capital city > default (GB)
+                        // We intentionally ignore any previously saved wifiCountry
                         var saved = root.imageWriter.getSavedCustomizationSettings()
-                        console.log("WifiCustomizationStep: recommendedWifiCountry =", saved.recommendedWifiCountry, "wifiCountry =", saved.wifiCountry)
+                        console.log("WifiCustomizationStep: recommendedWifiCountry =", saved.recommendedWifiCountry)
                         if (saved && saved.recommendedWifiCountry && model && model.length > 0) {
-                            // Use recommended country from capital city selection (highest priority)
+                            // Use recommended country from capital city selection
                             var target = saved.recommendedWifiCountry
                             var idx = -1
                             for (var i = 0; i < model.length; i++) {
@@ -131,19 +126,6 @@ WizardStepBase {
                             if (idx >= 0) {
                                 currentIndex = idx
                             } else {
-                                fieldWifiCountry.editText = target
-                            }
-                        } else if (saved && saved.wifiCountry && model && model.length > 0) {
-                            // Fallback to previously saved country if no recommendation
-                            var target = saved.wifiCountry
-                            var idx = -1
-                            for (var i = 0; i < model.length; i++) {
-                                if (model[i] === target) { idx = i; break }
-                            }
-                            if (idx >= 0) {
-                                currentIndex = idx
-                            } else {
-                                // Fallback to free text when not in list
                                 fieldWifiCountry.editText = target
                             }
                         } else if (model && model.length > 0) {
