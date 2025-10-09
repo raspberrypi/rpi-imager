@@ -1145,7 +1145,7 @@ void DownloadThread::setImageCustomization(const QByteArray &config, const QByte
 
 bool DownloadThread::_customizeImage()
 {
-    emit preparationStatusUpdate(tr("Customizing image"));
+    emit preparationStatusUpdate(tr("Customising OS"));
 
     // Use DeviceWrapper with existing FileOperations for image customization
     try

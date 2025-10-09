@@ -152,7 +152,7 @@ BaseDialog {
 
             ImButton {
                 id: cancelButton
-                text: qsTr("Cancel")
+                text: CommonStrings.cancel
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
                 onClicked: {
@@ -268,7 +268,7 @@ BaseDialog {
 
             ImButton {
                 id: confirmCancelButton
-                text: qsTr("Cancel")
+                text: CommonStrings.cancel
                 activeFocusOnTab: true
                 onClicked: confirmDisableWarnings.close()
             }

@@ -926,7 +926,7 @@ Item {
             imageWriter: root.imageWriter
             wizardContainer: root
             showBackButton: false
-            nextButtonText: qsTr("Finish")
+            nextButtonText: CommonStrings.finish
             appOptionsButton: optionsButton
             onNextClicked: root.wizardCompleted()
         }

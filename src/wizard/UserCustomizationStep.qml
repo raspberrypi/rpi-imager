@@ -54,7 +54,7 @@ WizardStepBase {
                 }
                 
                 WizardFormLabel {
-                    text: qsTr("Password:")
+                    text: CommonStrings.password
                 }
                 
                 ImTextField {

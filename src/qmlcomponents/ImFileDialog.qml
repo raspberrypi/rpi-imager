@@ -621,7 +621,7 @@ BaseDialog {
         Item { Layout.fillWidth: true }
         ImButton {
             id: cancelButton
-            text: qsTr("Cancel")
+            text: CommonStrings.cancel
             activeFocusOnTab: true
             onClicked: { dialog.close(); dialog.rejected() }
         }

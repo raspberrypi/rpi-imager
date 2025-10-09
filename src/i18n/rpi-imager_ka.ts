@@ -28,10 +28,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Save</source>
         <translation type="unfinished"></translation>
     </message>
@@ -44,19 +40,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Select custom Repository</source>
+        <source>Content Repository</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Browse</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select Repository</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select custom repository</source>
+        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -88,6 +76,98 @@
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation type="unfinished">უკან</translation>
+    </message>
+    <message>
+        <source>Finish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select image</source>
+        <translation type="unfinished">აირჩიეთ დისკის ასლის ფაილი</translation>
+    </message>
+    <message>
+        <source>Password:</source>
+        <translation type="unfinished">პაროლი:</translation>
+    </message>
+    <message>
+        <source>Device:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No device selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No image selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No storage selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hostname configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>User account configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Locale configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wi‑Fi configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Connect enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB Gadget enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I2C enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SPI enabled</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -155,47 +235,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No device selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Operating System:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No image selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Storage Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No storage device selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Hostname configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ User account configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ SSH enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Raspberry Pi Connect enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Locale configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -211,19 +255,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Write complete!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Customisations applied:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Wi‑Fi configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -330,10 +366,6 @@
         <translation>ჩანაწერის გადამოწმება ჩავარდა. SD ბარათი არ შეიცავს იმ მონაცემებს, რაც ზედ ჩაიწერა.</translation>
     </message>
     <message>
-        <source>Customizing image</source>
-        <translation>დისკის ასლის ფაილის მორგება</translation>
-    </message>
-    <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -399,6 +431,10 @@
     </message>
     <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customising OS</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -474,19 +510,11 @@
 <context>
     <name>IfAndFeaturesCustomizationStep</name>
     <message>
-        <source>Customization: Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Enable hardware interfaces and connectivity options.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Interfaces</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Enable I²C</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -526,11 +554,15 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
+        <source>I understand, continue</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>I understand, continue</source>
+        <source>Customisation: Interfaces &amp; Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable I2C</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -546,10 +578,6 @@
     </message>
     <message>
         <source>Folders</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -674,14 +702,6 @@
         <source>This will require administrator authentication on macOS.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>No</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>LanguageSelectionStep</name>
@@ -774,10 +794,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Back</source>
-        <translation type="unfinished">უკან</translation>
-    </message>
-    <message>
         <source>Go back to main menu</source>
         <translation type="unfinished">მთავარ მენიუზე დაბრუნება</translation>
     </message>
@@ -844,10 +860,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Browse</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Select SSH Public Key</source>
         <translation type="unfinished"></translation>
     </message>
@@ -873,6 +885,41 @@
     </message>
     <message>
         <source>Failed to read SSH key file</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RepositoryDialog</name>
+    <message>
+        <source>Content Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Repository source:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use custom file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use custom URI</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please select a custom repository json file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply &amp; Restart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select custom repository</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -909,24 +956,12 @@
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>No</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>UserCustomizationStep</name>
     <message>
         <source>Username:</source>
         <translation type="unfinished">მომხმარებელი:</translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation type="unfinished">პაროლი:</translation>
     </message>
     <message>
         <source>Enter password</source>
@@ -974,10 +1009,6 @@
     <message>
         <source>Network name</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation type="unfinished">პაროლი:</translation>
     </message>
     <message>
         <source>Network password</source>
@@ -1031,10 +1062,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Customisation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1082,10 +1109,6 @@
         <translation type="unfinished">შემდეგი</translation>
     </message>
     <message>
-        <source>Back</source>
-        <translation type="unfinished">უკან</translation>
-    </message>
-    <message>
         <source>Skip customisation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1097,55 +1120,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Continue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Write</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Summary</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No device selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No image selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Storage:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No storage selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• Hostname configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• User account configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• SSH enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• Locale configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1197,10 +1176,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>• Wi‑Fi configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Finalising...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1218,22 +1193,6 @@
     </message>
     <message>
         <source>Ready to write the image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• USB Gadget enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• I2C enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• SPI enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• Raspberry Pi Connect enabled</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1272,19 +1231,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Storage device removed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Continue</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

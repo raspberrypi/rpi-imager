@@ -28,10 +28,6 @@
         <translation>Warnungen ausschalten</translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation>Abbrechen</translation>
-    </message>
-    <message>
         <source>Save</source>
         <translation>Speichern</translation>
     </message>
@@ -44,19 +40,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Select custom Repository</source>
+        <source>Content Repository</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Browse</source>
-        <translation>Durchsuchen</translation>
-    </message>
-    <message>
-        <source>Select Repository</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select custom repository</source>
+        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -88,6 +76,98 @@
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Abbrechen</translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation type="unfinished">Ja</translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation type="unfinished">Nein</translation>
+    </message>
+    <message>
+        <source>Browse</source>
+        <translation type="unfinished">Durchsuchen</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished">Weiter</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation type="unfinished">Zurück</translation>
+    </message>
+    <message>
+        <source>Finish</source>
+        <translation type="unfinished">Beenden</translation>
+    </message>
+    <message>
+        <source>Select image</source>
+        <translation type="unfinished">Image auswählen</translation>
+    </message>
+    <message>
+        <source>Password:</source>
+        <translation type="unfinished">Passwort:</translation>
+    </message>
+    <message>
+        <source>Device:</source>
+        <translation type="unfinished">Modell:</translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation type="unfinished">Speicher:</translation>
+    </message>
+    <message>
+        <source>No device selected</source>
+        <translation type="unfinished">Kein Modell ausgewählt</translation>
+    </message>
+    <message>
+        <source>No image selected</source>
+        <translation type="unfinished">Kein Image ausgewählt</translation>
+    </message>
+    <message>
+        <source>No storage selected</source>
+        <translation type="unfinished">Kein Speichergerät ausgewählt</translation>
+    </message>
+    <message>
+        <source>Hostname configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>User account configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Locale configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wi‑Fi configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Connect enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB Gadget enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I2C enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SPI enabled</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -155,48 +235,12 @@
         <translation>Ihr Auswahl:</translation>
     </message>
     <message>
-        <source>Device:</source>
-        <translation>Modell:</translation>
-    </message>
-    <message>
-        <source>No device selected</source>
-        <translation>Kein Modell ausgewählt</translation>
-    </message>
-    <message>
         <source>Operating System:</source>
         <translation>Betriebssystem:</translation>
     </message>
     <message>
-        <source>No image selected</source>
-        <translation>Kein Image ausgewählt</translation>
-    </message>
-    <message>
         <source>Storage Device:</source>
         <translation>Speichergerät:</translation>
-    </message>
-    <message>
-        <source>No storage device selected</source>
-        <translation>Kein Speichergerät ausgewählt</translation>
-    </message>
-    <message>
-        <source>✓ Hostname configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ User account configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ SSH enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Raspberry Pi Connect enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Locale configured</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
@@ -211,19 +255,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation>Beenden</translation>
-    </message>
-    <message>
         <source>Write complete!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Customisations applied:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Wi‑Fi configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -330,10 +366,6 @@
         <translation>Verifizierung fehlgeschlagen. Der Inhalt der SD-Karte weicht von dem Inhalt ab, der geschrieben werden sollte.</translation>
     </message>
     <message>
-        <source>Customizing image</source>
-        <translation>Image modifizieren</translation>
-    </message>
-    <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -399,6 +431,10 @@
     </message>
     <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customising OS</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -474,19 +510,11 @@
 <context>
     <name>IfAndFeaturesCustomizationStep</name>
     <message>
-        <source>Customization: Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Enable hardware interfaces and connectivity options.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Interfaces</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Enable I²C</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -526,11 +554,15 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation>Abbrechen</translation>
+        <source>I understand, continue</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>I understand, continue</source>
+        <source>Customisation: Interfaces &amp; Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable I2C</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -547,10 +579,6 @@
     <message>
         <source>Folders</source>
         <translation>Ordner</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation>Abbrechen</translation>
     </message>
     <message>
         <source>Open</source>
@@ -674,14 +702,6 @@
         <source>This will require administrator authentication on macOS.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>No</source>
-        <translation>Nein</translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation>Ja</translation>
-    </message>
 </context>
 <context>
     <name>LanguageSelectionStep</name>
@@ -774,10 +794,6 @@
         <translation>Online - %1 download</translation>
     </message>
     <message>
-        <source>Back</source>
-        <translation>Zurück</translation>
-    </message>
-    <message>
         <source>Go back to main menu</source>
         <translation>Zurück zum Hauptmenü</translation>
     </message>
@@ -844,10 +860,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Browse</source>
-        <translation>Durchsuchen</translation>
-    </message>
-    <message>
         <source>Select SSH Public Key</source>
         <translation type="unfinished"></translation>
     </message>
@@ -873,6 +885,41 @@
     </message>
     <message>
         <source>Failed to read SSH key file</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RepositoryDialog</name>
+    <message>
+        <source>Content Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Repository source:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use custom file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use custom URI</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please select a custom repository json file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply &amp; Restart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select custom repository</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -909,24 +956,12 @@
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
         <translation>Es ist eine neuere Version von Imager verfügbar. Möchten Sie die Website besuchen, um sie herunterzuladen?</translation>
     </message>
-    <message>
-        <source>No</source>
-        <translation>Nein</translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation>Ja</translation>
-    </message>
 </context>
 <context>
     <name>UserCustomizationStep</name>
     <message>
         <source>Username:</source>
         <translation>Benutzername:</translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation>Passwort:</translation>
     </message>
     <message>
         <source>Enter password</source>
@@ -974,10 +1009,6 @@
     <message>
         <source>Network name</source>
         <translation>Netzwerk Name</translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation>Passwort:</translation>
     </message>
     <message>
         <source>Network password</source>
@@ -1031,10 +1062,6 @@
         <translation>Fertig</translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation>Beenden</translation>
-    </message>
-    <message>
         <source>Customisation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1082,10 +1109,6 @@
         <translation>Weiter</translation>
     </message>
     <message>
-        <source>Back</source>
-        <translation>Zurück</translation>
-    </message>
-    <message>
         <source>Skip customisation</source>
         <translation>Anpassung überspringen</translation>
     </message>
@@ -1097,56 +1120,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation>Abbrechen</translation>
-    </message>
-    <message>
-        <source>Continue</source>
-        <translation>Weiter</translation>
-    </message>
-    <message>
         <source>Write</source>
         <translation>Schreiben</translation>
     </message>
     <message>
         <source>Summary</source>
         <translation>Zusammenfassung</translation>
-    </message>
-    <message>
-        <source>Device:</source>
-        <translation>Modell:</translation>
-    </message>
-    <message>
-        <source>No device selected</source>
-        <translation>Kein Modell ausgewählt</translation>
-    </message>
-    <message>
-        <source>No image selected</source>
-        <translation>Kein Image ausgewählt</translation>
-    </message>
-    <message>
-        <source>Storage:</source>
-        <translation>Speicher:</translation>
-    </message>
-    <message>
-        <source>No storage selected</source>
-        <translation>Kein Speichergerät ausgewählt</translation>
-    </message>
-    <message>
-        <source>• Hostname configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• User account configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• SSH enabled</source>
-        <translation>• SSH aktiviert</translation>
-    </message>
-    <message>
-        <source>• Locale configured</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Starting write process...</source>
@@ -1197,10 +1176,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>• Wi‑Fi configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Finalising...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1218,22 +1193,6 @@
     </message>
     <message>
         <source>Ready to write the image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• USB Gadget enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• I2C enabled</source>
-        <translation>• I2C enabled</translation>
-    </message>
-    <message>
-        <source>• SPI enabled</source>
-        <translation>• SPI enabled</translation>
-    </message>
-    <message>
-        <source>• Raspberry Pi Connect enabled</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1272,20 +1231,8 @@
         <translation>Raspberry Pi Imager ist noch beschäftigt. Möchten Sie wirklich beenden?</translation>
     </message>
     <message>
-        <source>No</source>
-        <translation>Nein</translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation>Ja</translation>
-    </message>
-    <message>
         <source>Storage device removed</source>
         <translation>Speichergerät entfernt</translation>
-    </message>
-    <message>
-        <source>Continue</source>
-        <translation>Weiter</translation>
     </message>
     <message>
         <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>

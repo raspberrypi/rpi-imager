@@ -89,7 +89,7 @@ WizardStepBase {
                 }
                 
                 WizardFormLabel {
-                    text: qsTr("Password:")
+                    text: CommonStrings.password
                 }
                 
                 ImTextField {
@@ -109,6 +109,7 @@ WizardStepBase {
                     Layout.fillWidth: true
                     model: []
                     font.pixelSize: Style.fontSizeInput
+                    property bool isInitializing: true
                     Component.onCompleted: {
                         model = root.imageWriter.getCountryList()
                         // Always use recommended country from capital city selection
@@ -136,10 +137,15 @@ WizardStepBase {
                             }
                             currentIndex = (gbIndex >= 0) ? gbIndex : 0
                         }
+                        isInitializing = false
+                        // Now that initialization is complete, update the label once
+                        recommendedLabel.updateVisibility()
                     }
                     onCurrentTextChanged: {
-                        // Update visibility when selection changes
-                        recommendedLabel.updateVisibility()
+                        // Update visibility when selection changes (but not during initialization)
+                        if (!isInitializing) {
+                            recommendedLabel.updateVisibility()
+                        }
                     }
                 }
                 
@@ -167,8 +173,6 @@ WizardStepBase {
                             console.log("WifiCustomizationStep: no recommendation available")
                         }
                     }
-                    
-                    Component.onCompleted: updateVisibility()
                 }
             }
             

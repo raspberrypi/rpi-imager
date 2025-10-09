@@ -441,24 +441,7 @@ WizardStepBase {
             id: sublistview
             autoSelectFirst: true
             model: ListModel {
-                // Back entry
-                ListElement {
-                    url: ""
-                    icon: "../icons/ic_chevron_left_40px.svg"
-                    extract_size: 0
-                    image_download_size: 0
-                    extract_sha256: ""
-                    contains_multiple_files: false
-                    release_date: ""
-                    subitems_url: "internal://back"
-                    subitems_json: ""
-                    name: qsTr("Back")
-                    description: qsTr("Go back to main menu")
-                    tooltip: ""
-                    website: ""
-                    init_format: ""
-                    capabilities: ""
-                }
+                id: sublistModel
             }
             delegate: osdelegate
             
@@ -472,6 +455,25 @@ WizardStepBase {
             onLeftPressed: root.handleBackNavigation
             
             Component.onCompleted: {
+                // Build the back entry dynamically to support translations
+                sublistModel.append({
+                    url: "",
+                    icon: "../icons/ic_chevron_left_40px.svg",
+                    extract_size: 0,
+                    image_download_size: 0,
+                    extract_sha256: "",
+                    contains_multiple_files: false,
+                    release_date: "",
+                    subitems_url: "internal://back",
+                    subitems_json: "",
+                    name: CommonStrings.back,
+                    description: qsTr("Go back to main menu"),
+                    tooltip: "",
+                    website: "",
+                    init_format: "",
+                    capabilities: ""
+                })
+                
                 // Ensure this sublist can receive keyboard focus
                 forceActiveFocus()
                 root.initializeListViewFocus(sublistview)

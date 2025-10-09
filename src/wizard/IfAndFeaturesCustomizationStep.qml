@@ -23,7 +23,7 @@ WizardStepBase {
     property bool supportsUsbOtg: false
     property bool isConfirmed: false
 
-    title: qsTr("Customization: Interfaces & Features")
+    title: qsTr("Customisation: Interfaces & Features")
     subtitle: qsTr("Enable hardware interfaces and connectivity options.")
     showSkipButton: true
     nextButtonEnabled: true
@@ -265,7 +265,7 @@ WizardStepBase {
 
             ImButton {
                 id: cancelBtn
-                text: qsTr("Cancel")
+                text: CommonStrings.cancel
                 activeFocusOnTab: true
                 onClicked: confirmDialog.close()
             }

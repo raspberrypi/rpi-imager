@@ -19,7 +19,7 @@ WizardStepBase {
 
     title: qsTr("Write image")
     subtitle: qsTr("Review your choices and write the image to the storage device")
-    nextButtonText: root.isWriting ? qsTr("Cancel") : (root.isComplete ? qsTr("Continue") : qsTr("Write"))
+    nextButtonText: root.isWriting ? CommonStrings.cancel : (root.isComplete ? CommonStrings.continueText : qsTr("Write"))
     nextButtonEnabled: root.isWriting || root.isComplete || imageWriter.readyToWrite()
     showBackButton: true
 
@@ -77,14 +77,14 @@ WizardStepBase {
                 rowSpacing: Style.spacingSmall
 
                 Text {
-                    text: qsTr("Device:")
+                    text: CommonStrings.device
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                 }
 
                 Text {
-                    text: wizardContainer.selectedDeviceName || qsTr("No device selected")
+                    text: wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -100,7 +100,7 @@ WizardStepBase {
                 }
 
                 Text {
-                    text: wizardContainer.selectedOsName || qsTr("No image selected")
+                    text: wizardContainer.selectedOsName || CommonStrings.noImageSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -109,14 +109,14 @@ WizardStepBase {
                 }
 
                 Text {
-                    text: qsTr("Storage:")
+                    text: CommonStrings.storage
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                 }
 
                 Text {
-                    text: wizardContainer.selectedStorageName || qsTr("No storage selected")
+                    text: wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
@@ -184,15 +184,15 @@ WizardStepBase {
                         id: customizationsColumn
                         width: parent.width
                         spacing: Style.spacingXSmall
-                        Text { text: qsTr("• Hostname configured");        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.hostnameConfigured }
-                        Text { text: qsTr("• User account configured");    font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.userConfigured }
-                        Text { text: qsTr("• Wi‑Fi configured");           font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured }
-                        Text { text: qsTr("• SSH enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled }
-                        Text { text: qsTr("• Raspberry Pi Connect enabled");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled }
-                        Text { text: qsTr("• USB Gadget enabled");         font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.featUsbGadgetEnabled }
-                        Text { text: qsTr("• I2C enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifI2cEnabled }
-                        Text { text: qsTr("• SPI enabled");                font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSpiEnabled }
-                        Text { text: qsTr("• Locale configured");          font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.localeConfigured }
+                        Text { text: "• " + CommonStrings.hostnameConfigured;      font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.hostnameConfigured }
+                        Text { text: "• " + CommonStrings.userAccountConfigured;   font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.userConfigured }
+                        Text { text: "• " + CommonStrings.wifiConfigured;          font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured }
+                        Text { text: "• " + CommonStrings.sshEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled }
+                        Text { text: "• " + CommonStrings.piConnectEnabled;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled }
+                        Text { text: "• " + CommonStrings.usbGadgetEnabled;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.featUsbGadgetEnabled }
+                        Text { text: "• " + CommonStrings.i2cEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifI2cEnabled }
+                        Text { text: "• " + CommonStrings.spiEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSpiEnabled }
+                        Text { text: "• " + CommonStrings.localeConfigured;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.localeConfigured }
                     }
                 }
                 ScrollBar.vertical: ScrollBar {
@@ -329,7 +329,7 @@ WizardStepBase {
 
             ImButton {
                 id: cancelButton
-                text: qsTr("Cancel")
+                text: CommonStrings.cancel
                 activeFocusOnTab: true
                 onClicked: confirmDialog.close()
             }

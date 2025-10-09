@@ -47,11 +47,9 @@ ListView {
     // Standard highlight configuration
     highlight: Rectangle {
         // When focused: use stronger highlight color
-        // When not focused (default selected): use focus border style to show it's the default choice
+        // When not focused (default selected): use subtle highlight to show it's the default choice
         color: root.activeFocus ? Style.listViewHighlightColor : Style.listViewRowBackgroundColor
         radius: 0
-        border.color: root.activeFocus ? Style.buttonFocusedBackgroundColor : Style.buttonFocusedBackgroundColor
-        border.width: root.activeFocus ? 2 : 2
         anchors.fill: parent
         anchors.rightMargin: (root.contentHeight > root.height ? Style.scrollBarWidth : 0)
     }
