@@ -1742,9 +1742,10 @@ QStringList ImageWriter::getCountryList()
 {
     QStringList countries;
     QFile f(":/countries.txt");
-    if ( f.open(f.ReadOnly) )
+    if (f.open(QFile::ReadOnly | QFile::Text))
     {
-        countries = QString(f.readAll()).trimmed().split('\n');
+        countries = QString::fromUtf8(f.readAll()).split('\n', Qt::SkipEmptyParts);
+        for (QString &s : countries) s = s.trimmed();
         f.close();
     }
 
