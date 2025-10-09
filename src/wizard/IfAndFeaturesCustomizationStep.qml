@@ -137,7 +137,7 @@ WizardStepBase {
     ]
 
     Component.onCompleted: {
-        if (!imageWriter.checkSWCapability("rpios_cloudinit")) {
+        if (!wizardContainer.ccRpiAvailable) {
             root.isConfirmed = true
             wizardContainer.ifI2cEnabled     = false
             wizardContainer.ifSpiEnabled     = false

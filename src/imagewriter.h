@@ -247,6 +247,7 @@ public:
     Q_INVOKABLE void clearSavedCustomizationSettings();
     Q_INVOKABLE bool hasSavedCustomizationSettings();
     Q_INVOKABLE bool imageSupportsCustomization();
+    Q_INVOKABLE bool imageSupportsCcRpi();
 
     Q_INVOKABLE QString crypt(const QByteArray &password);
     Q_INVOKABLE QString pbkdf2(const QByteArray &psk, const QByteArray &ssid);

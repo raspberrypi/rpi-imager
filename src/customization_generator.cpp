@@ -227,7 +227,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
 
 QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& settings,
                                                              const QString& piConnectToken,
-                                                             bool isRpiosCloudInit,
+                                                             bool hasCcRpi,
                                                              bool sshEnabled,
                                                              const QString& currentUser)
 {
@@ -319,8 +319,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     const bool armInterfaceEnabled = enableI2C || enableSPI || enableSerial != "Disabled";
     const bool isUsbGadgetEnabled = settings.value("enableUsbGadget").toBool();
     
-    // cc_raspberry_pi config for rpios_cloudinit capable OSs
-    if (isRpiosCloudInit && (isUsbGadgetEnabled || armInterfaceEnabled)) {
+    // cc_raspberry_pi config for capable OSs
+    if (hasCcRpi && (isUsbGadgetEnabled || armInterfaceEnabled)) {
         push(QStringLiteral("rpi:"), cloud);
         
         if (isUsbGadgetEnabled) {
@@ -381,7 +381,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
 }
 
 QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariantMap& settings,
-                                                                  bool isRpiosCloudInit)
+                                                                  bool hasCcRpi)
 {
     QByteArray netcfg;
     
@@ -401,8 +401,8 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         push(QStringLiteral("  version: 2"), netcfg);
         push(QStringLiteral("  wifis:"), netcfg);
         push(QStringLiteral("    renderer: %1")
-                 .arg(isRpiosCloudInit ? QStringLiteral("NetworkManager")
-                                       : QStringLiteral("networkd")),
+                 .arg(hasCcRpi ? QStringLiteral("NetworkManager")
+                               : QStringLiteral("networkd")),
              netcfg);
         push(QStringLiteral("    wlan0:"), netcfg);
         push(QStringLiteral("      dhcp4: true"), netcfg);
