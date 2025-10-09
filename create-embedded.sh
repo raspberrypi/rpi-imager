@@ -399,8 +399,9 @@ strip --strip-unneeded $(find . -name "*.so*")
 popd
 
 echo "Creating embedded AppImage..."
-# Remove old AppImage symlink
+# Remove old symlinks for embedded variant only
 rm -f "$PWD/rpi-imager-embedded.AppImage"
+rm -f "$PWD/rpi-imager-embedded-$ARCH.AppImage"
 
 if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
     # Create AppImage using linuxdeploy
@@ -414,9 +415,20 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         --exclude-library="libicudata*"
     
     # Rename the output file
+    # Use a more specific pattern to avoid matching other variant AppImages
     for appimage in *.AppImage; do
-        if [ "$PWD/$appimage" != "$OUTPUT_FILE" ]; then
+        # Skip if this is a regular (non-embedded) or CLI variant AppImage
+        if [[ "$appimage" != *"-embedded-"* ]]; then
+            continue
+        fi
+        # Skip if this is already our target file
+        if [ "$PWD/$appimage" = "$OUTPUT_FILE" ]; then
+            continue
+        fi
+        # Only rename if this looks like it was created by linuxdeploy for us
+        if [[ "$appimage" =~ ^(rpi-imager|Raspberry_Pi_Imager).*-embedded-.*\.AppImage$ ]]; then
             mv "$appimage" "$OUTPUT_FILE"
+            break
         fi
     done
 else
@@ -432,13 +444,21 @@ fi
 if [ -f "$OUTPUT_FILE" ]; then
     echo "Embedded AppImage created at $OUTPUT_FILE"
     
-    # Create a symlink with a simpler name
+    # Create symlinks with simpler names
     SYMLINK_NAME="$PWD/rpi-imager-embedded.AppImage"
+    SYMLINK_ARCH_NAME="$PWD/rpi-imager-embedded-$ARCH.AppImage"
+    
     if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
         rm -f "$SYMLINK_NAME"
     fi
     ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_NAME"
     echo "Created symlink: $SYMLINK_NAME -> $(basename "$OUTPUT_FILE")"
+    
+    if [ -L "$SYMLINK_ARCH_NAME" ] || [ -f "$SYMLINK_ARCH_NAME" ]; then
+        rm -f "$SYMLINK_ARCH_NAME"
+    fi
+    ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_ARCH_NAME"
+    echo "Created symlink: $SYMLINK_ARCH_NAME -> $(basename "$OUTPUT_FILE")"
     
     echo ""
     echo "Embedded AppImage build completed successfully for $ARCH architecture."

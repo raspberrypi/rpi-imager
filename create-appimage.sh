@@ -294,15 +294,26 @@ rm -f "$APPDIR/usr/lib/libQt6QuickControls2WindowsStyleImpl.so"*
 
 # Create the AppImage
 echo "Creating AppImage..."
-# Remove old AppImage symlink
-rm -f "$PWD/rpi-imager.AppImage"
+# Remove old symlinks for this variant only
+rm -f "$PWD/rpi-imager-$ARCH.AppImage"
 # Ensure LD_LIBRARY_PATH is still set for this call too
 "$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage
 
 # Rename the output file if needed
+# Use a more specific pattern to avoid matching CLI AppImages
 for appimage in *.AppImage; do
-    if [ "$PWD/$appimage" != "$OUTPUT_FILE" ]; then
+    # Skip if this is a CLI or other variant AppImage
+    if [[ "$appimage" == *"-cli-"* ]] || [[ "$appimage" == *"-embedded-"* ]]; then
+        continue
+    fi
+    # Skip if this is already our target file
+    if [ "$PWD/$appimage" = "$OUTPUT_FILE" ]; then
+        continue
+    fi
+    # Only rename if this looks like it was created by linuxdeploy for us
+    if [[ "$appimage" =~ ^(rpi-imager|Raspberry_Pi_Imager).*\.AppImage$ ]]; then
         mv "$appimage" "$OUTPUT_FILE"
+        break
     fi
 done
 

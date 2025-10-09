@@ -304,8 +304,9 @@ fi
 popd
 
 echo "Creating CLI-only AppImage..."
-# Remove old AppImage symlink
+# Remove old symlinks for CLI variant only
 rm -f "$PWD/rpi-imager-cli.AppImage"
+rm -f "$PWD/rpi-imager-cli-$ARCH.AppImage"
 
 if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
     # Create AppImage using linuxdeploy
@@ -321,9 +322,20 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         --exclude-library="libEGL*"
     
     # Rename the output file
+    # Use a more specific pattern to avoid matching other variant AppImages
     for appimage in *.AppImage; do
-        if [ "$PWD/$appimage" != "$OUTPUT_FILE" ]; then
+        # Skip if this is a regular (non-CLI) or other variant AppImage
+        if [[ "$appimage" != *"-cli-"* ]]; then
+            continue
+        fi
+        # Skip if this is already our target file
+        if [ "$PWD/$appimage" = "$OUTPUT_FILE" ]; then
+            continue
+        fi
+        # Only rename if this looks like it was created by linuxdeploy for us
+        if [[ "$appimage" =~ ^(rpi-imager|Raspberry_Pi_Imager).*-cli-.*\.AppImage$ ]]; then
             mv "$appimage" "$OUTPUT_FILE"
+            break
         fi
     done
 else
@@ -339,13 +351,21 @@ fi
 if [ -f "$OUTPUT_FILE" ]; then
     echo "CLI-only AppImage created at $OUTPUT_FILE"
     
-    # Create a symlink with a simpler name
+    # Create symlinks with simpler names
     SYMLINK_NAME="$PWD/rpi-imager-cli.AppImage"
+    SYMLINK_ARCH_NAME="$PWD/rpi-imager-cli-$ARCH.AppImage"
+    
     if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
         rm -f "$SYMLINK_NAME"
     fi
     ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_NAME"
     echo "Created symlink: $SYMLINK_NAME -> $(basename "$OUTPUT_FILE")"
+    
+    if [ -L "$SYMLINK_ARCH_NAME" ] || [ -f "$SYMLINK_ARCH_NAME" ]; then
+        rm -f "$SYMLINK_ARCH_NAME"
+    fi
+    ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_ARCH_NAME"
+    echo "Created symlink: $SYMLINK_ARCH_NAME -> $(basename "$OUTPUT_FILE")"
     
     # Show size comparison if regular AppImage exists
     REGULAR_APPIMAGE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-${ARCH}.AppImage"
