@@ -156,7 +156,7 @@ Item {
             return []
         }
         
-        var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote Access")]
+        var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote access")]
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
@@ -177,7 +177,7 @@ Item {
         if (stepLabel === qsTr("Localisation")) return localeConfigured
         if (stepLabel === qsTr("User")) return userConfigured
         if (stepLabel === qsTr("Wi‑Fi")) return wifiConfigured
-        if (stepLabel === qsTr("Remote Access")) return sshEnabled
+        if (stepLabel === qsTr("Remote access")) return sshEnabled
         if (stepLabel === qsTr("Raspberry Pi Connect")) return piConnectEnabled
         if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || ifSerial !== "" || featUsbGadgetEnabled)
         
@@ -426,7 +426,7 @@ Item {
                                         else if (root.currentStep === root.stepLocaleCustomization) currentStepLabel = qsTr("Localisation")
                                         else if (root.currentStep === root.stepUserCustomization) currentStepLabel = qsTr("User")
                                         else if (root.currentStep === root.stepWifiCustomization) currentStepLabel = qsTr("Wi‑Fi")
-                                        else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote Access")
+                                        else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote access")
                                         else if (root.currentStep === root.stepPiConnectCustomization) currentStepLabel = qsTr("Raspberry Pi Connect")
                                         else if (root.currentStep === root.stepIfAndFeatures) currentStepLabel = qsTr("Interfaces & Features")
                                         
@@ -466,7 +466,7 @@ Item {
                                             else if (stepLabel === qsTr("Localisation")) target = root.stepLocaleCustomization
                                             else if (stepLabel === qsTr("User")) target = root.stepUserCustomization
                                             else if (stepLabel === qsTr("Wi‑Fi")) target = root.stepWifiCustomization
-                                            else if (stepLabel === qsTr("Remote Access")) target = root.stepRemoteAccess
+                                            else if (stepLabel === qsTr("Remote access")) target = root.stepRemoteAccess
                                             else if (stepLabel === qsTr("Raspberry Pi Connect")) target = root.stepPiConnectCustomization
                                             else if (stepLabel === qsTr("Interfaces & Features")) target = root.stepIfAndFeatures
                                             

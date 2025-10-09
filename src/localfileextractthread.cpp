@@ -46,7 +46,7 @@ void LocalFileExtractThread::run()
     if (isImage() && !_openAndPrepareDevice())
         return;
 
-    emit preparationStatusUpdate(tr("opening image file"));
+    emit preparationStatusUpdate(tr("Opening image file..."));
     _timer.start();
     _inputfile.setFileName( QUrl(_url).toLocalFile() );
     if (!_inputfile.open(_inputfile.ReadOnly))
@@ -57,7 +57,7 @@ void LocalFileExtractThread::run()
     }
     _lastDlTotal = _inputfile.size();
     
-    emit preparationStatusUpdate(tr("starting extraction"));
+    emit preparationStatusUpdate(tr("Starting extraction..."));
 
     // Test if this file can be handled by libarchive
     bool canUseArchive = false;
