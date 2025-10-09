@@ -8,6 +8,7 @@ set -e
 
 # Source common configuration and functions
 BASE_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+PROJECT_ROOT="$(cd "$BASE_DIR/.." && pwd)"
 source "$BASE_DIR/qt-build-common.sh"
 
 # Initialize common variables
@@ -131,8 +132,8 @@ else
     echo "Building custom ICU..."
 
     cd "$BASE_DIR"
-    # Compile Languages List
-    LANG_DIR="$BASE_DIR/../src/i18n"
+    # Compile Languages List from project i18n directory
+    LANG_DIR="$PROJECT_ROOT/src/i18n"
 
     if [ -d "$LANG_DIR" ]; then
         pushd "$LANG_DIR" > /dev/null
