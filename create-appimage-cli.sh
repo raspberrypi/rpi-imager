@@ -310,7 +310,10 @@ rm -f "$PWD/rpi-imager-cli-$ARCH.AppImage"
 
 if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
     # Create AppImage using linuxdeploy
-    LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage \
+    # Explicitly specify the desktop file to ensure correct naming
+    LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" \
+        --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-cli.desktop" \
+        --output=appimage \
         --exclude-library="libwayland-*" \
         --exclude-library="libX11*" \
         --exclude-library="libxcb*" \
@@ -322,22 +325,32 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         --exclude-library="libEGL*"
     
     # Rename the output file
-    # Use a more specific pattern to avoid matching other variant AppImages
+    # Find and rename the AppImage created by linuxdeploy to our standardized name
+    RENAMED=false
     for appimage in *.AppImage; do
-        # Skip if this is a regular (non-CLI) or other variant AppImage
-        if [[ "$appimage" != *"-cli-"* ]]; then
+        # Skip symlinks
+        if [ -L "$appimage" ]; then
             continue
         fi
         # Skip if this is already our target file
-        if [ "$PWD/$appimage" = "$OUTPUT_FILE" ]; then
-            continue
+        if [ "$appimage" = "$(basename "$OUTPUT_FILE")" ]; then
+            RENAMED=true
+            break
         fi
-        # Only rename if this looks like it was created by linuxdeploy for us
-        if [[ "$appimage" =~ ^(rpi-imager|Raspberry_Pi_Imager).*-cli-.*\.AppImage$ ]]; then
+        # Only rename if this contains "CLI" (linuxdeploy creates Raspberry_Pi_Imager_(CLI)-arch.AppImage)
+        if [[ "$appimage" == *"CLI"* ]] && [[ "$appimage" == *"${ARCH}"* ]]; then
+            echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
             mv "$appimage" "$OUTPUT_FILE"
+            RENAMED=true
             break
         fi
     done
+    
+    # Check if we successfully found/created the output file
+    if [ "$RENAMED" = false ] && [ ! -f "$OUTPUT_FILE" ]; then
+        echo "Warning: Could not find CLI AppImage to rename. Looking for any matching AppImage..."
+        ls -la *.AppImage 2>/dev/null || true
+    fi
 else
     # Manual AppImage creation (basic implementation)
     echo "Creating AppImage manually (basic implementation)..."
@@ -351,21 +364,22 @@ fi
 if [ -f "$OUTPUT_FILE" ]; then
     echo "CLI-only AppImage created at $OUTPUT_FILE"
     
-    # Create symlinks with simpler names
-    SYMLINK_NAME="$PWD/rpi-imager-cli.AppImage"
-    SYMLINK_ARCH_NAME="$PWD/rpi-imager-cli-$ARCH.AppImage"
-    
-    if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
-        rm -f "$SYMLINK_NAME"
+    # Create symlinks for debian packaging and user convenience
+    # Primary symlink matches debian/rpi-imager-cli.install expectations
+    DEBIAN_SYMLINK="$PWD/rpi-imager-cli-$ARCH.AppImage"
+    if [ -L "$DEBIAN_SYMLINK" ] || [ -f "$DEBIAN_SYMLINK" ]; then
+        rm -f "$DEBIAN_SYMLINK"
     fi
-    ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_NAME"
-    echo "Created symlink: $SYMLINK_NAME -> $(basename "$OUTPUT_FILE")"
+    ln -s "$(basename "$OUTPUT_FILE")" "$DEBIAN_SYMLINK"
+    echo "Created symlink: $DEBIAN_SYMLINK -> $(basename "$OUTPUT_FILE")"
     
-    if [ -L "$SYMLINK_ARCH_NAME" ] || [ -f "$SYMLINK_ARCH_NAME" ]; then
-        rm -f "$SYMLINK_ARCH_NAME"
+    # Additional architecture-independent symlink for convenience
+    SIMPLE_SYMLINK="$PWD/rpi-imager-cli.AppImage"
+    if [ -L "$SIMPLE_SYMLINK" ] || [ -f "$SIMPLE_SYMLINK" ]; then
+        rm -f "$SIMPLE_SYMLINK"
     fi
-    ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_ARCH_NAME"
-    echo "Created symlink: $SYMLINK_ARCH_NAME -> $(basename "$OUTPUT_FILE")"
+    ln -s "$(basename "$OUTPUT_FILE")" "$SIMPLE_SYMLINK"
+    echo "Created symlink: $SIMPLE_SYMLINK -> $(basename "$OUTPUT_FILE")"
     
     # Show size comparison if regular AppImage exists
     REGULAR_APPIMAGE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-${ARCH}.AppImage"

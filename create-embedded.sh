@@ -233,14 +233,15 @@ make DESTDIR="$APPDIR" install
 cd ..
 
 # Copy the desktop file from debian directory and modify for embedded use
-if [ ! -f "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop" ]; then
-    mkdir -p "$APPDIR/usr/share/applications"
-    cp "debian/com.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
-    # Update the desktop file for embedded use
-    sed -i 's|Name=.*|Name=Raspberry Pi Imager (Embedded)|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
-    sed -i 's|Comment=.*|Comment=Raspberry Pi Imager for embedded systems |' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
-    sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
-fi
+mkdir -p "$APPDIR/usr/share/applications"
+# Remove any existing desktop files to avoid confusion
+rm -f "$APPDIR/usr/share/applications/"*.desktop
+# Copy and modify the embedded desktop file
+cp "debian/com.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
+# Update the desktop file for embedded use
+sed -i 's|Name=.*|Name=Raspberry Pi Imager (Embedded)|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
+sed -i 's|Comment=.*|Comment=Raspberry Pi Imager for embedded systems|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
+sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
 
 # Create the AppRun file
 cat > "$APPDIR/AppRun" << 'EOF'
@@ -405,7 +406,11 @@ rm -f "$PWD/rpi-imager-embedded-$ARCH.AppImage"
 
 if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
     # Create AppImage using linuxdeploy
-    LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage --exclude-library="libwayland-*" \
+    # Explicitly specify the desktop file to ensure correct naming
+    LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" \
+        --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop" \
+        --output=appimage \
+        --exclude-library="libwayland-*" \
         --exclude-library="libX11*" \
         --exclude-library="libxcb*" \
         --exclude-library="libXext*" \
@@ -415,22 +420,32 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         --exclude-library="libicudata*"
     
     # Rename the output file
-    # Use a more specific pattern to avoid matching other variant AppImages
+    # Find and rename the AppImage created by linuxdeploy to our standardized name
+    RENAMED=false
     for appimage in *.AppImage; do
-        # Skip if this is a regular (non-embedded) or CLI variant AppImage
-        if [[ "$appimage" != *"-embedded-"* ]]; then
+        # Skip symlinks
+        if [ -L "$appimage" ]; then
             continue
         fi
         # Skip if this is already our target file
-        if [ "$PWD/$appimage" = "$OUTPUT_FILE" ]; then
-            continue
+        if [ "$appimage" = "$(basename "$OUTPUT_FILE")" ]; then
+            RENAMED=true
+            break
         fi
-        # Only rename if this looks like it was created by linuxdeploy for us
-        if [[ "$appimage" =~ ^(rpi-imager|Raspberry_Pi_Imager).*-embedded-.*\.AppImage$ ]]; then
+        # Only rename if this contains "Embedded" (linuxdeploy creates Raspberry_Pi_Imager_(Embedded)-arch.AppImage)
+        if [[ "$appimage" == *"Embedded"* ]] && [[ "$appimage" == *"${ARCH}"* ]]; then
+            echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
             mv "$appimage" "$OUTPUT_FILE"
+            RENAMED=true
             break
         fi
     done
+    
+    # Check if we successfully found/created the output file
+    if [ "$RENAMED" = false ] && [ ! -f "$OUTPUT_FILE" ]; then
+        echo "Warning: Could not find Embedded AppImage to rename. Looking for any matching AppImage..."
+        ls -la *.AppImage 2>/dev/null || true
+    fi
 else
     # Manual AppImage creation (basic implementation)
     echo "Creating AppImage manually (basic implementation)..."
@@ -444,21 +459,22 @@ fi
 if [ -f "$OUTPUT_FILE" ]; then
     echo "Embedded AppImage created at $OUTPUT_FILE"
     
-    # Create symlinks with simpler names
-    SYMLINK_NAME="$PWD/rpi-imager-embedded.AppImage"
-    SYMLINK_ARCH_NAME="$PWD/rpi-imager-embedded-$ARCH.AppImage"
-    
-    if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
-        rm -f "$SYMLINK_NAME"
+    # Create symlinks for debian packaging and user convenience
+    # Primary symlink matches debian/rpi-imager-embedded.install expectations
+    DEBIAN_SYMLINK="$PWD/rpi-imager-embedded.AppImage"
+    if [ -L "$DEBIAN_SYMLINK" ] || [ -f "$DEBIAN_SYMLINK" ]; then
+        rm -f "$DEBIAN_SYMLINK"
     fi
-    ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_NAME"
-    echo "Created symlink: $SYMLINK_NAME -> $(basename "$OUTPUT_FILE")"
+    ln -s "$(basename "$OUTPUT_FILE")" "$DEBIAN_SYMLINK"
+    echo "Created symlink: $DEBIAN_SYMLINK -> $(basename "$OUTPUT_FILE")"
     
-    if [ -L "$SYMLINK_ARCH_NAME" ] || [ -f "$SYMLINK_ARCH_NAME" ]; then
-        rm -f "$SYMLINK_ARCH_NAME"
+    # Additional architecture-specific symlink for clarity when building for multiple architectures
+    ARCH_SYMLINK="$PWD/rpi-imager-embedded-$ARCH.AppImage"
+    if [ -L "$ARCH_SYMLINK" ] || [ -f "$ARCH_SYMLINK" ]; then
+        rm -f "$ARCH_SYMLINK"
     fi
-    ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_ARCH_NAME"
-    echo "Created symlink: $SYMLINK_ARCH_NAME -> $(basename "$OUTPUT_FILE")"
+    ln -s "$(basename "$OUTPUT_FILE")" "$ARCH_SYMLINK"
+    echo "Created symlink: $ARCH_SYMLINK -> $(basename "$OUTPUT_FILE")"
     
     echo ""
     echo "Embedded AppImage build completed successfully for $ARCH architecture."

@@ -138,7 +138,7 @@ QML_SOURCES_PATH="$PWD/src/qmlcomponents/"
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-$ARCH"
-OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-desktop-${ARCH}.AppImage"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"
@@ -295,36 +295,63 @@ rm -f "$APPDIR/usr/lib/libQt6QuickControls2WindowsStyleImpl.so"*
 # Create the AppImage
 echo "Creating AppImage..."
 # Remove old symlinks for this variant only
-rm -f "$PWD/rpi-imager-$ARCH.AppImage"
+rm -f "$PWD/rpi-imager-desktop-$ARCH.AppImage"
+rm -f "$PWD/rpi-imager-$ARCH.AppImage"  # Legacy symlink name
 # Ensure LD_LIBRARY_PATH is still set for this call too
-"$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage
+# Explicitly specify the desktop file to ensure correct naming
+"$LINUXDEPLOY" --appdir="$APPDIR" \
+    --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
+    --output=appimage
 
 # Rename the output file if needed
-# Use a more specific pattern to avoid matching CLI AppImages
+# Find and rename the AppImage created by linuxdeploy to our standardized name
+RENAMED=false
 for appimage in *.AppImage; do
-    # Skip if this is a CLI or other variant AppImage
-    if [[ "$appimage" == *"-cli-"* ]] || [[ "$appimage" == *"-embedded-"* ]]; then
+    # Skip symlinks
+    if [ -L "$appimage" ]; then
         continue
     fi
     # Skip if this is already our target file
-    if [ "$PWD/$appimage" = "$OUTPUT_FILE" ]; then
+    if [ "$appimage" = "$(basename "$OUTPUT_FILE")" ]; then
+        RENAMED=true
+        break
+    fi
+    # Skip if this is a CLI or embedded variant (has those keywords in the name)
+    if [[ "$appimage" == *"CLI"* ]] || [[ "$appimage" == *"Embedded"* ]]; then
         continue
     fi
-    # Only rename if this looks like it was created by linuxdeploy for us
-    if [[ "$appimage" =~ ^(rpi-imager|Raspberry_Pi_Imager).*\.AppImage$ ]]; then
+    # Rename the generic AppImage created by linuxdeploy to our standardized desktop variant name
+    if [[ "$appimage" =~ ^Raspberry_Pi_Imager(-[0-9.]+)?-${ARCH}\.AppImage$ ]]; then
+        echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
         mv "$appimage" "$OUTPUT_FILE"
+        RENAMED=true
         break
     fi
 done
 
+# Check if we successfully found/created the output file
+if [ "$RENAMED" = false ] && [ ! -f "$OUTPUT_FILE" ]; then
+    echo "Warning: Could not find AppImage to rename. Looking for any matching AppImage..."
+    ls -la *.AppImage 2>/dev/null || true
+fi
+
 echo "AppImage created at $OUTPUT_FILE"
 
-# Create a symlink with an architecture-specific name
-SYMLINK_NAME="$PWD/rpi-imager-$ARCH.AppImage"
-if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
-    rm -f "$SYMLINK_NAME"
+# Create symlinks for debian packaging and user convenience
+# Primary symlink matches debian/rpi-imager.install expectations
+DEBIAN_SYMLINK="$PWD/rpi-imager-$ARCH.AppImage"
+if [ -L "$DEBIAN_SYMLINK" ] || [ -f "$DEBIAN_SYMLINK" ]; then
+    rm -f "$DEBIAN_SYMLINK"
 fi
-ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_NAME"
-echo "Created symlink: $SYMLINK_NAME -> $(basename "$OUTPUT_FILE")"
+ln -s "$(basename "$OUTPUT_FILE")" "$DEBIAN_SYMLINK"
+echo "Created symlink: $DEBIAN_SYMLINK -> $(basename "$OUTPUT_FILE")"
+
+# Additional descriptive symlink for clarity when multiple variants exist
+DESCRIPTIVE_SYMLINK="$PWD/rpi-imager-desktop-$ARCH.AppImage"
+if [ -L "$DESCRIPTIVE_SYMLINK" ] || [ -f "$DESCRIPTIVE_SYMLINK" ]; then
+    rm -f "$DESCRIPTIVE_SYMLINK"
+fi
+ln -s "$(basename "$OUTPUT_FILE")" "$DESCRIPTIVE_SYMLINK"
+echo "Created symlink: $DESCRIPTIVE_SYMLINK -> $(basename "$OUTPUT_FILE")"
 
 echo "Build completed successfully for $ARCH architecture." 
