@@ -29,10 +29,10 @@ usage() {
 }
 
 # Parse common arguments first
-remaining_args=($(parse_common_args "$@"))
+parse_common_args "$@"
 
 # Parse script-specific arguments
-for arg in "${remaining_args[@]}"; do
+for arg in "${COMMON_REMAINING_ARGS[@]}"; do
     case $arg in
         --rpi-optimize)
             RPI_OPTIMIZED=1

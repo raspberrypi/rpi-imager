@@ -30,10 +30,10 @@ usage() {
 }
 
 # Parse common arguments (CLI script has no additional arguments)
-remaining_args=($(parse_common_args "$@"))
+parse_common_args "$@"
 
 # Check for any remaining unknown arguments
-for arg in "${remaining_args[@]}"; do
+for arg in "${COMMON_REMAINING_ARGS[@]}"; do
     case $arg in
         -h|--help)
             usage
