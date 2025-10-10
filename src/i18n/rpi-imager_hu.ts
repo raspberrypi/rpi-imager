@@ -263,8 +263,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Storage device:</source>
-        <translation type="unfinished"></translation>
+        <source>Storage:</source>
+        <translation type="unfinished">Tároló:</translation>
     </message>
 </context>
 <context>
@@ -433,7 +433,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Customizing OS...</source>
+        <source>Customising OS...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
