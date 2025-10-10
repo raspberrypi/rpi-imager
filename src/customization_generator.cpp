@@ -395,6 +395,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     const QString ssid = settings.value("wifiSSID").toString();
     const QString cryptedPskFromSettings = settings.value("wifiPasswordCrypt").toString();
     const bool hidden = settings.value("wifiHidden").toBool();
+    const QString regDom = settings.value("wifiCountry").toString().toUpper();
     
     if (!ssid.isEmpty()) {
         push(QStringLiteral("network:"), netcfg);
@@ -406,6 +407,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
              netcfg);
         push(QStringLiteral("    wlan0:"), netcfg);
         push(QStringLiteral("      dhcp4: true"), netcfg);
+        push(QStringLiteral("      regulatory-domain: \"") + regDom + QStringLiteral("\""), netcfg);
         push(QStringLiteral("      access-points:"), netcfg);
         {
             QString key = ssid;

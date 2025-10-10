@@ -589,6 +589,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     QVariantMap settings;
     settings["wifiSSID"] = "TestNetwork";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    settings["wifiCountry"] = "DE";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
     QString yaml = QString::fromUtf8(netcfg);
@@ -599,6 +600,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("renderer: networkd"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("wlan0:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("dhcp4: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("regulatory-domain: \"DE\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("access-points:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"TestNetwork\":"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakecryptedhash123\""));
