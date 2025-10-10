@@ -418,7 +418,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     const QString ssid = settings.value("wifiSSID").toString();
     const QString cryptedPskFromSettings = settings.value("wifiPasswordCrypt").toString();
     const bool hidden = settings.value("wifiHidden").toBool();
-    const QString regDom = settings.value("wifiCountry").toString().toUpper();
+    const QString regDom = settings.value("wifiCountry").toString().trimmed().toUpper();
     
     // Generate network config if we have a country code (regulatory domain) or an SSID
     if (!regDom.isEmpty() || !ssid.isEmpty()) {
