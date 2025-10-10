@@ -235,14 +235,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Operating System:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Storage Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -264,6 +256,14 @@
     </message>
     <message>
         <source>Reboot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -297,14 +297,6 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>unmounting drive</source>
-        <translation>ড্রাইভটি আনমাউন্ট করা হচ্ছে</translation>
-    </message>
-    <message>
-        <source>opening drive</source>
-        <translation>ড্রাইভটি খোলা হচ্ছে</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>অনুগ্রহ করে নিশ্চিত করুন যে &apos;Raspberry Pi Imager&apos; এর প্রাইভেসি সেটিংসের &apos;রিমুভেবল ভলিউম&apos; এ অ্যাক্সেস রয়েছে (সেটিংস এর &apos;ফাইল এবং ফোল্ডার&apos; থেকে; অথবা &apos;ফুল ডিস্ক অ্যাক্সেস&apos; দিন)।</translation>
     </message>
@@ -313,24 +305,12 @@
         <translation>স্টোরেজ ডিভাইস &apos;%1&apos; এ প্রবেশ করা ব্যর্থ হয়েছে</translation>
     </message>
     <message>
-        <source>discarding existing data on drive</source>
-        <translation>ড্রাইভে বিদ্যমান ডেটা বিসর্জন করা হচ্ছে</translation>
-    </message>
-    <message>
-        <source>zeroing out first and last MB of drive</source>
-        <translation>ড্রাইভের প্রথম এবং শেষ মেগাবাইট শূন্য করা হচ্ছে</translation>
-    </message>
-    <message>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>MBR শূন্য করার সময় ড্রাইভে লিখার ত্রুটি</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>কার্ডের শেষ অংশ শূন্য করার সময় লেখার ত্রুটি।&lt;br&gt;কার্ডটি ভুল ধারণক্ষমতা প্রদর্শন করতে পারে (কার্ডটি সম্ভবতঃ জাল)।</translation>
-    </message>
-    <message>
-        <source>starting download</source>
-        <translation>ডাউনলোড শুরু হচ্ছে</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
@@ -409,10 +389,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>writing image</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Error opening disk device &apos;%1&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -433,7 +409,31 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Customising OS</source>
+        <source>Unmounting drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discarding existing data on drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customizing OS...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -720,16 +720,8 @@
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <source>opening image file</source>
-        <translation>ইমেজ ফাইলটি খোলা হচ্ছে</translation>
-    </message>
-    <message>
         <source>Error opening image file</source>
         <translation>ইমেজ ফাইল খোলার সময় ত্রুটি</translation>
-    </message>
-    <message>
-        <source>starting extraction</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -741,6 +733,14 @@
     </message>
     <message>
         <source>Failed to read complete image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening image file...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting extraction...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -840,7 +840,14 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Internal SD card reader</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1077,10 +1084,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remote Access</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Raspberry Pi Connect</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1098,6 +1101,10 @@
     </message>
     <message>
         <source>Localisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remote access</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

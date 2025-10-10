@@ -235,14 +235,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Operating System:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Storage Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -264,6 +256,14 @@
     </message>
     <message>
         <source>Reboot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -297,14 +297,6 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>unmounting drive</source>
-        <translation>smontaggio unità</translation>
-    </message>
-    <message>
-        <source>opening drive</source>
-        <translation>apertura unità</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Verifica se a &apos;Raspberry Pi Imager&apos; è consentito l&apos;accesso a &apos;volumi rimovibili&apos; nelle impostazioni privacy (in &apos;file e cartelle&apos; o in alternativa concedi &apos;accesso completo al disco&apos;).</translation>
     </message>
@@ -313,24 +305,12 @@
         <translation>Impossibile aprire dispositivo storage &apos;%1&apos;.</translation>
     </message>
     <message>
-        <source>discarding existing data on drive</source>
-        <translation>elimina i dati esistenti nell&apos;unità</translation>
-    </message>
-    <message>
-        <source>zeroing out first and last MB of drive</source>
-        <translation>azzera il primo e l&apos;ultimo MB dell&apos;unità</translation>
-    </message>
-    <message>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>Errore scrittura durante azzeramento MBR</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>Errore di scrittura durante il tentativo di azzerare l&apos;ultima parte della scheda.&lt;br&gt;La scheda potrebbe riportare una capacità maggiore di quella reale (possibile contraffazione).</translation>
-    </message>
-    <message>
-        <source>starting download</source>
-        <translation>avvio download</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
@@ -409,10 +389,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>writing image</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Error opening disk device &apos;%1&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -433,7 +409,31 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Customising OS</source>
+        <source>Unmounting drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discarding existing data on drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customizing OS...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -720,16 +720,8 @@
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <source>opening image file</source>
-        <translation>apertura file immagine</translation>
-    </message>
-    <message>
         <source>Error opening image file</source>
         <translation>Errore durante l&apos;apertura del file immagine</translation>
-    </message>
-    <message>
-        <source>starting extraction</source>
-        <translation>avvio estrazione</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -742,6 +734,14 @@
     <message>
         <source>Failed to read complete image file</source>
         <translation>Impossibile leggere il file immagine completo</translation>
+    </message>
+    <message>
+        <source>Opening image file...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting extraction...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -840,7 +840,14 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Internal SD card reader</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1077,10 +1084,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remote Access</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Raspberry Pi Connect</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1098,6 +1101,10 @@
     </message>
     <message>
         <source>Localisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remote access</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

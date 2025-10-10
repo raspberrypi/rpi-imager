@@ -235,14 +235,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Operating System:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Storage Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -264,6 +256,14 @@
     </message>
     <message>
         <source>Reboot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -297,14 +297,6 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>unmounting drive</source>
-        <translation>드라이브 마운트 해제</translation>
-    </message>
-    <message>
-        <source>opening drive</source>
-        <translation>드라이브 열기</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>&apos;Raspberry Pi Imager&apos;가 개인 정보 설정(&apos;파일 및 폴더&apos;에서 또는 &apos;전체 디스크 액세스&apos;를 부여)에서 &apos;제거 가능한 볼륨&apos;에 액세스할 수 있는지 확인하세요.</translation>
     </message>
@@ -313,24 +305,12 @@
         <translation>저장 장치를 열 수 없습니다 &apos;%1&apos;.</translation>
     </message>
     <message>
-        <source>discarding existing data on drive</source>
-        <translation>드라이브의 기존 데이터 삭제</translation>
-    </message>
-    <message>
-        <source>zeroing out first and last MB of drive</source>
-        <translation>드라이브의 처음과 마지막 MB를 비웁니다.</translation>
-    </message>
-    <message>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>MBR을 zero&apos;ing out 하는 동안 쓰기 오류 발생 </translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>SD card의 마지막 부분을 비워내는 동안 오류가 발생했습니다.&lt;br&gt;카드가 잘못된 용량을 표기하고 있을 수 있습니다(위조 품목).</translation>
-    </message>
-    <message>
-        <source>starting download</source>
-        <translation>다운로드 시작</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
@@ -409,10 +389,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>writing image</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Error opening disk device &apos;%1&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -433,7 +409,31 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Customising OS</source>
+        <source>Unmounting drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discarding existing data on drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customizing OS...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -720,16 +720,8 @@
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <source>opening image file</source>
-        <translation>이미지 파일 열기</translation>
-    </message>
-    <message>
         <source>Error opening image file</source>
         <translation>이미지 파일 열기 오류</translation>
-    </message>
-    <message>
-        <source>starting extraction</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -741,6 +733,14 @@
     </message>
     <message>
         <source>Failed to read complete image file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening image file...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting extraction...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -840,7 +840,14 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Internal SD card reader</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1077,10 +1084,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remote Access</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Raspberry Pi Connect</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1098,6 +1101,10 @@
     </message>
     <message>
         <source>Localisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remote access</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

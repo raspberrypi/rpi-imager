@@ -235,14 +235,6 @@
         <translation>Twój wybór:</translation>
     </message>
     <message>
-        <source>Operating System:</source>
-        <translation>System operacyjny:</translation>
-    </message>
-    <message>
-        <source>Storage Device:</source>
-        <translation>Urządzenie pamięci masowej:</translation>
-    </message>
-    <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
         <translation>Urządzenie pamięci zostało automatycznie wysunięte. Można je teraz bezpiecznie wyjąć.</translation>
     </message>
@@ -265,6 +257,14 @@
     <message>
         <source>Reboot</source>
         <translation>Uruchom ponownie</translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation type="unfinished">System operacyjny:</translation>
+    </message>
+    <message>
+        <source>Storage device:</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -297,14 +297,6 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>unmounting drive</source>
-        <translation>odmontowywanie dysku</translation>
-    </message>
-    <message>
-        <source>opening drive</source>
-        <translation>otwieranie dysku</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translatorcomment>Not sure if current macOS has that option (or if it got moved/renamed)</translatorcomment>
         <translation>Sprawdź, czy &apos;Raspberry Pi Imager&apos; ma dostęp do &apos;woluminów wymiennych&apos; w ustawieniach prywatności (w &apos;plikach i folderach&apos; lub alternatywnie daj mu &apos;pełny dostęp do dysku&apos;).</translation>
@@ -314,24 +306,12 @@
         <translation>Nie można otworzyć urządzenia pamięci masowej &apos;%1&apos;.</translation>
     </message>
     <message>
-        <source>discarding existing data on drive</source>
-        <translation>usuwanie istniejących danych na dysku</translation>
-    </message>
-    <message>
-        <source>zeroing out first and last MB of drive</source>
-        <translation>zerowanie pierwszego oraz ostatniego megabajta dysku</translation>
-    </message>
-    <message>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>Błąd zapisu podczas zerowania MBR</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>Błąd zapisu podczas próby wyzerowania ostatniej części karty.&lt;br&gt;;Karta może pokazywać nieprawidłową pojemność (możliwe podróbki).</translation>
-    </message>
-    <message>
-        <source>starting download</source>
-        <translation>rozpoczęcie pobierania</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
@@ -410,10 +390,6 @@
         <translation>Błąd urządzenia wejścia/wyjścia. Urządzenie pamięci masowej mogło zostać odłączone lub działa nieprawidłowo.</translation>
     </message>
     <message>
-        <source>writing image</source>
-        <translation>zapisywanie obrazu</translation>
-    </message>
-    <message>
         <source>Error opening disk device &apos;%1&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -434,7 +410,31 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Customising OS</source>
+        <source>Unmounting drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discarding existing data on drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customizing OS...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -721,16 +721,8 @@
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <source>opening image file</source>
-        <translation>otwieranie pliku obrazu</translation>
-    </message>
-    <message>
         <source>Error opening image file</source>
         <translation>Błąd podczas otwierania pliku obrazu</translation>
-    </message>
-    <message>
-        <source>starting extraction</source>
-        <translation>rozpoczęcie ekstrakcji</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -743,6 +735,14 @@
     <message>
         <source>Failed to read complete image file</source>
         <translation>Nie udało się odczytać całego pliku obrazu</translation>
+    </message>
+    <message>
+        <source>Opening image file...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting extraction...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -841,8 +841,15 @@
         <translation>Oczekiwanie na token</translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
-        <translation>Zaloguj się, aby otrzymać token i włączyć Raspberry PiConnect.</translation>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Internal SD card reader</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1078,10 +1085,6 @@
         <translation></translation>
     </message>
     <message>
-        <source>Remote Access</source>
-        <translation>Dostęp zdalny</translation>
-    </message>
-    <message>
         <source>Raspberry Pi Connect</source>
         <translation></translation>
     </message>
@@ -1099,6 +1102,10 @@
     </message>
     <message>
         <source>Localisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remote access</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

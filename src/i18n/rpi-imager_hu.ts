@@ -235,14 +235,6 @@
         <translation>Választásai:</translation>
     </message>
     <message>
-        <source>Operating System:</source>
-        <translation>Operációs rendszer:</translation>
-    </message>
-    <message>
-        <source>Storage Device:</source>
-        <translation>Tárolóeszköz:</translation>
-    </message>
-    <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
         <translation>A tárolóeszköz automatikusan ki lett adva. Most már biztonságosan eltávolíthatja.</translation>
     </message>
@@ -265,6 +257,14 @@
     <message>
         <source>Reboot</source>
         <translation>Újraindítás</translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device:</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -297,14 +297,6 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>unmounting drive</source>
-        <translation>meghajtó leválasztása</translation>
-    </message>
-    <message>
-        <source>opening drive</source>
-        <translation>meghajtó megnyitása</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Ellenőrizze, hogy a &apos;Raspberry Pi Imager&apos; hozzáférhet-e az &apos;eltávolítható kötetekhez&apos; az adatvédelmi beállításokban (a &apos;fájlok és mappák&apos; alatt), vagy adjon &apos;teljes lemezhozzáférést&apos;.</translation>
     </message>
@@ -313,24 +305,12 @@
         <translation>A(z) &apos;%1&apos; tárolóeszköz nem nyitható meg.</translation>
     </message>
     <message>
-        <source>discarding existing data on drive</source>
-        <translation>meglévő adatok elvetése a meghajtón</translation>
-    </message>
-    <message>
-        <source>zeroing out first and last MB of drive</source>
-        <translation>a meghajtó első és utolsó MB-jának kinullázása</translation>
-    </message>
-    <message>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>Íráshiba az MBR kinullázásakor</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>Íráshiba a kártya utolsó részének kinullázásakor.&lt;br&gt;Előfordulhat, hogy a kártya hibás kapacitást jelez (esetleg hamisítvány).</translation>
-    </message>
-    <message>
-        <source>starting download</source>
-        <translation>letöltés indítása</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
@@ -409,10 +389,6 @@
         <translation>I/O eszközhiba. A tárolóeszköz lecsatlakozhatott vagy meghibásodott.</translation>
     </message>
     <message>
-        <source>writing image</source>
-        <translation>kép írása</translation>
-    </message>
-    <message>
         <source>Error opening disk device &apos;%1&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -433,7 +409,31 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Customising OS</source>
+        <source>Unmounting drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discarding existing data on drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customizing OS...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -720,16 +720,8 @@
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <source>opening image file</source>
-        <translation>képfájl megnyitása</translation>
-    </message>
-    <message>
         <source>Error opening image file</source>
         <translation>Hiba a képfájl megnyitásakor</translation>
-    </message>
-    <message>
-        <source>starting extraction</source>
-        <translation>kibontás indítása</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -742,6 +734,14 @@
     <message>
         <source>Failed to read complete image file</source>
         <translation>Nem sikerült a teljes képfájl beolvasása</translation>
+    </message>
+    <message>
+        <source>Opening image file...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting extraction...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -840,7 +840,14 @@
         <translation>Várakozás tokenre</translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Internal SD card reader</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1077,10 +1084,6 @@
         <translation>Wi‑Fi</translation>
     </message>
     <message>
-        <source>Remote Access</source>
-        <translation>Távoli elérés</translation>
-    </message>
-    <message>
         <source>Raspberry Pi Connect</source>
         <translation>Raspberry Pi Connect</translation>
     </message>
@@ -1098,6 +1101,10 @@
     </message>
     <message>
         <source>Localisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remote access</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
