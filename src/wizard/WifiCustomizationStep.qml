@@ -247,14 +247,19 @@ WizardStepBase {
         var pwd = fieldWifiPassword.text
         var hadCrypt = !!saved.wifiPasswordCrypt
         var hidden = chkWifiHidden.checked
-        if (ssid.length === 0) {
-            // SSID cleared -> remove persisted SSID and password, regardless of country
-            delete saved.wifiSSID
-            delete saved.wifiPasswordCrypt
-            wizardContainer.wifiConfigured = false
-        } else if (country.length > 0) {
-            saved.wifiSSID = ssid
+        
+        // Save country code if provided (even without SSID)
+        if (country.length > 0) {
             saved.wifiCountry = country
+            wizardContainer.wifiConfigured = true
+        } else {
+            // No country -> clear country setting
+            delete saved.wifiCountry
+        }
+        
+        // Handle SSID and password
+        if (ssid.length > 0) {
+            saved.wifiSSID = ssid
             if (pwd && pwd.length > 0) {
                 // Persist crypted PSK; avoid storing plaintext
                 var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
@@ -266,9 +271,16 @@ WizardStepBase {
             saved.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
         } else {
-            // Partial -> do not change persisted settings
-            wizardContainer.wifiConfigured = false
+            // No SSID -> clear SSID and password settings
+            delete saved.wifiSSID
+            delete saved.wifiPasswordCrypt
+            delete saved.wifiHidden
+            // If we have a country, still mark as configured
+            if (country.length === 0) {
+                wizardContainer.wifiConfigured = false
+            }
         }
+        
         imageWriter.setSavedCustomizationSettings(saved)
         // Do not log sensitive data
     }
