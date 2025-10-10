@@ -418,7 +418,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     const QString ssid = settings.value("wifiSSID").toString();
     const QString cryptedPskFromSettings = settings.value("wifiPasswordCrypt").toString();
     const bool hidden = settings.value("wifiHidden").toBool();
-    const QString regDom = settings.value("wifiCountry").toString().toUpper();
+    const QString regDom = settings.value("wifiCountry").toString().trimmed().toUpper();
     
     // Generate network config if we have a country code (regulatory domain) or an SSID
     if (!regDom.isEmpty() || !ssid.isEmpty()) {
@@ -452,11 +452,9 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
                     effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
                 }
             }
-            if (!effectiveCryptedPsk.isEmpty()) {
-                QString epwd = effectiveCryptedPsk;
-                epwd.replace('"', QStringLiteral("\\\""));
-                push(QStringLiteral("          password: \"") + epwd + QStringLiteral("\""), netcfg);
-            }
+            // Required because without a password and hidden netplan would read ssid: null and crash
+            effectiveCryptedPsk.replace('"', QStringLiteral("\\\""));
+            push(QStringLiteral("          password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
             if (hidden) {
                 push(QStringLiteral("          hidden: true"), netcfg);
             }
