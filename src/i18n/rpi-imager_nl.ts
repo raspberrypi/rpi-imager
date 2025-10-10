@@ -263,7 +263,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Storage device:</source>
+        <source>Storage:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -433,7 +433,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Customizing OS...</source>
+        <source>Customising OS...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
