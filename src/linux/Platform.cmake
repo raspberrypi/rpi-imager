@@ -10,6 +10,7 @@ set(PLATFORM_SOURCES
     linux/acceleratedcryptographichash_gnutls.cpp
     linux/file_operations_linux.cpp
     linux/platformquirks_linux.cpp
+    linux/linux_suspend_inhibitor.cpp
 )
 
 # Only include networkmanagerapi for GUI builds (requires Qt Network)
