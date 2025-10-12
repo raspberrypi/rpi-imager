@@ -17,6 +17,13 @@ ComboBox {
     // Focus properties
     activeFocusOnTab: true
     
+    // Accessibility properties
+    Accessible.role: Accessible.ComboBox
+    Accessible.name: currentText
+    Accessible.description: indicateError ? "Error: Invalid selection" : ""
+    Accessible.editable: editable
+    Accessible.focused: activeFocus
+    
     // Enhanced properties
     property bool indicateError: false
     // Wheel scrolling configuration (no inertia for closed state)

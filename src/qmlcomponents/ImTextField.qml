@@ -14,6 +14,14 @@ TextField {
     activeFocusOnTab: true
     selectByMouse: true
     cursorVisible: activeFocus
+    
+    // Accessibility properties
+    Accessible.role: Accessible.EditableText
+    Accessible.name: placeholderText !== "" ? placeholderText : text
+    Accessible.description: ""
+    Accessible.editable: true
+    Accessible.focused: activeFocus
+    Accessible.passwordEdit: echoMode === TextInput.Password
 
     // No special key handling here; rely on WizardStepBase auto wiring
 }

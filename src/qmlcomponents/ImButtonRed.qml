@@ -32,7 +32,13 @@ Button {
     }
 
     activeFocusOnTab: true
+    
+    // Accessibility properties
+    Accessible.role: Accessible.Button
+    Accessible.name: text
+    Accessible.description: enabled ? "" : "Button disabled"
     Accessible.onPressAction: clicked()
+    
     Keys.onEnterPressed: clicked()
     Keys.onReturnPressed: clicked()
 }

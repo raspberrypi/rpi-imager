@@ -82,6 +82,14 @@ Item {
             checked: pill.checked
             activeFocusOnTab: true
             
+            // Accessibility properties
+            Accessible.role: Accessible.CheckBox
+            Accessible.name: label.text
+            Accessible.description: pill.helpLabel !== "" ? pill.helpLabel : ""
+            Accessible.checkable: true
+            Accessible.checked: pill.checked
+            Accessible.onToggleAction: toggle()
+            
             onToggled: {
                 pill.checked = checked
                 pill.toggled(checked)

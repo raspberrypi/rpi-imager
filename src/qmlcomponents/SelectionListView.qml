@@ -44,6 +44,11 @@ ListView {
     boundsBehavior: Flickable.StopAtBounds
     currentIndex: -1
     
+    // Accessibility properties
+    Accessible.role: Accessible.List
+    Accessible.name: "Selection list"
+    Accessible.description: "Use arrow keys to navigate, Enter or Space to select"
+    
     // Standard highlight configuration
     highlight: Rectangle {
         // When focused: use stronger highlight color
