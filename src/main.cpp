@@ -37,6 +37,8 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <winnls.h>
+#include <QLocalServer>
+#include <QLocalSocket>
 #endif
 #include "imageadvancedoptions.h"
 
@@ -307,6 +309,59 @@ int main(int argc, char *argv[])
             }
         }
     }
+
+#ifdef Q_OS_WIN
+    // ---- single-instance + URL forwarding ----
+    // Build a stable per-user name by hashing the per-user AppData path.
+    // This is consistent across elevated/non-elevated tokens for the same user.
+    auto base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (base.isEmpty()) base = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
+    QByteArray hash = QCryptographicHash::hash(base.toUtf8(), QCryptographicHash::Sha1);
+    const QString serverName = QStringLiteral("rpi-imager-urlpipe-%1").arg(QString::fromLatin1(hash.toHex()));
+    qDebug() << "Using IPC Server name:" << serverName;
+
+    // First, try to connect to an existing instance (client-first).
+    {
+        QLocalSocket probe;
+        probe.connectToServer(serverName);
+        if (probe.waitForConnected(150)) {
+            // A primary instance exists; forward the URL (if any) and exit.
+            if (!callbackUrl.isEmpty()) {
+                const QByteArray msg = callbackUrl.toString(QUrl::FullyEncoded).toUtf8();
+                probe.write(msg);
+                probe.flush();
+                probe.waitForBytesWritten(200);
+            }
+            return 0; // secondary: do not open another window
+        }
+    }
+
+    // No instance reachable. Become the server.
+    // Remove stale endpoint left by a crash (safe even if it doesn’t exist).
+    QLocalServer::removeServer(serverName);
+
+    static QLocalServer server; // must outlive the lambda
+    if (!server.listen(serverName)) {
+        // As a last resort: if listen still fails, we’re better off continuing as a single instance.
+        qWarning() << "Failed to listen on" << serverName << ":" << server.errorString();
+    } else {
+        QObject::connect(&server, &QLocalServer::newConnection, &app, [&imageWriter]() {
+            while (QLocalSocket *s = server.nextPendingConnection()) {
+                s->waitForReadyRead(1000);
+                const QByteArray payload = s->readAll();
+                s->close();
+                s->deleteLater();
+                QMetaObject::invokeMethod(
+                    &imageWriter,
+                    [payload, &imageWriter] {
+                        imageWriter.handleIncomingUrl(QUrl(QString::fromUtf8(payload)));
+                    },
+                    Qt::QueuedConnection
+                );
+            }
+        });
+    }
+#endif
 
     QTranslator *translator = new QTranslator;
     if (customQm.isEmpty())
