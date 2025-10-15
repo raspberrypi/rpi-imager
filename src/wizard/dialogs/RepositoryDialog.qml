@@ -84,7 +84,7 @@ BaseDialog {
 
             ImRadioButton {
                 id: radioCustomUri
-                text: qsTr("Use custom URI")
+                text: qsTr("Use custom URL")
                 checked: false
                 ButtonGroup.group: repoGroup
             }
