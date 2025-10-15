@@ -64,7 +64,9 @@ Item {
     readonly property string localeConfigured: qsTr("Locale configured")
     readonly property string wifiConfigured: qsTr("Wi‑Fi configured")
     readonly property string piConnectEnabled: qsTr("Raspberry Pi Connect enabled")
-    readonly property string usbGadgetEnabled: qsTr("USB Gadget enabled")
+    readonly property string usbGadgetEnabled: qsTr("USB Gadget mode enabled")
     readonly property string i2cEnabled: qsTr("I2C enabled")
     readonly property string spiEnabled: qsTr("SPI enabled")
+    readonly property string onewireEnabled: qsTr("1-Wire enabled")
+    readonly property string serialConfigured: qsTr("Serial configured")
 }

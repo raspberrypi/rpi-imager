@@ -322,8 +322,9 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     
     const bool enableI2C = settings.value("enableI2C").toBool();
     const bool enableSPI = settings.value("enableSPI").toBool();
+    const bool enable1Wire = settings.value("enable1Wire").toBool();
     const QString enableSerial = settings.value("enableSerial").toString();
-    const bool armInterfaceEnabled = enableI2C || enableSPI || enableSerial != "Disabled";
+    const bool armInterfaceEnabled = enableI2C || enableSPI || enable1Wire || enableSerial != "Disabled";
     const bool isUsbGadgetEnabled = settings.value("enableUsbGadget").toBool();
     
     // cc_raspberry_pi config for capable OSs
@@ -343,6 +344,9 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             }
             if (enableSPI) {
                 push(QStringLiteral("    spi: true"), cloud);
+            }
+            if (enable1Wire) {
+                push(QStringLiteral("    onewire: true"), cloud);
             }
             if (enableSerial != "Disabled") {
                 if (enableSerial == "" || enableSerial == "Default") {

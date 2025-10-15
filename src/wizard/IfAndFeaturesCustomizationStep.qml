@@ -75,6 +75,13 @@ WizardStepBase {
                             checked: false
                         }
 
+                        ImOptionPill {
+                            id: chkEnable1Wire
+                            Layout.fillWidth: true
+                            text: qsTr("Enable 1-Wire")
+                            checked: false
+                        }
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Style.spacingMedium
@@ -141,6 +148,7 @@ WizardStepBase {
             root.isConfirmed = true
             wizardContainer.ifI2cEnabled     = false
             wizardContainer.ifSpiEnabled     = false
+            wizardContainer.if1WireEnabled   = false
             wizardContainer.ifSerial         = false
             wizardContainer.featUsbGadgetEnabled = false
             // skip page
@@ -156,7 +164,7 @@ WizardStepBase {
         }
 
         root.registerFocusGroup("if_section_interfaces", function() {
-            return [chkEnableI2C.focusItem, chkEnableSPI.focusItem, comboSerial]
+            return [chkEnableI2C.focusItem, chkEnableSPI.focusItem, chkEnable1Wire.focusItem, comboSerial]
         }, 0)
 
         root.registerFocusGroup("if_section_features", function() {
@@ -168,6 +176,7 @@ WizardStepBase {
         // Load from persisted settings (if you store them there)…
         chkEnableI2C.checked     = saved.enableI2C === true || saved.enableI2C === "true" || wizardContainer.ifI2cEnabled
         chkEnableSPI.checked     = saved.enableSPI === true || saved.enableSPI === "true" || wizardContainer.ifSpiEnabled
+        chkEnable1Wire.checked   = saved.enable1Wire === true || saved.enable1Wire === "true" || wizardContainer.if1WireEnabled
         var enableSerial         = saved.enableSerial || wizardContainer.ifSerial
         var idx                  = comboSerial.find(enableSerial)
         comboSerial.currentIndex = (idx >= 0 ? idx : 0)
@@ -186,6 +195,7 @@ WizardStepBase {
         // Interfaces
         saved.enableI2C    = chkEnableI2C.checked
         saved.enableSPI    = chkEnableSPI.checked
+        saved.enable1Wire  = chkEnable1Wire.checked
         saved.enableSerial = !supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText
 
         // Features
@@ -196,6 +206,7 @@ WizardStepBase {
         // Mirror into wizardContainer
         wizardContainer.ifI2cEnabled     = chkEnableI2C.checked
         wizardContainer.ifSpiEnabled     = chkEnableSPI.checked
+        wizardContainer.if1WireEnabled   = chkEnable1Wire.checked
         wizardContainer.ifSerial         = comboSerial.editText
         wizardContainer.featUsbGadgetEnabled = saved.enableUsbGadget
 
