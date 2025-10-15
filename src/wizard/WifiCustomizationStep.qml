@@ -45,7 +45,7 @@ WizardStepBase {
         // Note: WiFi country is initialized by fieldWifiCountry's Component.onCompleted
         // after the model is loaded, which properly handles recommended/saved/default values
         if (saved.wifiHidden !== undefined) {
-            chkWifiHidden.checked = !!saved.wifiHidden
+            chkWifiHidden.checked = saved.wifiHidden === true || saved.wifiHidden === "true"
         }
         // Remember if a crypted PSK is already saved (affects placeholder/keep semantics)
         root.hasSavedWifiPSK = !!saved.wifiPasswordCrypt
