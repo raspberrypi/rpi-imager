@@ -227,6 +227,16 @@ WizardStepBase {
             }, 0)
         }
 
+        // Ensure disabled before showing to avoid flicker
+        onOpened: {
+            allowAccept = false
+            confirmDelay.start()
+        }
+        onClosed: {
+            confirmDelay.stop()
+            allowAccept = false
+        }
+
         // Dialog content
         Text {
             text: qsTr("USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.")
@@ -283,24 +293,18 @@ WizardStepBase {
                 }
             }
         }
+    }
 
-        // Delay accept for 2 seconds
-        Timer {
-            id: confirmDelay
-            interval: 2000
-            running: false
-            repeat: false
-            onTriggered: confirmDialog.allowAccept = true
-        }
-
-        // Ensure disabled before showing to avoid flicker
-        onAboutToShow: {
-            allowAccept = false
-            confirmDelay.start()
-        }
-        onClosed: {
-            confirmDelay.stop()
-            allowAccept = false
+    // Delay accept for 2 seconds
+    Timer {
+        id: confirmDelay
+        interval: 2000
+        running: false
+        repeat: false
+        onTriggered: {
+            confirmDialog.allowAccept = true
+            // Rebuild focus order now that accept button is enabled
+            confirmDialog.rebuildFocusOrder()
         }
     }
 
