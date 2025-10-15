@@ -59,6 +59,7 @@ Item {
     property bool ccRpiAvailable: false
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
+    property bool if1WireEnabled: false
     // "Disabled" | "Default" | "Console & Hardware" | "Console" | "Hardware" | ""
     property string ifSerial: ""
     property bool featUsbGadgetEnabled: false
@@ -179,7 +180,7 @@ Item {
         if (stepLabel === qsTr("Wi‑Fi")) return wifiConfigured
         if (stepLabel === qsTr("Remote access")) return sshEnabled
         if (stepLabel === qsTr("Raspberry Pi Connect")) return piConnectEnabled
-        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || ifSerial !== "" || featUsbGadgetEnabled)
+        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || if1WireEnabled || ifSerial !== "" || featUsbGadgetEnabled)
         
         return false
     }
@@ -221,6 +222,7 @@ Item {
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
     }
@@ -247,6 +249,7 @@ Item {
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
     }
@@ -981,6 +984,7 @@ Item {
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
 

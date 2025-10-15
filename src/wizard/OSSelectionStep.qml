@@ -595,6 +595,7 @@ WizardStepBase {
                 } else if (!root.wizardContainer.ccRpiAvailable) {
                     root.wizardContainer.ifI2cEnabled = false
                     root.wizardContainer.ifSpiEnabled = false
+                    root.wizardContainer.if1WireEnabled = false
                     root.wizardContainer.ifSerial = "Disabled"
                     root.wizardContainer.featUsbGadgetEnabled = false
                 }
