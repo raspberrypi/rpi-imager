@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (C) 2025 Raspberry Pi Ltd
+ */
+
 import QtCore
 import QtQuick
 import QtQuick.Controls
@@ -244,8 +249,7 @@ BaseDialog {
         // Save settings to ImageWriter
         // Only save repository setting if it has actually changed
         if (radioOfficial.checked && originalRepo !== "") {
-            // TODO: helper function in imageWriter that retrieves the original url from static property
-            imageWriter.refreshOsListFrom(new URL("https://downloads.raspberrypi.org/os_list_imagingutility_v4.json"))
+            imageWriter.refreshOsListFromDefaultUrl()
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
         } else if (radioCustomFile.checked && originalRepo !== selectedRepo) {
