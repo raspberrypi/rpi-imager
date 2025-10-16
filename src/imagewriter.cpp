@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2020 Raspberry Pi Ltd
+ * Copyright (C) 2020-2025 Raspberry Pi Ltd
  */
 
 #include "downloadextractthread.h"
@@ -1213,6 +1213,10 @@ void ImageWriter::refreshOsListFrom(const QUrl &url) {
     beginOSListFetch();
 }
 
+void ImageWriter::refreshOsListFromDefaultUrl() {
+    refreshOsListFrom(QUrl(QString(OSLIST_URL)));
+}
+
 void ImageWriter::onOsListRefreshTimeout()
 {
     qDebug() << "OS list refresh timer fired - refetching";
@@ -1742,9 +1746,10 @@ QStringList ImageWriter::getCountryList()
 {
     QStringList countries;
     QFile f(":/countries.txt");
-    if ( f.open(f.ReadOnly) )
+    if (f.open(QFile::ReadOnly | QFile::Text))
     {
-        countries = QString(f.readAll()).trimmed().split('\n');
+        countries = QString::fromUtf8(f.readAll()).split('\n', Qt::SkipEmptyParts);
+        for (QString &s : countries) s = s.trimmed();
         f.close();
     }
 
@@ -1934,6 +1939,7 @@ void ImageWriter::applyCustomizationFromSavedSettings()
     if (_initFormat == "systemd") {
         _applySystemdCustomizationFromSettings(s);
     } else {
+        // customization for cloudinit and cloudinit-rpi
         _applyCloudInitCustomizationFromSettings(s);
     }
 }
@@ -1956,14 +1962,14 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
 void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
 {
     // Use CustomisationGenerator for cloud-init YAML generation
-    const bool isRpiosCloudInit = checkSWCapability("rpios_cloudinit");
     const bool sshEnabled = s.value("sshEnabled").toBool();
+    const bool hasCcRpi = imageSupportsCcRpi();
     
     QByteArray cloud = rpi_imager::CustomisationGenerator::generateCloudInitUserData(
-        s, _piConnectToken, isRpiosCloudInit, sshEnabled, getCurrentUser());
+        s, _piConnectToken, hasCcRpi, sshEnabled, getCurrentUser());
     
     QByteArray netcfg = rpi_imager::CustomisationGenerator::generateCloudInitNetworkConfig(
-        s, isRpiosCloudInit);
+        s, hasCcRpi);
     
     // Extract wifiCountry for cmdline append
     QByteArray cmdlineAppend;
@@ -2089,6 +2095,11 @@ bool ImageWriter::hasSavedCustomizationSettings()
 bool ImageWriter::imageSupportsCustomization()
 {
     return !_initFormat.isEmpty();
+}
+
+bool ImageWriter::imageSupportsCcRpi()
+{
+    return _initFormat == "cloudinit-rpi";
 }
 
 QStringList ImageWriter::getTranslations()

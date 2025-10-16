@@ -246,6 +246,27 @@ TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customiz
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("\tpsk="));
 }
 
+TEST_CASE("CustomisationGenerator WiFi country only (no SSID)", "[customization]") {
+    QVariantMap settings;
+    // Set country code GB without SSID - tests regulatory domain configuration
+    settings["wifiCountry"] = "GB";
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // Should unblock WiFi even when no SSID is configured
+    // This prevents "Wi-Fi is currently blocked by rfkill" message
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rfkill unblock wifi"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/var/lib/systemd/rfkill/*:wlan"));
+    
+    // Should NOT try to configure wpa_supplicant when no SSID
+    REQUIRE_THAT(scriptStr.toStdString(), !ContainsSubstring("wpa_supplicant.conf"));
+    REQUIRE_THAT(scriptStr.toStdString(), !ContainsSubstring("set_wlan"));
+    
+    // Note: The country code "GB" is set via kernel cmdline parameter cfg80211.ieee80211_regdom=GB
+    // in imagewriter.cpp (_applySystemdCustomizationFromSettings), not in the firstrun.sh script itself
+}
+
 TEST_CASE("CustomisationGenerator Raspberry Pi Connect", "[customization]") {
     QVariantMap settings;
     settings["sshUserName"] = "testuser";
@@ -589,6 +610,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     QVariantMap settings;
     settings["wifiSSID"] = "TestNetwork";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    settings["wifiCountry"] = "DE";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
     QString yaml = QString::fromUtf8(netcfg);
@@ -599,6 +621,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("renderer: networkd"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("wlan0:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("dhcp4: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("regulatory-domain: \"DE\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("access-points:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"TestNetwork\":"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakecryptedhash123\""));
@@ -627,6 +650,32 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidde
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"HiddenNetwork\":"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hidden: true"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[cloudinit][network]") {
+    QVariantMap settings;
+    // Set country code FR without SSID - tests regulatory domain configuration
+    settings["wifiCountry"] = "FR";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, "", false, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Should include runcmd to unblock WiFi
+    // This prevents "Wi-Fi is currently blocked by rfkill" message
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rfkill, unblock, wifi"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("/var/lib/systemd/rfkill/*:wlan"));
+    
+    // Network config should include the FR regulatory domain even without SSID
+    // This verifies the country code makes it into the network configuration
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString netcfgYaml = QString::fromUtf8(netcfg);
+    REQUIRE_FALSE(netcfg.isEmpty());
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("regulatory-domain: \"FR\""));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("wlan0:"));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("optional: true"));
+    // Should NOT have access-points section (no SSID configured)
+    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("access-points:"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with special characters in SSID", "[cloudinit][network][negative]") {

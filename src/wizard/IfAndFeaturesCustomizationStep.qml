@@ -23,7 +23,7 @@ WizardStepBase {
     property bool supportsUsbOtg: false
     property bool isConfirmed: false
 
-    title: qsTr("Customization: Interfaces & Features")
+    title: qsTr("Customisation: Interfaces & Features")
     subtitle: qsTr("Enable hardware interfaces and connectivity options.")
     showSkipButton: true
     nextButtonEnabled: true
@@ -72,6 +72,13 @@ WizardStepBase {
                             id: chkEnableSPI
                             Layout.fillWidth: true
                             text: qsTr("Enable SPI")
+                            checked: false
+                        }
+
+                        ImOptionPill {
+                            id: chkEnable1Wire
+                            Layout.fillWidth: true
+                            text: qsTr("Enable 1-Wire")
                             checked: false
                         }
 
@@ -137,10 +144,11 @@ WizardStepBase {
     ]
 
     Component.onCompleted: {
-        if (!imageWriter.checkSWCapability("rpios_cloudinit")) {
+        if (!wizardContainer.ccRpiAvailable) {
             root.isConfirmed = true
             wizardContainer.ifI2cEnabled     = false
             wizardContainer.ifSpiEnabled     = false
+            wizardContainer.if1WireEnabled   = false
             wizardContainer.ifSerial         = false
             wizardContainer.featUsbGadgetEnabled = false
             // skip page
@@ -156,7 +164,7 @@ WizardStepBase {
         }
 
         root.registerFocusGroup("if_section_interfaces", function() {
-            return [chkEnableI2C.focusItem, chkEnableSPI.focusItem, comboSerial]
+            return [chkEnableI2C.focusItem, chkEnableSPI.focusItem, chkEnable1Wire.focusItem, comboSerial]
         }, 0)
 
         root.registerFocusGroup("if_section_features", function() {
@@ -168,6 +176,7 @@ WizardStepBase {
         // Load from persisted settings (if you store them there)…
         chkEnableI2C.checked     = saved.enableI2C === true || saved.enableI2C === "true" || wizardContainer.ifI2cEnabled
         chkEnableSPI.checked     = saved.enableSPI === true || saved.enableSPI === "true" || wizardContainer.ifSpiEnabled
+        chkEnable1Wire.checked   = saved.enable1Wire === true || saved.enable1Wire === "true" || wizardContainer.if1WireEnabled
         var enableSerial         = saved.enableSerial || wizardContainer.ifSerial
         var idx                  = comboSerial.find(enableSerial)
         comboSerial.currentIndex = (idx >= 0 ? idx : 0)
@@ -186,6 +195,7 @@ WizardStepBase {
         // Interfaces
         saved.enableI2C    = chkEnableI2C.checked
         saved.enableSPI    = chkEnableSPI.checked
+        saved.enable1Wire  = chkEnable1Wire.checked
         saved.enableSerial = !supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText
 
         // Features
@@ -196,6 +206,7 @@ WizardStepBase {
         // Mirror into wizardContainer
         wizardContainer.ifI2cEnabled     = chkEnableI2C.checked
         wizardContainer.ifSpiEnabled     = chkEnableSPI.checked
+        wizardContainer.if1WireEnabled   = chkEnable1Wire.checked
         wizardContainer.ifSerial         = comboSerial.editText
         wizardContainer.featUsbGadgetEnabled = saved.enableUsbGadget
 
@@ -225,6 +236,16 @@ WizardStepBase {
             registerFocusGroup("buttons", function(){ 
                 return [cancelBtn, acceptBtn] 
             }, 0)
+        }
+
+        // Ensure disabled before showing to avoid flicker
+        onOpened: {
+            allowAccept = false
+            confirmDelay.start()
+        }
+        onClosed: {
+            confirmDelay.stop()
+            allowAccept = false
         }
 
         // Dialog content
@@ -265,7 +286,7 @@ WizardStepBase {
 
             ImButton {
                 id: cancelBtn
-                text: qsTr("Cancel")
+                text: CommonStrings.cancel
                 activeFocusOnTab: true
                 onClicked: confirmDialog.close()
             }
@@ -283,24 +304,18 @@ WizardStepBase {
                 }
             }
         }
+    }
 
-        // Delay accept for 2 seconds
-        Timer {
-            id: confirmDelay
-            interval: 2000
-            running: false
-            repeat: false
-            onTriggered: confirmDialog.allowAccept = true
-        }
-
-        // Ensure disabled before showing to avoid flicker
-        onAboutToShow: {
-            allowAccept = false
-            confirmDelay.start()
-        }
-        onClosed: {
-            confirmDelay.stop()
-            allowAccept = false
+    // Delay accept for 2 seconds
+    Timer {
+        id: confirmDelay
+        interval: 2000
+        running: false
+        repeat: false
+        onTriggered: {
+            confirmDialog.allowAccept = true
+            // Rebuild focus order now that accept button is enabled
+            confirmDialog.rebuildFocusOrder()
         }
     }
 

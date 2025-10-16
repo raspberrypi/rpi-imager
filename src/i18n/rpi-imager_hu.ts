@@ -28,10 +28,6 @@
         <translation>Figyelmeztetések letiltása</translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation>Mégse</translation>
-    </message>
-    <message>
         <source>Save</source>
         <translation>Mentés</translation>
     </message>
@@ -44,19 +40,11 @@
         <translation>Ha letiltja a figyelmeztetéseket, a Raspberry Pi Imager &lt;b&gt;nem jelenít meg megerősítést az írás előtt&lt;/b&gt;. Rendszermeghajtó kiválasztásakor továbbra is &lt;b&gt;pontosan be kell írnia&lt;/b&gt; a nevét.</translation>
     </message>
     <message>
-        <source>Select custom Repository</source>
+        <source>Content Repository</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Browse</source>
-        <translation type="unfinished">Böngészés</translation>
-    </message>
-    <message>
-        <source>Select Repository</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select custom repository</source>
+        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -88,6 +76,98 @@
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Mégse</translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation type="unfinished">Igen</translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation type="unfinished">Nem</translation>
+    </message>
+    <message>
+        <source>Browse</source>
+        <translation type="unfinished">Böngészés</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished">Folytatás</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation type="unfinished">Vissza</translation>
+    </message>
+    <message>
+        <source>Finish</source>
+        <translation type="unfinished">Befejezés</translation>
+    </message>
+    <message>
+        <source>Select image</source>
+        <translation type="unfinished">Kép kiválasztása</translation>
+    </message>
+    <message>
+        <source>Password:</source>
+        <translation type="unfinished">Jelszó:</translation>
+    </message>
+    <message>
+        <source>Device:</source>
+        <translation type="unfinished">Eszköz:</translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation type="unfinished">Tároló:</translation>
+    </message>
+    <message>
+        <source>No device selected</source>
+        <translation type="unfinished">Nincs eszköz kiválasztva</translation>
+    </message>
+    <message>
+        <source>No image selected</source>
+        <translation type="unfinished">Nincs kép kiválasztva</translation>
+    </message>
+    <message>
+        <source>No storage selected</source>
+        <translation type="unfinished">Nincs tároló kiválasztva</translation>
+    </message>
+    <message>
+        <source>Hostname configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>User account configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Locale configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wi‑Fi configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Connect enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB Gadget enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I2C enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SPI enabled</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -155,50 +235,6 @@
         <translation>Választásai:</translation>
     </message>
     <message>
-        <source>Device:</source>
-        <translation>Eszköz:</translation>
-    </message>
-    <message>
-        <source>No device selected</source>
-        <translation>Nincs eszköz kiválasztva</translation>
-    </message>
-    <message>
-        <source>Operating System:</source>
-        <translation>Operációs rendszer:</translation>
-    </message>
-    <message>
-        <source>No image selected</source>
-        <translation>Nincs kép kiválasztva</translation>
-    </message>
-    <message>
-        <source>Storage Device:</source>
-        <translation>Tárolóeszköz:</translation>
-    </message>
-    <message>
-        <source>No storage device selected</source>
-        <translation>Nincs tárolóeszköz kiválasztva</translation>
-    </message>
-    <message>
-        <source>✓ Hostname configured</source>
-        <translation>✓ Gépnév beállítva</translation>
-    </message>
-    <message>
-        <source>✓ User account configured</source>
-        <translation>✓ Felhasználói fiók beállítva</translation>
-    </message>
-    <message>
-        <source>✓ SSH enabled</source>
-        <translation>✓ SSH engedélyezve</translation>
-    </message>
-    <message>
-        <source>✓ Raspberry Pi Connect enabled</source>
-        <translation>✓ Raspberry Pi Connect engedélyezve</translation>
-    </message>
-    <message>
-        <source>✓ Locale configured</source>
-        <translation>✓ Területi beállítások megadva</translation>
-    </message>
-    <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
         <translation>A tárolóeszköz automatikusan ki lett adva. Most már biztonságosan eltávolíthatja.</translation>
     </message>
@@ -211,10 +247,6 @@
         <translation>Újabb írás</translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation>Befejezés</translation>
-    </message>
-    <message>
         <source>Write complete!</source>
         <translation>Az írás befejeződött!</translation>
     </message>
@@ -223,12 +255,16 @@
         <translation>Alkalmazott testreszabások:</translation>
     </message>
     <message>
-        <source>✓ Wi‑Fi configured</source>
-        <translation>✓ Wi‑Fi beállítva</translation>
-    </message>
-    <message>
         <source>Reboot</source>
         <translation>Újraindítás</translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation type="unfinished">Tároló:</translation>
     </message>
 </context>
 <context>
@@ -261,14 +297,6 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>unmounting drive</source>
-        <translation>meghajtó leválasztása</translation>
-    </message>
-    <message>
-        <source>opening drive</source>
-        <translation>meghajtó megnyitása</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Ellenőrizze, hogy a &apos;Raspberry Pi Imager&apos; hozzáférhet-e az &apos;eltávolítható kötetekhez&apos; az adatvédelmi beállításokban (a &apos;fájlok és mappák&apos; alatt), vagy adjon &apos;teljes lemezhozzáférést&apos;.</translation>
     </message>
@@ -277,24 +305,12 @@
         <translation>A(z) &apos;%1&apos; tárolóeszköz nem nyitható meg.</translation>
     </message>
     <message>
-        <source>discarding existing data on drive</source>
-        <translation>meglévő adatok elvetése a meghajtón</translation>
-    </message>
-    <message>
-        <source>zeroing out first and last MB of drive</source>
-        <translation>a meghajtó első és utolsó MB-jának kinullázása</translation>
-    </message>
-    <message>
         <source>Write error while zero&apos;ing out MBR</source>
         <translation>Íráshiba az MBR kinullázásakor</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>Íráshiba a kártya utolsó részének kinullázásakor.&lt;br&gt;Előfordulhat, hogy a kártya hibás kapacitást jelez (esetleg hamisítvány).</translation>
-    </message>
-    <message>
-        <source>starting download</source>
-        <translation>letöltés indítása</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
@@ -331,10 +347,6 @@
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Az írás ellenőrzése sikertelen. Az SD-kártya tartalma eltér a ráírt adatoktól.</translation>
-    </message>
-    <message>
-        <source>Customizing image</source>
-        <translation>Kép testreszabása</translation>
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
@@ -377,10 +389,6 @@
         <translation>I/O eszközhiba. A tárolóeszköz lecsatlakozhatott vagy meghibásodott.</translation>
     </message>
     <message>
-        <source>writing image</source>
-        <translation>kép írása</translation>
-    </message>
-    <message>
         <source>Error opening disk device &apos;%1&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -398,6 +406,34 @@
     </message>
     <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unmounting drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discarding existing data on drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customising OS...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -473,19 +509,11 @@
 <context>
     <name>IfAndFeaturesCustomizationStep</name>
     <message>
-        <source>Customization: Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Enable hardware interfaces and connectivity options.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Interfaces</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Enable I²C</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -525,11 +553,15 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation type="unfinished">Mégse</translation>
+        <source>I understand, continue</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>I understand, continue</source>
+        <source>Customisation: Interfaces &amp; Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable I2C</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -546,10 +578,6 @@
     <message>
         <source>Folders</source>
         <translation>Mappák</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation>Mégse</translation>
     </message>
     <message>
         <source>Open</source>
@@ -673,14 +701,6 @@
         <source>This will require administrator authentication on macOS.</source>
         <translation>Ez macOS-en rendszergazdai hitelesítést igényel.</translation>
     </message>
-    <message>
-        <source>No</source>
-        <translation>Nem</translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation>Igen</translation>
-    </message>
 </context>
 <context>
     <name>LanguageSelectionStep</name>
@@ -700,16 +720,8 @@
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <source>opening image file</source>
-        <translation>képfájl megnyitása</translation>
-    </message>
-    <message>
         <source>Error opening image file</source>
         <translation>Hiba a képfájl megnyitásakor</translation>
-    </message>
-    <message>
-        <source>starting extraction</source>
-        <translation>kibontás indítása</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -722,6 +734,14 @@
     <message>
         <source>Failed to read complete image file</source>
         <translation>Nem sikerült a teljes képfájl beolvasása</translation>
+    </message>
+    <message>
+        <source>Opening image file...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting extraction...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -773,10 +793,6 @@
         <translation>Online – %1 letöltés</translation>
     </message>
     <message>
-        <source>Back</source>
-        <translation>Vissza</translation>
-    </message>
-    <message>
         <source>Go back to main menu</source>
         <translation>Vissza a főmenübe</translation>
     </message>
@@ -824,7 +840,14 @@
         <translation>Várakozás tokenre</translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Internal SD card reader</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -841,10 +864,6 @@
     <message>
         <source>Use public key authentication</source>
         <translation>Nyilvános kulcsos hitelesítés használata</translation>
-    </message>
-    <message>
-        <source>Browse</source>
-        <translation>Böngészés</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
@@ -872,6 +891,41 @@
     </message>
     <message>
         <source>Failed to read SSH key file</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RepositoryDialog</name>
+    <message>
+        <source>Content Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Repository source:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use custom file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use custom URI</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please select a custom repository json file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply &amp; Restart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select custom repository</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -908,24 +962,12 @@
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
         <translation>Elérhető a Imager újabb verziója. Szeretné megnyitni a weboldalt a letöltéshez?</translation>
     </message>
-    <message>
-        <source>No</source>
-        <translation>Nem</translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation>Igen</translation>
-    </message>
 </context>
 <context>
     <name>UserCustomizationStep</name>
     <message>
         <source>Username:</source>
         <translation>Felhasználónév:</translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation>Jelszó:</translation>
     </message>
     <message>
         <source>Enter password</source>
@@ -973,10 +1015,6 @@
     <message>
         <source>Network name</source>
         <translation>Hálózat neve</translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation>Jelszó:</translation>
     </message>
     <message>
         <source>Network password</source>
@@ -1030,10 +1068,6 @@
         <translation>Kész</translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation>Befejezés</translation>
-    </message>
-    <message>
         <source>Customisation</source>
         <translation>Testreszabás</translation>
     </message>
@@ -1048,10 +1082,6 @@
     <message>
         <source>Wi‑Fi</source>
         <translation>Wi‑Fi</translation>
-    </message>
-    <message>
-        <source>Remote Access</source>
-        <translation>Távoli elérés</translation>
     </message>
     <message>
         <source>Raspberry Pi Connect</source>
@@ -1073,16 +1103,16 @@
         <source>Localisation</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Remote access</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardStepBase</name>
     <message>
         <source>Next</source>
         <translation>Tovább</translation>
-    </message>
-    <message>
-        <source>Back</source>
-        <translation>Vissza</translation>
     </message>
     <message>
         <source>Skip customisation</source>
@@ -1096,56 +1126,12 @@
         <translation>Ellenőrizze a választásait, majd írja a képet a tárolóeszközre</translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation>Mégse</translation>
-    </message>
-    <message>
-        <source>Continue</source>
-        <translation>Folytatás</translation>
-    </message>
-    <message>
         <source>Write</source>
         <translation>Írás</translation>
     </message>
     <message>
         <source>Summary</source>
         <translation>Összegzés</translation>
-    </message>
-    <message>
-        <source>Device:</source>
-        <translation>Eszköz:</translation>
-    </message>
-    <message>
-        <source>No device selected</source>
-        <translation>Nincs eszköz kiválasztva</translation>
-    </message>
-    <message>
-        <source>No image selected</source>
-        <translation>Nincs kép kiválasztva</translation>
-    </message>
-    <message>
-        <source>Storage:</source>
-        <translation>Tároló:</translation>
-    </message>
-    <message>
-        <source>No storage selected</source>
-        <translation>Nincs tároló kiválasztva</translation>
-    </message>
-    <message>
-        <source>• Hostname configured</source>
-        <translation>• Gépnév beállítva</translation>
-    </message>
-    <message>
-        <source>• User account configured</source>
-        <translation>• Felhasználói fiók beállítva</translation>
-    </message>
-    <message>
-        <source>• SSH enabled</source>
-        <translation>• SSH engedélyezve</translation>
-    </message>
-    <message>
-        <source>• Locale configured</source>
-        <translation>• Területi beállítás megadva</translation>
     </message>
     <message>
         <source>Starting write process...</source>
@@ -1196,10 +1182,6 @@
         <translation>Alkalmazandó testreszabások:</translation>
     </message>
     <message>
-        <source>• Wi‑Fi configured</source>
-        <translation>• Wi‑Fi beállítva</translation>
-    </message>
-    <message>
         <source>Finalising...</source>
         <translation>Befejezés...</translation>
     </message>
@@ -1217,22 +1199,6 @@
     </message>
     <message>
         <source>Ready to write the image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• USB Gadget enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• I2C enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• SPI enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• Raspberry Pi Connect enabled</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1271,20 +1237,8 @@
         <translation>A Raspberry Pi Imager még dolgozik. Biztosan kilép?</translation>
     </message>
     <message>
-        <source>No</source>
-        <translation>Nem</translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation>Igen</translation>
-    </message>
-    <message>
         <source>Storage device removed</source>
         <translation>A tárolóeszközt eltávolították</translation>
-    </message>
-    <message>
-        <source>Continue</source>
-        <translation>Folytatás</translation>
     </message>
     <message>
         <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>

@@ -441,24 +441,7 @@ WizardStepBase {
             id: sublistview
             autoSelectFirst: true
             model: ListModel {
-                // Back entry
-                ListElement {
-                    url: ""
-                    icon: "../icons/ic_chevron_left_40px.svg"
-                    extract_size: 0
-                    image_download_size: 0
-                    extract_sha256: ""
-                    contains_multiple_files: false
-                    release_date: ""
-                    subitems_url: "internal://back"
-                    subitems_json: ""
-                    name: qsTr("Back")
-                    description: qsTr("Go back to main menu")
-                    tooltip: ""
-                    website: ""
-                    init_format: ""
-                    capabilities: ""
-                }
+                id: sublistModel
             }
             delegate: osdelegate
             
@@ -472,6 +455,25 @@ WizardStepBase {
             onLeftPressed: root.handleBackNavigation
             
             Component.onCompleted: {
+                // Build the back entry dynamically to support translations
+                sublistModel.append({
+                    url: "",
+                    icon: "../icons/ic_chevron_left_40px.svg",
+                    extract_size: 0,
+                    image_download_size: 0,
+                    extract_sha256: "",
+                    contains_multiple_files: false,
+                    release_date: "",
+                    subitems_url: "internal://back",
+                    subitems_json: "",
+                    name: CommonStrings.back,
+                    description: qsTr("Go back to main menu"),
+                    tooltip: "",
+                    website: "",
+                    init_format: "",
+                    capabilities: ""
+                })
+                
                 // Ensure this sublist can receive keyboard focus
                 forceActiveFocus()
                 root.initializeListViewFocus(sublistview)
@@ -554,9 +556,8 @@ WizardStepBase {
 
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-                // Gate Raspberry Pi Connect availability by OS JSON field
-                root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
-                root.wizardContainer.rpiosCloudInitAvailable = false
+                root.wizardContainer.piConnectAvailable = false
+                root.wizardContainer.ccRpiAvailable = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
                     Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
@@ -578,9 +579,8 @@ WizardStepBase {
 
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
-                // Gate Raspberry Pi Connect availability by OS JSON field
-                root.wizardContainer.piConnectAvailable = (typeof(model.enable_rpi_connect) !== "undefined") ? !!model.enable_rpi_connect : false
-                root.wizardContainer.rpiosCloudInitAvailable = imageWriter.checkSWCapability("rpios_cloudinit")
+                root.wizardContainer.piConnectAvailable = imageWriter.checkSWCapability("rpi_connect")
+                root.wizardContainer.ccRpiAvailable = imageWriter.imageSupportsCcRpi()
                 // If customization is not supported for this OS, clear any previously-staged UI flags
                 if (!root.wizardContainer.customizationSupported) {
                     root.wizardContainer.hostnameConfigured = false
@@ -592,7 +592,14 @@ WizardStepBase {
                 } else if (!root.wizardContainer.piConnectAvailable) {
                     // If Raspberry Pi Connect not available for this OS, ensure it's not marked enabled
                     root.wizardContainer.piConnectEnabled = false
+                } else if (!root.wizardContainer.ccRpiAvailable) {
+                    root.wizardContainer.ifI2cEnabled = false
+                    root.wizardContainer.ifSpiEnabled = false
+                    root.wizardContainer.if1WireEnabled = false
+                    root.wizardContainer.ifSerial = "Disabled"
+                    root.wizardContainer.featUsbGadgetEnabled = false
                 }
+
                 root.customSelected = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
@@ -671,10 +678,6 @@ WizardStepBase {
                 entry.icon = String(entry.icon || "")
                 entry.subitems_url = String(entry.subitems_url || "")
                 entry.website = String(entry.website || "")
-                // Propagate enable_rpi_connect from parent when missing
-                if (typeof(entry.enable_rpi_connect) === "undefined" && typeof(model.enable_rpi_connect) !== "undefined") {
-                    entry.enable_rpi_connect = model.enable_rpi_connect
-                }
 
                 if (typeof entry.capabilities === "string") {
                     // keep it

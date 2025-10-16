@@ -164,6 +164,13 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         line(QStringLiteral("       echo 0 > $filename"), script);
         line(QStringLiteral("   done"), script);
         line(QStringLiteral("fi"), script);
+    } else if (!wifiCountry.isEmpty()) {
+        // When country is set but no SSID, still need to unblock Wi-Fi
+        // This prevents "Wi-Fi is currently blocked by rfkill" message on boot
+        line(QStringLiteral("rfkill unblock wifi"), script);
+        line(QStringLiteral("for filename in /var/lib/systemd/rfkill/*:wlan ; do"), script);
+        line(QStringLiteral("  echo 0 > $filename"), script);
+        line(QStringLiteral("done"), script);
     }
 
     // Raspberry Pi Connect token provisioning (store in target user's home)
@@ -227,7 +234,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
 
 QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& settings,
                                                              const QString& piConnectToken,
-                                                             bool isRpiosCloudInit,
+                                                             bool hasCcRpi,
                                                              bool sshEnabled,
                                                              const QString& currentUser)
 {
@@ -315,12 +322,13 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     
     const bool enableI2C = settings.value("enableI2C").toBool();
     const bool enableSPI = settings.value("enableSPI").toBool();
+    const bool enable1Wire = settings.value("enable1Wire").toBool();
     const QString enableSerial = settings.value("enableSerial").toString();
-    const bool armInterfaceEnabled = enableI2C || enableSPI || enableSerial != "Disabled";
+    const bool armInterfaceEnabled = enableI2C || enableSPI || enable1Wire || enableSerial != "Disabled";
     const bool isUsbGadgetEnabled = settings.value("enableUsbGadget").toBool();
     
-    // cc_raspberry_pi config for rpios_cloudinit capable OSs
-    if (isRpiosCloudInit && (isUsbGadgetEnabled || armInterfaceEnabled)) {
+    // cc_raspberry_pi config for capable OSs
+    if (hasCcRpi && (isUsbGadgetEnabled || armInterfaceEnabled)) {
         push(QStringLiteral("rpi:"), cloud);
         
         if (isUsbGadgetEnabled) {
@@ -336,6 +344,9 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             }
             if (enableSPI) {
                 push(QStringLiteral("    spi: true"), cloud);
+            }
+            if (enable1Wire) {
+                push(QStringLiteral("    onewire: true"), cloud);
             }
             if (enableSerial != "Disabled") {
                 if (enableSerial == "" || enableSerial == "Default") {
@@ -360,6 +371,13 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     // Raspberry Pi Connect token provisioning via cloud-init write_files (store in user's home)
     const bool piConnectEnabled = settings.value("piConnectEnabled").toBool();
     QString cleanToken = piConnectToken.trimmed();
+    const QString ssid = settings.value("wifiSSID").toString();
+    const QString wifiCountry = settings.value("wifiCountry").toString().trimmed();
+    
+    // Determine if we need runcmd section
+    bool needsRuncmd = (piConnectEnabled && !cleanToken.isEmpty()) || 
+                       (!wifiCountry.isEmpty() && ssid.isEmpty());
+    
     if (piConnectEnabled && !cleanToken.isEmpty()) {
         // Use the same effective user decision as above
         const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
@@ -375,13 +393,22 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         push(QString(), cloud);
         push(QStringLiteral("runcmd:"), cloud);
         push(QStringLiteral("  - [ bash, -lc, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
+    } else if (needsRuncmd) {
+        // Start runcmd section if not already started
+        push(QStringLiteral("runcmd:"), cloud);
+    }
+    
+    // When Wi-Fi country is set but no SSID, unblock Wi-Fi to prevent "blocked by rfkill" message
+    if (!wifiCountry.isEmpty() && ssid.isEmpty()) {
+        push(QStringLiteral("  - [ rfkill, unblock, wifi ]"), cloud);
+        push(QStringLiteral("  - [ bash, -c, \"for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \\\"$f\\\"; done\" ]"), cloud);
     }
     
     return cloud;
 }
 
 QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariantMap& settings,
-                                                                  bool isRpiosCloudInit)
+                                                                  bool hasCcRpi)
 {
     QByteArray netcfg;
     
@@ -395,40 +422,48 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     const QString ssid = settings.value("wifiSSID").toString();
     const QString cryptedPskFromSettings = settings.value("wifiPasswordCrypt").toString();
     const bool hidden = settings.value("wifiHidden").toBool();
+    const QString regDom = settings.value("wifiCountry").toString().trimmed().toUpper();
     
-    if (!ssid.isEmpty()) {
+    // Generate network config if we have a country code (regulatory domain) or an SSID
+    if (!regDom.isEmpty() || !ssid.isEmpty()) {
         push(QStringLiteral("network:"), netcfg);
         push(QStringLiteral("  version: 2"), netcfg);
         push(QStringLiteral("  wifis:"), netcfg);
         push(QStringLiteral("    renderer: %1")
-                 .arg(isRpiosCloudInit ? QStringLiteral("NetworkManager")
-                                       : QStringLiteral("networkd")),
+                 .arg(hasCcRpi ? QStringLiteral("NetworkManager")
+                               : QStringLiteral("networkd")),
              netcfg);
         push(QStringLiteral("    wlan0:"), netcfg);
         push(QStringLiteral("      dhcp4: true"), netcfg);
-        push(QStringLiteral("      access-points:"), netcfg);
-        {
-            QString key = ssid;
-            key.replace('"', QStringLiteral("\\\""));
-            push(QStringLiteral("        \"") + key + QStringLiteral("\":"), netcfg);
+        if (!regDom.isEmpty()) {
+            push(QStringLiteral("      regulatory-domain: \"") + regDom + QStringLiteral("\""), netcfg);
         }
-        // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
-        QString effectiveCryptedPsk = cryptedPskFromSettings;
-        if (effectiveCryptedPsk.isEmpty()) {
-            const QString legacyPwd = settings.value("wifiPassword").toString();
-            if (!legacyPwd.isEmpty()) {
-                const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
-                effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
+        
+        // Only configure access points if we have an SSID
+        if (!ssid.isEmpty()) {
+            push(QStringLiteral("      access-points:"), netcfg);
+            {
+                QString key = ssid;
+                key.replace('"', QStringLiteral("\\\""));
+                push(QStringLiteral("        \"") + key + QStringLiteral("\":"), netcfg);
+            }
+            // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
+            QString effectiveCryptedPsk = cryptedPskFromSettings;
+            if (effectiveCryptedPsk.isEmpty()) {
+                const QString legacyPwd = settings.value("wifiPassword").toString();
+                if (!legacyPwd.isEmpty()) {
+                    const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
+                    effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
+                }
+            }
+            // Required because without a password and hidden netplan would read ssid: null and crash
+            effectiveCryptedPsk.replace('"', QStringLiteral("\\\""));
+            push(QStringLiteral("          password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
+            if (hidden) {
+                push(QStringLiteral("          hidden: true"), netcfg);
             }
         }
-        if (!effectiveCryptedPsk.isEmpty()) {
-            QString epwd = effectiveCryptedPsk;
-            epwd.replace('"', QStringLiteral("\\\""));
-            push(QStringLiteral("          password: \"") + epwd + QStringLiteral("\""), netcfg);
-        }
-        if (hidden) {
-            push(QStringLiteral("          hidden: true"), netcfg);
-        }
+        
         push(QStringLiteral("      optional: true"), netcfg);
     }
     

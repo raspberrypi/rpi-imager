@@ -82,7 +82,7 @@ WizardStepBase {
                     
                     ImButton {
                         id: browseButton
-                        text: qsTr("Browse")
+                        text: CommonStrings.browse
                         Layout.minimumWidth: 80
                         onClicked: {
                             // Prefer native file dialog via Imager's wrapper, but only if available

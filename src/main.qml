@@ -119,7 +119,7 @@ ApplicationWindow {
             }
             ImButton {
                 id: errorContinueButton
-                text: qsTr("Continue")
+                text: CommonStrings.continueText
                 activeFocusOnTab: true
                 onClicked: errorDialog.close()
             }
@@ -224,13 +224,13 @@ ApplicationWindow {
 
             ImButton {
                 id: quitNoButton
-                text: qsTr("No")
+                text: CommonStrings.no
                 activeFocusOnTab: true
                 onClicked: quitDialog.close()
             }
             ImButtonRed {
                 id: quitYesButton
-                text: qsTr("Yes")
+                text: CommonStrings.yes
                 activeFocusOnTab: true
                 onClicked: {
                     window.forceQuit = true;

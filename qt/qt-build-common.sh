@@ -79,9 +79,9 @@ init_common_variables() {
 
 # Function to parse common command line arguments
 # Usage: parse_common_args "$@"
-# Returns: remaining arguments that weren't processed
+# Sets: COMMON_REMAINING_ARGS array with arguments that weren't processed
 parse_common_args() {
-    local remaining_args=()
+    COMMON_REMAINING_ARGS=()
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -118,18 +118,15 @@ parse_common_args() {
                 ;;
             -h|--help)
                 # Let the calling script handle help
-                remaining_args+=("$1")
+                COMMON_REMAINING_ARGS+=("$1")
                 ;;
             *)
                 # Pass through unknown arguments
-                remaining_args+=("$1")
+                COMMON_REMAINING_ARGS+=("$1")
                 ;;
         esac
         shift
     done
-    
-    # Return remaining arguments
-    printf '%s\n' "${remaining_args[@]}"
 }
 
 # Function to validate common inputs

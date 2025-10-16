@@ -71,7 +71,7 @@ BaseDialog {
 
         ImButton {
             id: noButton
-            text: qsTr("No")
+            text: CommonStrings.no
             Layout.preferredWidth: 80
             activeFocusOnTab: true
             onClicked: {
@@ -82,7 +82,7 @@ BaseDialog {
 
         ImButtonRed {
             id: yesButton
-            text: qsTr("Yes")
+            text: CommonStrings.yes
             Layout.preferredWidth: 80
             activeFocusOnTab: true
             onClicked: {

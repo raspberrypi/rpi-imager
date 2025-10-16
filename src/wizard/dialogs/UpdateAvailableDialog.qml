@@ -55,7 +55,7 @@ BaseDialog {
 
         ImButton {
             id: noButton
-            text: qsTr("No")
+            text: CommonStrings.no
             activeFocusOnTab: true
             onClicked: {
                 root.reject()
@@ -64,7 +64,7 @@ BaseDialog {
 
         ImButtonRed {
             id: yesButton
-            text: qsTr("Yes")
+            text: CommonStrings.yes
             activeFocusOnTab: true
             onClicked: {
                 if (root.url && root.url.toString && root.url.toString().length > 0) {

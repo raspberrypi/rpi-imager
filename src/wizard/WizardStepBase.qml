@@ -9,6 +9,8 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../qmlcomponents"
 
+import RpiImager
+
 FocusScope {
     id: root
     
@@ -18,7 +20,7 @@ FocusScope {
     property bool showNextButton: true
     property bool showSkipButton: false
     property string nextButtonText: qsTr("Next")
-    property string backButtonText: qsTr("Back")
+    property string backButtonText: CommonStrings.back
     property string skipButtonText: qsTr("Skip customisation")
     property bool nextButtonEnabled: true
     property bool backButtonEnabled: true

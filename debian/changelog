@@ -1,3 +1,13 @@
+rpi-imager (2.0.0) unstable; urgency=medium
+
+  * UI: Complete redesign, now as a wizard
+  * OS customisation: Add Raspberry Pi Connect step
+  * App Options: Custom repository selection UI
+  * OS customisation: Rebuilt back-end in C++
+  * build: Custom Qt 6.9.3 builds for each platform
+
+  -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 10 Oct 2025 17:00:00 +0100
+
 rpi-imager (1.9.7) unstable; urgency=medium
 
   * OS customisation:

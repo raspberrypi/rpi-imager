@@ -3,7 +3,7 @@
 
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2020 Raspberry Pi Ltd
+ * Copyright (C) 2020-2025 Raspberry Pi Ltd
  */
 
 #include <memory>
@@ -247,6 +247,7 @@ public:
     Q_INVOKABLE void clearSavedCustomizationSettings();
     Q_INVOKABLE bool hasSavedCustomizationSettings();
     Q_INVOKABLE bool imageSupportsCustomization();
+    Q_INVOKABLE bool imageSupportsCcRpi();
 
     Q_INVOKABLE QString crypt(const QByteArray &password);
     Q_INVOKABLE QString pbkdf2(const QByteArray &psk, const QByteArray &ssid);
@@ -273,6 +274,7 @@ public:
     Q_INVOKABLE void setOsListRefreshOverride(int intervalMinutes, int jitterMinutes);
 
     Q_INVOKABLE void refreshOsListFrom(const QUrl &url);
+    Q_INVOKABLE void refreshOsListFromDefaultUrl();
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */

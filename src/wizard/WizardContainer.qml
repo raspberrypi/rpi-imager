@@ -56,9 +56,10 @@ Item {
     property bool piConnectAvailable: false
 
     // Interfaces & Features
-    property bool rpiosCloudInitAvailable: false
+    property bool ccRpiAvailable: false
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
+    property bool if1WireEnabled: false
     // "Disabled" | "Default" | "Console & Hardware" | "Console" | "Hardware" | ""
     property string ifSerial: ""
     property bool featUsbGadgetEnabled: false
@@ -143,7 +144,7 @@ Item {
     }
 
     function getLastCustomizationStep() {
-        return rpiosCloudInitAvailable
+        return ccRpiAvailable
             ? stepIfAndFeatures
             : piConnectAvailable
                 ? stepPiConnectCustomization
@@ -156,11 +157,11 @@ Item {
             return []
         }
         
-        var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote Access")]
+        var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote access")]
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
-        if (rpiosCloudInitAvailable) {
+        if (ccRpiAvailable) {
             labels.push(qsTr("Interfaces & Features"))
         }
 
@@ -177,9 +178,9 @@ Item {
         if (stepLabel === qsTr("Localisation")) return localeConfigured
         if (stepLabel === qsTr("User")) return userConfigured
         if (stepLabel === qsTr("Wi‑Fi")) return wifiConfigured
-        if (stepLabel === qsTr("Remote Access")) return sshEnabled
+        if (stepLabel === qsTr("Remote access")) return sshEnabled
         if (stepLabel === qsTr("Raspberry Pi Connect")) return piConnectEnabled
-        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || ifSerial !== "" || featUsbGadgetEnabled)
+        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || if1WireEnabled || ifSerial !== "" || featUsbGadgetEnabled)
         
         return false
     }
@@ -218,9 +219,10 @@ Item {
         sshEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
-        rpiosCloudInitAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
     }
@@ -244,9 +246,10 @@ Item {
         
         // Reset OS capability flags - these will be set correctly by OS selection
         piConnectAvailable = false
-        rpiosCloudInitAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
     }
@@ -426,7 +429,7 @@ Item {
                                         else if (root.currentStep === root.stepLocaleCustomization) currentStepLabel = qsTr("Localisation")
                                         else if (root.currentStep === root.stepUserCustomization) currentStepLabel = qsTr("User")
                                         else if (root.currentStep === root.stepWifiCustomization) currentStepLabel = qsTr("Wi‑Fi")
-                                        else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote Access")
+                                        else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote access")
                                         else if (root.currentStep === root.stepPiConnectCustomization) currentStepLabel = qsTr("Raspberry Pi Connect")
                                         else if (root.currentStep === root.stepIfAndFeatures) currentStepLabel = qsTr("Interfaces & Features")
                                         
@@ -466,7 +469,7 @@ Item {
                                             else if (stepLabel === qsTr("Localisation")) target = root.stepLocaleCustomization
                                             else if (stepLabel === qsTr("User")) target = root.stepUserCustomization
                                             else if (stepLabel === qsTr("Wi‑Fi")) target = root.stepWifiCustomization
-                                            else if (stepLabel === qsTr("Remote Access")) target = root.stepRemoteAccess
+                                            else if (stepLabel === qsTr("Remote access")) target = root.stepRemoteAccess
                                             else if (stepLabel === qsTr("Raspberry Pi Connect")) target = root.stepPiConnectCustomization
                                             else if (stepLabel === qsTr("Interfaces & Features")) target = root.stepIfAndFeatures
                                             
@@ -672,8 +675,8 @@ Item {
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
                 nextIndex++
             }
-            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-            if (!rpiosCloudInitAvailable && nextIndex == stepIfAndFeatures) {
+            // skip interfaces and features for Operating Systems that don't support the cc_raspberry_pi cloud-init module
+            if (!ccRpiAvailable && nextIndex == stepIfAndFeatures) {
                 nextIndex++
             }
             // Before entering the writing step, persist and apply customization (when supported)
@@ -703,8 +706,8 @@ Item {
             if (root.currentStep === stepWriting && !customizationSupported) {
                 prevIndex = stepStorageSelection
             } else {
-                // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-                if (prevIndex == stepIfAndFeatures && !rpiosCloudInitAvailable) {
+                // skip interfaces and features for Operating Systems that don't support the cc_raspberry_pi cloud-init module
+                if (prevIndex == stepIfAndFeatures && !ccRpiAvailable) {
                     prevIndex--
                 }
                 if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
@@ -926,7 +929,7 @@ Item {
             imageWriter: root.imageWriter
             wizardContainer: root
             showBackButton: false
-            nextButtonText: qsTr("Finish")
+            nextButtonText: CommonStrings.finish
             appOptionsButton: optionsButton
             onNextClicked: root.wizardCompleted()
         }
@@ -978,9 +981,10 @@ Item {
         piConnectEnabled = false
         piConnectAvailable = false
 
-        rpiosCloudInitAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
 

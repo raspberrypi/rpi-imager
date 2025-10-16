@@ -4,20 +4,18 @@
  */
 
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import RpiImager
-import QtQuick.Controls.Material 2.15
 
 // A labeled button styled for Imager; only the button clicks, not the whole row
 Item {
     id: control
     property alias text: label.text
-    property bool checked: false
     // Optional help link next to the label
     property string helpLabel: ""
     property url helpUrl: ""
     property string btnText: ""
+    property alias enabled: optionButton.enabled
     signal clicked()
 
     // Expose the actual focusable control for tab navigation
@@ -44,9 +42,8 @@ Item {
                 font.family: Style.fontFamilyBold
                 font.pixelSize: Style.fontSizeFormLabel
                 font.bold: true
-                color: Style.formLabelColor
+                color: optionButton.enabled ? Style.formLabelColor : Style.textDescriptionColor
                 elide: Text.ElideRight
-                TapHandler { onTapped: sw.toggle() }
             }
 
             // Optional help link under the label
@@ -62,7 +59,7 @@ Item {
                 Accessible.name: text
                 TapHandler {
                     cursorShape: Qt.PointingHandCursor
-                    onTapped: Qt.openUrlExternally(pill.helpUrl)
+                    onTapped: Qt.openUrlExternally(control.helpUrl)
                 }
                 HoverHandler {
                     id: helpHover
@@ -79,7 +76,7 @@ Item {
             id: optionButton
             Layout.alignment: Qt.AlignVCenter
             activeFocusOnTab: true
-            text: btnText
+            text: control.btnText
 
             onClicked: {
                 control.clicked()

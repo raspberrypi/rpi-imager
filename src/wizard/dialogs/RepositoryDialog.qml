@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (C) 2025 Raspberry Pi Ltd
+ */
+
 import QtCore
 import QtQuick
 import QtQuick.Controls
@@ -84,7 +89,7 @@ BaseDialog {
 
             ImRadioButton {
                 id: radioCustomUri
-                text: qsTr("Use custom URI")
+                text: qsTr("Use custom URL")
                 checked: false
                 ButtonGroup.group: repoGroup
             }
@@ -106,7 +111,7 @@ BaseDialog {
 
                 ImButton {
                     id: browseButton
-                    text: qsTr("Browse")
+                    text: CommonStrings.browse
                     Layout.minimumWidth: 80
                     activeFocusOnTab: true
                     onClicked: {
@@ -165,7 +170,7 @@ BaseDialog {
 
             ImButton {
                 id: cancelButton
-                text: qsTr("Cancel")
+                text: CommonStrings.cancel
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
                 onClicked: {
@@ -176,9 +181,14 @@ BaseDialog {
 
             ImButtonRed {
                 id: saveButton
-                enabled: radioOfficial.checked
+                enabled: (radioOfficial.checked
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
-                         || (radioCustomUri.checked && fieldCustomUri.acceptableInput)
+                         || (radioCustomUri.checked && fieldCustomUri.acceptableInput))
+                         // Disable while write is in progress to prevent restarting during write
+                         && (imageWriter.writeState === ImageWriter.Idle ||
+                             imageWriter.writeState === ImageWriter.Succeeded ||
+                             imageWriter.writeState === ImageWriter.Failed ||
+                             imageWriter.writeState === ImageWriter.Cancelled)
                 // TODO: only show or enable when settings changed
                 text: qsTr("Apply & Restart")
                 Layout.minimumWidth: Style.buttonWidthMinimum
@@ -239,8 +249,7 @@ BaseDialog {
         // Save settings to ImageWriter
         // Only save repository setting if it has actually changed
         if (radioOfficial.checked && originalRepo !== "") {
-            // TODO: helper function in imageWriter that retrieves the original url from static property
-            imageWriter.refreshOsListFrom(new URL("https://downloads.raspberrypi.org/os_list_imagingutility_v4.json"))
+            imageWriter.refreshOsListFromDefaultUrl()
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
         } else if (radioCustomFile.checked && originalRepo !== selectedRepo) {

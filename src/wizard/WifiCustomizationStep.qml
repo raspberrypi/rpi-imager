@@ -45,7 +45,7 @@ WizardStepBase {
         // Note: WiFi country is initialized by fieldWifiCountry's Component.onCompleted
         // after the model is loaded, which properly handles recommended/saved/default values
         if (saved.wifiHidden !== undefined) {
-            chkWifiHidden.checked = !!saved.wifiHidden
+            chkWifiHidden.checked = saved.wifiHidden === true || saved.wifiHidden === "true"
         }
         // Remember if a crypted PSK is already saved (affects placeholder/keep semantics)
         root.hasSavedWifiPSK = !!saved.wifiPasswordCrypt
@@ -89,7 +89,7 @@ WizardStepBase {
                 }
                 
                 WizardFormLabel {
-                    text: qsTr("Password:")
+                    text: CommonStrings.password
                 }
                 
                 ImTextField {
@@ -109,6 +109,7 @@ WizardStepBase {
                     Layout.fillWidth: true
                     model: []
                     font.pixelSize: Style.fontSizeInput
+                    property bool isInitializing: true
                     Component.onCompleted: {
                         model = root.imageWriter.getCountryList()
                         // Always use recommended country from capital city selection
@@ -136,10 +137,15 @@ WizardStepBase {
                             }
                             currentIndex = (gbIndex >= 0) ? gbIndex : 0
                         }
+                        isInitializing = false
+                        // Now that initialization is complete, update the label once
+                        recommendedLabel.updateVisibility()
                     }
                     onCurrentTextChanged: {
-                        // Update visibility when selection changes
-                        recommendedLabel.updateVisibility()
+                        // Update visibility when selection changes (but not during initialization)
+                        if (!isInitializing) {
+                            recommendedLabel.updateVisibility()
+                        }
                     }
                 }
                 
@@ -167,8 +173,6 @@ WizardStepBase {
                             console.log("WifiCustomizationStep: no recommendation available")
                         }
                     }
-                    
-                    Component.onCompleted: updateVisibility()
                 }
             }
             
@@ -243,14 +247,19 @@ WizardStepBase {
         var pwd = fieldWifiPassword.text
         var hadCrypt = !!saved.wifiPasswordCrypt
         var hidden = chkWifiHidden.checked
-        if (ssid.length === 0) {
-            // SSID cleared -> remove persisted SSID and password, regardless of country
-            delete saved.wifiSSID
-            delete saved.wifiPasswordCrypt
-            wizardContainer.wifiConfigured = false
-        } else if (country.length > 0) {
-            saved.wifiSSID = ssid
+        
+        // Save country code if provided (even without SSID)
+        if (country.length > 0) {
             saved.wifiCountry = country
+            wizardContainer.wifiConfigured = true
+        } else {
+            // No country -> clear country setting
+            delete saved.wifiCountry
+        }
+        
+        // Handle SSID and password
+        if (ssid.length > 0) {
+            saved.wifiSSID = ssid
             if (pwd && pwd.length > 0) {
                 // Persist crypted PSK; avoid storing plaintext
                 var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
@@ -262,9 +271,16 @@ WizardStepBase {
             saved.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
         } else {
-            // Partial -> do not change persisted settings
-            wizardContainer.wifiConfigured = false
+            // No SSID -> clear SSID and password settings
+            delete saved.wifiSSID
+            delete saved.wifiPasswordCrypt
+            delete saved.wifiHidden
+            // If we have a country, still mark as configured
+            if (country.length === 0) {
+                wizardContainer.wifiConfigured = false
+            }
         }
+        
         imageWriter.setSavedCustomizationSettings(saved)
         // Do not log sensitive data
     }
