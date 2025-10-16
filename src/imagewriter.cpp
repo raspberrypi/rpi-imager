@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2020 Raspberry Pi Ltd
+ * Copyright (C) 2020-2025 Raspberry Pi Ltd
  */
 
 #include "downloadextractthread.h"
@@ -1211,6 +1211,10 @@ void ImageWriter::refreshOsListFrom(const QUrl &url) {
     _completeOsList = QJsonDocument();
     _osListRefreshTimer.stop();
     beginOSListFetch();
+}
+
+void ImageWriter::refreshOsListFromDefaultUrl() {
+    refreshOsListFrom(QUrl(QString(OSLIST_URL)));
 }
 
 void ImageWriter::onOsListRefreshTimeout()
