@@ -19,12 +19,16 @@ WizardStepBase {
 
     title: qsTr("Write image")
     subtitle: qsTr("Review your choices and write the image to the storage device")
-    nextButtonText: root.isWriting ? CommonStrings.cancel : (root.isComplete ? CommonStrings.continueText : qsTr("Write"))
-    nextButtonEnabled: root.isWriting || root.isComplete || imageWriter.readyToWrite()
+    nextButtonText: root.cancelPending || root.isFinalising ? qsTr("Please wait…")
+                    : (root.isWriting ? CommonStrings.cancel
+                    : (root.isComplete ? CommonStrings.continueText : qsTr("Write")))
+    nextButtonEnabled: !(root.cancelPending || root.isFinalising) && (root.isWriting || root.isComplete || imageWriter.readyToWrite())
     showBackButton: true
 
     property bool isWriting: false
     property bool isVerifying: false
+    property bool cancelPending: false
+    property bool isFinalising: false
     property bool isComplete: false
     property bool confirmOpen: false
     readonly property bool anyCustomizationsApplied: (
@@ -40,7 +44,7 @@ WizardStepBase {
     )
 
     // Disable back while writing
-    backButtonEnabled: !root.isWriting
+    backButtonEnabled: !root.isWriting && !root.cancelPending && !root.isFinalising
 
     // Content
     content: [
@@ -59,7 +63,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: !root.isWriting
+            visible: !root.isWriting && !root.cancelPending && !root.isFinalising
 
             Text {
                 text: qsTr("Summary")
@@ -144,7 +148,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: !root.isWriting && root.anyCustomizationsApplied
+            visible: !root.isWriting && !root.cancelPending && !root.isFinalising && root.anyCustomizationsApplied
 
             Text {
                 text: qsTr("Customisations to apply:")
@@ -211,7 +215,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: root.isWriting || root.isComplete
+            visible: root.isWriting || root.cancelPending || root.isFinalising || root.isComplete
 
             Text {
                 id: progressText
@@ -234,7 +238,7 @@ WizardStepBase {
 
                 Material.accent: Style.progressBarVerifyForegroundColor
                 Material.background: Style.progressBarBackgroundColor
-                visible: root.isWriting
+                visible: (root.isWriting || root.isFinalising)
             }
         }
 
@@ -246,11 +250,12 @@ WizardStepBase {
     // Handle next button clicks based on current state
     onNextClicked: {
         if (root.isWriting) {
-            // Cancel the write
+            root.cancelPending = true
+            root.isVerifying = false
+            root.isFinalising = true
+            progressBar.value = 100
+            progressText.text = qsTr("Finalising…")
             imageWriter.cancelWrite()
-            root.isWriting = false
-            wizardContainer.isWriting = false
-            progressText.text = qsTr("Write cancelled")
         } else if (!root.isComplete) {
             // If warnings are disabled, skip the confirmation dialog
             if (wizardContainer.disableWarnings) {
@@ -411,6 +416,8 @@ WizardStepBase {
         function onSuccess() {
             root.isWriting = false
             wizardContainer.isWriting = false
+            root.cancelPending = false
+            root.isFinalising = false
             root.isComplete = true
             progressText.text = qsTr("Write completed successfully!")
 
@@ -420,12 +427,25 @@ WizardStepBase {
         function onError(msg) {
             root.isWriting = false
             wizardContainer.isWriting = false
-            progressText.text = qsTr("Write failed: %1").arg(msg)
+            if (root.cancelPending) {
+                // Treat verify-cancel as a benign finish
+                root.cancelPending = false
+                root.isFinalising = false
+                root.isComplete = true
+                progressText.text = qsTr("Verification cancelled")
+                wizardContainer.nextStep()
+            } else {
+                root.isFinalising = false
+                progressText.text = qsTr("Write failed: %1").arg(msg)
+            }
         }
 
         function onFinalizing() {
-            if (root.isWriting) {
-                root.onFinalizing()
+            if (root.isWriting || root.cancelPending) {
+                root.isVerifying = false
+                root.isFinalising = true
+                progressText.text = qsTr("Finalising…")
+                progressBar.value = 100
             }
         }
     }

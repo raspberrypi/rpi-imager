@@ -2309,6 +2309,7 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
 
         // If we're currently writing to this device, cancel the write immediately
         if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing || _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing) {
+            _selectedDeviceValid = false;
             qDebug() << "Cancelling write operation due to device removal";
             _cancelledDueToDeviceRemoval = true;
             cancelWrite();
@@ -2318,6 +2319,7 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
             qDebug() << "Device removed after successful write - ignoring (likely ejected)";
             // Don't notify UI - this is expected behavior after successful write
         } else {
+            _selectedDeviceValid = false;
             // Normal case - device removed when not writing
             emit selectedDeviceRemoved();
         }
