@@ -38,7 +38,14 @@ WizardStepBase {
             return [tabSecure, tabOpen]
         }, 0)
         root.registerFocusGroup("wifi_fields", function(){
-            return [fieldWifiSSID, fieldWifiPassword, fieldWifiPasswordConfirm, fieldWifiCountry]
+            var items = [fieldWifiSSID]
+            if (showPw) {
+                items.push(fieldWifiPassword)
+                if (confirmNeedsInput)
+                    items.push(fieldWifiPasswordConfirm)
+            }
+            items.push(fieldWifiCountry)
+            return items
         }, 1)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
 
@@ -85,6 +92,8 @@ WizardStepBase {
             : "secure"
 
         updatePasswordFieldUI()
+        // UpdatePasswordFieldUI already takes care of this
+        //root.rebuildFocusOrder()
     }
 
     function updatePasswordFieldUI() {
@@ -92,26 +101,28 @@ WizardStepBase {
         var prevSSID = originalSavedSSID
 
         if (wifiMode === "open") {
-           fieldWifiPassword.text = ""
-           fieldWifiPassword.enabled = false
-           fieldWifiPassword.placeholderText = qsTr("No password (open network)")
+            fieldWifiPassword.text = ""
+            fieldWifiPassword.enabled = false
+            fieldWifiPassword.placeholderText = qsTr("No password (open network)")
 
-           fieldWifiPasswordConfirm.text = ""
-           fieldWifiPasswordConfirm.enabled = false
-           confirmNeedsInput = false
-           return
-       }
+            fieldWifiPasswordConfirm.text = ""
+            fieldWifiPasswordConfirm.enabled = false
+            confirmNeedsInput = false
+            root.rebuildFocusOrder()
+            return
+        }
 
-       // secure
-       fieldWifiPassword.enabled = true
-       var canKeep = hadSavedCrypt && ssidUnchanged(ssid, prevSSID)
-       fieldWifiPassword.placeholderText = canKeep
+        // secure
+        fieldWifiPassword.enabled = true
+        var canKeep = hadSavedCrypt && ssidUnchanged(ssid, prevSSID)
+        fieldWifiPassword.placeholderText = canKeep
            ? qsTr("Saved (hidden) — leave blank to keep")
            : qsTr("Network password")
 
-       var userTypedNew = (fieldWifiPassword.text && fieldWifiPassword.text.length > 0)
-       confirmNeedsInput = (!canKeep) || userTypedNew
-       fieldWifiPasswordConfirm.enabled = confirmNeedsInput
+        var userTypedNew = (fieldWifiPassword.text && fieldWifiPassword.text.length > 0)
+        confirmNeedsInput = (!canKeep) || userTypedNew
+        fieldWifiPasswordConfirm.enabled = confirmNeedsInput
+        root.rebuildFocusOrder()
     }
 
     function passwordErrorMessage() {
