@@ -158,6 +158,7 @@ BaseDialog {
             ImButton {
                 id: cancelButton
                 text: CommonStrings.cancel
+                accessibleDescription: qsTr("Close the options dialog without saving any changes")
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
                 onClicked: {
@@ -168,6 +169,7 @@ BaseDialog {
             ImButtonRed {
                 id: saveButton
                 text: qsTr("Save")
+                accessibleDescription: qsTr("Save the selected options and apply them to Raspberry Pi Imager")
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
                 onClicked: {
@@ -274,6 +276,7 @@ BaseDialog {
             ImButton {
                 id: confirmCancelButton
                 text: CommonStrings.cancel
+                accessibleDescription: qsTr("Keep warnings enabled and return to the options dialog")
                 activeFocusOnTab: true
                 onClicked: confirmDisableWarnings.close()
             }
@@ -281,6 +284,7 @@ BaseDialog {
             ImButtonRed {
                 id: confirmDisableButton
                 text: qsTr("Disable warnings")
+                accessibleDescription: qsTr("Disable confirmation prompts before writing images, requiring only exact name entry for system drives")
                 activeFocusOnTab: true
                 onClicked: {
                     confirmDisableWarnings.confirmAccepted = true;

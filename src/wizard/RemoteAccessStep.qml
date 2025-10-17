@@ -83,6 +83,7 @@ WizardStepBase {
                     ImButton {
                         id: browseButton
                         text: CommonStrings.browse
+                        accessibleDescription: qsTr("Select an SSH public key file from your computer to enable key-based authentication")
                         Layout.minimumWidth: 80
                         onClicked: {
                             // Prefer native file dialog via Imager's wrapper, but only if available

@@ -120,6 +120,7 @@ BaseDialog {
         ImButtonRed {
             id: cancelButton
             text: qsTr("CANCEL")
+            accessibleDescription: qsTr("Cancel operation and return to storage selection to choose a different device")
             activeFocusOnTab: true
             onClicked: {
                 root.close()
@@ -130,6 +131,7 @@ BaseDialog {
         ImButton {
             id: continueButton
             text: qsTr("CONTINUE")
+            accessibleDescription: qsTr("Proceed to write the image to this system drive after confirming the drive name")
             enabled: nameInput.text === root.driveName
             activeFocusOnTab: true
             onClicked: {

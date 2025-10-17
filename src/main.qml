@@ -120,6 +120,7 @@ ApplicationWindow {
             ImButton {
                 id: errorContinueButton
                 text: CommonStrings.continueText
+                accessibleDescription: qsTr("Close the error dialog and continue")
                 activeFocusOnTab: true
                 onClicked: errorDialog.close()
             }
@@ -172,6 +173,7 @@ ApplicationWindow {
             ImButtonRed {
                 id: storageOkButton
                 text: qsTr("OK")
+                accessibleDescription: qsTr("Close the storage removed notification and return to storage selection")
                 activeFocusOnTab: true
                 onClicked: storageRemovedDialog.close()
             }
@@ -225,12 +227,14 @@ ApplicationWindow {
             ImButton {
                 id: quitNoButton
                 text: CommonStrings.no
+                accessibleDescription: qsTr("Return to Raspberry Pi Imager and continue the current operation")
                 activeFocusOnTab: true
                 onClicked: quitDialog.close()
             }
             ImButtonRed {
                 id: quitYesButton
                 text: CommonStrings.yes
+                accessibleDescription: qsTr("Force quit Raspberry Pi Imager and cancel the current write operation")
                 activeFocusOnTab: true
                 onClicked: {
                     window.forceQuit = true;

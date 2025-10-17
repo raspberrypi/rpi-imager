@@ -588,6 +588,7 @@ Item {
                     anchors.bottom: parent.bottom
                     height: Style.buttonHeightStandard
                     text: qsTr("App Options")
+                    accessibleDescription: qsTr("Open application settings to configure sound alerts, auto-eject, telemetry, and content repository")
                     activeFocusOnTab: true
                     onClicked: {
                         if (root.optionsPopup) {

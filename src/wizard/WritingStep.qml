@@ -332,6 +332,7 @@ WizardStepBase {
             ImButton {
                 id: cancelButton
                 text: CommonStrings.cancel
+                accessibleDescription: qsTr("Cancel and return to the write summary without erasing the storage device")
                 activeFocusOnTab: true
                 onClicked: confirmDialog.close()
             }
@@ -339,6 +340,7 @@ WizardStepBase {
             ImButtonRed {
                 id: acceptBtn
                 text: confirmDialog.allowAccept ? qsTr("I understand, erase and write") : qsTr("Please wait...")
+                accessibleDescription: qsTr("Confirm erasure and begin writing the image to the storage device")
                 enabled: confirmDialog.allowAccept
                 activeFocusOnTab: true
                 onClicked: {
