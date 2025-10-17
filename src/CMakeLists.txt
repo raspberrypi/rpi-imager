@@ -450,6 +450,7 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImOptionPill.qml
         qmlcomponents/ImOptionButton.qml
         qmlcomponents/ImTextField.qml
+        qmlcomponents/ImToggleTab.qml
         qmlcomponents/SelectionListView.qml
         qmlcomponents/OSSelectionListView.qml
         wizard/WizardStepBase.qml
