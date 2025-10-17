@@ -238,6 +238,10 @@ WizardStepBase {
                         placeholderText: qsTr("Network name")
                         font.pixelSize: Style.fontSizeInput
                         onTextChanged: updatePasswordFieldUI()
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
                     }
 
                     WizardFormLabel {
@@ -253,6 +257,10 @@ WizardStepBase {
                         font.pixelSize: Style.fontSizeInput
                         visible: showPw
 
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
                         onTextChanged: {
                             updatePasswordFieldUI()
                             wifiScroll.scrollToItem(fieldWifiPassword)
@@ -275,7 +283,8 @@ WizardStepBase {
                         visible: showPw
                         enabled: confirmNeedsInput
                         onActiveFocusChanged: {
-                            if (activeFocus) wifiScroll.scrollToItem(this);
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
                         }
                         onTextChanged: {
                             // keep scroll behavior pleasant while typing
@@ -349,6 +358,10 @@ WizardStepBase {
                             if (!isInitializing) {
                                 recommendedLabel.updateVisibility()
                             }
+                        }
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
                         }
                     }
 
