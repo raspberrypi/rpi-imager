@@ -145,6 +145,7 @@ WizardStepBase {
                     ImToggleTab {
                         id: tabSecure
                         text: qsTr("Secure network")
+                        accessibleDescription: qsTr("Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption")
                         active: wifiMode === "secure"
                         onClicked: { wifiMode = "secure"; updatePasswordFieldUI() }
 
@@ -156,6 +157,7 @@ WizardStepBase {
                     ImToggleTab {
                         id: tabOpen
                         text: qsTr("Open network")
+                        accessibleDescription: qsTr("Configure Wi-Fi for an unencrypted network without password protection")
                         active: wifiMode === "open"
                         onClicked: { wifiMode = "open"; updatePasswordFieldUI() }
 

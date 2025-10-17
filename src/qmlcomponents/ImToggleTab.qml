@@ -12,6 +12,9 @@ Button {
 
     // Externally drive which tab is "on"
     property bool active: false
+    
+    // Allow instances to provide a custom accessibility description
+    property string accessibleDescription: ""
 
     font.family: Style.fontFamily
     font.capitalization: Font.AllUppercase
@@ -45,7 +48,26 @@ Button {
     }
 
     activeFocusOnTab: true
+    
+    // Accessibility properties
+    Accessible.role: Accessible.Button
+    Accessible.name: text
+    Accessible.description: {
+        var desc = accessibleDescription
+        if (!enabled && desc !== "") {
+            return desc + " (disabled)"
+        } else if (!enabled) {
+            return "Button disabled"
+        } else if (active && desc !== "") {
+            return desc + " (currently selected)"
+        } else if (active) {
+            return "Currently selected"
+        } else {
+            return desc
+        }
+    }
     Accessible.onPressAction: clicked()
+    
     Keys.onEnterPressed: clicked()
     Keys.onReturnPressed: clicked()
 }
