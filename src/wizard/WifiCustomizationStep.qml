@@ -20,6 +20,8 @@ WizardStepBase {
     property string wifiMode: "secure"
     property string originalSavedSSID: ""
     property bool hadSavedCrypt: false
+    property bool showPw: wifiMode === "secure"
+    property bool confirmNeedsInput: false
 
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
@@ -36,7 +38,7 @@ WizardStepBase {
             return [tabSecure, tabOpen]
         }, 0)
         root.registerFocusGroup("wifi_fields", function(){
-            return [fieldWifiSSID, fieldWifiPassword, fieldWifiCountry]
+            return [fieldWifiSSID, fieldWifiPassword, fieldWifiPasswordConfirm, fieldWifiCountry]
         }, 1)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
 
@@ -71,7 +73,10 @@ WizardStepBase {
             // Auto-populate WiFi password from system keychain when available
             // Only when no crypted password is already saved
             var psk = imageWriter.getPSK()
-            if (psk && psk.length > 0) fieldWifiPassword.text = psk
+            if (psk && psk.length > 0) {
+                fieldWifiPassword.text = psk
+                fieldWifiPasswordConfirm.text = psk
+            }
         }
 
         // wifiMode: prefer saved value; otherwise infer from whether a password is present
@@ -85,17 +90,64 @@ WizardStepBase {
     function updatePasswordFieldUI() {
         var ssid = (fieldWifiSSID.text || "").trim()
         var prevSSID = originalSavedSSID
+
         if (wifiMode === "open") {
-            fieldWifiPassword.enabled = false
-            fieldWifiPassword.text = ""
-            fieldWifiPassword.placeholderText = qsTr("No password (open network)")
-        } else {
-            fieldWifiPassword.enabled = true
-            var canKeep = hadSavedCrypt && ssidUnchanged(ssid, prevSSID)
-            fieldWifiPassword.placeholderText = canKeep
-                ? qsTr("Saved (hidden) — leave blank to keep")
-                : qsTr("Network password")
+           fieldWifiPassword.text = ""
+           fieldWifiPassword.enabled = false
+           fieldWifiPassword.placeholderText = qsTr("No password (open network)")
+
+           fieldWifiPasswordConfirm.text = ""
+           fieldWifiPasswordConfirm.enabled = false
+           confirmNeedsInput = false
+           return
+       }
+
+       // secure
+       fieldWifiPassword.enabled = true
+       var canKeep = hadSavedCrypt && ssidUnchanged(ssid, prevSSID)
+       fieldWifiPassword.placeholderText = canKeep
+           ? qsTr("Saved (hidden) — leave blank to keep")
+           : qsTr("Network password")
+
+       var userTypedNew = (fieldWifiPassword.text && fieldWifiPassword.text.length > 0)
+       confirmNeedsInput = (!canKeep) || userTypedNew
+       fieldWifiPasswordConfirm.enabled = confirmNeedsInput
+    }
+
+    function passwordErrorMessage() {
+        if (!showPw) return " ";
+
+        // Gather state
+        var ssidNow = (fieldWifiSSID.text || "").trim();
+        var canKeep = hadSavedCrypt && ssidUnchanged(ssidNow, originalSavedSSID);
+        var pwd = fieldWifiPassword.text || "";
+        var conf = fieldWifiPasswordConfirm.text || "";
+
+        // Open mode: no errors
+        if (wifiMode === "open") return " ";
+
+        // If we can keep the saved crypt and user left blank => OK
+        if (canKeep && pwd.length === 0) return " ";
+
+        // New/changed password is required from here
+        // Empty -> prompt explicitly
+        if (pwd.length === 0) return qsTr("Enter a password");
+
+        // Detailed validity (mirrors isValidWifiPassword)
+        // 64 hex is allowed => if it's 64 chars but not hex, say invalid chars
+        var isHex = isHex64(pwd);
+        if (!isHex) {
+            if (pwd.length < 8) return qsTr("Password is too short (min 8 characters)");
+            if (pwd.length > 63) return qsTr("Password is too long (max 63 characters)");
+            if (!isAsciiPrintable(pwd)) return qsTr("Password contains unsupported characters");
         }
+
+        // If confirm is required, enforce match
+        if (confirmNeedsInput && (conf.length > 0 || pwd.length > 0) && pwd !== conf)
+            return qsTr("Passwords don’t match");
+
+        // No errors -> keep row height stable
+        return " ";
     }
 
     // Content
@@ -191,7 +243,7 @@ WizardStepBase {
                     WizardFormLabel {
                         id: lblPassword
                         text: CommonStrings.password
-                        visible: wifiMode === "secure"
+                        visible: showPw
                     }
 
                     ImTextField {
@@ -199,7 +251,56 @@ WizardStepBase {
                         Layout.fillWidth: true
                         echoMode: TextInput.Password
                         font.pixelSize: Style.fontSizeInput
-                        visible: wifiMode === "secure"
+                        visible: showPw
+
+                        onTextChanged: {
+                            updatePasswordFieldUI()
+                            wifiScroll.scrollToItem(fieldWifiPassword)
+                        }
+                    }
+
+                    /* Confirm password row */
+                    WizardFormLabel {
+                        id: lblPasswordConfirm
+                        text: qsTr("Confirm password:")
+                        visible: showPw
+                    }
+
+                    ImTextField {
+                        id: fieldWifiPasswordConfirm
+                        Layout.fillWidth: true
+                        echoMode: TextInput.Password
+                        font.pixelSize: Style.fontSizeInput
+                        placeholderText: qsTr("Re-enter password")
+                        visible: showPw
+                        enabled: confirmNeedsInput
+                        onActiveFocusChanged: {
+                            if (activeFocus) wifiScroll.scrollToItem(this);
+                        }
+                        onTextChanged: {
+                            // keep scroll behavior pleasant while typing
+                            wifiScroll.scrollToItem(fieldWifiPasswordConfirm);
+                        }
+                    }
+
+                    // Empty label to maintain grid alignment
+                    Item { width: 1; height: 1; visible: showPw }
+
+                    Text {
+                        id: pwdHint
+                        Layout.fillWidth: true
+                        Layout.columnSpan: 1
+                        visible: showPw
+                        wrapMode: Text.WordWrap
+                        text: passwordErrorMessage()
+                        color: (text === " ") ? "transparent" : Style.formLabelErrorColor
+                        //font.pixelSize: Style.fontSizeFormLabel
+                        font.pixelSize: 11
+
+                        // lock a minimum height so even " " keeps the same line height
+                        // TextMetrics is lighter than FontMetrics in Controls:
+                        TextMetrics { id: pwdHintMetrics; font: pwdHint.font; text: "X" }
+                        Layout.preferredHeight: pwdHintMetrics.height
                     }
 
                     WizardFormLabel {
@@ -351,11 +452,21 @@ WizardStepBase {
         if (wifiMode === "open") return true
 
         // secure / closed mode
-        var canKeep = hadSavedCrypt && ssidUnchanged(fieldWifiSSID.text.trim(), originalSavedSSID)
-        if ((fieldWifiPassword.text || "").length === 0) {
-            return canKeep // empty only ok if we can keep the old crypt
+        var ssidNow = fieldWifiSSID.text.trim()
+        var canKeep = hadSavedCrypt && ssidUnchanged(ssidNow, originalSavedSSID)
+        var pwd = fieldWifiPassword.text || ""
+
+        // If we *can* keep and user left blank, OK
+        if (canKeep && pwd.length === 0) {
+            return true
         }
-        return root.isValidWifiPassword(fieldWifiPassword.text)
+
+        // Need a new password -> must be valid and must match confirm
+        if (pwd.length === 0) return false
+        if (!root.isValidWifiPassword(pwd)) return false
+
+        if (confirmNeedsInput && (pwd !== (fieldWifiPasswordConfirm.text || ""))) return false
+        return true
     })()
 
     // Save settings when moving to next step
@@ -392,6 +503,8 @@ WizardStepBase {
             } else {
                // secure / closed mode
                if (pwd.length > 0) {
+                   // extra safety; normally unreachable because nextButtonEnabled prevents this
+                   if (confirmNeedsInput && pwd !== fieldWifiPasswordConfirm.text) return;
                    // overwrite with new password
                    var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
                    saved.wifiPasswordCrypt = isPassphrase ? imageWriter.pbkdf2(pwd, ssid) : pwd
