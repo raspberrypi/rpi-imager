@@ -1,7 +1,5 @@
 # Windows platform-specific sources and link settings
 
-set(CMAKE_DLLTOOL "C:\\msys64\\mingw64\\bin\\dlltool.exe")
-
 # Find dlltool for creating import library
 if(NOT CMAKE_DLLTOOL)
     find_program(CMAKE_DLLTOOL NAMES dlltool x86_64-w64-mingw32-dlltool)
