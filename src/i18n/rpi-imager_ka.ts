@@ -2,6 +2,272 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ka_GE">
 <context>
+    <name>AppOptionsDialog</name>
+    <message>
+        <source>App Options</source>
+        <translation>აპის პარამეტრები</translation>
+    </message>
+    <message>
+        <source>Play sound when finished</source>
+        <translation>ხმის დაკვრა დასრულებისას</translation>
+    </message>
+    <message>
+        <source>Eject media when finished</source>
+        <translation>მედიის გამოღება დასრულებისას</translation>
+    </message>
+    <message>
+        <source>Enable anonymous statistics (telemetry)</source>
+        <translation>ანონიმური სტატისტიკის ჩართვა (ტელემეტრია)</translation>
+    </message>
+    <message>
+        <source>What is this?</source>
+        <translation>რა არის ეს?</translation>
+    </message>
+    <message>
+        <source>Disable warnings</source>
+        <translation>გაფრთხილებების გამორთვა</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>შენახვა</translation>
+    </message>
+    <message>
+        <source>Disable warnings?</source>
+        <translation>გამოვრთო გაფრთხილებები?</translation>
+    </message>
+    <message>
+        <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
+        <translation>თუ გაფრთხილებებს გამორთავთ, Raspberry Pi Imager &lt;b&gt;არ გაჩვენებთ დადასტურების მოთხოვნას დისკის ასლის ფაილების ჩაწერამდე.&lt;/b&gt;. სისტემური დისკის არჩევამდე &lt;b&gt;ზუსტი სახელის&lt;/b&gt; შეყვანას მაინც მოგთხოვთ.</translation>
+    </message>
+    <message>
+        <source>Content Repository</source>
+        <translation>შემცველობის რეპოზიტორია</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>ჩასწორება</translation>
+    </message>
+</context>
+<context>
+    <name>CommonStrings</name>
+    <message>
+        <source>Only proceed if you fully understand the risks.</source>
+        <translation>გააგრძელეთ მხოლოდ იმ შემთხვევაში, თუ სრულად გესმით რისკები.</translation>
+    </message>
+    <message>
+        <source>Selecting the wrong drive will permanently erase data and can render your computer inoperable.</source>
+        <translation>არასწორი დისკის არჩევა შეუქცევადად წაშლის მონაცემებს და შეიძლება, თქვენი კომპიუტერი უმოქმედო გახადოს.</translation>
+    </message>
+    <message>
+        <source>System drives typically contain files essential to the operation of your computer, and may include your personal files (photos, videos, documents).</source>
+        <translation>სისტემური დისკები, ჩვეულებრივ, შეიცავენ ფაილებს, რომლებიც თქვენი კომპიუტერის მუშაობისთვისაა აუცილებელი და შეიძლება, თქვენს პირად ფაილებს (ფოტოებს, ვიდეოებს, დოკუმენტებს) შეიცავდეს.</translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
+        <translation>ყველა ფაილი (*)</translation>
+    </message>
+    <message>
+        <source>Image files (%1)</source>
+        <translation>დისკის ასლის ფაილები (%1)</translation>
+    </message>
+    <message>
+        <source>Imager Repository Files (*.json)</source>
+        <translation>დისკის ასლის ფაილის რეპოზიტორიის ფაილები (*.json)</translation>
+    </message>
+    <message>
+        <source>Public Key files (*.pub)</source>
+        <translation>საჯარო გასაღების ფაილები (*.pub)</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>გაუქმება</translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation>კი</translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation>არა</translation>
+    </message>
+    <message>
+        <source>Browse</source>
+        <translation>პოვნა</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>გაგრძელება</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>უკან</translation>
+    </message>
+    <message>
+        <source>Finish</source>
+        <translation>დასრულება</translation>
+    </message>
+    <message>
+        <source>Select image</source>
+        <translation>აირჩიეთ დისკის ასლის ფაილი</translation>
+    </message>
+    <message>
+        <source>Password:</source>
+        <translation>პაროლი:</translation>
+    </message>
+    <message>
+        <source>Device:</source>
+        <translation>მოწყობილობა:</translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation>საცავი:</translation>
+    </message>
+    <message>
+        <source>No device selected</source>
+        <translation>მოწყობილობა არჩეული არაა</translation>
+    </message>
+    <message>
+        <source>No image selected</source>
+        <translation>გამოსახულება არჩეული არაა</translation>
+    </message>
+    <message>
+        <source>No storage selected</source>
+        <translation>საცავი არჩეული არაა</translation>
+    </message>
+    <message>
+        <source>Hostname configured</source>
+        <translation>ჰოსტის სახელი მორგებულია</translation>
+    </message>
+    <message>
+        <source>User account configured</source>
+        <translation>მომხმარებლის ანგარიში მორგებულია</translation>
+    </message>
+    <message>
+        <source>SSH enabled</source>
+        <translation>SSH ჩართულია</translation>
+    </message>
+    <message>
+        <source>Locale configured</source>
+        <translation>ენა მორგებულია</translation>
+    </message>
+    <message>
+        <source>Wi‑Fi configured</source>
+        <translation>უსადენო ქსელი მორგებულია</translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Connect enabled</source>
+        <translation>Raspberry Pi Connect ჩართულია</translation>
+    </message>
+    <message>
+        <source>USB Gadget enabled</source>
+        <translation>USB გაჯეტი ჩართულია</translation>
+    </message>
+    <message>
+        <source>I2C enabled</source>
+        <translation>I2C ჩართულია</translation>
+    </message>
+    <message>
+        <source>SPI enabled</source>
+        <translation>SPI ჩართულია</translation>
+    </message>
+</context>
+<context>
+    <name>ConfirmSystemDriveDialog</name>
+    <message>
+        <source>Size: %1</source>
+        <translation>ზომა: %1</translation>
+    </message>
+    <message>
+        <source>Mounted as: %1</source>
+        <translation>მიმაგრებულია, როგორც: %1</translation>
+    </message>
+    <message>
+        <source>Not mounted</source>
+        <translation>მიმაგრებული არაა</translation>
+    </message>
+    <message>
+        <source>To continue, type the exact drive name below:</source>
+        <translation>გასაგრძელებლად აკრიფეთ ზუსტი დისკის სახელი ქვემოთ:</translation>
+    </message>
+    <message>
+        <source>Type drive name exactly as shown above</source>
+        <translation>აკრიფეთ დისკის სახელი ზუსტად ისე, როგორც ზემოთაა ნაჩვენები</translation>
+    </message>
+    <message>
+        <source>CANCEL</source>
+        <translation>გაუქმება</translation>
+    </message>
+    <message>
+        <source>CONTINUE</source>
+        <translation>გაგრძელება</translation>
+    </message>
+</context>
+<context>
+    <name>ConfirmUnfilterDialog</name>
+    <message>
+        <source>Remove system drive filter?</source>
+        <translation>წავშალო სისტემური დისკის ფილტრი?</translation>
+    </message>
+    <message>
+        <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
+        <translation>სისტემური დისკის გაფილტვრის გამორთვით &lt;b&gt;სისტემური დისკები სიაში იქნება ნაჩვენები&lt;/b&gt;.</translation>
+    </message>
+    <message>
+        <source>KEEP FILTER ON</source>
+        <translation>ფილტრის ჩართულად დატოვება</translation>
+    </message>
+    <message>
+        <source>SHOW SYSTEM DRIVES</source>
+        <translation>სისტემური დისკების ჩვენება</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceSelectionStep</name>
+    <message>
+        <source>Select your Raspberry Pi device</source>
+        <translation>აირჩიეთ თქვენი Raspberry Pi მოწყობილობა</translation>
+    </message>
+</context>
+<context>
+    <name>DoneStep</name>
+    <message>
+        <source>Your choices:</source>
+        <translation>თქვენი არჩევნები:</translation>
+    </message>
+    <message>
+        <source>The storage device was ejected automatically. You can now remove it safely.</source>
+        <translation>საცავის მოწყობილობა ავტომატურად იქნა ამოღებული. ახლა შეიძლიათ, ის უსაფრთხოდ გამოაერთოთ.</translation>
+    </message>
+    <message>
+        <source>Please eject the storage device before removing it from your computer.</source>
+        <translation>ამოიღეთ საცავის მოწყობილობა მისი კომპიუტერიდან მოხსნამდე.</translation>
+    </message>
+    <message>
+        <source>Write Another</source>
+        <translation>კიდევ ერთის ჩაწერა</translation>
+    </message>
+    <message>
+        <source>Write complete!</source>
+        <translation>ჩაწერა დასრულდა!</translation>
+    </message>
+    <message>
+        <source>Customisations applied:</source>
+        <translation>გამოყენებული პერსონალიზაცია:</translation>
+    </message>
+    <message>
+        <source>Reboot</source>
+        <translation>გადატვირთვა</translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation>ოპერაციული სისტემა:</translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation>საცავი:</translation>
+    </message>
+</context>
+<context>
     <name>DownloadExtractThread</name>
     <message>
         <source>Error extracting archive: %1</source>
@@ -16,72 +282,36 @@
         <translation>ოპერაციულმა სისტემამ FAT32 დანაყოფი არ მიამაგრა</translation>
     </message>
     <message>
-        <source>Error changing to directory &apos;%1&apos;</source>
-        <translation>ვერ გადავედი საქაღალდეში &apos;%1&apos;</translation>
+        <source>Error changing to directory '%1'</source>
+        <translation>ვერ გადავედი საქაღალდეში '%1'</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">საცავიდან წაკითხვის შეცდომა.&lt;br&gt;ალბათ SD ბარათი დაზიანებულია.</translation>
+        <translation>საცავიდან წაკითხვის შეცდომა.&lt;br&gt;ალბათ SD ბარათი დაზიანებულია.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">ჩანაწერის გადამოწმება ჩავარდა. SD ბარათი არ შეიცავს იმ მონაცემებს, რაც ზედ ჩაიწერა.</translation>
+        <translation>ჩანაწერის გადამოწმება ჩავარდა. SD ბარათი არ შეიცავს იმ მონაცემებს, რაც ზედ ჩაიწერა.</translation>
     </message>
 </context>
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>unmounting drive</source>
-        <translation>დისკის ოხსნა</translation>
-    </message>
-    <message>
-        <source>opening drive</source>
-        <translation>მიმდინარეობს დისკის გახნა</translation>
-    </message>
-    <message>
-        <source>Error running diskpart: %1</source>
-        <translation>შეცდომა diskpart-ის გაშვებისას: %1</translation>
-    </message>
-    <message>
-        <source>Error removing existing partitions</source>
-        <translation>არსებული დანაყოფების წაშლის შეცდომა</translation>
-    </message>
-    <message>
-        <source>Authentication cancelled</source>
-        <translation>ავთენტიკაცია გაუქმდა</translation>
-    </message>
-    <message>
-        <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
-        <translation>authopen-ის გაშვების შეცდომა წვდომის მისაღებად დისკთან &apos;%1&apos;</translation>
-    </message>
-    <message>
-        <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
+        <source>Please verify if 'Raspberry Pi Imager' is allowed access to 'removable volumes' in privacy settings (under 'files and folders' or alternatively give it 'full disk access').</source>
         <translatorcomment>Not sure if current macOS has that option (or if it got moved/renamed)</translatorcomment>
-        <translation>გადაამოწმეთ, აქვს თუ არა &apos;Rasperry Pi Imager&apos;-ს წვდომა &apos;მოხსნად ტომებთან&apos; კონფიდენციალობის პარამეტრებში (&apos;ფაილები და საქაღალდეებში&apos;, ან მიეცით &apos;სრული წვდომა დისკზე&apos;).</translation>
+        <translation>გადაამოწმეთ, აქვს თუ არა 'Rasperry Pi Imager'-ს წვდომა 'მოხსნად ტომებთან' კონფიდენციალობის პარამეტრებში ('ფაილები და საქაღალდეებში', ან მიეცით 'სრული წვდომა დისკზე').</translation>
     </message>
     <message>
-        <source>Cannot open storage device &apos;%1&apos;.</source>
-        <translation>ვერ გავხსენი საცავის მოწყობილობა &apos;%1&apos;.</translation>
+        <source>Cannot open storage device '%1'.</source>
+        <translation>ვერ გავხსენი საცავის მოწყობილობა '%1'.</translation>
     </message>
     <message>
-        <source>discarding existing data on drive</source>
-        <translation>დისკზე არსებული მონაცემების მოცილება</translation>
-    </message>
-    <message>
-        <source>zeroing out first and last MB of drive</source>
-        <translation>დისკის პირველი და ბოლო მეგაბაიტის განულება</translation>
-    </message>
-    <message>
-        <source>Write error while zero&apos;ing out MBR</source>
+        <source>Write error while zero'ing out MBR</source>
         <translation>ჩაწერის შეცდომა MBR-ის განულებისას</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
         <translation>ჩაწერის შეცდომა ბარათის ბოლო ნაწილის გაუქმებისას.&lt;br&gt;ბარათი, შეიძლება, არასწორ ზომას გადმოგვცემს (შეიძლება, ის ყალბია).</translation>
-    </message>
-    <message>
-        <source>starting download</source>
-        <translation>გადმოწერის დასაწყისი</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
@@ -116,24 +346,96 @@
         <translation>ჩანაწერის გადამოწმება ჩავარდა. SD ბარათი არ შეიცავს იმ მონაცემებს, რაც ზედ ჩაიწერა.</translation>
     </message>
     <message>
-        <source>Customizing image</source>
-        <translation>დისკის ასლის ფაილის მორგება</translation>
-    </message>
-    <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>დაკეშილი ფაილი დაზიანებულია. SHA256 ჰეში მოსალოდნელ მნიშვნელობას არ ემთხვევა.&lt;br&gt;დაკეშილი ფაილი წაიშლება და გადმოწერა თავიდან დაიწყება.</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>ლოკალური ფაილი დაზიანებულია, ან არასწორი SHA256 ჰეში აქვს.&lt;br&gt;მოსალოდნელი: %1&lt;br&gt;ფაქტიური:%2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>როგორც ჩანს, გადმოწერილი ფაილი დაზიანებულია. SHA256 ჰეში არ ემთხვევა.&lt;br&gt;მოსალოდნელი: %1&lt;br&gt;ფაქტიური: %2&lt;br&gt;შეამოწმეთ თქვენი ინტერნეტკავშირი და თავიდან სცადეთ.</translation>
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>როგორც ჩანს, ჩართულია კონტროლირებადი საქაღალდის წვდომა. დაამატეთ rpi-imager.exe და fat32format.exe დაშვებული პროგრამების სიაში და თავიდან სცადეთ.</translation>
+    </message>
+    <message>
+        <source>Error: Multiple partitions found on disk. Please ensure the disk is completely clean.</source>
+        <translation>შეცდომა: დისკზე აღმოჩენილია ერთზე მეტი ჩანაწერი. დარწმუნდით, რომ დისკი მთლიანად სუფთაა.</translation>
+    </message>
+    <message>
+        <source>The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.</source>
+        <translation>დისკი, შეიძლება, დაცულია ჩაწერისგან, ან გამოიყენება სხვა აპლიკაციის მიერ. დარწმუნდით, რომ დისკი მიმაგრებული არაა და თავიდან სცადეთ.</translation>
+    </message>
+    <message>
+        <source>Disk is full. Please use a larger storage device.</source>
+        <translation>დისკი სავსეა. გამოიყენეთ უფრო დიდი დისკი.</translation>
+    </message>
+    <message>
+        <source>The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only.</source>
+        <translation>დისკი ჩაწერისგან დაცულია. შეამოწმეთ, აქვს თუ არა დისკის ჩაწერისგან დაცულობის გადამრთველი და რაზეა დაყენებული ის.</translation>
+    </message>
+    <message>
+        <source>Media error detected. The storage device may be damaged or counterfeit. Please try a different device.</source>
+        <translation>აღმოჩენილია მედიის შეცდომა. შეიძლება, საცავის მოწყობილობა დაზიანებულია, ან ყალბია. სცადეთ სხვა მოწყობილობა.</translation>
+    </message>
+    <message>
+        <source>Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device.</source>
+        <translation>არასწორი დისკის პარამეტრი. საცავის მოწყობილობა, შეიძლება, არასწორადაა ამოცნობილი. სცადეთ, მოწყობილობა თავიდან შეაერთოთ.</translation>
+    </message>
+    <message>
+        <source>I/O device error. The storage device may have been disconnected or is malfunctioning.</source>
+        <translation>დისკის I/O შეცდომა. საცავის მოწყობილობა შეიძლება, გამოერთებულია, ან გაუმართავია.</translation>
+    </message>
+    <message>
+        <source>Error opening disk device '%1'</source>
+        <translation>გახსნის შეცდომა დისკის მოწყობილობისთვის '%1'</translation>
+    </message>
+    <message>
+        <source>Cannot open storage device '%1' after authorization.</source>
+        <translation>ვერ გავხსენი საცავის მოწყობილობა '%1' ავტორიზაციის შემდეგ.</translation>
+    </message>
+    <message>
+        <source>Cannot open storage device '%1' with udisks2 authorization.</source>
+        <translation>ვერ გავხსენი საცავის მოწყობილობა '%1' udisks2-ით ავტორიზაციით.</translation>
+    </message>
+    <message>
+        <source>Error getting device size</source>
+        <translation>მოწყობილობის ზომის მიღების შეცდომა</translation>
+    </message>
+    <message>
+        <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
+        <translation>საცავის მოწყობილობაზე ჩაწერის შეცდომა. შეამოწმეთ, არის თუ არა მოწყობილობა ჩაწერადი, არის თუ არა ზედ საკმარისი ადგილი და ხომ არაა დაცული ჩაწერისგან.</translation>
+    </message>
+    <message>
+        <source>Unmounting drive...</source>
+        <translation>დისკის მოხსნა...</translation>
+    </message>
+    <message>
+        <source>Opening drive...</source>
+        <translation>დისკის გახსნა...</translation>
+    </message>
+    <message>
+        <source>Discarding existing data on drive...</source>
+        <translation>დისკზე არსებული მონაცემების მოცილება...</translation>
+    </message>
+    <message>
+        <source>Zero'ing out first and last MB of drive...</source>
+        <translation>დისკის პირველი და ბოლო მეგაბაიტის განულება...</translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation>გადმოწერის დაწყება...</translation>
+    </message>
+    <message>
+        <source>Writing image...</source>
+        <translation>დისკის ასლის ფაილი იწერება...</translation>
+    </message>
+    <message>
+        <source>Customising OS...</source>
+        <translation>ოპერაციული სისტემის მორგება ...</translation>
     </message>
 </context>
 <context>
@@ -144,92 +446,159 @@
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>მოწყობილობის დასაფორმატებლად გახსნის შეცდომა</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>დაფორმატებისას მოწყობილობაზე ჩაწერის შეცდომა</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>მოწყობილობის გადახვევის შეცდომა დაფორმატებისას</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>არასწორი პარამეტრების დასაფორმატებლად</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>არასაკმარისი ადგილი მოწყობილობაზე</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>უცნობი დაფორმატების შეცდომა</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>DstPopup</name>
-    <message>
-        <source>Storage</source>
-        <translation type="unfinished">საცავი</translation>
+        <translation>მოწყობილობის დაფორმატება შეუძლებელია: არასაკმარისი წვდომები და udisks2 ხელმისაწვდომი არაა</translation>
     </message>
     <message>
-        <source>No storage devices found</source>
-        <translation type="unfinished">საცავის მოწყობილობები აღმოჩენილი არაა</translation>
+        <source>Preparing disk for formatting...</source>
+        <translation>დისკის მომზადება დასაფორმატებლად...</translation>
     </message>
     <message>
-        <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <source>Cleaning disk...</source>
+        <translation>დისკის გასუფთავება...</translation>
     </message>
     <message>
-        <source>gigabytes</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mounted as %1</source>
-        <translation type="unfinished">მიმაგრებულია, როგორც %1</translation>
-    </message>
-    <message>
-        <source>GB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[დაცულია ჩაწერისგან]</translation>
-    </message>
-    <message>
-        <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">SD ბარათი ჩაწერისგან დაცულია.&lt;br&gt;დააჭირეთ ჩაკეტვის გადამრთველს ბარათის მარცხენა მხარეს ზემოთკენ და თავიდან სცადეთ.</translation>
+        <source>Writing filesystem...</source>
+        <translation>ფაილური სისტემის ჩაწერა...</translation>
     </message>
 </context>
 <context>
     <name>HWListModel</name>
     <message>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">აირჩიეთ მოწყობილობა</translation>
+        <translation>აირჩიეთ მოწყობილობა</translation>
     </message>
 </context>
 <context>
-    <name>HwPopup</name>
+    <name>HostnameCustomizationStep</name>
     <message>
-        <source>Raspberry Pi Device</source>
-        <translation type="unfinished">Raspberry Pi მოწყობილობა</translation>
+        <source>raspberrypi</source>
+        <translation>raspberrypi</translation>
+    </message>
+    <message>
+        <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
+        <translation>ჰოსტის სახელი უნიკალური სახელია, რომლითაც თქვენი Raspberry Pi ქსელში გამოჩნდება. ის, მხოლოდ, ასოებს, ციფრებს და ტირეებს შეიძლება, შეიცავდეს.</translation>
+    </message>
+    <message>
+        <source>Customisation: Choose hostname</source>
+        <translation>მორგება: აირჩიეთ ჰოსტის სახელი</translation>
+    </message>
+</context>
+<context>
+    <name>IfAndFeaturesCustomizationStep</name>
+    <message>
+        <source>Enable hardware interfaces and connectivity options.</source>
+        <translation>აპარატურული ინტერფეისების და დაკავშირების პარამეტრების ჩართვა.</translation>
+    </message>
+    <message>
+        <source>Interfaces</source>
+        <translation>ინტერფეისები</translation>
+    </message>
+    <message>
+        <source>Enable SPI</source>
+        <translation>SPI-ის ჩართვა</translation>
+    </message>
+    <message>
+        <source>Enable Serial:</source>
+        <translation>სერიული პორტის ჩართვა:</translation>
+    </message>
+    <message>
+        <source>Features</source>
+        <translation>ფუნქციები</translation>
+    </message>
+    <message>
+        <source>Enable USB Gadget Mode</source>
+        <translation>USB გაჯეტის რეჟიმის ჩართვა</translation>
+    </message>
+    <message>
+        <source>Learn more about USB Gadget Mode</source>
+        <translation>გაიგეთ მეტი USB გაჯეტის რეჟიმის შესახებ</translation>
+    </message>
+    <message>
+        <source>Console</source>
+        <translation>კონსოლი</translation>
+    </message>
+    <message>
+        <source>USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.</source>
+        <translation>USB გაჯეტის რეჟიმს შეუძლია შეცვალოს, როგორ იქცევა თქვენი მოწყობილობა და შეიძლება, გავლენა ჰქონდეს დაკავშირებაზე და ჰოსტთან ურთიერთობაზე.</translation>
+    </message>
+    <message>
+        <source>Please review the &lt;a href='%1'&gt;documentation&lt;/a&gt; before proceeding.</source>
+        <translation>გაგრძელებამდე გადახედეთ &lt;a href='%1'&gt;დოკუმენტაციას&lt;/a&gt;.</translation>
+    </message>
+    <message>
+        <source>Only continue if you are sure you know what you are doing.</source>
+        <translation>გააგრძელეთ მხოლოდ იმ შემთხვევაში, თუ დარწმუნებული ხართ, რომ იცით, რას აკეთებთ.</translation>
+    </message>
+    <message>
+        <source>I understand, continue</source>
+        <translation>მესმის, გავაგრძელოთ</translation>
+    </message>
+    <message>
+        <source>Customisation: Interfaces &amp; Features</source>
+        <translation>მორგება: ინტერფეისები და ფუნქციები</translation>
+    </message>
+    <message>
+        <source>Enable I2C</source>
+        <translation>I2C-ის ჩართვა</translation>
+    </message>
+</context>
+<context>
+    <name>ImFileDialog</name>
+    <message>
+        <source>Select File</source>
+        <translation>აირჩიეთ ფაილი</translation>
+    </message>
+    <message>
+        <source>Enter path or URL…</source>
+        <translation>შეიყვანეთ ბილიკი ან ბმული…</translation>
+    </message>
+    <message>
+        <source>Folders</source>
+        <translation>საქაღალდეები</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>გახსნა</translation>
+    </message>
+    <message>
+        <source>Removable drives</source>
+        <translation>მოხსნადი დისკები</translation>
+    </message>
+    <message>
+        <source>Go up a folder</source>
+        <translation>ერთი საქაღალდით ზემოთ ასვლა</translation>
+    </message>
+    <message>
+        <source>No files in this folder</source>
+        <translation>ამ საქაღალდეში ფაილები არაა</translation>
     </message>
 </context>
 <context>
     <name>ImageWriter</name>
-    <message>
-        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1 GB.</source>
-        <translation>საცავის მოცულობა საკმარისი არაა.&lt;br&gt;საჭიროა, იყოს სულ ცოტა %1 გბ.</translation>
-    </message>
     <message>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>შეყვანის ფაილი სწორი დისკის ასლის ფაილი არაა.&lt;br&gt;ფაილის ზომაა %1 ბაიტი და ის 512 ბაიტის ნამრავლს არ წარმოადგენს.</translation>
@@ -243,380 +612,555 @@
         <translation>აირჩიეთ დისკის ასლის ფაილი</translation>
     </message>
     <message>
-        <source>Error synchronizing time. Trying again in 3 seconds</source>
-        <translation>დროის სინქრონიზაციის შეცდომა. თავიდან ვცდი 3 წამში</translation>
-    </message>
-    <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
         <translation>თქვენს Ethernet კომუტატორში STP ჩართულია. IP-ის მიღებას დიდი დრო დასჭირდება.</translation>
     </message>
     <message>
-        <source>Would you like to prefill the wifi password from the system keychain?</source>
-        <translation>გნებავთ wifi-ის პაროლის ავტომატური შევსება სისტემური ბრელოკიდან?</translation>
+        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1.</source>
+        <translation>საცავის მოცულობა საკმარისი არაა.&lt;br&gt;საჭიროა, იყოს სულ ცოტა %1.</translation>
+    </message>
+    <message>
+        <source>B</source>
+        <translation>ბ</translation>
+    </message>
+    <message>
+        <source>TB</source>
+        <translation>ტბ</translation>
+    </message>
+    <message>
+        <source>GB</source>
+        <translation>გბ</translation>
+    </message>
+    <message>
+        <source>MB</source>
+        <translation>მბ</translation>
+    </message>
+    <message>
+        <source>KB</source>
+        <translation>კბ</translation>
+    </message>
+    <message>
+        <source>%1 %2</source>
+        <translation>%1 %2</translation>
+    </message>
+    <message>
+        <source>%1.%2 %3</source>
+        <translation>%1.%2 %3</translation>
+    </message>
+    <message>
+        <source>Unknown precondition failure.</source>
+        <translation>უცნობი წინაპირობის ჩავარდნა.</translation>
+    </message>
+    <message>
+        <source>Cannot start write. %1</source>
+        <translation>ჩაწერის დაწყება შეუძლებელია. %1</translation>
+    </message>
+    <message>
+        <source>Source file not found: %1</source>
+        <translation>წყარო ფაილი აღმოჩენილი არაა: %1</translation>
+    </message>
+    <message>
+        <source>Source is not a regular file: %1</source>
+        <translation>წყარო ჩვეულებრივი ფაილი არაა: %1</translation>
+    </message>
+    <message>
+        <source>Source file is not readable: %1</source>
+        <translation>წყაო ფაილი წაკითხვადი არაა: %1</translation>
+    </message>
+    <message>
+        <source>image</source>
+        <translation>გამოსახულება</translation>
+    </message>
+    <message>
+        <source>storage device</source>
+        <translation>საცავის მოწყობილობა</translation>
+    </message>
+    <message>
+        <source>valid storage device (device no longer available)</source>
+        <translation>სწორი საცავის მოწყობილობა (მოწყობილობა ხელმისაწვდომი აღარაა)</translation>
+    </message>
+    <message>
+        <source>No %1 selected.</source>
+        <translation>%1 არჩეული არაა.</translation>
+    </message>
+    <message>
+        <source> or </source>
+        <translation> ან </translation>
+    </message>
+</context>
+<context>
+    <name>KeychainPermissionDialog</name>
+    <message>
+        <source>Keychain Access</source>
+        <translation>ბრელოკთან წვდომა</translation>
+    </message>
+    <message>
+        <source>Would you like to prefill the Wi‑Fi password from the system keychain?</source>
+        <translation>გნებავთ წინასწარ შეავსოთ Wi-Fi-ის პაროლი სისტემური ბრელოკიდან?</translation>
+    </message>
+    <message>
+        <source>This will require administrator authentication on macOS.</source>
+        <translation>macOS-ზე ეს ადმინისტრატორის ავთენტიკაციას მოგთხოვთ.</translation>
+    </message>
+</context>
+<context>
+    <name>LanguageSelectionStep</name>
+    <message>
+        <source>Welcome</source>
+        <translation>მოგესალმებით</translation>
+    </message>
+    <message>
+        <source>Language:</source>
+        <translation>ენა:</translation>
+    </message>
+    <message>
+        <source>Choose your language for Raspberry Pi Imager</source>
+        <translation>აირჩიეთ Raspberry Pi Imager-ის ენა</translation>
     </message>
 </context>
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <source>opening image file</source>
-        <translation>დისკის ასლის ფაილის გახსნა</translation>
-    </message>
-    <message>
         <source>Error opening image file</source>
         <translation>დისკის ასლის ფაილის გახსნის შეცდომა</translation>
     </message>
     <message>
-        <source>starting extraction</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Error reading from image file</source>
-        <translation type="unfinished"></translation>
+        <translation>დისკის ასლის ფაილიდან წაკითხვის შეცდომა</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation type="unfinished"></translation>
+        <translation>მოწყობილობაში ჩაწერის შეცდომა</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
-        <translation type="unfinished"></translation>
+        <translation>დისკის ასლის ფაილის სრულად წაკითხვის შეცდომა</translation>
+    </message>
+    <message>
+        <source>Opening image file...</source>
+        <translation>დისკის ასლის ფაილის გახსნა...</translation>
+    </message>
+    <message>
+        <source>Starting extraction...</source>
+        <translation>ამოღების დაწყება...</translation>
     </message>
 </context>
 <context>
-    <name>MsgPopup</name>
+    <name>LocaleCustomizationStep</name>
     <message>
-        <source>NO</source>
-        <translation>არა</translation>
+        <source>Keyboard layout:</source>
+        <translation>კლავიატურის განლაგება:</translation>
     </message>
     <message>
-        <source>YES</source>
-        <translation>დიახ</translation>
+        <source>Time zone:</source>
+        <translation>დროის სარტყელი:</translation>
     </message>
     <message>
-        <source>CONTINUE</source>
-        <translation>გაგრძელება</translation>
+        <source>Customisation: Localisation</source>
+        <translation>მორგება: ლოკალიზაცია</translation>
     </message>
     <message>
-        <source>QUIT</source>
-        <translation>გასვლა</translation>
+        <source>Select your location for suggested time zone and keyboard layout</source>
+        <translation>აირჩიეთ თქვენი მდებარეობა შემოთავაზებული დროის სარტყლისა და კლავიატურის განლაგებისთვის</translation>
+    </message>
+    <message>
+        <source>Capital city:</source>
+        <translation>დედაქალაქი:</translation>
     </message>
 </context>
 <context>
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>რეკომენდებულია</translation>
     </message>
 </context>
 <context>
-    <name>OSPopup</name>
+    <name>OSSelectionStep</name>
     <message>
-        <source>Operating System</source>
-        <translation type="unfinished">ოპერაციული სისტემა</translation>
-    </message>
-    <message>
-        <source>Back</source>
-        <translation type="unfinished">უკან</translation>
-    </message>
-    <message>
-        <source>Go back to main menu</source>
-        <translation type="unfinished">მთავარ მენიუზე დაბრუნება</translation>
-    </message>
-    <message>
-        <source>Released: %1</source>
-        <translation type="unfinished">გამოსვლის დრო: %1</translation>
+        <source>Local - %1</source>
+        <translation>ლოკალური - %1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">დაკეშილია თქვენს კომპიუტერზე</translation>
+        <translation>დაკეშილია თქვენს კომპიუტერზე</translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">ლოკალური ფაილი</translation>
+        <translation>ლოკალური ფაილი</translation>
     </message>
     <message>
-        <source>Online - %1 GB download</source>
-        <translation type="unfinished">ინტერნეტით - %1 გბ გადმოწერა</translation>
+        <source>Online - %1 download</source>
+        <translation>ინტერნეტით - %1-ის გადმოწერა</translation>
     </message>
     <message>
-        <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">ჯერ მიუერთეთ USB ბარათი, რომელიც დისკის ასლის ფაილებს შეიცავს.&lt;br&gt;ეს დისკის ასლის ფაილები USB ბარათის ძირითად საქაღალდეში უნდა იყოს მოთავსებული.</translation>
+        <source>Go back to main menu</source>
+        <translation>მთავარ მენიუზე დაბრუნება</translation>
+    </message>
+    <message>
+        <source>Select image</source>
+        <translation>აირჩიეთ დისკის ასლის ფაილი</translation>
+    </message>
+    <message>
+        <source>Choose operating system</source>
+        <translation>აირჩეთ ოპერაციული სისტემა</translation>
+    </message>
+    <message>
+        <source>Select an operating system to install on your Raspberry Pi</source>
+        <translation>აირჩიეთ ოპერაციული სისტემა თქვენს Raspberry Pi-ზე დასაყენებლად</translation>
     </message>
 </context>
 <context>
-    <name>OptionsGeneralTab</name>
+    <name>PiConnectCustomizationStep</name>
     <message>
-        <source>Set hostname:</source>
-        <translation type="unfinished">ჰოსტის სახელის დაყენება:</translation>
+        <source>Customisation: Raspberry Pi Connect</source>
+        <translation>მორგება: Raspberry Pi Connect</translation>
     </message>
     <message>
-        <source>Set username and password</source>
-        <translation type="unfinished">მომხმარებლის სახელისა და პაროლის დაყენება</translation>
+        <source>Enable Raspberry Pi Connect</source>
+        <translation>Raspberry Pi Connect-ის ჩართვა</translation>
     </message>
     <message>
-        <source>Username:</source>
-        <translation type="unfinished">მომხმარებელი:</translation>
+        <source>What is Raspberry Pi Connect?</source>
+        <translation>რა არის Raspberry Pi Connect?</translation>
     </message>
     <message>
-        <source>Password:</source>
-        <translation type="unfinished">პაროლი:</translation>
+        <source>Open Raspberry Pi Connect</source>
+        <translation>Raspberry Pi Connect-ის გახსნა</translation>
     </message>
     <message>
-        <source>Configure wireless LAN</source>
-        <translation type="unfinished">უსადენო ქსელის მორგება</translation>
+        <source>Status:</source>
+        <translation>სტატუსი:</translation>
     </message>
     <message>
-        <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <source>Token received from browser</source>
+        <translation>ბრაუზერიდან მიღებული ტოკენი</translation>
     </message>
     <message>
-        <source>Hidden SSID</source>
-        <translation type="unfinished">დამალული SSID</translation>
+        <source>Waiting for token</source>
+        <translation>ტოკეტის მოლოდინი</translation>
     </message>
     <message>
-        <source>Wireless LAN country:</source>
-        <translation type="unfinished">უსადენო ქსელის ქვეყანა:</translation>
-    </message>
-    <message>
-        <source>Set locale settings</source>
-        <translation type="unfinished">დააყენეთ ლოკალის პარამეტრები</translation>
-    </message>
-    <message>
-        <source>Time zone:</source>
-        <translation type="unfinished">დროის სარტყელი:</translation>
-    </message>
-    <message>
-        <source>Keyboard layout:</source>
-        <translation type="unfinished">კლავიატურის განლაგება:</translation>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
+        <translation>შედით, რომ მიიღოთ ტოკენი და ჩართოთ Raspberry Pi Connect.</translation>
     </message>
 </context>
 <context>
-    <name>OptionsMiscTab</name>
+    <name>QObject</name>
     <message>
-        <source>Play sound when finished</source>
-        <translation type="unfinished">ხმის დაკვრა დასრულებისას</translation>
-    </message>
-    <message>
-        <source>Eject media when finished</source>
-        <translation type="unfinished">მედიის გამოღება დასრულებისას</translation>
-    </message>
-    <message>
-        <source>Enable telemetry</source>
-        <translation type="unfinished">ტელემეტრიის ჩართვა</translation>
+        <source>Internal SD card reader</source>
+        <translation>შიდა SD ბარათის წამკითხავი</translation>
     </message>
 </context>
 <context>
-    <name>OptionsPopup</name>
-    <message>
-        <source>OS Customization</source>
-        <translation>ოს-ის მორგება</translation>
-    </message>
-    <message>
-        <source>General</source>
-        <translation>ზოგადი</translation>
-    </message>
-    <message>
-        <source>Services</source>
-        <translation>სერვისები</translation>
-    </message>
-    <message>
-        <source>Options</source>
-        <translation>მორგება</translation>
-    </message>
-    <message>
-        <source>SAVE</source>
-        <translation>შენახვა</translation>
-    </message>
-    <message>
-        <source>CANCEL</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Please fix validation errors in General and Services tabs</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Please fix validation errors in General tab</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Please fix validation errors in Services tab</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>OptionsServicesTab</name>
+    <name>RemoteAccessStep</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">SSH-ის ჩართვა</translation>
+        <translation>SSH-ის ჩართვა</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">პაროლით ავთენტიკაციის გამოყენება</translation>
+        <translation>პაროლით ავთენტიკაციის გამოყენება</translation>
     </message>
     <message>
-        <source>Allow public-key authentication only</source>
-        <translation type="unfinished">მხოლოდ საჯარო გასაღებით ავთენტიკაციის დაშვება</translation>
+        <source>Use public key authentication</source>
+        <translation>საჯარო გასაღებით ავთენტიკაციის გამოყენება</translation>
     </message>
     <message>
-        <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">authorized_keys-ის დაყენება მომხმარებლისთვის &apos;%1&apos;:</translation>
+        <source>Select SSH Public Key</source>
+        <translation>აირჩიეთ SSH საჯარო გასაღები</translation>
     </message>
     <message>
-        <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <source>Customisation: SSH authentication</source>
+        <translation>მორგება: SSH ავთენტიკაცია</translation>
     </message>
     <message>
-        <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">გაუშვით SSH-KEYGEN</translation>
+        <source>Learn about SSH</source>
+        <translation>გაიგეთ მეტი SSH-ის შესახებ</translation>
     </message>
     <message>
-        <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <source>Configure SSH access</source>
+        <translation>SSH წვდომის მორგება</translation>
     </message>
     <message>
-        <source>Paste your SSH public key here.
-Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
-Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
-        <translation type="unfinished"></translation>
+        <source>Authentication mechanism:</source>
+        <translation>ავთენტიკაციის მექანიზმი:</translation>
     </message>
     <message>
-        <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>UseSavedSettingsPopup</name>
-    <message>
-        <source>Would you like to apply OS customization settings?</source>
-        <translation>გნებავთ, გამოიყენოთ ოს-ის მორგების პარამეტრები?</translation>
+        <source>Enter public key or click BROWSE</source>
+        <translation>შეიყვანეთ საჯარო გასაღები, ან დააწკაპუნეთ ღილაკზე 'პოვნა'</translation>
     </message>
     <message>
-        <source>NO</source>
-        <translation>არა</translation>
-    </message>
-    <message>
-        <source>NO, CLEAR SETTINGS</source>
-        <translation>არა, გაასუფთავე პარამეტრები</translation>
-    </message>
-    <message>
-        <source>YES</source>
-        <translation>დიახ</translation>
-    </message>
-    <message>
-        <source>EDIT SETTINGS</source>
-        <translation>პარამეტრების ჩასწორება</translation>
+        <source>Failed to read SSH key file</source>
+        <translation>SSH გასაღების ფაილის წაკითხვა ჩავარდა</translation>
     </message>
 </context>
 <context>
-    <name>main</name>
+    <name>RepositoryDialog</name>
     <message>
-        <source>Raspberry Pi Imager v%1</source>
-        <translation>Raspberry Pi Imager v%1</translation>
+        <source>Content Repository</source>
+        <translation>შემცველობის რეპოზიტორია</translation>
     </message>
     <message>
-        <source>Raspberry Pi Device</source>
-        <translation>Raspberry Pi მოწყობილობა</translation>
+        <source>Repository source:</source>
+        <translation>რეპოზიტორიის წყარო:</translation>
     </message>
     <message>
-        <source>Select this button to choose your target Raspberry Pi</source>
-        <translation>აირჩიეთ ეს ღილაკი, რომ აირჩიოთ თქვენი სამიზნე Raspberry Pi</translation>
+        <source>Use custom file</source>
+        <translation>მომხმარებლის ფაილის გამოყენება</translation>
     </message>
     <message>
-        <source>Operating System</source>
-        <translation>ოპერაციული სისტემა</translation>
+        <source>Use custom URI</source>
+        <translation>მომხმარებლის URI-ის გამოყენება</translation>
     </message>
     <message>
-        <source>CHOOSE OS</source>
-        <translation>აირჩიეთ ოპერაციული სისტემა</translation>
+        <source>Please select a custom repository json file</source>
+        <translation>აირჩიეთ მომხმარებლის რეპოზიტორიის json ფაილი</translation>
     </message>
     <message>
-        <source>Select this button to change the operating system</source>
-        <translation>აირჩიეთ ეს ღილაკი ოპერაციული სისტემის შესაცვლელად</translation>
+        <source>Select Repository</source>
+        <translation>აირჩიეთ რეპოზიტორია</translation>
+    </message>
+    <message>
+        <source>Apply &amp; Restart</source>
+        <translation>გადატარება &amp; გადატვირთვა</translation>
+    </message>
+    <message>
+        <source>Select custom repository</source>
+        <translation>აირჩიეთ მომხმარებლის რეპოზიტორია</translation>
+    </message>
+</context>
+<context>
+    <name>StorageSelectionStep</name>
+    <message>
+        <source>No storage devices found</source>
+        <translation>საცავის მოწყობილობები აღმოჩენილი არაა</translation>
+    </message>
+    <message>
+        <source>Mounted as %1</source>
+        <translation>მიმაგრებულია, როგორც %1</translation>
+    </message>
+    <message>
+        <source>Read-only</source>
+        <translation>მხოლოდ-წასაკითხად</translation>
+    </message>
+    <message>
+        <source>Select your storage device</source>
+        <translation>აირჩიეთ თქვენი საცავის მოწყობილობა</translation>
+    </message>
+    <message>
+        <source>Exclude system drives</source>
+        <translation>სისტემური დისკების ამოღება</translation>
+    </message>
+</context>
+<context>
+    <name>UpdateAvailableDialog</name>
+    <message>
+        <source>Update available</source>
+        <translation>განახლება ხელმისაწვდომია</translation>
+    </message>
+    <message>
+        <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
+        <translation>ხელმისაწვდომია Imager-ის ახალი ვერსია. გნებავთ, გავხსნა ვებგვერდი, რომ გადმოწეროთ ის?</translation>
+    </message>
+</context>
+<context>
+    <name>UserCustomizationStep</name>
+    <message>
+        <source>Username:</source>
+        <translation>მომხმარებლის სახელი:</translation>
+    </message>
+    <message>
+        <source>Enter password</source>
+        <translation>შეიყვანეთ პაროლი</translation>
+    </message>
+    <message>
+        <source>Confirm password:</source>
+        <translation>პაროლის დადასტურება:</translation>
+    </message>
+    <message>
+        <source>Re-enter password</source>
+        <translation>თავიდან შეიყვანეთ პაროლი</translation>
+    </message>
+    <message>
+        <source>The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
+        <translation>მომხმარებლის სახელი, მხოლოდ, ასოებს, რიცხვებს და ტირეებს უნდა შეიცავდეს.</translation>
+    </message>
+    <message>
+        <source>Customisation: Choose username</source>
+        <translation>მორგება: აირჩიეთ მომხმარებლის სახელი</translation>
+    </message>
+    <message>
+        <source>Saved (hidden) — leave blank to keep</source>
+        <translation>შენახული (დამალული) — დატოვეთ ცარიელი შესანარჩუნებლად</translation>
+    </message>
+    <message>
+        <source>Re-enter to change password</source>
+        <translation>შეიყვანეთ თავიდან პაროლის შესაცვლელად</translation>
+    </message>
+    <message>
+        <source>Create a user account for your Raspberry Pi</source>
+        <translation>შექმენით მომხმარებლის ანგარიში თქვენი Raspberry Pi-ისთვის</translation>
+    </message>
+    <message>
+        <source>Enter your username</source>
+        <translation>შეიყვანეთ თქვენი მომხმარებლის სახელი</translation>
+    </message>
+</context>
+<context>
+    <name>WifiCustomizationStep</name>
+    <message>
+        <source>SSID:</source>
+        <translation>SSID:</translation>
+    </message>
+    <message>
+        <source>Network name</source>
+        <translation>ქსელის სახელი</translation>
+    </message>
+    <message>
+        <source>Network password</source>
+        <translation>ქსელის პაროლი</translation>
+    </message>
+    <message>
+        <source>Wireless LAN country:</source>
+        <translation>უსადენო ქსელის ქვეყანა:</translation>
+    </message>
+    <message>
+        <source>Hidden SSID</source>
+        <translation>დამალული SSID</translation>
+    </message>
+    <message>
+        <source>Customisation: Choose Wi‑Fi</source>
+        <translation>მორგება: აირჩიეთ Wi-Fi</translation>
+    </message>
+    <message>
+        <source>Configure wireless LAN settings</source>
+        <translation>უსადენო ქსელის პარამეტრების მორგება</translation>
+    </message>
+    <message>
+        <source>Saved (hidden) — leave blank to clear</source>
+        <translation>შენახულია (დამალულია) — დატოვეთ ცარიელი გასასუფთავებლად</translation>
+    </message>
+    <message>
+        <source>✓ Recommended based on your capital city selection</source>
+        <translation>✓ რეკომენდებულია თქვენი დედაქალაქის არჩევნის მიხედვით</translation>
+    </message>
+</context>
+<context>
+    <name>WizardContainer</name>
+    <message>
+        <source>Device</source>
+        <translation>მოწყობილობა</translation>
+    </message>
+    <message>
+        <source>OS</source>
+        <translation>OS</translation>
     </message>
     <message>
         <source>Storage</source>
         <translation>საცავი</translation>
     </message>
     <message>
-        <source>Network not ready yet</source>
-        <translation>ქსელი ჯერ მზად არაა</translation>
+        <source>Writing</source>
+        <translation>ჩაწერა</translation>
     </message>
     <message>
-        <source>CHOOSE STORAGE</source>
-        <translation>აირჩიეთ საცავი</translation>
+        <source>Done</source>
+        <translation>დასრულებულია</translation>
     </message>
     <message>
-        <source>Select this button to change the destination storage device</source>
-        <translation>აირჩიეთ ეს ღილაკი სამიზნე საცავი მოწყობილობის შესაცვლელად</translation>
+        <source>Customisation</source>
+        <translation>პერსონალიზაცია</translation>
     </message>
     <message>
-        <source>CANCEL WRITE</source>
-        <translation>ჩაწერის გაუქმება</translation>
+        <source>Hostname</source>
+        <translation>ჰოსტის სახელი</translation>
     </message>
     <message>
-        <source>Cancelling...</source>
-        <translation>გაუქმება…</translation>
+        <source>User</source>
+        <translation>მომხმარებელი</translation>
     </message>
     <message>
-        <source>CANCEL VERIFY</source>
-        <translation>გადამოწმების გაუქმება</translation>
+        <source>Wi‑Fi</source>
+        <translation>Wi‑Fi</translation>
     </message>
     <message>
-        <source>Finalizing...</source>
-        <translation>მიმდინარეობს დასრულება...</translation>
+        <source>Raspberry Pi Connect</source>
+        <translation>Raspberry Pi Connect</translation>
     </message>
+    <message>
+        <source>App Options</source>
+        <translation>აპის პარამეტრები</translation>
+    </message>
+    <message>
+        <source>Interfaces &amp; Features</source>
+        <translation>ინტერფეისები და ფუნქციები</translation>
+    </message>
+    <message>
+        <source>Setup steps</source>
+        <translation>დაყენების ნაბიჯები</translation>
+    </message>
+    <message>
+        <source>Localisation</source>
+        <translation>ლოკალიზაცია</translation>
+    </message>
+    <message>
+        <source>Remote access</source>
+        <translation>დაკავშირება</translation>
+    </message>
+</context>
+<context>
+    <name>WizardStepBase</name>
     <message>
         <source>Next</source>
         <translation>შემდეგი</translation>
     </message>
     <message>
-        <source>Select this button to start writing the image</source>
-        <translation>აირჩიეთ ეს ღილაკი, რომ დაიწყოთ დისკის ასლის ფაილის ჩაწერა</translation>
+        <source>Skip customisation</source>
+        <translation>პერსონალიზაციის გამოტოვება</translation>
+    </message>
+</context>
+<context>
+    <name>WritingStep</name>
+    <message>
+        <source>Review your choices and write the image to the storage device</source>
+        <translation>გადახედეთ თქვენს არჩევნებს და ჩაწერეთ დისკის ასლის ფაილი საცავის მოწყობილობაზე</translation>
     </message>
     <message>
-        <source>Using custom repository: %1</source>
-        <translation>ვიყენებ მორგებულ რეპოზიტორიას: %1</translation>
+        <source>Write</source>
+        <translation>ჩაწერა</translation>
     </message>
     <message>
-        <source>Keyboard navigation: &lt;tab&gt; navigate to next button &lt;space&gt; press button/select item &lt;arrow up/down&gt; go up/down in lists</source>
-        <translation>ნავიგაცია კლავიატურით: &lt;tab&gt; გადადის შემდეგ ღილაკზე &lt;space&gt; ღილაკის დაჭერა/ელემენტის არჩევა &lt;ისარი მაღლა/დაბლა&gt; სიაში მაღლა ასვლა/დაბლა ჩამოსვლა</translation>
+        <source>Summary</source>
+        <translation>ჯამში</translation>
     </message>
     <message>
-        <source>Language: </source>
-        <translation>ენა: </translation>
+        <source>Starting write process...</source>
+        <translation>ჩაწერის პროცესის დაწყება...</translation>
     </message>
     <message>
-        <source>Keyboard: </source>
-        <translation>კლავიატურა: </translation>
+        <source>Write cancelled</source>
+        <translation>ჩაწერა გაუქმდა</translation>
     </message>
     <message>
-        <source>Are you sure you want to quit?</source>
-        <translation>მართლა გნებავთ, გახვიდეთ?</translation>
+        <source>You are about to ERASE all data on: %1</source>
+        <translation>აპირებთ, წაშალოთ ყველაფერი დისკზე: %1</translation>
     </message>
     <message>
-        <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>Raspberry Pi Imager ჯერ კიდევ დაკავებულია.&lt;br&gt; მაინც გნებავთ გასვლა?</translation>
+        <source>the storage device</source>
+        <translation>საცავის მოწყობილობა</translation>
     </message>
     <message>
-        <source>Warning</source>
-        <translation>გაფრთხილება</translation>
+        <source>This action is PERMANENT and CANNOT be undone.</source>
+        <translation>ეს ქმედება სამუდამო და შეუქცევადია.</translation>
     </message>
     <message>
-        <source>Preparing to write...</source>
-        <translation>ჩასაწერად მომზადება...</translation>
+        <source>I understand, erase and write</source>
+        <translation>მესმის. წაშალე და ჩაწერე</translation>
     </message>
     <message>
-        <source>All existing data on &apos;%1&apos; will be erased.&lt;br&gt;Are you sure you want to continue?</source>
-        <translation>&apos;%1&apos;-ზე არსებული მონაცემები სულ წაიშლება.&lt;br&gt; მართლა გნებავთ ამისი გაკეთება?</translation>
-    </message>
-    <message>
-        <source>Update available</source>
-        <translation>განახლება ხელმისაწვდომია</translation>
-    </message>
-    <message>
-        <source>There is a newer version of Imager available.&lt;br&gt;Would you like to visit the website to download it?</source>
-        <translation>ხელმისაწვდომია Imager-ის ახალი ვერსია.&lt;br&gt;გნებავთ, გავხსნა ვებგვერდი, რომ გადმოწეროთ ის?</translation>
+        <source>Please wait...</source>
+        <translation>გთხოვთ, მოითმინეთ...</translation>
     </message>
     <message>
         <source>Writing... %1%</source>
@@ -627,28 +1171,55 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>გადამოწმება... %1%</translation>
     </message>
     <message>
-        <source>Preparing to write... (%1)</source>
-        <translation>მიმდინარეობს ჩაწერისთვის მომზადება... (%1)</translation>
+        <source>Write completed successfully!</source>
+        <translation>დაწერა წარმატებით დასრულდა!</translation>
+    </message>
+    <message>
+        <source>Write failed: %1</source>
+        <translation>ჩაწერა ჩავარდა: %1</translation>
+    </message>
+    <message>
+        <source>Customisations to apply:</source>
+        <translation>პერსონალიზაციები გადასატარებლად:</translation>
+    </message>
+    <message>
+        <source>Finalising...</source>
+        <translation>დასრულება...</translation>
+    </message>
+    <message>
+        <source>Write image</source>
+        <translation>დისკის ასლის ფაილის ჩაწერა</translation>
+    </message>
+    <message>
+        <source>Operating system:</source>
+        <translation>ოპერაციული სისტემა:</translation>
+    </message>
+    <message>
+        <source>Ready to write your customised image to your storage device. All existing data will be erased.</source>
+        <translation>თქვენი მორგებული დისკის ასლის ფაილი ჩასაწერად მზადაა. არსებული მონაცემები წაიშლება.</translation>
+    </message>
+    <message>
+        <source>Ready to write the image to your storage device. All existing data will be erased.</source>
+        <translation>დისკის ასლის ფაილი თქვენი საცავის მოწყობილობაზე ჩასაწერად მზადაა. არსებული მონაცემები მთლიანად წაიშლება.</translation>
+    </message>
+</context>
+<context>
+    <name>main</name>
+    <message>
+        <source>Raspberry Pi Imager v%1</source>
+        <translation>Raspberry Pi Imager v%1</translation>
+    </message>
+    <message>
+        <source>Are you sure you want to quit?</source>
+        <translation>მართლა გნებავთ, გახვიდეთ?</translation>
     </message>
     <message>
         <source>Error</source>
         <translation>შეცდომა</translation>
     </message>
     <message>
-        <source>Write Successful</source>
-        <translation>ჩაწერა წარმატებულია</translation>
-    </message>
-    <message>
         <source>Erase</source>
         <translation>წაშლა</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been erased&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; წაიშალა&lt;br&gt;&lt;br&gt;ახლა შეგიძლიათ, ამოიღოთ SD ბარათი წამკითხველიდან</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; has been written to &lt;b&gt;%2&lt;/b&gt;&lt;br&gt;&lt;br&gt;You can now remove the SD card from the reader</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; ჩაიწერა &lt;b&gt;%2&lt;/b&gt;-ზე&lt;br&gt;&lt;br&gt;ახლა შეგიძლიათ, ამოიღოთ SD ბარათი წამკითხველიდან</translation>
     </message>
     <message>
         <source>Format card as FAT32</source>
@@ -663,24 +1234,20 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
         <translation>მორგებული .img ფაილის არჩევა თქვენი კომპიუტერიდან</translation>
     </message>
     <message>
-        <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
+        <translation>Raspberry Pi Imager ჯერ კიდევ დაკავებულია. მართლა გნებავთ გასვლა?</translation>
     </message>
     <message>
-        <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <source>Storage device removed</source>
+        <translation>საცავის მოწყობილობა მოხსნილია</translation>
     </message>
     <message>
-        <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>
+        <translation>საცავის მოწყობილობა მოხსნილია ჩაწერისას, ასე რომ, ოპერაცია შეწყდა. გასაგრძელებლად შეაერთეთ მოწყობილობა თავიდან, ან აირჩიეთ სხვა.</translation>
     </message>
     <message>
-        <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <source>OK</source>
+        <translation>დიახ</translation>
     </message>
 </context>
 </TS>
