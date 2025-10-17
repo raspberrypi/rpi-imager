@@ -47,6 +47,22 @@
         <source>Edit</source>
         <translation>עריכה</translation>
     </message>
+    <message>
+        <source>Close the options dialog without saving any changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save the selected options and apply them to Raspberry Pi Imager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep warnings enabled and return to the options dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -159,16 +175,24 @@
         <translation>Raspberry Pi Connect הופעל</translation>
     </message>
     <message>
-        <source>USB Gadget enabled</source>
-        <translation>חפיץ USB הופעל</translation>
-    </message>
-    <message>
         <source>I2C enabled</source>
         <translation>I2C הופעל</translation>
     </message>
     <message>
         <source>SPI enabled</source>
         <translation>SPI הופעל</translation>
+    </message>
+    <message>
+        <source>USB Gadget mode enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1-Wire enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial configured</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -201,6 +225,14 @@
         <source>CONTINUE</source>
         <translation>המשך</translation>
     </message>
+    <message>
+        <source>Cancel operation and return to storage selection to choose a different device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Proceed to write the image to this system drive after confirming the drive name</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmUnfilterDialog</name>
@@ -219,6 +251,14 @@
     <message>
         <source>SHOW SYSTEM DRIVES</source>
         <translation>להציג כונני מערכת</translation>
+    </message>
+    <message>
+        <source>Keep system drives hidden to prevent accidental damage to your operating system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove the safety filter and display system drives in the storage device list</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -265,6 +305,18 @@
     <message>
         <source>Storage:</source>
         <translation>אחסון:</translation>
+    </message>
+    <message>
+        <source>Return to the beginning to write another image to a different storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reboot the system to apply changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close Raspberry Pi Imager and exit the application</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -494,16 +546,16 @@
 <context>
     <name>HostnameCustomizationStep</name>
     <message>
-        <source>raspberrypi</source>
-        <translation>raspberrypi</translation>
-    </message>
-    <message>
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
         <translation>שם מארח הוא שם ייחודי שעוזר לזהות את ה־Raspberry Pi שלך ברשת. הוא אמור להכיל תווים, ספרות ומינוסים בלבד.</translation>
     </message>
     <message>
         <source>Customisation: Choose hostname</source>
         <translation>התאמה אישית: בחירת שם מארח</translation>
+    </message>
+    <message>
+        <source>Enter your hostname</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -563,6 +615,10 @@
     <message>
         <source>Enable I2C</source>
         <translation>הפעלת I2C</translation>
+    </message>
+    <message>
+        <source>Enable 1-Wire</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -700,6 +756,14 @@
     <message>
         <source>This will require administrator authentication on macOS.</source>
         <translation>הפעולה הזאת תדרוש אימות הנהלת מערכת ב־macOS.</translation>
+    </message>
+    <message>
+        <source>Skip keychain access and manually enter the Wi-Fi password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -843,12 +907,9 @@
         <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
         <translation>יש להיכנס כדי לקבל אסימון ולהפעיל את Raspberry Pi Connect.</translation>
     </message>
-</context>
-<context>
-    <name>QObject</name>
     <message>
-        <source>Internal SD card reader</source>
-        <translation>קורא כרטיסי SD פנימי</translation>
+        <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -893,6 +954,10 @@
         <source>Failed to read SSH key file</source>
         <translation>קריאת קובץ מפתח ה־SSH נכשלה</translation>
     </message>
+    <message>
+        <source>Select an SSH public key file from your computer to enable key-based authentication</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RepositoryDialog</name>
@@ -909,10 +974,6 @@
         <translation>להשתמש בקובץ מותאם אישית</translation>
     </message>
     <message>
-        <source>Use custom URI</source>
-        <translation>להשתמש בכתובת מלאה מותאמת אישית</translation>
-    </message>
-    <message>
         <source>Please select a custom repository json file</source>
         <translation>נא לבחור קובץ json למאגר מותאם אישית</translation>
     </message>
@@ -927,6 +988,22 @@
     <message>
         <source>Select custom repository</source>
         <translation>בחירת מאגר מותאם אישית</translation>
+    </message>
+    <message>
+        <source>Use custom URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select a custom repository JSON file from your computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the repository dialog without changing the content source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply the new content repository and restart the wizard from the beginning</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -961,6 +1038,14 @@
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
         <translation>יש גרסה חדשה יותר של צורב הדמויות. לבקר באתר כדי להוריד אותה?</translation>
+    </message>
+    <message>
+        <source>Continue using the current version of Raspberry Pi Imager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open the Raspberry Pi website in your browser to download the latest version</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1037,12 +1122,32 @@
         <translation>הגדרת תצורת רשת אלחוטית</translation>
     </message>
     <message>
-        <source>Saved (hidden) — leave blank to clear</source>
-        <translation>שמור (מוסתר) - יש לרוקן כדי למחוק</translation>
-    </message>
-    <message>
         <source>✓ Recommended based on your capital city selection</source>
         <translation>✓ מומלץ לפי עיר הבירה שבחרת</translation>
+    </message>
+    <message>
+        <source>No password (open network)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved (hidden) — leave blank to keep</source>
+        <translation type="unfinished">שמור (מוסתר) - יש לרוקן כדי להשאיר</translation>
+    </message>
+    <message>
+        <source>Secure network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure Wi-Fi for an unencrypted network without password protection</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1106,6 +1211,10 @@
     <message>
         <source>Remote access</source>
         <translation>גישה מרחוק</translation>
+    </message>
+    <message>
+        <source>Open application settings to configure sound alerts, auto-eject, telemetry, and content repository</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1201,6 +1310,14 @@
         <source>Ready to write the image to your storage device. All existing data will be erased.</source>
         <translation>ההכנות לצריבת הדמות להתקן האחסון שלך הושלמו. כל הנתונים הקיימים יימחקו.</translation>
     </message>
+    <message>
+        <source>Cancel and return to the write summary without erasing the storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm erasure and begin writing the image to the storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -1247,6 +1364,22 @@
     <message>
         <source>OK</source>
         <translation>אישור</translation>
+    </message>
+    <message>
+        <source>Close the error dialog and continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the storage removed notification and return to storage selection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to Raspberry Pi Imager and continue the current operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

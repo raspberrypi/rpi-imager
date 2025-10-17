@@ -47,6 +47,22 @@
         <source>Edit</source>
         <translation>ჩასწორება</translation>
     </message>
+    <message>
+        <source>Close the options dialog without saving any changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save the selected options and apply them to Raspberry Pi Imager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep warnings enabled and return to the options dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -159,16 +175,24 @@
         <translation>Raspberry Pi Connect ჩართულია</translation>
     </message>
     <message>
-        <source>USB Gadget enabled</source>
-        <translation>USB გაჯეტი ჩართულია</translation>
-    </message>
-    <message>
         <source>I2C enabled</source>
         <translation>I2C ჩართულია</translation>
     </message>
     <message>
         <source>SPI enabled</source>
         <translation>SPI ჩართულია</translation>
+    </message>
+    <message>
+        <source>USB Gadget mode enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1-Wire enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial configured</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -201,6 +225,14 @@
         <source>CONTINUE</source>
         <translation>გაგრძელება</translation>
     </message>
+    <message>
+        <source>Cancel operation and return to storage selection to choose a different device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Proceed to write the image to this system drive after confirming the drive name</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmUnfilterDialog</name>
@@ -219,6 +251,14 @@
     <message>
         <source>SHOW SYSTEM DRIVES</source>
         <translation>სისტემური დისკების ჩვენება</translation>
+    </message>
+    <message>
+        <source>Keep system drives hidden to prevent accidental damage to your operating system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove the safety filter and display system drives in the storage device list</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -266,6 +306,18 @@
         <source>Storage:</source>
         <translation>საცავი:</translation>
     </message>
+    <message>
+        <source>Return to the beginning to write another image to a different storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reboot the system to apply changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close Raspberry Pi Imager and exit the application</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DownloadExtractThread</name>
@@ -282,8 +334,8 @@
         <translation>ოპერაციულმა სისტემამ FAT32 დანაყოფი არ მიამაგრა</translation>
     </message>
     <message>
-        <source>Error changing to directory '%1'</source>
-        <translation>ვერ გადავედი საქაღალდეში '%1'</translation>
+        <source>Error changing to directory &apos;%1&apos;</source>
+        <translation>ვერ გადავედი საქაღალდეში &apos;%1&apos;</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
@@ -297,16 +349,16 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>Please verify if 'Raspberry Pi Imager' is allowed access to 'removable volumes' in privacy settings (under 'files and folders' or alternatively give it 'full disk access').</source>
+        <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translatorcomment>Not sure if current macOS has that option (or if it got moved/renamed)</translatorcomment>
-        <translation>გადაამოწმეთ, აქვს თუ არა 'Rasperry Pi Imager'-ს წვდომა 'მოხსნად ტომებთან' კონფიდენციალობის პარამეტრებში ('ფაილები და საქაღალდეებში', ან მიეცით 'სრული წვდომა დისკზე').</translation>
+        <translation>გადაამოწმეთ, აქვს თუ არა &apos;Rasperry Pi Imager&apos;-ს წვდომა &apos;მოხსნად ტომებთან&apos; კონფიდენციალობის პარამეტრებში (&apos;ფაილები და საქაღალდეებში&apos;, ან მიეცით &apos;სრული წვდომა დისკზე&apos;).</translation>
     </message>
     <message>
-        <source>Cannot open storage device '%1'.</source>
-        <translation>ვერ გავხსენი საცავის მოწყობილობა '%1'.</translation>
+        <source>Cannot open storage device &apos;%1&apos;.</source>
+        <translation>ვერ გავხსენი საცავის მოწყობილობა &apos;%1&apos;.</translation>
     </message>
     <message>
-        <source>Write error while zero'ing out MBR</source>
+        <source>Write error while zero&apos;ing out MBR</source>
         <translation>ჩაწერის შეცდომა MBR-ის განულებისას</translation>
     </message>
     <message>
@@ -390,16 +442,16 @@
         <translation>დისკის I/O შეცდომა. საცავის მოწყობილობა შეიძლება, გამოერთებულია, ან გაუმართავია.</translation>
     </message>
     <message>
-        <source>Error opening disk device '%1'</source>
-        <translation>გახსნის შეცდომა დისკის მოწყობილობისთვის '%1'</translation>
+        <source>Error opening disk device &apos;%1&apos;</source>
+        <translation>გახსნის შეცდომა დისკის მოწყობილობისთვის &apos;%1&apos;</translation>
     </message>
     <message>
-        <source>Cannot open storage device '%1' after authorization.</source>
-        <translation>ვერ გავხსენი საცავის მოწყობილობა '%1' ავტორიზაციის შემდეგ.</translation>
+        <source>Cannot open storage device &apos;%1&apos; after authorization.</source>
+        <translation>ვერ გავხსენი საცავის მოწყობილობა &apos;%1&apos; ავტორიზაციის შემდეგ.</translation>
     </message>
     <message>
-        <source>Cannot open storage device '%1' with udisks2 authorization.</source>
-        <translation>ვერ გავხსენი საცავის მოწყობილობა '%1' udisks2-ით ავტორიზაციით.</translation>
+        <source>Cannot open storage device &apos;%1&apos; with udisks2 authorization.</source>
+        <translation>ვერ გავხსენი საცავის მოწყობილობა &apos;%1&apos; udisks2-ით ავტორიზაციით.</translation>
     </message>
     <message>
         <source>Error getting device size</source>
@@ -422,7 +474,7 @@
         <translation>დისკზე არსებული მონაცემების მოცილება...</translation>
     </message>
     <message>
-        <source>Zero'ing out first and last MB of drive...</source>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
         <translation>დისკის პირველი და ბოლო მეგაბაიტის განულება...</translation>
     </message>
     <message>
@@ -495,16 +547,16 @@
 <context>
     <name>HostnameCustomizationStep</name>
     <message>
-        <source>raspberrypi</source>
-        <translation>raspberrypi</translation>
-    </message>
-    <message>
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
         <translation>ჰოსტის სახელი უნიკალური სახელია, რომლითაც თქვენი Raspberry Pi ქსელში გამოჩნდება. ის, მხოლოდ, ასოებს, ციფრებს და ტირეებს შეიძლება, შეიცავდეს.</translation>
     </message>
     <message>
         <source>Customisation: Choose hostname</source>
         <translation>მორგება: აირჩიეთ ჰოსტის სახელი</translation>
+    </message>
+    <message>
+        <source>Enter your hostname</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -546,8 +598,8 @@
         <translation>USB გაჯეტის რეჟიმს შეუძლია შეცვალოს, როგორ იქცევა თქვენი მოწყობილობა და შეიძლება, გავლენა ჰქონდეს დაკავშირებაზე და ჰოსტთან ურთიერთობაზე.</translation>
     </message>
     <message>
-        <source>Please review the &lt;a href='%1'&gt;documentation&lt;/a&gt; before proceeding.</source>
-        <translation>გაგრძელებამდე გადახედეთ &lt;a href='%1'&gt;დოკუმენტაციას&lt;/a&gt;.</translation>
+        <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
+        <translation>გაგრძელებამდე გადახედეთ &lt;a href=&apos;%1&apos;&gt;დოკუმენტაციას&lt;/a&gt;.</translation>
     </message>
     <message>
         <source>Only continue if you are sure you know what you are doing.</source>
@@ -564,6 +616,10 @@
     <message>
         <source>Enable I2C</source>
         <translation>I2C-ის ჩართვა</translation>
+    </message>
+    <message>
+        <source>Enable 1-Wire</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -701,6 +757,14 @@
     <message>
         <source>This will require administrator authentication on macOS.</source>
         <translation>macOS-ზე ეს ადმინისტრატორის ავთენტიკაციას მოგთხოვთ.</translation>
+    </message>
+    <message>
+        <source>Skip keychain access and manually enter the Wi-Fi password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -844,12 +908,9 @@
         <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
         <translation>შედით, რომ მიიღოთ ტოკენი და ჩართოთ Raspberry Pi Connect.</translation>
     </message>
-</context>
-<context>
-    <name>QObject</name>
     <message>
-        <source>Internal SD card reader</source>
-        <translation>შიდა SD ბარათის წამკითხავი</translation>
+        <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -888,11 +949,15 @@
     </message>
     <message>
         <source>Enter public key or click BROWSE</source>
-        <translation>შეიყვანეთ საჯარო გასაღები, ან დააწკაპუნეთ ღილაკზე 'პოვნა'</translation>
+        <translation>შეიყვანეთ საჯარო გასაღები, ან დააწკაპუნეთ ღილაკზე &apos;პოვნა&apos;</translation>
     </message>
     <message>
         <source>Failed to read SSH key file</source>
         <translation>SSH გასაღების ფაილის წაკითხვა ჩავარდა</translation>
+    </message>
+    <message>
+        <source>Select an SSH public key file from your computer to enable key-based authentication</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -910,10 +975,6 @@
         <translation>მომხმარებლის ფაილის გამოყენება</translation>
     </message>
     <message>
-        <source>Use custom URI</source>
-        <translation>მომხმარებლის URI-ის გამოყენება</translation>
-    </message>
-    <message>
         <source>Please select a custom repository json file</source>
         <translation>აირჩიეთ მომხმარებლის რეპოზიტორიის json ფაილი</translation>
     </message>
@@ -928,6 +989,22 @@
     <message>
         <source>Select custom repository</source>
         <translation>აირჩიეთ მომხმარებლის რეპოზიტორია</translation>
+    </message>
+    <message>
+        <source>Use custom URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select a custom repository JSON file from your computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the repository dialog without changing the content source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply the new content repository and restart the wizard from the beginning</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -962,6 +1039,14 @@
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
         <translation>ხელმისაწვდომია Imager-ის ახალი ვერსია. გნებავთ, გავხსნა ვებგვერდი, რომ გადმოწეროთ ის?</translation>
+    </message>
+    <message>
+        <source>Continue using the current version of Raspberry Pi Imager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open the Raspberry Pi website in your browser to download the latest version</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1038,12 +1123,32 @@
         <translation>უსადენო ქსელის პარამეტრების მორგება</translation>
     </message>
     <message>
-        <source>Saved (hidden) — leave blank to clear</source>
-        <translation>შენახულია (დამალულია) — დატოვეთ ცარიელი გასასუფთავებლად</translation>
-    </message>
-    <message>
         <source>✓ Recommended based on your capital city selection</source>
         <translation>✓ რეკომენდებულია თქვენი დედაქალაქის არჩევნის მიხედვით</translation>
+    </message>
+    <message>
+        <source>No password (open network)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved (hidden) — leave blank to keep</source>
+        <translation type="unfinished">შენახული (დამალული) — დატოვეთ ცარიელი შესანარჩუნებლად</translation>
+    </message>
+    <message>
+        <source>Secure network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure Wi-Fi for an unencrypted network without password protection</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1107,6 +1212,10 @@
     <message>
         <source>Remote access</source>
         <translation>დაკავშირება</translation>
+    </message>
+    <message>
+        <source>Open application settings to configure sound alerts, auto-eject, telemetry, and content repository</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1202,6 +1311,14 @@
         <source>Ready to write the image to your storage device. All existing data will be erased.</source>
         <translation>დისკის ასლის ფაილი თქვენი საცავის მოწყობილობაზე ჩასაწერად მზადაა. არსებული მონაცემები მთლიანად წაიშლება.</translation>
     </message>
+    <message>
+        <source>Cancel and return to the write summary without erasing the storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm erasure and begin writing the image to the storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -1248,6 +1365,22 @@
     <message>
         <source>OK</source>
         <translation>დიახ</translation>
+    </message>
+    <message>
+        <source>Close the error dialog and continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the storage removed notification and return to storage selection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to Raspberry Pi Imager and continue the current operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>
