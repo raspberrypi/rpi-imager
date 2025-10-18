@@ -72,6 +72,7 @@ BaseDialog {
         ImButton {
             id: noButton
             text: CommonStrings.no
+            accessibleDescription: qsTr("Skip keychain access and manually enter the Wi-Fi password")
             Layout.preferredWidth: 80
             activeFocusOnTab: true
             onClicked: {
@@ -83,6 +84,7 @@ BaseDialog {
         ImButtonRed {
             id: yesButton
             text: CommonStrings.yes
+            accessibleDescription: qsTr("Retrieve the Wi-Fi password from the system keychain using administrator authentication")
             Layout.preferredWidth: 80
             activeFocusOnTab: true
             onClicked: {

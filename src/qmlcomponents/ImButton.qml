@@ -12,6 +12,9 @@ Button {
     id: control
     font.family: Style.fontFamily
     font.capitalization: Font.AllUppercase
+    
+    // Allow instances to provide a custom accessibility description
+    property string accessibleDescription: ""
 
     background: Rectangle {
         color: control.enabled ? (control.activeFocus ? Style.buttonFocusedBackgroundColor : (control.hovered ? Style.buttonHoveredBackgroundColor : Style.buttonBackgroundColor)) : Qt.rgba(0, 0, 0, 0.1)
@@ -29,7 +32,21 @@ Button {
     }
 
     activeFocusOnTab: true
+    
+    // Accessibility properties
+    Accessible.role: Accessible.Button
+    Accessible.name: text
+    Accessible.description: {
+        if (!enabled && accessibleDescription !== "") {
+            return accessibleDescription + " (disabled)"
+        } else if (!enabled) {
+            return "Button disabled"
+        } else {
+            return accessibleDescription
+        }
+    }
     Accessible.onPressAction: clicked()
+    
     Keys.onEnterPressed: clicked()
     Keys.onReturnPressed: clicked()
 }

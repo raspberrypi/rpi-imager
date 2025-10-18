@@ -51,7 +51,7 @@ WizardStepBase {
                 ImTextField {
                     id: fieldHostname
                     Layout.fillWidth: true
-                    placeholderText: qsTr("raspberrypi")
+                    placeholderText: qsTr("Enter your hostname")
                     font.pixelSize: Style.fontSizeInput
                     
                     

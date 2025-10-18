@@ -67,6 +67,7 @@ BaseDialog {
         ImButtonRed {
             id: keepFilterButton
             text: qsTr("KEEP FILTER ON")
+            accessibleDescription: qsTr("Keep system drives hidden to prevent accidental damage to your operating system")
             activeFocusOnTab: true
             onClicked: {
                 root.close()
@@ -77,6 +78,7 @@ BaseDialog {
         ImButton {
             id: showSystemButton
             text: qsTr("SHOW SYSTEM DRIVES")
+            accessibleDescription: qsTr("Remove the safety filter and display system drives in the storage device list")
             activeFocusOnTab: true
             onClicked: {
                 root.close()

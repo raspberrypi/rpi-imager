@@ -56,6 +56,7 @@ BaseDialog {
         ImButton {
             id: noButton
             text: CommonStrings.no
+            accessibleDescription: qsTr("Continue using the current version of Raspberry Pi Imager")
             activeFocusOnTab: true
             onClicked: {
                 root.reject()
@@ -65,6 +66,7 @@ BaseDialog {
         ImButtonRed {
             id: yesButton
             text: CommonStrings.yes
+            accessibleDescription: qsTr("Open the Raspberry Pi website in your browser to download the latest version")
             activeFocusOnTab: true
             onClicked: {
                 if (root.url && root.url.toString && root.url.toString().length > 0) {

@@ -11,6 +11,13 @@ RadioButton {
     Material.accent: Style.formControlActiveColor
     activeFocusOnTab: true
     
+    // Accessibility properties
+    Accessible.role: Accessible.RadioButton
+    Accessible.name: text
+    Accessible.checkable: true
+    Accessible.checked: checked
+    Accessible.onPressAction: click()
+    
     // Add visual focus indicator
     Rectangle {
         anchors.fill: parent

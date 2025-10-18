@@ -77,6 +77,12 @@ Item {
             Layout.alignment: Qt.AlignVCenter
             activeFocusOnTab: true
             text: control.btnText
+            
+            // Accessibility properties
+            Accessible.role: Accessible.Button
+            Accessible.name: label.text + " - " + btnText
+            Accessible.description: control.helpLabel !== "" ? control.helpLabel : ""
+            Accessible.onPressAction: clicked()
 
             onClicked: {
                 control.clicked()

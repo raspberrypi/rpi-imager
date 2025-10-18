@@ -13,14 +13,14 @@
 using namespace rpi_imager;
 using Catch::Matchers::ContainsSubstring;
 
-TEST_CASE("CustomisationGenerator generates valid bash script header", "[customization]") {
+TEST_CASE("CustomisationGenerator generates valid sh script header", "[customization]") {
     QVariantMap settings;
     settings["hostname"] = "testpi";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
     
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("#!/bin/bash"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("#!/bin/sh"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("set +e"));
 }
 
@@ -178,7 +178,7 @@ TEST_CASE("CustomisationGenerator reference script comparison", "[customization]
     
     // Key structural checks from the reference script
     SECTION("Script structure matches reference") {
-        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("#!/bin/bash"));
+        REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("#!/bin/sh"));
         REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("set +e"));
         REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("CURRENT_HOSTNAME=$(cat /etc/hostname | tr -d"));
         REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("FIRSTUSER=$(getent passwd 1000 | cut -d: -f1)"));
@@ -291,7 +291,7 @@ TEST_CASE("CustomisationGenerator handles empty settings gracefully", "[customiz
     QString scriptStr = QString::fromUtf8(script);
     
     // Should still generate valid script with header and cleanup
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("#!/bin/bash"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("#!/bin/sh"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("set +e"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rm -f /boot/firstrun.sh"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("exit 0"));
@@ -535,7 +535,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH user",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/sh"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: $5$fakesalt$fakehash123"));
 }

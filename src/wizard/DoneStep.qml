@@ -146,6 +146,7 @@ WizardStepBase {
         ImButton {
             id: writeAnotherButton
             text: qsTr("Write Another")
+            accessibleDescription: qsTr("Return to the beginning to write another image to a different storage device")
             enabled: true
             activeFocusOnTab: true
             Layout.minimumWidth: Style.buttonWidthMinimum
@@ -160,6 +161,7 @@ WizardStepBase {
         ImButtonRed {
             id: finishButton
             text: imageWriter.isEmbeddedMode() ? qsTr("Reboot") : CommonStrings.finish
+            accessibleDescription: imageWriter.isEmbeddedMode() ? qsTr("Reboot the system to apply changes") : qsTr("Close Raspberry Pi Imager and exit the application")
             enabled: true
             activeFocusOnTab: true
             Layout.minimumWidth: Style.buttonWidthMinimum

@@ -37,13 +37,13 @@ WizardStepBase {
 
     content: [
         ScrollView {
-            id: scroller
+            id: ifAndFeatScroll
             anchors.fill: parent
             clip: true
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
             ColumnLayout {
                 id: scrollContent
-                width: scroller.availableWidth
+                width: ifAndFeatScroll.availableWidth
                 spacing: Style.stepContentSpacing
 
                 // === Interfaces ===

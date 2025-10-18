@@ -242,7 +242,7 @@ endif()
 if (Qt6_FOUND)
     set(QT Qt6)
     if (APPLE)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "11" CACHE STRING "" FORCE)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "" FORCE)
     endif()
 else()
     message(FATAL_ERROR "Missing suitable Qt library (must be at least version 6.9)" )
@@ -450,6 +450,7 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImOptionPill.qml
         qmlcomponents/ImOptionButton.qml
         qmlcomponents/ImTextField.qml
+        qmlcomponents/ImToggleTab.qml
         qmlcomponents/SelectionListView.qml
         qmlcomponents/OSSelectionListView.qml
         wizard/WizardStepBase.qml

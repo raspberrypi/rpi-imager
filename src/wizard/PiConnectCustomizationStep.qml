@@ -50,6 +50,7 @@ WizardStepBase {
                 id: btnOpenConnect
                 Layout.fillWidth: true
                 text: qsTr("Open Raspberry Pi Connect")
+                accessibleDescription: qsTr("Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token")
                 enabled: useTokenPill.checked
                 visible: useTokenPill.checked && !root.connectTokenReceived
                 onClicked: {

@@ -65,7 +65,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
     const QString groups = QStringLiteral("users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo");
 
-    line(QStringLiteral("#!/bin/bash"), script);
+    line(QStringLiteral("#!/bin/sh"), script);
     line(QStringLiteral(""), script);
     line(QStringLiteral("set +e"), script);
     line(QStringLiteral(""), script);
@@ -292,7 +292,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
             push(QStringLiteral("- name: ") + effectiveUser, cloud);
             push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
-            push(QStringLiteral("  shell: /bin/bash"), cloud);
+            push(QStringLiteral("  shell: /bin/sh"), cloud);
             if (!userPass.isEmpty()) {
                 push(QStringLiteral("  lock_passwd: false"), cloud);
                 push(QStringLiteral("  passwd: ") + userPass, cloud);
@@ -392,7 +392,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // Ensure directory exists with correct owner
         push(QString(), cloud);
         push(QStringLiteral("runcmd:"), cloud);
-        push(QStringLiteral("  - [ bash, -lc, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
     } else if (needsRuncmd) {
         // Start runcmd section if not already started
         push(QStringLiteral("runcmd:"), cloud);
@@ -401,7 +401,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     // When Wi-Fi country is set but no SSID, unblock Wi-Fi to prevent "blocked by rfkill" message
     if (!wifiCountry.isEmpty() && ssid.isEmpty()) {
         push(QStringLiteral("  - [ rfkill, unblock, wifi ]"), cloud);
-        push(QStringLiteral("  - [ bash, -c, \"for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \\\"$f\\\"; done\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \\\"$f\\\"; done\" ]"), cloud);
     }
     
     return cloud;

@@ -112,6 +112,7 @@ BaseDialog {
                 ImButton {
                     id: browseButton
                     text: CommonStrings.browse
+                    accessibleDescription: qsTr("Select a custom repository JSON file from your computer")
                     Layout.minimumWidth: 80
                     activeFocusOnTab: true
                     onClicked: {
@@ -171,6 +172,7 @@ BaseDialog {
             ImButton {
                 id: cancelButton
                 text: CommonStrings.cancel
+                accessibleDescription: qsTr("Close the repository dialog without changing the content source")
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
                 onClicked: {
@@ -191,6 +193,7 @@ BaseDialog {
                              imageWriter.writeState === ImageWriter.Cancelled)
                 // TODO: only show or enable when settings changed
                 text: qsTr("Apply & Restart")
+                accessibleDescription: qsTr("Apply the new content repository and restart the wizard from the beginning")
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 activeFocusOnTab: true
                 onClicked: {

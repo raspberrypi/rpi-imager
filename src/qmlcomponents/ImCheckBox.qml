@@ -13,6 +13,13 @@ CheckBox {
     Material.accent: Style.formControlActiveColor
     activeFocusOnTab: true
     
+    // Accessibility properties
+    Accessible.role: Accessible.CheckBox
+    Accessible.name: text
+    Accessible.checkable: true
+    Accessible.checked: checked
+    Accessible.onToggleAction: toggle()
+    
     Rectangle {
         // This rectangle serves as a high-contrast underline for focus
         anchors.left: control.contentItem.left
