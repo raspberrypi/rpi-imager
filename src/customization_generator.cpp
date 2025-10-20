@@ -429,10 +429,6 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         push(QStringLiteral("network:"), netcfg);
         push(QStringLiteral("  version: 2"), netcfg);
         push(QStringLiteral("  wifis:"), netcfg);
-        push(QStringLiteral("    renderer: %1")
-                 .arg(hasCcRpi ? QStringLiteral("NetworkManager")
-                               : QStringLiteral("networkd")),
-             netcfg);
         push(QStringLiteral("    wlan0:"), netcfg);
         push(QStringLiteral("      dhcp4: true"), netcfg);
         if (!regDom.isEmpty()) {
