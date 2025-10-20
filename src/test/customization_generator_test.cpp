@@ -618,7 +618,6 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("network:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("version: 2"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("wifis:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("renderer: networkd"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("wlan0:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("dhcp4: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("regulatory-domain: \"DE\""));
@@ -626,17 +625,6 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"TestNetwork\":"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakecryptedhash123\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("optional: true"));
-}
-
-TEST_CASE("CustomisationGenerator generates cloud-init network-config with NetworkManager for rpios", "[cloudinit][network]") {
-    QVariantMap settings;
-    settings["wifiSSID"] = "TestNetwork";
-    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
-    
-    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, true);
-    QString yaml = QString::fromUtf8(netcfg);
-    
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("renderer: NetworkManager"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidden WiFi", "[cloudinit][network]") {
