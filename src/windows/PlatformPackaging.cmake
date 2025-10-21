@@ -64,7 +64,9 @@ add_custom_command(TARGET ${PROJECT_NAME}
     POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
         "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe"
-        "${CMAKE_SOURCE_DIR}/../license.txt" "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
+        "${CMAKE_SOURCE_DIR}/../license.txt"
+        "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
+        "${CMAKE_SOURCE_DIR}/windows/RpiImagerCallbackRelay.ps1"
         "${CMAKE_BINARY_DIR}/deploy")
 
 add_custom_command(TARGET ${PROJECT_NAME}
