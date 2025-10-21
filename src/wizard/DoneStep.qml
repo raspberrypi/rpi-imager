@@ -146,15 +146,15 @@ WizardStepBase {
         ImButton {
             id: writeAnotherButton
             text: qsTr("Write Another")
-            accessibleDescription: qsTr("Return to the beginning to write another image to a different storage device")
+            accessibleDescription: qsTr("Return to storage selection to write the same image to another storage device")
             enabled: true
             activeFocusOnTab: true
             Layout.minimumWidth: Style.buttonWidthMinimum
             Layout.preferredHeight: Style.buttonHeightStandard
             onClicked: {
-                // Reset the wizard state to start over
-                // Use existing app options settings
-                wizardContainer.resetWizard()
+                // Return to storage selection to write the same image to another SD card
+                // This preserves device, OS, and customization settings
+                wizardContainer.resetToWriteStep()
             }
         }
         

@@ -33,6 +33,9 @@ Item {
     // Track writing state
     property bool isWriting: false
     
+    // Track if we're in "write another" flow (skip to writing step after storage selection)
+    property bool writeAnotherMode: false
+    
     // Track selections for display in summary
     property string selectedDeviceName: ""
     property string selectedOsName: ""
@@ -668,8 +671,14 @@ Item {
     function nextStep() {
         if (root.currentStep < root.totalSteps - 1) {
             var nextIndex = root.currentStep + 1
+            
+            // Special handling for "write another" mode: skip directly to writing step after storage selection
+            if (writeAnotherMode && root.currentStep === stepStorageSelection) {
+                nextIndex = stepWriting
+                writeAnotherMode = false  // Reset the flag
+            }
             // If customization is not supported, skip customization steps entirely
-            if (!customizationSupported && nextIndex === firstCustomizationStep) {
+            else if (!customizationSupported && nextIndex === firstCustomizationStep) {
                 nextIndex = stepWriting
             }
             // Skip optional Raspberry Pi Connect step when OS does not support it
@@ -969,6 +978,7 @@ Item {
         currentStep = 0
         permissibleStepsBitmap = 1  // Reset to only Device step permissible
         isWriting = false
+        writeAnotherMode = false
         selectedDeviceName = ""
         selectedOsName = ""
         selectedStorageName = ""
@@ -995,6 +1005,23 @@ Item {
         // Navigate back to the first step
         wizardStack.clear()
         wizardStack.push(deviceSelectionStep)
+    }
+    
+    function resetToWriteStep() {
+        // Reset only the storage selection to allow choosing a new storage device
+        // while preserving device, OS, and customization settings
+        selectedStorageName = ""
+        
+        // Keep all steps permissible - they've already been completed
+        // This allows backward navigation if needed
+        
+        // Enable write another mode to skip directly to writing step after storage selection
+        writeAnotherMode = true
+        
+        // Navigate to storage selection step so user can select a new SD card
+        currentStep = stepStorageSelection
+        wizardStack.clear()
+        wizardStack.push(storageSelectionStep)
     }
 
     // Detect device selection changes and invalidate dependent steps
