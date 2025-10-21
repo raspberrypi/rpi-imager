@@ -14,7 +14,7 @@ ListView {
     id: root
     
     // Properties that can be customized
-    property bool autoSelectFirst: true
+    property bool autoSelectFirst: false
     property bool keyboardAutoAdvance: false
     property var nextFunction: null
     property string accessibleName: "Selection list"

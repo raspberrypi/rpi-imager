@@ -86,7 +86,6 @@ WizardStepBase {
             Layout.fillHeight: true
             model: root.hwModel
             delegate: hwdelegate
-            autoSelectFirst: true
             keyboardAutoAdvance: true
             nextFunction: root.next
             accessibleName: qsTr("Device selection list. Select a Raspberry Pi device. Use arrow keys to navigate, Enter or Space to select")
