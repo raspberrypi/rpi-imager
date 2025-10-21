@@ -21,7 +21,7 @@ BaseDialog {
     property bool initialized: false
     property url selectedRepo: ""
     property string customRepoUri: ""
-    property url originalRepo: ""
+    property string originalRepo: ""
 
     Component.onCompleted: {
         registerFocusGroup("sourceTypes", function(){
@@ -134,7 +134,7 @@ BaseDialog {
                 id: fieldCustomUri
                 visible: radioCustomUri.checked
                 Layout.fillWidth: true
-                text: customRepoUri
+                text: popup.customRepoUri
                 placeholderText: "https://path.to.my/repo.json"
                 font.pixelSize: Style.fontSizeInput
                 activeFocusOnTab: true
@@ -224,18 +224,19 @@ BaseDialog {
                     radioCustomFile.checked = true
                     radioCustomUri.checked = false
                     selectedRepo = repo
+                    originalRepo = selectedRepo.toString()
                 } else if (repo.protocol === "http:" || repo.protocol === "https:") {
                     radioOfficial.checked = false
                     radioCustomFile.checked = false
                     radioCustomUri.checked = true
                     customRepoUri = repo.toString()
+                    originalRepo = repo.toString()
                 } else {
                     radioOfficial.checked = true
                     radioCustomFile.checked = false
                     radioCustomUri.checked = false
+                    originalRepo = ""
                 }
-
-                originalRepo = selectedRepo
             } else {
                 radioOfficial.checked = true
                 radioCustomFile.checked = false
@@ -257,15 +258,16 @@ BaseDialog {
             imageWriter.refreshOsListFromDefaultUrl()
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
-        } else if (radioCustomFile.checked && originalRepo !== selectedRepo) {
+        } else if (radioCustomFile.checked && originalRepo !== selectedRepo.toString()) {
             imageWriter.refreshOsListFrom(selectedRepo)
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
-        } else if (radioCustomUri.checked && originalRepo.toString() !== customRepoUri) {
+        } else if (radioCustomUri.checked && originalRepo !== fieldCustomUri.text) {
             imageWriter.refreshOsListFrom(new URL(fieldCustomUri.text))
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
         }
+        initialized = false
     }
 
     onOpened: {
