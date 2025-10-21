@@ -292,7 +292,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
             push(QStringLiteral("- name: ") + effectiveUser, cloud);
             push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
-            push(QStringLiteral("  shell: /bin/sh"), cloud);
+            push(QStringLiteral("  shell: /bin/bash"), cloud);
             if (!userPass.isEmpty()) {
                 push(QStringLiteral("  lock_passwd: false"), cloud);
                 push(QStringLiteral("  passwd: ") + userPass, cloud);
