@@ -11,9 +11,17 @@ RadioButton {
     Material.accent: Style.formControlActiveColor
     activeFocusOnTab: true
     
-    // Accessibility properties
+    // Allow custom accessibility description
+    property string accessibleDescription: ""
+    
+    // Accessibility properties - combine text with description in name
     Accessible.role: Accessible.RadioButton
-    Accessible.name: text
+    Accessible.name: {
+        var name = text
+        var desc = accessibleDescription
+        return desc !== "" ? (name + ", " + desc) : name
+    }
+    Accessible.description: ""
     Accessible.checkable: true
     Accessible.checked: checked
     Accessible.onPressAction: click()

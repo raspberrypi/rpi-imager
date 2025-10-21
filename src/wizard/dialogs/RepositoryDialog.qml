@@ -54,6 +54,9 @@ BaseDialog {
         color: Style.formLabelColor
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
+        Accessible.role: Accessible.Heading
+        Accessible.name: text + ", " + qsTr("Choose the source for operating system images")
+        Accessible.ignored: false
     }
 
     // Options section
@@ -76,6 +79,7 @@ BaseDialog {
             ImRadioButton {
                 id: radioOfficial
                 text: "Raspberry Pi (default)"
+                accessibleDescription: qsTr("Use the official Raspberry Pi operating system repository")
                 checked: true
                 ButtonGroup.group: repoGroup
             }
@@ -83,15 +87,31 @@ BaseDialog {
             ImRadioButton {
                 id: radioCustomFile
                 text: qsTr("Use custom file")
+                accessibleDescription: qsTr("Load operating system list from a JSON file on your computer")
                 checked: false
                 ButtonGroup.group: repoGroup
+                onCheckedChanged: {
+                    if (checked) {
+                        Qt.callLater(function() {
+                            fieldCustomRepository.forceActiveFocus()
+                        })
+                    }
+                }
             }
 
             ImRadioButton {
                 id: radioCustomUri
                 text: qsTr("Use custom URL")
+                accessibleDescription: qsTr("Download operating system list from a custom web address")
                 checked: false
                 ButtonGroup.group: repoGroup
+                onCheckedChanged: {
+                    if (checked) {
+                        Qt.callLater(function() {
+                            fieldCustomUri.forceActiveFocus()
+                        })
+                    }
+                }
             }
 
             RowLayout {
