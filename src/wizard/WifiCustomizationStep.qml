@@ -26,7 +26,6 @@ WizardStepBase {
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
     title: qsTr("Customisation: Choose Wi‑Fi")
-    subtitle: qsTr("Configure wireless LAN settings")
     showSkipButton: true
     
     // Set initial focus on SSID
@@ -44,7 +43,6 @@ WizardStepBase {
                 if (confirmNeedsInput)
                     items.push(fieldWifiPasswordConfirm)
             }
-            items.push(fieldWifiCountry)
             return items
         }, 1)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
@@ -67,9 +65,6 @@ WizardStepBase {
 
         // Set SSID placeholder after component is fully constructed (matches password field approach)
         fieldWifiSSID.placeholderText = qsTr("Network name")
-
-        // Note: WiFi country is initialized by fieldWifiCountry's Component.onCompleted
-        // after the model is loaded, which properly handles recommended/saved/default values
         if (saved.wifiHidden !== undefined) {
             chkWifiHidden.checked = (saved.wifiHidden === true || saved.wifiHidden === "true")
         }
@@ -328,90 +323,6 @@ WizardStepBase {
                         Layout.preferredHeight: pwdHintMetrics.height
                     }
 
-                    WizardFormLabel {
-                        text: qsTr("Wireless LAN country:")
-                    }
-
-                    ImComboBox {
-                        id: fieldWifiCountry
-                        Layout.fillWidth: true
-                        model: []
-                        font.pixelSize: Style.fontSizeInput
-                        property bool isInitializing: true
-                        Component.onCompleted: {
-                            model = root.imageWriter.getCountryList()
-                            // Always use recommended country from capital city selection
-                            // Priority: recommendation from capital city > default (GB)
-                            // We intentionally ignore any previously saved wifiCountry
-                            var saved = root.imageWriter.getSavedCustomizationSettings()
-                            console.log("WifiCustomizationStep: recommendedWifiCountry =", saved.recommendedWifiCountry)
-                            if (saved && saved.recommendedWifiCountry && model && model.length > 0) {
-                                // Use recommended country from capital city selection
-                                var target = saved.recommendedWifiCountry
-                                var idx = -1
-                                for (var i = 0; i < model.length; i++) {
-                                    if (model[i] === target) { idx = i; break }
-                                }
-                                if (idx >= 0) {
-                                    currentIndex = idx
-                                } else {
-                                    fieldWifiCountry.editText = target
-                                }
-                            } else if (model && model.length > 0) {
-                                // Default to GB if available, else first item
-                                var gbIndex = -1
-                                for (var j = 0; j < model.length; j++) {
-                                    if (model[j] === "GB") { gbIndex = j; break }
-                                }
-                                currentIndex = (gbIndex >= 0) ? gbIndex : 0
-                            }
-                            isInitializing = false
-                            // Now that initialization is complete, update the label once
-                            recommendedLabel.updateVisibility()
-                        }
-                        onCurrentTextChanged: {
-                            // Update visibility when selection changes (but not during initialization)
-                            if (!isInitializing) {
-                                recommendedLabel.updateVisibility()
-                            }
-                        }
-                        onActiveFocusChanged: {
-                            if (activeFocus)
-                                wifiScroll.scrollToItem(this);
-                        }
-                    }
-
-                    // Empty label to maintain grid alignment
-                    Item { width: 1; height: 1 }
-
-                    Text {
-                        id: recommendedLabel
-                        Layout.fillWidth: true
-                        Layout.columnSpan: 1
-                        color: "#4CAF50"
-                        font.pixelSize: 11
-                        wrapMode: Text.WordWrap
-
-                        function updateVisibility() {
-                            var saved = root.imageWriter.getSavedCustomizationSettings()
-                            if (saved && saved.recommendedWifiCountry) {
-                                var currentCountry = fieldWifiCountry.currentText || fieldWifiCountry.editText
-                                visible = (currentCountry === saved.recommendedWifiCountry)
-                                text = visible ? qsTr("✓ Recommended based on your capital city selection") : ""
-                                console.log("WifiCustomizationStep: recommendation label visibility =", visible, "current =", currentCountry, "recommended =", saved.recommendedWifiCountry)
-                            } else {
-                                visible = false
-                                text = ""
-                                console.log("WifiCustomizationStep: no recommendation available")
-                            }
-                        }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.spacingMedium
-
                     ImCheckBox {
                         id: chkWifiHidden
                         text: qsTr("Hidden SSID")
@@ -420,10 +331,6 @@ WizardStepBase {
                             if (activeFocus)
                                 wifiScroll.scrollToItem(this);
                         }
-                    }
-
-                    Item {
-                        Layout.fillWidth: true
                     }
                 }
             }
@@ -471,12 +378,11 @@ WizardStepBase {
     }
 
     // Validation: allow proceed when
-    // - SSID and country entered and either new PSK provided or a saved crypt exists; or
+    // - SSID entered and either new PSK provided or a saved crypt exists; or
     // - all WiFi fields are empty (skip)
     nextButtonEnabled: (function(){
         var haveSSID = fieldWifiSSID.text && fieldWifiSSID.text.trim().length > 0
-        var haveCountry = (fieldWifiCountry.currentText || fieldWifiCountry.editText)
-        if (!haveSSID || !haveCountry) return true  // allow skipping by leaving fields empty as before
+        if (!haveSSID) return true  // allow skipping by leaving fields empty
 
         if (wifiMode === "open") return true
 
@@ -503,7 +409,6 @@ WizardStepBase {
         // Merge-and-save strategy
         var saved = imageWriter.getSavedCustomizationSettings()
         var ssid = fieldWifiSSID.text ? fieldWifiSSID.text.trim() : ""
-        var country = fieldWifiCountry.currentText || fieldWifiCountry.editText || ""
         var pwd = fieldWifiPassword.text
         var prevSSID = saved.wifiSSID || ""
         var hidden = chkWifiHidden.checked
@@ -512,15 +417,6 @@ WizardStepBase {
 
         // persist mode
         saved.wifiMode = wifiMode
-        
-        // Save country code if provided (even without SSID)
-        if (country.length > 0) {
-            saved.wifiCountry = country
-            wizardContainer.wifiConfigured = true
-        } else {
-            // No country -> clear country setting
-            delete saved.wifiCountry
-        }
         
         // Handle SSID and password
         if (ssid.length > 0) {
@@ -553,10 +449,7 @@ WizardStepBase {
             delete saved.wifiSSID
             delete saved.wifiPasswordCrypt
             delete saved.wifiHidden
-            // If we have a country, still mark as configured
-            if (country.length === 0) {
-                wizardContainer.wifiConfigured = false
-            }
+            wizardContainer.wifiConfigured = false
         }
         
         imageWriter.setSavedCustomizationSettings(saved)
