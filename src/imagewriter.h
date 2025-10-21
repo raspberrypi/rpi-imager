@@ -237,6 +237,7 @@ public:
     Q_INVOKABLE QVariantMap getLocaleDataForCapital(const QString &capitalCity);
     Q_INVOKABLE QString getSSID();
     Q_INVOKABLE QString getPSK();
+    Q_INVOKABLE QString getPSKForSSID(const QString &ssid);
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
@@ -289,6 +290,7 @@ signals:
     void networkOnline();
     void preparationStatusUpdate(QVariant msg);
     void osListPrepared();
+    void hwFilterChanged();
     void networkInfo(QVariant msg);
     void cacheVerificationStarted();
     void cacheVerificationFinished();

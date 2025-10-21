@@ -63,6 +63,26 @@
         <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Play an audio notification when the image write process completes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatically eject the storage device when the write process completes successfully</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send anonymous usage statistics to help improve Raspberry Pi Imager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip confirmation dialogs before writing images (advanced users only)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change the source of operating system images between official Raspberry Pi repository and custom sources</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -233,6 +253,18 @@
         <source>Proceed to write the image to this system drive after confirming the drive name</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Drive information</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drive name to type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drive name input. Type exactly: %1. %2</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmUnfilterDialog</name>
@@ -266,6 +298,10 @@
     <message>
         <source>Select your Raspberry Pi device</source>
         <translation>Wählen Sie Ihr Raspberry Pi-Modell aus</translation>
+    </message>
+    <message>
+        <source>Device selection list. Select a Raspberry Pi device. Use arrow keys to navigate, Enter or Space to select</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -621,6 +657,22 @@
         <source>Enable 1-Wire</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImFileDialog</name>
@@ -873,6 +925,14 @@
         <source>Select an operating system to install on your Raspberry Pi</source>
         <translation>Wählen Sie ein Betriebssystem zur Installation auf Ihrem Raspberry Pi aus</translation>
     </message>
+    <message>
+        <source>Operating system list. Select an operating system. Use arrow keys to navigate, Enter or Space to select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating system category. Select an operating system. Use arrow keys to navigate, Enter or Space to select, Left arrow to go back</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>PiConnectCustomizationStep</name>
@@ -910,6 +970,10 @@
     </message>
     <message>
         <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable secure remote access to your Raspberry Pi through the Raspberry Pi Connect cloud service</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -959,6 +1023,10 @@
         <source>Select an SSH public key file from your computer to enable key-based authentication</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RepositoryDialog</name>
@@ -1006,6 +1074,22 @@
         <source>Apply the new content repository and restart the wizard from the beginning</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Choose the source for operating system images</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use the official Raspberry Pi operating system repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Load operating system list from a JSON file on your computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download operating system list from a custom web address</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>StorageSelectionStep</name>
@@ -1028,6 +1112,10 @@
     <message>
         <source>Exclude system drives</source>
         <translation>Systemlaufwerke ausschließen</translation>
+    </message>
+    <message>
+        <source>Storage device list. Select a storage device. Use arrow keys to navigate, Enter or Space to select</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1149,6 +1237,34 @@
     <message>
         <source>Configure Wi-Fi for an unencrypted network without password protection</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is too short (min 8 characters)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is too long (max 63 characters)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password contains unsupported characters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwords don’t match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm password:</source>
+        <translation type="unfinished">Passwort bestätigen:</translation>
+    </message>
+    <message>
+        <source>Re-enter password</source>
+        <translation type="unfinished">Passwort wiederholen</translation>
     </message>
 </context>
 <context>
@@ -1317,6 +1433,14 @@
     </message>
     <message>
         <source>Confirm erasure and begin writing the image to the storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip verification</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel write</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

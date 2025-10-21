@@ -11,6 +11,7 @@ class WlanCredentialsStub : public WlanCredentials
 public:
     virtual QByteArray getSSID() { return QByteArray(); }
     virtual QByteArray getPSK() { return QByteArray(); }
+    virtual QByteArray getPSKForSSID(const QByteArray &ssid) { Q_UNUSED(ssid); return QByteArray(); }
 };
 
 WlanCredentials *WlanCredentials::_instance = NULL;

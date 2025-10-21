@@ -42,7 +42,13 @@ WizardStepBase {
     Connections {
         target: imageWriter
         function onCacheStatusChanged() {
+            // Save scroll position before updating cache status (which causes all delegates to re-evaluate)
+            var savedContentY = oslist.contentY
             root.cacheStatusVersion++
+            // Restore scroll position after cache status update
+            Qt.callLater(function() {
+                oslist.contentY = savedContentY
+            })
         }
     }
     
@@ -55,17 +61,23 @@ WizardStepBase {
     }
     
     // Common handler functions for OS selection
-    function handleOSSelection(modelData, fromKeyboard) {
+    function handleOSSelection(modelData, fromKeyboard, fromMouse) {
         if (fromKeyboard === undefined) {
             fromKeyboard = true  // Default to keyboard since this is called from keyboard handlers
+        }
+        if (fromMouse === undefined) {
+            fromMouse = false  // Default to not from mouse
         }
         
         // Check if this is a sublist item - if so, navigate to it
         if (modelData && root.isOSsublist(modelData)) {
-            root.selectOSitem(modelData, true, false)
+            root.selectOSitem(modelData, true, fromMouse)
+        } else if (modelData && typeof(modelData.subitems_url) === "string" && modelData.subitems_url === "internal://back") {
+            // Back button - just navigate back without auto-advancing
+            root.selectOSitem(modelData, false, fromMouse)
         } else {
             // Regular OS selection
-            root.selectOSitem(modelData, false, false)
+            root.selectOSitem(modelData, false, fromMouse)
             
             // For keyboard selection of concrete OS items, automatically advance to next step
             if (fromKeyboard && modelData && !root.isOSsublist(modelData)) {
@@ -94,10 +106,7 @@ WizardStepBase {
     }
     
     function initializeListViewFocus(listView) {
-        // Ensure we have an initial selection for keyboard navigation
-        if (listView.currentIndex === -1 && listView.count > 0) {
-            listView.currentIndex = 0
-        }
+        // No-op: Do not auto-select first item to avoid unwanted highlighting on load
     }
 
     Component.onCompleted: {
@@ -129,6 +138,12 @@ WizardStepBase {
                 onOsListPreparedHandler()
             }
         }
+        function onHwFilterChanged() {
+            // Hardware filter changed (device selected) - reload OS list to apply new filter
+            if (root.modelLoaded && root.osmodel) {
+                root.osmodel.reload()
+            }
+        }
         // Handle native file selection for "Use custom"
         function onFileSelected(fileUrl) {
             // Ensure ImageWriter src is set to the chosen file explicitly
@@ -152,18 +167,11 @@ WizardStepBase {
             
             // Scroll back to the "Use custom" option so user can see their selection
             Qt.callLater(function() {
-                console.log("Attempting to scroll to 'Use custom' item")
-                console.log("oslist exists:", !!oslist)
-                console.log("oslist.model exists:", oslist && !!oslist.model)
-                console.log("oslist.count:", oslist ? oslist.count : "N/A")
-                
                 if (oslist && oslist.model) {
                     // Find the "Use custom" item (url === "internal://custom")
                     for (var i = 0; i < oslist.count; i++) {
                         var itemData = oslist.getModelData(i)
-                        console.log("Item", i, "url:", itemData ? itemData.url : "null")
                         if (itemData && itemData.url === "internal://custom") {
-                            console.log("Found 'Use custom' at index", i, "- scrolling to it")
                             oslist.currentIndex = i
                             oslist.positionViewAtIndex(i, ListView.Center)
                             break
@@ -225,6 +233,8 @@ WizardStepBase {
                 anchors.fill: parent
                 interactive: false
                 clip: true
+                focus: false  // Don't let SwipeView steal focus from its children
+                activeFocusOnTab: false
 
                 onCurrentIndexChanged: {
                     _focusFirstItemInCurrentView()
@@ -244,7 +254,8 @@ WizardStepBase {
                         id: oslist
                         model: root.osmodel
                         delegate: osdelegate
-                        autoSelectFirst: true
+                        accessibleName: qsTr("Operating system list. Select an operating system. Use arrow keys to navigate, Enter or Space to select")
+                        accessibleDescription: ""
                         
                         // Connect to our OS selection handler
                         osSelectionHandler: root.handleOSSelection
@@ -300,6 +311,13 @@ WizardStepBase {
             // Let content determine height for balanced vertical padding
             height: Math.max(80, row.implicitHeight + Style.spacingSmall + Style.spacingMedium)
             
+            // Accessibility properties
+            Accessible.role: Accessible.ListItem
+            Accessible.name: delegateItem.name
+            Accessible.description: delegateItem.description + (delegateItem.release_date !== "" ? " - " + delegateItem.release_date : "")
+            Accessible.focusable: true
+            Accessible.ignored: false
+            
             Rectangle {
                 id: osbgrect
                 anchors.left: parent.left
@@ -313,6 +331,7 @@ WizardStepBase {
                 radius: 0
                 anchors.rightMargin: (
                     (parentListView && parentListView.contentHeight > parentListView.height) ? Style.scrollBarWidth : 0)
+                Accessible.ignored: true
                 
                 MouseArea {
                     id: osMouseArea
@@ -326,16 +345,16 @@ WizardStepBase {
                             if (!parentListView.activeFocus) {
                                 parentListView.forceActiveFocus()
                             }
-                            parentListView.currentIndex = index
                         }
                     }
 
                     onClicked: {
-                        // currentIndex is set on press; ensure selection is in place
-                        if (parentListView && parentListView.currentIndex !== index) {
-                            parentListView.currentIndex = index
+                        // Trigger the itemSelected signal to handle selection with scroll preservation
+                        if (parentListView) {
+                            // Set flag to indicate this is a mouse click
+                            parentListView.currentSelectionIsFromMouse = true
+                            parentListView.itemSelected(index, delegateItem)
                         }
-                        selectOSitem(delegateItem.model, undefined, true)
                     }
                 }
                 
@@ -439,11 +458,12 @@ WizardStepBase {
         
         OSSelectionListView {
             id: sublistview
-            autoSelectFirst: true
             model: ListModel {
                 id: sublistModel
             }
             delegate: osdelegate
+            accessibleName: qsTr("Operating system category. Select an operating system. Use arrow keys to navigate, Enter or Space to select, Left arrow to go back")
+            accessibleDescription: ""
             
             // Connect to our OS selection handler
             osSelectionHandler: root.handleOSSelection
@@ -452,7 +472,10 @@ WizardStepBase {
                 root.handleOSNavigation(modelData)
             }
             
-            onLeftPressed: root.handleBackNavigation
+            onLeftPressed: {
+                console.log("Sublist onLeftPressed handler called")
+                root.handleBackNavigation()
+            }
             
             Component.onCompleted: {
                 // Build the back entry dynamically to support translations
@@ -495,16 +518,15 @@ WizardStepBase {
             categorySelected = model.name
             var lm = newSublist()
             populateSublistInto(lm, model)
-            // focus first sub item when navigating
+            // Navigate to sublist
             var nextView = osswipeview.itemAt(osswipeview.currentIndex+1)
             osswipeview.incrementCurrentIndex()
-            // ensure focus is on the new view and set currentIndex
+            // Ensure focus is on the new view and select first item for navigation consistency
             _focusFirstItemInCurrentView()
-            // Force currentIndex and focus on the new sublist
             Qt.callLater(function() {
                 var currentView = osswipeview.currentItem
                 if (currentView) {
-                    // Always set currentIndex to 0 for sublists to ensure highlighting
+                    // Set currentIndex to 0 for sublists - user explicitly navigated here
                     currentView.currentIndex = 0
                     if (typeof currentView.forceActiveFocus === "function") {
                         currentView.forceActiveFocus()
@@ -515,9 +537,9 @@ WizardStepBase {
             // Select this OS - explicit branching for clarity
             if (typeof(model.url) === "string" && model.url === "internal://custom") {
                 // Use custom: open native file selector if available, otherwise fall back to QML FileDialog
-                root.wizardContainer.selectedOsName = ""
+                // Don't clear selectedOsName or customSelected here - only update them when user actually selects a file
+                // Changing these properties causes delegate height changes and scroll position resets
                 root.nextButtonEnabled = false
-                root.customSelected = false
                 if (imageWriter.nativeFileDialogAvailable()) {
                     // Defer opening the native dialog until after the current event completes
                     Qt.callLater(function() {
@@ -701,7 +723,6 @@ WizardStepBase {
             return
         }
         // Always reload to reflect cache status changes and updates from backend
-        console.log("OSSelectionStep: osListPrepared received - reloading model")
         var osSuccess = root.osmodel.reload()
         if (osSuccess && !modelLoaded) {
             modelLoaded = true

@@ -44,9 +44,13 @@ BaseDialog {
         font.bold: true
         color: Style.formLabelColor
         Layout.fillWidth: true
+        Accessible.role: Accessible.Heading
+        Accessible.name: text
+        Accessible.ignored: false
     }
 
     Text {
+        id: warningText
         textFormat: Text.StyledText
         text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.")
               + "<br><br>"
@@ -57,6 +61,9 @@ BaseDialog {
         color: Style.textDescriptionColor
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
+        Accessible.ignored: false
     }
 
     RowLayout {

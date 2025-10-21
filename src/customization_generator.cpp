@@ -65,7 +65,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
     const QString groups = QStringLiteral("users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo");
 
-    line(QStringLiteral("#!/bin/bash"), script);
+    line(QStringLiteral("#!/bin/sh"), script);
     line(QStringLiteral(""), script);
     line(QStringLiteral("set +e"), script);
     line(QStringLiteral(""), script);
@@ -392,7 +392,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // Ensure directory exists with correct owner
         push(QString(), cloud);
         push(QStringLiteral("runcmd:"), cloud);
-        push(QStringLiteral("  - [ bash, -lc, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
     } else if (needsRuncmd) {
         // Start runcmd section if not already started
         push(QStringLiteral("runcmd:"), cloud);
@@ -401,7 +401,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     // When Wi-Fi country is set but no SSID, unblock Wi-Fi to prevent "blocked by rfkill" message
     if (!wifiCountry.isEmpty() && ssid.isEmpty()) {
         push(QStringLiteral("  - [ rfkill, unblock, wifi ]"), cloud);
-        push(QStringLiteral("  - [ bash, -c, \"for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \\\"$f\\\"; done\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \\\"$f\\\"; done\" ]"), cloud);
     }
     
     return cloud;
@@ -429,10 +429,6 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         push(QStringLiteral("network:"), netcfg);
         push(QStringLiteral("  version: 2"), netcfg);
         push(QStringLiteral("  wifis:"), netcfg);
-        push(QStringLiteral("    renderer: %1")
-                 .arg(hasCcRpi ? QStringLiteral("NetworkManager")
-                               : QStringLiteral("networkd")),
-             netcfg);
         push(QStringLiteral("    wlan0:"), netcfg);
         push(QStringLiteral("      dhcp4: true"), netcfg);
         if (!regDom.isEmpty()) {

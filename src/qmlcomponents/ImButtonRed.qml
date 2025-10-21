@@ -38,16 +38,21 @@ Button {
     
     // Accessibility properties
     Accessible.role: Accessible.Button
-    Accessible.name: text
-    Accessible.description: {
-        if (!enabled && accessibleDescription !== "") {
-            return accessibleDescription + " (disabled)"
+    Accessible.name: {
+        // Combine text with description in name since VoiceOver reads name more reliably
+        var name = text
+        var desc = accessibleDescription
+        if (!enabled && desc !== "") {
+            return name + ", " + desc + " (disabled)"
         } else if (!enabled) {
-            return "Button disabled"
+            return name + " (disabled)"
+        } else if (desc !== "") {
+            return name + ", " + desc
         } else {
-            return accessibleDescription
+            return name
         }
     }
+    Accessible.description: ""
     Accessible.onPressAction: clicked()
     
     Keys.onEnterPressed: clicked()

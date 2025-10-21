@@ -21,7 +21,7 @@ BaseDialog {
     property bool initialized: false
     property url selectedRepo: ""
     property string customRepoUri: ""
-    property url originalRepo: ""
+    property string originalRepo: ""
 
     Component.onCompleted: {
         registerFocusGroup("sourceTypes", function(){
@@ -54,6 +54,9 @@ BaseDialog {
         color: Style.formLabelColor
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
+        Accessible.role: Accessible.Heading
+        Accessible.name: text + ", " + qsTr("Choose the source for operating system images")
+        Accessible.ignored: false
     }
 
     // Options section
@@ -76,6 +79,7 @@ BaseDialog {
             ImRadioButton {
                 id: radioOfficial
                 text: "Raspberry Pi (default)"
+                accessibleDescription: qsTr("Use the official Raspberry Pi operating system repository")
                 checked: true
                 ButtonGroup.group: repoGroup
             }
@@ -83,15 +87,31 @@ BaseDialog {
             ImRadioButton {
                 id: radioCustomFile
                 text: qsTr("Use custom file")
+                accessibleDescription: qsTr("Load operating system list from a JSON file on your computer")
                 checked: false
                 ButtonGroup.group: repoGroup
+                onCheckedChanged: {
+                    if (checked) {
+                        Qt.callLater(function() {
+                            fieldCustomRepository.forceActiveFocus()
+                        })
+                    }
+                }
             }
 
             ImRadioButton {
                 id: radioCustomUri
                 text: qsTr("Use custom URL")
+                accessibleDescription: qsTr("Download operating system list from a custom web address")
                 checked: false
                 ButtonGroup.group: repoGroup
+                onCheckedChanged: {
+                    if (checked) {
+                        Qt.callLater(function() {
+                            fieldCustomUri.forceActiveFocus()
+                        })
+                    }
+                }
             }
 
             RowLayout {
@@ -134,15 +154,17 @@ BaseDialog {
                 id: fieldCustomUri
                 visible: radioCustomUri.checked
                 Layout.fillWidth: true
-                text: customRepoUri
+                text: popup.customRepoUri
                 placeholderText: "https://path.to.my/repo.json"
                 font.pixelSize: Style.fontSizeInput
                 activeFocusOnTab: true
                 inputMethodHints: Qt.ImhUrlCharactersOnly
 
-                validator: RegularExpressionValidator {
-                    // accept http and https and the linked file must end on .json
-                    regularExpression: /^https?:\/\/\S+\.json$/i
+                property bool isValid: fieldCustomUri.isStrictRepoUrl(text)
+
+                function isStrictRepoUrl(s) {
+                    // http/https, at least one non-space char, ends with .json
+                    return /^https?:\/\/[^ \t\r\n]+\.json$/i.test(s)
                 }
             }
         }
@@ -185,7 +207,7 @@ BaseDialog {
                 id: saveButton
                 enabled: (radioOfficial.checked
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
-                         || (radioCustomUri.checked && fieldCustomUri.acceptableInput))
+                         || (radioCustomUri.checked && fieldCustomUri.isValid))
                          // Disable while write is in progress to prevent restarting during write
                          && (imageWriter.writeState === ImageWriter.Idle ||
                              imageWriter.writeState === ImageWriter.Succeeded ||
@@ -222,18 +244,19 @@ BaseDialog {
                     radioCustomFile.checked = true
                     radioCustomUri.checked = false
                     selectedRepo = repo
+                    originalRepo = selectedRepo.toString()
                 } else if (repo.protocol === "http:" || repo.protocol === "https:") {
                     radioOfficial.checked = false
                     radioCustomFile.checked = false
                     radioCustomUri.checked = true
                     customRepoUri = repo.toString()
+                    originalRepo = repo.toString()
                 } else {
                     radioOfficial.checked = true
                     radioCustomFile.checked = false
                     radioCustomUri.checked = false
+                    originalRepo = ""
                 }
-
-                originalRepo = selectedRepo
             } else {
                 radioOfficial.checked = true
                 radioCustomFile.checked = false
@@ -255,15 +278,16 @@ BaseDialog {
             imageWriter.refreshOsListFromDefaultUrl()
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
-        } else if (radioCustomFile.checked && originalRepo !== selectedRepo) {
+        } else if (radioCustomFile.checked && originalRepo !== selectedRepo.toString()) {
             imageWriter.refreshOsListFrom(selectedRepo)
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
-        } else if (radioCustomUri.checked && originalRepo.toString() !== customRepoUri) {
+        } else if (radioCustomUri.checked && originalRepo !== fieldCustomUri.text) {
             imageWriter.refreshOsListFrom(new URL(fieldCustomUri.text))
             // reset wizard to device selection because the repository changed
             wizardContainer.resetWizard()
         }
+        initialized = false
     }
 
     onOpened: {

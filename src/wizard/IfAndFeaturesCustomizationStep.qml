@@ -65,6 +65,7 @@ WizardStepBase {
                             id: chkEnableI2C
                             Layout.fillWidth: true
                             text: qsTr("Enable I2C")
+                            accessibleDescription: qsTr("Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals")
                             checked: false
                         }
 
@@ -72,6 +73,7 @@ WizardStepBase {
                             id: chkEnableSPI
                             Layout.fillWidth: true
                             text: qsTr("Enable SPI")
+                            accessibleDescription: qsTr("Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors")
                             checked: false
                         }
 
@@ -79,6 +81,7 @@ WizardStepBase {
                             id: chkEnable1Wire
                             Layout.fillWidth: true
                             text: qsTr("Enable 1-Wire")
+                            accessibleDescription: qsTr("Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices")
                             checked: false
                         }
 
@@ -130,6 +133,7 @@ WizardStepBase {
                                 id: chkEnableUsbGadget
                                 Layout.fillWidth: true
                                 text: qsTr("Enable USB Gadget Mode")
+                                accessibleDescription: qsTr("Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage")
                                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn more about USB Gadget Mode")
                                 helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-usb-gadget?tab=readme-ov-file"
                                 checked: false

@@ -39,6 +39,7 @@ WizardStepBase {
                 id: useTokenPill
                 Layout.fillWidth: true
                 text: qsTr("Enable Raspberry Pi Connect")
+                accessibleDescription: qsTr("Enable secure remote access to your Raspberry Pi through the Raspberry Pi Connect cloud service")
                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is Raspberry Pi Connect?")
                 helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/software/connect/"
                 checked: false

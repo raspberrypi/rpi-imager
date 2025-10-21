@@ -73,6 +73,8 @@ WizardStepBase {
             delegate: dstdelegate
             keyboardAutoAdvance: true
             nextFunction: root.conditionalNext
+            accessibleName: qsTr("Storage device list. Select a storage device. Use arrow keys to navigate, Enter or Space to select")
+            accessibleDescription: ""
             
             onItemSelected: function(index, item) {
                 if (index >= 0 && index < count && item && typeof item.selectDrive === "function") {
@@ -152,6 +154,13 @@ WizardStepBase {
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
             readonly property bool unselectable: isReadOnly
             
+            // Accessibility properties
+            Accessible.role: Accessible.ListItem
+            Accessible.name: dstitem.description
+            Accessible.description: imageWriter.formatSize(parseFloat(dstitem.size)) + (dstitem.unselectable ? " - " + qsTr("Read-only") : "")
+            Accessible.focusable: true
+            Accessible.ignored: false
+            
             // Function called by keyboard selection
             function selectDrive() {
                 if (!unselectable) {
@@ -174,6 +183,7 @@ WizardStepBase {
                 radius: 0
                 opacity: dstitem.unselectable ? 0.5 : 1.0
                 anchors.rightMargin: (dstlist.contentHeight > dstlist.height ? Style.scrollBarWidth : 0)
+                Accessible.ignored: true
                 
                 MouseArea {
                     id: dstMouseArea

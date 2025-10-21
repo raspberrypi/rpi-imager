@@ -137,6 +137,18 @@ QByteArray NetworkManagerApi::getPSK()
     return QByteArray();
 }
 
+QByteArray NetworkManagerApi::getPSKForSSID(const QByteArray &ssid)
+{
+    // For NetworkManager, PSK retrieval requires the connection settings
+    // which are typically only available for the currently active connection
+    // For simplicity, check if requested SSID matches current SSID
+    QByteArray currentSsid = getSSID();
+    if (!currentSsid.isEmpty() && currentSsid == ssid) {
+        return getPSK();
+    }
+    return QByteArray();
+}
+
 WlanCredentials *WlanCredentials::_instance = NULL;
 WlanCredentials *WlanCredentials::instance()
 {
