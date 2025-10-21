@@ -19,7 +19,20 @@ WizardStepBase {
 
     title: qsTr("Write image")
     subtitle: qsTr("Review your choices and write the image to the storage device")
-    nextButtonText: root.isWriting ? CommonStrings.cancel : (root.isComplete ? CommonStrings.continueText : qsTr("Write"))
+    nextButtonText: {
+        if (root.isWriting) {
+            // Show specific cancel text based on write state
+            if (imageWriter.writeState === ImageWriter.Verifying) {
+                return qsTr("Skip verification")
+            } else {
+                return qsTr("Cancel write")
+            }
+        } else if (root.isComplete) {
+            return CommonStrings.continueText
+        } else {
+            return qsTr("Write")
+        }
+    }
     nextButtonEnabled: root.isWriting || root.isComplete || imageWriter.readyToWrite()
     showBackButton: true
 
