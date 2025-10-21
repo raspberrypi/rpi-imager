@@ -38,7 +38,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     bool hidden = s.value("wifiHidden").toBool();
     if (!hidden)
         hidden = s.value("wifiSSIDHidden").toBool();
-    const QString wifiCountry = s.value("wifiCountry").toString().trimmed();
+    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
     
     // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
     QString cryptedPsk = cryptedPskFromSettings;
@@ -372,7 +372,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     const bool piConnectEnabled = settings.value("piConnectEnabled").toBool();
     QString cleanToken = piConnectToken.trimmed();
     const QString ssid = settings.value("wifiSSID").toString();
-    const QString wifiCountry = settings.value("wifiCountry").toString().trimmed();
+    const QString wifiCountry = settings.value("recommendedWifiCountry").toString().trimmed();
     
     // Determine if we need runcmd section
     bool needsRuncmd = (piConnectEnabled && !cleanToken.isEmpty()) || 
@@ -422,7 +422,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     const QString ssid = settings.value("wifiSSID").toString();
     const QString cryptedPskFromSettings = settings.value("wifiPasswordCrypt").toString();
     const bool hidden = settings.value("wifiHidden").toBool();
-    const QString regDom = settings.value("wifiCountry").toString().trimmed().toUpper();
+    const QString regDom = settings.value("recommendedWifiCountry").toString().trimmed().toUpper();
     
     // Generate network config if we have a country code (regulatory domain) or an SSID
     if (!regDom.isEmpty() || !ssid.isEmpty()) {

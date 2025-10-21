@@ -1991,9 +1991,9 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     // Use CustomisationGenerator for script generation
     QByteArray script = rpi_imager::CustomisationGenerator::generateSystemdScript(s, _piConnectToken);
     
-    // Extract wifiCountry for cmdline append
+    // Extract recommendedWifiCountry for cmdline append
     QByteArray cmdlineAppend;
-    const QString wifiCountry = s.value("wifiCountry").toString().trimmed();
+    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
     if (!wifiCountry.isEmpty()) {
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
@@ -2013,9 +2013,9 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     QByteArray netcfg = rpi_imager::CustomisationGenerator::generateCloudInitNetworkConfig(
         s, hasCcRpi);
     
-    // Extract wifiCountry for cmdline append
+    // Extract recommendedWifiCountry for cmdline append
     QByteArray cmdlineAppend;
-    const QString wifiCountry = s.value("wifiCountry").toString().trimmed();
+    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
     if (!wifiCountry.isEmpty()) {
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
