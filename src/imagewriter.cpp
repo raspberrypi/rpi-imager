@@ -967,6 +967,7 @@ namespace {
 void ImageWriter::setHWFilterList(const QJsonArray &tags, const bool &inclusive) {
     _deviceFilter = tags;
     _deviceFilterIsInclusive = inclusive;
+    emit hwFilterChanged();
 }
 
 void ImageWriter::setHWCapabilitiesList(const QJsonArray &json) {

@@ -97,14 +97,20 @@ ListView {
     
     // Standard keyboard navigation
     Keys.onUpPressed: {
-        if (currentIndex > 0) {
+        // Initialize selection if needed
+        if (currentIndex === -1 && count > 0) {
+            currentIndex = 0
+        } else if (currentIndex > 0) {
             currentIndex--
             positionViewAtIndex(currentIndex, ListView.Center)
         }
     }
     
     Keys.onDownPressed: {
-        if (currentIndex < count - 1) {
+        // Initialize selection if needed
+        if (currentIndex === -1 && count > 0) {
+            currentIndex = 0
+        } else if (currentIndex < count - 1) {
             currentIndex++
             positionViewAtIndex(currentIndex, ListView.Center)
         }

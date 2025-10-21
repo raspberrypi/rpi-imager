@@ -26,6 +26,7 @@ WizardStepBase {
     property alias hwlist: hwlist
     property bool modelLoaded: false
     property bool hasDeviceSelected: false
+    property bool isReloadingModel: false
     
     // Forward the nextClicked signal as next() function for keyboard auto-advance
     function next() {
@@ -61,15 +62,15 @@ WizardStepBase {
             return
         }
 
-        // Don't guard with modelLoaded to support reloading when repo changed
-        console.log("DeviceSelectionStep: OS list prepared, reloading hardware model")
-        var success = root.hwModel.reload()
-        if (success) {
-            modelLoaded = true
-            // Set initial focus for keyboard navigation if no device is selected
-            if (hwlist.currentIndex === -1 && root.hwModel.rowCount() > 0) {
-                hwlist.currentIndex = 0
+        // Only reload if we haven't loaded yet, to avoid resetting scroll position during device selection
+        if (!modelLoaded) {
+            isReloadingModel = true
+            var success = root.hwModel.reload()
+            if (success) {
+                modelLoaded = true
+                // Do not auto-select first item to avoid unwanted highlighting on load
             }
+            isReloadingModel = false
         }
     }
     
@@ -96,14 +97,8 @@ WizardStepBase {
                     currentIndex = root.hwModel.currentIndex
                     root.hasDeviceSelected = true
                     root.nextButtonEnabled = true
-                } else {
-                    // Delay auto-selection slightly to allow VoiceOver to announce the list container first
-                    Qt.callLater(function() {
-                        if (currentIndex === -1 && count > 0) {
-                            currentIndex = 0
-                        }
-                    })
                 }
+                // Do not auto-select first item to avoid unwanted highlighting on load
             }
             
             onCurrentIndexChanged: {
@@ -113,12 +108,29 @@ WizardStepBase {
             
             onItemSelected: function(index, item) {
                 if (index >= 0 && index < model.rowCount()) {
+                    // Only save/restore scroll position if we're not reloading the model
+                    // (During model reload, the list may have changed and we should start at top)
+                    var shouldPreserveScroll = !root.isReloadingModel
+                    var savedContentY = shouldPreserveScroll ? contentY : 0
+                    
+                    // Update ListView's currentIndex (for visual highlight)
+                    currentIndex = index
+                    
                     // Set the model's current index (this triggers the HWListModel logic)
                     root.hwModel.currentIndex = index
                     // Use the model's currentName property
                     root.wizardContainer.selectedDeviceName = root.hwModel.currentName
                     root.hasDeviceSelected = true
                     root.nextButtonEnabled = true
+                    
+                    // Restore scroll position after all changes (clamped to valid range)
+                    if (shouldPreserveScroll) {
+                        Qt.callLater(function() {
+                            // Clamp to valid range: 0 to (contentHeight - height)
+                            var maxContentY = Math.max(0, contentHeight - height)
+                            contentY = Math.min(Math.max(0, savedContentY), maxContentY)
+                        })
+                    }
                 }
             }
         }
@@ -165,13 +177,9 @@ WizardStepBase {
                     cursorShape: Qt.PointingHandCursor
                     
                     onClicked: {
-                        hwlist.currentIndex = hwitem.index
-                        root.hwModel.currentIndex = hwitem.index
-                        root.wizardContainer.selectedDeviceName = hwitem.name
-
-                        // Enable Next; do not auto-advance
-                        root.hasDeviceSelected = true
-                        root.nextButtonEnabled = true
+                        // Trigger the itemSelected signal by setting ListView's currentIndex
+                        // This will handle all the selection logic in onItemSelected
+                        hwlist.itemSelected(hwitem.index, hwitem)
                     }
                 }
                 
