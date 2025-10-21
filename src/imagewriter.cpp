@@ -1884,6 +1884,47 @@ QString ImageWriter::getPSK()
     return WlanCredentials::instance()->getPSK();
 }
 
+QString ImageWriter::getPSKForSSID(const QString &ssid)
+{
+    if (ssid.isEmpty()) {
+        qDebug() << "ImageWriter::getPSKForSSID(): Empty SSID provided, cannot retrieve PSK";
+        return QString();
+    }
+
+#ifdef Q_OS_DARWIN
+    /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
+     * Request user permission through QML dialog instead of QtWidgets QMessageBox. */
+
+    // Set up a flag to track if permission was granted
+    _keychainPermissionGranted = false;
+    _keychainPermissionReceived = false;
+
+    // Emit signal to show QML permission dialog
+    emit keychainPermissionRequested();
+
+    // Wait for user response (with timeout)
+    QEventLoop loop;
+    QTimer timeout;
+    timeout.setSingleShot(true);
+    timeout.setInterval(30000); // 30 second timeout
+
+    connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+    connect(this, &ImageWriter::keychainPermissionResponseReceived, &loop, &QEventLoop::quit);
+
+    timeout.start();
+    loop.exec();
+
+    if (!_keychainPermissionReceived || !_keychainPermissionGranted) {
+        qDebug() << "Keychain access denied or timed out";
+        return QString();
+    }
+
+    qDebug() << "Keychain access granted by user";
+#endif
+
+    return WlanCredentials::instance()->getPSKForSSID(ssid.toUtf8());
+}
+
 void ImageWriter::keychainPermissionResponse(bool granted)
 {
     _keychainPermissionGranted = granted;

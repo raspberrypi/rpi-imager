@@ -65,6 +65,9 @@ WizardStepBase {
             }
         }
 
+        // Set SSID placeholder after component is fully constructed (matches password field approach)
+        fieldWifiSSID.placeholderText = qsTr("Network name")
+
         // Note: WiFi country is initialized by fieldWifiCountry's Component.onCompleted
         // after the model is loaded, which properly handles recommended/saved/default values
         if (saved.wifiHidden !== undefined) {
@@ -76,10 +79,13 @@ WizardStepBase {
         hadSavedCrypt = !!saved.wifiPasswordCrypt
 
         // if no saved crypt, try to prefill a PSK from system
-        if (!hadSavedCrypt) {
+        // IMPORTANT: Only attempt PSK retrieval if we have an SSID (either saved or detected)
+        // Pass the SSID to getPSKForSSID() to avoid race condition where SSID detection
+        // might fail during the keychain permission dialog on macOS
+        if (!hadSavedCrypt && fieldWifiSSID.text && fieldWifiSSID.text.length > 0) {
             // Auto-populate WiFi password from system keychain when available
             // Only when no crypted password is already saved
-            var psk = imageWriter.getPSK()
+            var psk = imageWriter.getPSKForSSID(fieldWifiSSID.text)
             if (psk && psk.length > 0) {
                 fieldWifiPassword.text = psk
                 fieldWifiPasswordConfirm.text = psk
@@ -246,7 +252,6 @@ WizardStepBase {
                     ImTextField {
                         id: fieldWifiSSID
                         Layout.fillWidth: true
-                        placeholderText: qsTr("Network name")
                         font.pixelSize: Style.fontSizeInput
                         onTextChanged: updatePasswordFieldUI()
                         onActiveFocusChanged: {

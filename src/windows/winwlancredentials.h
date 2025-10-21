@@ -14,6 +14,7 @@ public:
     WinWlanCredentials();
     virtual QByteArray getSSID();
     virtual QByteArray getPSK();
+    virtual QByteArray getPSKForSSID(const QByteArray &ssid);
 
 protected:
     QByteArray _ssid, _psk;

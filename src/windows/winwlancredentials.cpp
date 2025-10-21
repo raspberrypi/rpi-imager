@@ -155,6 +155,17 @@ QByteArray WinWlanCredentials::getPSK()
     return _psk;
 }
 
+QByteArray WinWlanCredentials::getPSKForSSID(const QByteArray &ssid)
+{
+    // Windows implementation caches both SSID and PSK during construction
+    // If requested SSID matches cached SSID, return cached PSK
+    if (ssid == _ssid && !_psk.isEmpty()) {
+        return _psk;
+    }
+    // Otherwise, return empty (would need to re-query Windows WLAN API)
+    return QByteArray();
+}
+
 WlanCredentials *WlanCredentials::_instance = NULL;
 WlanCredentials *WlanCredentials::instance()
 {
