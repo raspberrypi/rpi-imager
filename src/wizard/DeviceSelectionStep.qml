@@ -89,14 +89,22 @@ WizardStepBase {
             autoSelectFirst: true
             keyboardAutoAdvance: true
             nextFunction: root.next
+            accessibleName: qsTr("Device selection list. Select a Raspberry Pi device. Use arrow keys to navigate, Enter or Space to select")
+            accessibleDescription: ""
             
             Component.onCompleted: {
                 if (root.hwModel && root.hwModel.currentIndex !== undefined && root.hwModel.currentIndex >= 0) {
                     currentIndex = root.hwModel.currentIndex
                     root.hasDeviceSelected = true
                     root.nextButtonEnabled = true
+                } else {
+                    // Delay auto-selection slightly to allow VoiceOver to announce the list container first
+                    Qt.callLater(function() {
+                        if (currentIndex === -1 && count > 0) {
+                            currentIndex = 0
+                        }
+                    })
                 }
-                // SelectionListView handles setting currentIndex = 0 when count > 0
             }
             
             onCurrentIndexChanged: {
@@ -135,6 +143,13 @@ WizardStepBase {
             // Let content determine height for balanced vertical padding
             height: Math.max(60, row.implicitHeight + Style.spacingSmall + Style.spacingMedium)
             
+            // Accessibility properties
+            Accessible.role: Accessible.ListItem
+            Accessible.name: hwitem.name
+            Accessible.description: hwitem.description
+            Accessible.focusable: true
+            Accessible.ignored: false
+            
             Rectangle {
                 id: hwbgrect
                 anchors.fill: parent
@@ -142,6 +157,7 @@ WizardStepBase {
                        (hwMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 anchors.rightMargin: (hwlist.contentHeight > hwlist.height ? Style.scrollBarWidth : 0)
+                Accessible.ignored: true
                 
                 MouseArea {
                     id: hwMouseArea

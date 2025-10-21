@@ -17,6 +17,8 @@ ListView {
     property bool autoSelectFirst: true
     property bool keyboardAutoAdvance: false
     property var nextFunction: null
+    property string accessibleName: "Selection list"
+    property string accessibleDescription: "Use arrow keys to navigate, Enter or Space to select"
     
     // Signals for selection actions
     signal itemSelected(int index, var item)
@@ -46,8 +48,8 @@ ListView {
     
     // Accessibility properties
     Accessible.role: Accessible.List
-    Accessible.name: "Selection list"
-    Accessible.description: "Use arrow keys to navigate, Enter or Space to select"
+    Accessible.name: root.accessibleName
+    Accessible.description: root.accessibleDescription
     
     // Standard highlight configuration
     highlight: Rectangle {
@@ -72,14 +74,24 @@ ListView {
     // Focus management
     onActiveFocusChanged: {
         if (activeFocus && currentIndex === -1 && count > 0 && autoSelectFirst) {
-            currentIndex = 0
+            // Delay selection to allow VoiceOver to announce the list container first
+            Qt.callLater(function() {
+                if (activeFocus && currentIndex === -1 && count > 0) {
+                    currentIndex = 0
+                }
+            })
         }
     }
     
     // Ensure we have a selection when count changes
     onCountChanged: {
         if (count > 0 && currentIndex === -1 && autoSelectFirst) {
-            currentIndex = 0
+            // Delay selection to allow VoiceOver to announce the list container first
+            Qt.callLater(function() {
+                if (count > 0 && currentIndex === -1) {
+                    currentIndex = 0
+                }
+            })
         }
     }
     

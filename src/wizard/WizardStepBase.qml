@@ -74,6 +74,9 @@ FocusScope {
                 color: Style.formLabelColor
                 Layout.fillWidth: true
                 visible: root.title && root.title.length > 0
+                Accessible.role: Accessible.Heading
+                Accessible.name: root.title
+                Accessible.ignored: false
             }
             
             Text {
@@ -84,6 +87,9 @@ FocusScope {
                 color: Style.textDescriptionColor
                 Layout.fillWidth: true
                 visible: root.subtitle && root.subtitle.length > 0
+                Accessible.role: Accessible.StaticText
+                Accessible.name: root.subtitle
+                Accessible.ignored: false
             }
         }
         

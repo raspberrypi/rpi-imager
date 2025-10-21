@@ -15,6 +15,8 @@ Item {
     property string helpLabel: ""
     property url helpUrl: ""
     property string btnText: ""
+    // Allow custom accessibility description
+    property string accessibleDescription: ""
     property alias enabled: optionButton.enabled
     signal clicked()
 
@@ -44,6 +46,9 @@ Item {
                 font.bold: true
                 color: optionButton.enabled ? Style.formLabelColor : Style.textDescriptionColor
                 elide: Text.ElideRight
+                
+                // Ignore this for accessibility - the button will handle it
+                Accessible.ignored: true
             }
 
             // Optional help link under the label
@@ -78,11 +83,19 @@ Item {
             activeFocusOnTab: true
             text: control.btnText
             
-            // Accessibility properties
-            Accessible.role: Accessible.Button
-            Accessible.name: label.text + " - " + btnText
-            Accessible.description: control.helpLabel !== "" ? control.helpLabel : ""
-            Accessible.onPressAction: clicked()
+            // Override accessibility to include the full context
+            Accessible.name: {
+                var desc = ""
+                if (control.accessibleDescription !== "") {
+                    desc = control.accessibleDescription
+                } else if (control.helpLabel !== "") {
+                    desc = control.helpLabel
+                }
+                // Format: "Label - ButtonText, Description"
+                var fullName = label.text + " - " + control.btnText
+                return desc !== "" ? (fullName + ", " + desc) : fullName
+            }
+            Accessible.description: ""
 
             onClicked: {
                 control.clicked()

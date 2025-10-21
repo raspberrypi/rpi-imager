@@ -310,6 +310,9 @@ WizardStepBase {
             color: Style.formLabelErrorColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.ignored: false
         }
 
         Text {
@@ -320,6 +323,9 @@ WizardStepBase {
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
         }
 
         RowLayout {

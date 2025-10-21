@@ -245,6 +245,8 @@ WizardStepBase {
                         model: root.osmodel
                         delegate: osdelegate
                         autoSelectFirst: true
+                        accessibleName: qsTr("Operating system list. Select an operating system. Use arrow keys to navigate, Enter or Space to select")
+                        accessibleDescription: ""
                         
                         // Connect to our OS selection handler
                         osSelectionHandler: root.handleOSSelection
@@ -300,6 +302,13 @@ WizardStepBase {
             // Let content determine height for balanced vertical padding
             height: Math.max(80, row.implicitHeight + Style.spacingSmall + Style.spacingMedium)
             
+            // Accessibility properties
+            Accessible.role: Accessible.ListItem
+            Accessible.name: delegateItem.name
+            Accessible.description: delegateItem.description + (delegateItem.release_date !== "" ? " - " + delegateItem.release_date : "")
+            Accessible.focusable: true
+            Accessible.ignored: false
+            
             Rectangle {
                 id: osbgrect
                 anchors.left: parent.left
@@ -313,6 +322,7 @@ WizardStepBase {
                 radius: 0
                 anchors.rightMargin: (
                     (parentListView && parentListView.contentHeight > parentListView.height) ? Style.scrollBarWidth : 0)
+                Accessible.ignored: true
                 
                 MouseArea {
                     id: osMouseArea
@@ -444,6 +454,8 @@ WizardStepBase {
                 id: sublistModel
             }
             delegate: osdelegate
+            accessibleName: qsTr("Operating system category. Select an operating system. Use arrow keys to navigate, Enter or Space to select, Left arrow to go back")
+            accessibleDescription: ""
             
             // Connect to our OS selection handler
             osSelectionHandler: root.handleOSSelection

@@ -38,6 +38,7 @@ WizardStepBase {
                 id: sshEnablePill
                 Layout.fillWidth: true
                 text: qsTr("Enable SSH")
+                accessibleDescription: qsTr("Enable secure shell access for remote command-line control of your Raspberry Pi")
                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn about SSH")
                 helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh"
                 checked: false

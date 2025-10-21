@@ -17,6 +17,8 @@ Item {
     // Optional help link next to the label
     property string helpLabel: ""
     property url helpUrl: ""
+    // Allow custom accessibility description
+    property string accessibleDescription: ""
     signal toggled(bool checked)
 
     // Expose the actual focusable control for tab navigation
@@ -24,6 +26,9 @@ Item {
 
     implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
     implicitWidth: label.implicitWidth + sw.implicitWidth + Style.cardPadding
+    
+    // Make the label text ignore accessibility so only the switch is read
+    // This prevents VoiceOver from reading the label separately
 
     RowLayout {
         anchors.fill: parent
@@ -46,6 +51,9 @@ Item {
                 color: Style.formLabelColor
                 elide: Text.ElideRight
                 TapHandler { onTapped: sw.toggle() }
+                
+                // Ignore this for accessibility - the switch will handle it
+                Accessible.ignored: true
             }
 
             // Optional help link under the label
@@ -82,10 +90,20 @@ Item {
             checked: pill.checked
             activeFocusOnTab: true
             
-            // Accessibility properties
+            // Accessibility properties - combine label text with description
             Accessible.role: Accessible.CheckBox
-            Accessible.name: label.text
-            Accessible.description: pill.helpLabel !== "" ? pill.helpLabel : ""
+            Accessible.name: {
+                var name = label.text
+                var desc = ""
+                if (pill.accessibleDescription !== "") {
+                    desc = pill.accessibleDescription
+                } else if (pill.helpLabel !== "") {
+                    desc = pill.helpLabel
+                }
+                // Combine name and description since VoiceOver reads name more reliably
+                return desc !== "" ? (name + ", " + desc) : name
+            }
+            Accessible.description: ""
             Accessible.checkable: true
             Accessible.checked: pill.checked
             Accessible.onToggleAction: toggle()

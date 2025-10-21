@@ -59,6 +59,11 @@ Dialog {
         anchors.fill: parent
         focus: true
         
+        // Accessibility properties
+        Accessible.role: Accessible.Dialog
+        Accessible.name: root.title
+        Accessible.description: ""
+        
         Keys.onEscapePressed: {
             // Allow child dialogs to handle escape differently
             root.escapePressed()
