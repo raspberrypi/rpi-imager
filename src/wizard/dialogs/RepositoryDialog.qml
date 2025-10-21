@@ -140,9 +140,11 @@ BaseDialog {
                 activeFocusOnTab: true
                 inputMethodHints: Qt.ImhUrlCharactersOnly
 
-                validator: RegularExpressionValidator {
-                    // accept http and https and the linked file must end on .json
-                    regularExpression: /^https?:\/\/\S+\.json$/i
+                property bool isValid: fieldCustomUri.isStrictRepoUrl(text)
+
+                function isStrictRepoUrl(s) {
+                    // http/https, at least one non-space char, ends with .json
+                    return /^https?:\/\/[^ \t\r\n]+\.json$/i.test(s)
                 }
             }
         }
@@ -185,7 +187,7 @@ BaseDialog {
                 id: saveButton
                 enabled: (radioOfficial.checked
                          || (radioCustomFile.checked && popup.selectedRepo.toString() !== "")
-                         || (radioCustomUri.checked && fieldCustomUri.acceptableInput))
+                         || (radioCustomUri.checked && fieldCustomUri.isValid))
                          // Disable while write is in progress to prevent restarting during write
                          && (imageWriter.writeState === ImageWriter.Idle ||
                              imageWriter.writeState === ImageWriter.Succeeded ||
