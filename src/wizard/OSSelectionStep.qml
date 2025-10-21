@@ -228,6 +228,8 @@ WizardStepBase {
                 anchors.fill: parent
                 interactive: false
                 clip: true
+                focus: false  // Don't let SwipeView steal focus from its children
+                activeFocusOnTab: false
 
                 onCurrentIndexChanged: {
                     _focusFirstItemInCurrentView()
@@ -247,7 +249,6 @@ WizardStepBase {
                         id: oslist
                         model: root.osmodel
                         delegate: osdelegate
-                        autoSelectFirst: true
                         accessibleName: qsTr("Operating system list. Select an operating system. Use arrow keys to navigate, Enter or Space to select")
                         accessibleDescription: ""
                         
@@ -452,7 +453,6 @@ WizardStepBase {
         
         OSSelectionListView {
             id: sublistview
-            autoSelectFirst: true
             model: ListModel {
                 id: sublistModel
             }
