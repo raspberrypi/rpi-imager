@@ -63,6 +63,9 @@ WizardStepBase {
         // Check if this is a sublist item - if so, navigate to it
         if (modelData && root.isOSsublist(modelData)) {
             root.selectOSitem(modelData, true, false)
+        } else if (modelData && typeof(modelData.subitems_url) === "string" && modelData.subitems_url === "internal://back") {
+            // Back button - just navigate back without auto-advancing
+            root.selectOSitem(modelData, false, false)
         } else {
             // Regular OS selection
             root.selectOSitem(modelData, false, false)
