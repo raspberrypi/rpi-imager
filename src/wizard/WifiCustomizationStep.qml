@@ -50,6 +50,10 @@ WizardStepBase {
         // Prefill from saved settings
         var saved = imageWriter.getSavedCustomizationSettings()
 
+        // Set SSID placeholder first (before setting any text)
+        fieldWifiSSID.placeholderText = qsTr("Network name")
+
+        // Then set text values after, so they properly override the placeholder
         if (saved.wifiSSID) {
             fieldWifiSSID.text = saved.wifiSSID
         }
@@ -62,9 +66,6 @@ WizardStepBase {
                 fieldWifiSSID.text = detectedSsid
             }
         }
-
-        // Set SSID placeholder after component is fully constructed (matches password field approach)
-        fieldWifiSSID.placeholderText = qsTr("Network name")
         if (saved.wifiHidden !== undefined) {
             chkWifiHidden.checked = (saved.wifiHidden === true || saved.wifiHidden === "true")
         }
