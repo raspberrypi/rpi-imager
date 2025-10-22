@@ -47,9 +47,13 @@ if (IMAGER_SIGNED_APP)
     endif()
     add_definitions(-DSIGNTOOL="${SIGNTOOL}")
 
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a
+                "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe")
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a
+                "${CMAKE_BINARY_DIR}/rpi-imager-callback-relay.exe")
 endif()
 
 # windeployqt
@@ -66,7 +70,7 @@ add_custom_command(TARGET ${PROJECT_NAME}
         "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.exe"
         "${CMAKE_SOURCE_DIR}/../license.txt"
         "${CMAKE_SOURCE_DIR}/windows/rpi-imager-cli.cmd"
-        "${CMAKE_SOURCE_DIR}/windows/RpiImagerCallbackRelay.ps1"
+        "${CMAKE_BINARY_DIR}/rpi-imager-callback-relay.exe"
         "${CMAKE_BINARY_DIR}/deploy")
 
 add_custom_command(TARGET ${PROJECT_NAME}

@@ -88,7 +88,7 @@ WizardStepBase {
         target: root.imageWriter
 
         // Listen for callback with token
-        function connectTokenReceived(token){
+        function onConnectTokenReceived(token){
             if (token && token.length > 0) {
                 connectTokenReceived = true
                 connectToken = token
@@ -105,25 +105,20 @@ WizardStepBase {
             connectToken = token
         }
 
-        var saved = imageWriter.getSavedCustomizationSettings()
         // Never load token from persistent settings; token is session-only
         // auto enable if token has already been provided
-        if (saved.piConnectEnabled === true || saved.piConnectEnabled === "true" || connectTokenReceived) {
+        if (connectTokenReceived) {
             useTokenPill.checked = true
             wizardContainer.piConnectEnabled = true
         }
     }
 
     onNextClicked: {
-        var saved = imageWriter.getSavedCustomizationSettings()
         if (useTokenPill.checked) {
-            saved.piConnectEnabled = true
             wizardContainer.piConnectEnabled = true
         } else {
-            delete saved.piConnectEnabled
             wizardContainer.piConnectEnabled = false
         }
-        imageWriter.setSavedCustomizationSettings(saved)
     }
 
     // Handle skip button
