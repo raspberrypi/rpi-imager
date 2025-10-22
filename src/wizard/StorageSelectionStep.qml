@@ -73,8 +73,13 @@ WizardStepBase {
             delegate: dstdelegate
             keyboardAutoAdvance: true
             nextFunction: root.conditionalNext
+            isItemSelectableFunction: root.isStorageItemSelectable
             accessibleName: qsTr("Storage device list. Select a storage device. Use arrow keys to navigate, Enter or Space to select")
             accessibleDescription: ""
+            
+            // Disable ListView's built-in highlight since delegate handles its own highlighting
+            highlight: Item {}
+            highlightFollowsCurrentItem: false
             
             onItemSelected: function(index, item) {
                 if (index >= 0 && index < count && item && typeof item.selectDrive === "function") {
@@ -179,7 +184,7 @@ WizardStepBase {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 color: (dstlist.currentIndex === dstitem.index) ? Style.listViewHighlightColor :
-                       (dstMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
+                       (dstMouseArea.containsMouse && !dstitem.unselectable ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 opacity: dstitem.unselectable ? 0.5 : 1.0
                 anchors.rightMargin: (dstlist.contentHeight > dstlist.height ? Style.scrollBarWidth : 0)
@@ -299,6 +304,25 @@ WizardStepBase {
         root.nextButtonEnabled = true
     }
 
+    // Check if a storage item at the given index is selectable (not read-only and not hidden)
+    function isStorageItemSelectable(index) {
+        var model = root.imageWriter.getDriveList()
+        if (!model || index < 0 || index >= model.rowCount()) {
+            return false
+        }
+        
+        var isReadOnlyRole = 0x106
+        var isSystemRole = 0x107
+        
+        var idx = model.index(index, 0)
+        var isReadOnly = model.data(idx, isReadOnlyRole)
+        var isSystem = model.data(idx, isSystemRole)
+        
+        // Item is selectable if it's not read-only and either not a system drive or filter is off
+        var shouldHide = isSystem && filterSystemDrives.checked
+        return !isReadOnly && !shouldHide
+    }
+    
     // Select default drive by priority (never system):
     // 1) SD cards (not USB and not SCSI)
     // 2) USB storage devices

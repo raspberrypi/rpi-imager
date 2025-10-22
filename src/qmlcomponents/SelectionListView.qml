@@ -17,6 +17,7 @@ ListView {
     property bool autoSelectFirst: false
     property bool keyboardAutoAdvance: false
     property var nextFunction: null
+    property var isItemSelectableFunction: null  // Function(index) that returns true if item can be selected
     property string accessibleName: "Selection list"
     property string accessibleDescription: "Use arrow keys to navigate, Enter or Space to select"
     
@@ -95,24 +96,72 @@ ListView {
         }
     }
     
+    // Helper function to check if an item is selectable
+    function isItemSelectable(index) {
+        if (isItemSelectableFunction && typeof isItemSelectableFunction === "function") {
+            return isItemSelectableFunction(index)
+        }
+        return true  // By default, all items are selectable
+    }
+    
+    // Helper function to find next selectable item in a direction
+    function findNextSelectableIndex(fromIndex, direction) {
+        var nextIndex = fromIndex + direction
+        var maxIterations = count  // Prevent infinite loops
+        var iterations = 0
+        
+        while (iterations < maxIterations) {
+            // Check bounds
+            if (nextIndex < 0 || nextIndex >= count) {
+                return fromIndex  // Stay at current position if we hit the edge
+            }
+            
+            // Check if this index is selectable
+            if (isItemSelectable(nextIndex)) {
+                return nextIndex
+            }
+            
+            // Move to next index in the direction
+            nextIndex += direction
+            iterations++
+        }
+        
+        // If no selectable item found, stay at current position
+        return fromIndex
+    }
+    
     // Standard keyboard navigation
     Keys.onUpPressed: {
         // Initialize selection if needed
         if (currentIndex === -1 && count > 0) {
-            currentIndex = 0
+            // Find first selectable item from the top
+            var firstSelectable = findNextSelectableIndex(-1, 1)
+            if (firstSelectable !== -1) {
+                currentIndex = firstSelectable
+            }
         } else if (currentIndex > 0) {
-            currentIndex--
-            positionViewAtIndex(currentIndex, ListView.Center)
+            var newIndex = findNextSelectableIndex(currentIndex, -1)
+            if (newIndex !== currentIndex) {
+                currentIndex = newIndex
+                positionViewAtIndex(currentIndex, ListView.Center)
+            }
         }
     }
     
     Keys.onDownPressed: {
         // Initialize selection if needed
         if (currentIndex === -1 && count > 0) {
-            currentIndex = 0
+            // Find first selectable item from the top
+            var firstSelectable = findNextSelectableIndex(-1, 1)
+            if (firstSelectable !== -1) {
+                currentIndex = firstSelectable
+            }
         } else if (currentIndex < count - 1) {
-            currentIndex++
-            positionViewAtIndex(currentIndex, ListView.Center)
+            var newIndex = findNextSelectableIndex(currentIndex, 1)
+            if (newIndex !== currentIndex) {
+                currentIndex = newIndex
+                positionViewAtIndex(currentIndex, ListView.Center)
+            }
         }
     }
     
