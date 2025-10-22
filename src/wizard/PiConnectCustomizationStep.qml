@@ -84,49 +84,34 @@ WizardStepBase {
     property bool connectTokenReceived: false
     property string connectToken: ""
 
-    function parseTokenFromUrl(u) {
-        // Handle QUrl or string, accept token/code/deploy_key/auth_key
-        var s = ""
-        try {
-            if (u && typeof u.toString === 'function') s = u.toString(); else s = String(u)
-        } catch(e) { s = String(u) }
-        if (!s || s.length === 0) return ""
-        var qIndex = s.indexOf('?')
-        if (qIndex === -1) return ""
-        var query = s.substring(qIndex+1)
-        var parts = query.split('&')
-        var token = ""
-        for (var i = 0; i < parts.length; i++) {
-            var kv = parts[i].split('=')
-            if (kv.length >= 2) {
-                var key = decodeURIComponent(kv[0])
-                var val = decodeURIComponent(kv.slice(1).join('='))
-                if (key === 'token' || key === 'code' || key === 'deploy_key' || key === 'auth_key') {
-                    token = val
-                    break
-                }
+    Connections {
+        target: root.imageWriter
+
+        // Listen for callback with token
+        function connectTokenReceived(token){
+            if (token && token.length > 0) {
+                connectTokenReceived = true
+                connectToken = token
             }
         }
-        return token
     }
 
     Component.onCompleted: {
         root.registerFocusGroup("pi_connect", function(){ return [btnOpenConnect, useTokenPill.focusItem] }, 0)
+
+        var token = root.imageWriter.getRuntimeConnectToken()
+        if (token && token.length > 0) {
+            connectTokenReceived = true
+            connectToken = token
+        }
+
         var saved = imageWriter.getSavedCustomizationSettings()
         // Never load token from persistent settings; token is session-only
-        if (saved.piConnectEnabled === true || saved.piConnectEnabled === "true") {
+        // auto enable if token has already been provided
+        if (saved.piConnectEnabled === true || saved.piConnectEnabled === "true" || connectTokenReceived) {
             useTokenPill.checked = true
             wizardContainer.piConnectEnabled = true
         }
-        // Listen for callback with token
-        root.imageWriter.connectCallbackReceived.connect(function(url){
-            var t = parseTokenFromUrl(url)
-            if (t && t.length > 0) {
-                connectTokenReceived = true
-                connectToken = t
-                imageWriter.setRuntimeConnectToken(t)
-            }
-        })
     }
 
     onNextClicked: {
