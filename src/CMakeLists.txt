@@ -39,6 +39,9 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# One place to define the Windows callback IPC port
+set(IMAGER_CALLBACK_PORT "49629" CACHE STRING "TCP port for rpi-imager callback relay on Windows")
+
 # Apply optimization flags globally to all targets (including bundled dependencies)
 if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
     # Use -Os instead of -O3 for better code size vs performance balance
@@ -371,6 +374,13 @@ endif()
 if (WIN32)
     # Adding WIN32 prevents a console window being opened on Windows
     add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${DEPENDENCIES})
+
+    # Inject the callback port macro for Windows builds
+    target_compile_definitions(${PROJECT_NAME}
+            PRIVATE RPI_IMAGER_CALLBACK_PORT=${IMAGER_CALLBACK_PORT})
+
+    # Ensure the relay builds with the app
+    add_dependencies(${PROJECT_NAME} rpi-imager-callback-relay)
 else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${DEPENDENCIES})
 endif()

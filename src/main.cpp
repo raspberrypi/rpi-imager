@@ -55,7 +55,15 @@ static QTextStream cerr(stderr);
 static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QString &str) {
     cerr << str << endl;
 }
-const quint16 kPort = 49629;
+
+// If CMake didn't inject it for some reason, fall back to a sensible default.
+#ifndef RPI_IMAGER_CALLBACK_PORT
+#define RPI_IMAGER_CALLBACK_PORT 49629
+#endif
+static_assert(RPI_IMAGER_CALLBACK_PORT > 0 && RPI_IMAGER_CALLBACK_PORT <= 65535,
+              "RPI_IMAGER_CALLBACK_PORT must be a valid TCP port");
+static constexpr quint16 kPort =
+    static_cast<quint16>(RPI_IMAGER_CALLBACK_PORT);
 #endif
 
 

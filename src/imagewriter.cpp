@@ -2567,8 +2567,14 @@ static QString parseTokenFromUrl(const QUrl &url) {
 
     for (const auto& key : keys) {
         const QString val = q.queryItemValue(key, QUrl::FullyDecoded);
-        if (!val.isEmpty())
-            return val;
+        if (!val.isEmpty()) {
+            // Reject tokens with different length
+            // small protection agains bad token injection
+            if (val.size() == 30)
+                return val;
+            else
+                qWarning() << "Ignoring token with invalid length:" << val.size();
+        }
     }
 
     return {};
