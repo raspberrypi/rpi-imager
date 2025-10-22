@@ -44,6 +44,10 @@
 #include <QWindow>
 #include <QGuiApplication>
 #endif
+#include <QUrl>
+#include <QUrlQuery>
+#include <QString>
+#include <QStringList>
 #include <QHostAddress>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -2550,15 +2554,53 @@ void ImageWriter::openUrl(const QUrl &url)
     }
 }
 
+static QString parseTokenFromUrl(const QUrl &url) {
+    // Handle QUrl or string, accept token/code/deploy_key/auth_key
+    if (!url.isValid()) {
+        return {};
+    }
+
+    QUrlQuery q(url);
+    static const QStringList keys {
+        QStringLiteral("token"),
+        QStringLiteral("code"),
+        QStringLiteral("deploy_key"),
+        QStringLiteral("auth_key")
+    };
+
+    for (const auto& key : keys) {
+        const QString val = q.queryItemValue(key, QUrl::FullyDecoded);
+        if (!val.isEmpty())
+            return val;
+    }
+
+    return {};
+}
+
 void ImageWriter::handleIncomingUrl(const QUrl &url)
 {
     qDebug() << "Incoming URL:" << url;
-    emit connectCallbackReceived(QVariant::fromValue(url));
+
+    auto token = parseTokenFromUrl(url);
+    if (!token.isEmpty()) {
+        if (!_piConnectToken.isEmpty()) {
+            if (_piConnectToken != token) {
+                // Let QML decide whether to overwrite
+                emit connectTokenConflictDetected(token);
+            }
+
+            return;
+        }
+
+        overwriteConnectToken(token);
+    }
 }
 
-void ImageWriter::setRuntimeConnectToken(const QString &token)
+void ImageWriter::overwriteConnectToken(const QString &token)
 {
+    // Ephemeral session-only Connect token (never persisted)
     _piConnectToken = token;
+    emit connectTokenReceived(token);
 }
 
 QString ImageWriter::getRuntimeConnectToken() const

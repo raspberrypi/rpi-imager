@@ -944,6 +944,120 @@ Item {
             onNextClicked: root.wizardCompleted()
         }
     }
+
+    // Token conflict dialog — based on your BaseDialog pattern
+    BaseDialog {
+        id: tokenConflictDialog
+        parent: root
+        anchors.centerIn: parent
+
+        // carry the new token we just received
+        property string newToken: ""
+        property bool allowAccept: false
+
+        // small safety delay before enabling "Replace"
+        Timer {
+            id: acceptEnableDelay
+            interval: 1500
+            running: false
+            repeat: false
+            onTriggered: tokenConflictDialog.allowAccept = true
+        }
+
+        function openWithToken(tok) {
+            newToken = tok
+            allowAccept = false
+            acceptEnableDelay.start()
+            tokenConflictDialog.open()
+        }
+
+        // ESC closes
+        function escapePressed() { tokenConflictDialog.close() }
+
+        Component.onCompleted: {
+            // match your focus group style
+            registerFocusGroup("token_conflict_buttons", function() {
+                return [keepBtn, replaceBtn]
+            }, 0)
+        }
+
+        onClosed: {
+            acceptEnableDelay.stop()
+            allowAccept = false
+            newToken = ""
+        }
+
+        // ----- CONTENT -----
+        Text {
+            id: titleText
+            text: qsTr("Replace existing Raspberry Pi Connect token?")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.ignored: false
+        }
+
+        // Body / security note
+        Text {
+            id: bodyText
+            text: qsTr("A new Raspberry Pi Connect token was received that differs from your current one.\n\n") +
+                  qsTr("Do you want to overwrite the existing token?\n\n") +
+                  qsTr("Warning: Only replace the token if you initiated this action. ") +
+                  qsTr("If you didn't, someone could be trying to push a bad token to RPi Imager.")
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamily
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
+        }
+
+        // Buttons row
+        RowLayout {
+            id: btnRow
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            spacing: Style.spacingMedium
+
+            Item { Layout.fillWidth: true }
+
+            ImButton {
+                id: replaceBtn
+                text: tokenConflictDialog.allowAccept ? qsTr("Replace token") : qsTr("Please wait…")
+                accessibleDescription: qsTr("Replace the current token with the newly received one")
+                enabled: tokenConflictDialog.allowAccept
+                activeFocusOnTab: true
+                onClicked: {
+                    tokenConflictDialog.close()
+                    // Overwrite in C++ and re-emit to existing listeners
+                    root.imageWriter.overwriteConnectToken(tokenConflictDialog.newToken)
+                }
+            }
+
+            ImButtonRed {
+                id: keepBtn
+                text: qsTr("Keep existing")
+                accessibleDescription: qsTr("Keep your current Raspberry Pi Connect token")
+                activeFocusOnTab: true
+                onClicked: tokenConflictDialog.close()
+            }
+        }
+    }
+
+    Connections {
+        target: root.imageWriter
+        function onConnectTokenConflictDetected(newToken) {
+            tokenConflictDialog.openWithToken(newToken)
+        }
+    }
+
     
     function onFinalizing() {
         // Forward to the WritingStep if currently active

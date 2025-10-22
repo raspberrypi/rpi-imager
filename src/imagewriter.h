@@ -267,8 +267,7 @@ public:
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void openUrl(const QUrl &url);
     Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
-    // Ephemeral session-only Connect token (never persisted)
-    Q_INVOKABLE void setRuntimeConnectToken(const QString &token);
+    Q_INVOKABLE void overwriteConnectToken(const QString &token);
     Q_INVOKABLE QString getRuntimeConnectToken() const;
     
     /* Override OS list refresh schedule (in minutes); pass negative to clear override */
@@ -299,7 +298,8 @@ signals:
     void keychainPermissionRequested();
     void keychainPermissionResponseReceived();
     void writeStateChanged();
-    void connectCallbackReceived(QVariant url);
+    void connectTokenReceived(const QString &token);
+    void connectTokenConflictDetected(const QString &token);
     void cacheStatusChanged();
 
 protected slots:
