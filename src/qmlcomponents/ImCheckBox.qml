@@ -3,9 +3,9 @@
  * Copyright (C) 2022 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Controls.Material 2.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Controls.Material
 import RpiImager
 
 CheckBox {

@@ -3,8 +3,8 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Layouts
 import RpiImager
 
 // A labeled button styled for Imager; only the button clicks, not the whole row
