@@ -92,26 +92,6 @@ WizardStepBase {
                         root.connectToken = ""
                     }
                 }
-                
-                ContextMenu.menu: Menu {
-                    MenuItem {
-                        text: qsTr("Paste")
-                        enabled: fieldConnectToken.enabled
-                        onTriggered: {
-                            var clipboardText = root.imageWriter.getClipboardText()
-                            if (clipboardText && clipboardText.length > 0) {
-                                fieldConnectToken.text = clipboardText.trim()
-                                fieldConnectToken.forceActiveFocus()
-                            }
-                        }
-                    }
-                    
-                    MenuItem {
-                        text: qsTr("Select All")
-                        enabled: fieldConnectToken.enabled && fieldConnectToken.text.length > 0
-                        onTriggered: fieldConnectToken.selectAll()
-                    }
-                }
             }
         }
     }
