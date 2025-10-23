@@ -22,6 +22,7 @@
 #include "iconimageprovider.h"
 #include "nativefiledialog.h"
 #include <QQmlApplicationEngine>
+#include <QQuickWindow>
 #endif
 #include <archive.h>
 #include <archive_entry.h>
@@ -109,7 +110,13 @@ ImageWriter::ImageWriter(QObject *parent)
       _translations(),
       _trans(nullptr),
       _refreshIntervalOverrideMinutes(-1),
-      _refreshJitterOverrideMinutes(-1)
+      _refreshJitterOverrideMinutes(-1),
+#ifndef CLI_ONLY_BUILD
+      _piConnectToken(),
+      _mainWindow(nullptr)
+#else
+      _piConnectToken()
+#endif
 {
     // Initialize CacheManager
     _cacheManager = new CacheManager(this);
@@ -294,6 +301,23 @@ ImageWriter::ImageWriter(QObject *parent)
     }
 }
 
+void ImageWriter::setMainWindow(QObject *window)
+{
+#ifndef CLI_ONLY_BUILD
+    // Convert QObject to QWindow
+    _mainWindow = qobject_cast<QWindow*>(window);
+    if (!_mainWindow) {
+        // If it's not a QWindow directly, try to get the window from a QQuickWindow
+        QQuickWindow *quickWindow = qobject_cast<QQuickWindow*>(window);
+        if (quickWindow) {
+            _mainWindow = quickWindow;
+        }
+    }
+#else
+    Q_UNUSED(window);
+#endif
+}
+
 QString ImageWriter::getNativeOpenFileName(const QString &title,
                                            const QString &initialDir,
                                            const QString &filter)
@@ -302,7 +326,7 @@ QString ImageWriter::getNativeOpenFileName(const QString &title,
     if (!NativeFileDialog::areNativeDialogsAvailable()) {
         return QString();
     }
-    return NativeFileDialog::getOpenFileName(title, initialDir, filter);
+    return NativeFileDialog::getOpenFileName(title, initialDir, filter, _mainWindow);
 #else
     Q_UNUSED(title);
     Q_UNUSED(initialDir);
@@ -1395,10 +1419,11 @@ void ImageWriter::openFileDialog(const QString &title, const QString &filter)
     if (path.isEmpty() || !fi.exists() || !fi.isReadable() )
         path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
-    // Use native file dialog - QtWidgets fallback removed
+    // Use native file dialog with modal behavior to main window
     QString filename = NativeFileDialog::getOpenFileName(tr("Select image"),
                                                         path,
-                                                        filter);
+                                                        filter,
+                                                        _mainWindow);
 
     // Process the selected file if one was chosen
     if (!filename.isEmpty())

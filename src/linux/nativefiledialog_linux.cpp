@@ -60,7 +60,7 @@ private:
 
 QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
-                                           bool saveDialog)
+                                           bool saveDialog, void *parentWindow)
 {
     
     QDBusConnection bus = QDBusConnection::sessionBus();
@@ -77,6 +77,18 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     if (!interface.isValid()) {
         qDebug() << "NativeFileDialog: XDG Desktop Portal not available";
         return QString(); // QML callsites will handle fallback
+    }
+    
+    // Prepare parent window identifier for modal behavior
+    QString parentWindowId = "";
+    if (parentWindow) {
+        QWindow *window = static_cast<QWindow*>(parentWindow);
+        // Format: "x11:<xid>" for X11 windows
+        // For Wayland it would be "wayland:<handle>" but that's more complex
+        WId winId = window->winId();
+        if (winId != 0) {
+            parentWindowId = QString("x11:%1").arg(winId, 0, 16);
+        }
     }
     
     // Prepare arguments for the portal call
@@ -128,10 +140,9 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     options["handle_token"] = token;
     
     QString method = saveDialog ? "SaveFile" : "OpenFile";
-    QString parentWindow = "";  // Could be set to X11 window ID for proper modal behavior
     
-    // Make the async call
-    QDBusReply<QDBusObjectPath> reply = interface.call(method, parentWindow, title, options);
+    // Make the async call with parent window identifier for modal behavior
+    QDBusReply<QDBusObjectPath> reply = interface.call(method, parentWindowId, title, options);
     
     if (!reply.isValid()) {
         qDebug() << "NativeFileDialog: Portal call failed:" << reply.error().message();

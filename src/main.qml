@@ -32,6 +32,11 @@ ApplicationWindow {
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
 
+    Component.onCompleted: {
+        // Set the main window for modal file dialogs
+        imageWriter.setMainWindow(window)
+    }
+
     onClosing: function (close) {
         if (wizardContainer.isWriting && !forceQuit) {
             close.accepted = false;
