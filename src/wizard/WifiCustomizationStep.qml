@@ -47,6 +47,9 @@ WizardStepBase {
         }, 1)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
 
+        // Set SSID placeholder before prefilling text content
+        fieldWifiSSID.placeholderText = qsTr("Network name")
+
         // Prefill from saved settings
         var saved = imageWriter.getSavedCustomizationSettings()
 
