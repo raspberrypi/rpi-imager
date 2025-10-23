@@ -886,7 +886,13 @@ Item {
             imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
-            onNextClicked: root.nextStep()
+            onNextClicked: {
+                // Only advance if the step indicates it's ready
+                if (isValid) {
+                    root.nextStep()
+                }
+                // Otherwise, let the step handle the action internally (showing dialog, etc.)
+            }
             onBackClicked: root.previousStep()
             onSkipClicked: {
                 // Skip functionality is handled in the step itself

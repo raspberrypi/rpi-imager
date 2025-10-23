@@ -43,6 +43,7 @@
 #include <QQmlContext>
 #include <QWindow>
 #include <QGuiApplication>
+#include <QClipboard>
 #endif
 #include <QUrl>
 #include <QUrlQuery>
@@ -2551,30 +2552,44 @@ void ImageWriter::openUrl(const QUrl &url)
     }
 }
 
-static QString parseTokenFromUrl(const QUrl &url) {
-    // Handle QUrl or string, accept token/code/deploy_key/auth_key
-    if (!url.isValid()) {
-        return {};
+bool ImageWriter::verifyAuthKey(const QString &s, bool strict) const
+{
+    // Base58 (no 0 O I l)
+    static const QRegularExpression base58OnlyRe(QStringLiteral("^[1-9A-HJ-NP-Za-km-z]+$"));
+
+    // Required prefix
+    bool hasPrefix = s.startsWith(QStringLiteral("rpuak_")) || s.startsWith(QStringLiteral("rpoak_"));
+    if (!hasPrefix)
+        return false;
+
+    const QString payload = s.mid(6);
+    bool base58Match = base58OnlyRe.match(payload).hasMatch();
+    
+    if (payload.isEmpty() || !base58Match)
+        return false;
+
+    if (strict) {
+        // Exactly 24 Base58 chars today → total length 30
+        return payload.size() == 24;
+    } else {
+        // Future-proof: accept >=24 Base58 chars
+        return payload.size() >= 24;
     }
+}
+
+QString ImageWriter::parseTokenFromUrl(const QUrl &url, bool strictAuthKey) const {
+    // Handle QUrl or string, accept auth_key
+    if (!url.isValid())
+        return {};
 
     QUrlQuery q(url);
-    static const QStringList keys {
-        QStringLiteral("token"),
-        QStringLiteral("code"),
-        QStringLiteral("deploy_key"),
-        QStringLiteral("auth_key")
-    };
-
-    for (const auto& key : keys) {
-        const QString val = q.queryItemValue(key, QUrl::FullyDecoded);
-        if (!val.isEmpty()) {
-            // Reject tokens with different length
-            // small protection agains bad token injection
-            if (val.size() == 30)
-                return val;
-            else
-                qWarning() << "Ignoring token with invalid length:" << val.size();
+    const QString val = q.queryItemValue(QStringLiteral("auth_key"), QUrl::FullyDecoded);
+    if (!val.isEmpty()) {
+        if (verifyAuthKey(val, strictAuthKey)) {
+            return val;
         }
+
+        qWarning() << "Ignoring auth_key with invalid format/length:" << val;
     }
 
     return {};
@@ -2609,4 +2624,15 @@ void ImageWriter::overwriteConnectToken(const QString &token)
 QString ImageWriter::getRuntimeConnectToken() const
 {
     return _piConnectToken;
+}
+
+QString ImageWriter::getClipboardText() const
+{
+#ifndef CLI_ONLY_BUILD
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    if (clipboard) {
+        return clipboard->text();
+    }
+#endif
+    return QString();
 }

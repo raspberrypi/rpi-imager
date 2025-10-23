@@ -269,6 +269,8 @@ public:
     Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
     Q_INVOKABLE void overwriteConnectToken(const QString &token);
     Q_INVOKABLE QString getRuntimeConnectToken() const;
+    Q_INVOKABLE QString getClipboardText() const;
+    Q_INVOKABLE bool verifyAuthKey(const QString &token, bool strict = false) const;
     
     /* Override OS list refresh schedule (in minutes); pass negative to clear override */
     Q_INVOKABLE void setOsListRefreshOverride(int intervalMinutes, int jitterMinutes);
@@ -338,6 +340,8 @@ private:
     QJsonArray _deviceFilter, _hwCapabilities, _swCapabilities;
     bool _deviceFilterIsInclusive;
     std::shared_ptr<DeviceInfo> _device_info;
+
+    QString parseTokenFromUrl(const QUrl &url, bool strictAuthKey = false) const;
 
 protected:
     QUrl _src, _repo;
