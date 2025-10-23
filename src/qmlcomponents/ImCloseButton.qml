@@ -4,8 +4,8 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-import QtQuick 2.9
-import QtQuick.Layouts 1.0
+import QtQuick
+import QtQuick.Layouts
 
 import RpiImager
 

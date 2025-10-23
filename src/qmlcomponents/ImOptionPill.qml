@@ -3,11 +3,11 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import RpiImager
-import QtQuick.Controls.Material 2.15
+import QtQuick.Controls.Material
 
 // A labeled switch styled for Imager; only the switch toggles, not the whole row
 Item {
