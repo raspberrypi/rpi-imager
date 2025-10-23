@@ -39,6 +39,9 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# One place to define the Windows callback IPC port
+set(IMAGER_CALLBACK_PORT "49629" CACHE STRING "TCP port for rpi-imager callback relay on Windows")
+
 # Apply optimization flags globally to all targets (including bundled dependencies)
 if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
     # Use -Os instead of -O3 for better code size vs performance balance
@@ -232,11 +235,11 @@ if(BUILD_CLI_ONLY)
         find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
     endif()
 else()
-    # Regular GUI build: need Core, Quick, Svg, Network - DBus only needed on Linux
+    # Regular GUI build: need Core, Quick, Svg, Network, Gui - DBus only needed on Linux
     if(UNIX AND NOT APPLE)
-        find_package(Qt6 6.9 COMPONENTS Core Quick Svg Network OPTIONAL_COMPONENTS LinguistTools DBus)
+        find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network OPTIONAL_COMPONENTS LinguistTools DBus)
     else()
-        find_package(Qt6 6.9 COMPONENTS Core Quick Svg Network OPTIONAL_COMPONENTS LinguistTools)
+        find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network OPTIONAL_COMPONENTS LinguistTools)
     endif()
 endif()
 if (Qt6_FOUND)
@@ -371,6 +374,13 @@ endif()
 if (WIN32)
     # Adding WIN32 prevents a console window being opened on Windows
     add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${DEPENDENCIES})
+
+    # Inject the callback port macro for Windows builds
+    target_compile_definitions(${PROJECT_NAME}
+            PRIVATE RPI_IMAGER_CALLBACK_PORT=${IMAGER_CALLBACK_PORT})
+
+    # Ensure the relay builds with the app
+    add_dependencies(${PROJECT_NAME} rpi-imager-callback-relay)
 else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${DEPENDENCIES})
 endif()
@@ -481,6 +491,7 @@ if(NOT BUILD_CLI_ONLY)
         hwlistmodel.cpp
         oslistmodel.cpp
         urlfmt.cpp
+        clipboardhelper.cpp
     )
 endif()
 
@@ -517,7 +528,7 @@ if(BUILD_CLI_ONLY)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
 else()
     # Regular GUI build: link all GUI components
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
 endif()
 
 # Testing

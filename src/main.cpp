@@ -37,8 +37,8 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <winnls.h>
-#include <QLocalServer>
-#include <QLocalSocket>
+#include <QTcpServer>
+#include <QTcpSocket>
 #endif
 #include "imageadvancedoptions.h"
 
@@ -55,6 +55,15 @@ static QTextStream cerr(stderr);
 static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QString &str) {
     cerr << str << endl;
 }
+
+// If CMake didn't inject it for some reason, fall back to a sensible default.
+#ifndef RPI_IMAGER_CALLBACK_PORT
+#define RPI_IMAGER_CALLBACK_PORT 49629
+#endif
+static_assert(RPI_IMAGER_CALLBACK_PORT > 0 && RPI_IMAGER_CALLBACK_PORT <= 65535,
+              "RPI_IMAGER_CALLBACK_PORT must be a valid TCP port");
+static constexpr quint16 kPort =
+    static_cast<quint16>(RPI_IMAGER_CALLBACK_PORT);
 #endif
 
 
@@ -311,55 +320,25 @@ int main(int argc, char *argv[])
     }
 
 #ifdef Q_OS_WIN
-    // ---- single-instance + URL forwarding ----
-    // Build a stable per-user name by hashing the per-user AppData path.
-    // This is consistent across elevated/non-elevated tokens for the same user.
-    auto base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    if (base.isEmpty()) base = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    QByteArray hash = QCryptographicHash::hash(base.toUtf8(), QCryptographicHash::Sha1);
-    const QString serverName = QStringLiteral("rpi-imager-urlpipe-%1").arg(QString::fromLatin1(hash.toHex()));
-    qDebug() << "Using IPC Server name:" << serverName;
-
-    // First, try to connect to an existing instance (client-first).
-    {
-        QLocalSocket probe;
-        probe.connectToServer(serverName);
-        if (probe.waitForConnected(150)) {
-            // A primary instance exists; forward the URL (if any) and exit.
-            if (!callbackUrl.isEmpty()) {
-                const QByteArray msg = callbackUrl.toString(QUrl::FullyEncoded).toUtf8();
-                probe.write(msg);
-                probe.flush();
-                probe.waitForBytesWritten(200);
-            }
-            return 0; // secondary: do not open another window
-        }
-    }
-
-    // No instance reachable. Become the server.
-    // Remove stale endpoint left by a crash (safe even if it doesn’t exist).
-    QLocalServer::removeServer(serverName);
-
-    static QLocalServer server; // must outlive the lambda
-    if (!server.listen(serverName)) {
-        // As a last resort: if listen still fails, we’re better off continuing as a single instance.
-        qWarning() << "Failed to listen on" << serverName << ":" << server.errorString();
-    } else {
-        QObject::connect(&server, &QLocalServer::newConnection, &app, [&imageWriter]() {
-            while (QLocalSocket *s = server.nextPendingConnection()) {
-                s->waitForReadyRead(1000);
+    // callback server
+    QTcpServer server;
+    QObject::connect(&server, &QTcpServer::newConnection, &app, [&]() {
+        while (auto *s = server.nextPendingConnection()) {
+            QObject::connect(s, &QTcpSocket::readyRead, s, [s, &imageWriter]() {
                 const QByteArray payload = s->readAll();
-                s->close();
-                s->deleteLater();
+                s->disconnectFromHost();
                 QMetaObject::invokeMethod(
                     &imageWriter,
                     [payload, &imageWriter] {
                         imageWriter.handleIncomingUrl(QUrl(QString::fromUtf8(payload)));
                     },
                     Qt::QueuedConnection
-                );
-            }
-        });
+                    );
+            });
+        }
+    });
+    if (!server.listen(QHostAddress::LocalHost, kPort)) {
+        qWarning() << "TCP listen failed:" << server.errorString();
     }
 #endif
 

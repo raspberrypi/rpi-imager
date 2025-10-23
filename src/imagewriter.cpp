@@ -43,7 +43,12 @@
 #include <QQmlContext>
 #include <QWindow>
 #include <QGuiApplication>
+#include <QClipboard>
 #endif
+#include <QUrl>
+#include <QUrlQuery>
+#include <QString>
+#include <QStringList>
 #include <QHostAddress>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -957,6 +962,7 @@ namespace {
                 QNetworkRequest request(subUrl);
                 request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                         QNetworkRequest::NoLessSafeRedirectPolicy);
+                request.setMaximumRedirectsAllowed(3);
                 manager.get(request);
             }
         }
@@ -1066,6 +1072,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
 
             auto request = QNetworkRequest(redirUrl);
             request.setAttribute(QNetworkRequest::RedirectionTargetAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+            request.setMaximumRedirectsAllowed(3);
             data->manager()->get(request);
 
             // maintain manager
@@ -1202,6 +1209,7 @@ void ImageWriter::beginOSListFetch() {
     QNetworkRequest request = QNetworkRequest(topUrl);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setMaximumRedirectsAllowed(3);
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
    _networkManager.get(request);
@@ -2547,18 +2555,87 @@ void ImageWriter::openUrl(const QUrl &url)
     }
 }
 
+bool ImageWriter::verifyAuthKey(const QString &s, bool strict) const
+{
+    // Base58 (no 0 O I l)
+    static const QRegularExpression base58OnlyRe(QStringLiteral("^[1-9A-HJ-NP-Za-km-z]+$"));
+
+    // Required prefix
+    bool hasPrefix = s.startsWith(QStringLiteral("rpuak_")) || s.startsWith(QStringLiteral("rpoak_"));
+    if (!hasPrefix)
+        return false;
+
+    const QString payload = s.mid(6);
+    bool base58Match = base58OnlyRe.match(payload).hasMatch();
+    
+    if (payload.isEmpty() || !base58Match)
+        return false;
+
+    if (strict) {
+        // Exactly 24 Base58 chars today → total length 30
+        return payload.size() == 24;
+    } else {
+        // Future-proof: accept >=24 Base58 chars
+        return payload.size() >= 24;
+    }
+}
+
+QString ImageWriter::parseTokenFromUrl(const QUrl &url, bool strictAuthKey) const {
+    // Handle QUrl or string, accept auth_key
+    if (!url.isValid())
+        return {};
+
+    QUrlQuery q(url);
+    const QString val = q.queryItemValue(QStringLiteral("auth_key"), QUrl::FullyDecoded);
+    if (!val.isEmpty()) {
+        if (verifyAuthKey(val, strictAuthKey)) {
+            return val;
+        }
+
+        qWarning() << "Ignoring auth_key with invalid format/length:" << val;
+    }
+
+    return {};
+}
+
 void ImageWriter::handleIncomingUrl(const QUrl &url)
 {
     qDebug() << "Incoming URL:" << url;
-    emit connectCallbackReceived(QVariant::fromValue(url));
+
+    auto token = parseTokenFromUrl(url);
+    if (!token.isEmpty()) {
+        if (!_piConnectToken.isEmpty()) {
+            if (_piConnectToken != token) {
+                // Let QML decide whether to overwrite
+                emit connectTokenConflictDetected(token);
+            }
+
+            return;
+        }
+
+        overwriteConnectToken(token);
+    }
 }
 
-void ImageWriter::setRuntimeConnectToken(const QString &token)
+void ImageWriter::overwriteConnectToken(const QString &token)
 {
+    // Ephemeral session-only Connect token (never persisted)
     _piConnectToken = token;
+    emit connectTokenReceived(token);
 }
 
 QString ImageWriter::getRuntimeConnectToken() const
 {
     return _piConnectToken;
+}
+
+QString ImageWriter::getClipboardText() const
+{
+#ifndef CLI_ONLY_BUILD
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    if (clipboard) {
+        return clipboard->text();
+    }
+#endif
+    return QString();
 }
