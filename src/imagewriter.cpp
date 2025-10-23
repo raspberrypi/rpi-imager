@@ -2653,14 +2653,3 @@ QString ImageWriter::getRuntimeConnectToken() const
 {
     return _piConnectToken;
 }
-
-QString ImageWriter::getClipboardText() const
-{
-#ifndef CLI_ONLY_BUILD
-    QClipboard *clipboard = QGuiApplication::clipboard();
-    if (clipboard) {
-        return clipboard->text();
-    }
-#endif
-    return QString();
-}
