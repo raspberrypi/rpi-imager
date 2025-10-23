@@ -15,7 +15,8 @@
 bool NativeFileDialog::s_forceQmlDialogs = false;
 
 QString NativeFileDialog::getOpenFileName(const QString &title,
-                                          const QString &initialDir, const QString &filter)
+                                          const QString &initialDir, const QString &filter,
+                                          void *parentWindow)
 {
     // Check if we should use native dialogs
     if (!areNativeDialogsAvailable()) {
@@ -23,11 +24,12 @@ QString NativeFileDialog::getOpenFileName(const QString &title,
         return QString();
     }
 
-    return getFileNameNative(title, initialDir, filter, false);
+    return getFileNameNative(title, initialDir, filter, false, parentWindow);
 }
 
 QString NativeFileDialog::getSaveFileName(const QString &title,
-                                          const QString &initialDir, const QString &filter)
+                                          const QString &initialDir, const QString &filter,
+                                          void *parentWindow)
 {
     // Check if we should use native dialogs
     if (!areNativeDialogsAvailable()) {
@@ -35,7 +37,7 @@ QString NativeFileDialog::getSaveFileName(const QString &title,
         return QString();
     }
 
-    return getFileNameNative(title, initialDir, filter, true);
+    return getFileNameNative(title, initialDir, filter, true, parentWindow);
 }
 
 bool NativeFileDialog::areNativeDialogsAvailable()

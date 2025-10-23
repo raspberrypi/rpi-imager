@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QEventLoop>
 #include <QCoreApplication>
+#include <QWindow>
 #include <Cocoa/Cocoa.h>
 
 namespace {
@@ -52,7 +53,7 @@ QString convertQtFilterToMacOS(const QString &qtFilter)
 
 QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
-                                           bool saveDialog)
+                                           bool saveDialog, void *parentWindow)
 {
     // Defer dialog presentation to avoid interfering with Qt QML object destruction
     QString result;
@@ -61,8 +62,18 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     // Process events once to allow QML cleanup, then show dialog with minimal delay
     QCoreApplication::processEvents();
     
+    // Get the native NSWindow if parentWindow is provided
+    NSWindow *nsParentWindow = nil;
+    if (parentWindow) {
+        QWindow *window = static_cast<QWindow*>(parentWindow);
+        NSView *view = reinterpret_cast<NSView*>(window->winId());
+        if (view) {
+            nsParentWindow = [view window];
+        }
+    }
+    
     // Use a very short timer to minimize delay while still avoiding Qt conflicts
-    QTimer::singleShot(1, [&]() {
+    QTimer::singleShot(1, [&, nsParentWindow]() {
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         
         NSString *nsTitle = title.isEmpty() ? nil : title.toNSString();
@@ -97,7 +108,15 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 }
             }
             
-            NSInteger buttonPressed = [panel runModal];
+            NSInteger buttonPressed;
+            if (nsParentWindow) {
+                // Run as sheet modal to parent window
+                buttonPressed = [panel runModalForWindow:nsParentWindow];
+            } else {
+                // Run as application modal dialog
+                buttonPressed = [panel runModal];
+            }
+            
             if (buttonPressed == NSModalResponseOK) {
                 NSURL *url = [panel URL];
                 modalResult = [url path];
@@ -124,7 +143,15 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 }
             }
             
-            NSInteger buttonPressed = [panel runModal];
+            NSInteger buttonPressed;
+            if (nsParentWindow) {
+                // Run as sheet modal to parent window
+                buttonPressed = [panel runModalForWindow:nsParentWindow];
+            } else {
+                // Run as application modal dialog
+                buttonPressed = [panel runModal];
+            }
+            
             if (buttonPressed == NSModalResponseOK) {
                 NSArray *urls = [panel URLs];
                 if ([urls count] > 0) {

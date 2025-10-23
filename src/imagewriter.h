@@ -28,6 +28,7 @@
 #include "oslistmodel.h"
 #ifndef CLI_ONLY_BUILD
 #include "nativefiledialog.h"
+#include <QWindow>
 #endif
 #include "cachemanager.h"
 #include "device_info.h"
@@ -196,6 +197,9 @@ public:
     Q_INVOKABLE QString getNativeOpenFileName(const QString &title = QString(),
                                              const QString &initialDir = QString(),
                                              const QString &filter = QString());
+
+    /* Set the main window for modal file dialogs */
+    Q_INVOKABLE void setMainWindow(QObject *window);
 
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
@@ -368,6 +372,9 @@ protected:
     int _refreshJitterOverrideMinutes;
     // Session-only storage for Raspberry Pi Connect token
     QString _piConnectToken;
+#ifndef CLI_ONLY_BUILD
+    QWindow *_mainWindow;
+#endif
 
     void _parseCompressedFile();
     void _parseXZFile();
