@@ -957,6 +957,7 @@ namespace {
                 QNetworkRequest request(subUrl);
                 request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                         QNetworkRequest::NoLessSafeRedirectPolicy);
+                request.setMaximumRedirectsAllowed(3);
                 manager.get(request);
             }
         }
@@ -1066,6 +1067,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
 
             auto request = QNetworkRequest(redirUrl);
             request.setAttribute(QNetworkRequest::RedirectionTargetAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+            request.setMaximumRedirectsAllowed(3);
             data->manager()->get(request);
 
             // maintain manager
@@ -1202,6 +1204,7 @@ void ImageWriter::beginOSListFetch() {
     QNetworkRequest request = QNetworkRequest(topUrl);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setMaximumRedirectsAllowed(3);
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
    _networkManager.get(request);
