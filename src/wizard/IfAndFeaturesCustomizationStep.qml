@@ -41,6 +41,7 @@ WizardStepBase {
             anchors.fill: parent
             clip: true
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            rightPadding: 20
             ColumnLayout {
                 id: scrollContent
                 width: ifAndFeatScroll.availableWidth
@@ -139,7 +140,7 @@ WizardStepBase {
                                 checked: false
                             }
 
-                            Item { Layout.fillWidth: true }
+                            Item { Layout.fillWidth: true; height: 40 }
                         }
                     }
                 }
