@@ -62,18 +62,12 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     // Process events once to allow QML cleanup, then show dialog with minimal delay
     QCoreApplication::processEvents();
     
-    // Get the native NSWindow if parentWindow is provided
-    NSWindow *nsParentWindow = nil;
-    if (parentWindow) {
-        QWindow *window = static_cast<QWindow*>(parentWindow);
-        NSView *view = reinterpret_cast<NSView*>(window->winId());
-        if (view) {
-            nsParentWindow = [view window];
-        }
-    }
+    // Parent window parameter is unused on macOS
+    // Native panels always run as application-modal dialogs
+    Q_UNUSED(parentWindow);
     
     // Use a very short timer to minimize delay while still avoiding Qt conflicts
-    QTimer::singleShot(1, [&, nsParentWindow]() {
+    QTimer::singleShot(1, [&]() {
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         
         NSString *nsTitle = title.isEmpty() ? nil : title.toNSString();
@@ -108,14 +102,9 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 }
             }
             
-            NSInteger buttonPressed;
-            if (nsParentWindow) {
-                // Run as sheet modal to parent window
-                buttonPressed = [panel runModalForWindow:nsParentWindow];
-            } else {
-                // Run as application modal dialog
-                buttonPressed = [panel runModal];
-            }
+            // Simply run as application modal dialog
+            // Sheet modals require async handling which complicates Qt integration
+            NSInteger buttonPressed = [panel runModal];
             
             if (buttonPressed == NSModalResponseOK) {
                 NSURL *url = [panel URL];
@@ -143,14 +132,9 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 }
             }
             
-            NSInteger buttonPressed;
-            if (nsParentWindow) {
-                // Run as sheet modal to parent window
-                buttonPressed = [panel runModalForWindow:nsParentWindow];
-            } else {
-                // Run as application modal dialog
-                buttonPressed = [panel runModal];
-            }
+            // Simply run as application modal dialog
+            // Sheet modals require async handling which complicates Qt integration
+            NSInteger buttonPressed = [panel runModal];
             
             if (buttonPressed == NSModalResponseOK) {
                 NSArray *urls = [panel URLs];
