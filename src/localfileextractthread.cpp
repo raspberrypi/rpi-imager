@@ -15,6 +15,16 @@
 LocalFileExtractThread::LocalFileExtractThread(const QByteArray &url, const QByteArray &dst, const QByteArray &expectedHash, QObject *parent)
     : DownloadExtractThread(url, dst, expectedHash, parent)
 {
+    // Prevent the machine from sleeping while the download/extraction is in progress.
+    try
+    {
+        _suspendInhibitor = CreateSuspendInhibitor();
+    }
+    catch (...)
+    {
+        _suspendInhibitor = nullptr;
+    }
+
     // Use the same optimal buffer sizing as compressed files for better performance
     size_t bufferSize = SystemMemoryManager::instance().getOptimalWriteBufferSize();
     _inputBuf = (char *) qMallocAligned(bufferSize, 4096);
@@ -32,6 +42,11 @@ LocalFileExtractThread::~LocalFileExtractThread()
     
     wait();
     qFreeAligned(_inputBuf);
+
+    // Release the inhibition on suspending the system.
+    if (_suspendInhibitor != nullptr) {
+        delete _suspendInhibitor;
+    }
 }
 
 void LocalFileExtractThread::_cancelExtract()

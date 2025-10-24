@@ -7,6 +7,7 @@
  */
 
 #include "downloadextractthread.h"
+#include "suspend_inhibitor.h"
 #include <QFile>
 
 // Forward declarations for libarchive
@@ -32,6 +33,9 @@ protected:
     QFile _inputfile;
     char *_inputBuf;
     size_t _inputBufSize;
+
+private:
+    SuspendInhibitor *_suspendInhibitor;
 };
 
 #endif // LOCALFILEEXTRACTTHREAD_H
