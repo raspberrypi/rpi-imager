@@ -5,7 +5,7 @@
     <name>AppOptionsDialog</name>
     <message>
         <source>App Options</source>
-        <translation>Programm Optionen</translation>
+        <translation>Einstellungen</translation>
     </message>
     <message>
         <source>Play sound when finished</source>
@@ -41,7 +41,7 @@
     </message>
     <message>
         <source>Content Repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Image Repository</translation>
     </message>
     <message>
         <source>Edit</source>
@@ -49,39 +49,39 @@
     </message>
     <message>
         <source>Close the options dialog without saving any changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Schließen Sie den Einstellungsdialog, ohne die Änderungen zu speichern</translation>
     </message>
     <message>
         <source>Save the selected options and apply them to Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Speichern Sie die ausgewählten Einstellungen und wenden Sie sie auf Raspberry Pi Imager an</translation>
     </message>
     <message>
         <source>Keep warnings enabled and return to the options dialog</source>
-        <translation type="unfinished"></translation>
+        <translation>Warnungen aktiviert lassen und zum Optionsdialog zurückkehren</translation>
     </message>
     <message>
         <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Bestätigungsaufforderungen vor dem Schreiben von Images deaktivieren, sodass nur die genaue Namenseingabe für Systemlaufwerke erforderlich ist</translation>
     </message>
     <message>
         <source>Play an audio notification when the image write process completes</source>
-        <translation type="unfinished"></translation>
+        <translation>Spiele eine Audiobenachrichtigung ab, wenn der Schreibvorgang abgeschlossen ist</translation>
     </message>
     <message>
         <source>Automatically eject the storage device when the write process completes successfully</source>
-        <translation type="unfinished"></translation>
+        <translation>Speichergerät automatisch auswerfen, wenn der Schreibvorgang erfolgreich abgeschlossen ist</translation>
     </message>
     <message>
         <source>Send anonymous usage statistics to help improve Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Anonyme Nutzungsstatistiken senden, um zur Verbesserung von Raspberry Pi Imager beizutragen</translation>
     </message>
     <message>
         <source>Skip confirmation dialogs before writing images (advanced users only)</source>
-        <translation type="unfinished"></translation>
+        <translation>Bestätigungsdialoge vor dem Schreiben des Images überspringen (nur für fortgeschrittene Benutzer)</translation>
     </message>
     <message>
         <source>Change the source of operating system images between official Raspberry Pi repository and custom sources</source>
-        <translation type="unfinished"></translation>
+        <translation>Ändern der Quelle der Betriebssystem-Images zwischen dem offiziellen Raspberry Pi-Repository und benutzerdefinierten Quellen</translation>
     </message>
 </context>
 <context>
@@ -204,11 +204,11 @@
     </message>
     <message>
         <source>USB Gadget mode enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>USB Gadget Modus aktiviert</translation>
     </message>
     <message>
         <source>1-Wire enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>1-Wire aktiviert</translation>
     </message>
     <message>
         <source>Serial configured</source>
@@ -247,23 +247,23 @@
     </message>
     <message>
         <source>Cancel operation and return to storage selection to choose a different device</source>
-        <translation type="unfinished"></translation>
+        <translation>Vorgang abbrechen und zur Speicherauswahl zurückkehren, um ein anderes Gerät auszuwählen</translation>
     </message>
     <message>
         <source>Proceed to write the image to this system drive after confirming the drive name</source>
-        <translation type="unfinished"></translation>
+        <translation>Mit dem Schreiben des Images auf dieses Systemlaufwerk fortfahren, nachdem der Laufwerksname bestätigt wurde</translation>
     </message>
     <message>
         <source>Drive information</source>
-        <translation type="unfinished"></translation>
+        <translation>Laufwerksinformationen</translation>
     </message>
     <message>
         <source>Drive name to type: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Einzugebender Laufwerksname: %1</translation>
     </message>
     <message>
         <source>Drive name input. Type exactly: %1. %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Eingabe des Laufwerknamens. Geben Sie exakt Folgendes ein: %1. %2</translation>
     </message>
 </context>
 <context>
@@ -286,11 +286,11 @@
     </message>
     <message>
         <source>Keep system drives hidden to prevent accidental damage to your operating system</source>
-        <translation type="unfinished"></translation>
+        <translation>Systemlaufwerke werden ausgeblendet, um versehentliche Schäden an Ihrem Betriebssystem zu verhindern</translation>
     </message>
     <message>
         <source>Remove the safety filter and display system drives in the storage device list</source>
-        <translation type="unfinished"></translation>
+        <translation>Entferne den Schutzmechanismus und zeige Systemlaufwerke in der Liste an</translation>
     </message>
 </context>
 <context>
@@ -301,7 +301,7 @@
     </message>
     <message>
         <source>Device selection list. Select a Raspberry Pi device. Use arrow keys to navigate, Enter or Space to select</source>
-        <translation type="unfinished"></translation>
+        <translation>Auswahlliste der Modelle. Wählen Sie ein Raspberry Pi-Modell aus. Verwenden Sie die Pfeiltasten zum Navigieren, die Eingabet- oder die Leertaste zum Auswählen</translation>
     </message>
 </context>
 <context>
@@ -344,15 +344,15 @@
     </message>
     <message>
         <source>Return to the beginning to write another image to a different storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Zum Anfang zurückgehen, um ein weiteres Bild auf ein anderes Speichergerät zu schreiben</translation>
     </message>
     <message>
         <source>Reboot the system to apply changes</source>
-        <translation type="unfinished"></translation>
+        <translation>System neustarten, um die Änderungen zu übernehmen</translation>
     </message>
     <message>
         <source>Close Raspberry Pi Imager and exit the application</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imager schließen und die Anwendung beenden</translation>
     </message>
 </context>
 <context>
@@ -435,95 +435,95 @@
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>Zwischengespeicherte Datei ist beschädigt. SHA256-Hash entspricht nicht dem erwarteten Wert.&lt;br&gt;Die Cache-Datei wird entfernt und der Download neu gestartet.</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Die lokale Datei ist beschädigt oder hat einen falschen SHA256-Hash.&lt;br&gt;Erwartet: %1&lt;br&gt;Tatsächlich: %2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Der Download scheint beschädigt zu sein. SHA256-Hash stimmt nicht überein.&lt;br&gt;Erwartet: %1&lt;br&gt;Tatsächlich: %2&lt;br&gt;Bitte überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut.</translation>
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Der kontrollierte Ordnerzugriff scheint aktiviert zu sein. Bitte fügen Sie rpi-imager.exe zur Liste der zulässigen Apps hinzu und versuchen Sie es erneut.</translation>
     </message>
     <message>
         <source>Error: Multiple partitions found on disk. Please ensure the disk is completely clean.</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler: Auf dem Laufwerk wurden mehrere Partitionen gefunden. Bitte stellen Sie sicher, dass das Speichergerät vollständig sauber ist.</translation>
     </message>
     <message>
         <source>The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Der Datenträger ist möglicherweise schreibgeschützt oder wird von einer anderen Anwendung verwendet. Stellen Sie sicher, dass der Datenträger nicht aktiviert ist, und versuchen Sie es erneut.</translation>
     </message>
     <message>
         <source>Disk is full. Please use a larger storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Datenträger ist voll. Bitte verwenden Sie ein größeres Speichergerät.</translation>
     </message>
     <message>
         <source>The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only.</source>
-        <translation type="unfinished"></translation>
+        <translation>Der Datenträger ist schreibgeschützt. Überprüfen Sie, ob er über einen physischen Schreibschutzschalter verfügt oder nur beschrieben werden kann.</translation>
     </message>
     <message>
         <source>Media error detected. The storage device may be damaged or counterfeit. Please try a different device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Medienfehler erkannt. Das Speichergerät ist möglicherweise beschädigt oder gefälscht. Bitte versuchen Sie es mit einem anderen Gerät.</translation>
     </message>
     <message>
         <source>Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ungültiger Laufwerksparameter. Das Speichergerät wird möglicherweise nicht richtig erkannt. Bitte versuchen Sie, das Gerät erneut anzuschließen.</translation>
     </message>
     <message>
         <source>I/O device error. The storage device may have been disconnected or is malfunctioning.</source>
-        <translation type="unfinished"></translation>
+        <translation>E/A-Gerätefehler. Das Speichergerät wurde möglicherweise getrennt oder funktioniert nicht richtig.</translation>
     </message>
     <message>
         <source>Error opening disk device &apos;%1&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Öffnen des Datenträgergeräts &apos;%1&apos;</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos; after authorization.</source>
-        <translation type="unfinished"></translation>
+        <translation>Speichergerät &apos;%1&apos; kann nach der Autorisierung nicht geöffnet werden.</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos; with udisks2 authorization.</source>
-        <translation type="unfinished"></translation>
+        <translation>Speichergerät &apos;%1&apos; kann nicht mit udisks2-Autorisierung geöffnet werden.</translation>
     </message>
     <message>
         <source>Error getting device size</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Ermitteln der Gerätegröße</translation>
     </message>
     <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Schreiben auf das Speichergerät. Bitte überprüfen Sie, ob das Gerät beschreibbar ist, über ausreichend Speicherplatz verfügt und nicht schreibgeschützt ist.</translation>
     </message>
     <message>
         <source>Unmounting drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Laufwerk wird ausgehängt...</translation>
     </message>
     <message>
         <source>Opening drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffne Laufwerk...</translation>
     </message>
     <message>
         <source>Discarding existing data on drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Entferne vorhandene Daten auf dem Laufwerk…</translation>
     </message>
     <message>
         <source>Zero&apos;ing out first and last MB of drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Setze erstes und letztes MB des Laufwerks auf Null...</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>Starte Download...</translation>
     </message>
     <message>
         <source>Writing image...</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibe Image...</translation>
     </message>
     <message>
         <source>Customising OS...</source>
-        <translation type="unfinished"></translation>
+        <translation>Passe Betriebssystem an...</translation>
     </message>
 </context>
 <context>
@@ -534,39 +534,39 @@
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Öffnen des Geräts zum Formatieren</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Schreiben auf das Gerät während der Formatierung</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Suchen auf dem Gerät während der Formatierung</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Ungültige Parameter beim Formatieren</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>Nicht genügend Speicherplatz auf dem Gerät</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>Unbekannter Fehler beim Formatieren</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
+        <translation>Gerät kann nicht formatiert werden: unzureichende Berechtigungen und udisks2 nicht verfügbar</translation>
     </message>
     <message>
         <source>Preparing disk for formatting...</source>
-        <translation type="unfinished"></translation>
+        <translation>Bereite Speicher zum Formatieren vor...</translation>
     </message>
     <message>
         <source>Cleaning disk...</source>
-        <translation type="unfinished"></translation>
+        <translation>Datenträger wird bereinigt...</translation>
     </message>
     <message>
         <source>Writing filesystem...</source>
@@ -592,7 +592,7 @@
     </message>
     <message>
         <source>Enter your hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Hostname eingeben</translation>
     </message>
 </context>
 <context>
@@ -619,7 +619,7 @@
     </message>
     <message>
         <source>Enable USB Gadget Mode</source>
-        <translation type="unfinished"></translation>
+        <translation>USB Gadget Modus aktivieren</translation>
     </message>
     <message>
         <source>Learn more about USB Gadget Mode</source>
@@ -643,7 +643,7 @@
     </message>
     <message>
         <source>I understand, continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Ich verstehe, weiter</translation>
     </message>
     <message>
         <source>Customisation: Interfaces &amp; Features</source>
@@ -655,7 +655,7 @@
     </message>
     <message>
         <source>Enable 1-Wire</source>
-        <translation type="unfinished"></translation>
+        <translation>1-Wire aktivieren</translation>
     </message>
     <message>
         <source>Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals</source>
@@ -682,7 +682,7 @@
     </message>
     <message>
         <source>Enter path or URL…</source>
-        <translation type="unfinished"></translation>
+        <translation>Geben Sie den Pfad oder die URL ein…</translation>
     </message>
     <message>
         <source>Folders</source>
@@ -694,15 +694,15 @@
     </message>
     <message>
         <source>Removable drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Wechseldatenträger</translation>
     </message>
     <message>
         <source>Go up a folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Einen Ordner nach oben gehen</translation>
     </message>
     <message>
         <source>No files in this folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Keine Dateien in diesem Ordner</translation>
     </message>
 </context>
 <context>
@@ -757,23 +757,23 @@
     </message>
     <message>
         <source>Unknown precondition failure.</source>
-        <translation type="unfinished"></translation>
+        <translation>Unbekannter Fehler.</translation>
     </message>
     <message>
         <source>Cannot start write. %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibvorgang kann nicht gestartet werden. %1</translation>
     </message>
     <message>
         <source>Source file not found: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Quelldatei nicht gefunden: %1</translation>
     </message>
     <message>
         <source>Source is not a regular file: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Quelle ist keine reguläre Datei: %1</translation>
     </message>
     <message>
         <source>Source file is not readable: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Quelldatei ist nicht lesbar: %1</translation>
     </message>
     <message>
         <source>image</source>
@@ -785,7 +785,7 @@
     </message>
     <message>
         <source>valid storage device (device no longer available)</source>
-        <translation type="unfinished"></translation>
+        <translation>gültiges Speichergerät (Gerät nicht mehr verfügbar)</translation>
     </message>
     <message>
         <source>No %1 selected.</source>
@@ -812,11 +812,11 @@
     </message>
     <message>
         <source>Skip keychain access and manually enter the Wi-Fi password</source>
-        <translation type="unfinished"></translation>
+        <translation>Überspringen Sie den Schlüsselbundzugriff und geben Sie das Wi-Fi-Passwort manuell ein</translation>
     </message>
     <message>
         <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Rufen Sie das Wi-Fi-Passwort mit Administratorrechten aus dem Schlüsselbund des Systems ab</translation>
     </message>
 </context>
 <context>
@@ -927,11 +927,11 @@
     </message>
     <message>
         <source>Operating system list. Select an operating system. Use arrow keys to navigate, Enter or Space to select</source>
-        <translation type="unfinished"></translation>
+        <translation>Liste der Betriebssysteme. Wählen Sie ein Betriebssystem aus. Verwenden Sie die Pfeiltasten zum Navigieren, die Eingabe- oder die Leertaste zum Auswählen</translation>
     </message>
     <message>
         <source>Operating system category. Select an operating system. Use arrow keys to navigate, Enter or Space to select, Left arrow to go back</source>
-        <translation type="unfinished"></translation>
+        <translation>Kategorien der Betriebssysteme Wählen Sie ein Betriebssystem aus. Verwenden Sie die Pfeiltasten zum Navigieren, die Eingabe- oder die Leertaste zum Auswählen und den linken Pfeil zum Zurückgehen.</translation>
     </message>
 </context>
 <context>
@@ -970,11 +970,11 @@
     </message>
     <message>
         <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffnen Sie die Raspberry Pi Connect-Website in Ihrem Browser, um sich anzumelden und ein Authentifizierungstoken zu erhalten</translation>
     </message>
     <message>
         <source>Enable secure remote access to your Raspberry Pi through the Raspberry Pi Connect cloud service</source>
-        <translation type="unfinished"></translation>
+        <translation>Sicheren Fernzugriff für die Steuerung Ihres Raspberry Pi über den Raspberry Pi Connect Service aktivieren</translation>
     </message>
 </context>
 <context>
@@ -1021,22 +1021,22 @@
     </message>
     <message>
         <source>Select an SSH public key file from your computer to enable key-based authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie eine Datei mit einem öffentlichen SSH-Schlüssel aus, um die schlüsselbasierte Authentifizierung zu aktivieren</translation>
     </message>
     <message>
         <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Sicheren Shell-Zugriff für die Steuerung Ihres Raspberry Pi über eine Remote-Befehlszeile aktivieren</translation>
     </message>
 </context>
 <context>
     <name>RepositoryDialog</name>
     <message>
         <source>Content Repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Image Repository</translation>
     </message>
     <message>
         <source>Repository source:</source>
-        <translation type="unfinished"></translation>
+        <translation>Repository-Quelle:</translation>
     </message>
     <message>
         <source>Use custom file</source>
@@ -1044,7 +1044,7 @@
     </message>
     <message>
         <source>Please select a custom repository json file</source>
-        <translation type="unfinished"></translation>
+        <translation>Bitte wählen Sie eine benutzerdefinierte Repository-JSON-Datei aus</translation>
     </message>
     <message>
         <source>Select Repository</source>
@@ -1060,35 +1060,35 @@
     </message>
     <message>
         <source>Use custom URL</source>
-        <translation type="unfinished"></translation>
+        <translation>Eigene URL verwenden</translation>
     </message>
     <message>
         <source>Select a custom repository JSON file from your computer</source>
-        <translation type="unfinished"></translation>
+        <translation>Eine benutzerdefinierte Repository JSON-Datei von Ihrem Computer auswählen</translation>
     </message>
     <message>
         <source>Close the repository dialog without changing the content source</source>
-        <translation type="unfinished"></translation>
+        <translation>Den Repository-Dialog schließen, ohne die Image-Quelle zu ändern</translation>
     </message>
     <message>
         <source>Apply the new content repository and restart the wizard from the beginning</source>
-        <translation type="unfinished"></translation>
+        <translation>Das neue Image-Repository anwenden und den Assistenten von Anfang an neu starten</translation>
     </message>
     <message>
         <source>Choose the source for operating system images</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie die Quelle für die Betriebssystem-Images</translation>
     </message>
     <message>
         <source>Use the official Raspberry Pi operating system repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Verwende das offizielle Repository des Raspberry Pi-Betriebssystems</translation>
     </message>
     <message>
         <source>Load operating system list from a JSON file on your computer</source>
-        <translation type="unfinished"></translation>
+        <translation>Lade Betriebssystemliste aus einer JSON-Datei auf Ihrem Computer</translation>
     </message>
     <message>
         <source>Download operating system list from a custom web address</source>
-        <translation type="unfinished"></translation>
+        <translation>Lade Betriebssystemliste von einer benutzerdefinierten Webadresse herunter</translation>
     </message>
 </context>
 <context>
@@ -1115,7 +1115,7 @@
     </message>
     <message>
         <source>Storage device list. Select a storage device. Use arrow keys to navigate, Enter or Space to select</source>
-        <translation type="unfinished"></translation>
+        <translation>Liste der Speichergeräte. Wählen Sie ein Speichergerät aus. Verwenden Sie die Pfeiltasten zum Navigieren, die Eingabe- oder die Leertaste zum Auswählen</translation>
     </message>
 </context>
 <context>
@@ -1130,11 +1130,11 @@
     </message>
     <message>
         <source>Continue using the current version of Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Weiterhin die aktuelle Version von Raspberry Pi Imager verwenden</translation>
     </message>
     <message>
         <source>Open the Raspberry Pi website in your browser to download the latest version</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffnen Sie die Raspberry Pi-Website in Ihrem Browser, um die neueste Version herunterzuladen</translation>
     </message>
 </context>
 <context>
@@ -1165,7 +1165,7 @@
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
-        <translation type="unfinished"></translation>
+        <translation>Gespeichert (versteckt) – zum Beibehalten leer lassen</translation>
     </message>
     <message>
         <source>Re-enter to change password</source>
@@ -1216,55 +1216,55 @@
     </message>
     <message>
         <source>No password (open network)</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Passwort (Offenes Netzwerk)</translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
-        <translation type="unfinished"></translation>
+        <translation>Gespeichert (versteckt) – zum Beibehalten leer lassen</translation>
     </message>
     <message>
         <source>Secure network</source>
-        <translation type="unfinished"></translation>
+        <translation>Gesichertes Netzwerk</translation>
     </message>
     <message>
         <source>Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption</source>
-        <translation type="unfinished"></translation>
+        <translation>Wi-Fi für ein passwortgeschütztes Netzwerk mit WPA2/WPA3-Verschlüsselung konfigurieren</translation>
     </message>
     <message>
         <source>Open network</source>
-        <translation type="unfinished"></translation>
+        <translation>Offenes Netzwerk</translation>
     </message>
     <message>
         <source>Configure Wi-Fi for an unencrypted network without password protection</source>
-        <translation type="unfinished"></translation>
+        <translation>Wi-Fi für ein unverschlüsseltes Netzwerk ohne Passwortschutz konfigurieren</translation>
     </message>
     <message>
         <source>Enter a password</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort eingeben</translation>
     </message>
     <message>
         <source>Password is too short (min 8 characters)</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort ist zu kurz (mind. 8 Zeichen)</translation>
     </message>
     <message>
         <source>Password is too long (max 63 characters)</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort ist zu lang (max.. 63 Zeichen)</translation>
     </message>
     <message>
         <source>Password contains unsupported characters</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwort enthält nicht unterstützte Zeichen</translation>
     </message>
     <message>
         <source>Passwords don’t match</source>
-        <translation type="unfinished"></translation>
+        <translation>Passwörter stimmen nicht überein</translation>
     </message>
     <message>
         <source>Confirm password:</source>
-        <translation type="unfinished">Passwort bestätigen:</translation>
+        <translation>Passwort bestätigen:</translation>
     </message>
     <message>
         <source>Re-enter password</source>
-        <translation type="unfinished">Passwort wiederholen</translation>
+        <translation>Passwort wiederholen</translation>
     </message>
 </context>
 <context>
@@ -1311,15 +1311,15 @@
     </message>
     <message>
         <source>App Options</source>
-        <translation>Programm Optionen</translation>
+        <translation>Einstellungen</translation>
     </message>
     <message>
         <source>Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Schnittstellen &amp; Funktionen</translation>
     </message>
     <message>
         <source>Setup steps</source>
-        <translation type="unfinished"></translation>
+        <translation>Setup Schritte</translation>
     </message>
     <message>
         <source>Localisation</source>
@@ -1331,7 +1331,7 @@
     </message>
     <message>
         <source>Open application settings to configure sound alerts, auto-eject, telemetry, and content repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffnen Sie die Einstellungen, um Tonsignale, automatisches Auswerfen, Telemetrie, Warnungen und die Software-Quelle zu konfigurieren</translation>
     </message>
 </context>
 <context>
@@ -1381,7 +1381,7 @@
     </message>
     <message>
         <source>I understand, erase and write</source>
-        <translation>Ich verstehe. Lösche und schreibe.</translation>
+        <translation>Ich verstehe. Lösche und schreibe</translation>
     </message>
     <message>
         <source>Please wait...</source>
@@ -1389,11 +1389,11 @@
     </message>
     <message>
         <source>Writing... %1%</source>
-        <translation>Schreiben... %1%</translation>
+        <translation>Schreibe... %1%</translation>
     </message>
     <message>
         <source>Verifying... %1%</source>
-        <translation>Verifizieren... %1%</translation>
+        <translation>Verifiziere... %1%</translation>
     </message>
     <message>
         <source>Write completed successfully!</source>
@@ -1429,19 +1429,19 @@
     </message>
     <message>
         <source>Cancel and return to the write summary without erasing the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Abbrechen und zur Zusammenfassung zurückkehren, ohne das Speichergerät zu löschen</translation>
     </message>
     <message>
         <source>Confirm erasure and begin writing the image to the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Das Löschen bestätigen und mit dem Schreiben des Images auf das Speichergerät beginnen</translation>
     </message>
     <message>
         <source>Skip verification</source>
-        <translation type="unfinished"></translation>
+        <translation>Verifizierung überspringen</translation>
     </message>
     <message>
         <source>Cancel write</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibvorgang abbrechen</translation>
     </message>
 </context>
 <context>
@@ -1492,19 +1492,19 @@
     </message>
     <message>
         <source>Close the error dialog and continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Den Fehlerdialog schließen und fortfahren</translation>
     </message>
     <message>
         <source>Close the storage removed notification and return to storage selection</source>
-        <translation type="unfinished"></translation>
+        <translation>Den &quot;Speichergerät entfernt&quot; Hinweis schließen und zur Speicher-Auswahl zurückkehren</translation>
     </message>
     <message>
         <source>Return to Raspberry Pi Imager and continue the current operation</source>
-        <translation type="unfinished"></translation>
+        <translation>Zum Raspberry Pi Imager zurückkehren und den aktuellen Vorgang fortsetzen</translation>
     </message>
     <message>
         <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
-        <translation type="unfinished"></translation>
+        <translation>Den Raspberry Pi Imager schließen und den aktuellen Schreibvorgang abbrechen</translation>
     </message>
 </context>
 </TS>
