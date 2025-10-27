@@ -269,10 +269,6 @@
 <context>
     <name>ConfirmUnfilterDialog</name>
     <message>
-        <source>Remove system drive filter?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -300,7 +296,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Device selection list. Select a Raspberry Pi device. Use arrow keys to navigate, Enter or Space to select</source>
+        <source>Device selection list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use arrow keys to navigate, Enter or Space to select</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -343,15 +355,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Return to the beginning to write another image to a different storage device</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Reboot the system to apply changes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Close Raspberry Pi Imager and exit the application</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to storage selection to write the same image to another storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>customization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>customizations</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -593,6 +613,18 @@
         <source>Enter your hostname</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Save hostname and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>IfAndFeaturesCustomizationStep</name>
@@ -672,6 +704,42 @@
         <source>Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Save interface and feature settings and continue to writing step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure the serial interface: Disabled, Default (system decides), Console &amp; Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB Gadget Mode Warning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please review the documentation before proceeding.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel and return to the interfaces and features settings without enabling USB Gadget Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm that you understand the risks and continue with USB Gadget Mode enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This button will be enabled after 2 seconds</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImFileDialog</name>
@@ -701,6 +769,25 @@
     </message>
     <message>
         <source>No files in this folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImTextField</name>
+    <message>
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select All</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -832,6 +919,10 @@
         <source>Choose your language for Raspberry Pi Imager</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Select the language for the Raspberry Pi Imager interface</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>LocalFileExtractThread</name>
@@ -882,6 +973,30 @@
         <source>Capital city:</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Save localisation settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country&apos;s Wi-Fi regulations.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>OSListModel</name>
@@ -925,11 +1040,35 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Operating system list. Select an operating system. Use arrow keys to navigate, Enter or Space to select</source>
+        <source>Operating system list</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Operating system category. Select an operating system. Use arrow keys to navigate, Enter or Space to select, Left arrow to go back</source>
+        <source>No operating systems</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 operating system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 operating systems</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use arrow keys to navigate, Enter or Space to select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating system category</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use arrow keys to navigate, Enter or Space to select, Left arrow to go back</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Released: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -952,15 +1091,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Status:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Token received from browser</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Waiting for token</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -973,6 +1104,50 @@
     </message>
     <message>
         <source>Enable secure remote access to your Raspberry Pi through the Raspberry Pi Connect cloud service</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Raspberry Pi Connect settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the &apos;Open Raspberry Pi Connect&apos; button to sign in.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for token (%1s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste token here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid Token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The token you entered is not valid. Please check the token and try again, or use the &apos;Open Raspberry Pi Connect&apos; button to get a valid token.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close this dialog and return to the token field</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Authentication token:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1024,6 +1199,38 @@
     </message>
     <message>
         <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save SSH settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allow SSH login using the username and password you configured in the previous step.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allow SSH login using a cryptographic key pair instead of a password. More secure than password authentication.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter or paste your SSH public key, or use the Browse button to select a public key file (typically id_rsa.pub or id_ed25519.pub).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Public key:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1113,7 +1320,60 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Storage device list. Select a storage device. Use arrow keys to navigate, Enter or Space to select</source>
+        <source>Storage device list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use arrow keys to navigate, Enter or Space to select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All visible devices are read-only.
+Try connecting a new device, or uncheck
+&apos;Exclude system drives&apos; below.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All devices are read-only.
+Please connect a writable storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All devices are hidden by the filter.
+Uncheck &apos;Exclude system drives&apos; below
+to show system drives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No storage devices found. Please connect a storage device to continue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos; to show hidden system drives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1178,6 +1438,38 @@
         <source>Enter your username</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Save user account settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a new password for this account, or leave blank to keep the previously saved password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a password for this account. You will need to re-enter it in the next field to confirm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter the new password to confirm, or leave blank to keep the previously saved password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter the password to confirm it matches.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WifiCustomizationStep</name>
@@ -1194,23 +1486,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Wireless LAN country:</source>
-        <translation type="unfinished">WiFi je v državi:</translation>
-    </message>
-    <message>
         <source>Hidden SSID</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Customisation: Choose Wi‑Fi</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Configure wireless LAN settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Recommended based on your capital city selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1254,15 +1534,55 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Passwords don’t match</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Confirm password:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Re-enter password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Wi-Fi settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter the Wi-Fi password to confirm it matches.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwords don&apos;t match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter to change password</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1332,6 +1652,50 @@
         <source>Open application settings to configure sound alerts, auto-eject, telemetry, and content repository</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Replace existing Raspberry Pi Connect token?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A new Raspberry Pi Connect token was received that differs from your current one.
+
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Do you want to overwrite the existing token?
+
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Warning: Only replace the token if you initiated this action. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>If you didn&apos;t, someone could be trying to push a bad token to RPi Imager.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please wait…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace the current token with the newly received one</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep existing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep your current Raspberry Pi Connect token</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardStepBase</name>
@@ -1360,10 +1724,6 @@
     </message>
     <message>
         <source>Starting write process...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Write cancelled</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1419,14 +1779,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Ready to write your customised image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Ready to write the image to your storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Cancel and return to the write summary without erasing the storage device</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1440,6 +1792,54 @@
     </message>
     <message>
         <source>Cancel write</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip verification and finish the write process</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel the write operation and return to the summary</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue to the completion screen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Begin writing the image to the storage device. All existing data will be erased.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous customization step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finalising…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verification cancelled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>customization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>customizations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing in progress — do not disconnect the storage device</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

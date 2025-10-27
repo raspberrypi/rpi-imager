@@ -19,6 +19,9 @@ WizardStepBase {
     title: qsTr("Customisation: Raspberry Pi Connect")
     subtitle: qsTr("Sign in to receive a token and enable Raspberry Pi Connect.")
     showSkipButton: true
+    nextButtonAccessibleDescription: qsTr("Save Raspberry Pi Connect settings and continue to next customisation step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
 
     // Only visible/active when the selected OS supports it
     visible: wizardContainer.piConnectAvailable
@@ -43,7 +46,11 @@ WizardStepBase {
                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is Raspberry Pi Connect?")
                 helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/software/connect/"
                 checked: false
-                onToggled: function(isChecked) { wizardContainer.piConnectEnabled = isChecked }
+                onToggled: function(isChecked) { 
+                    wizardContainer.piConnectEnabled = isChecked
+                    // Rebuild focus order when pill state changes
+                    root.rebuildFocusOrder()
+                }
             }
 
             // Request token button (only when enabled and no token present)
@@ -62,7 +69,18 @@ WizardStepBase {
                 }
             }
 
-            // Token input field (only when enabled)
+            // Token input field label and field (only when enabled)
+            WizardFormLabel {
+                id: labelConnectToken
+                text: qsTr("Authentication token:")
+                visible: useTokenPill.checked
+                Accessible.ignored: false
+                Accessible.focusable: true
+                Accessible.description: qsTr("Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the 'Open Raspberry Pi Connect' button to sign in.")
+                focusPolicy: Qt.TabFocus
+                activeFocusOnTab: true
+            }
+            
             ImTextField {
                 id: fieldConnectToken
                 Layout.fillWidth: true
@@ -118,6 +136,8 @@ WizardStepBase {
             if (root.countdownSeconds === 0) {
                 stop()
                 root.tokenFieldEnabled = true
+                // Rebuild focus order since the text field is now enabled
+                root.rebuildFocusOrder()
             }
         }
     }
@@ -138,6 +158,8 @@ WizardStepBase {
                 if (fieldConnectToken) {
                     fieldConnectToken.text = token
                 }
+                // Rebuild focus order since the "Open Raspberry Pi Connect" button is now hidden
+                root.rebuildFocusOrder()
             }
         }
     }
@@ -145,10 +167,14 @@ WizardStepBase {
     Component.onCompleted: {
         root.registerFocusGroup("pi_connect", function(){
             var items = [useTokenPill.focusItem]
-            if (useTokenPill.checked)
+            // Only include button if it's actually visible (checked and no token received yet)
+            if (useTokenPill.checked && !root.connectTokenReceived)
                 items.push(btnOpenConnect)
-            if (fieldConnectToken.enabled)
+            // Include label before text field so users hear the explanation first
+            if (useTokenPill.checked && fieldConnectToken.enabled) {
+                items.push(labelConnectToken)
                 items.push(fieldConnectToken)
+            }
             return items
         }, 0)
 
@@ -225,6 +251,7 @@ WizardStepBase {
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
+        title: qsTr("Invalid Token")
         
         function escapePressed() {
             invalidTokenDialog.close()
@@ -238,6 +265,7 @@ WizardStepBase {
         
         // Dialog content
         Text {
+            id: dialogTitle
             text: qsTr("Invalid Token")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
@@ -245,15 +273,22 @@ WizardStepBase {
             color: Style.formLabelErrorColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            // Make accessible to screen readers
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         
         Text {
+            id: dialogMessage
             text: qsTr("The token you entered is not valid. Please check the token and try again, or use the 'Open Raspberry Pi Connect' button to get a valid token.")
             font.pixelSize: Style.fontSizeFormLabel
             font.family: Style.fontFamily
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            // Make accessible to screen readers
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
         
         RowLayout {
@@ -264,6 +299,7 @@ WizardStepBase {
             ImButton {
                 id: okBtn
                 text: qsTr("OK")
+                accessibleDescription: qsTr("Close this dialog and return to the token field")
                 activeFocusOnTab: true
                 onClicked: {
                     invalidTokenDialog.close()

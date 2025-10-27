@@ -49,6 +49,8 @@ BaseDialog {
         color: Style.formLabelColor
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
+        Accessible.role: Accessible.Heading
+        Accessible.name: text
     }
 
     // Options section
@@ -259,6 +261,8 @@ BaseDialog {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
 
         Text {
@@ -269,6 +273,8 @@ BaseDialog {
             color: Style.textDescriptionColor
             Layout.fillWidth: true
             text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         }
 
         RowLayout {

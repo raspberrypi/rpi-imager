@@ -120,11 +120,7 @@ WizardStepBase {
             return currentPage ? [currentPage] : [oslist]
         }, 0)
 
-        // Set the initial focus item to the OS list
-        root.initialFocusItem = oslist
-
-        // Ensure focus starts on the OS list when entering this step
-        oslist.forceActiveFocus()
+        // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
         _focusFirstItemInCurrentView()
     }
 
@@ -254,7 +250,21 @@ WizardStepBase {
                         id: oslist
                         model: root.osmodel
                         delegate: osdelegate
-                        accessibleName: qsTr("Operating system list. Select an operating system. Use arrow keys to navigate, Enter or Space to select")
+                        accessibleName: {
+                            var count = oslist.count
+                            var name = qsTr("Operating system list")
+                            
+                            if (count === 0) {
+                                name += ". " + qsTr("No operating systems")
+                            } else if (count === 1) {
+                                name += ". " + qsTr("1 operating system")
+                            } else {
+                                name += ". " + qsTr("%1 operating systems").arg(count)
+                            }
+                            
+                            name += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select")
+                            return name
+                        }
                         accessibleDescription: ""
                         
                         // Connect to our OS selection handler
@@ -313,8 +323,7 @@ WizardStepBase {
             
             // Accessibility properties
             Accessible.role: Accessible.ListItem
-            Accessible.name: delegateItem.name
-            Accessible.description: delegateItem.description + (delegateItem.release_date !== "" ? " - " + delegateItem.release_date : "")
+            Accessible.name: delegateItem.name + ". " + delegateItem.description + (delegateItem.release_date !== "" ? ". " + qsTr("Released: %1").arg(delegateItem.release_date) : "")
             Accessible.focusable: true
             Accessible.ignored: false
             
@@ -379,7 +388,7 @@ WizardStepBase {
                         smooth: true
                         mipmap: true
                         // Rasterize vector sources at device pixel ratio to avoid aliasing/blurriness on HiDPI
-                        sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+                        sourceSize: Qt.size(Math.round(Layout.preferredWidth * Screen.devicePixelRatio), Math.round(Layout.preferredHeight * Screen.devicePixelRatio))
                         visible: source.toString().length > 0
 
                         Rectangle {
@@ -403,6 +412,7 @@ WizardStepBase {
                             font.bold: true
                             color: Style.formLabelColor
                             Layout.fillWidth: true
+                            Accessible.ignored: true
                         }
                         
                         Text {
@@ -412,6 +422,7 @@ WizardStepBase {
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
+                            Accessible.ignored: true
                         }
                         // Cache/local/online status line
                         Text {
@@ -436,15 +447,17 @@ WizardStepBase {
                                     : (delegateItem.url.startsWith("file://")
                                        ? qsTr("Local file")
                                        : qsTr("Online - %1 download").arg(imageWriter.formatSize(delegateItem.image_download_size)))))
+                            Accessible.ignored: true
                         }
                         
                         Text {
-                            text: delegateItem.release_date
+                            text: delegateItem.release_date !== "" ? qsTr("Released: %1").arg(delegateItem.release_date) : ""
                             font.pixelSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
                             color: Style.textMetadataColor
                             Layout.fillWidth: true
                             visible: delegateItem.release_date !== ""
+                            Accessible.ignored: true
                         }
                     }
                 }
@@ -460,9 +473,42 @@ WizardStepBase {
             id: sublistview
             model: ListModel {
                 id: sublistModel
+                
+                // Notify accessibility system when the model changes
+                onCountChanged: {
+                    // Force accessibility update by briefly toggling and restoring focus
+                    if (sublistview.activeFocus) {
+                        Qt.callLater(function() {
+                            // The accessibleName binding will re-evaluate with the new count
+                            // Force the screen reader to re-announce by resetting focus
+                            var parent = sublistview.parent
+                            if (parent) {
+                                parent.forceActiveFocus()
+                                Qt.callLater(function() {
+                                    sublistview.forceActiveFocus()
+                                })
+                            }
+                        })
+                    }
+                }
             }
             delegate: osdelegate
-            accessibleName: qsTr("Operating system category. Select an operating system. Use arrow keys to navigate, Enter or Space to select, Left arrow to go back")
+            accessibleName: {
+                // Subtract 1 from count because the first item is the "Back" button, not an OS
+                var osCount = Math.max(0, sublistview.count - 1)
+                var name = qsTr("Operating system category")
+                
+                if (osCount === 0) {
+                    name += ". " + qsTr("No operating systems")
+                } else if (osCount === 1) {
+                    name += ". " + qsTr("1 operating system")
+                } else {
+                    name += ". " + qsTr("%1 operating systems").arg(osCount)
+                }
+                
+                name += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select, Left arrow to go back")
+                return name
+            }
             accessibleDescription: ""
             
             // Connect to our OS selection handler

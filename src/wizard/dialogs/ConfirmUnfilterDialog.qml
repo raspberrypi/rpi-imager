@@ -31,24 +31,15 @@ BaseDialog {
 
     // Register focus groups when component is ready
     Component.onCompleted: {
+        registerFocusGroup("warning", function(){ 
+            return [warningText] 
+        }, 0)
         registerFocusGroup("buttons", function(){ 
             return [keepFilterButton, showSystemButton] 
-        }, 0)
+        }, 1)
     }
 
     // Dialog content
-    Text {
-        text: qsTr("Remove system drive filter?")
-        font.pixelSize: Style.fontSizeHeading
-        font.family: Style.fontFamilyBold
-        font.bold: true
-        color: Style.formLabelColor
-        Layout.fillWidth: true
-        Accessible.role: Accessible.Heading
-        Accessible.name: text
-        Accessible.ignored: false
-    }
-
     Text {
         id: warningText
         textFormat: Text.StyledText
@@ -64,6 +55,9 @@ BaseDialog {
         Accessible.role: Accessible.StaticText
         Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         Accessible.ignored: false
+        Accessible.focusable: true
+        focusPolicy: Qt.TabFocus
+        activeFocusOnTab: true
     }
 
     RowLayout {

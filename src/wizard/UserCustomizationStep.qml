@@ -21,6 +21,9 @@ WizardStepBase {
     title: qsTr("Customisation: Choose username")
     subtitle: qsTr("Create a user account for your Raspberry Pi")
     showSkipButton: true
+    nextButtonAccessibleDescription: qsTr("Save user account settings and continue to next customisation step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
     
     // Content
     content: [
@@ -39,13 +42,19 @@ WizardStepBase {
                 rowSpacing: Style.formRowSpacing
                 
                 WizardFormLabel {
+                    id: labelUsername
                     text: qsTr("Username:")
+                    Accessible.ignored: false
+                    Accessible.focusable: true
+                    Accessible.description: qsTr("Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
                 
                 ImTextField {
                     id: fieldUsername
                     Layout.fillWidth: true
-                    placeholderText: root.hasSavedUserPassword && root.savedUsername ? root.savedUsername : qsTr("Enter your username")
+                    placeholderText: qsTr("Enter your username")
                     font.pixelSize: Style.fontSizeInput
                     
                     validator: RegularExpressionValidator {
@@ -54,7 +63,13 @@ WizardStepBase {
                 }
                 
                 WizardFormLabel {
+                    id: labelPassword
                     text: CommonStrings.password
+                    Accessible.ignored: false
+                    Accessible.focusable: true
+                    Accessible.description: root.hasSavedUserPassword ? qsTr("Enter a new password for this account, or leave blank to keep the previously saved password.") : qsTr("Enter a password for this account. You will need to re-enter it in the next field to confirm.")
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
                 
                 ImTextField {
@@ -66,7 +81,13 @@ WizardStepBase {
                 }
                 
                 WizardFormLabel {
+                    id: labelPasswordConfirm
                     text: qsTr("Confirm password:")
+                    Accessible.ignored: false
+                    Accessible.focusable: true
+                    Accessible.description: root.hasSavedUserPassword ? qsTr("Re-enter the new password to confirm, or leave blank to keep the previously saved password.") : qsTr("Re-enter the password to confirm it matches.")
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
                 
                 ImTextField {
@@ -79,6 +100,7 @@ WizardStepBase {
             }
             
             WizardDescriptionText {
+                id: helpText
                 text: qsTr("The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
             }
         }
@@ -86,12 +108,13 @@ WizardStepBase {
     ]
 
     Component.onCompleted: {
+        // Include labels before their corresponding fields so users hear the explanation first
         root.registerFocusGroup("user_fields", function(){
-            return [fieldUsername, fieldPassword, fieldPasswordConfirm]
+            return [labelUsername, fieldUsername, labelPassword, fieldPassword, labelPasswordConfirm, fieldPasswordConfirm, helpText]
         }, 0)
         
         // Set initial focus on the username field
-        root.initialFocusItem = fieldUsername
+        // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
         
         // Prefill from saved settings (avoid showing raw passwords)
         var saved = imageWriter.getSavedCustomizationSettings()

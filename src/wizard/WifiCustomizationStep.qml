@@ -21,27 +21,30 @@ WizardStepBase {
     property string originalSavedSSID: ""
     property bool hadSavedCrypt: false
     property bool showPw: wifiMode === "secure"
-    property bool confirmNeedsInput: false
 
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
     title: qsTr("Customisation: Choose Wi‑Fi")
     showSkipButton: true
+    nextButtonAccessibleDescription: qsTr("Save Wi-Fi settings and continue to next customisation step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
     
-    // Set initial focus on SSID
-    // don't default to the mode switchers so they aren't tempted to select open ;)
-    initialFocusItem: fieldWifiSSID
+    // Initial focus will automatically go to title, then subtitle (if present), then first control (handled by WizardStepBase)
 
     Component.onCompleted: {
         root.registerFocusGroup("wifi_modes", function() {
             return [tabSecure, tabOpen]
         }, 0)
+        // Include labels before their corresponding fields so users hear the explanation first
         root.registerFocusGroup("wifi_fields", function(){
-            var items = [fieldWifiSSID]
+            var items = [labelSSID, fieldWifiSSID]
             if (showPw) {
+                items.push(lblPassword)
                 items.push(fieldWifiPassword)
-                if (confirmNeedsInput)
-                    items.push(fieldWifiPasswordConfirm)
+                // Always include confirm label and field when password is shown (like user customization step)
+                items.push(lblPasswordConfirm)
+                items.push(fieldWifiPasswordConfirm)
             }
             return items
         }, 1)
@@ -111,9 +114,6 @@ WizardStepBase {
             fieldWifiPassword.placeholderText = qsTr("No password (open network)")
 
             fieldWifiPasswordConfirm.text = ""
-            fieldWifiPasswordConfirm.enabled = false
-            confirmNeedsInput = false
-            root.rebuildFocusOrder()
             return
         }
 
@@ -123,11 +123,6 @@ WizardStepBase {
         fieldWifiPassword.placeholderText = canKeep
            ? qsTr("Saved (hidden) — leave blank to keep")
            : qsTr("Network password")
-
-        var userTypedNew = (fieldWifiPassword.text && fieldWifiPassword.text.length > 0)
-        confirmNeedsInput = (!canKeep) || userTypedNew
-        fieldWifiPasswordConfirm.enabled = confirmNeedsInput
-        root.rebuildFocusOrder()
     }
 
     function passwordErrorMessage() {
@@ -158,9 +153,9 @@ WizardStepBase {
             if (!isAsciiPrintable(pwd)) return qsTr("Password contains unsupported characters");
         }
 
-        // If confirm is required, enforce match
-        if (confirmNeedsInput && (conf.length > 0 || pwd.length > 0) && pwd !== conf)
-            return qsTr("Passwords don’t match");
+        // Always enforce match when either field has content (like user customization step)
+        if ((conf.length > 0 || pwd.length > 0) && pwd !== conf)
+            return qsTr("Passwords don't match");
 
         // No errors -> keep row height stable
         return " ";
@@ -245,7 +240,13 @@ WizardStepBase {
                     rowSpacing: Style.formRowSpacing
 
                     WizardFormLabel {
+                        id: labelSSID
                         text: qsTr("SSID:")
+                        Accessible.ignored: false
+                        Accessible.focusable: true
+                        Accessible.description: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
+                        focusPolicy: Qt.TabFocus
+                        activeFocusOnTab: true
                     }
 
                     ImTextField {
@@ -263,6 +264,16 @@ WizardStepBase {
                         id: lblPassword
                         text: CommonStrings.password
                         visible: showPw
+                        Accessible.ignored: false
+                        Accessible.focusable: true
+                        Accessible.description: {
+                            var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
+                            return canKeep 
+                                ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
+                                : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
+                        }
+                        focusPolicy: Qt.TabFocus
+                        activeFocusOnTab: true
                     }
 
                     ImTextField {
@@ -287,6 +298,16 @@ WizardStepBase {
                         id: lblPasswordConfirm
                         text: qsTr("Confirm password:")
                         visible: showPw
+                        Accessible.ignored: false
+                        Accessible.focusable: true
+                        Accessible.description: {
+                            var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
+                            return canKeep 
+                                ? qsTr("Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.")
+                                : qsTr("Re-enter the Wi-Fi password to confirm it matches.")
+                        }
+                        focusPolicy: Qt.TabFocus
+                        activeFocusOnTab: true
                     }
 
                     ImTextField {
@@ -294,9 +315,11 @@ WizardStepBase {
                         Layout.fillWidth: true
                         echoMode: TextInput.Password
                         font.pixelSize: Style.fontSizeInput
-                        placeholderText: qsTr("Re-enter password")
+                        placeholderText: {
+                            var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
+                            return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
+                        }
                         visible: showPw
-                        enabled: confirmNeedsInput
                         onActiveFocusChanged: {
                             if (activeFocus)
                                 wifiScroll.scrollToItem(this);
@@ -330,6 +353,7 @@ WizardStepBase {
                     ImCheckBox {
                         id: chkWifiHidden
                         text: qsTr("Hidden SSID")
+                        Accessible.description: qsTr("Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.")
 
                         onActiveFocusChanged: {
                             if (activeFocus)
@@ -400,11 +424,12 @@ WizardStepBase {
             return true
         }
 
-        // Need a new password -> must be valid and must match confirm
+        // Need a new password -> must be valid and must match confirm (like user customization step)
         if (pwd.length === 0) return false
         if (!root.isValidWifiPassword(pwd)) return false
 
-        if (confirmNeedsInput && (pwd !== (fieldWifiPasswordConfirm.text || ""))) return false
+        // Always check that passwords match
+        if (pwd !== (fieldWifiPasswordConfirm.text || "")) return false
         return true
     })()
 
@@ -433,7 +458,7 @@ WizardStepBase {
                // secure / closed mode
                if (pwd.length > 0) {
                    // extra safety; normally unreachable because nextButtonEnabled prevents this
-                   if (confirmNeedsInput && pwd !== fieldWifiPasswordConfirm.text) return;
+                   if (pwd !== fieldWifiPasswordConfirm.text) return;
                    // overwrite with new password
                    var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
                    saved.wifiPasswordCrypt = isPassphrase ? imageWriter.pbkdf2(pwd, ssid) : pwd

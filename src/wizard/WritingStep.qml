@@ -18,7 +18,15 @@ WizardStepBase {
     required property var wizardContainer
 
     title: qsTr("Write image")
-    subtitle: qsTr("Review your choices and write the image to the storage device")
+    subtitle: {
+        if (root.isWriting) {
+            return qsTr("Writing in progress — do not disconnect the storage device")
+        } else if (root.isComplete) {
+            return qsTr("Write complete")
+        } else {
+            return qsTr("Review your choices and write the image to the storage device")
+        }
+    }
     nextButtonText: {
         if (root.isWriting) {
             // Show specific cancel text based on write state
@@ -33,6 +41,20 @@ WizardStepBase {
             return qsTr("Write")
         }
     }
+    nextButtonAccessibleDescription: {
+        if (root.isWriting) {
+            if (imageWriter.writeState === ImageWriter.Verifying) {
+                return qsTr("Skip verification and finish the write process")
+            } else {
+                return qsTr("Cancel the write operation and return to the summary")
+            }
+        } else if (root.isComplete) {
+            return qsTr("Continue to the completion screen")
+        } else {
+            return qsTr("Begin writing the image to the storage device. All existing data will be erased.")
+        }
+    }
+    backButtonAccessibleDescription: qsTr("Return to previous customization step")
     nextButtonEnabled: root.isWriting || root.isComplete || imageWriter.readyToWrite()
     showBackButton: true
 
@@ -77,25 +99,38 @@ WizardStepBase {
             visible: !root.isWriting && !root.cancelPending && !root.isFinalising
 
             Text {
+                id: summaryHeading
                 text: qsTr("Summary")
                 font.pixelSize: Style.fontSizeHeading
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.formLabelColor
                 Layout.fillWidth: true
+                Accessible.role: Accessible.Heading
+                Accessible.name: text
+                Accessible.focusable: true
+                focusPolicy: Qt.TabFocus
+                activeFocusOnTab: true
             }
 
             GridLayout {
+                id: summaryGrid
                 Layout.fillWidth: true
                 columns: 2
                 columnSpacing: Style.formColumnSpacing
                 rowSpacing: Style.spacingSmall
 
                 Text {
+                    id: deviceLabel
                     text: CommonStrings.device
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
+                    Accessible.focusable: true
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
 
                 Text {
@@ -105,13 +140,20 @@ WizardStepBase {
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    Accessible.ignored: true  // Read as part of the label
                 }
 
                 Text {
+                    id: osLabel
                     text: qsTr("Operating system:")
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
+                    Accessible.focusable: true
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
 
                 Text {
@@ -121,13 +163,20 @@ WizardStepBase {
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    Accessible.ignored: true  // Read as part of the label
                 }
 
                 Text {
+                    id: storageLabel
                     text: CommonStrings.storage
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text + ": " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
+                    Accessible.focusable: true
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
 
                 Text {
@@ -137,18 +186,8 @@ WizardStepBase {
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    Accessible.ignored: true  // Read as part of the label
                 }
-            }
-
-            Text {
-                text: root.anyCustomizationsApplied
-                      ? qsTr("Ready to write your customised image to your storage device. All existing data will be erased.")
-                      : qsTr("Ready to write the image to your storage device. All existing data will be erased.")
-                font.pixelSize: Style.fontSizeDescription
-                font.family: Style.fontFamily
-                color: Style.textDescriptionColor
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
             }
         }
 
@@ -162,12 +201,18 @@ WizardStepBase {
             visible: !root.isWriting && !root.cancelPending && !root.isFinalising && root.anyCustomizationsApplied
 
             Text {
+                id: customizationsHeading
                 text: qsTr("Customisations to apply:")
                 font.pixelSize: Style.fontSizeHeading
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.formLabelColor
                 Layout.fillWidth: true
+                Accessible.role: Accessible.Heading
+                Accessible.name: text
+                Accessible.focusable: true
+                focusPolicy: Qt.TabFocus
+                activeFocusOnTab: true
             }
 
             ScrollView {
@@ -177,6 +222,24 @@ WizardStepBase {
                 Layout.maximumHeight: Math.round(root.height * 0.4)
                 clip: true
                 activeFocusOnTab: true
+                Accessible.role: Accessible.List
+                Accessible.name: {
+                    // Build a list of visible customizations to announce
+                    var items = []
+                    if (wizardContainer.hostnameConfigured) items.push(CommonStrings.hostnameConfigured)
+                    if (wizardContainer.localeConfigured) items.push(CommonStrings.localeConfigured)
+                    if (wizardContainer.userConfigured) items.push(CommonStrings.userAccountConfigured)
+                    if (wizardContainer.wifiConfigured) items.push(CommonStrings.wifiConfigured)
+                    if (wizardContainer.sshEnabled) items.push(CommonStrings.sshEnabled)
+                    if (wizardContainer.piConnectEnabled) items.push(CommonStrings.piConnectEnabled)
+                    if (wizardContainer.featUsbGadgetEnabled) items.push(CommonStrings.usbGadgetEnabled)
+                    if (wizardContainer.ifI2cEnabled) items.push(CommonStrings.i2cEnabled)
+                    if (wizardContainer.ifSpiEnabled) items.push(CommonStrings.spiEnabled)
+                    if (wizardContainer.if1WireEnabled) items.push(CommonStrings.onewireEnabled)
+                    if (wizardContainer.ifSerial !== "" && wizardContainer.ifSerial !== "Disabled") items.push(CommonStrings.serialConfigured)
+                    
+                    return items.length + " " + (items.length === 1 ? qsTr("customization") : qsTr("customizations")) + ": " + items.join(", ")
+                }
                 contentItem: Flickable {
                     id: customizationsFlickable
                     contentWidth: width
@@ -199,17 +262,17 @@ WizardStepBase {
                         id: customizationsColumn
                         width: parent.width
                         spacing: Style.spacingXSmall
-                        Text { text: "• " + CommonStrings.hostnameConfigured;      font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.hostnameConfigured }
-                        Text { text: "• " + CommonStrings.localeConfigured;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.localeConfigured }
-                        Text { text: "• " + CommonStrings.userAccountConfigured;   font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.userConfigured }
-                        Text { text: "• " + CommonStrings.wifiConfigured;          font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured }
-                        Text { text: "• " + CommonStrings.sshEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled }
-                        Text { text: "• " + CommonStrings.piConnectEnabled;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled }
-                        Text { text: "• " + CommonStrings.usbGadgetEnabled;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.featUsbGadgetEnabled }
-                        Text { text: "• " + CommonStrings.i2cEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifI2cEnabled }
-                        Text { text: "• " + CommonStrings.spiEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSpiEnabled }
-                        Text { text: "• " + CommonStrings.onewireEnabled;          font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.if1WireEnabled }
-                        Text { text: "• " + CommonStrings.serialConfigured;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSerial !== "" && wizardContainer.ifSerial !== "Disabled" }
+                        Text { text: "• " + CommonStrings.hostnameConfigured;      font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.hostnameConfigured;         Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.localeConfigured;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.localeConfigured;           Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.userAccountConfigured;   font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.userConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.wifiConfigured;          font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.wifiConfigured;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.sshEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.sshEnabled;                 Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.piConnectEnabled;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.piConnectEnabled;           Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.usbGadgetEnabled;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.featUsbGadgetEnabled;       Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.i2cEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifI2cEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.spiEnabled;              font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSpiEnabled;               Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.onewireEnabled;          font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.if1WireEnabled;             Accessible.role: Accessible.ListItem; Accessible.name: text }
+                        Text { text: "• " + CommonStrings.serialConfigured;        font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor;     visible: wizardContainer.ifSerial !== "" && wizardContainer.ifSerial !== "Disabled"; Accessible.role: Accessible.ListItem; Accessible.name: text }
                     }
                 }
                 ScrollBar.vertical: ScrollBar {
@@ -237,6 +300,11 @@ WizardStepBase {
                 color: Style.formLabelColor
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
+                Accessible.role: Accessible.StatusBar
+                Accessible.name: text
+                Accessible.focusable: true
+                focusPolicy: Qt.TabFocus
+                activeFocusOnTab: true
             }
 
             ProgressBar {
@@ -250,6 +318,9 @@ WizardStepBase {
                 Material.accent: Style.progressBarVerifyForegroundColor
                 Material.background: Style.progressBarBackgroundColor
                 visible: (root.isWriting || root.isFinalising)
+                Accessible.role: Accessible.ProgressBar
+                Accessible.name: qsTr("Write progress")
+                Accessible.description: progressText.text
             }
         }
 
@@ -302,9 +373,12 @@ WizardStepBase {
 
         // Register focus groups when component is ready
         Component.onCompleted: {
+            registerFocusGroup("warning", function(){ 
+                return [warningText, permanentText] 
+            }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [cancelButton, acceptBtn] 
-            }, 0)
+            }, 1)
         }
 
         onOpened: {
@@ -329,6 +403,9 @@ WizardStepBase {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.ignored: false
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         Text {
@@ -342,6 +419,9 @@ WizardStepBase {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         RowLayout {
@@ -470,40 +550,48 @@ WizardStepBase {
     // Focus management - rebuild when visibility changes between phases
     onIsWritingChanged: rebuildFocusOrder()
     onIsCompleteChanged: rebuildFocusOrder()
-    onAnyCustomizationsAppliedChanged: {
-        // Update initialFocusItem based on whether customizations are present
-        if (root.anyCustomizationsApplied) {
-            root.initialFocusItem = customizationsScrollView
-        } else {
-            root.initialFocusItem = nextButtonItem
-        }
-        rebuildFocusOrder()
-    }
+    onAnyCustomizationsAppliedChanged: rebuildFocusOrder()
     
     Component.onCompleted: {
-        registerFocusGroup("customizations", function() {
-            // Include the scroll view when it's visible, regardless of whether it needs scrolling
-            if (customizationsScrollView.visible) {
-                return [customizationsScrollView]
+        // Register summary section as first focus group
+        registerFocusGroup("summary", function() {
+            var items = []
+            if (summaryLayout.visible) {
+                // Add the summary heading and all summary items
+                items.push(summaryHeading)
+                items.push(deviceLabel)
+                items.push(osLabel)
+                items.push(storageLabel)
             }
-            return []
+            return items
         }, 0)
         
-        // Set initial focus item to the customizations scroll view if customizations are present,
-        // otherwise default to the next button so tab navigation works
-        if (root.anyCustomizationsApplied) {
-            root.initialFocusItem = customizationsScrollView
-        } else {
-            root.initialFocusItem = nextButtonItem
-        }
+        // Register customizations section as second focus group
+        registerFocusGroup("customizations", function() {
+            var items = []
+            if (customLayout.visible) {
+                // Add the customizations heading and scroll view
+                items.push(customizationsHeading)
+                items.push(customizationsScrollView)
+            }
+            return items
+        }, 1)
         
+        // Register progress section (when writing)
+        registerFocusGroup("progress", function() {
+            var items = []
+            if (progressLayout.visible) {
+                // Add progress text and progress bar
+                items.push(progressText)
+                items.push(progressBar)
+            }
+            return items
+        }, 0)
+        
+        // Let WizardStepBase handle initial focus (title first)
         // Ensure focus order is built when component completes
         Qt.callLater(function() {
             rebuildFocusOrder()
-            // Try to set initial focus
-            if (initialFocusItem) {
-                initialFocusItem.forceActiveFocus()
-            }
         })
     }
 }

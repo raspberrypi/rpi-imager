@@ -222,6 +222,10 @@ BaseDialog {
                     popup.applySettings();
                     popup.close();
                 }
+                onEnabledChanged: {
+                    // Rebuild focus order when button becomes enabled/disabled
+                    Qt.callLater(popup.rebuildFocusOrder)
+                }
             }
         }
     }

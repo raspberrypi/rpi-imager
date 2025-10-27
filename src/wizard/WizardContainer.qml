@@ -313,6 +313,8 @@ Item {
                     color: Style.sidebarTextOnInactiveColor
                     Layout.fillWidth: true
                     Layout.bottomMargin: Style.spacingSmall
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
                 }
                 
                 // Step list
@@ -662,6 +664,22 @@ Item {
                     from: 1
                     to: 0
                     duration: 250
+                }
+            }
+            
+            // Set focus when a new step is activated
+            onCurrentItemChanged: {
+                if (currentItem) {
+                    Qt.callLater(function() {
+                        if (currentItem && currentItem.initialFocusItem) {
+                            currentItem.initialFocusItem.forceActiveFocus()
+                        } else if (currentItem) {
+                            // Fallback: try to find first focusable field
+                            if (currentItem._focusableItems && currentItem._focusableItems.length > 0) {
+                                currentItem._focusableItems[0].forceActiveFocus()
+                            }
+                        }
+                    })
                 }
             }
         }

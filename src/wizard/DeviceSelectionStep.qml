@@ -42,11 +42,7 @@ WizardStepBase {
             return [hwlist]
         }, 0)
         
-        // Set the initial focus item to the ListView
-        root.initialFocusItem = hwlist
-        
-        // Ensure focus starts on the device list when entering this step (same as OSSelectionStep)
-        hwlist.forceActiveFocus()
+        // Initial focus will automatically go to title, then first control (handled by WizardStepBase)
     }
 
     Connections {
@@ -89,7 +85,21 @@ WizardStepBase {
             delegate: hwdelegate
             keyboardAutoAdvance: true
             nextFunction: root.next
-            accessibleName: qsTr("Device selection list. Select a Raspberry Pi device. Use arrow keys to navigate, Enter or Space to select")
+            accessibleName: {
+                var count = hwlist.count
+                var name = qsTr("Device selection list")
+                
+                if (count === 0) {
+                    name += ". " + qsTr("No devices")
+                } else if (count === 1) {
+                    name += ". " + qsTr("1 device")
+                } else {
+                    name += ". " + qsTr("%1 devices").arg(count)
+                }
+                
+                name += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select")
+                return name
+            }
             accessibleDescription: ""
             
             Component.onCompleted: {
@@ -156,8 +166,7 @@ WizardStepBase {
             
             // Accessibility properties
             Accessible.role: Accessible.ListItem
-            Accessible.name: hwitem.name
-            Accessible.description: hwitem.description
+            Accessible.name: hwitem.name + ". " + hwitem.description
             Accessible.focusable: true
             Accessible.ignored: false
             
@@ -202,7 +211,7 @@ WizardStepBase {
                         smooth: true
                         mipmap: true
                         // Rasterize vector sources at device pixel ratio to avoid aliasing/blurriness on HiDPI
-                        sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+                        sourceSize: Qt.size(Math.round(Layout.preferredWidth * Screen.devicePixelRatio), Math.round(Layout.preferredHeight * Screen.devicePixelRatio))
                         visible: source.toString().length > 0
                         
                         Rectangle {
@@ -226,6 +235,7 @@ WizardStepBase {
                             font.bold: true
                             color: Style.formLabelColor
                             Layout.fillWidth: true
+                            Accessible.ignored: true
                         }
                         
                         Text {
@@ -235,6 +245,7 @@ WizardStepBase {
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
+                            Accessible.ignored: true
                         }
                     }
                 }

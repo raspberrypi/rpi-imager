@@ -37,6 +37,8 @@ BaseDialog {
         font.bold: true
         color: Style.formLabelColor
         Layout.fillWidth: true
+        Accessible.role: Accessible.Heading
+        Accessible.name: text
     }
 
     Text {
@@ -46,6 +48,8 @@ BaseDialog {
         font.family: Style.fontFamily
         color: Style.textDescriptionColor
         Layout.fillWidth: true
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
     }
 
     RowLayout {

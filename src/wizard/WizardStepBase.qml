@@ -25,6 +25,9 @@ FocusScope {
     property bool nextButtonEnabled: true
     property bool backButtonEnabled: true
     property bool skipButtonEnabled: true
+    property string nextButtonAccessibleDescription: ""
+    property string backButtonAccessibleDescription: ""
+    property string skipButtonAccessibleDescription: ""
     property alias content: contentArea.children
     // Step may set the first item to receive focus when the step becomes visible
     property var initialFocusItem: null
@@ -77,6 +80,9 @@ FocusScope {
                 Accessible.role: Accessible.Heading
                 Accessible.name: root.title
                 Accessible.ignored: false
+                Accessible.focusable: true
+                focusPolicy: Qt.TabFocus
+                activeFocusOnTab: true
             }
             
             Text {
@@ -90,6 +96,9 @@ FocusScope {
                 Accessible.role: Accessible.StaticText
                 Accessible.name: root.subtitle
                 Accessible.ignored: false
+                Accessible.focusable: true
+                focusPolicy: Qt.TabFocus
+                activeFocusOnTab: true
             }
         }
         
@@ -110,6 +119,7 @@ FocusScope {
                 text: root.skipButtonText
                 visible: root.showSkipButton
                 enabled: root.skipButtonEnabled
+                accessibleDescription: root.skipButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthSkip
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.skipClicked()
@@ -127,6 +137,7 @@ FocusScope {
                 text: root.backButtonText
                 visible: root.showBackButton
                 enabled: root.backButtonEnabled
+                accessibleDescription: root.backButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.backClicked()
@@ -140,6 +151,7 @@ FocusScope {
                 text: root.nextButtonText
                 visible: root.showNextButton
                 enabled: root.nextButtonEnabled
+                accessibleDescription: root.nextButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthMinimum
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.nextClicked()
@@ -151,15 +163,30 @@ FocusScope {
     }
 
     Component.onCompleted: {
+        // Automatically register header elements (title, subtitle) as first focus group
+        registerFocusGroup("_wizard_header", function(){ 
+            var items = []
+            if (titleText.visible) items.push(titleText)
+            if (subtitleText.visible) items.push(subtitleText)
+            return items
+        }, -100) // Negative order ensures header is always first
+        
         rebuildFocusOrder()
-        if (initialFocusItem && typeof initialFocusItem.forceActiveFocus === 'function') {
-            initialFocusItem.forceActiveFocus()
+        
+        // Set initial focus: prefer title if visible, otherwise use specified initialFocusItem
+        var firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
+        if (firstFocusTarget && typeof firstFocusTarget.forceActiveFocus === 'function') {
+            firstFocusTarget.forceActiveFocus()
         }
     }
 
     onVisibleChanged: {
-        if (visible && initialFocusItem && typeof initialFocusItem.forceActiveFocus === 'function') {
-            initialFocusItem.forceActiveFocus()
+        if (visible) {
+            // Set initial focus: prefer title if visible, otherwise use specified initialFocusItem
+            var firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
+            if (firstFocusTarget && typeof firstFocusTarget.forceActiveFocus === 'function') {
+                firstFocusTarget.forceActiveFocus()
+            }
         }
     }
 

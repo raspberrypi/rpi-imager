@@ -34,12 +34,15 @@ BaseDialog {
 
     // Register focus groups when component is ready
     Component.onCompleted: {
+        registerFocusGroup("warning", function(){ 
+            return [warningTextElement] 
+        }, 0)
         registerFocusGroup("input", function(){ 
             return [driveNameText, nameInput] 
-        }, 0)
+        }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, continueButton] 
-        }, 1)
+        }, 2)
     }
     
     onOpened: {
@@ -50,6 +53,7 @@ BaseDialog {
 
     // Dialog content
     Text {
+        id: warningTextElement
         textFormat: Text.StyledText
         wrapMode: Text.WordWrap
         font.family: Style.fontFamily
@@ -60,6 +64,9 @@ BaseDialog {
         Accessible.role: Accessible.StaticText
         Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         Accessible.ignored: false
+        Accessible.focusable: true
+        focusPolicy: Qt.TabFocus
+        activeFocusOnTab: true
     }
 
     Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor; Accessible.ignored: true }

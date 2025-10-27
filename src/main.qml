@@ -105,6 +105,8 @@ ApplicationWindow {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
 
         Text {
@@ -114,6 +116,8 @@ ApplicationWindow {
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
 
         RowLayout {
@@ -158,6 +162,8 @@ ApplicationWindow {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
 
         Text {
@@ -167,6 +173,8 @@ ApplicationWindow {
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
 
         RowLayout {
@@ -211,6 +219,8 @@ ApplicationWindow {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
 
         Text {
@@ -220,6 +230,8 @@ ApplicationWindow {
             color: Style.textDescriptionColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
 
         RowLayout {
