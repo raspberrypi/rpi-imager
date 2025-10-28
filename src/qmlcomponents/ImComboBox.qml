@@ -26,8 +26,6 @@ ComboBox {
     
     // Enhanced properties
     property bool indicateError: false
-    // Wheel scrolling configuration (no inertia for closed state)
-    property bool wheelInvert: false
     
     // Internal search functionality
     property string searchString: ""
@@ -176,11 +174,20 @@ ComboBox {
         onWheel: (event) => {
             if (!root.popup.visible) {
                 var dy = event.pixelDelta && Math.abs(event.pixelDelta.y) > 0 ? event.pixelDelta.y : event.angleDelta.y
-                // Apply wheelInvert option if needed
-                if (root.wheelInvert) dy = -dy
-                // Negative delta = scroll down = move down list = increase index
-                // Positive delta = scroll up = move up list = decrease index
-                // (Qt already handles natural scrolling, so we use the raw delta)
+                
+                // Qt provides deltas that match the system scroll direction (natural vs traditional).
+                // However, for combo boxes (discrete item selection), users expect consistent behavior:
+                // "scroll down gesture" should always mean "next item" regardless of scroll preferences.
+                // 
+                // When event.inverted is true (natural scrolling), Qt's deltas are content-oriented,
+                // which feels backwards for discrete selection. We invert to match user expectations.
+                if (event.inverted) {
+                    dy = -dy
+                }
+                
+                // After adjustment:
+                // Negative delta = scroll down = next item (increase index)
+                // Positive delta = scroll up = previous item (decrease index)
                 if (dy < 0 && root.currentIndex < root.model.length - 1) {
                     root.currentIndex++
                 } else if (dy > 0 && root.currentIndex > 0) {
