@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <wbemidl.h>
 #include <oleauto.h>
+#include <iphlpapi.h>
 #include <string>
 #include <algorithm>
 #include <cctype>
@@ -165,11 +166,74 @@ void applyQuirks() {
     if (hasNvidiaGraphicsCard()) {
         SetEnvironmentVariableA("QSG_RHI_PREFER_SOFTWARE_RENDERER", "1");
     }
+
+    // make imager single instance because of rpi-connect callback server
+    // will be automatically released once the process exits cleanly or crashes
+    HANDLE hMutex = CreateMutexW(nullptr, TRUE, L"Global\\RaspberryPiImagerMutex");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        // Another instance running
+        MessageBoxW(nullptr, L"Raspberry Pi Imager is already running.", L"Raspberry Pi Imager", MB_OK | MB_ICONINFORMATION);
+        exit(0);
+    }
 }
 
 void beep() {
     // Use Windows MessageBeep for system beep sound
     MessageBeep(MB_OK);
+}
+
+bool hasNetworkConnectivity() {
+    // Use Windows API to check network connectivity
+    // Check if any network adapter has an IP address
+    DWORD dwSize = 0;
+    DWORD dwRetVal = 0;
+    
+    // First call to get size
+    if (GetAdaptersAddresses(AF_UNSPEC, 0, NULL, NULL, &dwSize) != ERROR_BUFFER_OVERFLOW) {
+        return false;
+    }
+    
+    PIP_ADAPTER_ADDRESSES pAddresses = (IP_ADAPTER_ADDRESSES*) malloc(dwSize);
+    if (pAddresses == NULL) {
+        return false;
+    }
+    
+    // Get adapter addresses
+    dwRetVal = GetAdaptersAddresses(AF_UNSPEC, 
+                                   GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                                   NULL, pAddresses, &dwSize);
+    
+    if (dwRetVal != NO_ERROR) {
+        free(pAddresses);
+        return false;
+    }
+    
+    // Check if any adapter is connected and has an IP address
+    bool hasConnectivity = false;
+    PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses;
+    
+    while (pCurrAddresses) {
+        // Skip loopback and tunnel adapters
+        if (pCurrAddresses->IfType != IF_TYPE_SOFTWARE_LOOPBACK &&
+            pCurrAddresses->OperStatus == IfOperStatusUp) {
+            
+            // Check if adapter has at least one unicast IP address
+            PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress;
+            if (pUnicast != NULL) {
+                hasConnectivity = true;
+                break;
+            }
+        }
+        pCurrAddresses = pCurrAddresses->Next;
+    }
+    
+    free(pAddresses);
+    return hasConnectivity;
+}
+
+bool isNetworkReady() {
+    // On Windows, no special time sync check needed - system time is reliable
+    return hasNetworkConnectivity();
 }
 
 } // namespace PlatformQuirks

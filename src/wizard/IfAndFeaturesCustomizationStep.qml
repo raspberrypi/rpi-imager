@@ -3,9 +3,9 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
 import QtQuick.Dialogs
 import QtCore
 import "../qmlcomponents"
@@ -28,6 +28,9 @@ WizardStepBase {
     showSkipButton: true
     nextButtonEnabled: true
     backButtonEnabled: true
+    nextButtonAccessibleDescription: qsTr("Save interface and feature settings and continue to writing step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
 
     function updateCaps() {
         // imageWriter knows the currently selected hardware
@@ -41,6 +44,7 @@ WizardStepBase {
             anchors.fill: parent
             clip: true
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            rightPadding: 20
             ColumnLayout {
                 id: scrollContent
                 width: ifAndFeatScroll.availableWidth
@@ -65,6 +69,7 @@ WizardStepBase {
                             id: chkEnableI2C
                             Layout.fillWidth: true
                             text: qsTr("Enable I2C")
+                            accessibleDescription: qsTr("Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals")
                             checked: false
                         }
 
@@ -72,6 +77,7 @@ WizardStepBase {
                             id: chkEnableSPI
                             Layout.fillWidth: true
                             text: qsTr("Enable SPI")
+                            accessibleDescription: qsTr("Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors")
                             checked: false
                         }
 
@@ -79,6 +85,7 @@ WizardStepBase {
                             id: chkEnable1Wire
                             Layout.fillWidth: true
                             text: qsTr("Enable 1-Wire")
+                            accessibleDescription: qsTr("Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices")
                             checked: false
                         }
 
@@ -86,7 +93,17 @@ WizardStepBase {
                             Layout.fillWidth: true
                             spacing: Style.spacingMedium
 
-                            WizardFormLabel { text: qsTr("Enable Serial:"); font.bold: true; Layout.fillWidth: true }
+                            WizardFormLabel {
+                                id: labelSerial
+                                text: qsTr("Enable Serial:")
+                                font.bold: true
+                                Layout.fillWidth: true
+                                Accessible.ignored: false
+                                Accessible.focusable: true
+                                Accessible.description: qsTr("Configure the serial interface: Disabled, Default (system decides), Console & Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).")
+                                focusPolicy: Qt.TabFocus
+                                activeFocusOnTab: true
+                            }
                             ImComboBox {
                                 id: comboSerial
                                 model: ListModel {
@@ -130,12 +147,13 @@ WizardStepBase {
                                 id: chkEnableUsbGadget
                                 Layout.fillWidth: true
                                 text: qsTr("Enable USB Gadget Mode")
+                                accessibleDescription: qsTr("Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage")
                                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn more about USB Gadget Mode")
                                 helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-usb-gadget?tab=readme-ov-file"
                                 checked: false
                             }
 
-                            Item { Layout.fillWidth: true }
+                            Item { Layout.fillWidth: true; height: 40 }
                         }
                     }
                 }
@@ -163,8 +181,9 @@ WizardStepBase {
             serialModel.append({ text: qsTr("Console") })
         }
 
+        // Include label before combo box so users hear the explanation first
         root.registerFocusGroup("if_section_interfaces", function() {
-            return [chkEnableI2C.focusItem, chkEnableSPI.focusItem, chkEnable1Wire.focusItem, comboSerial]
+            return [chkEnableI2C.focusItem, chkEnableSPI.focusItem, chkEnable1Wire.focusItem, labelSerial, comboSerial]
         }, 0)
 
         root.registerFocusGroup("if_section_features", function() {
@@ -223,6 +242,7 @@ WizardStepBase {
         parent: wizardContainer && wizardContainer.overlayRootRef ? wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
+        title: qsTr("USB Gadget Mode Warning")
 
         property bool allowAccept: false
 
@@ -257,6 +277,8 @@ WizardStepBase {
             color: Style.formLabelErrorColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
 
         Text {
@@ -268,6 +290,8 @@ WizardStepBase {
             wrapMode: Text.WordWrap
             onLinkActivated: function(link) { Qt.openUrlExternally(link) }
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: qsTr("Please review the documentation before proceeding.")
         }
 
         Text {
@@ -277,6 +301,8 @@ WizardStepBase {
             color: Style.formLabelErrorColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
 
         RowLayout {
@@ -287,6 +313,7 @@ WizardStepBase {
             ImButton {
                 id: cancelBtn
                 text: CommonStrings.cancel
+                accessibleDescription: qsTr("Cancel and return to the interfaces and features settings without enabling USB Gadget Mode")
                 activeFocusOnTab: true
                 onClicked: confirmDialog.close()
             }
@@ -294,6 +321,7 @@ WizardStepBase {
             ImButtonRed {
                 id: acceptBtn
                 text: qsTr("I understand, continue")
+                accessibleDescription: confirmDialog.allowAccept ? qsTr("Confirm that you understand the risks and continue with USB Gadget Mode enabled") : qsTr("This button will be enabled after 2 seconds")
                 enabled: confirmDialog.allowAccept
                 activeFocusOnTab: true
                 onClicked: {

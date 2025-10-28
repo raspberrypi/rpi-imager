@@ -3,9 +3,8 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Layouts
 import RpiImager
 
 Text {
@@ -23,4 +22,10 @@ Text {
     // Default layout properties for consistent spacing
     Layout.fillWidth: false
     Layout.alignment: Qt.AlignVCenter
+    
+    // Accessibility - by default labels are part of the form flow
+    // Individual instances can set Accessible.ignored: false to make them explicitly readable
+    Accessible.role: Accessible.StaticText
+    Accessible.name: text
+    Accessible.ignored: true  // Usually read as part of the associated control
 } 

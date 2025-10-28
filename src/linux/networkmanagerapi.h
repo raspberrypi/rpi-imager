@@ -14,6 +14,7 @@ public:
     NetworkManagerApi();
     virtual QByteArray getSSID();
     virtual QByteArray getPSK();
+    virtual QByteArray getPSKForSSID(const QByteArray &ssid);
 
 protected:
     QByteArray _getSSIDofInterface(const QByteArray &iface);

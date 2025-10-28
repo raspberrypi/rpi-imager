@@ -6,6 +6,7 @@
 #include "../platformquirks.h"
 #include <cstdlib>
 #import <AppKit/AppKit.h>
+#import <SystemConfiguration/SystemConfiguration.h>
 
 namespace PlatformQuirks {
 
@@ -20,6 +21,34 @@ void applyQuirks() {
 void beep() {
     // Use macOS NSBeep for system beep sound
     NSBeep();
+}
+
+bool hasNetworkConnectivity() {
+    // Use SystemConfiguration framework to check network reachability
+    SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithName(NULL, "www.raspberrypi.com");
+    if (!reachability) {
+        return false;
+    }
+    
+    SCNetworkReachabilityFlags flags;
+    bool success = SCNetworkReachabilityGetFlags(reachability, &flags);
+    CFRelease(reachability);
+    
+    if (!success) {
+        return false;
+    }
+    
+    // Check if network is reachable
+    bool isReachable = (flags & kSCNetworkReachabilityFlagsReachable) != 0;
+    // Check if connection is required (e.g., captive portal)
+    bool needsConnection = (flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0;
+    
+    return isReachable && !needsConnection;
+}
+
+bool isNetworkReady() {
+    // On macOS, no special time sync check needed - system time is reliable
+    return hasNetworkConnectivity();
 }
 
 } // namespace PlatformQuirks

@@ -3,9 +3,9 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../qmlcomponents"
 import "components"
 
@@ -20,9 +20,11 @@ WizardStepBase {
     title: qsTr("Customisation: Localisation")
     subtitle: qsTr("Select your location for suggested time zone and keyboard layout")
     showSkipButton: true
+    nextButtonAccessibleDescription: qsTr("Save localisation settings and continue to next customisation step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
 
-    // Set initial focus on capital city selector when entering step
-    initialFocusItem: comboCapitalCity
+    // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
     
     // Track if user manually changed fields (to avoid overwriting their choices)
     property bool userChangedTimezone: false
@@ -61,8 +63,9 @@ WizardStepBase {
         else comboKeyboard.editText = kbToSet
 
         // Register focus group for locale controls in proper tab order
+        // Include labels before their corresponding controls so users hear the explanation first
         root.registerFocusGroup("locale_controls", function(){ 
-            return [comboCapitalCity, comboTimezone, comboKeyboard] 
+            return [labelCapitalCity, comboCapitalCity, labelTimezone, comboTimezone, labelKeyboard, comboKeyboard] 
         }, 0)
     }
     
@@ -113,7 +116,15 @@ WizardStepBase {
                 Layout.fillWidth: true
                 spacing: Style.spacingMedium
                 
-                WizardFormLabel { text: qsTr("Capital city:") }
+                WizardFormLabel { 
+                    id: labelCapitalCity
+                    text: qsTr("Capital city:") 
+                    Accessible.ignored: false
+                    Accessible.focusable: true
+                    Accessible.description: qsTr("Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country's Wi-Fi regulations.")
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
+                }
                 ImComboBox {
                     id: comboCapitalCity
                     Layout.fillWidth: true
@@ -132,7 +143,13 @@ WizardStepBase {
                 spacing: Style.spacingMedium
                 
                 WizardFormLabel { 
+                    id: labelTimezone
                     text: qsTr("Time zone:") 
+                    Accessible.ignored: false
+                    Accessible.focusable: true
+                    Accessible.description: qsTr("Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.")
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
                 ImComboBox {
                     id: comboTimezone
@@ -151,7 +168,13 @@ WizardStepBase {
                 spacing: Style.spacingMedium
                 
                 WizardFormLabel { 
+                    id: labelKeyboard
                     text: qsTr("Keyboard layout:") 
+                    Accessible.ignored: false
+                    Accessible.focusable: true
+                    Accessible.description: qsTr("Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.")
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
                 ImComboBox {
                     id: comboKeyboard

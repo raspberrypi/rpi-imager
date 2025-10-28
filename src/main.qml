@@ -3,11 +3,11 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-import QtQuick 2.9
-import QtQuick.Window 2.2
-import QtQuick.Controls 2.2
-import QtQuick.Layouts 1.0
-import QtQuick.Controls.Material 2.2
+import QtQuick
+import QtQuick.Window
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Controls.Material
 import "qmlcomponents"
 import "wizard"
 
@@ -31,6 +31,11 @@ ApplicationWindow {
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
     title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
+
+    Component.onCompleted: {
+        // Set the main window for modal file dialogs
+        imageWriter.setMainWindow(window)
+    }
 
     onClosing: function (close) {
         if (wizardContainer.isWriting && !forceQuit) {
@@ -87,28 +92,43 @@ ApplicationWindow {
 
         // Register focus groups when component is ready
         Component.onCompleted: {
+            registerFocusGroup("content", function(){ 
+                return [errorTitle, errorMessage] 
+            }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [errorContinueButton] 
-            }, 0)
+            }, 1)
         }
 
         // Dialog content
         Text {
+            id: errorTitle
             text: errorDialog.titleText
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         Text {
+            id: errorMessage
             text: errorDialog.message
             wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         RowLayout {
@@ -140,28 +160,43 @@ ApplicationWindow {
 
         // Register focus groups when component is ready
         Component.onCompleted: {
+            registerFocusGroup("content", function(){ 
+                return [storageRemovedTitle, storageRemovedMessage] 
+            }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [storageOkButton] 
-            }, 0)
+            }, 1)
         }
 
         // Dialog content
         Text {
+            id: storageRemovedTitle
             text: qsTr("Storage device removed")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         Text {
+            id: storageRemovedMessage
             text: qsTr("The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.")
             wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         RowLayout {
@@ -193,28 +228,43 @@ ApplicationWindow {
 
         // Register focus groups when component is ready
         Component.onCompleted: {
+            registerFocusGroup("content", function(){ 
+                return [quitTitle, quitMessage] 
+            }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [quitNoButton, quitYesButton] 
-            }, 0)
+            }, 1)
         }
 
         // Dialog content
         Text {
+            id: quitTitle
             text: qsTr("Are you sure you want to quit?")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         Text {
+            id: quitMessage
             text: qsTr("Raspberry Pi Imager is still busy. Are you sure you want to quit?")
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         RowLayout {
@@ -298,6 +348,13 @@ ApplicationWindow {
         wizardContainer.onFinalizing();
     }
 
+    function onCancelled() {
+        // Forward to wizard container to handle write cancellation
+        if (wizardContainer) {
+            wizardContainer.onWriteCancelled();
+        }
+    }
+
     function onNetworkInfo(msg) {
         if (imageWriter.isEmbeddedMode() && wizardContainer) {
             wizardContainer.networkInfoText = msg;
@@ -341,6 +398,14 @@ ApplicationWindow {
             window.imageWriter.keychainPermissionResponse(true);
         } else {
             keychainpopup.askForPermission();
+        }
+    }
+    
+    function onOsListFetchFailed() {
+        // Network fetch failed - skip device selection and go straight to OS selection
+        if (wizardContainer && wizardContainer.currentStep === wizardContainer.stepDeviceSelection) {
+            console.log("OS list fetch failed - switching to offline mode, skipping device selection");
+            wizardContainer.jumpToStep(wizardContainer.stepOSSelection);
         }
     }
 }

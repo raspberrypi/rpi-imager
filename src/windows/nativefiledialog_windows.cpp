@@ -7,6 +7,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QDebug>
+#include <QWindow>
 #include <windows.h>
 #include <commdlg.h>
 
@@ -40,9 +41,8 @@ QString convertQtFilterToWindows(const QString &qtFilter)
 
 QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
-                                           bool saveDialog)
-{  // Windows dialogs will be modal to the application
-    
+                                           bool saveDialog, void *parentWindow)
+{
     OPENFILENAME ofn;
     ZeroMemory(&ofn, sizeof(ofn));
     
@@ -63,9 +63,16 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     }
     std::wstring initialDirStr = QDir::toNativeSeparators(dir).toStdWString();
     
+    // Get native window handle for modal behavior
+    HWND hwndOwner = nullptr;
+    if (parentWindow) {
+        QWindow *window = static_cast<QWindow*>(parentWindow);
+        hwndOwner = reinterpret_cast<HWND>(window->winId());
+    }
+    
     // Setup OPENFILENAME structure
     ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = nullptr;  // Could get actual window handle if needed
+    ofn.hwndOwner = hwndOwner;  // Set parent window for modal behavior
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
     ofn.lpstrFilter = filterStr.empty() ? nullptr : filterStr.c_str();

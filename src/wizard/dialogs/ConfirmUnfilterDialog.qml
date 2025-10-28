@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2025 Raspberry Pi Ltd
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import RpiImager
 import "../../qmlcomponents"
 
@@ -31,22 +31,17 @@ BaseDialog {
 
     // Register focus groups when component is ready
     Component.onCompleted: {
+        registerFocusGroup("warning", function(){ 
+            return [warningText] 
+        }, 0)
         registerFocusGroup("buttons", function(){ 
             return [keepFilterButton, showSystemButton] 
-        }, 0)
+        }, 1)
     }
 
     // Dialog content
     Text {
-        text: qsTr("Remove system drive filter?")
-        font.pixelSize: Style.fontSizeHeading
-        font.family: Style.fontFamilyBold
-        font.bold: true
-        color: Style.formLabelColor
-        Layout.fillWidth: true
-    }
-
-    Text {
+        id: warningText
         textFormat: Text.StyledText
         text: qsTr("By disabling system drive filtering, <b>system drives will be shown</b> in the list.")
               + "<br><br>"
@@ -57,6 +52,12 @@ BaseDialog {
         color: Style.textDescriptionColor
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
+        Accessible.ignored: false
+        Accessible.focusable: true
+        focusPolicy: Qt.TabFocus
+        activeFocusOnTab: true
     }
 
     RowLayout {

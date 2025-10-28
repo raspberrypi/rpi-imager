@@ -22,6 +22,7 @@
 #include "iconimageprovider.h"
 #include "nativefiledialog.h"
 #include <QQmlApplicationEngine>
+#include <QQuickWindow>
 #endif
 #include <archive.h>
 #include <archive_entry.h>
@@ -43,7 +44,12 @@
 #include <QQmlContext>
 #include <QWindow>
 #include <QGuiApplication>
+#include <QClipboard>
 #endif
+#include <QUrl>
+#include <QUrlQuery>
+#include <QString>
+#include <QStringList>
 #include <QHostAddress>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -104,7 +110,13 @@ ImageWriter::ImageWriter(QObject *parent)
       _translations(),
       _trans(nullptr),
       _refreshIntervalOverrideMinutes(-1),
-      _refreshJitterOverrideMinutes(-1)
+      _refreshJitterOverrideMinutes(-1),
+#ifndef CLI_ONLY_BUILD
+      _piConnectToken(),
+      _mainWindow(nullptr)
+#else
+      _piConnectToken()
+#endif
 {
     // Initialize CacheManager
     _cacheManager = new CacheManager(this);
@@ -289,6 +301,23 @@ ImageWriter::ImageWriter(QObject *parent)
     }
 }
 
+void ImageWriter::setMainWindow(QObject *window)
+{
+#ifndef CLI_ONLY_BUILD
+    // Convert QObject to QWindow
+    _mainWindow = qobject_cast<QWindow*>(window);
+    if (!_mainWindow) {
+        // If it's not a QWindow directly, try to get the window from a QQuickWindow
+        QQuickWindow *quickWindow = qobject_cast<QQuickWindow*>(window);
+        if (quickWindow) {
+            _mainWindow = quickWindow;
+        }
+    }
+#else
+    Q_UNUSED(window);
+#endif
+}
+
 QString ImageWriter::getNativeOpenFileName(const QString &title,
                                            const QString &initialDir,
                                            const QString &filter)
@@ -297,7 +326,7 @@ QString ImageWriter::getNativeOpenFileName(const QString &title,
     if (!NativeFileDialog::areNativeDialogsAvailable()) {
         return QString();
     }
-    return NativeFileDialog::getOpenFileName(title, initialDir, filter);
+    return NativeFileDialog::getOpenFileName(title, initialDir, filter, _mainWindow);
 #else
     Q_UNUSED(title);
     Q_UNUSED(initialDir);
@@ -957,6 +986,7 @@ namespace {
                 QNetworkRequest request(subUrl);
                 request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                         QNetworkRequest::NoLessSafeRedirectPolicy);
+                request.setMaximumRedirectsAllowed(3);
                 manager.get(request);
             }
         }
@@ -967,6 +997,7 @@ namespace {
 void ImageWriter::setHWFilterList(const QJsonArray &tags, const bool &inclusive) {
     _deviceFilter = tags;
     _deviceFilterIsInclusive = inclusive;
+    emit hwFilterChanged();
 }
 
 void ImageWriter::setHWCapabilitiesList(const QJsonArray &json) {
@@ -1018,6 +1049,9 @@ bool ImageWriter::checkSWCapability(const QString &cap) {
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
     // Defer deletion
     data->deleteLater();
+    
+    // Track if this is the top-level OS list request
+    bool isTopLevelRequest = (data->request().url() == osListUrl());
 
     if (data->error() == QNetworkReply::NoError) {
         auto httpStatusCode = data->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -1035,7 +1069,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     // Preserve latest top-level imager metadata if present in the top-level fetch
                     auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url(), 1);
                     QJsonObject imager_meta = _completeOsList["imager"].toObject();
-                    if (response_object.contains("imager") && data->request().url() == osListUrl()) {
+                    if (response_object.contains("imager") && isTopLevelRequest) {
                         // Update imager metadata when this reply is for the top-level OS list
                         imager_meta = response_object["imager"].toObject();
                     }
@@ -1049,11 +1083,16 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                 emit osListPrepared();
 
                 // After processing a top-level list fetch, (re)schedule the next refresh
-                if (data->request().url() == osListUrl()) {
+                if (isTopLevelRequest) {
                     scheduleOsListRefresh();
                 }
             } else {
                 qDebug() << "Incorrectly formatted OS list at: " << data->url();
+                // If this was the top-level fetch and it failed, treat as network failure
+                if (isTopLevelRequest && _completeOsList.isEmpty()) {
+                    qWarning() << "Top-level OS list fetch failed - malformed response. Operating in offline mode.";
+                    emit osListFetchFailed();
+                }
             }
         } else if (httpStatusCode >= 300 && httpStatusCode < 400) {
             // We should _never_ enter this branch. All requests are set to follow redirections
@@ -1065,6 +1104,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
 
             auto request = QNetworkRequest(redirUrl);
             request.setAttribute(QNetworkRequest::RedirectionTargetAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+            request.setMaximumRedirectsAllowed(3);
             data->manager()->get(request);
 
             // maintain manager
@@ -1072,9 +1112,19 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
         } else if (httpStatusCode >= 400 && httpStatusCode < 600) {
             // HTTP Error
             qDebug() << "Failed to fetch URL [" << data->url() << "], got: " << httpStatusCode;
+            // If this was the top-level fetch and it failed, treat as network failure
+            if (isTopLevelRequest && _completeOsList.isEmpty()) {
+                qWarning() << "Top-level OS list fetch failed with HTTP error" << httpStatusCode << ". Operating in offline mode.";
+                emit osListFetchFailed();
+            }
         } else {
             // Completely unknown error, worth logging separately
             qDebug() << "Failed to fetch URL [" << data->url() << "], got unknown response code: " << httpStatusCode;
+            // If this was the top-level fetch and it failed, treat as network failure
+            if (isTopLevelRequest && _completeOsList.isEmpty()) {
+                qWarning() << "Top-level OS list fetch failed with unknown error. Operating in offline mode.";
+                emit osListFetchFailed();
+            }
         }
     } else {
         // QT Error - provide more actionable context when common misconfigurations are detected
@@ -1093,6 +1143,12 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
         }
 
         qDebug() << "Unrecognised QT error: " << err << ", explainer: " << errStr;
+        
+        // If this was the top-level fetch and it failed, treat as network failure
+        if (isTopLevelRequest && _completeOsList.isEmpty()) {
+            qWarning() << "Top-level OS list fetch failed with network error:" << errStr << ". Operating in offline mode.";
+            emit osListFetchFailed();
+        }
     }
 }
 
@@ -1201,6 +1257,7 @@ void ImageWriter::beginOSListFetch() {
     QNetworkRequest request = QNetworkRequest(topUrl);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setMaximumRedirectsAllowed(3);
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
    _networkManager.get(request);
@@ -1386,10 +1443,11 @@ void ImageWriter::openFileDialog(const QString &title, const QString &filter)
     if (path.isEmpty() || !fi.exists() || !fi.isReadable() )
         path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
-    // Use native file dialog - QtWidgets fallback removed
+    // Use native file dialog with modal behavior to main window
     QString filename = NativeFileDialog::getOpenFileName(tr("Select image"),
                                                         path,
-                                                        filter);
+                                                        filter,
+                                                        _mainWindow);
 
     // Process the selected file if one was chosen
     if (!filename.isEmpty())
@@ -1503,63 +1561,35 @@ void ImageWriter::_parseXZFile()
 
 bool ImageWriter::isOnline()
 {
-    /* Check if we have an IP-address other than localhost */
-    QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
-    bool online = false;
-
-    foreach (QHostAddress a, addresses)
-    {
-        if (!a.isLoopback() && a.scopeId().isEmpty())
+    // Use platform abstraction for network connectivity check
+    bool hasBasicConnectivity = PlatformQuirks::hasNetworkConnectivity();
+    
+    if (hasBasicConnectivity) {
+        /* Report detected IP addresses for embedded mode status display */
+        QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+        foreach (QHostAddress a, addresses)
         {
-            /* Not a loopback or IPv6 link-local address, so online */
-            qDebug() << "IP DETECTED: " << a.toString();
-            emit networkInfo(QString("IP: %1").arg(a.toString()));
-            online = true;
-            break;
+            if (!a.isLoopback() && a.scopeId().isEmpty())
+            {
+                qDebug() << "IP DETECTED: " << a.toString();
+                emit networkInfo(QString("IP: %1").arg(a.toString()));
+                break;
+            }
         }
     }
-
-    if (online) {
-        QNetworkRequest request(QUrl(TIME_URL));
-        request.setTransferTimeout(3000); // 3 seconds
-        QNetworkReply* response = _networkManager.get(request);
-
-        // Connect to the finished signal to ensure headers are available
-        QObject::connect(response, &QNetworkReply::finished, [response, this]() {
-            if (response->hasRawHeader("date"))
-                {
-                bool timeSet = false;
-                // systemd-timesyncd will change the timestamp of this file to indicate that the time has been set
-                QString filePath = "/var/lib/systemd/timesync/clock";
-                QDateTime clock_time;
-                QFileInfo fileInfo(filePath);
-
-                if (fileInfo.exists()) {clock_time = fileInfo.lastModified();}
-
-                filePath = "/lib/systemd/systemd-timesyncd";
-                QDateTime creation_time;
-                QFileInfo fileInfo2(filePath);
-
-                if (fileInfo2.exists())
-                    creation_time = fileInfo2.lastModified();
-                if (clock_time > creation_time)
-                    timeSet = true;
-
-                if (timeSet)
-                {
-                    _networkchecktimer.stop();
-                    beginOSListFetch();
-                    emit networkOnline();
-                }
-            }
-            else
-            {
-                qDebug() << "Unable to access time server";
-            }
-            response->deleteLater();
-        });
+    
+    // For embedded mode, check if network is truly ready (including time sync)
+    if (hasBasicConnectivity && isEmbeddedMode()) {
+        bool networkReady = PlatformQuirks::isNetworkReady();
+        if (networkReady) {
+            _networkchecktimer.stop();
+            beginOSListFetch();
+            emit networkOnline();
+        }
+        return networkReady;
     }
-    return online;
+    
+    return hasBasicConnectivity;
 }
 
 void ImageWriter::pollNetwork()
@@ -1883,6 +1913,47 @@ QString ImageWriter::getPSK()
     return WlanCredentials::instance()->getPSK();
 }
 
+QString ImageWriter::getPSKForSSID(const QString &ssid)
+{
+    if (ssid.isEmpty()) {
+        qDebug() << "ImageWriter::getPSKForSSID(): Empty SSID provided, cannot retrieve PSK";
+        return QString();
+    }
+
+#ifdef Q_OS_DARWIN
+    /* On OSX the user is presented with a prompt for the admin password when opening the system key chain.
+     * Request user permission through QML dialog instead of QtWidgets QMessageBox. */
+
+    // Set up a flag to track if permission was granted
+    _keychainPermissionGranted = false;
+    _keychainPermissionReceived = false;
+
+    // Emit signal to show QML permission dialog
+    emit keychainPermissionRequested();
+
+    // Wait for user response (with timeout)
+    QEventLoop loop;
+    QTimer timeout;
+    timeout.setSingleShot(true);
+    timeout.setInterval(30000); // 30 second timeout
+
+    connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+    connect(this, &ImageWriter::keychainPermissionResponseReceived, &loop, &QEventLoop::quit);
+
+    timeout.start();
+    loop.exec();
+
+    if (!_keychainPermissionReceived || !_keychainPermissionGranted) {
+        qDebug() << "Keychain access denied or timed out";
+        return QString();
+    }
+
+    qDebug() << "Keychain access granted by user";
+#endif
+
+    return WlanCredentials::instance()->getPSKForSSID(ssid.toUtf8());
+}
+
 void ImageWriter::keychainPermissionResponse(bool granted)
 {
     _keychainPermissionGranted = granted;
@@ -1949,9 +2020,9 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
     // Use CustomisationGenerator for script generation
     QByteArray script = rpi_imager::CustomisationGenerator::generateSystemdScript(s, _piConnectToken);
     
-    // Extract wifiCountry for cmdline append
+    // Extract recommendedWifiCountry for cmdline append
     QByteArray cmdlineAppend;
-    const QString wifiCountry = s.value("wifiCountry").toString().trimmed();
+    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
     if (!wifiCountry.isEmpty()) {
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
@@ -1971,9 +2042,9 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
     QByteArray netcfg = rpi_imager::CustomisationGenerator::generateCloudInitNetworkConfig(
         s, hasCcRpi);
     
-    // Extract wifiCountry for cmdline append
+    // Extract recommendedWifiCountry for cmdline append
     QByteArray cmdlineAppend;
-    const QString wifiCountry = s.value("wifiCountry").toString().trimmed();
+    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
     if (!wifiCountry.isEmpty()) {
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
@@ -2309,6 +2380,7 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
 
         // If we're currently writing to this device, cancel the write immediately
         if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing || _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing) {
+            _selectedDeviceValid = false;
             qDebug() << "Cancelling write operation due to device removal";
             _cancelledDueToDeviceRemoval = true;
             cancelWrite();
@@ -2318,6 +2390,7 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
             qDebug() << "Device removed after successful write - ignoring (likely ejected)";
             // Don't notify UI - this is expected behavior after successful write
         } else {
+            _selectedDeviceValid = false;
             // Normal case - device removed when not writing
             emit selectedDeviceRemoved();
         }
@@ -2503,15 +2576,73 @@ void ImageWriter::openUrl(const QUrl &url)
     }
 }
 
+bool ImageWriter::verifyAuthKey(const QString &s, bool strict) const
+{
+    // Base58 (no 0 O I l)
+    static const QRegularExpression base58OnlyRe(QStringLiteral("^[1-9A-HJ-NP-Za-km-z]+$"));
+
+    // Required prefix
+    bool hasPrefix = s.startsWith(QStringLiteral("rpuak_")) || s.startsWith(QStringLiteral("rpoak_"));
+    if (!hasPrefix)
+        return false;
+
+    const QString payload = s.mid(6);
+    bool base58Match = base58OnlyRe.match(payload).hasMatch();
+    
+    if (payload.isEmpty() || !base58Match)
+        return false;
+
+    if (strict) {
+        // Exactly 24 Base58 chars today → total length 30
+        return payload.size() == 24;
+    } else {
+        // Future-proof: accept >=24 Base58 chars
+        return payload.size() >= 24;
+    }
+}
+
+QString ImageWriter::parseTokenFromUrl(const QUrl &url, bool strictAuthKey) const {
+    // Handle QUrl or string, accept auth_key
+    if (!url.isValid())
+        return {};
+
+    QUrlQuery q(url);
+    const QString val = q.queryItemValue(QStringLiteral("auth_key"), QUrl::FullyDecoded);
+    if (!val.isEmpty()) {
+        if (verifyAuthKey(val, strictAuthKey)) {
+            return val;
+        }
+
+        qWarning() << "Ignoring auth_key with invalid format/length:" << val;
+    }
+
+    return {};
+}
+
 void ImageWriter::handleIncomingUrl(const QUrl &url)
 {
     qDebug() << "Incoming URL:" << url;
-    emit connectCallbackReceived(QVariant::fromValue(url));
+
+    auto token = parseTokenFromUrl(url);
+    if (!token.isEmpty()) {
+        if (!_piConnectToken.isEmpty()) {
+            if (_piConnectToken != token) {
+                // Let QML decide whether to overwrite
+                emit connectTokenConflictDetected(token);
+            }
+
+            return;
+        }
+
+        overwriteConnectToken(token);
+    }
 }
 
-void ImageWriter::setRuntimeConnectToken(const QString &token)
+void ImageWriter::overwriteConnectToken(const QString &token)
 {
+    // Ephemeral session-only Connect token (never persisted)
     _piConnectToken = token;
+    emit connectTokenReceived(token);
 }
 
 QString ImageWriter::getRuntimeConnectToken() const

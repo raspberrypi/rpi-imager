@@ -22,6 +22,9 @@ WizardStepBase {
     title: qsTr("Customisation: SSH authentication")
     subtitle: qsTr("Configure SSH access")
     showSkipButton: true
+    nextButtonAccessibleDescription: qsTr("Save SSH settings and continue to next customisation step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
     
     // Content
     content: [
@@ -38,6 +41,7 @@ WizardStepBase {
                 id: sshEnablePill
                 Layout.fillWidth: true
                 text: qsTr("Enable SSH")
+                accessibleDescription: qsTr("Enable secure shell access for remote command-line control of your Raspberry Pi")
                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn about SSH")
                 helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh"
                 checked: false
@@ -49,7 +53,13 @@ WizardStepBase {
                 enabled: sshEnablePill.checked
                 
                 WizardFormLabel {
+                    id: labelAuthMechanism
                     text: qsTr("Authentication mechanism:")
+                    Accessible.ignored: false
+                    Accessible.focusable: true
+                    Accessible.description: qsTr("Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.")
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
 
                 ButtonGroup { id: authGroup }
@@ -59,6 +69,7 @@ WizardStepBase {
                     text: qsTr("Use password authentication")
                     checked: true
                     ButtonGroup.group: authGroup
+                    Accessible.description: qsTr("Allow SSH login using the username and password you configured in the previous step.")
                 }
                 
                 ImRadioButton {
@@ -66,6 +77,18 @@ WizardStepBase {
                     text: qsTr("Use public key authentication")
                     checked: false
                     ButtonGroup.group: authGroup
+                    Accessible.description: qsTr("Allow SSH login using a cryptographic key pair instead of a password. More secure than password authentication.")
+                }
+                
+                WizardFormLabel {
+                    id: labelPublicKey
+                    text: qsTr("Public key:")
+                    visible: radioPublicKey.checked
+                    Accessible.ignored: false
+                    Accessible.focusable: true
+                    Accessible.description: qsTr("Enter or paste your SSH public key, or use the Browse button to select a public key file (typically id_rsa.pub or id_ed25519.pub).")
+                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: true
                 }
                 
                 RowLayout {
@@ -117,8 +140,9 @@ WizardStepBase {
 
     Component.onCompleted: {
         root.registerFocusGroup("ssh_controller", function(){ return [sshEnablePill.focusItem] }, 0)
-        root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [radioPassword, radioPublicKey] : [] }, 1)
-        root.registerFocusGroup("ssh_key", function(){ return sshEnablePill.checked && radioPublicKey.checked ? [fieldPublicKey, browseButton] : [] }, 2)
+        // Include labels before their corresponding controls so users hear the explanation first
+        root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [labelAuthMechanism, radioPassword, radioPublicKey] : [] }, 1)
+        root.registerFocusGroup("ssh_key", function(){ return sshEnablePill.checked && radioPublicKey.checked ? [labelPublicKey, fieldPublicKey, browseButton] : [] }, 2)
         // Prefill from saved settings
         var saved = imageWriter.getSavedCustomizationSettings()
         if (saved.sshEnabled === true || saved.sshEnabled === "true") {

@@ -17,16 +17,56 @@
 #include <QTimer>
 #include <QDBusPendingCallWatcher>
 #include <QDBusVariant>
+#include <QEvent>
 #include <unistd.h>
 #include <QProcess>
+#include <qnativeinterface.h>
+
+// Helper class to block all input events on a window
+class InputBlockerEventFilter : public QObject
+{
+    Q_OBJECT
+public:
+    InputBlockerEventFilter(QObject *parent = nullptr) : QObject(parent) {}
+
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override {
+        // Block all input events and provide feedback
+        switch (event->type()) {
+            case QEvent::MouseButtonPress:
+            case QEvent::MouseButtonRelease:
+            case QEvent::MouseButtonDblClick:
+            case QEvent::MouseMove:
+            case QEvent::KeyPress:
+            case QEvent::KeyRelease:
+            case QEvent::Wheel:
+            case QEvent::TouchBegin:
+            case QEvent::TouchUpdate:
+            case QEvent::TouchEnd:
+            case QEvent::TabletPress:
+            case QEvent::TabletMove:
+            case QEvent::TabletRelease:
+                // Block the event
+                // Note: We cannot directly focus the portal dialog window as it's managed
+                // by the system's file picker. The modal flag should keep it on top.
+                // Users can click directly on the file dialog to ensure it has focus.
+                return true;
+            default:
+                // Allow other events to pass through
+                return QObject::eventFilter(obj, event);
+        }
+    }
+};
 
 // Helper class to handle D-Bus portal response signals
 class PortalResponseHandler : public QObject
 {
     Q_OBJECT
 public:
-    PortalResponseHandler(QString &result, bool &dialogFinished)
-        : m_result(result), m_dialogFinished(dialogFinished) {}
+    PortalResponseHandler(QEventLoop *loop) 
+        : m_loop(loop) {}
+
+    QString result() const { return m_result; }
 
 public slots:
     void handleResponse(uint response, const QVariantMap &results) {
@@ -48,21 +88,59 @@ public slots:
             qDebug() << "NativeFileDialog: Dialog cancelled or failed, response code:" << response;
         }
         
-        m_dialogFinished = true;
+        // Quit the event loop immediately when we get a response
+        if (m_loop) {
+            m_loop->quit();
+        }
     }
 
 private:
-    QString &m_result;
-    bool &m_dialogFinished;
+    QString m_result;
+    QEventLoop *m_loop;
 };
 
-// Anonymous namespace removed - filter conversion now done inline
+static QString portalParentHandleForWindow(QWindow *window)
+{
+    if (!window)
+        return QString();
+
+    // Platform detection is RUNTIME-based, not compile-time
+    // Qt automatically selects the platform when the app starts
+    // To test different backends, set the QT_QPA_PLATFORM environment variable:
+    //   QT_QPA_PLATFORM=xcb ./rpi-imager      (force X11)
+    //   QT_QPA_PLATFORM=wayland ./rpi-imager  (force Wayland)
+    const QString platform = QGuiApplication::platformName().toLower();
+    
+    // X11/XCB backend
+    if (platform.contains("xcb") || platform == "xcb") {
+        // On X11, provide the window ID in hex format for proper parenting
+        WId wid = window->winId();
+        if (wid != 0) {
+            QString handle = QStringLiteral("x11:%1").arg(QString::number(wid, 16));
+            qDebug() << "NativeFileDialog: X11 detected, parent handle:" << handle;
+            return handle;
+        }
+        qWarning() << "NativeFileDialog: X11 detected but could not get window ID";
+        return QString();
+    }
+    
+    // Wayland backend
+    if (platform.contains("wayland")) {
+        // Wayland window export requires the xdg-foreign protocol
+        // Qt doesn't provide a simple API for this, so we rely on modal behavior
+        qDebug() << "NativeFileDialog: Wayland detected, using modal dialog without parent handle";
+        return QString();
+    }
+    
+    // Unknown platform
+    qWarning() << "NativeFileDialog: Unknown platform detected:" << platform;
+    return QString();
+}
 
 QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
-                                           bool saveDialog)
+                                           bool saveDialog, void *parentWindow)
 {
-    
     QDBusConnection bus = QDBusConnection::sessionBus();
     if (!bus.isConnected()) {
         qDebug() << "NativeFileDialog: No D-Bus session bus available";
@@ -79,6 +157,20 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
         return QString(); // QML callsites will handle fallback
     }
     
+    // Prepare parent window identifier for modal behavior
+    QString parentWindowId = "";
+    QWindow *window = nullptr;
+    InputBlockerEventFilter *inputBlocker = nullptr;
+    
+    if (parentWindow) {
+        window = static_cast<QWindow*>(parentWindow);
+        parentWindowId = portalParentHandleForWindow(window);
+        
+        // Install event filter to block all input events while dialog is open
+        inputBlocker = new InputBlockerEventFilter();
+        window->installEventFilter(inputBlocker);
+    }
+    
     // Prepare arguments for the portal call
     QVariantMap options;
     options["modal"] = true;
@@ -93,60 +185,60 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
         options["current_folder"] = QByteArray(dirUrl.toEncoded());
     }
     
-    // Convert and set file filters - Portal expects specific format
-    if (!filter.isEmpty()) {
-        // Parse Qt filter format: "Images (*.png *.jpg);;All files (*)"
-        QStringList filterParts = filter.split(";;");
-        QVariantList filters;
-        
-        for (const QString &filterPart : filterParts) {
-            if (filterPart.contains('(') && filterPart.contains(')')) {
-                QString name = filterPart.section('(', 0, 0).trimmed();
-                QString patterns = filterPart.section('(', 1, 1).section(')', 0, 0);
-                QStringList patternList = patterns.split(' ', Qt::SkipEmptyParts);
-                
-                // Portal filter format: [name, [[pattern1, pattern2], ...]]
-                QVariantList filterEntry;
-                filterEntry << name;
-                QVariantList patternVariants;
-                for (const QString &pattern : patternList) {
-                    patternVariants << QVariant(pattern);
-                }
-                filterEntry << QVariant(patternVariants);
-                filters << QVariant(filterEntry);
-            }
-        }
-        
-        if (!filters.isEmpty()) {
-            options["filters"] = QVariant(filters);
-        }
-    }
-    
     // Generate unique request token
     static uint requestCounter = 0;
     QString token = QString("rpi_imager_%1_%2").arg(getpid()).arg(++requestCounter);
     options["handle_token"] = token;
     
-    QString method = saveDialog ? "SaveFile" : "OpenFile";
-    QString parentWindow = "";  // Could be set to X11 window ID for proper modal behavior
+    // Note: File type filters are not supported on Linux
+    // The XDG Desktop Portal requires complex D-Bus type marshalling (a(sa(us)))
+    // that would require significant boilerplate code for minimal benefit.
+    // The dialog will show all files - users can navigate and select any file.
+    Q_UNUSED(filter);
     
-    // Make the async call
-    QDBusReply<QDBusObjectPath> reply = interface.call(method, parentWindow, title, options);
+    QString method = saveDialog ? "SaveFile" : "OpenFile";
+    
+    // Use QDBusMessage for better control over argument types
+    QDBusMessage message = QDBusMessage::createMethodCall(
+        "org.freedesktop.portal.Desktop",
+        "/org/freedesktop/portal/desktop",
+        "org.freedesktop.portal.FileChooser",
+        method);
+    
+    message << parentWindowId << title << options;
+    
+    // Make the call and get the reply
+    QDBusMessage replyMsg = bus.call(message);
+    
+    if (replyMsg.type() == QDBusMessage::ErrorMessage) {
+        qDebug() << "NativeFileDialog: Portal call failed:" << replyMsg.errorMessage();
+        // Restore window interactivity on error
+        if (window && inputBlocker) {
+            window->removeEventFilter(inputBlocker);
+            delete inputBlocker;
+        }
+        return QString(); // QML callsites will handle fallback
+    }
+    
+    QDBusReply<QDBusObjectPath> reply(replyMsg);
     
     if (!reply.isValid()) {
         qDebug() << "NativeFileDialog: Portal call failed:" << reply.error().message();
+        // Restore window interactivity on error
+        if (window && inputBlocker) {
+            window->removeEventFilter(inputBlocker);
+            delete inputBlocker;
+        }
         return QString(); // QML callsites will handle fallback
     }
     
     QString requestPath = reply.value().path();
-    qDebug() << "NativeFileDialog: Portal request created at:" << requestPath;
     
-    // Connect to the Response signal to get the result
-    QString result;
-    bool dialogFinished = false;
+    // Create event loop for blocking until we get a response
+    QEventLoop loop;
     
     // Create handler for the portal response
-    PortalResponseHandler handler(result, dialogFinished);
+    PortalResponseHandler handler(&loop);
     
     // Connect to the D-Bus signal using QDBusConnection
     bool connected = QDBusConnection::sessionBus().connect(
@@ -160,35 +252,39 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     
     if (!connected) {
         qDebug() << "NativeFileDialog: Could not connect to portal Response signal";
+        // Restore window interactivity on error
+        if (window && inputBlocker) {
+            window->removeEventFilter(inputBlocker);
+            delete inputBlocker;
+        }
         return QString(); // QML callsites will handle fallback
     }
     
-    // Run a local event loop until we get the response
-    QEventLoop loop;
+    // Set up timeout timer (5 minutes should be more than enough)
     QTimer timeoutTimer;
     timeoutTimer.setSingleShot(true);
-    timeoutTimer.setInterval(30000); // 30 second timeout
-    
-    QObject::connect(&timeoutTimer, &QTimer::timeout, [&loop, &dialogFinished]() {
-        qWarning() << "NativeFileDialog: Portal dialog timed out";
-        dialogFinished = true;
+    QObject::connect(&timeoutTimer, &QTimer::timeout, [&loop]() {
+        qWarning() << "NativeFileDialog: Portal dialog timed out after 5 minutes";
         loop.quit();
     });
+    timeoutTimer.start(300000); // 5 minute timeout
     
-    // Check for completion every 100ms
-    QTimer checkTimer;
-    checkTimer.setInterval(100);
-    QObject::connect(&checkTimer, &QTimer::timeout, [&loop, &dialogFinished]() {
-        if (dialogFinished) {
-            loop.quit();
-        }
-    });
-    
-    timeoutTimer.start();
-    checkTimer.start();
-    
-    // Wait for response or timeout
+    // Wait for response or timeout - this blocks until the user interacts with the dialog
+    // This makes the application non-interactive while the dialog is open
     loop.exec();
+    
+    // Stop the timeout timer if it's still running
+    timeoutTimer.stop();
+    
+    // Disconnect the signal
+    QDBusConnection::sessionBus().disconnect(
+        "org.freedesktop.portal.Desktop",
+        requestPath,
+        "org.freedesktop.portal.Request",
+        "Response",
+        &handler,
+        SLOT(handleResponse(uint, QVariantMap))
+    );
     
     // Clean up the request object
     QDBusInterface requestInterface("org.freedesktop.portal.Desktop",
@@ -197,6 +293,14 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                                     bus);
     if (requestInterface.isValid()) {
         requestInterface.call("Close");
+    }
+    
+    QString result = handler.result();
+    
+    // Restore window interactivity now that dialog is closed
+    if (window && inputBlocker) {
+        window->removeEventFilter(inputBlocker);
+        delete inputBlocker;
     }
     
     if (result.isEmpty()) {
@@ -231,4 +335,3 @@ bool NativeFileDialog::areNativeDialogsAvailablePlatform()
 }
 
 #include "nativefiledialog_linux.moc"
-

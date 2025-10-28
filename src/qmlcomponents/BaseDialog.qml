@@ -3,9 +3,9 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import RpiImager
 
 /**
@@ -58,6 +58,11 @@ Dialog {
         id: dialogFocusScope
         anchors.fill: parent
         focus: true
+        
+        // Accessibility properties
+        Accessible.role: Accessible.Dialog
+        Accessible.name: root.title
+        Accessible.description: ""
         
         Keys.onEscapePressed: {
             // Allow child dialogs to handle escape differently

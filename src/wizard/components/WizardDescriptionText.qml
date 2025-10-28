@@ -3,9 +3,8 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Layouts
 import RpiImager
 
 Text {
@@ -18,4 +17,12 @@ Text {
     // Default layout properties for consistent spacing
     Layout.fillWidth: true
     wrapMode: Text.WordWrap
+    
+    // Accessibility
+    Accessible.role: Accessible.StaticText
+    Accessible.name: text
+    Accessible.ignored: false
+    Accessible.focusable: true
+    focusPolicy: Qt.TabFocus
+    activeFocusOnTab: true
 } 

@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QEventLoop>
 #include <QCoreApplication>
+#include <QWindow>
 #include <Cocoa/Cocoa.h>
 
 namespace {
@@ -52,7 +53,7 @@ QString convertQtFilterToMacOS(const QString &qtFilter)
 
 QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
-                                           bool saveDialog)
+                                           bool saveDialog, void *parentWindow)
 {
     // Defer dialog presentation to avoid interfering with Qt QML object destruction
     QString result;
@@ -60,6 +61,10 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     
     // Process events once to allow QML cleanup, then show dialog with minimal delay
     QCoreApplication::processEvents();
+    
+    // Parent window parameter is unused on macOS
+    // Native panels always run as application-modal dialogs
+    Q_UNUSED(parentWindow);
     
     // Use a very short timer to minimize delay while still avoiding Qt conflicts
     QTimer::singleShot(1, [&]() {
@@ -97,7 +102,10 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 }
             }
             
+            // Simply run as application modal dialog
+            // Sheet modals require async handling which complicates Qt integration
             NSInteger buttonPressed = [panel runModal];
+            
             if (buttonPressed == NSModalResponseOK) {
                 NSURL *url = [panel URL];
                 modalResult = [url path];
@@ -124,7 +132,10 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 }
             }
             
+            // Simply run as application modal dialog
+            // Sheet modals require async handling which complicates Qt integration
             NSInteger buttonPressed = [panel runModal];
+            
             if (buttonPressed == NSModalResponseOK) {
                 NSArray *urls = [panel URLs];
                 if ([urls count] > 0) {

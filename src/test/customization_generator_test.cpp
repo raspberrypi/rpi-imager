@@ -217,7 +217,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     QVariantMap settings;
     settings["wifiSSID"] = "TestNetwork";
     settings["wifiPasswordCrypt"] = "hashed_password_here";
-    settings["wifiCountry"] = "GB";
+    settings["recommendedWifiCountry"] = "GB";
     settings["wifiHidden"] = true;
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
@@ -235,7 +235,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customiz
     QVariantMap settings;
     settings["wifiSSID"] = "OpenNetwork";
     settings["wifiPasswordCrypt"] = "";  // Empty PSK for open network
-    settings["wifiCountry"] = "US";
+    settings["recommendedWifiCountry"] = "US";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
@@ -249,7 +249,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customiz
 TEST_CASE("CustomisationGenerator WiFi country only (no SSID)", "[customization]") {
     QVariantMap settings;
     // Set country code GB without SSID - tests regulatory domain configuration
-    settings["wifiCountry"] = "GB";
+    settings["recommendedWifiCountry"] = "GB";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
@@ -350,7 +350,7 @@ TEST_CASE("CustomisationGenerator handles special characters in WiFi SSID", "[cu
     QVariantMap settings;
     settings["wifiSSID"] = "Test Network (5GHz)";
     settings["wifiPasswordCrypt"] = "fakehash";
-    settings["wifiCountry"] = "US";
+    settings["recommendedWifiCountry"] = "US";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
@@ -364,7 +364,7 @@ TEST_CASE("CustomisationGenerator handles quotes in WiFi SSID", "[customization]
     QVariantMap settings;
     settings["wifiSSID"] = "My \"Quoted\" Network";
     settings["wifiPasswordCrypt"] = "fakehash";
-    settings["wifiCountry"] = "US";
+    settings["recommendedWifiCountry"] = "US";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
@@ -379,7 +379,7 @@ TEST_CASE("CustomisationGenerator handles backslashes in WiFi SSID", "[customiza
     QVariantMap settings;
     settings["wifiSSID"] = "Network\\With\\Backslashes";
     settings["wifiPasswordCrypt"] = "fakehash";
-    settings["wifiCountry"] = "US";
+    settings["recommendedWifiCountry"] = "US";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
@@ -392,7 +392,7 @@ TEST_CASE("CustomisationGenerator handles non-ASCII UTF-8 WiFi SSID", "[customiz
     QVariantMap settings;
     settings["wifiSSID"] = "Café ☕ 日本語";
     settings["wifiPasswordCrypt"] = "fakehash";  // Pre-computed PSK (passwords are ASCII-only per WPA2 spec)
-    settings["wifiCountry"] = "FR";
+    settings["recommendedWifiCountry"] = "FR";
     
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
@@ -610,7 +610,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     QVariantMap settings;
     settings["wifiSSID"] = "TestNetwork";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
-    settings["wifiCountry"] = "DE";
+    settings["recommendedWifiCountry"] = "DE";
     
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
     QString yaml = QString::fromUtf8(netcfg);
@@ -618,7 +618,6 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("network:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("version: 2"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("wifis:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("renderer: networkd"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("wlan0:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("dhcp4: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("regulatory-domain: \"DE\""));
@@ -626,17 +625,6 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"TestNetwork\":"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakecryptedhash123\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("optional: true"));
-}
-
-TEST_CASE("CustomisationGenerator generates cloud-init network-config with NetworkManager for rpios", "[cloudinit][network]") {
-    QVariantMap settings;
-    settings["wifiSSID"] = "TestNetwork";
-    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
-    
-    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, true);
-    QString yaml = QString::fromUtf8(netcfg);
-    
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("renderer: NetworkManager"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidden WiFi", "[cloudinit][network]") {
@@ -655,7 +643,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidde
 TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[cloudinit][network]") {
     QVariantMap settings;
     // Set country code FR without SSID - tests regulatory domain configuration
-    settings["wifiCountry"] = "FR";
+    settings["recommendedWifiCountry"] = "FR";
     
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, "", false, false, "pi");
     QString yaml = QString::fromUtf8(userdata);

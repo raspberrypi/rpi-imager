@@ -3,9 +3,9 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../qmlcomponents"
 import "components"
 
@@ -46,7 +46,7 @@ WizardStepBase {
 
         // Focus first interactive control
         root.registerFocusGroup("language_controls", function(){ return [comboLanguage] }, 0)
-        root.initialFocusItem = comboLanguage
+        // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
     }
 
     content: [
@@ -69,6 +69,7 @@ WizardStepBase {
                         editable: false
                         selectTextByMouse: true
                         font.pixelSize: Style.fontSizeInput
+                        Accessible.description: qsTr("Select the language for the Raspberry Pi Imager interface")
                     }
                 }
             }

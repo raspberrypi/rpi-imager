@@ -28,6 +28,7 @@
 #include "oslistmodel.h"
 #ifndef CLI_ONLY_BUILD
 #include "nativefiledialog.h"
+#include <QWindow>
 #endif
 #include "cachemanager.h"
 #include "device_info.h"
@@ -197,6 +198,9 @@ public:
                                              const QString &initialDir = QString(),
                                              const QString &filter = QString());
 
+    /* Set the main window for modal file dialogs */
+    Q_INVOKABLE void setMainWindow(QObject *window);
+
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 
@@ -237,6 +241,7 @@ public:
     Q_INVOKABLE QVariantMap getLocaleDataForCapital(const QString &capitalCity);
     Q_INVOKABLE QString getSSID();
     Q_INVOKABLE QString getPSK();
+    Q_INVOKABLE QString getPSKForSSID(const QString &ssid);
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
@@ -266,9 +271,9 @@ public:
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void openUrl(const QUrl &url);
     Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
-    // Ephemeral session-only Connect token (never persisted)
-    Q_INVOKABLE void setRuntimeConnectToken(const QString &token);
+    Q_INVOKABLE void overwriteConnectToken(const QString &token);
     Q_INVOKABLE QString getRuntimeConnectToken() const;
+    Q_INVOKABLE bool verifyAuthKey(const QString &token, bool strict = false) const;
     
     /* Override OS list refresh schedule (in minutes); pass negative to clear override */
     Q_INVOKABLE void setOsListRefreshOverride(int intervalMinutes, int jitterMinutes);
@@ -289,6 +294,7 @@ signals:
     void networkOnline();
     void preparationStatusUpdate(QVariant msg);
     void osListPrepared();
+    void hwFilterChanged();
     void networkInfo(QVariant msg);
     void cacheVerificationStarted();
     void cacheVerificationFinished();
@@ -297,8 +303,10 @@ signals:
     void keychainPermissionRequested();
     void keychainPermissionResponseReceived();
     void writeStateChanged();
-    void connectCallbackReceived(QVariant url);
+    void connectTokenReceived(const QString &token);
+    void connectTokenConflictDetected(const QString &token);
     void cacheStatusChanged();
+    void osListFetchFailed();
 
 protected slots:
     void startProgressPolling();
@@ -337,6 +345,8 @@ private:
     bool _deviceFilterIsInclusive;
     std::shared_ptr<DeviceInfo> _device_info;
 
+    QString parseTokenFromUrl(const QUrl &url, bool strictAuthKey = false) const;
+
 protected:
     QUrl _src, _repo;
     QString _dst, _parentCategory, _osName, _osReleaseDate, _currentLang, _currentLangcode, _currentKeyboard;
@@ -362,6 +372,9 @@ protected:
     int _refreshJitterOverrideMinutes;
     // Session-only storage for Raspberry Pi Connect token
     QString _piConnectToken;
+#ifndef CLI_ONLY_BUILD
+    QWindow *_mainWindow;
+#endif
 
     void _parseCompressedFile();
     void _parseXZFile();

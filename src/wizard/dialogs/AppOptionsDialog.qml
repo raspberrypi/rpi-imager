@@ -4,10 +4,10 @@
  */
 
 import QtCore
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Window 2.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Window
 import "../../qmlcomponents"
 
 import RpiImager
@@ -49,6 +49,8 @@ BaseDialog {
         color: Style.formLabelColor
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
+        Accessible.role: Accessible.Heading
+        Accessible.name: text
     }
 
     // Options section
@@ -65,6 +67,7 @@ BaseDialog {
             ImOptionPill {
                 id: chkBeep
                 text: qsTr("Play sound when finished")
+                accessibleDescription: qsTr("Play an audio notification when the image write process completes")
                 Layout.fillWidth: true
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
@@ -74,6 +77,7 @@ BaseDialog {
             ImOptionPill {
                 id: chkEject
                 text: qsTr("Eject media when finished")
+                accessibleDescription: qsTr("Automatically eject the storage device when the write process completes successfully")
                 Layout.fillWidth: true
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
@@ -83,6 +87,7 @@ BaseDialog {
             ImOptionPill {
                 id: chkTelemetry
                 text: qsTr("Enable anonymous statistics (telemetry)")
+                accessibleDescription: qsTr("Send anonymous usage statistics to help improve Raspberry Pi Imager")
                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("What is this?")
                 helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/rpi-imager?tab=readme-ov-file#anonymous-metrics-telemetry"
                 Layout.fillWidth: true
@@ -94,6 +99,7 @@ BaseDialog {
             ImOptionPill {
                 id: chkDisableWarnings
                 text: qsTr("Disable warnings")
+                accessibleDescription: qsTr("Skip confirmation dialogs before writing images (advanced users only)")
                 Layout.fillWidth: true
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
@@ -112,6 +118,7 @@ BaseDialog {
                 id: editRepoButton
                 text: qsTr("Content Repository")
                 btnText: qsTr("Edit")
+                accessibleDescription: qsTr("Change the source of operating system images between official Raspberry Pi repository and custom sources")
                 Layout.fillWidth: true
                 // Disable while write is in progress to prevent changing source during write
                 enabled: imageWriter.writeState === ImageWriter.Idle ||
@@ -254,6 +261,8 @@ BaseDialog {
             font.bold: true
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
 
         Text {
@@ -264,6 +273,8 @@ BaseDialog {
             color: Style.textDescriptionColor
             Layout.fillWidth: true
             text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         }
 
         RowLayout {

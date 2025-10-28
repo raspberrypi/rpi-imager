@@ -3,8 +3,8 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Layouts
 import QtQuick.Controls
 import "../qmlcomponents"
 import "components"
@@ -20,29 +20,46 @@ WizardStepBase {
     property string wifiMode: "secure"
     property string originalSavedSSID: ""
     property bool hadSavedCrypt: false
+    property bool showPw: wifiMode === "secure"
 
     function ssidUnchanged(ssid, prev) { return (ssid || "") === (prev || "") }
     
     title: qsTr("Customisation: Choose Wi‑Fi")
-    subtitle: qsTr("Configure wireless LAN settings")
     showSkipButton: true
+    nextButtonAccessibleDescription: qsTr("Save Wi-Fi settings and continue to next customisation step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
     
-    // Set initial focus on SSID
-    // don't default to the mode switchers so they aren't tempted to select open ;)
-    initialFocusItem: fieldWifiSSID
+    // Initial focus will automatically go to title, then subtitle (if present), then first control (handled by WizardStepBase)
 
     Component.onCompleted: {
         root.registerFocusGroup("wifi_modes", function() {
             return [tabSecure, tabOpen]
         }, 0)
+        // Include labels before their corresponding fields so users hear the explanation first
         root.registerFocusGroup("wifi_fields", function(){
-            return [fieldWifiSSID, fieldWifiPassword, fieldWifiCountry]
+            var items = [labelSSID, fieldWifiSSID]
+            if (showPw) {
+                items.push(lblPassword)
+                items.push(fieldWifiPassword)
+                // Always include confirm label and field when password is shown (like user customization step)
+                items.push(lblPasswordConfirm)
+                items.push(fieldWifiPasswordConfirm)
+            }
+            return items
         }, 1)
         root.registerFocusGroup("wifi_options", function(){ return [chkWifiHidden] }, 2)
+
+        // Set SSID placeholder before prefilling text content
+        fieldWifiSSID.placeholderText = qsTr("Network name")
 
         // Prefill from saved settings
         var saved = imageWriter.getSavedCustomizationSettings()
 
+        // Set SSID placeholder first (before setting any text)
+        fieldWifiSSID.placeholderText = qsTr("Network name")
+
+        // Then set text values after, so they properly override the placeholder
         if (saved.wifiSSID) {
             fieldWifiSSID.text = saved.wifiSSID
         }
@@ -55,9 +72,6 @@ WizardStepBase {
                 fieldWifiSSID.text = detectedSsid
             }
         }
-
-        // Note: WiFi country is initialized by fieldWifiCountry's Component.onCompleted
-        // after the model is loaded, which properly handles recommended/saved/default values
         if (saved.wifiHidden !== undefined) {
             chkWifiHidden.checked = (saved.wifiHidden === true || saved.wifiHidden === "true")
         }
@@ -67,11 +81,17 @@ WizardStepBase {
         hadSavedCrypt = !!saved.wifiPasswordCrypt
 
         // if no saved crypt, try to prefill a PSK from system
-        if (!hadSavedCrypt) {
+        // IMPORTANT: Only attempt PSK retrieval if we have an SSID (either saved or detected)
+        // Pass the SSID to getPSKForSSID() to avoid race condition where SSID detection
+        // might fail during the keychain permission dialog on macOS
+        if (!hadSavedCrypt && fieldWifiSSID.text && fieldWifiSSID.text.length > 0) {
             // Auto-populate WiFi password from system keychain when available
             // Only when no crypted password is already saved
-            var psk = imageWriter.getPSK()
-            if (psk && psk.length > 0) fieldWifiPassword.text = psk
+            var psk = imageWriter.getPSKForSSID(fieldWifiSSID.text)
+            if (psk && psk.length > 0) {
+                fieldWifiPassword.text = psk
+                fieldWifiPasswordConfirm.text = psk
+            }
         }
 
         // wifiMode: prefer saved value; otherwise infer from whether a password is present
@@ -80,22 +100,65 @@ WizardStepBase {
             : "secure"
 
         updatePasswordFieldUI()
+        // UpdatePasswordFieldUI already takes care of this
+        //root.rebuildFocusOrder()
     }
 
     function updatePasswordFieldUI() {
         var ssid = (fieldWifiSSID.text || "").trim()
         var prevSSID = originalSavedSSID
+
         if (wifiMode === "open") {
-            fieldWifiPassword.enabled = false
             fieldWifiPassword.text = ""
+            fieldWifiPassword.enabled = false
             fieldWifiPassword.placeholderText = qsTr("No password (open network)")
-        } else {
-            fieldWifiPassword.enabled = true
-            var canKeep = hadSavedCrypt && ssidUnchanged(ssid, prevSSID)
-            fieldWifiPassword.placeholderText = canKeep
-                ? qsTr("Saved (hidden) — leave blank to keep")
-                : qsTr("Network password")
+
+            fieldWifiPasswordConfirm.text = ""
+            return
         }
+
+        // secure
+        fieldWifiPassword.enabled = true
+        var canKeep = hadSavedCrypt && ssidUnchanged(ssid, prevSSID)
+        fieldWifiPassword.placeholderText = canKeep
+           ? qsTr("Saved (hidden) — leave blank to keep")
+           : qsTr("Network password")
+    }
+
+    function passwordErrorMessage() {
+        if (!showPw) return " ";
+
+        // Gather state
+        var ssidNow = (fieldWifiSSID.text || "").trim();
+        var canKeep = hadSavedCrypt && ssidUnchanged(ssidNow, originalSavedSSID);
+        var pwd = fieldWifiPassword.text || "";
+        var conf = fieldWifiPasswordConfirm.text || "";
+
+        // Open mode: no errors
+        if (wifiMode === "open") return " ";
+
+        // If we can keep the saved crypt and user left blank => OK
+        if (canKeep && pwd.length === 0) return " ";
+
+        // New/changed password is required from here
+        // Empty -> prompt explicitly
+        if (pwd.length === 0) return qsTr("Enter a password");
+
+        // Detailed validity (mirrors isValidWifiPassword)
+        // 64 hex is allowed => if it's 64 chars but not hex, say invalid chars
+        var isHex = isHex64(pwd);
+        if (!isHex) {
+            if (pwd.length < 8) return qsTr("Password is too short (min 8 characters)");
+            if (pwd.length > 63) return qsTr("Password is too long (max 63 characters)");
+            if (!isAsciiPrintable(pwd)) return qsTr("Password contains unsupported characters");
+        }
+
+        // Always enforce match when either field has content (like user customization step)
+        if ((conf.length > 0 || pwd.length > 0) && pwd !== conf)
+            return qsTr("Passwords don't match");
+
+        // No errors -> keep row height stable
+        return " ";
     }
 
     // Content
@@ -177,21 +240,40 @@ WizardStepBase {
                     rowSpacing: Style.formRowSpacing
 
                     WizardFormLabel {
+                        id: labelSSID
                         text: qsTr("SSID:")
+                        Accessible.ignored: false
+                        Accessible.focusable: true
+                        Accessible.description: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
+                        focusPolicy: Qt.TabFocus
+                        activeFocusOnTab: true
                     }
 
                     ImTextField {
                         id: fieldWifiSSID
                         Layout.fillWidth: true
-                        placeholderText: qsTr("Network name")
                         font.pixelSize: Style.fontSizeInput
                         onTextChanged: updatePasswordFieldUI()
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
                     }
 
                     WizardFormLabel {
                         id: lblPassword
                         text: CommonStrings.password
-                        visible: wifiMode === "secure"
+                        visible: showPw
+                        Accessible.ignored: false
+                        Accessible.focusable: true
+                        Accessible.description: {
+                            var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
+                            return canKeep 
+                                ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
+                                : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
+                        }
+                        focusPolicy: Qt.TabFocus
+                        activeFocusOnTab: true
                     }
 
                     ImTextField {
@@ -199,101 +281,84 @@ WizardStepBase {
                         Layout.fillWidth: true
                         echoMode: TextInput.Password
                         font.pixelSize: Style.fontSizeInput
-                        visible: wifiMode === "secure"
-                    }
-
-                    WizardFormLabel {
-                        text: qsTr("Wireless LAN country:")
-                    }
-
-                    ImComboBox {
-                        id: fieldWifiCountry
-                        Layout.fillWidth: true
-                        model: []
-                        font.pixelSize: Style.fontSizeInput
-                        property bool isInitializing: true
-                        Component.onCompleted: {
-                            model = root.imageWriter.getCountryList()
-                            // Always use recommended country from capital city selection
-                            // Priority: recommendation from capital city > default (GB)
-                            // We intentionally ignore any previously saved wifiCountry
-                            var saved = root.imageWriter.getSavedCustomizationSettings()
-                            console.log("WifiCustomizationStep: recommendedWifiCountry =", saved.recommendedWifiCountry)
-                            if (saved && saved.recommendedWifiCountry && model && model.length > 0) {
-                                // Use recommended country from capital city selection
-                                var target = saved.recommendedWifiCountry
-                                var idx = -1
-                                for (var i = 0; i < model.length; i++) {
-                                    if (model[i] === target) { idx = i; break }
-                                }
-                                if (idx >= 0) {
-                                    currentIndex = idx
-                                } else {
-                                    fieldWifiCountry.editText = target
-                                }
-                            } else if (model && model.length > 0) {
-                                // Default to GB if available, else first item
-                                var gbIndex = -1
-                                for (var j = 0; j < model.length; j++) {
-                                    if (model[j] === "GB") { gbIndex = j; break }
-                                }
-                                currentIndex = (gbIndex >= 0) ? gbIndex : 0
-                            }
-                            isInitializing = false
-                            // Now that initialization is complete, update the label once
-                            recommendedLabel.updateVisibility()
-                        }
-                        onCurrentTextChanged: {
-                            // Update visibility when selection changes (but not during initialization)
-                            if (!isInitializing) {
-                                recommendedLabel.updateVisibility()
-                            }
-                        }
-                    }
-
-                    // Empty label to maintain grid alignment
-                    Item { width: 1; height: 1 }
-
-                    Text {
-                        id: recommendedLabel
-                        Layout.fillWidth: true
-                        Layout.columnSpan: 1
-                        color: "#4CAF50"
-                        font.pixelSize: 11
-                        wrapMode: Text.WordWrap
-
-                        function updateVisibility() {
-                            var saved = root.imageWriter.getSavedCustomizationSettings()
-                            if (saved && saved.recommendedWifiCountry) {
-                                var currentCountry = fieldWifiCountry.currentText || fieldWifiCountry.editText
-                                visible = (currentCountry === saved.recommendedWifiCountry)
-                                text = visible ? qsTr("✓ Recommended based on your capital city selection") : ""
-                                console.log("WifiCustomizationStep: recommendation label visibility =", visible, "current =", currentCountry, "recommended =", saved.recommendedWifiCountry)
-                            } else {
-                                visible = false
-                                text = ""
-                                console.log("WifiCustomizationStep: no recommendation available")
-                            }
-                        }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.spacingMedium
-
-                    ImCheckBox {
-                        id: chkWifiHidden
-                        text: qsTr("Hidden SSID")
+                        visible: showPw
 
                         onActiveFocusChanged: {
                             if (activeFocus)
                                 wifiScroll.scrollToItem(this);
                         }
+                        onTextChanged: {
+                            updatePasswordFieldUI()
+                            wifiScroll.scrollToItem(fieldWifiPassword)
+                        }
                     }
 
-                    Item {
+                    /* Confirm password row */
+                    WizardFormLabel {
+                        id: lblPasswordConfirm
+                        text: qsTr("Confirm password:")
+                        visible: showPw
+                        Accessible.ignored: false
+                        Accessible.focusable: true
+                        Accessible.description: {
+                            var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
+                            return canKeep 
+                                ? qsTr("Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.")
+                                : qsTr("Re-enter the Wi-Fi password to confirm it matches.")
+                        }
+                        focusPolicy: Qt.TabFocus
+                        activeFocusOnTab: true
+                    }
+
+                    ImTextField {
+                        id: fieldWifiPasswordConfirm
                         Layout.fillWidth: true
+                        echoMode: TextInput.Password
+                        font.pixelSize: Style.fontSizeInput
+                        placeholderText: {
+                            var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
+                            return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
+                        }
+                        visible: showPw
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
+                        onTextChanged: {
+                            // keep scroll behavior pleasant while typing
+                            wifiScroll.scrollToItem(fieldWifiPasswordConfirm);
+                        }
+                    }
+
+                    // Empty label to maintain grid alignment
+                    Item { width: 1; height: 1; visible: showPw }
+
+                    Text {
+                        id: pwdHint
+                        Layout.fillWidth: true
+                        Layout.columnSpan: 1
+                        visible: showPw
+                        wrapMode: Text.WordWrap
+                        text: passwordErrorMessage()
+                        color: (text === " ") ? "transparent" : Style.formLabelErrorColor
+                        //font.pixelSize: Style.fontSizeFormLabel
+                        font.pixelSize: 11
+
+                        // lock a minimum height so even " " keeps the same line height
+                        // TextMetrics is lighter than FontMetrics in Controls:
+                        TextMetrics { id: pwdHintMetrics; font: pwdHint.font; text: "X" }
+                        Layout.preferredHeight: pwdHintMetrics.height
+                    }
+
+                    ImCheckBox {
+                        id: chkWifiHidden
+                        text: qsTr("Hidden SSID")
+                        Accessible.description: qsTr("Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.")
+
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                wifiScroll.scrollToItem(this);
+                        }
                     }
                 }
             }
@@ -341,21 +406,31 @@ WizardStepBase {
     }
 
     // Validation: allow proceed when
-    // - SSID and country entered and either new PSK provided or a saved crypt exists; or
+    // - SSID entered and either new PSK provided or a saved crypt exists; or
     // - all WiFi fields are empty (skip)
     nextButtonEnabled: (function(){
         var haveSSID = fieldWifiSSID.text && fieldWifiSSID.text.trim().length > 0
-        var haveCountry = (fieldWifiCountry.currentText || fieldWifiCountry.editText)
-        if (!haveSSID || !haveCountry) return true  // allow skipping by leaving fields empty as before
+        if (!haveSSID) return true  // allow skipping by leaving fields empty
 
         if (wifiMode === "open") return true
 
         // secure / closed mode
-        var canKeep = hadSavedCrypt && ssidUnchanged(fieldWifiSSID.text.trim(), originalSavedSSID)
-        if ((fieldWifiPassword.text || "").length === 0) {
-            return canKeep // empty only ok if we can keep the old crypt
+        var ssidNow = fieldWifiSSID.text.trim()
+        var canKeep = hadSavedCrypt && ssidUnchanged(ssidNow, originalSavedSSID)
+        var pwd = fieldWifiPassword.text || ""
+
+        // If we *can* keep and user left blank, OK
+        if (canKeep && pwd.length === 0) {
+            return true
         }
-        return root.isValidWifiPassword(fieldWifiPassword.text)
+
+        // Need a new password -> must be valid and must match confirm (like user customization step)
+        if (pwd.length === 0) return false
+        if (!root.isValidWifiPassword(pwd)) return false
+
+        // Always check that passwords match
+        if (pwd !== (fieldWifiPasswordConfirm.text || "")) return false
+        return true
     })()
 
     // Save settings when moving to next step
@@ -363,7 +438,6 @@ WizardStepBase {
         // Merge-and-save strategy
         var saved = imageWriter.getSavedCustomizationSettings()
         var ssid = fieldWifiSSID.text ? fieldWifiSSID.text.trim() : ""
-        var country = fieldWifiCountry.currentText || fieldWifiCountry.editText || ""
         var pwd = fieldWifiPassword.text
         var prevSSID = saved.wifiSSID || ""
         var hidden = chkWifiHidden.checked
@@ -372,15 +446,6 @@ WizardStepBase {
 
         // persist mode
         saved.wifiMode = wifiMode
-        
-        // Save country code if provided (even without SSID)
-        if (country.length > 0) {
-            saved.wifiCountry = country
-            wizardContainer.wifiConfigured = true
-        } else {
-            // No country -> clear country setting
-            delete saved.wifiCountry
-        }
         
         // Handle SSID and password
         if (ssid.length > 0) {
@@ -392,6 +457,8 @@ WizardStepBase {
             } else {
                // secure / closed mode
                if (pwd.length > 0) {
+                   // extra safety; normally unreachable because nextButtonEnabled prevents this
+                   if (pwd !== fieldWifiPasswordConfirm.text) return;
                    // overwrite with new password
                    var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
                    saved.wifiPasswordCrypt = isPassphrase ? imageWriter.pbkdf2(pwd, ssid) : pwd
@@ -411,10 +478,7 @@ WizardStepBase {
             delete saved.wifiSSID
             delete saved.wifiPasswordCrypt
             delete saved.wifiHidden
-            // If we have a country, still mark as configured
-            if (country.length === 0) {
-                wizardContainer.wifiConfigured = false
-            }
+            wizardContainer.wifiConfigured = false
         }
         
         imageWriter.setSavedCustomizationSettings(saved)

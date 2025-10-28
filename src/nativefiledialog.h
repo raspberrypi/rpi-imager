@@ -24,22 +24,26 @@ public:
      * @param title Dialog title
      * @param initialDir Initial directory to show
      * @param filter File type filters (Qt format: "Images (*.png *.jpg);;All files (*)")
+     * @param parentWindow Parent window for modal behavior (optional)
      * @return Selected file path, or empty string if cancelled
      */
     static QString getOpenFileName(const QString &title = QString(),
                                    const QString &initialDir = QString(),
-                                   const QString &filter = QString());
+                                   const QString &filter = QString(),
+                                   void *parentWindow = nullptr);
 
     /**
      * @brief Shows a native save file dialog
      * @param title Dialog title
      * @param initialDir Initial directory to show
      * @param filter File type filters (Qt format: "Images (*.png *.jpg);;All files (*)")
+     * @param parentWindow Parent window for modal behavior (optional)
      * @return Selected file path, or empty string if cancelled
      */
     static QString getSaveFileName(const QString &title = QString(),
                                    const QString &initialDir = QString(),
-                                   const QString &filter = QString());
+                                   const QString &filter = QString(),
+                                   void *parentWindow = nullptr);
 
     /**
      * @brief Check if native dialogs are available
@@ -57,7 +61,7 @@ private:
     // Platform-specific implementations (implemented in platform-specific files)
     static QString getFileNameNative(const QString &title,
                                      const QString &initialDir, const QString &filter,
-                                     bool saveDialog);
+                                     bool saveDialog, void *parentWindow);
     static bool areNativeDialogsAvailablePlatform();
 
     // Flag to force QML dialogs

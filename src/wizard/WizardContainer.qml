@@ -4,9 +4,9 @@
  */
 pragma ComponentBehavior: Bound
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../qmlcomponents"
 
 import RpiImager
@@ -23,7 +23,11 @@ Item {
     // Expose network info text for embedded mode status updates
     property alias networkInfoText: networkInfo.text
     
-    property int currentStep: 0
+    // Check network connectivity at startup
+    readonly property bool hasNetworkConnectivity: PlatformHelper.hasNetworkConnectivity()
+    
+    // Start at device selection if online, otherwise skip to OS selection
+    property int currentStep: hasNetworkConnectivity ? 0 : 1
     readonly property int totalSteps: 12
     
     // Track which steps have been made permissible/unlocked for navigation
@@ -32,6 +36,9 @@ Item {
     
     // Track writing state
     property bool isWriting: false
+    
+    // Track if we're in "write another" flow (skip to writing step after storage selection)
+    property bool writeAnotherMode: false
     
     // Track selections for display in summary
     property string selectedDeviceName: ""
@@ -310,6 +317,8 @@ Item {
                     color: Style.sidebarTextOnInactiveColor
                     Layout.fillWidth: true
                     Layout.bottomMargin: Style.spacingSmall
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
                 }
                 
                 // Step list
@@ -623,7 +632,10 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             
-            initialItem: root.showLanguageSelection ? languageSelectionStep : deviceSelectionStep
+            // Skip device selection if offline (no network = no device list available)
+            // Start with language selection if requested, otherwise device selection if online, or OS selection if offline
+            initialItem: root.showLanguageSelection ? languageSelectionStep : 
+                        (root.hasNetworkConnectivity ? deviceSelectionStep : osSelectionStep)
             
             // Smooth transitions between steps
             pushEnter: Transition {
@@ -661,6 +673,22 @@ Item {
                     duration: 250
                 }
             }
+            
+            // Set focus when a new step is activated
+            onCurrentItemChanged: {
+                if (currentItem) {
+                    Qt.callLater(function() {
+                        if (currentItem && currentItem.initialFocusItem) {
+                            currentItem.initialFocusItem.forceActiveFocus()
+                        } else if (currentItem) {
+                            // Fallback: try to find first focusable field
+                            if (currentItem._focusableItems && currentItem._focusableItems.length > 0) {
+                                currentItem._focusableItems[0].forceActiveFocus()
+                            }
+                        }
+                    })
+                }
+            }
         }
     }
     
@@ -668,8 +696,14 @@ Item {
     function nextStep() {
         if (root.currentStep < root.totalSteps - 1) {
             var nextIndex = root.currentStep + 1
+            
+            // Special handling for "write another" mode: skip directly to writing step after storage selection
+            if (writeAnotherMode && root.currentStep === stepStorageSelection) {
+                nextIndex = stepWriting
+                writeAnotherMode = false  // Reset the flag
+            }
             // If customization is not supported, skip customization steps entirely
-            if (!customizationSupported && nextIndex === firstCustomizationStep) {
+            else if (!customizationSupported && nextIndex === firstCustomizationStep) {
                 nextIndex = stepWriting
             }
             // Skip optional Raspberry Pi Connect step when OS does not support it
@@ -764,7 +798,12 @@ Item {
             appOptionsButton: optionsButton
             onNextClicked: {
                 // After choosing language, jump to first real wizard step
-                root.jumpToStep(root.stepDeviceSelection)
+                // Skip device selection if offline
+                if (root.hasNetworkConnectivity) {
+                    root.jumpToStep(root.stepDeviceSelection)
+                } else {
+                    root.jumpToStep(root.stepOSSelection)
+                }
             }
         }
     }
@@ -877,7 +916,13 @@ Item {
             imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
-            onNextClicked: root.nextStep()
+            onNextClicked: {
+                // Only advance if the step indicates it's ready
+                if (isValid) {
+                    root.nextStep()
+                }
+                // Otherwise, let the step handle the action internally (showing dialog, etc.)
+            }
             onBackClicked: root.previousStep()
             onSkipClicked: {
                 // Skip functionality is handled in the step itself
@@ -935,11 +980,152 @@ Item {
             onNextClicked: root.wizardCompleted()
         }
     }
+
+    // Token conflict dialog — based on your BaseDialog pattern
+    BaseDialog {
+        id: tokenConflictDialog
+        parent: root
+        anchors.centerIn: parent
+
+        // carry the new token we just received
+        property string newToken: ""
+        property bool allowAccept: false
+
+        // small safety delay before enabling "Replace"
+        Timer {
+            id: acceptEnableDelay
+            interval: 1500
+            running: false
+            repeat: false
+            onTriggered: tokenConflictDialog.allowAccept = true
+        }
+
+        function openWithToken(tok) {
+            newToken = tok
+            allowAccept = false
+            acceptEnableDelay.start()
+            tokenConflictDialog.open()
+        }
+
+        // ESC closes
+        function escapePressed() { tokenConflictDialog.close() }
+
+        Component.onCompleted: {
+            // match your focus group style
+            registerFocusGroup("token_conflict_content", function() {
+                return [titleText, bodyText]
+            }, 0)
+            registerFocusGroup("token_conflict_buttons", function() {
+                return [keepBtn, replaceBtn]
+            }, 1)
+        }
+
+        onClosed: {
+            acceptEnableDelay.stop()
+            allowAccept = false
+            newToken = ""
+        }
+
+        // ----- CONTENT -----
+        Text {
+            id: titleText
+            text: qsTr("Replace existing Raspberry Pi Connect token?")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
+        }
+
+        // Body / security note
+        Text {
+            id: bodyText
+            text: qsTr("A new Raspberry Pi Connect token was received that differs from your current one.\n\n") +
+                  qsTr("Do you want to overwrite the existing token?\n\n") +
+                  qsTr("Warning: Only replace the token if you initiated this action. ") +
+                  qsTr("If you didn't, someone could be trying to push a bad token to RPi Imager.")
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamily
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
+        }
+
+        // Buttons row
+        RowLayout {
+            id: btnRow
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            spacing: Style.spacingMedium
+
+            Item { Layout.fillWidth: true }
+
+            ImButton {
+                id: replaceBtn
+                text: tokenConflictDialog.allowAccept ? qsTr("Replace token") : qsTr("Please wait…")
+                accessibleDescription: qsTr("Replace the current token with the newly received one")
+                enabled: tokenConflictDialog.allowAccept
+                activeFocusOnTab: true
+                onClicked: {
+                    tokenConflictDialog.close()
+                    // Overwrite in C++ and re-emit to existing listeners
+                    root.imageWriter.overwriteConnectToken(tokenConflictDialog.newToken)
+                }
+            }
+
+            ImButtonRed {
+                id: keepBtn
+                text: qsTr("Keep existing")
+                accessibleDescription: qsTr("Keep your current Raspberry Pi Connect token")
+                activeFocusOnTab: true
+                onClicked: tokenConflictDialog.close()
+            }
+        }
+    }
+
+    Connections {
+        target: root.imageWriter
+        function onConnectTokenConflictDetected(newToken) {
+            tokenConflictDialog.openWithToken(newToken)
+        }
+    }
+
     
     function onFinalizing() {
         // Forward to the WritingStep if currently active
         if (currentStep === stepWriting && wizardStack.currentItem) {
             wizardStack.currentItem.onFinalizing()
+        }
+    }
+    
+    function onWriteCancelled() {
+        // Reset write state
+        isWriting = false
+        
+        // Navigate back to writing step (which will show the summary since isWriting is false)
+        if (currentStep !== stepWriting) {
+            jumpToStep(stepWriting)
+        }
+        
+        // Reset the writing step's state if it exists
+        if (wizardStack.currentItem && wizardStack.currentItem.objectName === "writingStep") {
+            wizardStack.currentItem.isWriting = false
+            wizardStack.currentItem.cancelPending = false
+            wizardStack.currentItem.isFinalising = false
+            wizardStack.currentItem.isComplete = false
         }
     }
     
@@ -969,6 +1155,7 @@ Item {
         currentStep = 0
         permissibleStepsBitmap = 1  // Reset to only Device step permissible
         isWriting = false
+        writeAnotherMode = false
         selectedDeviceName = ""
         selectedOsName = ""
         selectedStorageName = ""
@@ -995,6 +1182,23 @@ Item {
         // Navigate back to the first step
         wizardStack.clear()
         wizardStack.push(deviceSelectionStep)
+    }
+    
+    function resetToWriteStep() {
+        // Reset only the storage selection to allow choosing a new storage device
+        // while preserving device, OS, and customization settings
+        selectedStorageName = ""
+        
+        // Keep all steps permissible - they've already been completed
+        // This allows backward navigation if needed
+        
+        // Enable write another mode to skip directly to writing step after storage selection
+        writeAnotherMode = true
+        
+        // Navigate to storage selection step so user can select a new SD card
+        currentStep = stepStorageSelection
+        wizardStack.clear()
+        wizardStack.push(storageSelectionStep)
     }
 
     // Detect device selection changes and invalidate dependent steps

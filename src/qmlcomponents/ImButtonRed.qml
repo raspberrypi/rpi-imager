@@ -2,8 +2,9 @@
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2022 Raspberry Pi Ltd
  */
-import QtQuick 2.9
-import QtQuick.Controls 2.2
+
+import QtQuick
+import QtQuick.Controls
 
 import RpiImager
 
@@ -38,16 +39,21 @@ Button {
     
     // Accessibility properties
     Accessible.role: Accessible.Button
-    Accessible.name: text
-    Accessible.description: {
-        if (!enabled && accessibleDescription !== "") {
-            return accessibleDescription + " (disabled)"
+    Accessible.name: {
+        // Combine text with description in name since VoiceOver reads name more reliably
+        var name = text
+        var desc = accessibleDescription
+        if (!enabled && desc !== "") {
+            return name + ", " + desc + " (disabled)"
         } else if (!enabled) {
-            return "Button disabled"
+            return name + " (disabled)"
+        } else if (desc !== "") {
+            return name + ", " + desc
         } else {
-            return accessibleDescription
+            return name
         }
     }
+    Accessible.description: ""
     Accessible.onPressAction: clicked()
     
     Keys.onEnterPressed: clicked()

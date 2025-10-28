@@ -5,9 +5,9 @@
 
 pragma ComponentBehavior: Bound
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../qmlcomponents"
 
 import RpiImager
@@ -45,6 +45,9 @@ WizardStepBase {
     
     property alias dstlist: dstlist
     property string selectedDeviceName: ""
+    property bool hasValidStorageOptions: false
+    property bool hasAnyDevices: false
+    property bool hasOnlyReadOnlyDevices: false
     
     Component.onCompleted: {
         // Register the ListView for keyboard navigation
@@ -53,7 +56,10 @@ WizardStepBase {
         }, 0)
         
         // Set the initial focus item to the ListView
-        root.initialFocusItem = dstlist
+        // Initial focus will automatically go to title, then first control (handled by WizardStepBase)
+        
+        // Initialize hasValidStorageOptions
+        root.updateStorageStatus()
     }
     
     // Removed drive list polling calls; backend handles device updates
@@ -73,6 +79,41 @@ WizardStepBase {
             delegate: dstdelegate
             keyboardAutoAdvance: true
             nextFunction: root.conditionalNext
+            isItemSelectableFunction: root.isStorageItemSelectable
+            accessibleName: {
+                // Count only visible and selectable devices
+                var selectableCount = 0
+                for (var i = 0; i < dstlist.count; i++) {
+                    if (root.isStorageItemSelectable(i)) {
+                        selectableCount++
+                    }
+                }
+                
+                var baseName = qsTr("Storage device list")
+                
+                // Add item count (only selectable items)
+                if (selectableCount === 0) {
+                    baseName += ". " + qsTr("No devices")
+                } else if (selectableCount === 1) {
+                    baseName += ". " + qsTr("1 device")
+                } else {
+                    baseName += ". " + qsTr("%1 devices").arg(selectableCount)
+                }
+                
+                baseName += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select")
+                
+                // Include the status message if there are no valid options
+                if (!root.hasValidStorageOptions) {
+                    var statusMsg = root.getStorageStatusMessage()
+                    baseName += ". " + statusMsg
+                }
+                return baseName
+            }
+            accessibleDescription: ""
+            
+            // Disable ListView's built-in highlight since delegate handles its own highlighting
+            highlight: Item {}
+            highlightFollowsCurrentItem: false
             
             onItemSelected: function(index, item) {
                 if (index >= 0 && index < count && item && typeof item.selectDrive === "function") {
@@ -82,20 +123,58 @@ WizardStepBase {
 
             // Auto-select a safe default when drives appear
             onCountChanged: {
+                root.updateStorageStatus()
                 if (dstlist.count > 0 && dstlist.currentIndex === -1) {
                     selectDefaultDrive()
                 }
             }
             
-            // No storage devices message
+            // No storage devices or no valid options message (visually hidden, for screen readers only)
             Label {
+                id: noDevicesLabel
                 anchors.fill: parent
-                horizontalAlignment: Qt.AlignHCenter
-                verticalAlignment: Qt.AlignVCenter
-                visible: parent.count == 0
-                text: qsTr("No storage devices found")
-                font.bold: true
-                color: Style.formLabelColor
+                visible: !root.hasValidStorageOptions
+                text: {
+                    if (!root.hasAnyDevices) {
+                        return qsTr("No storage devices found")
+                    } else if (root.hasOnlyReadOnlyDevices) {
+                        if (filterSystemDrives.checked) {
+                            return qsTr("All visible devices are read-only.\nTry connecting a new device, or uncheck\n'Exclude system drives' below.")
+                        } else {
+                            return qsTr("All devices are read-only.\nPlease connect a writable storage device.")
+                        }
+                    } else {
+                        return qsTr("All devices are hidden by the filter.\nUncheck 'Exclude system drives' below\nto show system drives.")
+                    }
+                }
+                // Make it invisible but still accessible to screen readers
+                opacity: 0
+                Accessible.role: Accessible.StatusBar
+                Accessible.name: text
+                Accessible.ignored: false
+                
+                // Force accessibility update when text changes
+                onTextChanged: {
+                    if (visible) {
+                        // Briefly toggle focus to force screen reader update
+                        Accessible.ignored = true
+                        Qt.callLater(function() {
+                            Accessible.ignored = false
+                        })
+                    }
+                }
+                
+                // Announce when becomes visible
+                onVisibleChanged: {
+                    if (visible) {
+                        // Small delay to ensure the text is set before announcing
+                        Qt.callLater(function() {
+                            if (visible) {
+                                forceActiveFocus()
+                            }
+                        })
+                    }
+                }
             }
         }
         
@@ -111,6 +190,7 @@ WizardStepBase {
                 id: filterSystemDrives
                 checked: true
                 text: qsTr("Exclude system drives")
+                Accessible.description: qsTr("When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.")
 
                 onToggled: {
                     if (!checked) {
@@ -123,6 +203,12 @@ WizardStepBase {
                             confirmUnfilterPopup.open()
                         }
                     }
+                }
+                
+                // Update storage status whenever checked state changes (from any source)
+                onCheckedChanged: {
+                    // Defer the update to allow the model to update first
+                    Qt.callLater(root.updateStorageStatus)
                 }
             }
         }
@@ -152,6 +238,12 @@ WizardStepBase {
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
             readonly property bool unselectable: isReadOnly
             
+            // Accessibility properties
+            Accessible.role: Accessible.ListItem
+            Accessible.name: dstitem.description + ". " + imageWriter.formatSize(parseFloat(dstitem.size)) + (dstitem.mountpoints.length > 0 ? ". " + qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", ")) : "") + (dstitem.unselectable ? ". " + qsTr("Read-only") : "")
+            Accessible.focusable: true
+            Accessible.ignored: false
+            
             // Function called by keyboard selection
             function selectDrive() {
                 if (!unselectable) {
@@ -170,10 +262,11 @@ WizardStepBase {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 color: (dstlist.currentIndex === dstitem.index) ? Style.listViewHighlightColor :
-                       (dstMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
+                       (dstMouseArea.containsMouse && !dstitem.unselectable ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 opacity: dstitem.unselectable ? 0.5 : 1.0
                 anchors.rightMargin: (dstlist.contentHeight > dstlist.height ? Style.scrollBarWidth : 0)
+                Accessible.ignored: true
                 
                 MouseArea {
                     id: dstMouseArea
@@ -231,6 +324,7 @@ WizardStepBase {
                             font.bold: true
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.formLabelColor
                             Layout.fillWidth: true
+                            Accessible.ignored: true
                         }
                         
                         Text {
@@ -239,6 +333,7 @@ WizardStepBase {
                             font.family: Style.fontFamily
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textDescriptionColor
                             Layout.fillWidth: true
+                            Accessible.ignored: true
                         }
                         
                         Text {
@@ -249,6 +344,7 @@ WizardStepBase {
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textMetadataColor
                             Layout.fillWidth: true
                             visible: dstitem.mountpoints.length > 0
+                            Accessible.ignored: true
                         }
                     }
                     
@@ -259,6 +355,7 @@ WizardStepBase {
                         font.family: Style.fontFamily
                         color: Style.formLabelErrorColor
                         visible: dstitem.unselectable
+                        Accessible.ignored: true
                     }
                 }
             }
@@ -289,6 +386,79 @@ WizardStepBase {
         root.nextButtonEnabled = true
     }
 
+    // Check if a storage item at the given index is selectable (not read-only and not hidden)
+    function isStorageItemSelectable(index) {
+        var model = root.imageWriter.getDriveList()
+        if (!model || index < 0 || index >= model.rowCount()) {
+            return false
+        }
+        
+        var isReadOnlyRole = 0x106
+        var isSystemRole = 0x107
+        
+        var idx = model.index(index, 0)
+        var isReadOnly = model.data(idx, isReadOnlyRole)
+        var isSystem = model.data(idx, isSystemRole)
+        
+        // Item is selectable if it's not read-only and either not a system drive or filter is off
+        var shouldHide = isSystem && filterSystemDrives.checked
+        return !isReadOnly && !shouldHide
+    }
+    
+    // Check if there are any selectable items in the list
+    function hasSelectableItems() {
+        var model = root.imageWriter.getDriveList()
+        if (!model || model.rowCount() === 0) {
+            return false
+        }
+        
+        for (var i = 0; i < model.rowCount(); i++) {
+            if (isStorageItemSelectable(i)) {
+                return true
+            }
+        }
+        return false
+    }
+    
+    // Update storage status properties for accessibility messages
+    function updateStorageStatus() {
+        var model = root.imageWriter.getDriveList()
+        root.hasValidStorageOptions = hasSelectableItems()
+        root.hasAnyDevices = model && model.rowCount() > 0
+        
+        // Check if we only have read-only devices
+        if (root.hasAnyDevices && !root.hasValidStorageOptions) {
+            var isReadOnlyRole = 0x106
+            var allReadOnly = true
+            for (var i = 0; i < model.rowCount(); i++) {
+                var idx = model.index(i, 0)
+                var isReadOnly = model.data(idx, isReadOnlyRole)
+                if (!isReadOnly) {
+                    allReadOnly = false
+                    break
+                }
+            }
+            root.hasOnlyReadOnlyDevices = allReadOnly
+        } else {
+            root.hasOnlyReadOnlyDevices = false
+        }
+    }
+    
+    // Get the storage status message for accessibility
+    function getStorageStatusMessage() {
+        if (!root.hasAnyDevices) {
+            return qsTr("No storage devices found. Please connect a storage device to continue.")
+        } else if (root.hasOnlyReadOnlyDevices) {
+            if (filterSystemDrives.checked) {
+                return qsTr("No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck 'Exclude system drives' to show hidden system drives.")
+            } else {
+                return qsTr("No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.")
+            }
+        } else {
+            return qsTr("No valid storage devices are currently available. Uncheck 'Exclude system drives' to show hidden system drives, or connect a new storage device.")
+        }
+    }
+    
     // Select default drive by priority (never system):
     // 1) SD cards (not USB and not SCSI)
     // 2) USB storage devices
@@ -349,10 +519,12 @@ WizardStepBase {
         overlayParent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         onConfirmed: {
             // user chose to disable filter; leave checkbox unchecked
+            // updateStorageStatus will be called via onCheckedChanged
         }
         onCancelled: {
             // Re-enable the filter checkbox and keep system drives hidden
             filterSystemDrives.checked = true
+            // updateStorageStatus will be called via onCheckedChanged
         }
         onClosed: {
             if (filterSystemDrives.checked === false) {
@@ -373,6 +545,7 @@ WizardStepBase {
             root.wizardContainer.selectedStorageName = systemDriveConfirm.driveName
             // Re-enable filtering after selection via confirmation path
             filterSystemDrives.checked = true
+            // updateStorageStatus will be called via onCheckedChanged
             // Enable Next
             root.nextButtonEnabled = true
             // Auto-advance after explicit confirmation on a system drive

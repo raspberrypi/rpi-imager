@@ -56,4 +56,13 @@ set(DEPENDENCIES
 )
 set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll ole32 oleaut32 wbemuuid)
 
-
+# ---- Relay exe ----
+add_executable(rpi-imager-callback-relay WIN32 windows/CallbackRelay.cpp)
+target_compile_definitions(rpi-imager-callback-relay
+    PRIVATE RPI_IMAGER_PORT=${IMAGER_CALLBACK_PORT}
+            RPI_IMAGER_EXE_NAME=L"rpi-imager.exe"
+            RPI_IMAGER_START_ON_FAIL=1)
+target_link_libraries(rpi-imager-callback-relay PRIVATE ws2_32)
+if (MINGW)
+  target_link_options(rpi-imager-callback-relay PRIVATE -municode)
+endif()

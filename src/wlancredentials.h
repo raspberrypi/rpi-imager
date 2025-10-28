@@ -18,6 +18,7 @@ public:
     static WlanCredentials *instance();
     virtual QByteArray getSSID() = 0;
     virtual QByteArray getPSK() = 0;
+    virtual QByteArray getPSKForSSID(const QByteArray &ssid) = 0;
 
 protected:
     static WlanCredentials *_instance;
