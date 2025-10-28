@@ -21,7 +21,6 @@
 #include <QIcon>
 #include "imagewriter.h"
 #include "networkaccessmanagerfactory.h"
-#include "platformquirks.h"
 #include "nativefiledialog.h"
 #include <QQuickWindow>
 #include <QScreen>
@@ -30,6 +29,7 @@
 #include <QSessionManager>
 #include <QFileOpenEvent>
 #endif
+#include "platformquirks.h"
 #ifdef Q_OS_DARWIN
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreServices/CoreServices.h>
@@ -447,6 +447,7 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(selectedDeviceRemoved()), qmlwindow, SLOT(onSelectedDeviceRemoved()));
     qmlwindow->connect(&imageWriter, SIGNAL(writeCancelledDueToDeviceRemoval()), qmlwindow, SLOT(onWriteCancelledDueToDeviceRemoval()));
     qmlwindow->connect(&imageWriter, SIGNAL(keychainPermissionRequested()), qmlwindow, SLOT(onKeychainPermissionRequested()));
+    qmlwindow->connect(&imageWriter, SIGNAL(osListFetchFailed()), qmlwindow, SLOT(onOsListFetchFailed()));
 #ifdef Q_OS_DARWIN
     // Handle custom URL scheme on macOS via FileOpen events
     struct UrlOpenFilter : public QObject {
@@ -500,7 +501,8 @@ int main(int argc, char *argv[])
     qmlwindow->setProperty("x", x);
     qmlwindow->setProperty("y", y);
 
-    if (imageWriter.isOnline())
+    // Only fetch OS list if we have network connectivity
+    if (imageWriter.isOnline() && PlatformQuirks::hasNetworkConnectivity())
         imageWriter.beginOSListFetch();
 
     int rc = app.exec();

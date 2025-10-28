@@ -306,6 +306,7 @@ signals:
     void connectTokenReceived(const QString &token);
     void connectTokenConflictDetected(const QString &token);
     void cacheStatusChanged();
+    void osListFetchFailed();
 
 protected slots:
     void startProgressPolling();

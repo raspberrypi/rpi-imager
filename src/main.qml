@@ -400,4 +400,12 @@ ApplicationWindow {
             keychainpopup.askForPermission();
         }
     }
+    
+    function onOsListFetchFailed() {
+        // Network fetch failed - skip device selection and go straight to OS selection
+        if (wizardContainer && wizardContainer.currentStep === wizardContainer.stepDeviceSelection) {
+            console.log("OS list fetch failed - switching to offline mode, skipping device selection");
+            wizardContainer.jumpToStep(wizardContainer.stepOSSelection);
+        }
+    }
 }

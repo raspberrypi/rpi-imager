@@ -23,7 +23,11 @@ Item {
     // Expose network info text for embedded mode status updates
     property alias networkInfoText: networkInfo.text
     
-    property int currentStep: 0
+    // Check network connectivity at startup
+    readonly property bool hasNetworkConnectivity: PlatformHelper.hasNetworkConnectivity()
+    
+    // Start at device selection if online, otherwise skip to OS selection
+    property int currentStep: hasNetworkConnectivity ? 0 : 1
     readonly property int totalSteps: 12
     
     // Track which steps have been made permissible/unlocked for navigation
@@ -628,7 +632,10 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             
-            initialItem: root.showLanguageSelection ? languageSelectionStep : deviceSelectionStep
+            // Skip device selection if offline (no network = no device list available)
+            // Start with language selection if requested, otherwise device selection if online, or OS selection if offline
+            initialItem: root.showLanguageSelection ? languageSelectionStep : 
+                        (root.hasNetworkConnectivity ? deviceSelectionStep : osSelectionStep)
             
             // Smooth transitions between steps
             pushEnter: Transition {
@@ -791,7 +798,12 @@ Item {
             appOptionsButton: optionsButton
             onNextClicked: {
                 // After choosing language, jump to first real wizard step
-                root.jumpToStep(root.stepDeviceSelection)
+                // Skip device selection if offline
+                if (root.hasNetworkConnectivity) {
+                    root.jumpToStep(root.stepDeviceSelection)
+                } else {
+                    root.jumpToStep(root.stepOSSelection)
+                }
             }
         }
     }

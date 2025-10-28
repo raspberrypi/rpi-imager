@@ -209,7 +209,7 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
-    "customization_generator.cpp")
+    "customization_generator.cpp" "platformhelper.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
@@ -492,6 +492,7 @@ if(NOT BUILD_CLI_ONLY)
         oslistmodel.cpp
         urlfmt.cpp
         clipboardhelper.cpp
+        platformhelper.cpp
     )
 endif()
 

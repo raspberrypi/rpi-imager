@@ -1049,6 +1049,9 @@ bool ImageWriter::checkSWCapability(const QString &cap) {
 void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
     // Defer deletion
     data->deleteLater();
+    
+    // Track if this is the top-level OS list request
+    bool isTopLevelRequest = (data->request().url() == osListUrl());
 
     if (data->error() == QNetworkReply::NoError) {
         auto httpStatusCode = data->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -1066,7 +1069,7 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                     // Preserve latest top-level imager metadata if present in the top-level fetch
                     auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url(), 1);
                     QJsonObject imager_meta = _completeOsList["imager"].toObject();
-                    if (response_object.contains("imager") && data->request().url() == osListUrl()) {
+                    if (response_object.contains("imager") && isTopLevelRequest) {
                         // Update imager metadata when this reply is for the top-level OS list
                         imager_meta = response_object["imager"].toObject();
                     }
@@ -1080,11 +1083,16 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
                 emit osListPrepared();
 
                 // After processing a top-level list fetch, (re)schedule the next refresh
-                if (data->request().url() == osListUrl()) {
+                if (isTopLevelRequest) {
                     scheduleOsListRefresh();
                 }
             } else {
                 qDebug() << "Incorrectly formatted OS list at: " << data->url();
+                // If this was the top-level fetch and it failed, treat as network failure
+                if (isTopLevelRequest && _completeOsList.isEmpty()) {
+                    qWarning() << "Top-level OS list fetch failed - malformed response. Operating in offline mode.";
+                    emit osListFetchFailed();
+                }
             }
         } else if (httpStatusCode >= 300 && httpStatusCode < 400) {
             // We should _never_ enter this branch. All requests are set to follow redirections
@@ -1104,9 +1112,19 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
         } else if (httpStatusCode >= 400 && httpStatusCode < 600) {
             // HTTP Error
             qDebug() << "Failed to fetch URL [" << data->url() << "], got: " << httpStatusCode;
+            // If this was the top-level fetch and it failed, treat as network failure
+            if (isTopLevelRequest && _completeOsList.isEmpty()) {
+                qWarning() << "Top-level OS list fetch failed with HTTP error" << httpStatusCode << ". Operating in offline mode.";
+                emit osListFetchFailed();
+            }
         } else {
             // Completely unknown error, worth logging separately
             qDebug() << "Failed to fetch URL [" << data->url() << "], got unknown response code: " << httpStatusCode;
+            // If this was the top-level fetch and it failed, treat as network failure
+            if (isTopLevelRequest && _completeOsList.isEmpty()) {
+                qWarning() << "Top-level OS list fetch failed with unknown error. Operating in offline mode.";
+                emit osListFetchFailed();
+            }
         }
     } else {
         // QT Error - provide more actionable context when common misconfigurations are detected
@@ -1125,6 +1143,12 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
         }
 
         qDebug() << "Unrecognised QT error: " << err << ", explainer: " << errStr;
+        
+        // If this was the top-level fetch and it failed, treat as network failure
+        if (isTopLevelRequest && _completeOsList.isEmpty()) {
+            qWarning() << "Top-level OS list fetch failed with network error:" << errStr << ". Operating in offline mode.";
+            emit osListFetchFailed();
+        }
     }
 }
 
@@ -1537,63 +1561,35 @@ void ImageWriter::_parseXZFile()
 
 bool ImageWriter::isOnline()
 {
-    /* Check if we have an IP-address other than localhost */
-    QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
-    bool online = false;
-
-    foreach (QHostAddress a, addresses)
-    {
-        if (!a.isLoopback() && a.scopeId().isEmpty())
+    // Use platform abstraction for network connectivity check
+    bool hasBasicConnectivity = PlatformQuirks::hasNetworkConnectivity();
+    
+    if (hasBasicConnectivity) {
+        /* Report detected IP addresses for embedded mode status display */
+        QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+        foreach (QHostAddress a, addresses)
         {
-            /* Not a loopback or IPv6 link-local address, so online */
-            qDebug() << "IP DETECTED: " << a.toString();
-            emit networkInfo(QString("IP: %1").arg(a.toString()));
-            online = true;
-            break;
+            if (!a.isLoopback() && a.scopeId().isEmpty())
+            {
+                qDebug() << "IP DETECTED: " << a.toString();
+                emit networkInfo(QString("IP: %1").arg(a.toString()));
+                break;
+            }
         }
     }
-
-    if (online) {
-        QNetworkRequest request(QUrl(TIME_URL));
-        request.setTransferTimeout(3000); // 3 seconds
-        QNetworkReply* response = _networkManager.get(request);
-
-        // Connect to the finished signal to ensure headers are available
-        QObject::connect(response, &QNetworkReply::finished, [response, this]() {
-            if (response->hasRawHeader("date"))
-                {
-                bool timeSet = false;
-                // systemd-timesyncd will change the timestamp of this file to indicate that the time has been set
-                QString filePath = "/var/lib/systemd/timesync/clock";
-                QDateTime clock_time;
-                QFileInfo fileInfo(filePath);
-
-                if (fileInfo.exists()) {clock_time = fileInfo.lastModified();}
-
-                filePath = "/lib/systemd/systemd-timesyncd";
-                QDateTime creation_time;
-                QFileInfo fileInfo2(filePath);
-
-                if (fileInfo2.exists())
-                    creation_time = fileInfo2.lastModified();
-                if (clock_time > creation_time)
-                    timeSet = true;
-
-                if (timeSet)
-                {
-                    _networkchecktimer.stop();
-                    beginOSListFetch();
-                    emit networkOnline();
-                }
-            }
-            else
-            {
-                qDebug() << "Unable to access time server";
-            }
-            response->deleteLater();
-        });
+    
+    // For embedded mode, check if network is truly ready (including time sync)
+    if (hasBasicConnectivity && isEmbeddedMode()) {
+        bool networkReady = PlatformQuirks::isNetworkReady();
+        if (networkReady) {
+            _networkchecktimer.stop();
+            beginOSListFetch();
+            emit networkOnline();
+        }
+        return networkReady;
     }
-    return online;
+    
+    return hasBasicConnectivity;
 }
 
 void ImageWriter::pollNetwork()
