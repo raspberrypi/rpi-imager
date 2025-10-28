@@ -147,20 +147,24 @@ mkdir -p "$TOOLS_DIR"
 # Download linuxdeploy and plugins if they don't exist
 echo "Ensuring linuxdeploy tools are available..."
 
+# Pin to specific stable versions
+LINUXDEPLOY_VERSION="1-alpha-20250213-2"
+LINUXDEPLOY_PLUGIN_QT_VERSION="1-alpha-20250213-1"
+
 # Choose the right linuxdeploy tools based on architecture
 if [ "$ARCH" = "x86_64" ]; then
     LINUXDEPLOY="$TOOLS_DIR/linuxdeploy-x86_64.AppImage"
     LINUXDEPLOY_QT="$TOOLS_DIR/linuxdeploy-plugin-qt-x86_64.AppImage"
     
     if [ ! -f "$LINUXDEPLOY" ]; then
-        echo "Downloading linuxdeploy for x86_64..."
-        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+        echo "Downloading linuxdeploy $LINUXDEPLOY_VERSION for x86_64..."
+        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_VERSION/linuxdeploy-x86_64.AppImage"
         chmod +x "$LINUXDEPLOY"
     fi
     
     if [ ! -f "$LINUXDEPLOY_QT" ]; then
-        echo "Downloading linuxdeploy-plugin-qt for x86_64..."
-        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+        echo "Downloading linuxdeploy-plugin-qt $LINUXDEPLOY_PLUGIN_QT_VERSION for x86_64..."
+        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/$LINUXDEPLOY_PLUGIN_QT_VERSION/linuxdeploy-plugin-qt-x86_64.AppImage"
         chmod +x "$LINUXDEPLOY_QT"
     fi
 elif [ "$ARCH" = "aarch64" ]; then
@@ -168,14 +172,14 @@ elif [ "$ARCH" = "aarch64" ]; then
     LINUXDEPLOY_QT="$TOOLS_DIR/linuxdeploy-plugin-qt-aarch64.AppImage"
     
     if [ ! -f "$LINUXDEPLOY" ]; then
-        echo "Downloading linuxdeploy for aarch64..."
-        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-aarch64.AppImage"
+        echo "Downloading linuxdeploy $LINUXDEPLOY_VERSION for aarch64..."
+        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_VERSION/linuxdeploy-aarch64.AppImage"
         chmod +x "$LINUXDEPLOY"
     fi
     
     if [ ! -f "$LINUXDEPLOY_QT" ]; then
-        echo "Downloading linuxdeploy-plugin-qt for aarch64..."
-        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-aarch64.AppImage"
+        echo "Downloading linuxdeploy-plugin-qt $LINUXDEPLOY_PLUGIN_QT_VERSION for aarch64..."
+        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/$LINUXDEPLOY_PLUGIN_QT_VERSION/linuxdeploy-plugin-qt-aarch64.AppImage"
         chmod +x "$LINUXDEPLOY_QT"
     fi
 fi
@@ -247,11 +251,11 @@ export QML_SOURCES_PATHS="$QML_SOURCES_PATH"
 export APPIMAGE_EXTRACT_AND_RUN=1
 # Set Qt path for linuxdeploy-plugin-qt
 export QMAKE="$QT_DIR/bin/qmake"
-# Set LD_LIBRARY_PATH to include Qt libraries
+# Set library paths to include Qt libraries (both runtime and linker search paths)
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 # Optimize deployment: exclude translations and unnecessary libraries
 export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
-"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*"
+"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*" --verbosity=0
 
 # Hook for removing files before AppImage creation
 echo "Pre-packaging hook - opportunity to remove unwanted files"
@@ -298,10 +302,12 @@ echo "Creating AppImage..."
 rm -f "$PWD/rpi-imager-desktop-$ARCH.AppImage"
 rm -f "$PWD/rpi-imager-$ARCH.AppImage"  # Legacy symlink name
 # Ensure LD_LIBRARY_PATH is still set for this call too
+export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 # Explicitly specify the desktop file to ensure correct naming
 "$LINUXDEPLOY" --appdir="$APPDIR" \
     --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
-    --output=appimage
+    --output=appimage \
+    --verbosity=0
 
 # Rename the output file if needed
 # Find and rename the AppImage created by linuxdeploy to our standardized name
