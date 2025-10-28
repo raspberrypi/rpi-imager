@@ -999,6 +999,13 @@
     </message>
 </context>
 <context>
+    <name>MacFile</name>
+    <message>
+        <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
