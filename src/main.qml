@@ -92,13 +92,17 @@ ApplicationWindow {
 
         // Register focus groups when component is ready
         Component.onCompleted: {
+            registerFocusGroup("content", function(){ 
+                return [errorTitle, errorMessage] 
+            }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [errorContinueButton] 
-            }, 0)
+            }, 1)
         }
 
         // Dialog content
         Text {
+            id: errorTitle
             text: errorDialog.titleText
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
@@ -107,9 +111,13 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         Text {
+            id: errorMessage
             text: errorDialog.message
             wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription
@@ -118,6 +126,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         RowLayout {
@@ -149,13 +160,17 @@ ApplicationWindow {
 
         // Register focus groups when component is ready
         Component.onCompleted: {
+            registerFocusGroup("content", function(){ 
+                return [storageRemovedTitle, storageRemovedMessage] 
+            }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [storageOkButton] 
-            }, 0)
+            }, 1)
         }
 
         // Dialog content
         Text {
+            id: storageRemovedTitle
             text: qsTr("Storage device removed")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
@@ -164,9 +179,13 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         Text {
+            id: storageRemovedMessage
             text: qsTr("The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.")
             wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription
@@ -175,6 +194,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         RowLayout {
@@ -206,13 +228,17 @@ ApplicationWindow {
 
         // Register focus groups when component is ready
         Component.onCompleted: {
+            registerFocusGroup("content", function(){ 
+                return [quitTitle, quitMessage] 
+            }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [quitNoButton, quitYesButton] 
-            }, 0)
+            }, 1)
         }
 
         // Dialog content
         Text {
+            id: quitTitle
             text: qsTr("Are you sure you want to quit?")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
@@ -221,9 +247,13 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         Text {
+            id: quitMessage
             text: qsTr("Raspberry Pi Imager is still busy. Are you sure you want to quit?")
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
@@ -232,6 +262,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         RowLayout {

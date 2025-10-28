@@ -1000,9 +1000,12 @@ Item {
 
         Component.onCompleted: {
             // match your focus group style
+            registerFocusGroup("token_conflict_content", function() {
+                return [titleText, bodyText]
+            }, 0)
             registerFocusGroup("token_conflict_buttons", function() {
                 return [keepBtn, replaceBtn]
-            }, 0)
+            }, 1)
         }
 
         onClosed: {
@@ -1024,6 +1027,9 @@ Item {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.ignored: false
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         // Body / security note
@@ -1041,6 +1047,9 @@ Item {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
         }
 
         // Buttons row
