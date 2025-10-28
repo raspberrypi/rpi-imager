@@ -12,8 +12,8 @@
 #include <QtDBus/QtDBus>
 
 namespace {
-    constexpr QString service = "org.gnome.SessionManager";
-    constexpr QString path = "/org/gnome/SessionManager";
+    constexpr const char* service = "org.gnome.SessionManager";
+    constexpr const char* path = "/org/gnome/SessionManager";
 }
 
 GnomeSuspendInhibitor::GnomeSuspendInhibitor()

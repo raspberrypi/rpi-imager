@@ -7,7 +7,7 @@
 
 class GnomeSuspendInhibitor
 {
-    QDBusConnection _bus;
+    QDBusConnection _bus = QDBusConnection::sessionBus();
     bool _serviceFound;
     int _cookie;
 public:

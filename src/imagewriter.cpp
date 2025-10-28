@@ -2533,7 +2533,7 @@ void MountUtilsLog(std::string msg) {
 void ImageWriter::reboot()
 {
     qDebug() << "Rebooting system.";
-    system("reboot");
+    (void)system("reboot");
 }
 
 void ImageWriter::openUrl(const QUrl &url)
