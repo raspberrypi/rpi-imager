@@ -1099,6 +1099,24 @@ Item {
         }
     }
     
+    function onWriteCancelled() {
+        // Reset write state
+        isWriting = false
+        
+        // Navigate back to writing step (which will show the summary since isWriting is false)
+        if (currentStep !== stepWriting) {
+            jumpToStep(stepWriting)
+        }
+        
+        // Reset the writing step's state if it exists
+        if (wizardStack.currentItem && wizardStack.currentItem.objectName === "writingStep") {
+            wizardStack.currentItem.isWriting = false
+            wizardStack.currentItem.cancelPending = false
+            wizardStack.currentItem.isFinalising = false
+            wizardStack.currentItem.isComplete = false
+        }
+    }
+    
     function onDownloadProgress(now, total) {
         // Forward to the WritingStep if currently active
         if (currentStep === stepWriting && wizardStack.currentItem) {

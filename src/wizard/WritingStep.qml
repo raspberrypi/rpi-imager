@@ -13,6 +13,7 @@ import ImageOptions
 
 WizardStepBase {
     id: root
+    objectName: "writingStep"
 
     required property ImageWriter imageWriter
     required property var wizardContainer

@@ -348,6 +348,13 @@ ApplicationWindow {
         wizardContainer.onFinalizing();
     }
 
+    function onCancelled() {
+        // Forward to wizard container to handle write cancellation
+        if (wizardContainer) {
+            wizardContainer.onWriteCancelled();
+        }
+    }
+
     function onNetworkInfo(msg) {
         if (imageWriter.isEmbeddedMode() && wizardContainer) {
             wizardContainer.networkInfoText = msg;
