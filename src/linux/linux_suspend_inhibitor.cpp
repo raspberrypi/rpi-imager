@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -10,6 +11,11 @@
 
 #include <QtDBus/QtDBus>
 
+namespace {
+    constexpr QString service = "org.gnome.SessionManager";
+    constexpr QString path = "/org/gnome/SessionManager";
+}
+
 GnomeSuspendInhibitor::GnomeSuspendInhibitor()
 {
     _serviceFound = false;
@@ -17,9 +23,6 @@ GnomeSuspendInhibitor::GnomeSuspendInhibitor()
     if (_bus.isConnected())
     {
         auto availableServices = _bus.interface()->registeredServiceNames().value();
-
-        QString service = "org.gnome.SessionManager";
-        QString path = "/org/gnome/SessionManager";
 
         if (availableServices.contains(service))
         {
@@ -54,6 +57,7 @@ GnomeSuspendInhibitor::~GnomeSuspendInhibitor()
 }
 
 ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileName, const char *arg)
+    : _controlFd(-1), _childPid(-1)
 {
     // Assumes:
     // - fileName refers to a tool that takes a command-line to run as a child process
@@ -63,22 +67,21 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
     //   expanded to supply more than one parameter to the inhibitor program, it will
     //   need to be reworked to use a full-on argument vector and execvp
     //
-    // Action: Run fileName, and have it wrap: cat /tmp/fifo
+    // Action: Run fileName, and have it wrap: cat /run/fifo
     //
     // This inner command opens and reads from the supplied temporary FIFO.
     // We connect to the FIFO by opening it on our end, and we can then
     // terminate that read at any time by closing our end, which then
     // unblocks the inhibitor.
 
-    // Generate and claim a unique filename for the FIFO.
-    strcpy(_fifoName, "/tmp/suspend_fifo_XXXXXX");
+    // Generate and claim a unique filename for the FIFO in /run (runtime directory).
+    snprintf(_fifoName, sizeof(_fifoName), "/run/rpi-imager-suspend_XXXXXX");
 
     int fd = mkstemp(_fifoName);
 
     if (fd < 0)
     {
         // It just isn't working out. :-(
-        _controlFd = -1;
         _fifoName[0] = '\0';
         return;
     }
@@ -91,7 +94,6 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
     if (mkfifo(_fifoName, 0600) < 0)
     {
         // Can't make the FIFO. Oh well. :-(
-        _controlFd = -1;
         _fifoName[0] = '\0';
         return;
     }
@@ -101,6 +103,8 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
 
     if (_controlFd < 0)
     {
+        // Failed to open, clean up the FIFO file
+        unlink(_fifoName);
         _fifoName[0] = '\0';
         return;
     }
@@ -115,36 +119,77 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
     }
     else if (forkResult == 0)
     {
-        // If we get here, we're the child process. Close our copy of _controlFd.
-        close(_controlFd);
+        // If we get here, we're the child process.
+        
+        // Close all file descriptors except stdin/stdout/stderr to prevent
+        // the exec'd program from accessing disk devices or other resources.
+        // The parent may have disk devices, network sockets, etc. open.
+        long maxfd = sysconf(_SC_OPEN_MAX);
+        if (maxfd == -1)
+            maxfd = 1024; // Fallback if sysconf fails
+        
+        for (int fd = 3; fd < maxfd; fd++)
+        {
+            close(fd); // Ignore errors - fd may not be open
+        }
 
-        // Prepare an sh internal command that will block trying to read from the pipe.
-        char waitCmd[100];
+        // Drop privileges before exec'ing external programs.
+        // The imager runs with elevated privileges to write to disks, but the
+        // inhibitor tools don't need those privileges.
+        if (getuid() != geteuid())
+        {
+            // Drop effective privileges back to real user
+            if (setgid(getgid()) != 0 || setuid(getuid()) != 0)
+            {
+                // Failed to drop privileges - abort for safety
+                _exit(126);
+            }
+        }
 
-        snprintf(waitCmd, sizeof(waitCmd), "cat %s", _fifoName);
-
-        // Run the inhibitor tool, and have it wrap an instance of sh that we can unblock
-        // by closing the pipe. (execlp() does not return)
+        // Run the inhibitor tool, and have it wrap cat reading from the FIFO.
+        // We avoid using shell to prevent any potential command injection issues.
+        // (execlp() does not return on success)
         execlp(
             fileName,
             fileName,
             arg,
-            "sh",
-            "-c",
-            waitCmd,
+            "cat",
+            _fifoName,
             NULL);
+        
+        // If we get here, exec failed. Must use _exit() not exit() in forked child.
+        _exit(127);
+    }
+    else
+    {
+        // Parent process: store the child PID so we can clean it up later
+        _childPid = forkResult;
     }
 }
 
 void ProcessScopedSuspendInhibitor::CleanUp()
 {
-    if (_controlFd)
+    // Close the FIFO, which will unblock the child process
+    if (_controlFd >= 0)
+    {
         close(_controlFd);
+        _controlFd = -1;
+    }
+    
+    // Wait for the child process to exit (prevents zombie processes)
+    if (_childPid > 0)
+    {
+        int status;
+        waitpid(_childPid, &status, 0);
+        _childPid = -1;
+    }
+    
+    // Remove the FIFO file
     if (_fifoName[0])
+    {
         unlink(_fifoName);
-
-    _controlFd = -1;
-    _fifoName[0] = '\0';
+        _fifoName[0] = '\0';
+    }
 }
 
 ProcessScopedSuspendInhibitor::~ProcessScopedSuspendInhibitor()

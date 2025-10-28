@@ -19,6 +19,7 @@ class ProcessScopedSuspendInhibitor
 {
     char _fifoName[50];
     int _controlFd;
+    pid_t _childPid;
 
     void CleanUp();
 public:

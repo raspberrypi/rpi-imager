@@ -1,9 +1,11 @@
 #ifndef SUSPEND_INHIBITOR_H
 #define SUSPEND_INHIBITOR_H
 
-class SuspendInhibitor : QObject
+#include <QObject>
+
+class SuspendInhibitor : public QObject
 {
-    QOBJECT
+    Q_OBJECT
 protected:
     SuspendInhibitor();
 public:
