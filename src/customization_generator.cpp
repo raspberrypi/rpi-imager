@@ -11,6 +11,9 @@
 
 namespace rpi_imager {
 
+constexpr auto PI_CONNECT_CONFIG_PATH = ".config/com.raspberrypi.connect";
+constexpr auto PI_CONNECT_DEPLOY_KEY_FILENAME = "deploy.key";
+
 QString CustomisationGenerator::shellQuote(const QString& value) {
     QString t = value;
     t.replace("'", "'\"'\"'");
@@ -177,16 +180,18 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     const bool piConnectEnabled = s.value("piConnectEnabled").toBool();
     QString piConnectTokenTrimmed = piConnectToken.trimmed();
     if (piConnectEnabled && !piConnectTokenTrimmed.isEmpty()) {
-        // Determine home directory for the effective user
+        const QString configDir = QStringLiteral("$TARGET_HOME/") + PI_CONNECT_CONFIG_PATH;
+        const QString deployKeyPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
+        
         line(QStringLiteral("TARGET_USER=\"") + effectiveUser + QStringLiteral("\""), script);
         line(QStringLiteral("TARGET_HOME=$(getent passwd \"$TARGET_USER\" | cut -d: -f6)"), script);
         line(QStringLiteral("if [ -z \"$TARGET_HOME\" ] || [ ! -d \"$TARGET_HOME\" ]; then TARGET_HOME=\"/home/") + effectiveUser + QStringLiteral("\"; fi"), script);
-        line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"$TARGET_HOME/com.raspberrypi.connect\""), script);
-        line(QStringLiteral("cat > \"$TARGET_HOME/com.raspberrypi.connect/deploy.key\" <<'EOF'"), script);
+        line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"") + configDir + QStringLiteral("\""), script);
+        line(QStringLiteral("cat > \"") + deployKeyPath + QStringLiteral("\" <<'EOF'"), script);
         line(piConnectTokenTrimmed, script);
         line(QStringLiteral("EOF"), script);
-        line(QStringLiteral("chown \"$TARGET_USER:$TARGET_USER\" \"$TARGET_HOME/com.raspberrypi.connect/deploy.key\""), script);
-        line(QStringLiteral("chmod 600 \"$TARGET_HOME/com.raspberrypi.connect/deploy.key\""), script);
+        line(QStringLiteral("chown \"$TARGET_USER:$TARGET_USER\" \"") + deployKeyPath + QStringLiteral("\""), script);
+        line(QStringLiteral("chmod 600 \"") + deployKeyPath + QStringLiteral("\""), script);
 
         // Enable systemd user service rpi-connect-signin.service for the target user
         line(QStringLiteral("install -o \"$TARGET_USER\" -m 700 -d \"$TARGET_HOME/.config/systemd/user/default.target.wants\""), script);
@@ -381,7 +386,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     if (piConnectEnabled && !cleanToken.isEmpty()) {
         // Use the same effective user decision as above
         const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
-        const QString targetPath = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect/auth.key");
+        const QString configDir = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/") + PI_CONNECT_CONFIG_PATH;
+        const QString targetPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
         push(QStringLiteral("write_files:"), cloud);
         push(QStringLiteral("  - path: ") + targetPath, cloud);
         push(QStringLiteral("    permissions: '0600'"), cloud);
@@ -392,7 +398,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // Ensure directory exists with correct owner
         push(QString(), cloud);
         push(QStringLiteral("runcmd:"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d /home/") + effectiveUser + QStringLiteral("/com.raspberrypi.connect\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d ") + configDir + QStringLiteral("\" ]"), cloud);
     } else if (needsRuncmd) {
         // Start runcmd section if not already started
         push(QStringLiteral("runcmd:"), cloud);

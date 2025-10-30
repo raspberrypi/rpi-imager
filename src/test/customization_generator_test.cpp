@@ -597,13 +597,13 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     QString yaml = QString::fromUtf8(userdata);
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("write_files:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- path: /home/testuser/com.raspberrypi.connect/auth.key"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- path: /home/testuser/.config/com.raspberrypi.connect/deploy.key"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("permissions: '0600'"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("owner: testuser:testuser"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("content: |"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -o testuser -m 700 -d /home/testuser/com.raspberrypi.connect"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -o testuser -m 700 -d /home/testuser/.config/com.raspberrypi.connect"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi", "[cloudinit][network]") {
