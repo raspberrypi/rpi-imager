@@ -333,12 +333,18 @@ WizardStepBase {
     // Handle next button clicks based on current state
     onNextClicked: {
         if (root.isWriting) {
-            root.cancelPending = true
-            root.isVerifying = false
-            root.isFinalising = true
-            progressBar.value = 100
-            progressText.text = qsTr("Finalising…")
-            imageWriter.cancelWrite()
+            // If we're in verification phase, skip verification and let write complete successfully
+            if (imageWriter.writeState === ImageWriter.Verifying) {
+                imageWriter.skipCurrentVerification()
+            } else {
+                // Cancel the actual write operation
+                root.cancelPending = true
+                root.isVerifying = false
+                root.isFinalising = true
+                progressBar.value = 100
+                progressText.text = qsTr("Finalising…")
+                imageWriter.cancelWrite()
+            }
         } else if (!root.isComplete) {
             // If warnings are disabled, skip the confirmation dialog
             if (wizardContainer.disableWarnings) {
@@ -525,17 +531,9 @@ WizardStepBase {
         function onError(msg) {
             root.isWriting = false
             wizardContainer.isWriting = false
-            if (root.cancelPending) {
-                // Treat verify-cancel as a benign finish
-                root.cancelPending = false
-                root.isFinalising = false
-                root.isComplete = true
-                progressText.text = qsTr("Verification cancelled")
-                wizardContainer.nextStep()
-            } else {
-                root.isFinalising = false
-                progressText.text = qsTr("Write failed: %1").arg(msg)
-            }
+            root.cancelPending = false
+            root.isFinalising = false
+            progressText.text = qsTr("Write failed: %1").arg(msg)
         }
 
         function onFinalizing() {
