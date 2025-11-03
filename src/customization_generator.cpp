@@ -11,9 +11,6 @@
 
 namespace rpi_imager {
 
-constexpr auto PI_CONNECT_CONFIG_PATH = ".config/com.raspberrypi.connect";
-constexpr auto PI_CONNECT_DEPLOY_KEY_FILENAME = "deploy.key";
-
 QString CustomisationGenerator::shellQuote(const QString& value) {
     QString t = value;
     t.replace("'", "'\"'\"'");

@@ -277,8 +277,8 @@ TEST_CASE("CustomisationGenerator Raspberry Pi Connect", "[customization]") {
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings, token);
     QString scriptStr = QString::fromUtf8(script);
     
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("com.raspberrypi.connect"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("deploy.key"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring(PI_CONNECT_CONFIG_PATH));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring(PI_CONNECT_DEPLOY_KEY_FILENAME));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("test-token-12345"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect-signin.service"));
 }
@@ -448,8 +448,8 @@ TEST_CASE("CustomisationGenerator handles null/empty piConnect token", "[customi
     QString scriptStr = QString::fromUtf8(script);
     
     // Should not include Pi Connect setup if token is empty
-    REQUIRE_FALSE(scriptStr.contains("com.raspberrypi.connect"));
-    REQUIRE_FALSE(scriptStr.contains("deploy.key"));
+    REQUIRE_FALSE(scriptStr.contains(PI_CONNECT_CONFIG_PATH));
+    REQUIRE_FALSE(scriptStr.contains(PI_CONNECT_DEPLOY_KEY_FILENAME));
 }
 
 TEST_CASE("CustomisationGenerator handles invalid keyboard layout", "[customization][negative]") {
@@ -597,13 +597,15 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     QString yaml = QString::fromUtf8(userdata);
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("write_files:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- path: /home/testuser/.config/com.raspberrypi.connect/deploy.key"));
+    QString expectedPath = QString("- path: /home/testuser/") + PI_CONNECT_CONFIG_PATH + "/" + PI_CONNECT_DEPLOY_KEY_FILENAME;
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedPath.toStdString()));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("permissions: '0600'"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("owner: testuser:testuser"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("content: |"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -o testuser -m 700 -d /home/testuser/.config/com.raspberrypi.connect"));
+    QString expectedInstallDir = QString("install -o testuser -m 700 -d /home/testuser/") + PI_CONNECT_CONFIG_PATH;
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedInstallDir.toStdString()));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi", "[cloudinit][network]") {
@@ -701,6 +703,6 @@ TEST_CASE("CustomisationGenerator cloud-init handles empty Pi Connect token", "[
     
     // Should not include write_files or runcmd for Pi Connect
     REQUIRE_FALSE(yaml.contains("write_files:"));
-    REQUIRE_FALSE(yaml.contains("com.raspberrypi.connect"));
+    REQUIRE_FALSE(yaml.contains(PI_CONNECT_CONFIG_PATH));
 }
 
