@@ -277,10 +277,24 @@ TEST_CASE("CustomisationGenerator Raspberry Pi Connect", "[customization]") {
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings, token);
     QString scriptStr = QString::fromUtf8(script);
     
+    // Check deploy key is written
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring(PI_CONNECT_CONFIG_PATH));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring(PI_CONNECT_DEPLOY_KEY_FILENAME));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("test-token-12345"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect-signin.service"));
+    
+    // Check systemd unit directories are created
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("SYSTEMD_USER_BASE="));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("default.target.wants"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect.service.wants"));
+    
+    // Check all three systemd units are enabled
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect.service"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect-signin.path"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect-wayvnc.service"));
+    
+    // Check systemd linger is set up for auto-start
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/var/lib/systemd/linger"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("install -m 0644 /dev/null \"/var/lib/systemd/linger/$TARGET_USER\""));
 }
 
 // Negative Tests - Testing resilience to invalid/malicious inputs
@@ -596,6 +610,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, token, false, true, "testuser");
     QString yaml = QString::fromUtf8(userdata);
     
+    // Check deploy key file is written
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("write_files:"));
     QString expectedPath = QString("- path: /home/testuser/") + PI_CONNECT_CONFIG_PATH + "/" + PI_CONNECT_DEPLOY_KEY_FILENAME;
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedPath.toStdString()));
@@ -603,9 +618,27 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("owner: testuser:testuser"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("content: |"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
+    
+    // Check runcmd section exists and creates config directory
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
     QString expectedInstallDir = QString("install -o testuser -m 700 -d /home/testuser/") + PI_CONNECT_CONFIG_PATH;
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedInstallDir.toStdString()));
+    
+    // Check systemd unit directories are created
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/default.target.wants"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/rpi-connect.service.wants"));
+    
+    // Check all three systemd units are enabled via symlinks
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ln -sf /usr/lib/systemd/user/rpi-connect.service"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ln -sf /usr/lib/systemd/user/rpi-connect-signin.path"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ln -sf /usr/lib/systemd/user/rpi-connect-wayvnc.service"));
+    
+    // Check ownership is set correctly
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chown -R testuser:testuser"));
+    
+    // Check systemd linger is set up for auto-start
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("/var/lib/systemd/linger"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -m 0644 /dev/null /var/lib/systemd/linger/testuser"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi", "[cloudinit][network]") {
