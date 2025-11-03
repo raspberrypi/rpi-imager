@@ -30,7 +30,26 @@ project(rpi-imager LANGUAGES CXX C)
 set(IMAGER_VERSION_MAJOR 2)
 set(IMAGER_VERSION_MINOR 0)
 set(IMAGER_VERSION_PATCH 0)
+
+# Get git description for version string
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_DESCRIBE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif()
+
+# Build version string with git description if available
 set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}.${IMAGER_VERSION_PATCH}")
+if(GIT_DESCRIBE)
+    set(IMAGER_VERSION_STR "${IMAGER_VERSION_STR}-${GIT_DESCRIBE}")
+    message(STATUS "Git description: ${GIT_DESCRIBE}")
+endif()
+
 set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},${IMAGER_VERSION_PATCH},0")
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
 add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
