@@ -121,6 +121,12 @@ else()
     endif()
 endif()
 
+# Resource file generation (contains version info)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.rc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.rc"
+    @ONLY)
+
 # Manifest generation and copying
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.manifest.in"

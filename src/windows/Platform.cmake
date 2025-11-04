@@ -52,7 +52,7 @@ else()
 endif()
 
 set(DEPENDENCIES
-    windows/rpi-imager.rc
+    ${CMAKE_BINARY_DIR}/rpi-imager.rc
     wlanapi_delayed.lib
 )
 set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll ole32 oleaut32 wbemuuid)

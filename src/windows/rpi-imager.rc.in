@@ -4,8 +4,8 @@ IDI_ICON1 ICON DISCARDABLE "../icons/rpi-imager.ico"
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "rpi-imager.manifest"
 
 1 VERSIONINFO
-FILEVERSION IMAGER_VERSION_CSV
-PRODUCTVERSION IMAGER_VERSION_CSV
+FILEVERSION @IMAGER_VERSION_MAJOR@,@IMAGER_VERSION_MINOR@,@IMAGER_VERSION_PATCH@,0
+PRODUCTVERSION @IMAGER_VERSION_MAJOR@,@IMAGER_VERSION_MINOR@,@IMAGER_VERSION_PATCH@,0
 {
     BLOCK "StringFileInfo"
     {
@@ -13,6 +13,8 @@ PRODUCTVERSION IMAGER_VERSION_CSV
         {
             VALUE "CompanyName",     "Raspberry Pi Ltd"
             VALUE "FileDescription", "Raspberry Pi Imager"
+            VALUE "FileVersion",     "@IMAGER_VERSION_STR@"
+            VALUE "ProductVersion",  "@IMAGER_VERSION_STR@"
         }
     }
     BLOCK "VarFileInfo"
@@ -20,3 +22,4 @@ PRODUCTVERSION IMAGER_VERSION_CSV
         VALUE "Translation", 0x409, 1252
     }
 }
+

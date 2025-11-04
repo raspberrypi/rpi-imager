@@ -27,11 +27,8 @@ endif()
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectures to build for")
 
 project(rpi-imager LANGUAGES CXX C)
-set(IMAGER_VERSION_MAJOR 2)
-set(IMAGER_VERSION_MINOR 0)
-set(IMAGER_VERSION_PATCH 0)
 
-# Get git description for version string
+# Get version from git tag
 find_package(Git QUIET)
 if(GIT_FOUND)
     execute_process(
@@ -43,16 +40,37 @@ if(GIT_FOUND)
     )
 endif()
 
-# Build version string with git description if available
-set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}.${IMAGER_VERSION_PATCH}")
+# Use git-derived version as the canonical version string
 if(GIT_DESCRIBE)
-    set(IMAGER_VERSION_STR "${IMAGER_VERSION_STR}-${GIT_DESCRIBE}")
-    message(STATUS "Git description: ${GIT_DESCRIBE}")
+    set(IMAGER_VERSION_STR "${GIT_DESCRIBE}")
+    message(STATUS "Version from git: ${IMAGER_VERSION_STR}")
+    
+    # Extract numeric version components from git tag for Windows metadata
+    # Expected format: v2.0.0 or v2.0.0-rc4-60-geac7c2f0
+    string(REGEX MATCH "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)" VERSION_MATCH "${GIT_DESCRIBE}")
+    if(VERSION_MATCH)
+        set(IMAGER_VERSION_MAJOR ${CMAKE_MATCH_1})
+        set(IMAGER_VERSION_MINOR ${CMAKE_MATCH_2})
+        set(IMAGER_VERSION_PATCH ${CMAKE_MATCH_3})
+    else()
+        # Fallback if tag doesn't match expected format
+        set(IMAGER_VERSION_MAJOR 0)
+        set(IMAGER_VERSION_MINOR 0)
+        set(IMAGER_VERSION_PATCH 0)
+        message(WARNING "Could not parse version from git tag: ${GIT_DESCRIBE}")
+    endif()
+else()
+    # Fallback when git is not available or no tags exist
+    set(IMAGER_VERSION_MAJOR 0)
+    set(IMAGER_VERSION_MINOR 0)
+    set(IMAGER_VERSION_PATCH 0)
+    set(IMAGER_VERSION_STR "0.0.0-unknown")
+    message(WARNING "Git not found or no tags available, using fallback version: ${IMAGER_VERSION_STR}")
 endif()
 
-set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},${IMAGER_VERSION_PATCH},0")
+# Version variables for template substitution (Windows .rc, .manifest, etc.)
+# Note: IMAGER_VERSION_STR is used in C++ code, so it needs to be a compile definition
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
-add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 20)
