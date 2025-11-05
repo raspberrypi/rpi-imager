@@ -30,7 +30,7 @@ ApplicationWindow {
     minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
-    title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
+    title: qsTr("Raspberry Pi Imager %1").arg(imageWriter.constantVersion())
 
     Component.onCompleted: {
         // Set the main window for modal file dialogs
