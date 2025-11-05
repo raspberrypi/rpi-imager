@@ -111,7 +111,7 @@ public:
     /*
      * Enable image customization
      */
-    void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const ImageOptions::AdvancedOptions opts);
+    void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const ImageOptions::AdvancedOptions opts);
 
     /*
      * Thread safe download progress query functions

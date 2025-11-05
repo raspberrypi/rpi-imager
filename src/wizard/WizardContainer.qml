@@ -76,6 +76,11 @@ Item {
     // Whether the selected OS supports customisation (init_format present)
     property bool customizationSupported: true
     
+    // Conserved customization settings object - runtime state passed to generator
+    // This is the single source of truth for what customizations will be applied
+    // Individual steps read from and write to this object
+    property var customizationSettings: ({})
+    
     // Wizard steps enum
     readonly property int stepDeviceSelection: 0
     readonly property int stepOSSelection: 1
@@ -121,6 +126,12 @@ Item {
         // Default to disabling warnings in embedded mode (per-run, non-persistent)
         if (imageWriter && imageWriter.isEmbeddedMode()) {
             disableWarnings = true
+        }
+        
+        // Initialize customizationSettings from persistent storage
+        // Each step can then read from this and update it as needed
+        if (imageWriter) {
+            customizationSettings = imageWriter.getSavedCustomisationSettings()
         }
     }
 
@@ -714,13 +725,12 @@ Item {
             if (!ccRpiAvailable && nextIndex == stepIfAndFeatures) {
                 nextIndex++
             }
-            // Before entering the writing step, persist and apply customization (when supported)
+            // Before entering the writing step, apply customization (when supported)
             if (nextIndex === stepWriting && customizationSupported && imageWriter) {
-                // Persist whatever is currently staged in per-step UIs
-                var settings = imageWriter.getSavedCustomizationSettings()
-                imageWriter.setSavedCustomizationSettings(settings)
-                // Build and stage customization directly in C++
-                imageWriter.applyCustomizationFromSavedSettings()
+                // Pass the complete customizationSettings object directly to the generator
+                // This includes both persistent settings (hostname, wifi, etc.) and
+                // ephemeral settings (piConnectEnabled) from the current wizard session
+                imageWriter.applyCustomisationFromSettings(customizationSettings)
             }
             root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)

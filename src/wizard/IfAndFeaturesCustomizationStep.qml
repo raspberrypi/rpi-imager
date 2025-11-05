@@ -190,46 +190,49 @@ WizardStepBase {
             return supportsUsbOtg ? [chkEnableUsbGadget.focusItem] : []
         }, 1)
 
-        // Prefill
-        var saved = imageWriter.getSavedCustomizationSettings()
-        // Load from persisted settings (if you store them there)…
-        chkEnableI2C.checked     = saved.enableI2C === true || saved.enableI2C === "true" || wizardContainer.ifI2cEnabled
-        chkEnableSPI.checked     = saved.enableSPI === true || saved.enableSPI === "true" || wizardContainer.ifSpiEnabled
-        chkEnable1Wire.checked   = saved.enable1Wire === true || saved.enable1Wire === "true" || wizardContainer.if1WireEnabled
-        var enableSerial         = saved.enableSerial || wizardContainer.ifSerial
+        // Prefill from conserved customization settings
+        var settings = wizardContainer.customizationSettings
+        chkEnableI2C.checked     = settings.enableI2C === true || settings.enableI2C === "true" || wizardContainer.ifI2cEnabled
+        chkEnableSPI.checked     = settings.enableSPI === true || settings.enableSPI === "true" || wizardContainer.ifSpiEnabled
+        chkEnable1Wire.checked   = settings.enable1Wire === true || settings.enable1Wire === "true" || wizardContainer.if1WireEnabled
+        var enableSerial         = settings.enableSerial || wizardContainer.ifSerial
         var idx                  = comboSerial.find(enableSerial)
         comboSerial.currentIndex = (idx >= 0 ? idx : 0)
 
         // Features
         if (supportsUsbOtg) {
-            chkEnableUsbGadget.checked = saved.enableUsbGadget === true || saved.enableUsbGadget === "true" || wizardContainer.featUsbGadgetEnabled
+            chkEnableUsbGadget.checked = settings.enableUsbGadget === true || settings.enableUsbGadget === "true" || wizardContainer.featUsbGadgetEnabled
         } else {
             chkEnableUsbGadget.checked = false
         }
     }
 
     onNextClicked: {
-        let saved = imageWriter.getSavedCustomizationSettings()
+        // Update conserved customization settings (runtime state)
+        var serialVal = !supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText
+        var usbGadgetVal = supportsUsbOtg ? chkEnableUsbGadget.checked : false
+        
+        wizardContainer.customizationSettings.enableI2C    = chkEnableI2C.checked
+        wizardContainer.customizationSettings.enableSPI    = chkEnableSPI.checked
+        wizardContainer.customizationSettings.enable1Wire  = chkEnable1Wire.checked
+        wizardContainer.customizationSettings.enableSerial = serialVal
+        wizardContainer.customizationSettings.enableUsbGadget = usbGadgetVal
 
-        // Interfaces
-        saved.enableI2C    = chkEnableI2C.checked
-        saved.enableSPI    = chkEnableSPI.checked
-        saved.enable1Wire  = chkEnable1Wire.checked
-        saved.enableSerial = !supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText
-
-        // Features
-        saved.enableUsbGadget = supportsUsbOtg ? chkEnableUsbGadget.checked : false
-
-        imageWriter.setSavedCustomizationSettings(saved)
+        // Persist for future sessions
+        imageWriter.setPersistedCustomisationSetting("enableI2C", chkEnableI2C.checked)
+        imageWriter.setPersistedCustomisationSetting("enableSPI", chkEnableSPI.checked)
+        imageWriter.setPersistedCustomisationSetting("enable1Wire", chkEnable1Wire.checked)
+        imageWriter.setPersistedCustomisationSetting("enableSerial", serialVal)
+        imageWriter.setPersistedCustomisationSetting("enableUsbGadget", usbGadgetVal)
 
         // Mirror into wizardContainer
         wizardContainer.ifI2cEnabled     = chkEnableI2C.checked
         wizardContainer.ifSpiEnabled     = chkEnableSPI.checked
         wizardContainer.if1WireEnabled   = chkEnable1Wire.checked
         wizardContainer.ifSerial         = comboSerial.editText
-        wizardContainer.featUsbGadgetEnabled = saved.enableUsbGadget
+        wizardContainer.featUsbGadgetEnabled = usbGadgetVal
 
-        if (saved.enableUsbGadget && !wizardContainer.disableWarnings) {
+        if (usbGadgetVal && !wizardContainer.disableWarnings) {
             confirmDialog.open()
         } else {
             root.isConfirmed = true

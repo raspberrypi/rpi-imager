@@ -53,15 +53,15 @@ WizardStepBase {
         // Set SSID placeholder before prefilling text content
         fieldWifiSSID.placeholderText = qsTr("Network name")
 
-        // Prefill from saved settings
-        var saved = imageWriter.getSavedCustomizationSettings()
+        // Prefill from conserved customization settings
+        var settings = wizardContainer.customizationSettings
 
         // Set SSID placeholder first (before setting any text)
         fieldWifiSSID.placeholderText = qsTr("Network name")
 
         // Then set text values after, so they properly override the placeholder
-        if (saved.wifiSSID) {
-            fieldWifiSSID.text = saved.wifiSSID
+        if (settings.wifiSSID) {
+            fieldWifiSSID.text = settings.wifiSSID
         }
 
         // If not saved, try to auto-detect the current SSID from the system
@@ -72,13 +72,13 @@ WizardStepBase {
                 fieldWifiSSID.text = detectedSsid
             }
         }
-        if (saved.wifiHidden !== undefined) {
-            chkWifiHidden.checked = (saved.wifiHidden === true || saved.wifiHidden === "true")
+        if (settings.wifiHidden !== undefined) {
+            chkWifiHidden.checked = (settings.wifiHidden === true || settings.wifiHidden === "true")
         }
 
-        originalSavedSSID = saved.wifiSSID || ""
+        originalSavedSSID = settings.wifiSSID || ""
         // Remember if a crypted PSK is already saved (affects placeholder/keep semantics)
-        hadSavedCrypt = !!saved.wifiPasswordCrypt
+        hadSavedCrypt = !!settings.wifiPasswordCrypt
 
         // if no saved crypt, try to prefill a PSK from system
         // IMPORTANT: Only attempt PSK retrieval if we have an SSID (either saved or detected)
@@ -95,8 +95,8 @@ WizardStepBase {
         }
 
         // wifiMode: prefer saved value; otherwise infer from whether a password is present
-        wifiMode = (saved.wifiMode === "secure" || saved.wifiMode === "open")
-            ? saved.wifiMode
+        wifiMode = (settings.wifiMode === "secure" || settings.wifiMode === "open")
+            ? settings.wifiMode
             : "secure"
 
         updatePasswordFieldUI()
@@ -435,25 +435,23 @@ WizardStepBase {
 
     // Save settings when moving to next step
     onNextClicked: {
-        // Merge-and-save strategy
-        var saved = imageWriter.getSavedCustomizationSettings()
         var ssid = fieldWifiSSID.text ? fieldWifiSSID.text.trim() : ""
         var pwd = fieldWifiPassword.text
-        var prevSSID = saved.wifiSSID || ""
+        var prevSSID = wizardContainer.customizationSettings.wifiSSID || ""
         var hidden = chkWifiHidden.checked
-        var hadCryptBefore = !!saved.wifiPasswordCrypt
+        var hadCryptBefore = !!wizardContainer.customizationSettings.wifiPasswordCrypt
         var sameSSID = ssidUnchanged(ssid, prevSSID)
 
-        // persist mode
-        saved.wifiMode = wifiMode
+        // Update conserved customization settings (runtime state)
+        wizardContainer.customizationSettings.wifiMode = wifiMode
         
         // Handle SSID and password
         if (ssid.length > 0) {
-            saved.wifiSSID = ssid
+            wizardContainer.customizationSettings.wifiSSID = ssid
 
             if (wifiMode === "open") {
                // always clear in open mode
-               delete saved.wifiPasswordCrypt
+               delete wizardContainer.customizationSettings.wifiPasswordCrypt
             } else {
                // secure / closed mode
                if (pwd.length > 0) {
@@ -461,27 +459,50 @@ WizardStepBase {
                    if (pwd !== fieldWifiPasswordConfirm.text) return;
                    // overwrite with new password
                    var isPassphrase = (pwd.length >= 8 && pwd.length < 64)
-                   saved.wifiPasswordCrypt = isPassphrase ? imageWriter.pbkdf2(pwd, ssid) : pwd
+                   wizardContainer.customizationSettings.wifiPasswordCrypt = isPassphrase ? imageWriter.pbkdf2(pwd, ssid) : pwd
                } else if (hadCryptBefore && sameSSID) {
                    // keep the existing crypt
                    // (do nothing)
                } else {
                    // no password provided and can't keep -> ensure cleared
-                   delete saved.wifiPasswordCrypt
+                   delete wizardContainer.customizationSettings.wifiPasswordCrypt
                }
             }
 
-            saved.wifiHidden = hidden
+            wizardContainer.customizationSettings.wifiHidden = hidden
             wizardContainer.wifiConfigured = true
         } else {
             // No SSID -> clear SSID and password settings
-            delete saved.wifiSSID
-            delete saved.wifiPasswordCrypt
-            delete saved.wifiHidden
+            delete wizardContainer.customizationSettings.wifiSSID
+            delete wizardContainer.customizationSettings.wifiPasswordCrypt
+            delete wizardContainer.customizationSettings.wifiHidden
             wizardContainer.wifiConfigured = false
         }
         
-        imageWriter.setSavedCustomizationSettings(saved)
+        // Also persist for future sessions
+        var saved = imageWriter.getSavedCustomisationSettings()
+        saved.wifiMode = wifiMode
+        if (ssid.length > 0) {
+            saved.wifiSSID = ssid
+            if (wifiMode === "open") {
+               delete saved.wifiPasswordCrypt
+            } else {
+               if (pwd.length > 0) {
+                   var isPassphrase2 = (pwd.length >= 8 && pwd.length < 64)
+                   saved.wifiPasswordCrypt = isPassphrase2 ? imageWriter.pbkdf2(pwd, ssid) : pwd
+               } else if (hadCryptBefore && sameSSID) {
+                   // keep existing
+               } else {
+                   delete saved.wifiPasswordCrypt
+               }
+            }
+            saved.wifiHidden = hidden
+        } else {
+            delete saved.wifiSSID
+            delete saved.wifiPasswordCrypt
+            delete saved.wifiHidden
+        }
+        imageWriter.setSavedCustomisationSettings(saved)
         // Do not log sensitive data
     }
     

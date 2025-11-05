@@ -116,13 +116,13 @@ WizardStepBase {
         // Set initial focus on the username field
         // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
         
-        // Prefill from saved settings (avoid showing raw passwords)
-        var saved = imageWriter.getSavedCustomizationSettings()
-        if (saved.sshUserName) {
-            fieldUsername.text = saved.sshUserName
-            root.savedUsername = saved.sshUserName
+        // Prefill from conserved customization settings (avoid showing raw passwords)
+        var settings = wizardContainer.customizationSettings
+        if (settings.sshUserName) {
+            fieldUsername.text = settings.sshUserName
+            root.savedUsername = settings.sshUserName
         }
-        if (saved.sshUserPassword) {
+        if (settings.sshUserPassword) {
             // Indicate a saved (crypted) password exists; do not prefill fields
             root.hasSavedUserPassword = true
         }
@@ -141,31 +141,38 @@ WizardStepBase {
     
     // Save settings when moving to next step
     onNextClicked: {
-        // Merge-and-save strategy
-        var saved = imageWriter.getSavedCustomizationSettings()
         var usernameText = fieldUsername.text ? fieldUsername.text.trim() : ""
         var hasPasswords = fieldPassword.text.length > 0 && fieldPassword.text === fieldPasswordConfirm.text
+        
+        // Update conserved customization settings (runtime state)
         if (usernameText.length > 0 && hasPasswords) {
             // User entered both username and new password
-            saved.sshUserName = usernameText
-            // Store crypted password similar to legacy flow
-            saved.sshUserPassword = imageWriter.crypt(fieldPassword.text)
+            var cryptedPwd = imageWriter.crypt(fieldPassword.text)
+            wizardContainer.customizationSettings.sshUserName = usernameText
+            wizardContainer.customizationSettings.sshUserPassword = cryptedPwd
             wizardContainer.userConfigured = true
+            // Persist for future sessions
+            imageWriter.setPersistedCustomisationSetting("sshUserName", usernameText)
+            imageWriter.setPersistedCustomisationSetting("sshUserPassword", cryptedPwd)
         } else if (usernameText.length > 0 && root.hasSavedUserPassword && fieldPassword.text.length === 0) {
             // User has a username (entered or kept from saved) and saved password (keeping it)
-            saved.sshUserName = usernameText
-            // Keep existing saved.sshUserPassword
+            wizardContainer.customizationSettings.sshUserName = usernameText
+            // Keep existing sshUserPassword in runtime settings
             wizardContainer.userConfigured = true
+            // Persist username (password already persisted)
+            imageWriter.setPersistedCustomisationSetting("sshUserName", usernameText)
         } else if (usernameText.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0) {
-            // User cleared all fields -> remove from persisted settings (allows opting out)
-            delete saved.sshUserName
-            delete saved.sshUserPassword
+            // User cleared all fields -> remove from runtime settings
+            delete wizardContainer.customizationSettings.sshUserName
+            delete wizardContainer.customizationSettings.sshUserPassword
             wizardContainer.userConfigured = false
+            // Remove from persistence
+            imageWriter.removePersistedCustomisationSetting("sshUserName")
+            imageWriter.removePersistedCustomisationSetting("sshUserPassword")
         } else {
-            // Partial/invalid -> do not change persisted settings, but do not mark configured
+            // Partial/invalid -> do not mark configured
             wizardContainer.userConfigured = false
         }
-        imageWriter.setSavedCustomizationSettings(saved)
         // Do not log sensitive data
     }
     

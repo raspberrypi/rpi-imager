@@ -37,12 +37,12 @@ WizardStepBase {
         comboTimezone.model = imageWriter.getTimezoneList()
         comboKeyboard.model = imageWriter.getKeymapLayoutList()
         
-        // Prefill from saved settings; fallback to platform defaults
-        var saved = imageWriter.getSavedCustomizationSettings()
+        // Prefill from conserved customization settings; fallback to platform defaults
+        var settings = wizardContainer.customizationSettings
         
         // Restore saved capital city if available
-        if (saved.capitalCity) {
-            var cityIndex = comboCapitalCity.find(saved.capitalCity)
+        if (settings.capitalCity) {
+            var cityIndex = comboCapitalCity.find(settings.capitalCity)
             if (cityIndex !== -1) {
                 comboCapitalCity.currentIndex = cityIndex
                 // Ensure WiFi country recommendation is always up to date
@@ -51,13 +51,13 @@ WizardStepBase {
             }
         }
         
-        var tzToSet = saved.timezone || imageWriter.getTimezone()
+        var tzToSet = settings.timezone || imageWriter.getTimezone()
         var tzIndex = comboTimezone.find(tzToSet)
         if (tzIndex !== -1) comboTimezone.currentIndex = tzIndex
         else comboTimezone.editText = tzToSet
 
         var defaultKeyboard = (tzToSet === "Europe/London") ? "gb" : "us"
-        var kbToSet = saved.keyboard || defaultKeyboard
+        var kbToSet = settings.keyboard || defaultKeyboard
         var kbIndex = comboKeyboard.find(kbToSet)
         if (kbIndex !== -1) comboKeyboard.currentIndex = kbIndex
         else comboKeyboard.editText = kbToSet
@@ -95,9 +95,8 @@ WizardStepBase {
         
         // Save the recommended WiFi country for later
         if (localeData.countryCode) {
-            var saved = imageWriter.getSavedCustomizationSettings()
-            saved.recommendedWifiCountry = localeData.countryCode
-            imageWriter.setSavedCustomizationSettings(saved)
+            wizardContainer.customizationSettings.recommendedWifiCountry = localeData.countryCode
+            imageWriter.setPersistedCustomisationSetting("recommendedWifiCountry", localeData.countryCode)
             console.log("LocaleCustomizationStep: Saved recommendedWifiCountry:", localeData.countryCode)
         }
     }
@@ -194,16 +193,36 @@ WizardStepBase {
     
     // Save settings when moving to next step
     onNextClicked: {
-        // Merge-and-save strategy
-        var saved = imageWriter.getSavedCustomizationSettings()
         var city = comboCapitalCity.editText ? comboCapitalCity.editText.trim() : ""
         var tz = comboTimezone.editText ? comboTimezone.editText.trim() : ""
         var kb = comboKeyboard.editText ? comboKeyboard.editText.trim() : ""
-        if (city.length > 0) saved.capitalCity = city; else delete saved.capitalCity
-        if (tz.length > 0) saved.timezone = tz; else delete saved.timezone
-        if (kb.length > 0) saved.keyboard = kb; else delete saved.keyboard
+        
+        // Update conserved customization settings (runtime state)
+        if (city.length > 0) {
+            wizardContainer.customizationSettings.capitalCity = city
+            imageWriter.setPersistedCustomisationSetting("capitalCity", city)
+        } else {
+            delete wizardContainer.customizationSettings.capitalCity
+            imageWriter.removePersistedCustomisationSetting("capitalCity")
+        }
+        
+        if (tz.length > 0) {
+            wizardContainer.customizationSettings.timezone = tz
+            imageWriter.setPersistedCustomisationSetting("timezone", tz)
+        } else {
+            delete wizardContainer.customizationSettings.timezone
+            imageWriter.removePersistedCustomisationSetting("timezone")
+        }
+        
+        if (kb.length > 0) {
+            wizardContainer.customizationSettings.keyboard = kb
+            imageWriter.setPersistedCustomisationSetting("keyboard", kb)
+        } else {
+            delete wizardContainer.customizationSettings.keyboard
+            imageWriter.removePersistedCustomisationSetting("keyboard")
+        }
+        
         wizardContainer.localeConfigured = (tz.length > 0 || kb.length > 0)
-        imageWriter.setSavedCustomizationSettings(saved)
         // Avoid logging settings to protect privacy
     }
     

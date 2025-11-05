@@ -649,18 +649,18 @@ WizardStepBase {
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.wizardContainer.piConnectAvailable = imageWriter.checkSWCapability("rpi_connect")
                 root.wizardContainer.ccRpiAvailable = imageWriter.imageSupportsCcRpi()
-                // If customization is not supported for this OS, clear any previously-staged UI flags
-                if (!root.wizardContainer.customizationSupported) {
-                    root.wizardContainer.hostnameConfigured = false
-                    root.wizardContainer.localeConfigured = false
-                    root.wizardContainer.userConfigured = false
-                    root.wizardContainer.wifiConfigured = false
-                    root.wizardContainer.sshEnabled = false
+                
+                // Clean up incompatible settings from customizationSettings based on OS capabilities
+                if (!root.wizardContainer.piConnectAvailable) {
+                    delete root.wizardContainer.customizationSettings.piConnectEnabled
                     root.wizardContainer.piConnectEnabled = false
-                } else if (!root.wizardContainer.piConnectAvailable) {
-                    // If Raspberry Pi Connect not available for this OS, ensure it's not marked enabled
-                    root.wizardContainer.piConnectEnabled = false
-                } else if (!root.wizardContainer.ccRpiAvailable) {
+                }
+                if (!root.wizardContainer.ccRpiAvailable) {
+                    delete root.wizardContainer.customizationSettings.enableI2C
+                    delete root.wizardContainer.customizationSettings.enableSPI
+                    delete root.wizardContainer.customizationSettings.enable1Wire
+                    delete root.wizardContainer.customizationSettings.enableSerial
+                    delete root.wizardContainer.customizationSettings.enableUsbGadget
                     root.wizardContainer.ifI2cEnabled = false
                     root.wizardContainer.ifSpiEnabled = false
                     root.wizardContainer.if1WireEnabled = false

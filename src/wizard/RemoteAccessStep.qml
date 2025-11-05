@@ -143,16 +143,16 @@ WizardStepBase {
         // Include labels before their corresponding controls so users hear the explanation first
         root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [labelAuthMechanism, radioPassword, radioPublicKey] : [] }, 1)
         root.registerFocusGroup("ssh_key", function(){ return sshEnablePill.checked && radioPublicKey.checked ? [labelPublicKey, fieldPublicKey, browseButton] : [] }, 2)
-        // Prefill from saved settings
-        var saved = imageWriter.getSavedCustomizationSettings()
-        if (saved.sshEnabled === true || saved.sshEnabled === "true") {
+        // Prefill from conserved customization settings
+        var settings = wizardContainer.customizationSettings
+        if (settings.sshEnabled === true || settings.sshEnabled === "true") {
             sshEnablePill.checked = true
         }
-        if (saved.sshPublicKey) {
+        if (settings.sshPublicKey) {
             radioPublicKey.checked = true
             radioPassword.checked = false
-            fieldPublicKey.text = saved.sshPublicKey
-        } else if (saved.sshPasswordAuth === true || saved.sshPasswordAuth === "true") {
+            fieldPublicKey.text = settings.sshPublicKey
+        } else if (settings.sshPasswordAuth === true || settings.sshPasswordAuth === "true") {
             radioPassword.checked = true
             radioPublicKey.checked = false
         }
@@ -173,8 +173,26 @@ WizardStepBase {
     
     // Save settings when moving to next step
     onNextClicked: {
-        // Merge-and-save strategy
-        var saved = imageWriter.getSavedCustomizationSettings()
+        // Update conserved customization settings (runtime state)
+        if (sshEnablePill.checked) {
+            wizardContainer.customizationSettings.sshEnabled = true
+            wizardContainer.customizationSettings.sshPasswordAuth = radioPassword.checked
+            if (radioPublicKey.checked && fieldPublicKey.text && fieldPublicKey.text.trim().length > 0) {
+                wizardContainer.customizationSettings.sshPublicKey = fieldPublicKey.text.trim()
+            } else {
+                delete wizardContainer.customizationSettings.sshPublicKey
+            }
+            wizardContainer.sshEnabled = true
+        } else {
+            // User disabled SSH -> remove SSH settings
+            delete wizardContainer.customizationSettings.sshEnabled
+            delete wizardContainer.customizationSettings.sshPasswordAuth
+            delete wizardContainer.customizationSettings.sshPublicKey
+            wizardContainer.sshEnabled = false
+        }
+        
+        // Also persist for future sessions
+        var saved = imageWriter.getSavedCustomisationSettings()
         if (sshEnablePill.checked) {
             saved.sshEnabled = true
             saved.sshPasswordAuth = radioPassword.checked
@@ -183,15 +201,12 @@ WizardStepBase {
             } else {
                 delete saved.sshPublicKey
             }
-            wizardContainer.sshEnabled = true
         } else {
-            // User disabled SSH -> remove SSH settings from persistence
             delete saved.sshEnabled
             delete saved.sshPasswordAuth
             delete saved.sshPublicKey
-            wizardContainer.sshEnabled = false
         }
-        imageWriter.setSavedCustomizationSettings(saved)
+        imageWriter.setSavedCustomisationSettings(saved)
         // Do not log remote access settings (may contain sensitive data)
     }
     

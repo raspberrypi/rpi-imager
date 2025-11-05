@@ -245,12 +245,16 @@ public:
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
-    Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts = {});
-    Q_INVOKABLE void applyCustomizationFromSavedSettings();
-    Q_INVOKABLE void setSavedCustomizationSettings(const QVariantMap &map);
-    Q_INVOKABLE QVariantMap getSavedCustomizationSettings();
-    Q_INVOKABLE void clearSavedCustomizationSettings();
-    Q_INVOKABLE bool hasSavedCustomizationSettings();
+    
+    // Customisation API
+    Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
+    Q_INVOKABLE void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts = {});  // Advanced: bypass generator with pre-made scripts
+    
+    // Persistence API
+    Q_INVOKABLE void setSavedCustomisationSettings(const QVariantMap &map);  // Legacy: prefer setPersistedCustomisationSetting()
+    Q_INVOKABLE QVariantMap getSavedCustomisationSettings();
+    Q_INVOKABLE void setPersistedCustomisationSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE void removePersistedCustomisationSetting(const QString &key);
     Q_INVOKABLE bool imageSupportsCustomization();
     Q_INVOKABLE bool imageSupportsCcRpi();
 
@@ -383,8 +387,8 @@ protected:
     QString _privKeyFileName();
     QString _sshKeyDir();
     QString _sshKeyGen();
-    void _applySystemdCustomizationFromSettings(const QVariantMap &s);
-    void _applyCloudInitCustomizationFromSettings(const QVariantMap &s);
+    void _applySystemdCustomisationFromSettings(const QVariantMap &s);
+    void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
     void scheduleOsListRefresh();
 };

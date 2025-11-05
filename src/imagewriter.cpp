@@ -688,7 +688,7 @@ void ImageWriter::startWrite()
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+    _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -2000,7 +2000,7 @@ void ImageWriter::setSetting(const QString &key, const QVariant &value)
     _settings.sync();
 }
 
-void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts)
+void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts)
 {
     _config = config;
     _cmdline = cmdline;
@@ -2016,26 +2016,27 @@ void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArr
     qDebug() << "Advanced options:" << opts;
 }
 
-void ImageWriter::applyCustomizationFromSavedSettings()
+void ImageWriter::applyCustomisationFromSettings(const QVariantMap &settings)
 {
-    // Build customization payloads from saved settings
-    QVariantMap s = getSavedCustomizationSettings();
+    // Build customisation payloads from provided settings map
+    // This method accepts settings directly (which may be a combination of
+    // persistent and ephemeral/runtime settings from the wizard)
 
-    // If the selected image does not support customization, ensure nothing is staged
+    // If the selected image does not support customisation, ensure nothing is staged
     if (_initFormat.isEmpty()) {
-        setImageCustomization(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray(), NoAdvancedOptions);
+        setImageCustomisation(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray(), NoAdvancedOptions);
         return;
     }
 
     if (_initFormat == "systemd") {
-        _applySystemdCustomizationFromSettings(s);
+        _applySystemdCustomisationFromSettings(settings);
     } else {
-        // customization for cloudinit and cloudinit-rpi
-        _applyCloudInitCustomizationFromSettings(s);
+        // customisation for cloudinit and cloudinit-rpi
+        _applyCloudInitCustomisationFromSettings(settings);
     }
 }
 
-void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
+void ImageWriter::_applySystemdCustomisationFromSettings(const QVariantMap &s)
 {
     // Use CustomisationGenerator for script generation
     QByteArray script = rpi_imager::CustomisationGenerator::generateSystemdScript(s, _piConnectToken);
@@ -2047,10 +2048,10 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
 
-    setImageCustomization(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), NoAdvancedOptions);
+    setImageCustomisation(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), NoAdvancedOptions);
 }
 
-void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
+void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
 {
     // Use CustomisationGenerator for cloud-init YAML generation
     const bool sshEnabled = s.value("sshEnabled").toBool();
@@ -2069,7 +2070,7 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
     
-    setImageCustomization(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, NoAdvancedOptions);
+    setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, NoAdvancedOptions);
 }
 
 QString ImageWriter::crypt(const QByteArray &password)
@@ -2114,7 +2115,7 @@ QString ImageWriter::pbkdf2(const QByteArray &psk, const QByteArray &ssid)
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, psk, ssid, 4096, 32).toHex();
 }
 
-void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)
+void ImageWriter::setSavedCustomisationSettings(const QVariantMap &map)
 {
     _settings.beginGroup("imagecustomization");
     _settings.remove("");
@@ -2126,7 +2127,7 @@ void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)
     _settings.sync();
 }
 
-QVariantMap ImageWriter::getSavedCustomizationSettings()
+QVariantMap ImageWriter::getSavedCustomisationSettings()
 {
     QVariantMap result;
 
@@ -2165,22 +2166,20 @@ QVariantMap ImageWriter::getSavedCustomizationSettings()
     return result;
 }
 
-void ImageWriter::clearSavedCustomizationSettings()
+void ImageWriter::setPersistedCustomisationSetting(const QString &key, const QVariant &value)
 {
     _settings.beginGroup("imagecustomization");
-    _settings.remove("");
+    _settings.setValue(key, value);
     _settings.endGroup();
     _settings.sync();
 }
 
-bool ImageWriter::hasSavedCustomizationSettings()
+void ImageWriter::removePersistedCustomisationSetting(const QString &key)
 {
-    _settings.sync();
     _settings.beginGroup("imagecustomization");
-    bool result = !_settings.childKeys().isEmpty();
+    _settings.remove(key);
     _settings.endGroup();
-
-    return result;
+    _settings.sync();
 }
 
 bool ImageWriter::imageSupportsCustomization()
@@ -2495,7 +2494,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+    _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)
