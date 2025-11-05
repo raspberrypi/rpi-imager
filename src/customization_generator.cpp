@@ -402,13 +402,17 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
         const QString configDir = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/") + PI_CONNECT_CONFIG_PATH;
         const QString targetPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
+        
+        // Use write_files with defer option to ensure user and directories exist first
         push(QStringLiteral("write_files:"), cloud);
         push(QStringLiteral("  - path: ") + targetPath, cloud);
         push(QStringLiteral("    permissions: '0600'"), cloud);
         push(QStringLiteral("    owner: ") + effectiveUser + QStringLiteral(":") + effectiveUser, cloud);
+        push(QStringLiteral("    defer: true"), cloud);
         push(QStringLiteral("    content: |"), cloud);
         QString indented = QStringLiteral("      ") + cleanToken;
         push(indented, cloud);
+        
         // Ensure directory exists with correct owner and enable systemd units
         push(QString(), cloud);
         push(QStringLiteral("runcmd:"), cloud);
@@ -416,9 +420,10 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // Enable Raspberry Pi Connect systemd units
         QString userHome = QStringLiteral("/home/") + effectiveUser;
         push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants ") + userHome + QStringLiteral("/.config/systemd/user/rpi-connect.service.wants\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"ln -sf /usr/lib/systemd/user/rpi-connect.service ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect.service\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"ln -sf /usr/lib/systemd/user/rpi-connect-signin.path ") + userHome + QStringLiteral("/.config/systemd/user/rpi-connect.service.wants/rpi-connect-signin.path\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"ln -sf /usr/lib/systemd/user/rpi-connect-wayvnc.service ") + userHome + QStringLiteral("/.config/systemd/user/rpi-connect.service.wants/rpi-connect-wayvnc.service\" ]"), cloud);
+        // Check both /usr/lib and /lib for systemd unit files (different distros use different paths)
+        push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect.service; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect.service\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect-signin.path; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-signin.path; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/rpi-connect.service.wants/rpi-connect-signin.path\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect-wayvnc.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-wayvnc.service; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/rpi-connect.service.wants/rpi-connect-wayvnc.service\" ]"), cloud);
         push(QStringLiteral("  - [ sh, -c, \"chown -R ") + effectiveUser + QStringLiteral(":") + effectiveUser + QStringLiteral(" ") + userHome + QStringLiteral("/.config/systemd\" ]"), cloud);
         // Set up systemd linger for auto-start
         push(QStringLiteral("  - [ sh, -c, \"install -d -m 0755 /var/lib/systemd/linger\" ]"), cloud);

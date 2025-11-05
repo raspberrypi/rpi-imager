@@ -610,12 +610,13 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, token, false, true, "testuser");
     QString yaml = QString::fromUtf8(userdata);
     
-    // Check deploy key file is written
+    // Check deploy key file is written with defer option
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("write_files:"));
     QString expectedPath = QString("- path: /home/testuser/") + PI_CONNECT_CONFIG_PATH + "/" + PI_CONNECT_DEPLOY_KEY_FILENAME;
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedPath.toStdString()));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("permissions: '0600'"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("owner: testuser:testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("defer: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("content: |"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
     
@@ -628,10 +629,13 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/default.target.wants"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/rpi-connect.service.wants"));
     
-    // Check all three systemd units are enabled via symlinks
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ln -sf /usr/lib/systemd/user/rpi-connect.service"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ln -sf /usr/lib/systemd/user/rpi-connect-signin.path"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ln -sf /usr/lib/systemd/user/rpi-connect-wayvnc.service"));
+    // Check all three systemd units are enabled via symlinks with fallback logic
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("UNIT_SRC=/lib/systemd/user/rpi-connect.service"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ln -sf $UNIT_SRC"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect.service"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect-signin.path"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect-wayvnc.service"));
     
     // Check ownership is set correctly
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chown -R testuser:testuser"));
