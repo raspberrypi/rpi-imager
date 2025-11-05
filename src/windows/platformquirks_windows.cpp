@@ -270,4 +270,31 @@ void bringWindowToForeground(void* windowHandle) {
     FlashWindowEx(&fwi);
 }
 
+bool hasElevatedPrivileges() {
+    // Check if running as Administrator
+    BOOL fIsRunAsAdmin = FALSE;
+    PSID pAdministratorsGroup = NULL;
+
+    // Allocate and initialize a SID of the administrators group
+    SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
+    if (!AllocateAndInitializeSid(&NtAuthority, 2,
+                                  SECURITY_BUILTIN_DOMAIN_RID,
+                                  DOMAIN_ALIAS_RID_ADMINS,
+                                  0, 0, 0, 0, 0, 0,
+                                  &pAdministratorsGroup)) {
+        return false;
+    }
+
+    // Determine whether the SID of administrators group is enabled in
+    // the primary access token of the process
+    if (!CheckTokenMembership(NULL, pAdministratorsGroup, &fIsRunAsAdmin)) {
+        fIsRunAsAdmin = FALSE;
+    }
+
+    // Free the SID
+    FreeSid(pAdministratorsGroup);
+
+    return fIsRunAsAdmin == TRUE;
+}
+
 } // namespace PlatformQuirks

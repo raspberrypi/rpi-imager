@@ -12,9 +12,6 @@
 #include <QTemporaryFile>
 
 #ifdef Q_OS_LINUX
-#ifndef QT_NO_DBUS
-#include "linux/udisks2api.h"
-#endif
 #include <unistd.h>
 #endif
 
@@ -51,22 +48,10 @@ std::uint64_t DriveFormatThread::getDeviceSize(const QByteArray &device)
 void DriveFormatThread::run()
 {
 #ifdef Q_OS_LINUX
-    // Linux-specific: Check if we need to use udisks2 fallback
+    // Linux-specific: Check permissions
     if (::access(_device.constData(), W_OK) != 0)
     {
-        /* Not running as root, try to outsource formatting to udisks2 */
-#ifndef QT_NO_DBUS
-        UDisks2Api udisks2;
-        if (udisks2.formatDrive(_device))
-        {
-            emit success();
-            return;
-        } else {
-            emit error(tr("Error formatting device. If udisks2 is not installed, please run with elevated privileges (sudo) or install udisks2."));
-        }
-#else // QT_NO_DBUS
-        emit error(tr("Cannot format device: insufficient permissions and udisks2 not available"));
-#endif
+        emit error(tr("Cannot format device: insufficient permissions. Please run with elevated privileges (sudo)."));
         return;
     }
 #endif

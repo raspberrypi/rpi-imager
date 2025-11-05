@@ -13,6 +13,9 @@ namespace PlatformQuirks {
      * 
      * Currently handles:
      * - Windows: NVIDIA graphics card detection and QSG_RHI_PREFER_SOFTWARE_RENDERER workaround
+     * - Linux: Sudo user detection and environment override for:
+     *   - HOME and XDG directories (cache/config/data)
+     *   - XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS for D-Bus session access
      */
     void applyQuirks();
 
@@ -50,6 +53,16 @@ namespace PlatformQuirks {
      * @param windowHandle Native window handle (HWND on Windows, cast from QWindow::winId())
      */
     void bringWindowToForeground(void* windowHandle);
+
+    /**
+     * Check if the application is running with elevated privileges.
+     * On Linux: Checks if running as root (UID 0)
+     * On Windows: Checks if running as Administrator
+     * On macOS: Always returns true (sensible permissions model operates as expected)
+     * 
+     * @return true if running with elevated privileges, false otherwise
+     */
+    bool hasElevatedPrivileges();
 }
 
 #endif // PLATFORMQUIRKS_H

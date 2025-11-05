@@ -41,9 +41,6 @@
 #ifdef Q_OS_LINUX
 #include <sys/ioctl.h>
 #include <linux/fs.h>
-#ifndef QT_NO_DBUS
-#include "linux/udisks2api.h"
-#endif
 #endif
 
 using namespace std;
@@ -302,42 +299,11 @@ bool DownloadThread::_openAndPrepareDevice()
     if (result != rpi_imager::FileError::kSuccess)
     {
 #ifdef Q_OS_LINUX
-#ifndef QT_NO_DBUS
-        /* Opening device directly did not work, ask udisks2 to do it for us,
-         * if necessary prompting for authorization */
-        UDisks2Api udisks;
-        int fd = udisks.authOpen(_filename);
-        if (fd != -1)
-        {
-            // Create a temporary FileOperations and manually set the fd
-            // This is a transition approach - ideally udisks2 would return a path we can use
-            _file->Close(); // Close any existing file
-            // For now, we'll create a temporary file and open it with the fd
-            // This is a compatibility bridge during the transition
-            QFile tempFile;
-            if (tempFile.open(fd, QIODevice::ReadWrite | QIODevice::Unbuffered, QFileDevice::AutoCloseHandle)) {
-                tempFile.close();
-                // Try to open the device again after udisks2 authorization
-                result = _file->OpenDevice(filename_str);
-                if (result != rpi_imager::FileError::kSuccess) {
-                    emit error(tr("Cannot open storage device '%1' after authorization.").arg(QString(_filename)));
-                    return false;
-                }
-            } else {
-                emit error(tr("Cannot open storage device '%1' with udisks2 authorization.").arg(QString(_filename)));
-                return false;
-            }
-        }
-        else
-#endif
-        {
-            emit error(tr("Cannot open storage device '%1'. If udisks2 is not installed, please run with elevated privileges (sudo) or install udisks2.").arg(QString(_filename)));
-            return false;
-        }
+        emit error(tr("Cannot open storage device '%1'. Please run with elevated privileges (sudo).").arg(QString(_filename)));
 #else
         emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
-        return false;
 #endif
+        return false;
     }
 #endif
 
@@ -975,13 +941,6 @@ void DownloadThread::_writeComplete()
     if (_ejectEnabled)
     {
         eject_disk(_filename.constData());
-#ifdef Q_OS_LINUX
-#ifndef QT_NO_DBUS
-        /* mountutils only implemented unmount and not eject on Linux. Do so through udisks2 */
-        UDisks2Api udisks;
-        udisks.ejectDrive(_filename);
-#endif
-#endif
     }
 }
 

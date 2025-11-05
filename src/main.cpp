@@ -34,12 +34,6 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreServices/CoreServices.h>
 #endif
-#ifdef Q_OS_LINUX
-#include "linux/linuxutils.h"
-#ifndef QT_NO_DBUS
-#include "linux/udisks2api.h"
-#endif
-#endif
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <winnls.h>
@@ -75,6 +69,10 @@ static constexpr quint16 kPort =
 
 int main(int argc, char *argv[])
 {
+    // Apply platform-specific quirks and workarounds FIRST
+    // This must happen before any Qt initialization (QCoreApplication/QGuiApplication)
+    PlatformQuirks::applyQuirks();
+
 #ifdef CLI_ONLY_BUILD
     /* Force CLI mode for CLI-only builds */
     Cli cli(argc, argv);
@@ -117,9 +115,6 @@ int main(int argc, char *argv[])
     qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
 #endif
 
-    // Apply platform-specific quirks and workarounds
-    PlatformQuirks::applyQuirks();
-
     QGuiApplication app(argc, argv);
     
     app.setOrganizationName("Raspberry Pi");
@@ -138,35 +133,30 @@ int main(int argc, char *argv[])
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;
 
-#ifdef Q_OS_LINUX
-    // Early check for Linux permissions - warn if neither root nor udisks2 is available
+    // Early check for elevated privileges on platforms that require them (Linux/Windows)
     bool hasPermissionIssue = false;
     QString permissionMessage;
     
-    if (!LinuxUtils::isRunningAsRoot())
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    if (!PlatformQuirks::hasElevatedPrivileges())
     {
-#ifndef QT_NO_DBUS
-        if (!UDisks2Api::isAvailable())
-        {
-            hasPermissionIssue = true;
-            permissionMessage = QObject::tr(
-                "Raspberry Pi Imager requires elevated privileges to write to storage devices.\n\n"
-                "You are not running as root and udisks2 is not installed on your system.\n\n"
-                "To continue, you can either:\n"
-                "• Install udisks2: sudo apt install udisks2\n"
-                "• Run with elevated privileges: sudo rpi-imager\n\n"
-                "Without these, you will encounter permission errors when writing images."
-            );
-        }
-#else
         hasPermissionIssue = true;
+#ifdef Q_OS_LINUX
         permissionMessage = QObject::tr(
             "Raspberry Pi Imager requires elevated privileges to write to storage devices.\n\n"
-            "You are not running as root and this build does not support udisks2.\n\n"
+            "You are not running as root.\n\n"
             "Please run with elevated privileges: sudo rpi-imager\n\n"
             "Without this, you will encounter permission errors when writing images."
         );
+#elif defined(Q_OS_WIN)
+        permissionMessage = QObject::tr(
+            "Raspberry Pi Imager requires elevated privileges to write to storage devices.\n\n"
+            "You are not running as Administrator.\n\n"
+            "Please run as Administrator.\n\n"
+            "Without this, you will encounter permission errors when writing images."
+        );
 #endif
+        qWarning() << "Not running with elevated privileges - device access may fail";
     }
 #endif
 
@@ -544,7 +534,6 @@ int main(int argc, char *argv[])
     if (imageWriter.isOnline() && PlatformQuirks::hasNetworkConnectivity())
         imageWriter.beginOSListFetch();
 
-#ifdef Q_OS_LINUX
     // Emit permission warning signal after UI is loaded so dialog can be shown
     if (hasPermissionIssue)
     {
@@ -552,7 +541,6 @@ int main(int argc, char *argv[])
             emit imageWriter.permissionWarning(permissionMessage);
         }, Qt::QueuedConnection);
     }
-#endif
 
     int rc = app.exec();
 

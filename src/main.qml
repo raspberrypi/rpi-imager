@@ -314,85 +314,85 @@ ApplicationWindow {
         onRejected: {}
     }
 
-    // Permission warning dialog for Linux when neither root nor udisks2 available
+    // Permission warning dialog for when not running with elevated privileges
     BaseDialog {
         id: permissionWarningDialog
         parent: overlayRoot
         anchors.centerIn: parent
-
+        closePolicy: Popup.NoAutoClose  // Prevent closing with escape or clicking outside
+        
         property string warningMessage: ""
-
-        // Custom escape handling
-        function escapePressed() {
-            // Escape should close but continue the app
-            permissionWarningDialog.close()
+        
+        function showWarning(message) {
+            warningMessage = message
+            open()
         }
-
+        
+        // Custom escape handling - exit the application
+        function escapePressed() {
+            Qt.quit()
+        }
+        
         // Register focus groups when component is ready
         Component.onCompleted: {
-            registerFocusGroup("content", function(){ 
-                return [permissionWarningTitle, permissionWarningText] 
+            registerFocusGroup("heading", function(){ 
+                return [headingText] 
             }, 0)
-            registerFocusGroup("buttons", function(){ 
-                return [permissionContinueButton, permissionExitButton] 
+            registerFocusGroup("message", function(){ 
+                return [messageText] 
             }, 1)
+            registerFocusGroup("buttons", function(){ 
+                return [exitButton] 
+            }, 2)
         }
-
+        
         // Dialog content
         Text {
-            id: permissionWarningTitle
-            text: qsTr("Permission Warning")
+            id: headingText
+            text: qsTr("Insufficient Permissions")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
-            color: Style.formLabelErrorColor  // Use error color to emphasize importance
+            color: Style.formLabelErrorColor
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
+            Accessible.description: text
             Accessible.focusable: true
             focusPolicy: Qt.TabFocus
             activeFocusOnTab: true
         }
-
+        
         Text {
-            id: permissionWarningText
+            id: messageText
             text: permissionWarningDialog.warningMessage
-            wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
+            wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Layout.preferredWidth: 500
             Accessible.role: Accessible.StaticText
             Accessible.name: text
+            Accessible.description: qsTr("Error message explaining why elevated privileges are required")
             Accessible.focusable: true
+            Accessible.ignored: false
             focusPolicy: Qt.TabFocus
             activeFocusOnTab: true
         }
-
+        
         RowLayout {
             Layout.fillWidth: true
             spacing: Style.spacingMedium
             Item {
                 Layout.fillWidth: true
             }
-            ImButton {
-                id: permissionContinueButton
-                text: qsTr("Continue Anyway")
-                accessibleDescription: qsTr("Continue using the application despite permission warnings. You may encounter errors when writing to storage devices.")
-                activeFocusOnTab: true
-                onClicked: {
-                    permissionWarningDialog.close()
-                }
-            }
+            
             ImButtonRed {
-                id: permissionExitButton
+                id: exitButton
                 text: qsTr("Exit")
-                accessibleDescription: qsTr("Exit Raspberry Pi Imager to resolve permission issues before continuing")
+                accessibleDescription: qsTr("Exit Raspberry Pi Imager - you must restart with elevated privileges to write images")
                 activeFocusOnTab: true
-                onClicked: {
-                    Qt.quit()
-                }
+                onClicked: Qt.quit()
             }
         }
     }
@@ -492,10 +492,9 @@ ApplicationWindow {
             wizardContainer.jumpToStep(wizardContainer.stepOSSelection);
         }
     }
-
-    // Called from C++ when permission issues are detected on Linux
+    
     function onPermissionWarning(message) {
-        permissionWarningDialog.warningMessage = message;
-        permissionWarningDialog.open();
+        permissionWarningDialog.showWarning(message);
     }
+
 }

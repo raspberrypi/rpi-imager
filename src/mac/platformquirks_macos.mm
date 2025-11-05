@@ -12,7 +12,7 @@ namespace PlatformQuirks {
 
 void applyQuirks() {
     // Currently no platform-specific quirks needed for macOS
-    // This is a placeholder for future macOS-specific workarounds
+    // macOS has a sensible permissions model that operates as expected
     
     // Example of how to set environment variables without Qt:
     // setenv("VARIABLE_NAME", "value", 1);
@@ -56,6 +56,12 @@ void bringWindowToForeground(void* windowHandle) {
     // macOS handles window activation differently and has restrictions on
     // applications bringing themselves to the foreground
     (void)windowHandle;
+}
+
+bool hasElevatedPrivileges() {
+    // macOS has a sensible permissions model that operates as expected
+    // No special privilege check needed - return true
+    return true;
 }
 
 } // namespace PlatformQuirks
