@@ -41,7 +41,9 @@
 #ifdef Q_OS_LINUX
 #include <sys/ioctl.h>
 #include <linux/fs.h>
+#ifndef QT_NO_DBUS
 #include "linux/udisks2api.h"
+#endif
 #endif
 
 using namespace std;

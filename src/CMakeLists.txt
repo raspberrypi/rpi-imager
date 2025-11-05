@@ -265,12 +265,9 @@ endif()
 
 # Find Qt components - different requirements for CLI-only vs GUI builds
 if(BUILD_CLI_ONLY)
-    # CLI-only build: need Core and Network for downloading, optionally DBus
-    if(UNIX AND NOT APPLE)
-        find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools DBus)
-    else()
-        find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
-    endif()
+    # CLI-only build: need ONLY Core and Network for downloading
+    # No DBus dependency - use stub suspend inhibitor instead
+    find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
 else()
     # Regular GUI build: need Core, Quick, Svg, Network, Gui - DBus only needed on Linux
     if(UNIX AND NOT APPLE)
@@ -288,10 +285,17 @@ else()
     message(FATAL_ERROR "Missing suitable Qt library (must be at least version 6.9)" )
 endif()
 
-if(${QT}DBus_FOUND AND UNIX AND NOT APPLE)
+# Only enable udisks2 support for GUI builds (requires DBus)
+if(${QT}DBus_FOUND AND UNIX AND NOT APPLE AND NOT BUILD_CLI_ONLY)
     set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::DBus)
     message("udisks2 support enabled")
+else()
+    # Define QT_NO_DBUS for builds without DBus support
+    if(UNIX AND NOT APPLE)
+        add_definitions(-DQT_NO_DBUS)
+        message("DBus support disabled (CLI-only build or Qt6DBus not found)")
+    endif()
 endif()
 if(${QT}WinExtras_FOUND)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::WinExtras)

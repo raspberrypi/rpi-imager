@@ -12,7 +12,9 @@
 #include <QTemporaryFile>
 
 #ifdef Q_OS_LINUX
+#ifndef QT_NO_DBUS
 #include "linux/udisks2api.h"
+#endif
 #include <unistd.h>
 #endif
 
