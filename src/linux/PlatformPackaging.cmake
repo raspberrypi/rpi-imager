@@ -13,9 +13,10 @@ if (NOT CMAKE_CROSSCOMPILING)
 endif()
 
 # Generate metainfo.xml with current version
+# Output to debian/ directory for dpkg-buildpackage
 configure_file(
     "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/com.raspberrypi.rpi-imager.metainfo.xml"
+    "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml"
     @ONLY)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
@@ -28,7 +29,7 @@ else()
     # GUI build: install full desktop integration
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/rpi-imager.png" DESTINATION share/icons/hicolor/128x128/apps)
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/com.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
 
 

@@ -20,6 +20,7 @@ debian/files
 debian/*.substvars
 debian/debhelper**
 debian/tmp
+debian/com.raspberrypi.rpi-imager.metainfo.xml
 
 # macOS
 .DS_Store
