@@ -136,8 +136,15 @@ Item {
     }
 
     // Wizard step names for sidebar (grouped for cleaner display)
-    readonly property var stepNames: [
+    // When offline, skip Device selection
+    readonly property var stepNames: hasNetworkConnectivity ? [
         qsTr("Device"),
+        qsTr("OS"), 
+        qsTr("Storage"),
+        qsTr("Customisation"),
+        qsTr("Writing"),
+        qsTr("Done")
+    ] : [
         qsTr("OS"), 
         qsTr("Storage"),
         qsTr("Customisation"),
@@ -149,14 +156,22 @@ Item {
 
     // Helper function to map wizard step to sidebar index
     function getSidebarIndex(wizardStep) {
-        if (wizardStep <= stepStorageSelection) {
-            return wizardStep
+        // When offline, device selection is skipped, so adjust indices
+        var offset = hasNetworkConnectivity ? 0 : -1
+        
+        if (wizardStep === stepDeviceSelection) {
+            // Device is at index 0 when online, not shown when offline
+            return hasNetworkConnectivity ? 0 : -1
+        } else if (wizardStep === stepOSSelection) {
+            return hasNetworkConnectivity ? 1 : 0
+        } else if (wizardStep === stepStorageSelection) {
+            return hasNetworkConnectivity ? 2 : 1
         } else if (wizardStep >= firstCustomizationStep && wizardStep <= getLastCustomizationStep()) {
-            return 3 // Customization group
+            return hasNetworkConnectivity ? 3 : 2 // Customization group
         } else if (wizardStep === stepWriting) {
-            return 4 // Writing
+            return hasNetworkConnectivity ? 4 : 3 // Writing
         } else if (wizardStep === stepDone) {
-            return 5 // Done
+            return hasNetworkConnectivity ? 5 : 4 // Done
         }
         return 0
     }
@@ -275,14 +290,27 @@ Item {
 
     // Map sidebar index back to the first wizard step in that group
     function getWizardStepFromSidebarIndex(sidebarIndex) {
-        switch (sidebarIndex) {
-            case 0: return stepDeviceSelection
-            case 1: return stepOSSelection
-            case 2: return stepStorageSelection
-            case 3: return firstCustomizationStep
-            case 4: return stepWriting
-            case 5: return stepDone
-            default: return stepDeviceSelection
+        // When offline, device selection is not shown, so indices shift
+        if (hasNetworkConnectivity) {
+            switch (sidebarIndex) {
+                case 0: return stepDeviceSelection
+                case 1: return stepOSSelection
+                case 2: return stepStorageSelection
+                case 3: return firstCustomizationStep
+                case 4: return stepWriting
+                case 5: return stepDone
+                default: return stepDeviceSelection
+            }
+        } else {
+            // Offline: no device selection in sidebar
+            switch (sidebarIndex) {
+                case 0: return stepOSSelection
+                case 1: return stepStorageSelection
+                case 2: return firstCustomizationStep
+                case 3: return stepWriting
+                case 4: return stepDone
+                default: return stepOSSelection
+            }
         }
     }
     
@@ -758,6 +786,11 @@ Item {
                 if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
                     prevIndex--
                 }
+                // Skip device selection if offline (it would be empty/useless)
+                if (prevIndex === stepDeviceSelection && !hasNetworkConnectivity) {
+                    // Can't go back further, stay at current step
+                    return
+                }
             }
             root.currentStep = prevIndex
             var prevComponent = getStepComponent(root.currentStep)
@@ -771,6 +804,11 @@ Item {
     
     function jumpToStep(stepIndex) {
         if (stepIndex >= 0 && stepIndex < root.totalSteps) {
+            // Prevent jumping to device selection when offline
+            if (stepIndex === stepDeviceSelection && !hasNetworkConnectivity) {
+                console.log("Cannot jump to device selection when offline")
+                return
+            }
             root.currentStep = stepIndex
             var stepComponent = getStepComponent(stepIndex)
             if (stepComponent) {
@@ -833,6 +871,8 @@ Item {
         OSSelectionStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            // Hide back button when offline (device selection was skipped)
+            showBackButton: root.hasNetworkConnectivity
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
@@ -1162,7 +1202,8 @@ Item {
     
     function resetWizard() {
         // Reset all wizard state to initial values
-        currentStep = 0
+        // Start at OS selection if offline, device selection if online
+        currentStep = hasNetworkConnectivity ? 0 : 1
         permissibleStepsBitmap = 1  // Reset to only Device step permissible
         isWriting = false
         writeAnotherMode = false
@@ -1189,9 +1230,9 @@ Item {
         supportsSerialConsoleOnly = false
         supportsUsbGadget = false
         
-        // Navigate back to the first step
+        // Navigate back to the first step (device selection if online, OS selection if offline)
         wizardStack.clear()
-        wizardStack.push(deviceSelectionStep)
+        wizardStack.push(hasNetworkConnectivity ? deviceSelectionStep : osSelectionStep)
     }
     
     function resetToWriteStep() {
