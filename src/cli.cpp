@@ -72,13 +72,16 @@ int Cli::run()
     // Check for elevated privileges on platforms that require them (Linux/Windows)
     if (!PlatformQuirks::hasElevatedPrivileges())
     {
+        // Common error message
+        const char* commonMsg = "Writing to storage devices requires elevated privileges.";
+        
 #ifdef Q_OS_LINUX
         std::cerr << "ERROR: Not running as root." << std::endl;
-        std::cerr << "Writing to storage devices requires elevated privileges." << std::endl;
+        std::cerr << commonMsg << std::endl;
         std::cerr << "Please run with sudo: sudo rpi-imager --cli ..." << std::endl;
 #elif defined(Q_OS_WIN)
         std::cerr << "ERROR: Not running as Administrator." << std::endl;
-        std::cerr << "Writing to storage devices requires elevated privileges." << std::endl;
+        std::cerr << commonMsg << std::endl;
         std::cerr << "Please run as Administrator." << std::endl;
 #endif
         return 1;

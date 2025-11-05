@@ -141,21 +141,24 @@ int main(int argc, char *argv[])
     if (!PlatformQuirks::hasElevatedPrivileges())
     {
         hasPermissionIssue = true;
+        
+        // Common message parts to reduce translation effort
+        QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
+        QString footer = QObject::tr("Without this, you will encounter permission errors when writing images.");
+        
 #ifdef Q_OS_LINUX
-        permissionMessage = QObject::tr(
-            "Raspberry Pi Imager requires elevated privileges to write to storage devices.\n\n"
+        QString statusAndAction = QObject::tr(
             "You are not running as root.\n\n"
-            "Please run with elevated privileges: sudo rpi-imager\n\n"
-            "Without this, you will encounter permission errors when writing images."
+            "Please run with elevated privileges: sudo rpi-imager"
         );
 #elif defined(Q_OS_WIN)
-        permissionMessage = QObject::tr(
-            "Raspberry Pi Imager requires elevated privileges to write to storage devices.\n\n"
+        QString statusAndAction = QObject::tr(
             "You are not running as Administrator.\n\n"
-            "Please run as Administrator.\n\n"
-            "Without this, you will encounter permission errors when writing images."
+            "Please run as Administrator."
         );
 #endif
+        
+        permissionMessage = QString("%1\n\n%2\n\n%3").arg(header, statusAndAction, footer);
         qWarning() << "Not running with elevated privileges - device access may fail";
     }
 #endif

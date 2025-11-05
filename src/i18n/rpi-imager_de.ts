@@ -502,14 +502,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cannot open storage device &apos;%1&apos; after authorization.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cannot open storage device &apos;%1&apos; with udisks2 authorization.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Error getting device size</source>
         <translation type="unfinished"></translation>
     </message>
@@ -545,13 +537,13 @@
         <source>Customising OS...</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Cannot open storage device &apos;%1&apos;. Please run with elevated privileges (sudo).</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
-    <message>
-        <source>Error formatting (through udisks2)</source>
-        <translation>Fehler beim Formatieren (mit udisks2)</translation>
-    </message>
     <message>
         <source>Error opening device for formatting</source>
         <translation type="unfinished"></translation>
@@ -577,10 +569,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Preparing disk for formatting...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -591,6 +579,10 @@
     <message>
         <source>Writing filesystem...</source>
         <translation>Schreibe Dateisystem...</translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -797,10 +789,6 @@
     <message>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Die Eingabedatei ist kein gültiges Disk-Image.&lt;br&gt;Die Dateigröße%1 Bytes ist kein Vielfaches von 512 Bytes.</translation>
-    </message>
-    <message>
-        <source>Downloading and writing image</source>
-        <translation>Image herunterladen und schreiben</translation>
     </message>
     <message>
         <source>Select image</source>
@@ -1156,6 +1144,29 @@
     </message>
     <message>
         <source>Authentication token:</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Raspberry Pi Imager requires elevated privileges to write to storage devices.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Without this, you will encounter permission errors when writing images.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as root.
+
+Please run with elevated privileges: sudo rpi-imager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as Administrator.
+
+Please run as Administrator.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1831,10 +1842,6 @@ to show system drives.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Verification cancelled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Write complete</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1853,10 +1860,6 @@ to show system drives.</source>
 </context>
 <context>
     <name>main</name>
-    <message>
-        <source>Raspberry Pi Imager v%1</source>
-        <translation>Raspberry Pi Imager v%1</translation>
-    </message>
     <message>
         <source>Are you sure you want to quit?</source>
         <translation>Sind Sie sicher, dass Sie beenden möchten?</translation>
@@ -1911,6 +1914,26 @@ to show system drives.</source>
     </message>
     <message>
         <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Imager %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Insufficient Permissions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error message explaining why elevated privileges are required</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
