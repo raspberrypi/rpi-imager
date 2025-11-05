@@ -62,7 +62,7 @@ void DriveFormatThread::run()
             emit success();
             return;
         } else {
-            emit error(tr("Error formatting (through udisks2)"));
+            emit error(tr("Error formatting device. If udisks2 is not installed, please run with elevated privileges (sudo) or install udisks2."));
         }
 #else // QT_NO_DBUS
         emit error(tr("Cannot format device: insufficient permissions and udisks2 not available"));

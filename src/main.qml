@@ -313,6 +313,89 @@ ApplicationWindow {
         onRejected: {}
     }
 
+    // Permission warning dialog for Linux when neither root nor udisks2 available
+    BaseDialog {
+        id: permissionWarningDialog
+        parent: overlayRoot
+        anchors.centerIn: parent
+
+        property string warningMessage: ""
+
+        // Custom escape handling
+        function escapePressed() {
+            // Escape should close but continue the app
+            permissionWarningDialog.close()
+        }
+
+        // Register focus groups when component is ready
+        Component.onCompleted: {
+            registerFocusGroup("content", function(){ 
+                return [permissionWarningTitle, permissionWarningText] 
+            }, 0)
+            registerFocusGroup("buttons", function(){ 
+                return [permissionContinueButton, permissionExitButton] 
+            }, 1)
+        }
+
+        // Dialog content
+        Text {
+            id: permissionWarningTitle
+            text: qsTr("Permission Warning")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelErrorColor  // Use error color to emphasize importance
+            Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
+        }
+
+        Text {
+            id: permissionWarningText
+            text: permissionWarningDialog.warningMessage
+            wrapMode: Text.WordWrap
+            font.pixelSize: Style.fontSizeDescription
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+            Layout.fillWidth: true
+            Layout.preferredWidth: 500
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.focusable: true
+            focusPolicy: Qt.TabFocus
+            activeFocusOnTab: true
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacingMedium
+            Item {
+                Layout.fillWidth: true
+            }
+            ImButton {
+                id: permissionContinueButton
+                text: qsTr("Continue Anyway")
+                accessibleDescription: qsTr("Continue using the application despite permission warnings. You may encounter errors when writing to storage devices.")
+                activeFocusOnTab: true
+                onClicked: {
+                    permissionWarningDialog.close()
+                }
+            }
+            ImButtonRed {
+                id: permissionExitButton
+                text: qsTr("Exit")
+                accessibleDescription: qsTr("Exit Raspberry Pi Imager to resolve permission issues before continuing")
+                activeFocusOnTab: true
+                onClicked: {
+                    Qt.quit()
+                }
+            }
+        }
+    }
+
     AppOptionsDialog {
         id: appOptionsDialog
         parent: overlayRoot
@@ -407,5 +490,11 @@ ApplicationWindow {
             console.log("OS list fetch failed - switching to offline mode, skipping device selection");
             wizardContainer.jumpToStep(wizardContainer.stepOSSelection);
         }
+    }
+
+    // Called from C++ when permission issues are detected on Linux
+    function onPermissionWarning(message) {
+        permissionWarningDialog.warningMessage = message;
+        permissionWarningDialog.open();
     }
 }

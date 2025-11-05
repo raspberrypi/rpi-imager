@@ -311,3 +311,11 @@ QByteArrayList UDisks2Api::mountPoints(const QDBusInterface &filesystem)
 
     return mps;
 }
+
+bool UDisks2Api::isAvailable()
+{
+    // Check if udisks2 service is available on the system bus
+    QDBusInterface manager("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2/Manager",
+                          "org.freedesktop.UDisks2.Manager", QDBusConnection::systemBus());
+    return manager.isValid();
+}

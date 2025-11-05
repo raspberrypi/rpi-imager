@@ -24,6 +24,9 @@ public:
     QByteArrayList mountPoints(const QString &partitionDevice);
     QByteArrayList mountPoints(const QDBusInterface &filesystem);
 
+    // Static utility method for checking udisks2 availability
+    static bool isAvailable();
+
 protected:
     QString _resolveDevice(const QString &device);
     void _unmountDrive(const QString &driveDbusPath);

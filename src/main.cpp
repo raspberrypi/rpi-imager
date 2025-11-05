@@ -34,6 +34,12 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreServices/CoreServices.h>
 #endif
+#ifdef Q_OS_LINUX
+#include "linux/linuxutils.h"
+#ifndef QT_NO_DBUS
+#include "linux/udisks2api.h"
+#endif
+#endif
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <winnls.h>
@@ -131,6 +137,38 @@ int main(int argc, char *argv[])
     
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;
+
+#ifdef Q_OS_LINUX
+    // Early check for Linux permissions - warn if neither root nor udisks2 is available
+    bool hasPermissionIssue = false;
+    QString permissionMessage;
+    
+    if (!LinuxUtils::isRunningAsRoot())
+    {
+#ifndef QT_NO_DBUS
+        if (!UDisks2Api::isAvailable())
+        {
+            hasPermissionIssue = true;
+            permissionMessage = QObject::tr(
+                "Raspberry Pi Imager requires elevated privileges to write to storage devices.\n\n"
+                "You are not running as root and udisks2 is not installed on your system.\n\n"
+                "To continue, you can either:\n"
+                "• Install udisks2: sudo apt install udisks2\n"
+                "• Run with elevated privileges: sudo rpi-imager\n\n"
+                "Without these, you will encounter permission errors when writing images."
+            );
+        }
+#else
+        hasPermissionIssue = true;
+        permissionMessage = QObject::tr(
+            "Raspberry Pi Imager requires elevated privileges to write to storage devices.\n\n"
+            "You are not running as root and this build does not support udisks2.\n\n"
+            "Please run with elevated privileges: sudo rpi-imager\n\n"
+            "Without this, you will encounter permission errors when writing images."
+        );
+#endif
+    }
+#endif
 
 #ifdef Q_OS_DARWIN
     // Ensure our app is the default handler for rpi-imager:// scheme so Safari recognizes it
@@ -448,6 +486,7 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(writeCancelledDueToDeviceRemoval()), qmlwindow, SLOT(onWriteCancelledDueToDeviceRemoval()));
     qmlwindow->connect(&imageWriter, SIGNAL(keychainPermissionRequested()), qmlwindow, SLOT(onKeychainPermissionRequested()));
     qmlwindow->connect(&imageWriter, SIGNAL(osListFetchFailed()), qmlwindow, SLOT(onOsListFetchFailed()));
+    qmlwindow->connect(&imageWriter, SIGNAL(permissionWarning(QVariant)), qmlwindow, SLOT(onPermissionWarning(QVariant)));
 #ifdef Q_OS_DARWIN
     // Handle custom URL scheme on macOS via FileOpen events
     struct UrlOpenFilter : public QObject {
@@ -504,6 +543,16 @@ int main(int argc, char *argv[])
     // Only fetch OS list if we have network connectivity
     if (imageWriter.isOnline() && PlatformQuirks::hasNetworkConnectivity())
         imageWriter.beginOSListFetch();
+
+#ifdef Q_OS_LINUX
+    // Emit permission warning signal after UI is loaded so dialog can be shown
+    if (hasPermissionIssue)
+    {
+        QMetaObject::invokeMethod(&imageWriter, [&imageWriter, permissionMessage]() {
+            emit imageWriter.permissionWarning(permissionMessage);
+        }, Qt::QueuedConnection);
+    }
+#endif
 
     int rc = app.exec();
 

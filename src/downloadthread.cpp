@@ -331,7 +331,7 @@ bool DownloadThread::_openAndPrepareDevice()
         else
 #endif
         {
-            emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
+            emit error(tr("Cannot open storage device '%1'. If udisks2 is not installed, please run with elevated privileges (sudo) or install udisks2.").arg(QString(_filename)));
             return false;
         }
 #else

@@ -307,6 +307,7 @@ signals:
     void connectTokenConflictDetected(const QString &token);
     void cacheStatusChanged();
     void osListFetchFailed();
+    void permissionWarning(QVariant message);
 
 protected slots:
     void startProgressPolling();

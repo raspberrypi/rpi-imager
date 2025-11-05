@@ -12,6 +12,12 @@
 #include "drivelistmodel.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "imageadvancedoptions.h"
+#ifdef Q_OS_LINUX
+#include "linux/linuxutils.h"
+#ifndef QT_NO_DBUS
+#include "linux/udisks2api.h"
+#endif
+#endif
 
 /* Message handler to discard qDebug() output if using cli (unless --debug is set) */
 static void devnullMsgHandler(QtMsgType, const QMessageLogContext &, const QString &)
@@ -67,6 +73,29 @@ int Cli::run()
     parser.addPositionalArgument("src", "Image file/URL");
     parser.addPositionalArgument("dst", "Destination device");
     parser.process(*_app);
+
+#ifdef Q_OS_LINUX
+    // Early check for Linux permissions - fail fast if neither root nor udisks2 is available
+    if (!LinuxUtils::isRunningAsRoot())
+    {
+#ifndef QT_NO_DBUS
+        if (!UDisks2Api::isAvailable())
+        {
+            std::cerr << "ERROR: Not running as root and udisks2 is not available." << std::endl;
+            std::cerr << "Writing to storage devices requires elevated privileges." << std::endl;
+            std::cerr << "Please either:" << std::endl;
+            std::cerr << "  - Run with sudo: sudo rpi-imager --cli ..." << std::endl;
+            std::cerr << "  - Install udisks2: sudo apt install udisks2" << std::endl;
+            return 1;
+        }
+#else
+        std::cerr << "ERROR: Not running as root and this build does not support udisks2." << std::endl;
+        std::cerr << "Writing to storage devices requires elevated privileges." << std::endl;
+        std::cerr << "Please run with sudo: sudo rpi-imager --cli ..." << std::endl;
+        return 1;
+#endif
+    }
+#endif
 
 
     const QStringList args = parser.positionalArguments();
