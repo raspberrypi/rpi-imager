@@ -119,13 +119,14 @@ ApplicationWindow {
         Text {
             id: errorMessage
             text: errorDialog.message
+            textFormat: Text.StyledText
             wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
-            Accessible.name: text
+            Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
             Accessible.focusable: true
             focusPolicy: Qt.TabFocus
             activeFocusOnTab: true
