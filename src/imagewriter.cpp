@@ -318,6 +318,22 @@ void ImageWriter::setMainWindow(QObject *window)
 #endif
 }
 
+void ImageWriter::bringWindowToForeground()
+{
+#ifndef CLI_ONLY_BUILD
+    if (!_mainWindow) {
+        return;
+    }
+
+    // Get the native window handle and pass it to the platform-specific implementation
+    void* windowHandle = reinterpret_cast<void*>(_mainWindow->winId());
+    if (windowHandle) {
+        PlatformQuirks::bringWindowToForeground(windowHandle);
+        qDebug() << "Requested window to be brought to foreground for rpi-connect token";
+    }
+#endif
+}
+
 QString ImageWriter::getNativeOpenFileName(const QString &title,
                                            const QString &initialDir,
                                            const QString &filter)
@@ -2662,6 +2678,9 @@ void ImageWriter::overwriteConnectToken(const QString &token)
     // Ephemeral session-only Connect token (never persisted)
     _piConnectToken = token;
     emit connectTokenReceived(token);
+    
+    // Bring the window to the foreground on Windows when token is received
+    bringWindowToForeground();
 }
 
 QString ImageWriter::getRuntimeConnectToken() const

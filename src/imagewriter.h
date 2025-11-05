@@ -201,6 +201,9 @@ public:
     /* Set the main window for modal file dialogs */
     Q_INVOKABLE void setMainWindow(QObject *window);
 
+    /* Bring the application window to the foreground */
+    void bringWindowToForeground();
+
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 

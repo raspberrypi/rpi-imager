@@ -241,4 +241,33 @@ bool isNetworkReady() {
     return hasNetworkConnectivity();
 }
 
+void bringWindowToForeground(void* windowHandle) {
+    if (!windowHandle) {
+        return;
+    }
+
+    HWND hwnd = reinterpret_cast<HWND>(windowHandle);
+
+    // Restore the window if it's minimized
+    if (IsIconic(hwnd)) {
+        ShowWindow(hwnd, SW_RESTORE);
+    }
+
+    // Bring the window to the foreground
+    // This combination of calls is necessary to reliably bring the window to the front
+    // even when called from a different process or thread context
+    SetForegroundWindow(hwnd);
+    SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    
+    // Flash the window if SetForegroundWindow didn't succeed
+    // (Windows may prevent stealing focus in some cases)
+    FLASHWINFO fwi;
+    fwi.cbSize = sizeof(FLASHWINFO);
+    fwi.hwnd = hwnd;
+    fwi.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG;
+    fwi.uCount = 3;
+    fwi.dwTimeout = 0;
+    FlashWindowEx(&fwi);
+}
+
 } // namespace PlatformQuirks

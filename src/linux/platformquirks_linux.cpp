@@ -117,4 +117,10 @@ bool isNetworkReady() {
     return timeIsSynced;
 }
 
+void bringWindowToForeground(void* windowHandle) {
+    // No-op on Linux - window management is handled by the window manager
+    // and applications cannot force themselves to the foreground
+    Q_UNUSED(windowHandle);
+}
+
 } // namespace PlatformQuirks

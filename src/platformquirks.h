@@ -41,6 +41,15 @@ namespace PlatformQuirks {
      * @return true if network is ready for use (including time sync if needed)
      */
     bool isNetworkReady();
+
+    /**
+     * Bring the application window to the foreground.
+     * On Windows, this will restore a minimized window and attempt to bring it to the front.
+     * On other platforms, this is a no-op.
+     * 
+     * @param windowHandle Native window handle (HWND on Windows, cast from QWindow::winId())
+     */
+    void bringWindowToForeground(void* windowHandle);
 }
 
 #endif // PLATFORMQUIRKS_H

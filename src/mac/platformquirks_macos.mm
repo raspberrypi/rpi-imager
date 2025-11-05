@@ -51,4 +51,11 @@ bool isNetworkReady() {
     return hasNetworkConnectivity();
 }
 
+void bringWindowToForeground(void* windowHandle) {
+    // No-op on macOS - not implemented
+    // macOS handles window activation differently and has restrictions on
+    // applications bringing themselves to the foreground
+    (void)windowHandle;
+}
+
 } // namespace PlatformQuirks
