@@ -103,7 +103,7 @@ ImageWriter::ImageWriter(QObject *parent)
       _engine(nullptr),
       _networkchecktimer(),
       _osListRefreshTimer(),
-      _powersave(),
+      _suspendInhibitor(nullptr),
       _thread(nullptr),
       _verifyEnabled(true), _multipleFilesInZip(false), _online(false),
       _settings(),
@@ -381,6 +381,12 @@ ImageWriter::~ImageWriter()
         }
         delete _thread;
         _thread = nullptr;
+    }
+
+    // Cleanup suspend inhibitor if it's still active
+    if (_suspendInhibitor) {
+        delete _suspendInhibitor;
+        _suspendInhibitor = nullptr;
     }
 
     if (_trans)
@@ -1373,14 +1379,28 @@ OSListModel *ImageWriter::getOSList()
 
 void ImageWriter::startProgressPolling()
 {
-    _powersave.applyBlock(tr("Downloading and writing image"));
+    // Prevent system suspend and display sleep during imaging
+    try
+    {
+        if (_suspendInhibitor == nullptr)
+            _suspendInhibitor = CreateSuspendInhibitor();
+    }
+    catch (...)
+    {
+        // If we can't create the inhibitor, continue anyway
+    }
     _dlnow = 0;
     _verifynow = 0;
 }
 
 void ImageWriter::stopProgressPolling()
 {
-    _powersave.removeBlock();
+    // Release the inhibition on system suspend and display sleep
+    if (_suspendInhibitor != nullptr)
+    {
+        delete _suspendInhibitor;
+        _suspendInhibitor = nullptr;
+    }
 }
 
 void ImageWriter::setWriteState(WriteState state)

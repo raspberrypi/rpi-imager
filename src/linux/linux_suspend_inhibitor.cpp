@@ -33,7 +33,10 @@ GnomeSuspendInhibitor::GnomeSuspendInhibitor()
             if (sessionManagerInterface.isValid())
             {
                 uint32_t xid = 0;
-                uint32_t flags = 0x4; // Inhibit suspending the session or computer
+                // Inhibit both suspending and idle (which prevents display sleep)
+                // 0x4 = Inhibit suspending the session or computer
+                // 0x8 = Inhibit the session being marked as idle
+                uint32_t flags = 0x4 | 0x8;
 
                 QDBusReply<unsigned int> reply;
 
@@ -56,18 +59,15 @@ GnomeSuspendInhibitor::~GnomeSuspendInhibitor()
     }
 }
 
-ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileName, const char *arg)
+ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileName, std::vector<std::string> args)
     : _controlFd(-1), _childPid(-1)
 {
     // Assumes:
     // - fileName refers to a tool that takes a command-line to run as a child process
     //   and can inhibit power management activity such as sleeping as long as that
     //   process runs.
-    // - it can be configured with only one argument :-) if this ever needs to be
-    //   expanded to supply more than one parameter to the inhibitor program, it will
-    //   need to be reworked to use a full-on argument vector and execvp
     //
-    // Action: Run fileName, and have it wrap: cat /run/fifo
+    // Action: Run fileName with args, and have it wrap: cat /run/fifo
     //
     // This inner command opens and reads from the supplied temporary FIFO.
     // We connect to the FIFO by opening it on our end, and we can then
@@ -148,14 +148,19 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
 
         // Run the inhibitor tool, and have it wrap cat reading from the FIFO.
         // We avoid using shell to prevent any potential command injection issues.
-        // (execlp() does not return on success)
-        execlp(
-            fileName,
-            fileName,
-            arg,
-            "cat",
-            _fifoName,
-            NULL);
+        // Build argument vector: [fileName, ...args, "cat", _fifoName, NULL]
+        std::vector<const char*> argv;
+        argv.push_back(fileName);
+        for (const auto& arg : args)
+        {
+            argv.push_back(arg.c_str());
+        }
+        argv.push_back("cat");
+        argv.push_back(_fifoName);
+        argv.push_back(NULL);
+        
+        // (execvp() does not return on success)
+        execvp(fileName, const_cast<char* const*>(argv.data()));
         
         // If we get here, exec failed. Must use _exit() not exit() in forked child.
         _exit(127);
@@ -199,8 +204,8 @@ ProcessScopedSuspendInhibitor::~ProcessScopedSuspendInhibitor()
 }
 
 LinuxSuspendInhibitor::LinuxSuspendInhibitor()
-    : _kdeInhibitor("kde-inhibit", "--power"),
-      _systemdInhibitor("systemd-inhibit", "--who=Raspberry Pi Imager")
+    : _kdeInhibitor("kde-inhibit", {"--power", "--screen"}),
+      _systemdInhibitor("systemd-inhibit", {"--what=idle:sleep", "--who=Raspberry Pi Imager"})
 {
 }
 

@@ -22,7 +22,7 @@
 #endif
 #include <QNetworkReply>
 #include "config.h"
-#include "powersaveblocker.h"
+#include "suspend_inhibitor.h"
 #include "drivelistmodel.h"
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
@@ -363,7 +363,7 @@ protected:
     QQmlApplicationEngine *_engine;
     QTimer _networkchecktimer;
     QTimer _osListRefreshTimer;
-    PowerSaveBlocker _powersave;
+    SuspendInhibitor *_suspendInhibitor;
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _online;
     QSettings _settings;

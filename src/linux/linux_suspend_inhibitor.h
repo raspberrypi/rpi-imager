@@ -4,6 +4,8 @@
 #include "suspend_inhibitor.h"
 
 #include <QtDBus/QtDBus>
+#include <vector>
+#include <string>
 
 class GnomeSuspendInhibitor
 {
@@ -23,7 +25,7 @@ class ProcessScopedSuspendInhibitor
 
     void CleanUp();
 public:
-    ProcessScopedSuspendInhibitor(const char *fileName, const char *arg);
+    ProcessScopedSuspendInhibitor(const char *fileName, std::vector<std::string> args);
     ~ProcessScopedSuspendInhibitor();
 };
 
