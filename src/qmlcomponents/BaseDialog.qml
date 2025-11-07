@@ -15,6 +15,18 @@ import RpiImager
 Dialog {
     id: root
     
+    // Access imageWriter from ancestor context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+    
     // Standard dialog properties
     modal: true
     width: 520

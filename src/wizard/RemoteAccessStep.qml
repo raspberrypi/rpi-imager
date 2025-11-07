@@ -171,6 +171,16 @@ WizardStepBase {
         }
     }
     
+    // Validation: allow proceed when
+    // - SSH is not enabled, or
+    // - SSH is enabled with password auth, or  
+    // - SSH is enabled with public key auth AND a key is provided
+    nextButtonEnabled: (
+        !sshEnablePill.checked
+        || radioPassword.checked
+        || (radioPublicKey.checked && fieldPublicKey.text && fieldPublicKey.text.trim().length > 0)
+    )
+    
     // Save settings when moving to next step
     onNextClicked: {
         // Update conserved customization settings (runtime state)

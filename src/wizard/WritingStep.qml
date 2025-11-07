@@ -97,7 +97,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: !root.isWriting && !root.cancelPending && !root.isFinalising
+            visible: !root.isWriting && !root.cancelPending && !root.isFinalising && !root.isComplete
 
             Text {
                 id: summaryHeading
@@ -109,9 +109,9 @@ WizardStepBase {
                 Layout.fillWidth: true
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-                Accessible.focusable: true
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
 
             GridLayout {
@@ -129,9 +129,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
-                    Accessible.focusable: true
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                    focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
 
                 Text {
@@ -152,9 +152,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
-                    Accessible.focusable: true
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                    focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
 
                 Text {
@@ -175,9 +175,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
-                    Accessible.focusable: true
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                    focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
 
                 Text {
@@ -199,7 +199,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: !root.isWriting && !root.cancelPending && !root.isFinalising && root.anyCustomizationsApplied
+            visible: !root.isWriting && !root.cancelPending && !root.isFinalising && !root.isComplete && root.anyCustomizationsApplied
 
             Text {
                 id: customizationsHeading
@@ -211,9 +211,9 @@ WizardStepBase {
                 Layout.fillWidth: true
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-                Accessible.focusable: true
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
 
             ScrollView {
@@ -303,9 +303,9 @@ WizardStepBase {
                 horizontalAlignment: Text.AlignHCenter
                 Accessible.role: Accessible.StatusBar
                 Accessible.name: text
-                Accessible.focusable: true
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
 
             ProgressBar {
@@ -410,9 +410,9 @@ WizardStepBase {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: confirmDialog.imageWriter ? confirmDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (confirmDialog.imageWriter && confirmDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: confirmDialog.imageWriter ? confirmDialog.imageWriter.isScreenReaderActive() : false
         }
 
         Text {
@@ -426,9 +426,9 @@ WizardStepBase {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: confirmDialog.imageWriter ? confirmDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (confirmDialog.imageWriter && confirmDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: confirmDialog.imageWriter ? confirmDialog.imageWriter.isScreenReaderActive() : false
         }
 
         RowLayout {
@@ -556,11 +556,13 @@ WizardStepBase {
         registerFocusGroup("summary", function() {
             var items = []
             if (summaryLayout.visible) {
-                // Add the summary heading and all summary items
-                items.push(summaryHeading)
-                items.push(deviceLabel)
-                items.push(osLabel)
-                items.push(storageLabel)
+                // Only include text labels when screen reader is active
+                if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                    items.push(summaryHeading)
+                    items.push(deviceLabel)
+                    items.push(osLabel)
+                    items.push(storageLabel)
+                }
             }
             return items
         }, 0)
@@ -569,20 +571,27 @@ WizardStepBase {
         registerFocusGroup("customizations", function() {
             var items = []
             if (customLayout.visible) {
-                // Add the customizations heading and scroll view
-                items.push(customizationsHeading)
+                // Only include heading when screen reader is active; always include scroll view
+                if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                    items.push(customizationsHeading)
+                }
                 items.push(customizationsScrollView)
             }
             return items
         }, 1)
         
-        // Register progress section (when writing)
+        // Register progress section (when writing/complete)
         registerFocusGroup("progress", function() {
             var items = []
             if (progressLayout.visible) {
-                // Add progress text and progress bar
-                items.push(progressText)
-                items.push(progressBar)
+                // Only include progress text when screen reader is active
+                if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                    items.push(progressText)
+                }
+                // Always include progress bar when visible (during writing)
+                if (progressBar.visible) {
+                    items.push(progressBar)
+                }
             }
             return items
         }, 0)

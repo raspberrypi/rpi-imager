@@ -55,9 +55,9 @@ BaseDialog {
         Accessible.role: Accessible.StaticText
         Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         Accessible.ignored: false
-        Accessible.focusable: true
-        focusPolicy: Qt.TabFocus
-        activeFocusOnTab: true
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     RowLayout {

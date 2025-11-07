@@ -67,6 +67,7 @@
 #include <stdlib.h>
 #include <QLocale>
 #include <QMetaType>
+#include <QAccessible>
 #include "imageadvancedoptions.h"
 
 #ifdef Q_OS_WIN
@@ -2393,6 +2394,11 @@ QString ImageWriter::getCurrentUser()
 bool ImageWriter::hasMouse()
 {
     return !isEmbeddedMode() || QFile::exists("/dev/input/mouse0");
+}
+
+bool ImageWriter::isScreenReaderActive() const
+{
+    return QAccessible::isActive();
 }
 
 bool ImageWriter::customRepo()

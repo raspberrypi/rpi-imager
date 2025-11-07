@@ -14,6 +14,18 @@ import RpiImager
 FocusScope {
     id: root
     
+    // Access imageWriter from parent context if not explicitly provided
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+    
     property string title: ""
     property string subtitle: ""
     property bool showBackButton: true
@@ -80,9 +92,9 @@ FocusScope {
                 Accessible.role: Accessible.Heading
                 Accessible.name: root.title
                 Accessible.ignored: false
-                Accessible.focusable: true
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
             
             Text {
@@ -96,9 +108,9 @@ FocusScope {
                 Accessible.role: Accessible.StaticText
                 Accessible.name: root.subtitle
                 Accessible.ignored: false
-                Accessible.focusable: true
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
         }
         
@@ -166,15 +178,26 @@ FocusScope {
         // Automatically register header elements (title, subtitle) as first focus group
         registerFocusGroup("_wizard_header", function(){ 
             var items = []
-            if (titleText.visible) items.push(titleText)
-            if (subtitleText.visible) items.push(subtitleText)
+            // Only include title/subtitle in focus order when screen reader is active
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                if (titleText.visible) items.push(titleText)
+                if (subtitleText.visible) items.push(subtitleText)
+            }
             return items
-        }, -100) // Negative order ensures header is always first
+        }, -100) // Negative order ensures header is always first when included
         
         rebuildFocusOrder()
         
-        // Set initial focus: prefer title if visible, otherwise use specified initialFocusItem
-        var firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
+        // Set initial focus based on screen reader state
+        var firstFocusTarget = null
+        if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+            // Screen reader active: start at title for full context
+            firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
+        } else {
+            // No screen reader: skip to first interactive element
+            firstFocusTarget = initialFocusItem
+        }
+        
         if (firstFocusTarget && typeof firstFocusTarget.forceActiveFocus === 'function') {
             firstFocusTarget.forceActiveFocus()
         }
@@ -182,8 +205,16 @@ FocusScope {
 
     onVisibleChanged: {
         if (visible) {
-            // Set initial focus: prefer title if visible, otherwise use specified initialFocusItem
-            var firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
+            // Set initial focus based on screen reader state
+            var firstFocusTarget = null
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                // Screen reader active: start at title for full context
+                firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
+            } else {
+                // No screen reader: skip to first interactive element
+                firstFocusTarget = initialFocusItem
+            }
+            
             if (firstFocusTarget && typeof firstFocusTarget.forceActiveFocus === 'function') {
                 firstFocusTarget.forceActiveFocus()
             }

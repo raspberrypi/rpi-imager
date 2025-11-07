@@ -111,9 +111,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: errorDialog.imageWriter ? errorDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (errorDialog.imageWriter && errorDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: errorDialog.imageWriter ? errorDialog.imageWriter.isScreenReaderActive() : false
         }
 
         Text {
@@ -127,9 +127,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: errorDialog.imageWriter ? errorDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (errorDialog.imageWriter && errorDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: errorDialog.imageWriter ? errorDialog.imageWriter.isScreenReaderActive() : false
         }
 
         RowLayout {
@@ -180,9 +180,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.isScreenReaderActive() : false
         }
 
         Text {
@@ -195,9 +195,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.isScreenReaderActive() : false
         }
 
         RowLayout {
@@ -248,9 +248,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: quitDialog.imageWriter ? quitDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (quitDialog.imageWriter && quitDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: quitDialog.imageWriter ? quitDialog.imageWriter.isScreenReaderActive() : false
         }
 
         Text {
@@ -263,9 +263,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: quitDialog.imageWriter ? quitDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (quitDialog.imageWriter && quitDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: quitDialog.imageWriter ? quitDialog.imageWriter.isScreenReaderActive() : false
         }
 
         RowLayout {
@@ -358,9 +358,9 @@ ApplicationWindow {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.description: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.isScreenReaderActive() : false
         }
         
         Text {
@@ -374,10 +374,10 @@ ApplicationWindow {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.description: qsTr("Error message explaining why elevated privileges are required")
-            Accessible.focusable: true
+            Accessible.focusable: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.isScreenReaderActive() : false
             Accessible.ignored: false
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            focusPolicy: (permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.isScreenReaderActive() : false
         }
         
         RowLayout {

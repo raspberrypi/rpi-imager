@@ -51,6 +51,9 @@ BaseDialog {
         horizontalAlignment: Text.AlignHCenter
         Accessible.role: Accessible.Heading
         Accessible.name: text
+        Accessible.focusable: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
     }
 
     // Options section
@@ -301,6 +304,9 @@ BaseDialog {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
+            Accessible.focusable: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
         }
 
         Text {
@@ -313,6 +319,9 @@ BaseDialog {
             text: qsTr("If you disable warnings, Raspberry Pi Imager will <b>not show confirmation prompts before writing images</b>. You will still be required to <b>type the exact name</b> when selecting a system drive.")
             Accessible.role: Accessible.StaticText
             Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
+            Accessible.focusable: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
         }
 
         RowLayout {

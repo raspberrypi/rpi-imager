@@ -204,7 +204,7 @@ WizardStepBase {
         target: btnOpenConnect
         function onClicked() {
             if (!root.connectTokenReceived && !countdownTimer.running) {
-                root.countdownSeconds = 90
+                root.countdownSeconds = 25
                 countdownTimer.start()
             }
         }

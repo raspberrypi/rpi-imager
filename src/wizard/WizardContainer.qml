@@ -28,7 +28,7 @@ Item {
     
     // Start at device selection if online, otherwise skip to OS selection
     property int currentStep: hasNetworkConnectivity ? 0 : 1
-    readonly property int totalSteps: 12
+    readonly property int totalSteps: 13
     
     // Track which steps have been made permissible/unlocked for navigation
     // Each bit represents a step: bit 0 = Device, bit 1 = OS, etc.
@@ -1119,9 +1119,9 @@ Item {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
         }
 
         // Body / security note
@@ -1139,9 +1139,9 @@ Item {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
         }
 
         // Buttons row

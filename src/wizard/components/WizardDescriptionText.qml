@@ -10,6 +10,18 @@ import RpiImager
 Text {
     id: root
     
+    // Access imageWriter from ancestor context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+    
     font.pixelSize: Style.fontSizeDescription
     font.family: Style.fontFamily
     color: Style.textDescriptionColor
@@ -18,11 +30,11 @@ Text {
     Layout.fillWidth: true
     wrapMode: Text.WordWrap
     
-    // Accessibility
+    // Accessibility - description text becomes keyboard-focusable when screen reader is active
     Accessible.role: Accessible.StaticText
     Accessible.name: text
     Accessible.ignored: false
-    Accessible.focusable: true
-    focusPolicy: Qt.TabFocus
-    activeFocusOnTab: true
+    Accessible.focusable: imageWriter ? imageWriter.isScreenReaderActive() : false
+    focusPolicy: (imageWriter && imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+    activeFocusOnTab: imageWriter ? imageWriter.isScreenReaderActive() : false
 } 
