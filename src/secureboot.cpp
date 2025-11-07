@@ -183,12 +183,12 @@ QByteArray SecureBoot::rsaSign(const QByteArray &data, const QString &rsaKeyPath
         return QByteArray();
     }
 
-    // Sign the data using SecKeyCreateSignature (modern API)
-    // Use kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256 which hashes the data for us
-    // (The "Message" variant expects raw data and hashes it, vs "Digest" which expects pre-hashed data)
+    // Sign the digest using SecKeyCreateSignature (modern API)
+    // Use kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA256 since we're passing a pre-computed SHA-256 digest
+    // (The "Digest" variant expects pre-hashed 32-byte data)
     CFErrorRef error = nullptr;
     CFDataRef signature = SecKeyCreateSignature(privateKey,
-                                                kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,
+                                                kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA256,
                                                 dataToSign,
                                                 &error);
     
@@ -214,17 +214,34 @@ QByteArray SecureBoot::rsaSign(const QByteArray &data, const QString &rsaKeyPath
     
     return result.toHex();
 #else
-    // On Linux/Windows, use openssl command-line tool as fallback
+    // On Linux/Windows, use openssl rsautl to sign the pre-computed digest
+    // We need to wrap the 32-byte SHA-256 digest in PKCS#1 DigestInfo DER structure
+    QByteArray derWrapped;
+    // DigestInfo for SHA-256: SEQUENCE { AlgorithmIdentifier, OCTET STRING }
+    // 30 31 = SEQUENCE, length 49 bytes
+    // 30 0d = SEQUENCE, length 13 bytes (AlgorithmIdentifier)
+    // 06 09 = OID, length 9 bytes
+    // 60 86 48 01 65 03 04 02 01 = SHA-256 OID (2.16.840.1.101.3.4.2.1)
+    // 05 00 = NULL
+    // 04 20 = OCTET STRING, length 32 bytes
+    derWrapped.append("\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20", 19);
+    derWrapped.append(data); // Append the 32-byte SHA-256 digest
+    
+    if (derWrapped.size() != 51) {
+        qDebug() << "SecureBoot::rsaSign: invalid DER-wrapped digest size:" << derWrapped.size();
+        return QByteArray();
+    }
+    
     QProcess opensslProc;
     opensslProc.start("openssl", QStringList() 
-        << "dgst" << "-sha256" << "-sign" << rsaKeyPath << "-hex");
+        << "rsautl" << "-sign" << "-inkey" << rsaKeyPath << "-pkcs");
     
     if (!opensslProc.waitForStarted()) {
         qDebug() << "SecureBoot::rsaSign: failed to start openssl";
         return QByteArray();
     }
 
-    opensslProc.write(data);
+    opensslProc.write(derWrapped);
     opensslProc.closeWriteChannel();
 
     if (!opensslProc.waitForFinished(30000)) {
@@ -237,9 +254,9 @@ QByteArray SecureBoot::rsaSign(const QByteArray &data, const QString &rsaKeyPath
         return QByteArray();
     }
 
-    QByteArray output = opensslProc.readAllStandardOutput();
-    // Parse hex output from openssl
-    return output.trimmed();
+    QByteArray signature = opensslProc.readAllStandardOutput();
+    // Return hex-encoded signature
+    return signature.toHex();
 #endif
 }
 
@@ -247,21 +264,29 @@ bool SecureBoot::generateBootSig(const QString &bootImgPath, const QString &rsaK
 {
     qDebug() << "SecureBoot: generating boot.sig for" << bootImgPath;
 
-    // Calculate SHA-256 hash of boot.img
-    QByteArray hash = sha256File(bootImgPath);
-    if (hash.isEmpty()) {
+    // Calculate SHA-256 hash of boot.img (returns hex-encoded string)
+    QByteArray hashHex = sha256File(bootImgPath);
+    if (hashHex.isEmpty()) {
         qDebug() << "SecureBoot::generateBootSig: failed to hash boot.img";
         return false;
     }
 
-    qDebug() << "SecureBoot: boot.img SHA-256:" << hash;
+    qDebug() << "SecureBoot: boot.img SHA-256:" << hashHex;
+
+    // Convert hex hash to raw bytes for signing
+    QByteArray hashBytes = QByteArray::fromHex(hashHex);
+    if (hashBytes.size() != 32) {
+        qDebug() << "SecureBoot::generateBootSig: invalid hash size:" << hashBytes.size();
+        return false;
+    }
 
     // Get current timestamp
     qint64 timestamp = getCurrentTimestamp();
     qDebug() << "SecureBoot: timestamp:" << timestamp;
 
-    // Sign the hash with RSA key
-    QByteArray signature = rsaSign(hash, rsaKeyPath);
+    // Sign the raw hash bytes with RSA key
+    // The signature is computed over the raw 32-byte SHA-256 hash
+    QByteArray signature = rsaSign(hashBytes, rsaKeyPath);
     if (signature.isEmpty()) {
         qDebug() << "SecureBoot::generateBootSig: failed to sign boot.img";
         return false;
@@ -280,7 +305,7 @@ bool SecureBoot::generateBootSig(const QString &bootImgPath, const QString &rsaK
     // SHA-256 hash (hex)
     // ts: timestamp
     // rsa2048: signature (hex)
-    sigFile.write(hash);
+    sigFile.write(hashHex);
     sigFile.write("\n");
     sigFile.write("ts: ");
     sigFile.write(QByteArray::number(timestamp));
