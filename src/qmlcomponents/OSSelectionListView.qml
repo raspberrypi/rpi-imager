@@ -47,8 +47,12 @@ SelectionListView {
         event.accepted = true
     }
     
-    // Override selection to use OS-specific handler if provided
-    onItemSelected: function(index, item) {
+    // Helper function to handle OS selection (shared by single and double click)
+    function handleOSItemSelection(index, item, fromMouse, fromDoubleClick) {
+        if (fromDoubleClick === undefined) {
+            fromDoubleClick = false
+        }
+        
         if (osSelectionHandler && typeof osSelectionHandler === "function") {
             // Get the delegate item and access its model property (same as mouse click)
             var delegateItem = itemAtIndex(index)
@@ -75,7 +79,7 @@ SelectionListView {
                 // Only preserve scroll position for regular OS selection (not sublist navigation or back button or reselection)
                 var shouldPreserveScroll = !isSublist && !isBackButton && !isReselection
                 
-                console.log("OSSelectionListView: index:", index, "currentIndex:", currentIndex, "isReselection:", isReselection, "shouldPreserveScroll:", shouldPreserveScroll, "fromMouse:", currentSelectionIsFromMouse)
+                console.log("OSSelectionListView: index:", index, "currentIndex:", currentIndex, "isReselection:", isReselection, "shouldPreserveScroll:", shouldPreserveScroll, "fromMouse:", fromMouse, "fromDoubleClick:", fromDoubleClick)
                 
                 // Temporarily disable highlight following AND range mode to prevent ANY scroll on selection
                 var wasFollowing = highlightFollowsCurrentItem
@@ -99,11 +103,10 @@ SelectionListView {
                     highlightRangeMode = wasRangeMode
                 }
                 
-                // Call the handler with modelData and fromMouse flag
-                osSelectionHandler(modelData, !currentSelectionIsFromMouse, currentSelectionIsFromMouse)
-                
-                // Reset the flag after use
-                currentSelectionIsFromMouse = false
+                // Call the handler with modelData and fromKeyboard/fromMouse flags
+                // For double-click, treat it like keyboard (fromKeyboard=true) to enable auto-advance
+                var fromKeyboard = fromDoubleClick ? true : !fromMouse
+                osSelectionHandler(modelData, fromKeyboard, fromMouse)
                 
                 // Restore scroll position after all changes
                 // Only for regular OS items, not sublists or back button or reselection
@@ -117,5 +120,18 @@ SelectionListView {
                 }
             }
         }
+    }
+    
+    // Override selection to use OS-specific handler if provided
+    onItemSelected: function(index, item) {
+        handleOSItemSelection(index, item, currentSelectionIsFromMouse, false)
+        // Reset the flag after use
+        currentSelectionIsFromMouse = false
+    }
+    
+    // Handle double-click to act like Return key press
+    onItemDoubleClicked: function(index, item) {
+        // Pass fromMouse=true (to preserve scroll) and fromDoubleClick=true (to enable auto-advance)
+        handleOSItemSelection(index, item, true, true)
     }
 }

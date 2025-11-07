@@ -23,6 +23,7 @@ ListView {
     
     // Signals for selection actions
     signal itemSelected(int index, var item)
+    signal itemDoubleClicked(int index, var item)
     signal spacePressed(int index, var item)
     signal enterPressed(int index, var item) 
     signal returnPressed(int index, var item)

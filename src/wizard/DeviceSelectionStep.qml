@@ -143,6 +143,24 @@ WizardStepBase {
                     }
                 }
             }
+            
+            onItemDoubleClicked: function(index, item) {
+                // First select the item
+                if (index >= 0 && index < model.rowCount()) {
+                    currentIndex = index
+                    root.hwModel.currentIndex = index
+                    root.wizardContainer.selectedDeviceName = root.hwModel.currentName
+                    root.hasDeviceSelected = true
+                    root.nextButtonEnabled = true
+                    
+                    // Then advance to next step (same as pressing Return)
+                    Qt.callLater(function() {
+                        if (root.nextButtonEnabled) {
+                            root.next()
+                        }
+                    })
+                }
+            }
         }
     }
     ]
@@ -189,6 +207,11 @@ WizardStepBase {
                         // Trigger the itemSelected signal by setting ListView's currentIndex
                         // This will handle all the selection logic in onItemSelected
                         hwlist.itemSelected(hwitem.index, hwitem)
+                    }
+                    
+                    onDoubleClicked: {
+                        // Double-click acts like pressing Return - select and advance
+                        hwlist.itemDoubleClicked(hwitem.index, hwitem)
                     }
                 }
                 

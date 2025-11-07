@@ -365,6 +365,13 @@ WizardStepBase {
                             parentListView.itemSelected(index, delegateItem)
                         }
                     }
+                    
+                    onDoubleClicked: {
+                        // Double-click acts like pressing Return - select and advance
+                        if (parentListView) {
+                            parentListView.itemDoubleClicked(index, delegateItem)
+                        }
+                    }
                 }
                 
                 RowLayout {

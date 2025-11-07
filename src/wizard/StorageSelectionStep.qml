@@ -120,6 +120,20 @@ WizardStepBase {
                     item.selectDrive()
                 }
             }
+            
+            onItemDoubleClicked: function(index, item) {
+                // First select the item
+                if (index >= 0 && index < count && item && typeof item.selectDrive === "function") {
+                    item.selectDrive()
+                    
+                    // Then advance to next step if possible (same as pressing Return)
+                    Qt.callLater(function() {
+                        if (root.nextButtonEnabled) {
+                            root.nextClicked()
+                        }
+                    })
+                }
+            }
 
             // Auto-select a safe default when drives appear
             onCountChanged: {
@@ -279,6 +293,13 @@ WizardStepBase {
                         if (!dstitem.unselectable) {
                             dstlist.currentIndex = dstitem.index
                             root.selectDstItem(dstitem)
+                        }
+                    }
+                    
+                    onDoubleClicked: {
+                        if (!dstitem.unselectable) {
+                            // Double-click acts like pressing Return - select and advance
+                            dstlist.itemDoubleClicked(dstitem.index, dstitem)
                         }
                     }
                 }
