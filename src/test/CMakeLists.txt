@@ -53,3 +53,86 @@ add_custom_target(test_customization_generator
     COMMENT "Running customization generator tests"
 )
 
+# Determine platform-specific file operations implementation for FAT partition test
+if(WIN32)
+    set(PLATFORM_FILE_OPS
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/file_operations_windows.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/file_operations_windows.cpp
+    )
+elseif(APPLE)
+    set(PLATFORM_FILE_OPS
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/file_operations_macos.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/file_operations_macos.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/macfile.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/macfile.cpp
+    )
+else()
+    set(PLATFORM_FILE_OPS
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/file_operations_linux.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/file_operations_linux.cpp
+    )
+endif()
+
+# Add the FAT partition test executable (manual test against real filesystem)
+add_executable(fat_partition_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperblockcacheentry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../devicewrapperfatpartition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fat_partition_test.cpp
+)
+
+# Enable Qt MOC for Q_OBJECT classes
+set_target_properties(fat_partition_test PROPERTIES
+    AUTOMOC ON
+)
+
+# Link Catch2 and Qt libraries
+target_link_libraries(fat_partition_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+# Link platform-specific libraries
+if(APPLE)
+    target_link_libraries(fat_partition_test PRIVATE
+        "-framework Security"
+        "-framework DiskArbitration"
+        "-framework CoreFoundation"
+    )
+endif()
+
+# Include parent directory for headers
+target_include_directories(fat_partition_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(fat_partition_test PRIVATE cxx_std_20)
+target_compile_options(fat_partition_test PRIVATE 
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+# Register with CTest for automatic test discovery
+# Note: These tests are marked with [!mayfail] and [.destructive] tags
+# Run with: ctest -C Debug --output-on-failure
+# Or with environment variable: FAT_TEST_MOUNT_PATH="/Volumes/bootfs 1" ctest
+catch_discover_tests(fat_partition_test)
+
+# Custom target for manual running with mount path argument
+# Usage: FAT_TEST_MOUNT_PATH="/Volumes/bootfs 1" cmake --build . --target test_fat_partition
+add_custom_target(test_fat_partition
+    COMMAND echo "Set FAT_TEST_MOUNT_PATH environment variable and run: ./test/fat_partition_test"
+    COMMAND echo "Example: FAT_TEST_MOUNT_PATH=\"/Volumes/bootfs 1\" ./test/fat_partition_test"
+    DEPENDS fat_partition_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "FAT partition test built - set FAT_TEST_MOUNT_PATH to run"
+)
+

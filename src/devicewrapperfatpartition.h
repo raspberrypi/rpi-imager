@@ -23,6 +23,9 @@ public:
     QByteArray readFile(const QString &filename);
     void writeFile(const QString &filename, const QByteArray &contents);
     bool fileExists(const QString &filename);
+    bool deleteFile(const QString &filename);
+    QStringList listAllFiles(); // List all files recursively
+    QStringList listAllFilesRecursive(); // List all files including subdirectories
 
 protected:
     enum fatType _type;
@@ -47,6 +50,7 @@ protected:
     void writeDirEntryAtCurrentPos(struct dir_entry *dirEntry);
     void openDir();
     bool readDir(struct dir_entry *result);
+    void listFilesInDirectory(const QString &dirPath, uint32_t dirCluster, QStringList &fileList); // Helper for recursive listing
     void updateFSinfo(int deltaClusters, uint32_t nextFreeClusterHint);
     uint16_t QTimeToFATtime(const QTime &time);
     uint16_t QDateToFATdate(const QDate &date);

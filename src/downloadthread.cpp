@@ -37,6 +37,8 @@
 #endif
 
 #include "imageadvancedoptions.h"
+#include "secureboot.h"
+#include <QTemporaryDir>
 
 #ifdef Q_OS_LINUX
 #include <sys/ioctl.h>
@@ -1184,7 +1186,20 @@ bool DownloadThread::_customizeImage()
 
             fat->writeFile("cmdline.txt", cmdline);
         }
+        
+        // Sync before secure boot processing
         dw.sync();
+        
+        // Generate secure boot files if enabled
+        if (_advancedOptions.testFlag(ImageOptions::EnableSecureBoot))
+        {
+            emit preparationStatusUpdate(tr("Creating signed boot image..."));
+            if (!_createSecureBootFiles(fat))
+            {
+                emit error(tr("Failed to create secure boot files"));
+                return false;
+            }
+        }
     }
     catch (std::runtime_error &err)
     {
@@ -1193,6 +1208,196 @@ bool DownloadThread::_customizeImage()
     }
 
     emit finalizing();
+
+    return true;
+}
+
+bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
+{
+    qDebug() << "DownloadThread: creating secure boot files";
+
+    // Get RSA key path from settings
+    QSettings settings;
+    QString rsaKeyPath = settings.value("secureboot_rsa_key").toString();
+    
+    if (rsaKeyPath.isEmpty()) {
+        qDebug() << "DownloadThread: no RSA key configured for secure boot";
+        emit error(tr("No RSA key configured for secure boot. Please select a key in App Options."));
+        return false;
+    }
+
+    // Verify key file exists
+    if (!QFile::exists(rsaKeyPath)) {
+        qDebug() << "DownloadThread: RSA key file not found:" << rsaKeyPath;
+        emit error(tr("RSA key file not found: %1").arg(rsaKeyPath));
+        return false;
+    }
+
+    // Extract all files from the FAT partition
+    emit preparationStatusUpdate(tr("Extracting boot partition files..."));
+    QMap<QString, QByteArray> allFiles = SecureBoot::extractFatPartitionFiles(fat);
+    
+    if (allFiles.isEmpty()) {
+        qDebug() << "DownloadThread: no files extracted from boot partition";
+        emit error(tr("Failed to extract boot partition files"));
+        return false;
+    }
+
+    // Separate customization files from boot files
+    // Customization files must remain alongside boot.img and boot.sig
+    QStringList customizationFiles = {
+        "firstrun.sh",      // systemd init customization
+        "user-data",        // cloud-init customization
+        "meta-data",        // cloud-init metadata
+        "network-config"    // cloud-init network customization
+    };
+    
+    QMap<QString, QByteArray> bootFiles;
+    QMap<QString, QByteArray> customFiles;
+    
+    for (auto it = allFiles.constBegin(); it != allFiles.constEnd(); ++it) {
+        if (customizationFiles.contains(it.key())) {
+            customFiles[it.key()] = it.value();
+            qDebug() << "DownloadThread: preserving customization file:" << it.key();
+        } else {
+            bootFiles[it.key()] = it.value();
+        }
+    }
+    
+    if (bootFiles.isEmpty()) {
+        qDebug() << "DownloadThread: no boot files to package";
+        emit error(tr("No boot files found to package"));
+        return false;
+    }
+    
+    qDebug() << "DownloadThread:" << bootFiles.size() << "boot files," 
+             << customFiles.size() << "customization files";
+
+    // Create temporary directory for boot.img and boot.sig
+    QTemporaryDir tempDir;
+    if (!tempDir.isValid()) {
+        qDebug() << "DownloadThread: failed to create temp directory";
+        emit error(tr("Failed to create temporary directory"));
+        return false;
+    }
+
+    QString bootImgPath = tempDir.path() + "/boot.img";
+    QString bootSigPath = tempDir.path() + "/boot.sig";
+
+    // Create boot.img (only with boot files, not customization files)
+    emit preparationStatusUpdate(tr("Creating boot.img..."));
+    if (!SecureBoot::createBootImg(bootFiles, bootImgPath)) {
+        qDebug() << "DownloadThread: failed to create boot.img";
+        emit error(tr("Failed to create boot.img"));
+        return false;
+    }
+
+    // Generate boot.sig
+    emit preparationStatusUpdate(tr("Signing boot image..."));
+    if (!SecureBoot::generateBootSig(bootImgPath, rsaKeyPath, bootSigPath)) {
+        qDebug() << "DownloadThread: failed to generate boot.sig";
+        emit error(tr("Failed to generate boot.sig"));
+        return false;
+    }
+
+    // Read boot.img and boot.sig
+    QFile bootImgFile(bootImgPath);
+    if (!bootImgFile.open(QIODevice::ReadOnly)) {
+        qDebug() << "DownloadThread: failed to read boot.img";
+        emit error(tr("Failed to read boot.img"));
+        return false;
+    }
+    QByteArray bootImgData = bootImgFile.readAll();
+    bootImgFile.close();
+
+    QFile bootSigFile(bootSigPath);
+    if (!bootSigFile.open(QIODevice::ReadOnly)) {
+        qDebug() << "DownloadThread: failed to read boot.sig";
+        emit error(tr("Failed to read boot.sig"));
+        return false;
+    }
+    QByteArray bootSigData = bootSigFile.readAll();
+    bootSigFile.close();
+
+    // Delete ALL original files from the boot partition FIRST (before writing boot.img/boot.sig)
+    // This ensures we use the original filenames from extraction, avoiding LFN issues
+    // Boot files will be inside boot.img
+    // Customization files will remain alongside boot.img and boot.sig
+    emit preparationStatusUpdate(tr("Cleaning up boot partition..."));
+    
+    // Build a list of files to keep (only customization files)
+    QSet<QString> filesToKeep;
+    for (const QString &customFile : customizationFiles) {
+        filesToKeep.insert(customFile.toLower());
+    }
+    
+    // Delete all files except those we want to keep
+    // Use the ORIGINAL allFiles map keys for accurate filenames
+    int deletedCount = 0;
+    int skippedCount = 0;
+    QSet<QString> directories;  // Track directories for cleanup
+    
+    for (auto it = allFiles.constBegin(); it != allFiles.constEnd(); ++it) {
+        const QString &filename = it.key();
+        
+        // Track directories
+        if (filename.contains("/")) {
+            QString dirName = filename.left(filename.indexOf("/"));
+            directories.insert(dirName);
+        }
+        
+        // Skip customization files
+        if (filesToKeep.contains(filename.toLower())) {
+            qDebug() << "DownloadThread: keeping customization file:" << filename;
+            skippedCount++;
+            continue;
+        }
+        
+        // Delete everything else
+        qDebug() << "DownloadThread: attempting to delete:" << filename;
+        if (fat->deleteFile(filename)) {
+            deletedCount++;
+            if (deletedCount % 50 == 0) {  // Progress update every 50 files
+                qDebug() << "DownloadThread: deleted" << deletedCount << "files so far...";
+            }
+        } else {
+            qDebug() << "DownloadThread: WARNING - failed to delete:" << filename;
+            // Don't fail the entire process if a file can't be deleted
+        }
+    }
+    
+    // Now delete empty directories
+    int deletedDirs = 0;
+    for (const QString &dirName : directories) {
+        if (fat->deleteFile(dirName)) {
+            deletedDirs++;
+            qDebug() << "DownloadThread: deleted empty directory:" << dirName;
+        } else {
+            qDebug() << "DownloadThread: warning - failed to delete directory" << dirName;
+        }
+    }
+    
+    qDebug() << "DownloadThread: deleted" << deletedCount << "files and" << deletedDirs << "directories from partition";
+    qDebug() << "DownloadThread: kept" << skippedCount << "customization files";
+
+    // Sync deletions to disk before writing new files
+    emit preparationStatusUpdate(tr("Syncing deletions to disk..."));
+    qDebug() << "DownloadThread: syncing deletions to disk";
+    fat->deviceWrapper()->sync();
+    qDebug() << "DownloadThread: sync complete";
+
+    // NOW write boot.img and boot.sig to the cleaned partition
+    emit preparationStatusUpdate(tr("Writing signed boot files..."));
+    try {
+        fat->writeFile("boot.img", bootImgData);
+        fat->writeFile("boot.sig", bootSigData);
+        qDebug() << "DownloadThread: secure boot files written successfully";
+    }
+    catch (std::runtime_error &err) {
+        qDebug() << "DownloadThread: failed to write secure boot files:" << err.what();
+        emit error(tr("Failed to write secure boot files: %1").arg(err.what()));
+        return false;
+    }
 
     return true;
 }

@@ -30,6 +30,8 @@ set(PLATFORM_SOURCES
     dependencies/drivelist/src/windows/list.cpp
     windows/winfile.cpp
     windows/winfile.h
+    windows/bootimgcreator_windows.cpp
+    windows/rsakeyfingerprint_windows.cpp
     windows/diskpart_util.cpp
     windows/diskpart_util.h
     windows/file_operations_windows.cpp

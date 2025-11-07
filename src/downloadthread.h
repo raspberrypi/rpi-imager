@@ -149,6 +149,7 @@ protected:
     void _closeFiles();
     QByteArray _fileGetContentsTrimmed(const QString &filename);
     bool _customizeImage();
+    bool _createSecureBootFiles(class DeviceWrapperFatPartition *fat);
     void _periodicSync();
 
     /*

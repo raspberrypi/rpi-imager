@@ -2010,6 +2010,20 @@ bool ImageWriter::getBoolSetting(const QString &key)
         return _settings.value(key).toBool();
 }
 
+QString ImageWriter::getStringSetting(const QString &key)
+{
+    return _settings.value(key).toString();
+}
+
+// Platform-specific implementation (defined in platform-specific source files)
+extern QString getRsaKeyFingerprint(const QString &keyPath);
+
+QString ImageWriter::getRsaKeyFingerprint(const QString &keyPath)
+{
+    // Delegate to platform-specific implementation
+    return ::getRsaKeyFingerprint(keyPath);
+}
+
 void ImageWriter::setSetting(const QString &key, const QVariant &value)
 {
     _settings.setValue(key, value);
@@ -2064,7 +2078,16 @@ void ImageWriter::_applySystemdCustomisationFromSettings(const QVariantMap &s)
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
 
-    setImageCustomisation(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), NoAdvancedOptions);
+    // Check if secure boot should be enabled
+    ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
+    bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+    QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+    if (secureBootEnabled && !rsaKeyPath.isEmpty() && QFile::exists(rsaKeyPath)) {
+        advOpts |= ImageOptions::EnableSecureBoot;
+        qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+    }
+
+    setImageCustomisation(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), advOpts);
 }
 
 void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
@@ -2086,7 +2109,16 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
     
-    setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, NoAdvancedOptions);
+    // Check if secure boot should be enabled
+    ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
+    bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+    QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+    if (secureBootEnabled && !rsaKeyPath.isEmpty() && QFile::exists(rsaKeyPath)) {
+        advOpts |= ImageOptions::EnableSecureBoot;
+        qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+    }
+    
+    setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, advOpts);
 }
 
 QString ImageWriter::crypt(const QByteArray &password)

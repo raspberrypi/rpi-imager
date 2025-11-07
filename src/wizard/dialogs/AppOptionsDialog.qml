@@ -33,7 +33,7 @@ BaseDialog {
     Component.onCompleted: {
         registerFocusGroup("options", function(){ 
             return [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem,
-                    chkDisableWarnings.focusItem, editRepoButton.focusItem]
+                    chkDisableWarnings.focusItem, editRepoButton.focusItem, secureBootKeyButton.focusItem]
         }, 0)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, saveButton]
@@ -138,6 +138,38 @@ BaseDialog {
                     });
                 }
             }
+
+            ImOptionButton {
+                id: secureBootKeyButton
+                text: qsTr("Secure Boot RSA Key")
+                btnText: rsaKeyPath.text ? qsTr("Change") : qsTr("Select")
+                accessibleDescription: qsTr("Select an RSA 2048-bit private key for signing boot images in secure boot mode")
+                Layout.fillWidth: true
+                // Disable while write is in progress
+                enabled: imageWriter.writeState === ImageWriter.Idle ||
+                         imageWriter.writeState === ImageWriter.Succeeded ||
+                         imageWriter.writeState === ImageWriter.Failed ||
+                         imageWriter.writeState === ImageWriter.Cancelled
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+                onClicked: {
+                    var keyPath = imageWriter.getNativeOpenFileName(
+                        qsTr("Select RSA Private Key"), 
+                        "", 
+                        qsTr("PEM Files (*.pem);;All Files (*)")
+                    );
+                    if (keyPath) {
+                        rsaKeyPath.text = keyPath;
+                    }
+                }
+                
+                Text {
+                    id: rsaKeyPath
+                    text: ""
+                    visible: false
+                }
+            }
         }
     }
 
@@ -202,6 +234,11 @@ BaseDialog {
             chkTelemetry.checked = imageWriter.getBoolSetting("telemetry");
             // Do not load from QSettings; keep ephemeral
             chkDisableWarnings.checked = popup.wizardContainer ? popup.wizardContainer.disableWarnings : false;
+            // Load secure boot RSA key path
+            var keyPath = imageWriter.getStringSetting("secureboot_rsa_key");
+            if (keyPath) {
+                rsaKeyPath.text = keyPath;
+            }
 
             initialized = true;
             // Pre-compute final height before opening to avoid first-show reflow
@@ -215,6 +252,7 @@ BaseDialog {
         imageWriter.setSetting("beep", chkBeep.checked);
         imageWriter.setSetting("eject", chkEject.checked);
         imageWriter.setSetting("telemetry", chkTelemetry.checked);
+        imageWriter.setSetting("secureboot_rsa_key", rsaKeyPath.text);
         // Do not persist disable_warnings; set ephemeral flag only
         if (popup.wizardContainer)
             popup.wizardContainer.disableWarnings = chkDisableWarnings.checked;

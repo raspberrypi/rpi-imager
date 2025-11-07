@@ -20,6 +20,7 @@ public:
     void seek(qint64 pos);
     qint64 pos() const;
     void write(const char *data, qint64 size);
+    DeviceWrapper *deviceWrapper() const { return _dw; }
 
 protected:
     DeviceWrapper *_dw;

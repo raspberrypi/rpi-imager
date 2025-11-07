@@ -58,9 +58,12 @@ Item {
     property bool userConfigured: false
     property bool wifiConfigured: false
     property bool sshEnabled: false
+    property bool secureBootEnabled: false
     property bool piConnectEnabled: false
     // Whether selected OS supports Raspberry Raspberry Pi Connect customization
     property bool piConnectAvailable: false
+    // Whether secure boot key is configured in App Options
+    property bool secureBootKeyConfigured: false
 
     // Interfaces & Features
     property bool ccRpiAvailable: false
@@ -90,10 +93,11 @@ Item {
     readonly property int stepUserCustomization: 5
     readonly property int stepWifiCustomization: 6
     readonly property int stepRemoteAccess: 7
-    readonly property int stepPiConnectCustomization: 8
-    readonly property int stepIfAndFeatures: 9
-    readonly property int stepWriting: 10
-    readonly property int stepDone: 11
+    readonly property int stepSecureBootCustomization: 8
+    readonly property int stepPiConnectCustomization: 9
+    readonly property int stepIfAndFeatures: 10
+    readonly property int stepWriting: 11
+    readonly property int stepDone: 12
     
     signal wizardCompleted()
     
@@ -132,6 +136,10 @@ Item {
         // Each step can then read from this and update it as needed
         if (imageWriter) {
             customizationSettings = imageWriter.getSavedCustomisationSettings()
+            
+            // Check if secure boot RSA key is configured
+            var rsaKeyPath = imageWriter.getStringSetting("secureboot_rsa_key")
+            secureBootKeyConfigured = (rsaKeyPath && rsaKeyPath.length > 0)
         }
     }
 
@@ -181,7 +189,9 @@ Item {
             ? stepIfAndFeatures
             : piConnectAvailable
                 ? stepPiConnectCustomization
-                : stepRemoteAccess
+                : secureBootKeyConfigured
+                    ? stepSecureBootCustomization
+                    : stepRemoteAccess
     }
 
     function getCustomizationSubstepLabels() {
@@ -191,6 +201,9 @@ Item {
         }
         
         var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote access")]
+        if (secureBootKeyConfigured) {
+            labels.push(qsTr("Secure Boot"))
+        }
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
@@ -212,6 +225,7 @@ Item {
         if (stepLabel === qsTr("User")) return userConfigured
         if (stepLabel === qsTr("Wi‑Fi")) return wifiConfigured
         if (stepLabel === qsTr("Remote access")) return sshEnabled
+        if (stepLabel === qsTr("Secure Boot")) return secureBootEnabled
         if (stepLabel === qsTr("Raspberry Pi Connect")) return piConnectEnabled
         if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || if1WireEnabled || ifSerial !== "" || featUsbGadgetEnabled)
         
@@ -250,6 +264,7 @@ Item {
         userConfigured = false
         wifiConfigured = false
         sshEnabled = false
+        secureBootEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
         ccRpiAvailable = false
@@ -829,6 +844,7 @@ Item {
             case stepUserCustomization: return userCustomizationStep
             case stepWifiCustomization: return wifiCustomizationStep
             case stepRemoteAccess: return remoteAccessStep
+            case stepSecureBootCustomization: return secureBootCustomizationStep
             case stepPiConnectCustomization: return piConnectCustomizationStep
             case stepIfAndFeatures: return ifAndFeaturesStep
             case stepWriting: return writingStep
@@ -949,6 +965,20 @@ Item {
     Component {
         id: remoteAccessStep
         RemoteAccessStep {
+            imageWriter: root.imageWriter
+            wizardContainer: root
+            appOptionsButton: optionsButton
+            onNextClicked: root.nextStep()
+            onBackClicked: root.previousStep()
+            onSkipClicked: {
+                // Skip functionality is handled in the step itself
+            }
+        }
+    }
+    
+    Component {
+        id: secureBootCustomizationStep
+        SecureBootCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton

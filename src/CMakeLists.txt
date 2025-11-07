@@ -199,6 +199,9 @@ if(APPLE)
     find_package(CURL REQUIRED)
     # Normalize variable naming used later in include_directories
     set(CURL_INCLUDE_DIR ${CURL_INCLUDE_DIRS})
+    
+    # Note: No need to find OpenSSL on macOS - we use native Security.framework
+    # for RSA operations and CommonCrypto for hashing
 else()
     include(dependencies/curl.cmake)
 endif()
@@ -246,7 +249,7 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
-    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp")
+    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
@@ -502,6 +505,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/UserCustomizationStep.qml
         wizard/WifiCustomizationStep.qml
         wizard/RemoteAccessStep.qml
+        wizard/SecureBootCustomizationStep.qml
         wizard/PiConnectCustomizationStep.qml
         wizard/WritingStep.qml
         wizard/DoneStep.qml
@@ -557,7 +561,7 @@ if(BUILD_CLI_ONLY)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
 else()
     # Regular GUI build: link all GUI components
-    # Add DBus on Linux for suspend inhibitor and native file dialogs
+    # Add DBus on Linux for suspend inhibitor and native file dialogs (portals)
     if(UNIX AND NOT APPLE)
         target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${QT}::DBus ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
     else()

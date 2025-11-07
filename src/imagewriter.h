@@ -247,7 +247,9 @@ public:
     Q_INVOKABLE QString getPSKForSSID(const QString &ssid);
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
+    Q_INVOKABLE QString getStringSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE QString getRsaKeyFingerprint(const QString &keyPath);
     
     // Customisation API
     Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
