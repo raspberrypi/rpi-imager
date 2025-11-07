@@ -269,14 +269,9 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_WIN
     if (parser.isSet("debug"))
     {
-        /* Allocate console for debug messages on Windows */
-        if (::AttachConsole(ATTACH_PARENT_PROCESS) || ::AllocConsole())
-        {
-            freopen("CONOUT$", "w", stdout);
-            freopen("CONOUT$", "w", stderr);
-            std::ios::sync_with_stdio();
-            qInstallMessageHandler(consoleMsgHandler);
-        }
+        /* Attach to console for debug messages on Windows */
+        PlatformQuirks::attachConsole();
+        qInstallMessageHandler(consoleMsgHandler);
     }
 #endif
 

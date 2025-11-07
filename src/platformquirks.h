@@ -63,6 +63,14 @@ namespace PlatformQuirks {
      * @return true if running with elevated privileges, false otherwise
      */
     bool hasElevatedPrivileges();
+
+    /**
+     * Attach to or allocate a console for output.
+     * On Windows: Attempts to attach to parent console or allocates a new one,
+     *             redirecting stdout/stderr to the console.
+     * On Linux/macOS: No-op (console is already available).
+     */
+    void attachConsole();
 }
 
 #endif // PLATFORMQUIRKS_H

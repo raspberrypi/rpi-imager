@@ -21,15 +21,8 @@ static void devnullMsgHandler(QtMsgType, const QMessageLogContext &, const QStri
 
 Cli::Cli(int &argc, char *argv[]) : QObject(nullptr), _imageWriter(nullptr)
 {
-#ifdef Q_OS_WIN
-    /* Allocate console on Windows (only needed if compiled as GUI program) */
-    if (::AttachConsole(ATTACH_PARENT_PROCESS) || ::AllocConsole())
-    {
-        freopen("CONOUT$", "w", stdout);
-        freopen("CONOUT$", "w", stderr);
-        std::ios::sync_with_stdio();
-    }
-#endif
+    /* Attach to console for output (Windows-specific, no-op on other platforms) */
+    PlatformQuirks::attachConsole();
     _app = new QCoreApplication(argc, argv);
     _app->setOrganizationName("Raspberry Pi");
     _app->setOrganizationDomain("raspberrypi.com");

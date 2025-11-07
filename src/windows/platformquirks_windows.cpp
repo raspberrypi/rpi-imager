@@ -16,6 +16,8 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
+#include <iostream>
 
 namespace PlatformQuirks {
 
@@ -295,6 +297,17 @@ bool hasElevatedPrivileges() {
     FreeSid(pAdministratorsGroup);
 
     return fIsRunAsAdmin == TRUE;
+}
+
+void attachConsole() {
+    // Allocate console on Windows (only needed if compiled as GUI program)
+    // Try to attach to parent process console first, or allocate a new one
+    if (::AttachConsole(ATTACH_PARENT_PROCESS) || ::AllocConsole()) {
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+        // Sync C++ iostreams with C stdio for consistency
+        std::ios::sync_with_stdio();
+    }
 }
 
 } // namespace PlatformQuirks

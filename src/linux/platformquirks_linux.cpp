@@ -190,4 +190,8 @@ bool hasElevatedPrivileges() {
     return ::geteuid() == 0;
 }
 
+void attachConsole() {
+    // No-op on Linux - console is already available
+}
+
 } // namespace PlatformQuirks

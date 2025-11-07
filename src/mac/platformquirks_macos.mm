@@ -64,4 +64,8 @@ bool hasElevatedPrivileges() {
     return true;
 }
 
+void attachConsole() {
+    // No-op on macOS - console is already available
+}
+
 } // namespace PlatformQuirks
