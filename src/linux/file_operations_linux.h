@@ -54,8 +54,11 @@ class LinuxFileOperations : public FileOperations {
   int fd_;
   std::string current_path_;
   int last_error_code_;
-  
+
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
+
+  // Timeout-protected sync helper
+  FileError SyncWithTimeout(bool use_fsync);
 };
 
 } // namespace rpi_imager
