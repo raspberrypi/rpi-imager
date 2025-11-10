@@ -1271,6 +1271,17 @@ Item {
         supportsSerialConsoleOnly = false
         supportsUsbGadget = false
         
+        // Reset hardware model selection to prevent stale state
+        if (imageWriter) {
+            var hwModel = imageWriter.getHWList()
+            if (hwModel) {
+                hwModel.currentIndex = -1
+            }
+            // Also clear ImageWriter's internal source and destination state
+            imageWriter.setSrc("")
+            imageWriter.setDst("", 0)
+        }
+        
         // Navigate back to the first step (device selection if online, OS selection if offline)
         wizardStack.clear()
         wizardStack.push(hasNetworkConnectivity ? deviceSelectionStep : osSelectionStep)

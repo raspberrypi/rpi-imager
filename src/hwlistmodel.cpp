@@ -147,8 +147,21 @@ void HWListModel::setCurrentIndex(int index) {
     if (_currentIndex == index)
         return;
 
-    if (index < 0 || index >= _hwDevices.size()) {
+    // Allow -1 to clear the selection
+    if (index < -1 || index >= _hwDevices.size()) {
         qWarning() << Q_FUNC_INFO << "Invalid index" << index;
+        return;
+    }
+
+    // Handle clearing selection (index == -1)
+    if (index == -1) {
+        qDebug() << "Clearing hardware device selection";
+        _currentIndex = -1;
+        _lastSelectedDeviceName.clear();
+        
+        Q_EMIT currentIndexChanged();
+        Q_EMIT currentNameChanged();
+        Q_EMIT currentArchitectureChanged();
         return;
     }
 
