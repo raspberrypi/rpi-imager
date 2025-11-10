@@ -156,6 +156,7 @@ WizardStepBase {
                 root.wizardContainer.sshEnabled = false
                 root.wizardContainer.piConnectEnabled = false
                 root.wizardContainer.piConnectAvailable = false
+                root.wizardContainer.secureBootAvailable = imageWriter.isSecureBootForcedByCliFlag()
             }
             root.customSelected = true
             root.customSelectedSize = imageWriter.getSelectedSourceSize()
@@ -632,6 +633,7 @@ WizardStepBase {
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.wizardContainer.piConnectAvailable = false
+                root.wizardContainer.secureBootAvailable = imageWriter.isSecureBootForcedByCliFlag()
                 root.wizardContainer.ccRpiAvailable = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
@@ -655,12 +657,17 @@ WizardStepBase {
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.wizardContainer.piConnectAvailable = imageWriter.checkSWCapability("rpi_connect")
+                root.wizardContainer.secureBootAvailable = imageWriter.checkSWCapability("secure_boot") || imageWriter.isSecureBootForcedByCliFlag()
                 root.wizardContainer.ccRpiAvailable = imageWriter.imageSupportsCcRpi()
                 
                 // Clean up incompatible settings from customizationSettings based on OS capabilities
                 if (!root.wizardContainer.piConnectAvailable) {
                     delete root.wizardContainer.customizationSettings.piConnectEnabled
                     root.wizardContainer.piConnectEnabled = false
+                }
+                if (!root.wizardContainer.secureBootAvailable) {
+                    delete root.wizardContainer.customizationSettings.secureBootEnabled
+                    root.wizardContainer.secureBootEnabled = false
                 }
                 if (!root.wizardContainer.ccRpiAvailable) {
                     delete root.wizardContainer.customizationSettings.enableI2C

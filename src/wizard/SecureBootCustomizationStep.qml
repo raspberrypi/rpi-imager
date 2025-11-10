@@ -17,6 +17,10 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
     
+    // Only show and enable this step if OS supports secure boot
+    visible: wizardContainer.secureBootAvailable
+    enabled: wizardContainer.secureBootAvailable
+    
     title: qsTr("Customisation: Secure Boot")
     subtitle: qsTr("Configure secure boot image signing")
     showSkipButton: true

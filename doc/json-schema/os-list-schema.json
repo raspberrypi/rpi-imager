@@ -464,6 +464,20 @@
                                     "armv8",
                                     "armel"
                                 ]
+                            },
+                            "capabilities": {
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/capabilities",
+                                "type": "array",
+                                "title": "The capabilities schema",
+                                "description": "Optional. Array of strings representing OS capabilities. Used to enable or disable features in the customization wizard. Supported capabilities include: 'rpi_connect' (enables Raspberry Pi Connect setup), 'secure_boot' (enables secure boot signing), and others.",
+                                "default": [],
+                                "examples": [
+                                    ["rpi_connect", "secure_boot"],
+                                    ["secure_boot"]
+                                ],
+                                "items": {
+                                    "type": "string"
+                                }
                             }
                         },
                         "additionalProperties": true

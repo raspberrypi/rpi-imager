@@ -273,6 +273,10 @@ public:
     Q_INVOKABLE void changeLanguage(const QString &newLanguageName);
     Q_INVOKABLE void changeKeyboard(const QString &newKeymapLayout);
     Q_INVOKABLE bool customRepo();
+    
+    // Secure Boot CLI override
+    static void setForceSecureBootEnabled(bool enabled);
+    Q_INVOKABLE bool isSecureBootForcedByCliFlag() const;
 
     void replaceTranslator(QTranslator *trans);
     QString detectPiKeyboard();
@@ -383,6 +387,8 @@ protected:
     int _refreshJitterOverrideMinutes;
     // Session-only storage for Raspberry Pi Connect token
     QString _piConnectToken;
+    // CLI flag to force enable secure boot regardless of OS capabilities
+    static bool _forceSecureBootEnabled;
 #ifndef CLI_ONLY_BUILD
     QWindow *_mainWindow;
 #endif

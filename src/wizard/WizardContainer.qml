@@ -62,6 +62,8 @@ Item {
     property bool piConnectEnabled: false
     // Whether selected OS supports Raspberry Raspberry Pi Connect customization
     property bool piConnectAvailable: false
+    // Whether selected OS supports Secure Boot signing
+    property bool secureBootAvailable: false
     // Whether secure boot key is configured in App Options
     property bool secureBootKeyConfigured: false
 
@@ -189,7 +191,7 @@ Item {
             ? stepIfAndFeatures
             : piConnectAvailable
                 ? stepPiConnectCustomization
-                : secureBootKeyConfigured
+                : (secureBootAvailable && secureBootKeyConfigured)
                     ? stepSecureBootCustomization
                     : stepRemoteAccess
     }
@@ -201,7 +203,7 @@ Item {
         }
         
         var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote access")]
-        if (secureBootKeyConfigured) {
+        if (secureBootAvailable && secureBootKeyConfigured) {
             labels.push(qsTr("Secure Boot"))
         }
         if (piConnectAvailable) {
@@ -267,6 +269,7 @@ Item {
         secureBootEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
+        secureBootAvailable = false
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
@@ -294,6 +297,7 @@ Item {
         
         // Reset OS capability flags - these will be set correctly by OS selection
         piConnectAvailable = false
+        secureBootAvailable = false
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
@@ -760,6 +764,10 @@ Item {
             else if (!customizationSupported && nextIndex === firstCustomizationStep) {
                 nextIndex = stepWriting
             }
+            // Skip optional Secure Boot step when OS does not support it
+            if (!secureBootAvailable && nextIndex === stepSecureBootCustomization) {
+                nextIndex++
+            }
             // Skip optional Raspberry Pi Connect step when OS does not support it
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
                 nextIndex++
@@ -799,6 +807,9 @@ Item {
                     prevIndex--
                 }
                 if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
+                    prevIndex--
+                }
+                if (prevIndex === stepSecureBootCustomization && !secureBootAvailable) {
                     prevIndex--
                 }
                 // Skip device selection if offline (it would be empty/useless)

@@ -227,7 +227,8 @@ int main(int argc, char *argv[])
         {"enable-language-selection", "Show language selection on startup"},
         {"disable-telemetry", "Disable telemetry (persist setting)"},
         {"enable-telemetry", "Use default telemetry setting (clear override)"},
-        {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"}
+        {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"},
+        {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"}
     });
 
     parser.addPositionalArgument("image", "Image file/URL or rpi-imager:// callback URL (optional)", "[image]");
@@ -317,6 +318,11 @@ int main(int argc, char *argv[])
     if (parser.isSet("qml-file-dialogs"))
     {
         NativeFileDialog::setForceQmlDialogs(true);
+    }
+
+    if (parser.isSet("enable-secure-boot"))
+    {
+        ImageWriter::setForceSecureBootEnabled(true);
     }
 
     const QStringList posArgs = parser.positionalArguments();

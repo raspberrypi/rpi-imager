@@ -85,6 +85,9 @@ namespace {
     constexpr uint MAX_SUBITEMS_DEPTH = 16;
 } // namespace anonymous
 
+// Initialize static member for secure boot CLI override
+bool ImageWriter::_forceSecureBootEnabled = false;
+
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent),
       _cacheManager(nullptr),
@@ -2029,6 +2032,17 @@ void ImageWriter::setSetting(const QString &key, const QVariant &value)
 {
     _settings.setValue(key, value);
     _settings.sync();
+}
+
+void ImageWriter::setForceSecureBootEnabled(bool enabled)
+{
+    _forceSecureBootEnabled = enabled;
+    qDebug() << "Secure boot force-enabled via CLI flag:" << enabled;
+}
+
+bool ImageWriter::isSecureBootForcedByCliFlag() const
+{
+    return _forceSecureBootEnabled;
 }
 
 void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts)

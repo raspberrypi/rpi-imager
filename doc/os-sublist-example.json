@@ -17,7 +17,10 @@
         "pi2-32bit"
       ],
       "init_format": "systemd",
-      "architecture": "armhf"
+      "architecture": "armhf",
+      "capabilities": [
+        "secure_boot"
+      ]
     },
     {
       "name": "Your 64-bit Operating System",
@@ -35,7 +38,11 @@
         "pi5"
       ],
       "init_format": "systemd",
-      "architecture": "armv8"
+      "architecture": "armv8",
+      "capabilities": [
+        "secure_boot",
+        "rpi_connect"
+      ]
     }
   ]
 }

@@ -56,6 +56,7 @@ int Cli::run()
         {"disable-eject", "Disable automatic ejection of storage media after verification"},
         {"debug", "Output debug messages to console"},
         {"quiet", "Only write to console on error"},
+        {"secure-boot-key", "Path to RSA private key (PEM format) for secure boot signing", "key-file", ""},
     });
 
     parser.addPositionalArgument("src", "Image file/URL");
@@ -103,6 +104,33 @@ int Cli::run()
     _quiet = parser.isSet("quiet");
     QByteArray initFormat = (parser.value("cloudinit-userdata").isEmpty()
                              && parser.value("cloudinit-networkconfig").isEmpty() ) ? "systemd" : "cloudinit";
+    
+    // Handle secure boot key if provided
+    ImageOptions::AdvancedOptions advancedOptions = ImageOptions::NoAdvancedOptions;
+    if (!parser.value("secure-boot-key").isEmpty())
+    {
+        QString keyPath = parser.value("secure-boot-key");
+        QFileInfo keyFile(keyPath);
+        if (!keyFile.exists())
+        {
+            std::cerr << "Error: secure boot key file does not exist: " << keyPath.toStdString() << std::endl;
+            return 1;
+        }
+        if (!keyFile.isFile())
+        {
+            std::cerr << "Error: secure boot key path is not a regular file: " << keyPath.toStdString() << std::endl;
+            return 1;
+        }
+        
+        // Store key path in settings for ImageWriter to access
+        _imageWriter->setSetting("secureboot_rsa_key", keyPath);
+        advancedOptions = ImageOptions::EnableSecureBoot;
+        
+        if (!_quiet)
+        {
+            std::cerr << "Secure boot signing enabled with key: " << keyPath.toStdString() << std::endl;
+        }
+    }
 
     if (args[0].startsWith("http:", Qt::CaseInsensitive) || args[0].startsWith("https:", Qt::CaseInsensitive))
     {
@@ -208,7 +236,7 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomisation("", "", "", userData, networkConfig, ImageOptions::NoAdvancedOptions);
+        _imageWriter->setImageCustomisation("", "", "", userData, networkConfig, advancedOptions);
     }
     else if (!parser.value("first-run-script").isEmpty())
     {
@@ -230,7 +258,12 @@ int Cli::run()
             return 1;
         }
 
-        _imageWriter->setImageCustomisation("", "", firstRunScript, "", "", ImageOptions::UserDefinedFirstRun);
+        _imageWriter->setImageCustomisation("", "", firstRunScript, "", "", ImageOptions::UserDefinedFirstRun | advancedOptions);
+    }
+    else if (advancedOptions != ImageOptions::NoAdvancedOptions)
+    {
+        // Secure boot key provided without customization scripts
+        _imageWriter->setImageCustomisation("", "", "", "", "", advancedOptions);
     }
 
     _imageWriter->setDst(args[1]);
