@@ -179,7 +179,8 @@
                                 "icon": "icons/pi4.png",
                                 "tags": ["pi4"],
                                 "matching_type": "exclusive",
-                                "architecture": "armv8"
+                                "architecture": "armv8",
+                                "capabilities": ["i2c", "spi", "onewire", "serial", "usb_otg"]
                             }
                         ],
                         "required": [
@@ -251,6 +252,28 @@
                                     "armv8",
                                     "armel"
                                 ]
+                            },
+                            "capabilities": {
+                                "$id": "#/properties/imager/properties/devices/items/properties/capabilities",
+                                "type": "array",
+                                "title": "The capabilities schema",
+                                "description": "Optional. Array of strings representing hardware capabilities. Used to enable or disable features in the customization wizard. Supported hardware capabilities include: 'i2c' (enables I2C interface option), 'spi' (enables SPI interface option), 'onewire' (enables 1-Wire interface option), 'serial' (enables serial interface option), 'serial_on_console_only' (enables console-only mode for serial), 'usb_otg' (enables USB Gadget mode option).",
+                                "default": [],
+                                "examples": [
+                                    ["i2c", "spi", "onewire", "serial", "usb_otg"],
+                                    ["i2c", "spi", "serial"]
+                                ],
+                                "items": {
+                                    "type": "string",
+                                    "enum": [
+                                        "i2c",
+                                        "spi",
+                                        "onewire",
+                                        "serial",
+                                        "serial_on_console_only",
+                                        "usb_otg"
+                                    ]
+                                }
                             }
                         },
                         "additionalProperties": true
@@ -469,14 +492,23 @@
                                 "$id": "#/properties/os_list/items/anyOf/0/properties/capabilities",
                                 "type": "array",
                                 "title": "The capabilities schema",
-                                "description": "Optional. Array of strings representing OS capabilities. Used to enable or disable features in the customization wizard. Supported capabilities include: 'rpi_connect' (enables Raspberry Pi Connect setup), 'secure_boot' (enables secure boot signing), and others.",
+                                "description": "Optional. Array of strings representing OS capabilities. Used to enable or disable features in the customization wizard. Supported OS capabilities include: 'rpi_connect' (enables Raspberry Pi Connect setup), 'secure_boot' (enables secure boot signing), 'i2c' (enables I2C interface option), 'spi' (enables SPI interface option), 'onewire' (enables 1-Wire interface option), 'serial' (enables serial interface option), 'usb_otg' (enables USB Gadget mode option). Note: Interface capabilities (i2c, spi, onewire, serial, usb_otg) require both hardware and OS support - specify in both device and OS capabilities for them to be available.",
                                 "default": [],
                                 "examples": [
-                                    ["rpi_connect", "secure_boot"],
-                                    ["secure_boot"]
+                                    ["rpi_connect", "secure_boot", "i2c", "spi", "onewire", "serial", "usb_otg"],
+                                    ["secure_boot", "i2c", "spi"]
                                 ],
                                 "items": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "enum": [
+                                        "rpi_connect",
+                                        "secure_boot",
+                                        "i2c",
+                                        "spi",
+                                        "onewire",
+                                        "serial",
+                                        "usb_otg"
+                                    ]
                                 }
                             }
                         },

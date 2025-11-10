@@ -19,7 +19,9 @@
       "init_format": "systemd",
       "architecture": "armhf",
       "capabilities": [
-        "secure_boot"
+        "secure_boot",
+        "i2c",
+        "spi"
       ]
     },
     {
@@ -41,7 +43,12 @@
       "architecture": "armv8",
       "capabilities": [
         "secure_boot",
-        "rpi_connect"
+        "rpi_connect",
+        "i2c",
+        "spi",
+        "onewire",
+        "serial",
+        "usb_otg"
       ]
     }
   ]

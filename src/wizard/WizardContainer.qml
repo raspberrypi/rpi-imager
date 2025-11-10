@@ -69,6 +69,7 @@ Item {
 
     // Interfaces & Features
     property bool ccRpiAvailable: false
+    property bool ifAndFeaturesAvailable: false  // Whether any interface/feature capabilities are available
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
     property bool if1WireEnabled: false
@@ -187,7 +188,7 @@ Item {
     }
 
     function getLastCustomizationStep() {
-        return ccRpiAvailable
+        return (ccRpiAvailable && ifAndFeaturesAvailable)
             ? stepIfAndFeatures
             : piConnectAvailable
                 ? stepPiConnectCustomization
@@ -209,7 +210,7 @@ Item {
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
-        if (ccRpiAvailable) {
+        if (ccRpiAvailable && ifAndFeaturesAvailable) {
             labels.push(qsTr("Interfaces & Features"))
         }
 
@@ -772,8 +773,8 @@ Item {
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
                 nextIndex++
             }
-            // skip interfaces and features for Operating Systems that don't support the cc_raspberry_pi cloud-init module
-            if (!ccRpiAvailable && nextIndex == stepIfAndFeatures) {
+            // Skip interfaces and features if OS doesn't support it or no capabilities are available
+            if ((!ccRpiAvailable || !ifAndFeaturesAvailable) && nextIndex == stepIfAndFeatures) {
                 nextIndex++
             }
             // Before entering the writing step, apply customization (when supported)
@@ -802,8 +803,8 @@ Item {
             if (root.currentStep === stepWriting && !customizationSupported) {
                 prevIndex = stepStorageSelection
             } else {
-                // skip interfaces and features for Operating Systems that don't support the cc_raspberry_pi cloud-init module
-                if (prevIndex == stepIfAndFeatures && !ccRpiAvailable) {
+                // Skip interfaces and features if OS doesn't support it or no capabilities are available
+                if (prevIndex == stepIfAndFeatures && (!ccRpiAvailable || !ifAndFeaturesAvailable)) {
                     prevIndex--
                 }
                 if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
