@@ -61,7 +61,7 @@ Item {
     readonly property string hostnameConfigured: qsTr("Hostname configured")
     readonly property string userAccountConfigured: qsTr("User account configured")
     readonly property string sshEnabled: qsTr("SSH enabled")
-    readonly property string localeConfigured: qsTr("Locale configured")
+    readonly property string localeConfigured: qsTr("Localisation configured")
     readonly property string wifiConfigured: qsTr("Wi‑Fi configured")
     readonly property string piConnectEnabled: qsTr("Raspberry Pi Connect enabled")
     readonly property string usbGadgetEnabled: qsTr("USB Gadget mode enabled")
