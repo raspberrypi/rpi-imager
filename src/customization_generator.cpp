@@ -220,7 +220,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         line(QStringLiteral("sleep 2"), script);
         line(QStringLiteral("# Reload user systemd manager and start services"), script);
         line(QStringLiteral("systemctl --quiet --user --machine ${TARGET_USER}@.host daemon-reload"), script);
-        line(QStringLiteral("systemctl --quiet --user --machine ${TARGET_USER}@.host start rpi-connect.service rpi-connect-signin.path"), script);
+        line(QStringLiteral("systemctl --quiet --user --machine ${TARGET_USER}@.host start rpi-connect.service rpi-connect-signin.path rpi-connect-wayvnc.service"), script);
     }
 
     // Locale configuration (keyboard and timezone) - match legacy script structure
@@ -441,8 +441,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // Start the user services now (linger ensures user manager is running)
         push(QStringLiteral("  - [ sh, -c, \"loginctl enable-linger ") + effectiveUser + QStringLiteral(" 2>/dev/null || true\" ]"), cloud);
         push(QStringLiteral("  - [ sleep, \"2\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"systemctl --user --machine=") + effectiveUser + QStringLiteral("@.host daemon-reload\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"systemctl --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect.service rpi-connect-signin.path\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host daemon-reload\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect.service rpi-connect-signin.path rpi-connect-wayvnc.service\" ]"), cloud);
     } else if (needsRuncmd) {
         // Start runcmd section if not already started
         push(QStringLiteral("runcmd:"), cloud);
