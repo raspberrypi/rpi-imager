@@ -285,7 +285,7 @@ TEST_CASE("CustomisationGenerator Raspberry Pi Connect", "[customization]") {
     // Check systemd unit directories are created
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("SYSTEMD_USER_BASE="));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("default.target.wants"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect.service.wants"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("paths.target.wants"));
     
     // Check all three systemd units are enabled
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect.service"));
@@ -549,7 +549,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH user",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/sh"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: $5$fakesalt$fakehash123"));
 }
@@ -627,7 +627,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     
     // Check systemd unit directories are created
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/default.target.wants"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/rpi-connect.service.wants"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/paths.target.wants"));
     
     // Check all three systemd units are enabled via symlinks with fallback logic
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service"));
