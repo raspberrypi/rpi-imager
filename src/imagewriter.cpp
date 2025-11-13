@@ -2412,7 +2412,11 @@ bool ImageWriter::hasMouse()
 
 bool ImageWriter::isScreenReaderActive() const
 {
+#ifndef CLI_ONLY_BUILD
     return QAccessible::isActive();
+#else
+    return false;
+#endif
 }
 
 bool ImageWriter::customRepo()
