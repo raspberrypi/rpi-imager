@@ -198,42 +198,49 @@ int Cli::run()
         }
     }
 
-    if (!parser.value("cloudinit-userdata").isEmpty())
+    if (!parser.value("cloudinit-userdata").isEmpty() || !parser.value("cloudinit-networkconfig").isEmpty())
     {
         QByteArray userData, networkConfig;
-        QFile f(parser.value("cloudinit-userdata"));
+        if (!parser.value("cloudinit-userdata").isEmpty())
+        {
+            QFile f(parser.value("cloudinit-userdata"));
 
-        if (!f.exists())
-        {
-            std::cerr << "Error: user-data file does not exists" << std::endl;
-            return 1;
-        }
-        if (f.open(f.ReadOnly))
-        {
-            userData = f.readAll();
-            f.close();
-        }
-        else
-        {
-            std::cerr << "Error: opening user-data file" << std::endl;
-            return 1;
+            if (!f.exists())
+            {
+                std::cerr << "Error: user-data file does not exists" << std::endl;
+                return 1;
+            }
+            if (f.open(f.ReadOnly))
+            {
+                userData = f.readAll();
+                f.close();
+            }
+            else
+            {
+                std::cerr << "Error: opening user-data file" << std::endl;
+                return 1;
+            }
         }
 
-        f.setFileName(parser.value("cloudinit-networkconfig"));
-        if (!f.exists())
+        if (!parser.value("cloudinit-networkconfig").isEmpty())
         {
-            std::cerr << "Error: network-config file does not exists" << std::endl;
-            return 1;
-        }
-        if (f.open(f.ReadOnly))
-        {
-            networkConfig = f.readAll();
-            f.close();
-        }
-        else
-        {
-            std::cerr << "Error: opening network-config file" << std::endl;
-            return 1;
+            QFile f(parser.value("cloudinit-networkconfig"));
+
+            if (!f.exists())
+            {
+                std::cerr << "Error: network-config file does not exists" << std::endl;
+                return 1;
+            }
+            if (f.open(f.ReadOnly))
+            {
+                networkConfig = f.readAll();
+                f.close();
+            }
+            else
+            {
+                std::cerr << "Error: opening network-config file" << std::endl;
+                return 1;
+            }
         }
 
         _imageWriter->setImageCustomisation("", "", "", userData, networkConfig, advancedOptions);
