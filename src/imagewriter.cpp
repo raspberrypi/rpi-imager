@@ -63,11 +63,11 @@
 #include <QRandomGenerator>
 #ifndef CLI_ONLY_BUILD
 #include <QDesktopServices>
+#include <QAccessible>
 #endif
 #include <stdlib.h>
 #include <QLocale>
 #include <QMetaType>
-#include <QAccessible>
 #include "imageadvancedoptions.h"
 
 #ifdef Q_OS_WIN
