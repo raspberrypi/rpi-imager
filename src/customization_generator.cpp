@@ -282,7 +282,6 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // Parity with legacy QML: install avahi-daemon and disable apt Check-Date on first boot
         push(QStringLiteral("packages:"), cloud);
         push(QStringLiteral("- avahi-daemon"), cloud);
-        push(QStringLiteral("- rpi-connect"), cloud);
         push(QString(), cloud);
         push(QStringLiteral("apt:"), cloud);
         push(QStringLiteral("  conf: |"), cloud);
@@ -441,10 +440,10 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         // Start the user services now (linger ensures user manager is running)
         push(QStringLiteral("  - [ sh, -c, \"loginctl enable-linger ") + effectiveUser + QStringLiteral(" 2>/dev/null || true\" ]"), cloud);
         push(QStringLiteral("  - [ sleep, \"2\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host daemon-reload\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"[ systemctl --quiet --user is-enabled rpi-connect.service ] || systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect.service\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"[ systemctl --quiet --user is-enabled rpi-connect-signin.path ] || systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-signin.path\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"[ systemctl --quiet --user is-enabled rpi-connect-wayvnc.service ] || systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-wayvnc.service\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host daemon-reload || true\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect.service || true\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-signin.path || true\" ]"), cloud);
+        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-wayvnc.service || true\" ]"), cloud);
     } else if (needsRuncmd) {
         // Start runcmd section if not already started
         push(QStringLiteral("runcmd:"), cloud);
