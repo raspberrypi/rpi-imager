@@ -587,6 +587,10 @@ WizardStepBase {
                     }
                 }
             })
+        } else if (typeof(model.subitems_url) === "string" && model.subitems_url === "internal://back") {
+            // Back button - just navigate back without setting any OS selection
+            osswipeview.decrementCurrentIndex()
+            categorySelected = ""
         } else {
             // Select this OS - explicit branching for clarity
             if (typeof(model.url) === "string" && model.url === "internal://custom") {
@@ -688,13 +692,7 @@ WizardStepBase {
                     Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
                 }
             }
-
-            if (model.subitems_url === "internal://back") {
-                osswipeview.decrementCurrentIndex()
-                categorySelected = ""
-            } else {
-                // Stay on page; user must click Next
-            }
+            // Stay on page; user must click Next
         }
     }
     
