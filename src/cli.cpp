@@ -70,9 +70,19 @@ int Cli::run()
         const char* commonMsg = "Writing to storage devices requires elevated privileges.";
         
 #ifdef Q_OS_LINUX
+        // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
+        // Check if running from AppImage first
+        QString execName;
+        QByteArray appImagePath = qgetenv("APPIMAGE");
+        if (!appImagePath.isEmpty()) {
+            execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
+        } else {
+            execName = QFileInfo(_app->arguments()[0]).fileName();
+        }
+        
         std::cerr << "ERROR: Not running as root." << std::endl;
         std::cerr << commonMsg << std::endl;
-        std::cerr << "Please run with sudo: sudo rpi-imager --cli ..." << std::endl;
+        std::cerr << "Please run with sudo: sudo " << execName.toStdString() << " --cli ..." << std::endl;
 #elif defined(Q_OS_WIN)
         std::cerr << "ERROR: Not running as Administrator." << std::endl;
         std::cerr << commonMsg << std::endl;

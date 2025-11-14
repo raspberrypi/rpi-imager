@@ -3,8 +3,8 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-#include <QtCore/QFileInfo>
-#include <QtCore/QFile>
+#include <QFileInfo>
+#include <QFile>
 #include <QDebug>
 #include <QTextStream>
 #include <QMessageLogContext>
@@ -123,6 +123,45 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(ImageWriter::staticVersion());
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
 
+        // Early check for elevated privileges on platforms that require them (Linux/Windows)
+        bool hasPermissionIssue = false;
+        QString permissionMessage;
+        
+    #if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+        if (!PlatformQuirks::hasElevatedPrivileges())
+        {
+            hasPermissionIssue = true;
+            
+            // Common message parts to reduce translation effort
+            QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
+            QString footer = QObject::tr("Without this, you will encounter permission errors when writing images.");
+            
+    #ifdef Q_OS_LINUX
+            // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
+            // Check if running from AppImage first
+            QString execName;
+            QByteArray appImagePath = qgetenv("APPIMAGE");
+            if (!appImagePath.isEmpty()) {
+                execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
+            } else {
+                execName = QFileInfo(QString::fromUtf8(argv[0])).fileName();
+            }
+            QString statusAndAction = QObject::tr(
+                "You are not running as root.\n\n"
+                "Please run with elevated privileges: sudo %1"
+            ).arg(execName);
+    #elif defined(Q_OS_WIN)
+            QString statusAndAction = QObject::tr(
+                "You are not running as Administrator.\n\n"
+                "Please run as Administrator."
+            );
+    #endif
+            
+            permissionMessage = QString("%1\n\n%2\n\n%3").arg(header, statusAndAction, footer);
+            qWarning() << "Not running with elevated privileges - device access may fail";
+        }
+    #endif
+
     qmlRegisterUncreatableMetaObject(
         ImageOptions::staticMetaObject, // from Q_NAMESPACE
         "ImageOptions",    // import name in qml
@@ -133,36 +172,6 @@ int main(int argc, char *argv[])
     
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;
-
-    // Early check for elevated privileges on platforms that require them (Linux/Windows)
-    bool hasPermissionIssue = false;
-    QString permissionMessage;
-    
-#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
-    if (!PlatformQuirks::hasElevatedPrivileges())
-    {
-        hasPermissionIssue = true;
-        
-        // Common message parts to reduce translation effort
-        QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
-        QString footer = QObject::tr("Without this, you will encounter permission errors when writing images.");
-        
-#ifdef Q_OS_LINUX
-        QString statusAndAction = QObject::tr(
-            "You are not running as root.\n\n"
-            "Please run with elevated privileges: sudo rpi-imager"
-        );
-#elif defined(Q_OS_WIN)
-        QString statusAndAction = QObject::tr(
-            "You are not running as Administrator.\n\n"
-            "Please run as Administrator."
-        );
-#endif
-        
-        permissionMessage = QString("%1\n\n%2\n\n%3").arg(header, statusAndAction, footer);
-        qWarning() << "Not running with elevated privileges - device access may fail";
-    }
-#endif
 
 #ifdef Q_OS_DARWIN
     // Ensure our app is the default handler for rpi-imager:// scheme so Safari recognizes it
