@@ -37,6 +37,19 @@ for arg in "$@"; do
     esac
 done
 
+# Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
+if [ -n "$QT_ROOT_ARG" ]; then
+    # Expand tilde if present
+    QT_ROOT_ARG="${QT_ROOT_ARG/#\~/$HOME}"
+    # Convert to absolute path if it exists
+    if [ -e "$QT_ROOT_ARG" ]; then
+        QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
+    else
+        echo "Warning: Specified Qt root path does not exist: $QT_ROOT_ARG"
+        echo "Will attempt to use it anyway, but this may fail..."
+    fi
+fi
+
 # Validate architecture
 if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; then
     echo "Error: Architecture must be one of: x86_64, aarch64"
