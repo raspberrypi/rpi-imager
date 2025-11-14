@@ -79,6 +79,59 @@ void applyQuirks() {
                              "unix:path=%s/bus", xdgRuntimeDir);
                 ::setenv("DBUS_SESSION_BUS_ADDRESS", dbusSessionAddress, 1);
                 
+                // Preserve display-related environment variables from sudo/pkexec
+                // These are needed for xdg-open and other GUI operations
+                
+                // First, check if these are already in the environment (common with sudo)
+                const char* currentDisplay = ::getenv("DISPLAY");
+                const char* currentXauthority = ::getenv("XAUTHORITY");
+                const char* currentWaylandDisplay = ::getenv("WAYLAND_DISPLAY");
+                
+                // If not found, try to detect from the user's active session
+                // For X11, common display values are :0, :1, etc.
+                // For Wayland, common values are wayland-0, wayland-1, etc.
+                if (!currentDisplay && !currentWaylandDisplay) {
+                    // Try to find X11 socket in /tmp/.X11-unix/
+                    // This is a common location for X11 display sockets
+                    if (access("/tmp/.X11-unix/X0", F_OK) == 0) {
+                        ::setenv("DISPLAY", ":0", 1);
+                        std::fprintf(stderr, "Detected X11 display socket, set DISPLAY to: :0\n");
+                    }
+                    
+                    // Check for Wayland socket in the user's XDG_RUNTIME_DIR
+                    char waylandSocketPath[512];
+                    std::snprintf(waylandSocketPath, sizeof(waylandSocketPath), 
+                                 "%s/wayland-0", xdgRuntimeDir);
+                    if (access(waylandSocketPath, F_OK) == 0) {
+                        ::setenv("WAYLAND_DISPLAY", "wayland-0", 1);
+                        std::fprintf(stderr, "Detected Wayland socket, set WAYLAND_DISPLAY to: wayland-0\n");
+                    }
+                } else {
+                    // Display variables already set, just log them
+                    if (currentDisplay) {
+                        std::fprintf(stderr, "DISPLAY already set to: %s\n", currentDisplay);
+                    }
+                    if (currentWaylandDisplay) {
+                        std::fprintf(stderr, "WAYLAND_DISPLAY already set to: %s\n", currentWaylandDisplay);
+                    }
+                }
+                
+                // For XAUTHORITY, if not set, try common locations
+                if (!currentXauthority) {
+                    // Common location is ~/.Xauthority
+                    char xauthorityPath[512];
+                    std::snprintf(xauthorityPath, sizeof(xauthorityPath), 
+                                 "%s/.Xauthority", pw->pw_dir);
+                    if (access(xauthorityPath, R_OK) == 0) {
+                        ::setenv("XAUTHORITY", xauthorityPath, 1);
+                        std::fprintf(stderr, "Set XAUTHORITY to: %s\n", xauthorityPath);
+                    } else {
+                        std::fprintf(stderr, "Note: XAUTHORITY not found, X11 apps may have permission issues\n");
+                    }
+                } else {
+                    std::fprintf(stderr, "XAUTHORITY already set to: %s\n", currentXauthority);
+                }
+                
                 std::fprintf(stderr, "Set HOME to: %s\n", pw->pw_dir);
                 std::fprintf(stderr, "Set XDG_CACHE_HOME to: %s\n", xdgCacheHome);
                 std::fprintf(stderr, "Set XDG_CONFIG_HOME to: %s\n", xdgConfigHome);
