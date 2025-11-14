@@ -83,6 +83,30 @@
         <source>Change the source of operating system images between official Raspberry Pi repository and custom sources</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Secure Boot RSA Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem);;All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -183,10 +207,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Locale configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Wi‑Fi configured</source>
         <translation type="unfinished"></translation>
     </message>
@@ -212,6 +232,10 @@
     </message>
     <message>
         <source>Serial configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Localisation configured</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -538,6 +562,78 @@
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos;. Please run with elevated privileges (sudo).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Creating signed boot image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create secure boot files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No RSA key configured for secure boot. Please select a key in App Options.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>RSA key file not found: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Extracting boot partition files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to extract boot partition files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No boot files found to package</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create temporary directory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Creating boot.img...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create boot.img</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Signing boot image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to generate boot.sig</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read boot.img</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read boot.sig</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning up boot partition...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Syncing deletions to disk...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing signed boot files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write secure boot files: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1157,15 +1253,15 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>You are not running as root.
-
-Please run with elevated privileges: sudo rpi-imager</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>You are not running as Administrator.
 
 Please run as Administrator.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as root.
+
+Please run with elevated privileges: sudo %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1312,6 +1408,69 @@ Please run as Administrator.</source>
     </message>
     <message>
         <source>Download operating system list from a custom web address</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SecureBootCustomizationStep</name>
+    <message>
+        <source>Customisation: Secure Boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure secure boot image signing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save secure boot settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Secure Boot Signing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Learn about Secure Boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Your boot partition will be signed using the RSA private key configured in App Options.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Private Key: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(not configured)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Public Key Fingerprint: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unavailable)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unable to compute)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1712,6 +1871,10 @@ to show system drives.</source>
     </message>
     <message>
         <source>Keep your current Raspberry Pi Connect token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Secure Boot</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
