@@ -19,17 +19,26 @@
 namespace PlatformQuirks {
 
 void applyQuirks() {
-    // When running as root via sudo, ensure cache and settings directories
-    // are tied to the original user who ran sudo, not root
+    // When running as root via sudo or pkexec, ensure cache and settings directories
+    // are tied to the original user, not root
     if (::geteuid() == 0) {
-        // Check if we're running via sudo
+        // Check if we're running via sudo or pkexec
         const char* sudoUid = ::getenv("SUDO_UID");
-        const char* sudoGid = ::getenv("SUDO_GID");
-        const char* sudoUser = ::getenv("SUDO_USER");
+        const char* pkexecUid = ::getenv("PKEXEC_UID");
+        const char* originalUidStr = nullptr;
+        const char* elevationMethod = nullptr;
         
-        if (sudoUid && sudoGid && sudoUser) {
-            // We're running under sudo - get the original user's home directory
-            uid_t originalUid = static_cast<uid_t>(::atoi(sudoUid));
+        if (sudoUid) {
+            originalUidStr = sudoUid;
+            elevationMethod = "sudo";
+        } else if (pkexecUid) {
+            originalUidStr = pkexecUid;
+            elevationMethod = "pkexec";
+        }
+        
+        if (originalUidStr) {
+            // We're running under sudo or pkexec - get the original user's information
+            uid_t originalUid = static_cast<uid_t>(::atoi(originalUidStr));
             struct passwd* pw = ::getpwuid(originalUid);
             
             if (pw && pw->pw_dir) {
@@ -42,11 +51,11 @@ void applyQuirks() {
                 std::snprintf(xdgCacheHome, sizeof(xdgCacheHome), "%s/.cache", pw->pw_dir);
                 std::snprintf(xdgConfigHome, sizeof(xdgConfigHome), "%s/.config", pw->pw_dir);
                 std::snprintf(xdgDataHome, sizeof(xdgDataHome), "%s/.local/share", pw->pw_dir);
-                std::snprintf(xdgRuntimeDir, sizeof(xdgRuntimeDir), "/run/user/%s", sudoUid);
+                std::snprintf(xdgRuntimeDir, sizeof(xdgRuntimeDir), "/run/user/%s", originalUidStr);
                 
-                std::fprintf(stderr, "Running as root via sudo\n");
-                std::fprintf(stderr, "Original user: %s\n", sudoUser);
-                std::fprintf(stderr, "Original UID: %s\n", sudoUid);
+                std::fprintf(stderr, "Running as root via %s\n", elevationMethod);
+                std::fprintf(stderr, "Original user: %s\n", pw->pw_name);
+                std::fprintf(stderr, "Original UID: %s\n", originalUidStr);
                 std::fprintf(stderr, "Original home directory: %s\n", pw->pw_dir);
                 
                 // Override HOME to point to the original user's home directory
@@ -64,7 +73,7 @@ void applyQuirks() {
                 ::setenv("XDG_RUNTIME_DIR", xdgRuntimeDir, 1);
                 
                 // Try to construct the D-Bus session bus address from the original user's runtime directory
-                // This is needed for suspend inhibitor and other D-Bus services
+                // This is needed for XDG Desktop Portal (file dialogs), suspend inhibitor, and other D-Bus services
                 char dbusSessionAddress[1024];
                 std::snprintf(dbusSessionAddress, sizeof(dbusSessionAddress), 
                              "unix:path=%s/bus", xdgRuntimeDir);
@@ -77,7 +86,7 @@ void applyQuirks() {
                 std::fprintf(stderr, "Set XDG_RUNTIME_DIR to: %s\n", xdgRuntimeDir);
                 std::fprintf(stderr, "Set DBUS_SESSION_BUS_ADDRESS to: %s\n", dbusSessionAddress);
             } else {
-                std::fprintf(stderr, "WARNING: Could not retrieve original user information for UID: %s\n", sudoUid);
+                std::fprintf(stderr, "WARNING: Could not retrieve original user information for UID: %s\n", originalUidStr);
             }
         }
     }

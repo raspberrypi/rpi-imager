@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <pwd.h>
 
 #include <QtDBus/QtDBus>
 
@@ -136,10 +137,40 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
         // Drop privileges before exec'ing external programs.
         // The imager runs with elevated privileges to write to disks, but the
         // inhibitor tools don't need those privileges.
+        
+        // Determine target UID and GID to drop to
+        uid_t targetUid = 0;
+        gid_t targetGid = 0;
+        bool shouldDropPrivileges = false;
+        
         if (getuid() != geteuid())
         {
-            // Drop effective privileges back to real user
-            if (setgid(getgid()) != 0 || setuid(getuid()) != 0)
+            // Running under sudo: real UID is the original user
+            targetUid = getuid();
+            targetGid = getgid();
+            shouldDropPrivileges = true;
+        }
+        else if (geteuid() == 0)
+        {
+            // Running as root - check if we were invoked via pkexec
+            const char* pkexecUid = getenv("PKEXEC_UID");
+            if (pkexecUid)
+            {
+                // Running under pkexec: need to look up the original user's GID
+                targetUid = static_cast<uid_t>(atoi(pkexecUid));
+                struct passwd* pw = getpwuid(targetUid);
+                if (pw)
+                {
+                    targetGid = pw->pw_gid;
+                    shouldDropPrivileges = true;
+                }
+            }
+        }
+        
+        if (shouldDropPrivileges)
+        {
+            // Drop effective privileges back to the original user
+            if (setgid(targetGid) != 0 || setuid(targetUid) != 0)
             {
                 // Failed to drop privileges - abort for safety
                 _exit(126);
