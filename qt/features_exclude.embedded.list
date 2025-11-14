@@ -28,7 +28,6 @@ printer
 printpreviewdialog
 printpreviewwidget
 printsupport
-qev
 qt3d-animation
 qt3d-extras
 qt3d-input
