@@ -35,7 +35,6 @@ qt3d-logic
 qt3d-opengl-renderer
 qt3d-render
 qt3d-rhi-renderer
-qtattributionsscanner
 qtpdf-build
 qtpdf-quick-build
 qtpdf-widgets-build
