@@ -298,6 +298,10 @@ export QML_IMPORT_PATH="${HERE}/usr/qml"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
 QT_QPA_PLATFORM=linuxfb
 
+# Font configuration for bundled fontconfig
+export FONTCONFIG_PATH="${HERE}/etc/fonts"
+export FONTCONFIG_FILE="${HERE}/etc/fonts/fonts.conf"
+
 # Disable desktop-specific features for embedded use
 export QT_QUICK_CONTROLS_STYLE=Material
 export QT_SCALE_FACTOR=1.0
@@ -334,6 +338,51 @@ cp -d "$QT_DIR/lib/libQt6QuickControls2MaterialStyleImpl.so"* "$APPDIR/usr/lib/"
 cp -d "$QT_DIR/lib/libQt6Svg.so.6"* "$APPDIR/usr/lib/" 2>/dev/null || true
 cp -d "$QT_DIR/lib/libQt6QuickDialogs2.so.6"* "$APPDIR/usr/lib/" 2>/dev/null || true
 cp -d "$QT_DIR/lib/libQt6LabsFolderListModel.so.6"* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+# Copy font-related system libraries (required for embedded systems without desktop environment)
+echo "Copying font rendering libraries..."
+if [ -f "/lib/$ARCH-linux-gnu/libfontconfig.so.1" ] || [ -f "/usr/lib/$ARCH-linux-gnu/libfontconfig.so.1" ]; then
+    cp -d /lib/$ARCH-linux-gnu/libfontconfig.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d /usr/lib/$ARCH-linux-gnu/libfontconfig.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        echo "Warning: Could not find libfontconfig"
+    
+    cp -d /lib/$ARCH-linux-gnu/libfreetype.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d /usr/lib/$ARCH-linux-gnu/libfreetype.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        echo "Warning: Could not find libfreetype"
+    
+    # Copy dependencies of fontconfig and freetype
+    # Direct dependencies of fontconfig
+    cp -d /lib/$ARCH-linux-gnu/libexpat.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d /usr/lib/$ARCH-linux-gnu/libexpat.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    
+    # Dependencies of freetype (fontconfig -> freetype -> these)
+    cp -d /lib/$ARCH-linux-gnu/libz.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d /usr/lib/$ARCH-linux-gnu/libz.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    
+    cp -d /lib/$ARCH-linux-gnu/libbz2.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d /usr/lib/$ARCH-linux-gnu/libbz2.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    
+    cp -d /lib/$ARCH-linux-gnu/libpng16.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d /usr/lib/$ARCH-linux-gnu/libpng16.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    
+    cp -d /lib/$ARCH-linux-gnu/libbrotlidec.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d /usr/lib/$ARCH-linux-gnu/libbrotlidec.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    
+    cp -d /lib/$ARCH-linux-gnu/libbrotlicommon.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d /usr/lib/$ARCH-linux-gnu/libbrotlicommon.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    
+    # Copy font configuration files for fontconfig to work properly
+    mkdir -p "$APPDIR/etc/fonts"
+    if [ -d "/etc/fonts" ]; then
+        cp -r /etc/fonts/* "$APPDIR/etc/fonts/" 2>/dev/null || true
+        echo "Copied system font configuration"
+    fi
+    
+    echo "Font rendering libraries packaged for embedded deployment"
+else
+    echo "Warning: Font libraries not found for architecture $ARCH"
+    echo "AppImage may require fontconfig to be installed on target system"
+fi
 
 mkdir -p "$APPDIR/usr/qml/QtCore/"
 cp -d "$QT_DIR/qml/QtCore/"* "$APPDIR/usr/qml/QtCore/" 2>/dev/null || true
