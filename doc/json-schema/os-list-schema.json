@@ -435,10 +435,19 @@
                                 "$id": "#/properties/os_list/items/anyOf/0/properties/init_format",
                                 "type": "string",
                                 "title": "The init_format schema",
-                                "description": "If set 'advanced settings' button will be shown. If 'init_format' is set to 'systemd', OS customization will be done by creating a firstrun.sh with shell commands on the SD card, and cmdline.txt will be modified to instruct systemd to execute /boot/firstrun.sh. THIS WILL ONLY WORK IF THE FAT PARTITION IS MOUNTED AT /boot in your /etc/fstab. If 'init_format' is set to 'cloudinit' a cloud-init 'user-data' file will be created on the FAT partition instead.",
+                                "description": "If set OS customisation steps will be shown. If 'init_format' is set to 'systemd', OS customization will be done by creating a firstrun.sh with shell commands on the SD card, and cmdline.txt will be modified to instruct systemd to execute /boot/firstrun.sh. THIS WILL ONLY WORK IF THE FAT PARTITION IS MOUNTED AT /boot in your /etc/fstab. If 'init_format' is set to 'cloudinit', a cloud-init 'user-data' file will be created on the FAT partition instead. If set to 'cloudinit-rpi', cloud-init will be used with Raspberry Pi specific module (cc_raspberry_pi) support. Use 'none' or empty string to explicitly disable customization.",
                                 "default": "",
                                 "examples": [
-                                    "systemd"
+                                    "systemd",
+                                    "cloudinit",
+                                    "cloudinit-rpi"
+                                ],
+                                "enum": [
+                                    "",
+                                    "systemd",
+                                    "cloudinit",
+                                    "cloudinit-rpi",
+                                    "none"
                                 ]
                             },
                             "devices": {

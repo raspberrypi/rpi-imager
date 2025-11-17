@@ -301,15 +301,10 @@ WizardStepBase {
             required property string icon
             required property string release_date
             required property string url
-            required property string subitems_json
             required property string extract_sha256
             required property QtObject model
             required property double image_download_size
-            required property var capabilities
-            
-            property string website
-            property string tooltip
-            property string subitems_url
+            required property var devices
             
             // Get reference to the containing ListView
             // IMPORTANT: Cache ListView.view in a property for reliable access.
@@ -548,7 +543,8 @@ WizardStepBase {
                     tooltip: "",
                     website: "",
                     init_format: "",
-                    capabilities: ""
+                    capabilities: "",
+                    devices: []
                 })
                 
                 // Ensure this sublist can receive keyboard focus
