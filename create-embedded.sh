@@ -4,6 +4,12 @@ set -e
 # Script to create AppImage for embedded systems using linuxfb as a renderer
 # This creates an AppImage that runs with direct rendering (no window manager required)
 
+# Source common build functions for ICU version detection
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/qt/qt-build-common.sh" ]; then
+    source "$SCRIPT_DIR/qt/qt-build-common.sh"
+fi
+
 # Parse command line arguments
 ARCH=$(uname -m)  # Default to current architecture
 CLEAN_BUILD=1
@@ -158,6 +164,18 @@ fi
 if [ -f "$QT_DIR/bin/qmake" ]; then
     QT_VERSION=$("$QT_DIR/bin/qmake" -query QT_VERSION)
     echo "Qt version: $QT_VERSION"
+fi
+
+# Detect ICU version for this Qt version
+if declare -f get_icu_version_for_qt > /dev/null 2>&1; then
+    ICU_VERSION=$(get_icu_version_for_qt "$QT_VERSION")
+    ICU_MAJOR_VERSION="${ICU_VERSION%%.*}"  # Extract major version (e.g., 76 from 76.1)
+    echo "Using ICU version: $ICU_VERSION (major: $ICU_MAJOR_VERSION)"
+else
+    # Fallback if common functions not available
+    echo "Warning: Could not determine ICU version, using default 76"
+    ICU_VERSION="76.1"
+    ICU_MAJOR_VERSION="76"
 fi
 
 # Configuration
@@ -344,7 +362,27 @@ cp "$QT_DIR/qml/QtQuick/Controls/Basic/impl/libqtquickcontrols2basicstyleimplplu
 cp "$QT_DIR/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Basic/" 2>/dev/null || true
 cp "$QT_DIR/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Material/" 2>/dev/null || true
 
-cp "$PWD/qt/icu/icu4c/source/lib/libicudata.so.72" "$APPDIR/usr/lib/libicudata.so.72"
+# Copy ICU libraries (using detected version)
+echo "Copying ICU $ICU_VERSION libraries..."
+ICU_LIB_DIR="$PWD/qt/icu/icu4c/source/lib"
+if [ -d "$ICU_LIB_DIR" ]; then
+    # Copy ICU libraries with proper version
+    cp "$ICU_LIB_DIR/libicudata.so.$ICU_MAJOR_VERSION" "$APPDIR/usr/lib/" 2>/dev/null || \
+        echo "Warning: Could not find libicudata.so.$ICU_MAJOR_VERSION"
+    cp "$ICU_LIB_DIR/libicui18n.so.$ICU_MAJOR_VERSION" "$APPDIR/usr/lib/" 2>/dev/null || \
+        echo "Warning: Could not find libicui18n.so.$ICU_MAJOR_VERSION"
+    cp "$ICU_LIB_DIR/libicuuc.so.$ICU_MAJOR_VERSION" "$APPDIR/usr/lib/" 2>/dev/null || \
+        echo "Warning: Could not find libicuuc.so.$ICU_MAJOR_VERSION"
+    
+    # Create symlinks without version for compatibility
+    (cd "$APPDIR/usr/lib" && \
+        [ -f "libicudata.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicudata.so.$ICU_MAJOR_VERSION" "libicudata.so" || true && \
+        [ -f "libicui18n.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicui18n.so.$ICU_MAJOR_VERSION" "libicui18n.so" || true && \
+        [ -f "libicuuc.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicuuc.so.$ICU_MAJOR_VERSION" "libicuuc.so" || true)
+else
+    echo "Warning: ICU libraries not found at $ICU_LIB_DIR"
+    echo "You may need to build Qt with ICU support first"
+fi
 
 mkdir -p "$APPDIR/usr/share/fonts/truetype/dejavu"
 mkdir -p "$APPDIR/usr/share/fonts/truetype/freefont"

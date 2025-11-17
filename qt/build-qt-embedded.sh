@@ -131,6 +131,13 @@ if [ -d "$BASE_DIR/icu/icu4c/source/lib" ]; then
 else
     echo "Building custom ICU..."
 
+    # Detect the appropriate ICU version for this Qt version
+    ICU_VERSION=$(get_icu_version_for_qt "$QT_VERSION")
+    ICU_TAG=$(icu_version_to_tag "$ICU_VERSION")
+    ICU_DATA_ZIP=$(icu_version_to_data_package "$ICU_VERSION")
+    
+    echo "Using ICU version $ICU_VERSION (tag: $ICU_TAG) for Qt $QT_VERSION"
+
     cd "$BASE_DIR"
     # Compile Languages List from project i18n directory
     LANG_DIR="$PROJECT_ROOT/src/i18n"
@@ -176,15 +183,34 @@ EOF
             git clone https://github.com/unicode-org/icu.git
         fi
         cd "$BASE_DIR/icu/icu4c/source"
-        git checkout release-72-1 2>/dev/null || true
+        
+        # Checkout the appropriate ICU version
+        echo "Checking out ICU $ICU_TAG..."
+        git fetch --tags 2>/dev/null || true
+        git checkout "$ICU_TAG" 2>/dev/null || {
+            echo "Warning: Could not checkout $ICU_TAG, trying latest stable..."
+            git checkout $(git describe --tags --abbrev=0) 2>/dev/null || true
+        }
+        
         if [ ! -d "data" ]; then
-            wget https://github.com/unicode-org/icu/releases/download/release-72-1/icu4c-72_1-data.zip
-            unzip -q icu4c-72_1-data.zip
+            echo "Downloading ICU data package $ICU_DATA_ZIP..."
+            wget "https://github.com/unicode-org/icu/releases/download/$ICU_TAG/$ICU_DATA_ZIP" || {
+                echo "Warning: Could not download $ICU_DATA_ZIP, using default data"
+            }
+            if [ -f "$ICU_DATA_ZIP" ]; then
+                unzip -q "$ICU_DATA_ZIP"
+            fi
         fi
+        
+        # Build ICU with language filters
         ICU_DATA_FILTER_FILE="$BASE_DIR/language_filters.json" ./runConfigureICU Linux
         make -j"$CORES"
     else
         echo "Warning: Language directory not found at $LANG_DIR, building ICU without language filters"
+        
+        # Build ICU without language filters
+        ./runConfigureICU Linux
+        make -j"$CORES"
     fi
 fi
 
