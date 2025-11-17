@@ -324,6 +324,7 @@ echo "Deploying Qt dependencies for embedded systems..."
 mkdir -p "$APPDIR/usr/lib"
 cp -d "$QT_DIR/lib/libQt6Core.so"* "$APPDIR/usr/lib/"
 cp -d "$QT_DIR/lib/libQt6Gui.so"* "$APPDIR/usr/lib/"
+cp -d "$QT_DIR/lib/libQt6DBus.so"* "$APPDIR/usr/lib/"  # Required by linuxfb plugin
 # cp -d "$QT_DIR/lib/libQt6Widgets.so"* "$APPDIR/usr/lib/"    # QtWidgets excluded
 cp -d "$QT_DIR/lib/libQt6Quick.so"* "$APPDIR/usr/lib/"
 cp -d "$QT_DIR/lib/libQt6Qml.so"* "$APPDIR/usr/lib/"
@@ -383,6 +384,66 @@ else
     echo "Warning: Font libraries not found for architecture $ARCH"
     echo "AppImage may require fontconfig to be installed on target system"
 fi
+
+# Copy input device libraries (required by linuxfb platform plugin)
+echo "Copying input device libraries for linuxfb..."
+cp -d /lib/$ARCH-linux-gnu/libudev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libudev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libinput.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libinput.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libmtdev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libmtdev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libevdev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libevdev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libxkbcommon.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libxkbcommon.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libdrm.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libdrm.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libwacom.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libwacom.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+# Copy GLib libraries (required by libinput)
+cp -d /lib/$ARCH-linux-gnu/libglib-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libglib-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libgobject-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libgobject-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libgudev-1.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libgudev-1.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+# Copy additional system libraries
+cp -d /lib/$ARCH-linux-gnu/libdbus-1.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libdbus-1.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libsystemd.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libsystemd.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libcap.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libcap.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libatomic.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libatomic.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libdouble-conversion.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libdouble-conversion.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libpcre2-*.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libpcre2-*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libzstd.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libzstd.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+cp -d /lib/$ARCH-linux-gnu/libffi.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d /usr/lib/$ARCH-linux-gnu/libffi.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+
+echo "Input device libraries packaged for embedded deployment"
 
 mkdir -p "$APPDIR/usr/qml/QtCore/"
 cp -d "$QT_DIR/qml/QtCore/"* "$APPDIR/usr/qml/QtCore/" 2>/dev/null || true
