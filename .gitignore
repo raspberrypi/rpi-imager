@@ -37,6 +37,7 @@ appimage-*
 # Qt related
 qt-build**
 qt-src**
+qt/language_filters.json
 build
 build-**
 
