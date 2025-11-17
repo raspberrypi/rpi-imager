@@ -22,6 +22,9 @@ This guide explains how to create, validate, and manipulate Raspberry Pi Imager 
   - [Shell Scripts](#shell-scripts)
 - [Best Practices](#best-practices)
 - [Common Pitfalls](#common-pitfalls)
+- [Additional Resources](#additional-resources)
+- [Testing Your JSON Files](#testing-your-json-files)
+- [Requesting an addition to the official Raspberry Pi Imager OS List](#requesting-an-addition-to-the-official-raspberry-pi-imager-os-list)
 
 ## Overview
 
