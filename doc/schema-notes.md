@@ -38,6 +38,7 @@ The schema defines two main components:
 2. **`os_list`** (required): Array of operating system entries
 
 Each OS entry must include:
+
 - `name`: Display name
 - `description`: Description text
 - `icon`: Icon URL or path
@@ -53,11 +54,13 @@ Each OS entry must include:
 ### Python Validation
 
 **Install dependencies:**
+
 ```bash
 pip install jsonschema
 ```
 
 **Basic validation:**
+
 ```python
 #!/usr/bin/env python3
 import json
@@ -144,6 +147,7 @@ int main() {
 ```
 
 **Build with CMake:**
+
 ```cmake
 find_package(nlohmann_json REQUIRED)
 add_executable(validate_os_list validate.cpp)
@@ -222,6 +226,7 @@ int main() {
 ```
 
 **Compile:**
+
 ```bash
 gcc -o validate validate.c -ljson-c
 ```
@@ -231,6 +236,7 @@ gcc -o validate validate.c -ljson-c
 **Using [serde_json](https://github.com/serde-rs/json) and [jsonschema](https://github.com/Stranger6667/jsonschema-rs):**
 
 **Cargo.toml:**
+
 ```toml
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -239,6 +245,7 @@ jsonschema = "0.17"
 ```
 
 **Code:**
+
 ```rust
 use std::fs;
 use serde_json::Value;
@@ -285,6 +292,7 @@ fn main() {
 ```
 
 **Build and run:**
+
 ```bash
 cargo build --release
 ./target/release/validate_os_list
@@ -753,6 +761,7 @@ fn main() -> io::Result<()> {
 ```
 
 **Additional Cargo.toml dependencies:**
+
 ```toml
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -768,17 +777,20 @@ chrono = "0.4"
 [jq](https://stedolan.github.io/jq/) is a powerful command-line JSON processor.
 
 **Basic validation (check structure):**
+
 ```bash
 # Check if file is valid JSON and has os_list
 jq -e '.os_list | length' doc/os-sublist-example.json
 ```
 
 **Extract all OS names:**
+
 ```bash
 jq -r '.os_list[].name' doc/os-sublist-example.json
 ```
 
 **Add a new OS entry:**
+
 ```bash
 jq '.os_list += [{
   "name": "New OS",
@@ -795,22 +807,26 @@ jq '.os_list += [{
 ```
 
 **Update an OS entry by name:**
+
 ```bash
 jq '(.os_list[] | select(.name == "Your Operating System Name") | .release_date) = "2024-02-01"' \
   doc/os-sublist-example.json > updated.json
 ```
 
 **Filter OS entries by device support:**
+
 ```bash
 jq '.os_list[] | select(.devices | contains(["pi4"]))' my-os-list.json
 ```
 
 **Get total download size:**
+
 ```bash
 jq '[.os_list[].image_download_size] | add' my-os-list.json
 ```
 
 **Check for required fields:**
+
 ```bash
 jq -e '.os_list[] | 
   select(
@@ -827,26 +843,31 @@ jq -e '.os_list[] |
 ```
 
 **Pretty-print with colors:**
+
 ```bash
 jq -C '.' my-os-list.json | less -R
 ```
 
 **Compact output (no formatting):**
+
 ```bash
 jq -c '.' my-os-list.json
 ```
 
 **Sort OS list by release date:**
+
 ```bash
 jq '.os_list |= sort_by(.release_date)' my-os-list.json
 ```
 
 **Add architecture to all entries:**
+
 ```bash
 jq '.os_list[] |= . + {"architecture": "armv8"}' my-os-list.json
 ```
 
 **Remove optional fields:**
+
 ```bash
 jq '.os_list[] |= del(.website, .init_format)' my-os-list.json
 ```
@@ -854,16 +875,19 @@ jq '.os_list[] |= del(.website, .init_format)' my-os-list.json
 ### Using jsonschema (CLI)
 
 **Install:**
+
 ```bash
 pip install jsonschema
 ```
 
 **Validate from command line:**
+
 ```bash
 jsonschema -i doc/os-sublist-example.json doc/json-schema/os-list-schema.json
 ```
 
-**Or use the Python one-liner:**
+**Or use the Python sort-of-one-liner:**
+
 ```bash
 python3 -c "
 import json, jsonschema, sys
@@ -950,6 +974,7 @@ echo "✓ Size: $SIZE bytes"
 ```
 
 **Usage:**
+
 ```bash
 chmod +x create-os-list.sh
 ./create-os-list.sh my-os.img "My OS" "Custom OS for Pi" \
@@ -1034,6 +1059,7 @@ echo "All files validated successfully!"
 ### 1. **Missing Required Fields**
 
 ❌ Wrong:
+
 ```json
 {
   "os_list": [{
@@ -1044,6 +1070,7 @@ echo "All files validated successfully!"
 ```
 
 ✅ Correct:
+
 ```json
 {
   "os_list": [{
@@ -1063,11 +1090,13 @@ echo "All files validated successfully!"
 ### 2. **Wrong SHA256 Hash**
 
 ❌ Don't hash the compressed file for `extract_sha256`:
+
 ```bash
 sha256sum my-os.img.xz  # Wrong for extract_sha256!
 ```
 
 ✅ Hash the extracted/uncompressed image:
+
 ```bash
 xz -d -c my-os.img.xz | sha256sum
 # OR
@@ -1079,11 +1108,13 @@ sha256sum my-os.img
 The sizes must be in **bytes**, not megabytes or gigabytes:
 
 ❌ Wrong:
+
 ```json
 "extract_size": 4096  // This is 4KB, probably wrong!
 ```
 
 ✅ Correct:
+
 ```json
 "extract_size": 4294967296  // 4GB in bytes
 ```
@@ -1091,11 +1122,13 @@ The sizes must be in **bytes**, not megabytes or gigabytes:
 ### 4. **Invalid init_format Values**
 
 ❌ Wrong:
+
 ```json
 "init_format": "system-d"  // Typo!
 ```
 
 ✅ Correct (must be one of these):
+
 ```json
 "init_format": "systemd"
 "init_format": "cloudinit"
@@ -1107,11 +1140,13 @@ The sizes must be in **bytes**, not megabytes or gigabytes:
 ### 5. **Empty Device Arrays**
 
 ❌ Wrong:
+
 ```json
 "devices": []  // Empty array
 ```
 
 ✅ Correct:
+
 ```json
 "devices": ["pi4", "pi5"]  // At least one device
 ```
@@ -1121,6 +1156,7 @@ The sizes must be in **bytes**, not megabytes or gigabytes:
 The `imager` object should **only** appear in the top-level OS list, not in files referenced by `subitems_url`:
 
 ❌ Wrong (in a sublist file):
+
 ```json
 {
   "imager": { "latest_version": "1.8" },
@@ -1129,6 +1165,7 @@ The `imager` object should **only** appear in the top-level OS list, not in file
 ```
 
 ✅ Correct (in sublist file):
+
 ```json
 {
   "os_list": [...]
@@ -1176,4 +1213,3 @@ With those principals in mind, you can then fill out the form: https://forms.gle
 ## License
 
 This documentation follows the same license as the Raspberry Pi Imager project.
-
