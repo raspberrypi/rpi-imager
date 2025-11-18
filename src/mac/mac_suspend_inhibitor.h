@@ -7,7 +7,8 @@
 
 class MacSuspendInhibitor : public SuspendInhibitor
 {
-    IOPMAssertionID _powerAssertion;
+    IOPMAssertionID _systemSleepAssertion;
+    IOPMAssertionID _displaySleepAssertion;
 public:
     MacSuspendInhibitor();
     virtual ~MacSuspendInhibitor();

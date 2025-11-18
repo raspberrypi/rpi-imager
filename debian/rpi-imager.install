@@ -1,7 +1,11 @@
 #!/usr/bin/dh-exec
 
+# Install AppImage directly
 [linux-amd64] rpi-imager-x86_64.AppImage => /usr/bin/rpi-imager
 [linux-arm64] rpi-imager-aarch64.AppImage => /usr/bin/rpi-imager
+
+# Install PolicyKit policy for privilege escalation
+debian/com.raspberrypi.rpi-imager.policy /usr/share/polkit-1/actions/
 
 debian/rpi-imager.png /usr/share/icons/hicolor/128x128/apps/
 

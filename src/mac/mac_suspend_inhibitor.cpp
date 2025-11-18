@@ -6,22 +6,39 @@ MacSuspendInhibitor::MacSuspendInhibitor()
 {
     CFStringRef name = CFSTR("Raspberry Pi Imager");
 
+    // Prevent system sleep
     auto result = IOPMAssertionCreateWithName(
         kIOPMAssertionTypePreventUserIdleSystemSleep,
         kIOPMAssertionLevelOn,
         name,
-        &_powerAssertion);
+        &_systemSleepAssertion);
         
     if (result != kIOReturnSuccess)
-        _powerAssertion = kIOPMNullAssertionID;
+        _systemSleepAssertion = kIOPMNullAssertionID;
+
+    // Prevent display sleep
+    result = IOPMAssertionCreateWithName(
+        kIOPMAssertionTypeNoDisplaySleep,
+        kIOPMAssertionLevelOn,
+        name,
+        &_displaySleepAssertion);
+        
+    if (result != kIOReturnSuccess)
+        _displaySleepAssertion = kIOPMNullAssertionID;
 }
 
 /*virtual*/ MacSuspendInhibitor::~MacSuspendInhibitor()
 {
-    if (_powerAssertion != kIOPMNullAssertionID)
+    if (_systemSleepAssertion != kIOPMNullAssertionID)
     {
-        IOPMAssertionRelease(_powerAssertion);
-        _powerAssertion = kIOPMNullAssertionID;
+        IOPMAssertionRelease(_systemSleepAssertion);
+        _systemSleepAssertion = kIOPMNullAssertionID;
+    }
+
+    if (_displaySleepAssertion != kIOPMNullAssertionID)
+    {
+        IOPMAssertionRelease(_displaySleepAssertion);
+        _displaySleepAssertion = kIOPMNullAssertionID;
     }
 }
 

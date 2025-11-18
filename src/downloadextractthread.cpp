@@ -353,8 +353,7 @@ void DownloadExtractThread::extractMultiFileRun()
         manualmount = true;
     }
 
-    /* When run under some container environments -even when udisks2 said
-       it completed mounting the fs- we may have to wait a bit more
+    /* When run under some container environments, we may have to wait a bit more
        until mountpoint is available in sandbox which lags behind */
     for (int tries=0; tries<3; tries++)
     {

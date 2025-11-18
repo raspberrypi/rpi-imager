@@ -4,6 +4,12 @@ set -e
 # Script to create AppImage for embedded systems using linuxfb as a renderer
 # This creates an AppImage that runs with direct rendering (no window manager required)
 
+# Source common build functions for ICU version detection
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/qt/qt-build-common.sh" ]; then
+    source "$SCRIPT_DIR/qt/qt-build-common.sh"
+fi
+
 # Parse command line arguments
 ARCH=$(uname -m)  # Default to current architecture
 CLEAN_BUILD=1
@@ -45,6 +51,19 @@ for arg in "$@"; do
     esac
 done
 
+# Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
+if [ -n "$QT_ROOT_ARG" ]; then
+    # Expand tilde if present
+    QT_ROOT_ARG="${QT_ROOT_ARG/#\~/$HOME}"
+    # Convert to absolute path if it exists
+    if [ -e "$QT_ROOT_ARG" ]; then
+        QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
+    else
+        echo "Warning: Specified Qt root path does not exist: $QT_ROOT_ARG"
+        echo "Will attempt to use it anyway, but this may fail..."
+    fi
+fi
+
 # Validate architecture
 if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" && "$ARCH" != "armv7l" ]]; then
     echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
@@ -57,16 +76,27 @@ echo "Building embedded AppImage for architecture: $ARCH"
 SOURCE_DIR="src/"
 CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 
-# Extract version components
-MAJOR=$(grep -E "set\(IMAGER_VERSION_MAJOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MAJOR \([0-9]*\).*/\1/')
-MINOR=$(grep -E "set\(IMAGER_VERSION_MINOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MINOR \([0-9]*\).*/\1/')
-PATCH=$(grep -E "set\(IMAGER_VERSION_PATCH [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_PATCH \([0-9]*\).*/\1/')
-PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+# Get version from git tag (same approach as CMake)
+GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
+
+# Extract numeric version components for compatibility
+if [[ $GIT_VERSION =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+    MAJOR="${BASH_REMATCH[1]}"
+    MINOR="${BASH_REMATCH[2]}"
+    PATCH="${BASH_REMATCH[3]}"
+    PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+else
+    MAJOR="0"
+    MINOR="0"
+    PATCH="0"
+    PROJECT_VERSION="0.0.0"
+    echo "Warning: Could not parse version from git tag: $GIT_VERSION"
+fi
 
 # Extract project name (lowercase for AppImage naming convention)
 PROJECT_NAME=$(grep "project(" "$CMAKE_FILE" | head -1 | sed 's/project(\([^[:space:]]*\).*/\1/' | tr '[:upper:]' '[:lower:]')
 
-echo "Building $PROJECT_NAME version $PROJECT_VERSION for embedded systems"
+echo "Building $PROJECT_NAME version $GIT_VERSION (numeric: $PROJECT_VERSION) for embedded systems"
 
 QT_VERSION=""
 QT_DIR=""
@@ -136,13 +166,25 @@ if [ -f "$QT_DIR/bin/qmake" ]; then
     echo "Qt version: $QT_VERSION"
 fi
 
+# Detect ICU version for this Qt version
+if declare -f get_icu_version_for_qt > /dev/null 2>&1; then
+    ICU_VERSION=$(get_icu_version_for_qt "$QT_VERSION")
+    ICU_MAJOR_VERSION="${ICU_VERSION%%.*}"  # Extract major version (e.g., 76 from 76.1)
+    echo "Using ICU version: $ICU_VERSION (major: $ICU_MAJOR_VERSION)"
+else
+    # Fallback if common functions not available
+    echo "Warning: Could not determine ICU version, using default 76"
+    ICU_VERSION="76.1"
+    ICU_MAJOR_VERSION="76"
+fi
+
 # Configuration
 BUILD_TYPE="MinSizeRel"  # Optimize for size in embedded systems
 QML_SOURCES_PATH="$PWD/src/qmlcomponents/"
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-embedded-$ARCH"
-OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-embedded-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-embedded-${ARCH}.AppImage"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"
@@ -320,7 +362,27 @@ cp "$QT_DIR/qml/QtQuick/Controls/Basic/impl/libqtquickcontrols2basicstyleimplplu
 cp "$QT_DIR/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Basic/" 2>/dev/null || true
 cp "$QT_DIR/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so" "$APPDIR/usr/qml/QtQuick/Controls/Material/" 2>/dev/null || true
 
-cp "$PWD/qt/icu/icu4c/source/lib/libicudata.so.72" "$APPDIR/usr/lib/libicudata.so.72"
+# Copy ICU libraries (using detected version)
+echo "Copying ICU $ICU_VERSION libraries..."
+ICU_LIB_DIR="$PWD/qt/icu/icu4c/source/lib"
+if [ -d "$ICU_LIB_DIR" ]; then
+    # Copy ICU libraries with proper version
+    cp "$ICU_LIB_DIR/libicudata.so.$ICU_MAJOR_VERSION" "$APPDIR/usr/lib/" 2>/dev/null || \
+        echo "Warning: Could not find libicudata.so.$ICU_MAJOR_VERSION"
+    cp "$ICU_LIB_DIR/libicui18n.so.$ICU_MAJOR_VERSION" "$APPDIR/usr/lib/" 2>/dev/null || \
+        echo "Warning: Could not find libicui18n.so.$ICU_MAJOR_VERSION"
+    cp "$ICU_LIB_DIR/libicuuc.so.$ICU_MAJOR_VERSION" "$APPDIR/usr/lib/" 2>/dev/null || \
+        echo "Warning: Could not find libicuuc.so.$ICU_MAJOR_VERSION"
+    
+    # Create symlinks without version for compatibility
+    (cd "$APPDIR/usr/lib" && \
+        [ -f "libicudata.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicudata.so.$ICU_MAJOR_VERSION" "libicudata.so" || true && \
+        [ -f "libicui18n.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicui18n.so.$ICU_MAJOR_VERSION" "libicui18n.so" || true && \
+        [ -f "libicuuc.so.$ICU_MAJOR_VERSION" ] && ln -sf "libicuuc.so.$ICU_MAJOR_VERSION" "libicuuc.so" || true)
+else
+    echo "Warning: ICU libraries not found at $ICU_LIB_DIR"
+    echo "You may need to build Qt with ICU support first"
+fi
 
 mkdir -p "$APPDIR/usr/share/fonts/truetype/dejavu"
 mkdir -p "$APPDIR/usr/share/fonts/truetype/freefont"

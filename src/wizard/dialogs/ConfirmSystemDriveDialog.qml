@@ -64,9 +64,9 @@ BaseDialog {
         Accessible.role: Accessible.StaticText
         Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
         Accessible.ignored: false
-        Accessible.focusable: true
-        focusPolicy: Qt.TabFocus
-        activeFocusOnTab: true
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor; Accessible.ignored: true }
@@ -111,13 +111,13 @@ BaseDialog {
         font.bold: true
         color: Style.textDescriptionColor
         text: root.driveName
-        // Make this text focusable so VoiceOver can read it
+        // Make this text focusable when screen reader is active
         Accessible.role: Accessible.StaticText
         Accessible.name: qsTr("Drive name to type: %1").arg(text)
         Accessible.ignored: false
-        // Make it part of the tab order so it's announced
-        focusPolicy: Qt.TabFocus
-        activeFocusOnTab: true
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     TextField {

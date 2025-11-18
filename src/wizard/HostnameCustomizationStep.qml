@@ -28,10 +28,9 @@ WizardStepBase {
         
         // Initial focus will automatically go to title, then help text, then field (handled by WizardStepBase)
         
-        // Prefill from saved settings
-        var saved = imageWriter.getSavedCustomizationSettings()
-        if (saved.hostname) {
-            fieldHostname.text = saved.hostname
+        // Prefill from conserved customization settings
+        if (wizardContainer.customizationSettings.hostname) {
+            fieldHostname.text = wizardContainer.customizationSettings.hostname
             wizardContainer.hostnameConfigured = true
         }
     }
@@ -73,18 +72,20 @@ WizardStepBase {
     
     // Save settings when moving to next step
     onNextClicked: {
-        // Merge-and-save strategy: any non-empty hostname is a customization
-        var saved = imageWriter.getSavedCustomizationSettings()
         var hostnameText = fieldHostname.text ? fieldHostname.text.trim() : ""
+        
+        // Update conserved customization settings (runtime state)
         if (hostnameText.length > 0) {
-            saved.hostname = hostnameText
+            wizardContainer.customizationSettings.hostname = hostnameText
             wizardContainer.hostnameConfigured = true
+            // Persist for future sessions
+            imageWriter.setPersistedCustomisationSetting("hostname", hostnameText)
         } else {
-            // Empty -> remove from persisted settings
-            delete saved.hostname
+            // Empty -> remove from both runtime and persistent settings
+            delete wizardContainer.customizationSettings.hostname
             wizardContainer.hostnameConfigured = false
+            imageWriter.removePersistedCustomisationSetting("hostname")
         }
-        imageWriter.setSavedCustomizationSettings(saved)
     }
     
     // Handle skip button

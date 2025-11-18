@@ -12,6 +12,13 @@ if (NOT CMAKE_CROSSCOMPILING)
     endif()
 endif()
 
+# Generate metainfo.xml with current version
+# Output to debian/ directory for dpkg-buildpackage
+configure_file(
+    "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml.in"
+    "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml"
+    @ONLY)
+
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
 if(BUILD_CLI_ONLY)

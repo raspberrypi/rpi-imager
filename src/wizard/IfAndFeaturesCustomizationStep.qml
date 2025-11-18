@@ -19,6 +19,11 @@ WizardStepBase {
     required property ImageWriter imageWriter
     required property var wizardContainer
 
+    // Capability flags for each UI option
+    property bool supportsI2c: false
+    property bool supportsSpi: false
+    property bool supports1Wire: false
+    property bool supportsSerial: false
     property bool supportsSerialConsoleOnly: false
     property bool supportsUsbOtg: false
     property bool isConfirmed: false
@@ -33,7 +38,11 @@ WizardStepBase {
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
 
     function updateCaps() {
-        // imageWriter knows the currently selected hardware
+        // Check individual capabilities for each interface/feature
+        supportsI2c = imageWriter.checkHWAndSWCapability("i2c")
+        supportsSpi = imageWriter.checkHWAndSWCapability("spi")
+        supports1Wire = imageWriter.checkHWAndSWCapability("onewire")
+        supportsSerial = imageWriter.checkHWAndSWCapability("serial")
         supportsSerialConsoleOnly = imageWriter.checkHWCapability("serial_on_console_only")
         supportsUsbOtg = imageWriter.checkHWAndSWCapability("usb_otg")
     }
@@ -52,6 +61,8 @@ WizardStepBase {
 
                 // === Interfaces ===
                 WizardSectionContainer {
+                    visible: supportsI2c || supportsSpi || supports1Wire || supportsSerial
+
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: Style.spacingSmall
@@ -71,6 +82,7 @@ WizardStepBase {
                             text: qsTr("Enable I2C")
                             accessibleDescription: qsTr("Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals")
                             checked: false
+                            visible: supportsI2c
                         }
 
                         ImOptionPill {
@@ -79,6 +91,7 @@ WizardStepBase {
                             text: qsTr("Enable SPI")
                             accessibleDescription: qsTr("Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors")
                             checked: false
+                            visible: supportsSpi
                         }
 
                         ImOptionPill {
@@ -87,11 +100,13 @@ WizardStepBase {
                             text: qsTr("Enable 1-Wire")
                             accessibleDescription: qsTr("Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices")
                             checked: false
+                            visible: supports1Wire
                         }
 
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Style.spacingMedium
+                            visible: supportsSerial
 
                             WizardFormLabel {
                                 id: labelSerial
@@ -164,6 +179,7 @@ WizardStepBase {
     Component.onCompleted: {
         if (!wizardContainer.ccRpiAvailable) {
             root.isConfirmed = true
+            wizardContainer.ifAndFeaturesAvailable = false
             wizardContainer.ifI2cEnabled     = false
             wizardContainer.ifSpiEnabled     = false
             wizardContainer.if1WireEnabled   = false
@@ -175,61 +191,121 @@ WizardStepBase {
         }
         root.isConfirmed = false
 
-        updateCaps()
+        // Defer capability check to ensure imageWriter capabilities are fully available
+        // and QML bindings are established
+        Qt.callLater(function() {
+            updateCaps()
+            
+            // Update availability flag for sidebar navigation
+            var hasAnyCapabilities = supportsI2c || supportsSpi || supports1Wire || supportsSerial || supportsUsbOtg
+            wizardContainer.ifAndFeaturesAvailable = hasAnyCapabilities
+            
+            // If no capabilities are available, skip this step entirely
+            if (!hasAnyCapabilities) {
+                root.isConfirmed = true
+                wizardContainer.ifI2cEnabled     = false
+                wizardContainer.ifSpiEnabled     = false
+                wizardContainer.if1WireEnabled   = false
+                wizardContainer.ifSerial         = "Disabled"
+                wizardContainer.featUsbGadgetEnabled = false
+                wizardContainer.nextStep()
+                return
+            }
+            
+            if (supportsSerialConsoleOnly) {
+                serialModel.append({ text: qsTr("Console") })
+            }
+            
+            // Include label before combo box so users hear the explanation first
+            // Build focus group dynamically based on which interfaces are supported
+            root.registerFocusGroup("if_section_interfaces", function() {
+                var items = []
+                if (supportsI2c) items.push(chkEnableI2C.focusItem)
+                if (supportsSpi) items.push(chkEnableSPI.focusItem)
+                if (supports1Wire) items.push(chkEnable1Wire.focusItem)
+                if (supportsSerial) {
+                    items.push(labelSerial)
+                    items.push(comboSerial)
+                }
+                return items
+            }, 0)
 
-        if (supportsSerialConsoleOnly) {
-            serialModel.append({ text: qsTr("Console") })
-        }
+            root.registerFocusGroup("if_section_features", function() {
+                return supportsUsbOtg ? [chkEnableUsbGadget.focusItem] : []
+            }, 1)
 
-        // Include label before combo box so users hear the explanation first
-        root.registerFocusGroup("if_section_interfaces", function() {
-            return [chkEnableI2C.focusItem, chkEnableSPI.focusItem, chkEnable1Wire.focusItem, labelSerial, comboSerial]
-        }, 0)
+            // Prefill from conserved customization settings
+            var settings = wizardContainer.customizationSettings
+            
+            // Only restore settings for supported interfaces
+            if (supportsI2c) {
+                chkEnableI2C.checked = settings.enableI2C === true || settings.enableI2C === "true" || wizardContainer.ifI2cEnabled
+            } else {
+                chkEnableI2C.checked = false
+            }
+            
+            if (supportsSpi) {
+                chkEnableSPI.checked = settings.enableSPI === true || settings.enableSPI === "true" || wizardContainer.ifSpiEnabled
+            } else {
+                chkEnableSPI.checked = false
+            }
+            
+            if (supports1Wire) {
+                chkEnable1Wire.checked = settings.enable1Wire === true || settings.enable1Wire === "true" || wizardContainer.if1WireEnabled
+            } else {
+                chkEnable1Wire.checked = false
+            }
+            
+            if (supportsSerial) {
+                var enableSerial = settings.enableSerial || wizardContainer.ifSerial
+                var idx = comboSerial.find(enableSerial)
+                comboSerial.currentIndex = (idx >= 0 ? idx : 0)
+            } else {
+                comboSerial.currentIndex = 0
+            }
 
-        root.registerFocusGroup("if_section_features", function() {
-            return supportsUsbOtg ? [chkEnableUsbGadget.focusItem] : []
-        }, 1)
-
-        // Prefill
-        var saved = imageWriter.getSavedCustomizationSettings()
-        // Load from persisted settings (if you store them there)…
-        chkEnableI2C.checked     = saved.enableI2C === true || saved.enableI2C === "true" || wizardContainer.ifI2cEnabled
-        chkEnableSPI.checked     = saved.enableSPI === true || saved.enableSPI === "true" || wizardContainer.ifSpiEnabled
-        chkEnable1Wire.checked   = saved.enable1Wire === true || saved.enable1Wire === "true" || wizardContainer.if1WireEnabled
-        var enableSerial         = saved.enableSerial || wizardContainer.ifSerial
-        var idx                  = comboSerial.find(enableSerial)
-        comboSerial.currentIndex = (idx >= 0 ? idx : 0)
-
-        // Features
-        if (supportsUsbOtg) {
-            chkEnableUsbGadget.checked = saved.enableUsbGadget === true || saved.enableUsbGadget === "true" || wizardContainer.featUsbGadgetEnabled
-        } else {
-            chkEnableUsbGadget.checked = false
-        }
+            // Features
+            if (supportsUsbOtg) {
+                chkEnableUsbGadget.checked = settings.enableUsbGadget === true || settings.enableUsbGadget === "true" || wizardContainer.featUsbGadgetEnabled
+            } else {
+                chkEnableUsbGadget.checked = false
+            }
+            
+            // Rebuild focus order after capabilities and initial values are set
+            root.rebuildFocusOrder()
+        })
     }
 
     onNextClicked: {
-        let saved = imageWriter.getSavedCustomizationSettings()
+        // Only save values for supported interfaces/features
+        var i2cVal = supportsI2c ? chkEnableI2C.checked : false
+        var spiVal = supportsSpi ? chkEnableSPI.checked : false
+        var oneWireVal = supports1Wire ? chkEnable1Wire.checked : false
+        var serialVal = supportsSerial ? (!supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText) : "Disabled"
+        var usbGadgetVal = supportsUsbOtg ? chkEnableUsbGadget.checked : false
+        
+        // Update conserved customization settings (runtime state)
+        wizardContainer.customizationSettings.enableI2C    = i2cVal
+        wizardContainer.customizationSettings.enableSPI    = spiVal
+        wizardContainer.customizationSettings.enable1Wire  = oneWireVal
+        wizardContainer.customizationSettings.enableSerial = serialVal
+        wizardContainer.customizationSettings.enableUsbGadget = usbGadgetVal
 
-        // Interfaces
-        saved.enableI2C    = chkEnableI2C.checked
-        saved.enableSPI    = chkEnableSPI.checked
-        saved.enable1Wire  = chkEnable1Wire.checked
-        saved.enableSerial = !supportsSerialConsoleOnly && comboSerial.editText === "Console" ? "Default" : comboSerial.editText
-
-        // Features
-        saved.enableUsbGadget = supportsUsbOtg ? chkEnableUsbGadget.checked : false
-
-        imageWriter.setSavedCustomizationSettings(saved)
+        // Persist for future sessions
+        imageWriter.setPersistedCustomisationSetting("enableI2C", i2cVal)
+        imageWriter.setPersistedCustomisationSetting("enableSPI", spiVal)
+        imageWriter.setPersistedCustomisationSetting("enable1Wire", oneWireVal)
+        imageWriter.setPersistedCustomisationSetting("enableSerial", serialVal)
+        imageWriter.setPersistedCustomisationSetting("enableUsbGadget", usbGadgetVal)
 
         // Mirror into wizardContainer
-        wizardContainer.ifI2cEnabled     = chkEnableI2C.checked
-        wizardContainer.ifSpiEnabled     = chkEnableSPI.checked
-        wizardContainer.if1WireEnabled   = chkEnable1Wire.checked
-        wizardContainer.ifSerial         = comboSerial.editText
-        wizardContainer.featUsbGadgetEnabled = saved.enableUsbGadget
+        wizardContainer.ifI2cEnabled     = i2cVal
+        wizardContainer.ifSpiEnabled     = spiVal
+        wizardContainer.if1WireEnabled   = oneWireVal
+        wizardContainer.ifSerial         = supportsSerial ? comboSerial.editText : "Disabled"
+        wizardContainer.featUsbGadgetEnabled = usbGadgetVal
 
-        if (saved.enableUsbGadget && !wizardContainer.disableWarnings) {
+        if (usbGadgetVal && !wizardContainer.disableWarnings) {
             confirmDialog.open()
         } else {
             root.isConfirmed = true
@@ -368,10 +444,20 @@ WizardStepBase {
         // Recompute caps if the selected device changes elsewhere
         target: wizardContainer
         function onSelectedDeviceNameChanged() {
-            updateCaps()
-            // If Console is no longer supported and was selected, fall back
-            if (!supportsSerialConsoleOnly && comboSerial.editText === qsTr("Console"))
-                comboSerial.currentIndex = 0;
+            // Defer capability check to ensure capabilities are fully propagated
+            Qt.callLater(function() {
+                updateCaps()
+                
+                // Update availability flag for sidebar navigation
+                var hasAnyCapabilities = supportsI2c || supportsSpi || supports1Wire || supportsSerial || supportsUsbOtg
+                wizardContainer.ifAndFeaturesAvailable = hasAnyCapabilities
+                
+                // Rebuild focus order based on new capabilities
+                root.rebuildFocusOrder()
+                // If Console is no longer supported and was selected, fall back
+                if (!supportsSerialConsoleOnly && comboSerial.editText === qsTr("Console"))
+                    comboSerial.currentIndex = 0;
+            })
         }
     }
 }

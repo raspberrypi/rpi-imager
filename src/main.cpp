@@ -3,8 +3,8 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-#include <QtCore/QFileInfo>
-#include <QtCore/QFile>
+#include <QFileInfo>
+#include <QFile>
 #include <QDebug>
 #include <QTextStream>
 #include <QMessageLogContext>
@@ -69,6 +69,10 @@ static constexpr quint16 kPort =
 
 int main(int argc, char *argv[])
 {
+    // Apply platform-specific quirks and workarounds FIRST
+    // This must happen before any Qt initialization (QCoreApplication/QGuiApplication)
+    PlatformQuirks::applyQuirks();
+
 #ifdef CLI_ONLY_BUILD
     /* Force CLI mode for CLI-only builds */
     Cli cli(argc, argv);
@@ -111,15 +115,52 @@ int main(int argc, char *argv[])
     qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
 #endif
 
-    // Apply platform-specific quirks and workarounds
-    PlatformQuirks::applyQuirks();
-
     QGuiApplication app(argc, argv);
     
     app.setOrganizationName("Raspberry Pi");
     app.setOrganizationDomain("raspberrypi.com");
     app.setApplicationName("Raspberry Pi Imager");
+    app.setApplicationVersion(ImageWriter::staticVersion());
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
+
+        // Early check for elevated privileges on platforms that require them (Linux/Windows)
+        bool hasPermissionIssue = false;
+        QString permissionMessage;
+        
+    #if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+        if (!PlatformQuirks::hasElevatedPrivileges())
+        {
+            hasPermissionIssue = true;
+            
+            // Common message parts to reduce translation effort
+            QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
+            QString footer = QObject::tr("Without this, you will encounter permission errors when writing images.");
+            
+    #ifdef Q_OS_LINUX
+            // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
+            // Check if running from AppImage first
+            QString execName;
+            QByteArray appImagePath = qgetenv("APPIMAGE");
+            if (!appImagePath.isEmpty()) {
+                execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
+            } else {
+                execName = QFileInfo(QString::fromUtf8(argv[0])).fileName();
+            }
+            QString statusAndAction = QObject::tr(
+                "You are not running as root.\n\n"
+                "Please run with elevated privileges: sudo %1"
+            ).arg(execName);
+    #elif defined(Q_OS_WIN)
+            QString statusAndAction = QObject::tr(
+                "You are not running as Administrator.\n\n"
+                "Please run as Administrator."
+            );
+    #endif
+            
+            permissionMessage = QString("%1\n\n%2\n\n%3").arg(header, statusAndAction, footer);
+            qWarning() << "Not running with elevated privileges - device access may fail";
+        }
+    #endif
 
     qmlRegisterUncreatableMetaObject(
         ImageOptions::staticMetaObject, // from Q_NAMESPACE
@@ -196,7 +237,8 @@ int main(int argc, char *argv[])
         {"enable-language-selection", "Show language selection on startup"},
         {"disable-telemetry", "Disable telemetry (persist setting)"},
         {"enable-telemetry", "Use default telemetry setting (clear override)"},
-        {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"}
+        {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"},
+        {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"}
     });
 
     parser.addPositionalArgument("image", "Image file/URL or rpi-imager:// callback URL (optional)", "[image]");
@@ -238,14 +280,9 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_WIN
     if (parser.isSet("debug"))
     {
-        /* Allocate console for debug messages on Windows */
-        if (::AttachConsole(ATTACH_PARENT_PROCESS) || ::AllocConsole())
-        {
-            freopen("CONOUT$", "w", stdout);
-            freopen("CONOUT$", "w", stderr);
-            std::ios::sync_with_stdio();
-            qInstallMessageHandler(consoleMsgHandler);
-        }
+        /* Attach to console for debug messages on Windows */
+        PlatformQuirks::attachConsole();
+        qInstallMessageHandler(consoleMsgHandler);
     }
 #endif
 
@@ -291,6 +328,11 @@ int main(int argc, char *argv[])
     if (parser.isSet("qml-file-dialogs"))
     {
         NativeFileDialog::setForceQmlDialogs(true);
+    }
+
+    if (parser.isSet("enable-secure-boot"))
+    {
+        ImageWriter::setForceSecureBootEnabled(true);
     }
 
     const QStringList posArgs = parser.positionalArguments();
@@ -448,6 +490,7 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(writeCancelledDueToDeviceRemoval()), qmlwindow, SLOT(onWriteCancelledDueToDeviceRemoval()));
     qmlwindow->connect(&imageWriter, SIGNAL(keychainPermissionRequested()), qmlwindow, SLOT(onKeychainPermissionRequested()));
     qmlwindow->connect(&imageWriter, SIGNAL(osListFetchFailed()), qmlwindow, SLOT(onOsListFetchFailed()));
+    qmlwindow->connect(&imageWriter, SIGNAL(permissionWarning(QVariant)), qmlwindow, SLOT(onPermissionWarning(QVariant)));
 #ifdef Q_OS_DARWIN
     // Handle custom URL scheme on macOS via FileOpen events
     struct UrlOpenFilter : public QObject {
@@ -504,6 +547,14 @@ int main(int argc, char *argv[])
     // Only fetch OS list if we have network connectivity
     if (imageWriter.isOnline() && PlatformQuirks::hasNetworkConnectivity())
         imageWriter.beginOSListFetch();
+
+    // Emit permission warning signal after UI is loaded so dialog can be shown
+    if (hasPermissionIssue)
+    {
+        QMetaObject::invokeMethod(&imageWriter, [&imageWriter, permissionMessage]() {
+            emit imageWriter.permissionWarning(permissionMessage);
+        }, Qt::QueuedConnection);
+    }
 
     int rc = app.exec();
 

@@ -46,6 +46,19 @@ for arg in "$@"; do
     esac
 done
 
+# Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
+if [ -n "$QT_ROOT_ARG" ]; then
+    # Expand tilde if present
+    QT_ROOT_ARG="${QT_ROOT_ARG/#\~/$HOME}"
+    # Convert to absolute path if it exists
+    if [ -e "$QT_ROOT_ARG" ]; then
+        QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
+    else
+        echo "Warning: Specified Qt root path does not exist: $QT_ROOT_ARG"
+        echo "Will attempt to use it anyway, but this may fail..."
+    fi
+fi
+
 # Validate architecture
 if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" && "$ARCH" != "armv7l" ]]; then
     echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
@@ -58,16 +71,27 @@ echo "Building CLI-only AppImage for architecture: $ARCH"
 SOURCE_DIR="src/"
 CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 
-# Extract version components
-MAJOR=$(grep -E "set\(IMAGER_VERSION_MAJOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MAJOR \([0-9]*\).*/\1/')
-MINOR=$(grep -E "set\(IMAGER_VERSION_MINOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MINOR \([0-9]*\).*/\1/')
-PATCH=$(grep -E "set\(IMAGER_VERSION_PATCH [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_PATCH \([0-9]*\).*/\1/')
-PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+# Get version from git tag (same approach as CMake)
+GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
+
+# Extract numeric version components for compatibility
+if [[ $GIT_VERSION =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+    MAJOR="${BASH_REMATCH[1]}"
+    MINOR="${BASH_REMATCH[2]}"
+    PATCH="${BASH_REMATCH[3]}"
+    PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+else
+    MAJOR="0"
+    MINOR="0"
+    PATCH="0"
+    PROJECT_VERSION="0.0.0"
+    echo "Warning: Could not parse version from git tag: $GIT_VERSION"
+fi
 
 # Extract project name (lowercase for AppImage naming convention)
 PROJECT_NAME=$(grep "project(" "$CMAKE_FILE" | head -1 | sed 's/project(\([^[:space:]]*\).*/\1/' | tr '[:upper:]' '[:lower:]')
 
-echo "Building $PROJECT_NAME version $PROJECT_VERSION for CLI-only operation"
+echo "Building $PROJECT_NAME version $GIT_VERSION (numeric: $PROJECT_VERSION) for CLI-only operation"
 
 QT_VERSION=""
 QT_DIR=""
@@ -155,7 +179,7 @@ BUILD_TYPE="MinSizeRel"  # Optimize for size
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-cli-$ARCH"
-OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-cli-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-cli-${ARCH}.AppImage"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"

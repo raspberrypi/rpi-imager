@@ -22,7 +22,7 @@
 #endif
 #include <QNetworkReply>
 #include "config.h"
-#include "powersaveblocker.h"
+#include "suspend_inhibitor.h"
 #include "drivelistmodel.h"
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
@@ -201,6 +201,9 @@ public:
     /* Set the main window for modal file dialogs */
     Q_INVOKABLE void setMainWindow(QObject *window);
 
+    /* Bring the application window to the foreground */
+    void bringWindowToForeground();
+
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 
@@ -244,13 +247,19 @@ public:
     Q_INVOKABLE QString getPSKForSSID(const QString &ssid);
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
+    Q_INVOKABLE QString getStringSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
-    Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts = {});
-    Q_INVOKABLE void applyCustomizationFromSavedSettings();
-    Q_INVOKABLE void setSavedCustomizationSettings(const QVariantMap &map);
-    Q_INVOKABLE QVariantMap getSavedCustomizationSettings();
-    Q_INVOKABLE void clearSavedCustomizationSettings();
-    Q_INVOKABLE bool hasSavedCustomizationSettings();
+    Q_INVOKABLE QString getRsaKeyFingerprint(const QString &keyPath);
+    
+    // Customisation API
+    Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
+    Q_INVOKABLE void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts = {});  // Advanced: bypass generator with pre-made scripts
+    
+    // Persistence API
+    Q_INVOKABLE void setSavedCustomisationSettings(const QVariantMap &map);  // Legacy: prefer setPersistedCustomisationSetting()
+    Q_INVOKABLE QVariantMap getSavedCustomisationSettings();
+    Q_INVOKABLE void setPersistedCustomisationSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE void removePersistedCustomisationSetting(const QString &key);
     Q_INVOKABLE bool imageSupportsCustomization();
     Q_INVOKABLE bool imageSupportsCcRpi();
 
@@ -264,12 +273,17 @@ public:
     Q_INVOKABLE void changeLanguage(const QString &newLanguageName);
     Q_INVOKABLE void changeKeyboard(const QString &newKeymapLayout);
     Q_INVOKABLE bool customRepo();
+    
+    // Secure Boot CLI override
+    static void setForceSecureBootEnabled(bool enabled);
+    Q_INVOKABLE bool isSecureBootForcedByCliFlag() const;
 
     void replaceTranslator(QTranslator *trans);
     QString detectPiKeyboard();
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void openUrl(const QUrl &url);
+    Q_INVOKABLE bool isScreenReaderActive() const;
     Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
     Q_INVOKABLE void overwriteConnectToken(const QString &token);
     Q_INVOKABLE QString getRuntimeConnectToken() const;
@@ -307,6 +321,7 @@ signals:
     void connectTokenConflictDetected(const QString &token);
     void cacheStatusChanged();
     void osListFetchFailed();
+    void permissionWarning(QVariant msg);
 
 protected slots:
     void startProgressPolling();
@@ -362,7 +377,7 @@ protected:
     QQmlApplicationEngine *_engine;
     QTimer _networkchecktimer;
     QTimer _osListRefreshTimer;
-    PowerSaveBlocker _powersave;
+    SuspendInhibitor *_suspendInhibitor;
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _online;
     QSettings _settings;
@@ -372,6 +387,8 @@ protected:
     int _refreshJitterOverrideMinutes;
     // Session-only storage for Raspberry Pi Connect token
     QString _piConnectToken;
+    // CLI flag to force enable secure boot regardless of OS capabilities
+    static bool _forceSecureBootEnabled;
 #ifndef CLI_ONLY_BUILD
     QWindow *_mainWindow;
 #endif
@@ -382,8 +399,8 @@ protected:
     QString _privKeyFileName();
     QString _sshKeyDir();
     QString _sshKeyGen();
-    void _applySystemdCustomizationFromSettings(const QVariantMap &s);
-    void _applyCloudInitCustomizationFromSettings(const QVariantMap &s);
+    void _applySystemdCustomisationFromSettings(const QVariantMap &s);
+    void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
     void scheduleOsListRefresh();
 };

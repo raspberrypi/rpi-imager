@@ -8,21 +8,24 @@ set(PLATFORM_SOURCES
     linux/stpanalyzer.h
     linux/stpanalyzer.cpp
     linux/acceleratedcryptographichash_gnutls.cpp
+    linux/bootimgcreator_linux.cpp
+    linux/rsakeyfingerprint_linux.cpp
     linux/file_operations_linux.cpp
     linux/platformquirks_linux.cpp
-    linux/linux_suspend_inhibitor.cpp
 )
 
-# Only include networkmanagerapi for GUI builds (requires Qt Network)
+# Only include DBus-dependent and GUI components for non-CLI builds
 if(NOT BUILD_CLI_ONLY)
     list(APPEND PLATFORM_SOURCES
+        linux/linux_suspend_inhibitor.cpp
         linux/networkmanagerapi.h
         linux/networkmanagerapi.cpp
         linux/nativefiledialog_linux.cpp
     )
 else()
-    # Use stub implementation for CLI builds
+    # Use stub implementations for CLI builds (no DBus dependency)
     list(APPEND PLATFORM_SOURCES
+        linux/suspend_inhibitor_stub.cpp
         linux/wlancredentials_stub.cpp
     )
 endif()

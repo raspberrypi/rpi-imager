@@ -576,4 +576,40 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 EOF
 }
 
-echo "Qt build common configuration loaded (version: 1.0)"
+# =============================================================================
+# ICU VERSION DETECTION
+# =============================================================================
+
+# Function to get the recommended ICU version for a given Qt version
+# Usage: get_icu_version_for_qt QT_VERSION
+get_icu_version_for_qt() {
+    local qt_version="${1:-$QT_VERSION}"
+    local qt_major_minor="${qt_version%.*}"  # Extract X.Y from X.Y.Z
+    
+    case "$qt_version" in
+        6.9.3)
+            echo "76.1"
+            ;;
+        *)
+            echo "Unknown Qt version $qt_version"
+            echo "Please add the ICU version to the static mapping in get_icu_version_for_qt()"
+            return 1
+            ;;
+    esac
+}
+
+# Function to convert ICU version to git tag format
+# Usage: icu_version_to_tag "76.1" -> "release-76-1"
+icu_version_to_tag() {
+    local icu_version="$1"
+    echo "release-${icu_version//./-}"
+}
+
+# Function to convert ICU version to data package format
+# Usage: icu_version_to_data_package "76.1" -> "icu4c-76_1-data.zip"
+icu_version_to_data_package() {
+    local icu_version="$1"
+    echo "icu4c-${icu_version//./_}-data.zip"
+}
+
+echo "Qt build common configuration loaded (version: 1.1)"

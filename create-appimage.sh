@@ -37,6 +37,19 @@ for arg in "$@"; do
     esac
 done
 
+# Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
+if [ -n "$QT_ROOT_ARG" ]; then
+    # Expand tilde if present
+    QT_ROOT_ARG="${QT_ROOT_ARG/#\~/$HOME}"
+    # Convert to absolute path if it exists
+    if [ -e "$QT_ROOT_ARG" ]; then
+        QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
+    else
+        echo "Warning: Specified Qt root path does not exist: $QT_ROOT_ARG"
+        echo "Will attempt to use it anyway, but this may fail..."
+    fi
+fi
+
 # Validate architecture
 if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; then
     echo "Error: Architecture must be one of: x86_64, aarch64"
@@ -49,16 +62,27 @@ echo "Building for architecture: $ARCH"
 SOURCE_DIR="src/"
 CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 
-# Extract version components
-MAJOR=$(grep -E "set\(IMAGER_VERSION_MAJOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MAJOR \([0-9]*\).*/\1/')
-MINOR=$(grep -E "set\(IMAGER_VERSION_MINOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MINOR \([0-9]*\).*/\1/')
-PATCH=$(grep -E "set\(IMAGER_VERSION_PATCH [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_PATCH \([0-9]*\).*/\1/')
-PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+# Get version from git tag (same approach as CMake)
+GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
+
+# Extract numeric version components for compatibility
+if [[ $GIT_VERSION =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+    MAJOR="${BASH_REMATCH[1]}"
+    MINOR="${BASH_REMATCH[2]}"
+    PATCH="${BASH_REMATCH[3]}"
+    PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+else
+    MAJOR="0"
+    MINOR="0"
+    PATCH="0"
+    PROJECT_VERSION="0.0.0"
+    echo "Warning: Could not parse version from git tag: $GIT_VERSION"
+fi
 
 # Extract project name (lowercase for AppImage naming convention)
 PROJECT_NAME=$(grep "project(" "$CMAKE_FILE" | head -1 | sed 's/project(\([^[:space:]]*\).*/\1/' | tr '[:upper:]' '[:lower:]')
 
-echo "Building $PROJECT_NAME version $PROJECT_VERSION"
+echo "Building $PROJECT_NAME version $GIT_VERSION (numeric: $PROJECT_VERSION)"
 
 # Check for Qt installation
 # Priority: 1. Command line argument, 2. Environment variable, 3. Auto-detection
@@ -138,7 +162,7 @@ QML_SOURCES_PATH="$PWD/src/qmlcomponents/"
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-$ARCH"
-OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-desktop-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-desktop-${ARCH}.AppImage"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"
@@ -147,20 +171,24 @@ mkdir -p "$TOOLS_DIR"
 # Download linuxdeploy and plugins if they don't exist
 echo "Ensuring linuxdeploy tools are available..."
 
+# Pin to specific stable versions
+LINUXDEPLOY_VERSION="1-alpha-20250213-2"
+LINUXDEPLOY_PLUGIN_QT_VERSION="1-alpha-20250213-1"
+
 # Choose the right linuxdeploy tools based on architecture
 if [ "$ARCH" = "x86_64" ]; then
     LINUXDEPLOY="$TOOLS_DIR/linuxdeploy-x86_64.AppImage"
     LINUXDEPLOY_QT="$TOOLS_DIR/linuxdeploy-plugin-qt-x86_64.AppImage"
     
     if [ ! -f "$LINUXDEPLOY" ]; then
-        echo "Downloading linuxdeploy for x86_64..."
-        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+        echo "Downloading linuxdeploy $LINUXDEPLOY_VERSION for x86_64..."
+        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_VERSION/linuxdeploy-x86_64.AppImage"
         chmod +x "$LINUXDEPLOY"
     fi
     
     if [ ! -f "$LINUXDEPLOY_QT" ]; then
-        echo "Downloading linuxdeploy-plugin-qt for x86_64..."
-        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+        echo "Downloading linuxdeploy-plugin-qt $LINUXDEPLOY_PLUGIN_QT_VERSION for x86_64..."
+        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/$LINUXDEPLOY_PLUGIN_QT_VERSION/linuxdeploy-plugin-qt-x86_64.AppImage"
         chmod +x "$LINUXDEPLOY_QT"
     fi
 elif [ "$ARCH" = "aarch64" ]; then
@@ -168,14 +196,14 @@ elif [ "$ARCH" = "aarch64" ]; then
     LINUXDEPLOY_QT="$TOOLS_DIR/linuxdeploy-plugin-qt-aarch64.AppImage"
     
     if [ ! -f "$LINUXDEPLOY" ]; then
-        echo "Downloading linuxdeploy for aarch64..."
-        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-aarch64.AppImage"
+        echo "Downloading linuxdeploy $LINUXDEPLOY_VERSION for aarch64..."
+        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_VERSION/linuxdeploy-aarch64.AppImage"
         chmod +x "$LINUXDEPLOY"
     fi
     
     if [ ! -f "$LINUXDEPLOY_QT" ]; then
-        echo "Downloading linuxdeploy-plugin-qt for aarch64..."
-        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-aarch64.AppImage"
+        echo "Downloading linuxdeploy-plugin-qt $LINUXDEPLOY_PLUGIN_QT_VERSION for aarch64..."
+        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/$LINUXDEPLOY_PLUGIN_QT_VERSION/linuxdeploy-plugin-qt-aarch64.AppImage"
         chmod +x "$LINUXDEPLOY_QT"
     fi
 fi
@@ -247,11 +275,11 @@ export QML_SOURCES_PATHS="$QML_SOURCES_PATH"
 export APPIMAGE_EXTRACT_AND_RUN=1
 # Set Qt path for linuxdeploy-plugin-qt
 export QMAKE="$QT_DIR/bin/qmake"
-# Set LD_LIBRARY_PATH to include Qt libraries
+# Set library paths to include Qt libraries (both runtime and linker search paths)
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 # Optimize deployment: exclude translations and unnecessary libraries
 export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
-"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*"
+"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*" --verbosity=0
 
 # Hook for removing files before AppImage creation
 echo "Pre-packaging hook - opportunity to remove unwanted files"
@@ -298,10 +326,12 @@ echo "Creating AppImage..."
 rm -f "$PWD/rpi-imager-desktop-$ARCH.AppImage"
 rm -f "$PWD/rpi-imager-$ARCH.AppImage"  # Legacy symlink name
 # Ensure LD_LIBRARY_PATH is still set for this call too
+export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 # Explicitly specify the desktop file to ensure correct naming
 "$LINUXDEPLOY" --appdir="$APPDIR" \
     --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
-    --output=appimage
+    --output=appimage \
+    --verbosity=0
 
 # Rename the output file if needed
 # Find and rename the AppImage created by linuxdeploy to our standardized name

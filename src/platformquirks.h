@@ -13,6 +13,9 @@ namespace PlatformQuirks {
      * 
      * Currently handles:
      * - Windows: NVIDIA graphics card detection and QSG_RHI_PREFER_SOFTWARE_RENDERER workaround
+     * - Linux: Sudo user detection and environment override for:
+     *   - HOME and XDG directories (cache/config/data)
+     *   - XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS for D-Bus session access
      */
     void applyQuirks();
 
@@ -41,6 +44,33 @@ namespace PlatformQuirks {
      * @return true if network is ready for use (including time sync if needed)
      */
     bool isNetworkReady();
+
+    /**
+     * Bring the application window to the foreground.
+     * On Windows, this will restore a minimized window and attempt to bring it to the front.
+     * On other platforms, this is a no-op.
+     * 
+     * @param windowHandle Native window handle (HWND on Windows, cast from QWindow::winId())
+     */
+    void bringWindowToForeground(void* windowHandle);
+
+    /**
+     * Check if the application is running with elevated privileges.
+     * On Linux: Checks if running as root (UID 0)
+     * On Windows: Checks if running as Administrator
+     * On macOS: Always returns true (sensible permissions model operates as expected)
+     * 
+     * @return true if running with elevated privileges, false otherwise
+     */
+    bool hasElevatedPrivileges();
+
+    /**
+     * Attach to or allocate a console for output.
+     * On Windows: Attempts to attach to parent console or allocates a new one,
+     *             redirecting stdout/stderr to the console.
+     * On Linux/macOS: No-op (console is already available).
+     */
+    void attachConsole();
 }
 
 #endif // PLATFORMQUIRKS_H

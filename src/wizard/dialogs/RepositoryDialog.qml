@@ -57,6 +57,9 @@ BaseDialog {
         Accessible.role: Accessible.Heading
         Accessible.name: text + ", " + qsTr("Choose the source for operating system images")
         Accessible.ignored: false
+        Accessible.focusable: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
     }
 
     // Options section

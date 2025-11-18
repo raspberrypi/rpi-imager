@@ -4,7 +4,8 @@
 
 WindowsSuspendInhibitor::WindowsSuspendInhibitor()
 {
-    _previousState = SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
+    // Prevent both system suspend and display sleep
+    _previousState = SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
 }
 
 /*virtual*/ WindowsSuspendInhibitor::~WindowsSuspendInhibitor()

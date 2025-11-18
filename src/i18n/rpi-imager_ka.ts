@@ -83,6 +83,30 @@
         <source>Change the source of operating system images between official Raspberry Pi repository and custom sources</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Secure Boot RSA Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem);;All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -183,10 +207,6 @@
         <translation>SSH ჩართულია</translation>
     </message>
     <message>
-        <source>Locale configured</source>
-        <translation>ენა მორგებულია</translation>
-    </message>
-    <message>
         <source>Wi‑Fi configured</source>
         <translation>უსადენო ქსელი მორგებულია</translation>
     </message>
@@ -212,6 +232,10 @@
     </message>
     <message>
         <source>Serial configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Localisation configured</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -502,14 +526,6 @@
         <translation>გახსნის შეცდომა დისკის მოწყობილობისთვის &apos;%1&apos;</translation>
     </message>
     <message>
-        <source>Cannot open storage device &apos;%1&apos; after authorization.</source>
-        <translation>ვერ გავხსენი საცავის მოწყობილობა &apos;%1&apos; ავტორიზაციის შემდეგ.</translation>
-    </message>
-    <message>
-        <source>Cannot open storage device &apos;%1&apos; with udisks2 authorization.</source>
-        <translation>ვერ გავხსენი საცავის მოწყობილობა &apos;%1&apos; udisks2-ით ავტორიზაციით.</translation>
-    </message>
-    <message>
         <source>Error getting device size</source>
         <translation>მოწყობილობის ზომის მიღების შეცდომა</translation>
     </message>
@@ -545,13 +561,85 @@
         <source>Customising OS...</source>
         <translation>ოპერაციული სისტემის მორგება ...</translation>
     </message>
+    <message>
+        <source>Cannot open storage device &apos;%1&apos;. Please run with elevated privileges (sudo).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Creating signed boot image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create secure boot files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No RSA key configured for secure boot. Please select a key in App Options.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>RSA key file not found: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Extracting boot partition files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to extract boot partition files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No boot files found to package</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create temporary directory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Creating boot.img...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create boot.img</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Signing boot image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to generate boot.sig</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read boot.img</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read boot.sig</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning up boot partition...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Syncing deletions to disk...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing signed boot files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write secure boot files: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
-    <message>
-        <source>Error formatting (through udisks2)</source>
-        <translation>დაფორმატების შეცდომა (udisks2-ით)</translation>
-    </message>
     <message>
         <source>Error opening device for formatting</source>
         <translation>მოწყობილობის დასაფორმატებლად გახსნის შეცდომა</translation>
@@ -577,10 +665,6 @@
         <translation>უცნობი დაფორმატების შეცდომა</translation>
     </message>
     <message>
-        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation>მოწყობილობის დაფორმატება შეუძლებელია: არასაკმარისი წვდომები და udisks2 ხელმისაწვდომი არაა</translation>
-    </message>
-    <message>
         <source>Preparing disk for formatting...</source>
         <translation>დისკის მომზადება დასაფორმატებლად...</translation>
     </message>
@@ -591,6 +675,10 @@
     <message>
         <source>Writing filesystem...</source>
         <translation>ფაილური სისტემის ჩაწერა...</translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -797,10 +885,6 @@
     <message>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>შეყვანის ფაილი სწორი დისკის ასლის ფაილი არაა.&lt;br&gt;ფაილის ზომაა %1 ბაიტი და ის 512 ბაიტის ნამრავლს არ წარმოადგენს.</translation>
-    </message>
-    <message>
-        <source>Downloading and writing image</source>
-        <translation>მიმდინარეობს დისკის ასლის ფაილის გადმოწერა და ჩაწერა</translation>
     </message>
     <message>
         <source>Select image</source>
@@ -1160,6 +1244,29 @@
     </message>
 </context>
 <context>
+    <name>QObject</name>
+    <message>
+        <source>Raspberry Pi Imager requires elevated privileges to write to storage devices.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Without this, you will encounter permission errors when writing images.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as Administrator.
+
+Please run as Administrator.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as root.
+
+Please run with elevated privileges: sudo %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>RemoteAccessStep</name>
     <message>
         <source>Enable SSH</source>
@@ -1302,6 +1409,69 @@
     </message>
     <message>
         <source>Download operating system list from a custom web address</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SecureBootCustomizationStep</name>
+    <message>
+        <source>Customisation: Secure Boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure secure boot image signing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save secure boot settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Secure Boot Signing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Learn about Secure Boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Your boot partition will be signed using the RSA private key configured in App Options.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Private Key: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(not configured)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Public Key Fingerprint: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unavailable)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unable to compute)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1704,6 +1874,10 @@ to show system drives.</source>
         <source>Keep your current Raspberry Pi Connect token</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Secure Boot</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardStepBase</name>
@@ -1831,10 +2005,6 @@ to show system drives.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Verification cancelled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Write complete</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1853,10 +2023,6 @@ to show system drives.</source>
 </context>
 <context>
     <name>main</name>
-    <message>
-        <source>Raspberry Pi Imager v%1</source>
-        <translation>Raspberry Pi Imager v%1</translation>
-    </message>
     <message>
         <source>Are you sure you want to quit?</source>
         <translation>მართლა გნებავთ, გახვიდეთ?</translation>
@@ -1911,6 +2077,26 @@ to show system drives.</source>
     </message>
     <message>
         <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Imager %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Insufficient Permissions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error message explaining why elevated privileges are required</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

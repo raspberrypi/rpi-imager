@@ -27,13 +27,50 @@ endif()
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectures to build for")
 
 project(rpi-imager LANGUAGES CXX C)
-set(IMAGER_VERSION_MAJOR 2)
-set(IMAGER_VERSION_MINOR 0)
-set(IMAGER_VERSION_PATCH 0)
-set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}.${IMAGER_VERSION_PATCH}")
-set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},${IMAGER_VERSION_PATCH},0")
+
+# Get version from git tag
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_DESCRIBE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif()
+
+# Use git-derived version as the canonical version string
+if(GIT_DESCRIBE)
+    set(IMAGER_VERSION_STR "${GIT_DESCRIBE}")
+    message(STATUS "Version from git: ${IMAGER_VERSION_STR}")
+    
+    # Extract numeric version components from git tag for Windows metadata
+    # Expected format: v2.0.0 or v2.0.0-rc4-60-geac7c2f0
+    string(REGEX MATCH "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)" VERSION_MATCH "${GIT_DESCRIBE}")
+    if(VERSION_MATCH)
+        set(IMAGER_VERSION_MAJOR ${CMAKE_MATCH_1})
+        set(IMAGER_VERSION_MINOR ${CMAKE_MATCH_2})
+        set(IMAGER_VERSION_PATCH ${CMAKE_MATCH_3})
+    else()
+        # Fallback if tag doesn't match expected format
+        set(IMAGER_VERSION_MAJOR 0)
+        set(IMAGER_VERSION_MINOR 0)
+        set(IMAGER_VERSION_PATCH 0)
+        message(WARNING "Could not parse version from git tag: ${GIT_DESCRIBE}")
+    endif()
+else()
+    # Fallback when git is not available or no tags exist
+    set(IMAGER_VERSION_MAJOR 0)
+    set(IMAGER_VERSION_MINOR 0)
+    set(IMAGER_VERSION_PATCH 0)
+    set(IMAGER_VERSION_STR "0.0.0-unknown")
+    message(WARNING "Git not found or no tags available, using fallback version: ${IMAGER_VERSION_STR}")
+endif()
+
+# Version variables for template substitution (Windows .rc, .manifest, etc.)
+# Note: IMAGER_VERSION_STR is used in C++ code, so it needs to be a compile definition
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
-add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -162,6 +199,9 @@ if(APPLE)
     find_package(CURL REQUIRED)
     # Normalize variable naming used later in include_directories
     set(CURL_INCLUDE_DIR ${CURL_INCLUDE_DIRS})
+    
+    # Note: No need to find OpenSSL on macOS - we use native Security.framework
+    # for RSA operations and CommonCrypto for hashing
 else()
     include(dependencies/curl.cmake)
 endif()
@@ -207,9 +247,9 @@ endif( IS_BIG_ENDIAN )
 set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
-    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
+    "driveformatthread.cpp" "localfileextractthread.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
-    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp")
+    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
@@ -228,16 +268,13 @@ endif()
 
 # Find Qt components - different requirements for CLI-only vs GUI builds
 if(BUILD_CLI_ONLY)
-    # CLI-only build: need Core and Network for downloading, optionally DBus
-    if(UNIX AND NOT APPLE)
-        find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools DBus)
-    else()
-        find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
-    endif()
+    # CLI-only build: need ONLY Core and Network for downloading
+    find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
 else()
-    # Regular GUI build: need Core, Quick, Svg, Network, Gui - DBus only needed on Linux
+    # Regular GUI build: need Core, Quick, Svg, Network, Gui
+    # DBus is required on Linux for suspend inhibitor and native file dialogs (portals)
     if(UNIX AND NOT APPLE)
-        find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network OPTIONAL_COMPONENTS LinguistTools DBus)
+        find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network DBus OPTIONAL_COMPONENTS LinguistTools)
     else()
         find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network OPTIONAL_COMPONENTS LinguistTools)
     endif()
@@ -249,12 +286,6 @@ if (Qt6_FOUND)
     endif()
 else()
     message(FATAL_ERROR "Missing suitable Qt library (must be at least version 6.9)" )
-endif()
-
-if(${QT}DBus_FOUND AND UNIX AND NOT APPLE)
-    set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
-    set(EXTRALIBS ${EXTRALIBS} ${QT}::DBus)
-    message("udisks2 support enabled")
 endif()
 if(${QT}WinExtras_FOUND)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::WinExtras)
@@ -474,6 +505,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/UserCustomizationStep.qml
         wizard/WifiCustomizationStep.qml
         wizard/RemoteAccessStep.qml
+        wizard/SecureBootCustomizationStep.qml
         wizard/PiConnectCustomizationStep.qml
         wizard/WritingStep.qml
         wizard/DoneStep.qml
@@ -529,7 +561,12 @@ if(BUILD_CLI_ONLY)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
 else()
     # Regular GUI build: link all GUI components
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    # Add DBus on Linux for suspend inhibitor and native file dialogs (portals)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${QT}::DBus ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    else()
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    endif()
 endif()
 
 # Testing

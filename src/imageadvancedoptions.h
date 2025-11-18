@@ -10,6 +10,7 @@ enum AdvancedOption {
     IsRpiosCloudInit    = 0x1,
     EnableSsh           = 0x2,
     UserDefinedFirstRun = 0x3,
+    EnableSecureBoot    = 0x4,
 };
 Q_ENUM_NS(AdvancedOption)
 

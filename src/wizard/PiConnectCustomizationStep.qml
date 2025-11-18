@@ -118,7 +118,7 @@ WizardStepBase {
     // Token state and parsing helpers
     property bool connectTokenReceived: false
     property string connectToken: ""
-    property int countdownSeconds: 90
+    property int countdownSeconds: 25
     property bool tokenFieldEnabled: false
     property bool tokenFromBrowser: false
     property bool isValid: false
@@ -204,7 +204,7 @@ WizardStepBase {
         target: btnOpenConnect
         function onClicked() {
             if (!root.connectTokenReceived && !countdownTimer.running) {
-                root.countdownSeconds = 90
+                root.countdownSeconds = 25
                 countdownTimer.start()
             }
         }
@@ -236,13 +236,18 @@ WizardStepBase {
                 // Token is valid, set it in imageWriter
                 root.imageWriter.overwriteConnectToken(tokenToValidate)
             }
+            // Update conserved customization settings (runtime state only - NOT persisted)
+            wizardContainer.customizationSettings.piConnectEnabled = true
             root.wizardContainer.piConnectEnabled = true
             root.isValid = true
         } else {
-            // Not checked, just allow to proceed
+            // Not checked, remove from runtime settings
+            delete wizardContainer.customizationSettings.piConnectEnabled
             root.wizardContainer.piConnectEnabled = false
             root.isValid = true
         }
+        // Note: piConnectEnabled is intentionally NOT persisted to disk
+        // It's a session-only setting tied to the ephemeral Connect token
     }
     
     // Invalid token dialog

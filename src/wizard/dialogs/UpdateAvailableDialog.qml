@@ -39,6 +39,9 @@ BaseDialog {
         Layout.fillWidth: true
         Accessible.role: Accessible.Heading
         Accessible.name: text
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     Text {
@@ -50,6 +53,9 @@ BaseDialog {
         Layout.fillWidth: true
         Accessible.role: Accessible.StaticText
         Accessible.name: text
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     RowLayout {

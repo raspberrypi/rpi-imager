@@ -277,10 +277,24 @@ TEST_CASE("CustomisationGenerator Raspberry Pi Connect", "[customization]") {
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings, token);
     QString scriptStr = QString::fromUtf8(script);
     
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("com.raspberrypi.connect"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("deploy.key"));
+    // Check deploy key is written
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring(PI_CONNECT_CONFIG_PATH));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring(PI_CONNECT_DEPLOY_KEY_FILENAME));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("test-token-12345"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect-signin.service"));
+    
+    // Check systemd unit directories are created
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("SYSTEMD_USER_BASE="));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("default.target.wants"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("paths.target.wants"));
+    
+    // Check all three systemd units are enabled
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect.service"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect-signin.path"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("rpi-connect-wayvnc.service"));
+    
+    // Check systemd linger is set up for auto-start
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/var/lib/systemd/linger"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("install -m 0644 /dev/null \"/var/lib/systemd/linger/$TARGET_USER\""));
 }
 
 // Negative Tests - Testing resilience to invalid/malicious inputs
@@ -448,8 +462,8 @@ TEST_CASE("CustomisationGenerator handles null/empty piConnect token", "[customi
     QString scriptStr = QString::fromUtf8(script);
     
     // Should not include Pi Connect setup if token is empty
-    REQUIRE_FALSE(scriptStr.contains("com.raspberrypi.connect"));
-    REQUIRE_FALSE(scriptStr.contains("deploy.key"));
+    REQUIRE_FALSE(scriptStr.contains(PI_CONNECT_CONFIG_PATH));
+    REQUIRE_FALSE(scriptStr.contains(PI_CONNECT_DEPLOY_KEY_FILENAME));
 }
 
 TEST_CASE("CustomisationGenerator handles invalid keyboard layout", "[customization][negative]") {
@@ -535,7 +549,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH user",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/sh"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: $5$fakesalt$fakehash123"));
 }
@@ -596,14 +610,39 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, token, false, true, "testuser");
     QString yaml = QString::fromUtf8(userdata);
     
+    // Check deploy key file is written with defer option
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("write_files:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- path: /home/testuser/com.raspberrypi.connect/auth.key"));
+    QString expectedPath = QString("- path: /home/testuser/") + PI_CONNECT_CONFIG_PATH + "/" + PI_CONNECT_DEPLOY_KEY_FILENAME;
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedPath.toStdString()));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("permissions: '0600'"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("owner: testuser:testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("defer: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("content: |"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
+    
+    // Check runcmd section exists and creates config directory
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -o testuser -m 700 -d /home/testuser/com.raspberrypi.connect"));
+    QString expectedInstallDir = QString("install -o testuser -m 700 -d /home/testuser/") + PI_CONNECT_CONFIG_PATH;
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedInstallDir.toStdString()));
+    
+    // Check systemd unit directories are created
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/default.target.wants"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/paths.target.wants"));
+    
+    // Check all three systemd units are enabled via symlinks with fallback logic
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("UNIT_SRC=/lib/systemd/user/rpi-connect.service"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ln -sf $UNIT_SRC"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect.service"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect-signin.path"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect-wayvnc.service"));
+    
+    // Check ownership is set correctly
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chown -R testuser:testuser"));
+    
+    // Check systemd linger is set up for auto-start
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("/var/lib/systemd/linger"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -m 0644 /dev/null /var/lib/systemd/linger/testuser"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi", "[cloudinit][network]") {
@@ -701,6 +740,6 @@ TEST_CASE("CustomisationGenerator cloud-init handles empty Pi Connect token", "[
     
     // Should not include write_files or runcmd for Pi Connect
     REQUIRE_FALSE(yaml.contains("write_files:"));
-    REQUIRE_FALSE(yaml.contains("com.raspberrypi.connect"));
+    REQUIRE_FALSE(yaml.contains(PI_CONNECT_CONFIG_PATH));
 }
 

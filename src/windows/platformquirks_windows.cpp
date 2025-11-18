@@ -16,6 +16,8 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
+#include <iostream>
 
 namespace PlatformQuirks {
 
@@ -239,6 +241,73 @@ bool hasNetworkConnectivity() {
 bool isNetworkReady() {
     // On Windows, no special time sync check needed - system time is reliable
     return hasNetworkConnectivity();
+}
+
+void bringWindowToForeground(void* windowHandle) {
+    if (!windowHandle) {
+        return;
+    }
+
+    HWND hwnd = reinterpret_cast<HWND>(windowHandle);
+
+    // Restore the window if it's minimized
+    if (IsIconic(hwnd)) {
+        ShowWindow(hwnd, SW_RESTORE);
+    }
+
+    // Bring the window to the foreground
+    // This combination of calls is necessary to reliably bring the window to the front
+    // even when called from a different process or thread context
+    SetForegroundWindow(hwnd);
+    SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    
+    // Flash the window if SetForegroundWindow didn't succeed
+    // (Windows may prevent stealing focus in some cases)
+    FLASHWINFO fwi;
+    fwi.cbSize = sizeof(FLASHWINFO);
+    fwi.hwnd = hwnd;
+    fwi.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG;
+    fwi.uCount = 3;
+    fwi.dwTimeout = 0;
+    FlashWindowEx(&fwi);
+}
+
+bool hasElevatedPrivileges() {
+    // Check if running as Administrator
+    BOOL fIsRunAsAdmin = FALSE;
+    PSID pAdministratorsGroup = NULL;
+
+    // Allocate and initialize a SID of the administrators group
+    SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
+    if (!AllocateAndInitializeSid(&NtAuthority, 2,
+                                  SECURITY_BUILTIN_DOMAIN_RID,
+                                  DOMAIN_ALIAS_RID_ADMINS,
+                                  0, 0, 0, 0, 0, 0,
+                                  &pAdministratorsGroup)) {
+        return false;
+    }
+
+    // Determine whether the SID of administrators group is enabled in
+    // the primary access token of the process
+    if (!CheckTokenMembership(NULL, pAdministratorsGroup, &fIsRunAsAdmin)) {
+        fIsRunAsAdmin = FALSE;
+    }
+
+    // Free the SID
+    FreeSid(pAdministratorsGroup);
+
+    return fIsRunAsAdmin == TRUE;
+}
+
+void attachConsole() {
+    // Allocate console on Windows (only needed if compiled as GUI program)
+    // Try to attach to parent process console first, or allocate a new one
+    if (::AttachConsole(ATTACH_PARENT_PROCESS) || ::AllocConsole()) {
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+        // Sync C++ iostreams with C stdio for consistency
+        std::ios::sync_with_stdio();
+    }
 }
 
 } // namespace PlatformQuirks

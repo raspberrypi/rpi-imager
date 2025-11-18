@@ -12,6 +12,10 @@
 
 namespace rpi_imager {
 
+// Raspberry Pi Connect configuration paths
+constexpr auto PI_CONNECT_CONFIG_PATH = ".config/com.raspberrypi.connect";
+constexpr auto PI_CONNECT_DEPLOY_KEY_FILENAME = "auth.key";
+
 /**
  * @brief Generates firstrun.sh and cloud-init customisation scripts for Raspberry Pi images
  * 

@@ -58,9 +58,9 @@ WizardStepBase {
                 Layout.fillWidth: true
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-                Accessible.focusable: true
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
             
             GridLayout {
@@ -78,9 +78,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + ": " + (wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected)
-                    Accessible.focusable: true
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                    focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
                 Text {
                     text: wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
@@ -100,9 +100,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedOsName || CommonStrings.noImageSelected)
-                    Accessible.focusable: true
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                    focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
                 Text {
                     text: wizardContainer.selectedOsName || CommonStrings.noImageSelected
@@ -122,9 +122,9 @@ WizardStepBase {
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text + " " + (wizardContainer.selectedStorageName || CommonStrings.noStorageSelected)
-                    Accessible.focusable: true
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                    focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                    activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
                 Text {
                     text: wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
@@ -150,9 +150,9 @@ WizardStepBase {
                 visible: root.anyCustomizationsApplied
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-                Accessible.focusable: true
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
             
             ScrollView {
@@ -225,9 +225,9 @@ WizardStepBase {
                 wrapMode: Text.WordWrap
                 Accessible.role: Accessible.StaticText
                 Accessible.name: text
-                Accessible.focusable: true
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
         }        
     }

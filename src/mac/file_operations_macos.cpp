@@ -9,6 +9,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/filio.h>
+#include <sys/ioctl.h>
 #include <errno.h>
 #include <iostream>
 #include <QDebug>

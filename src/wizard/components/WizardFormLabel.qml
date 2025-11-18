@@ -13,6 +13,18 @@ Text {
     property bool isError: false
     property bool isDisabled: false
     
+    // Access imageWriter from ancestor context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+    
     font.pixelSize: Style.fontSizeFormLabel
     font.family: Style.fontFamily
     color: isError ? Style.formLabelErrorColor : 
@@ -23,9 +35,11 @@ Text {
     Layout.fillWidth: false
     Layout.alignment: Qt.AlignVCenter
     
-    // Accessibility - by default labels are part of the form flow
-    // Individual instances can set Accessible.ignored: false to make them explicitly readable
+    // Accessibility - labels become keyboard-focusable when screen reader is active
     Accessible.role: Accessible.StaticText
     Accessible.name: text
     Accessible.ignored: true  // Usually read as part of the associated control
+    Accessible.focusable: imageWriter ? imageWriter.isScreenReaderActive() : false
+    focusPolicy: (imageWriter && imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+    activeFocusOnTab: imageWriter ? imageWriter.isScreenReaderActive() : false
 } 

@@ -28,7 +28,7 @@ Item {
     
     // Start at device selection if online, otherwise skip to OS selection
     property int currentStep: hasNetworkConnectivity ? 0 : 1
-    readonly property int totalSteps: 12
+    readonly property int totalSteps: 13
     
     // Track which steps have been made permissible/unlocked for navigation
     // Each bit represents a step: bit 0 = Device, bit 1 = OS, etc.
@@ -58,12 +58,18 @@ Item {
     property bool userConfigured: false
     property bool wifiConfigured: false
     property bool sshEnabled: false
+    property bool secureBootEnabled: false
     property bool piConnectEnabled: false
     // Whether selected OS supports Raspberry Raspberry Pi Connect customization
     property bool piConnectAvailable: false
+    // Whether selected OS supports Secure Boot signing
+    property bool secureBootAvailable: false
+    // Whether secure boot key is configured in App Options
+    property bool secureBootKeyConfigured: false
 
     // Interfaces & Features
     property bool ccRpiAvailable: false
+    property bool ifAndFeaturesAvailable: false  // Whether any interface/feature capabilities are available
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
     property bool if1WireEnabled: false
@@ -76,6 +82,11 @@ Item {
     // Whether the selected OS supports customisation (init_format present)
     property bool customizationSupported: true
     
+    // Conserved customization settings object - runtime state passed to generator
+    // This is the single source of truth for what customizations will be applied
+    // Individual steps read from and write to this object
+    property var customizationSettings: ({})
+    
     // Wizard steps enum
     readonly property int stepDeviceSelection: 0
     readonly property int stepOSSelection: 1
@@ -85,10 +96,11 @@ Item {
     readonly property int stepUserCustomization: 5
     readonly property int stepWifiCustomization: 6
     readonly property int stepRemoteAccess: 7
-    readonly property int stepPiConnectCustomization: 8
-    readonly property int stepIfAndFeatures: 9
-    readonly property int stepWriting: 10
-    readonly property int stepDone: 11
+    readonly property int stepSecureBootCustomization: 8
+    readonly property int stepPiConnectCustomization: 9
+    readonly property int stepIfAndFeatures: 10
+    readonly property int stepWriting: 11
+    readonly property int stepDone: 12
     
     signal wizardCompleted()
     
@@ -122,11 +134,28 @@ Item {
         if (imageWriter && imageWriter.isEmbeddedMode()) {
             disableWarnings = true
         }
+        
+        // Initialize customizationSettings from persistent storage
+        // Each step can then read from this and update it as needed
+        if (imageWriter) {
+            customizationSettings = imageWriter.getSavedCustomisationSettings()
+            
+            // Check if secure boot RSA key is configured
+            var rsaKeyPath = imageWriter.getStringSetting("secureboot_rsa_key")
+            secureBootKeyConfigured = (rsaKeyPath && rsaKeyPath.length > 0)
+        }
     }
 
     // Wizard step names for sidebar (grouped for cleaner display)
-    readonly property var stepNames: [
+    // When offline, skip Device selection
+    readonly property var stepNames: hasNetworkConnectivity ? [
         qsTr("Device"),
+        qsTr("OS"), 
+        qsTr("Storage"),
+        qsTr("Customisation"),
+        qsTr("Writing"),
+        qsTr("Done")
+    ] : [
         qsTr("OS"), 
         qsTr("Storage"),
         qsTr("Customisation"),
@@ -138,24 +167,34 @@ Item {
 
     // Helper function to map wizard step to sidebar index
     function getSidebarIndex(wizardStep) {
-        if (wizardStep <= stepStorageSelection) {
-            return wizardStep
+        // When offline, device selection is skipped, so adjust indices
+        var offset = hasNetworkConnectivity ? 0 : -1
+        
+        if (wizardStep === stepDeviceSelection) {
+            // Device is at index 0 when online, not shown when offline
+            return hasNetworkConnectivity ? 0 : -1
+        } else if (wizardStep === stepOSSelection) {
+            return hasNetworkConnectivity ? 1 : 0
+        } else if (wizardStep === stepStorageSelection) {
+            return hasNetworkConnectivity ? 2 : 1
         } else if (wizardStep >= firstCustomizationStep && wizardStep <= getLastCustomizationStep()) {
-            return 3 // Customization group
+            return hasNetworkConnectivity ? 3 : 2 // Customization group
         } else if (wizardStep === stepWriting) {
-            return 4 // Writing
+            return hasNetworkConnectivity ? 4 : 3 // Writing
         } else if (wizardStep === stepDone) {
-            return 5 // Done
+            return hasNetworkConnectivity ? 5 : 4 // Done
         }
         return 0
     }
 
     function getLastCustomizationStep() {
-        return ccRpiAvailable
+        return (ccRpiAvailable && ifAndFeaturesAvailable)
             ? stepIfAndFeatures
             : piConnectAvailable
                 ? stepPiConnectCustomization
-                : stepRemoteAccess
+                : (secureBootAvailable && secureBootKeyConfigured)
+                    ? stepSecureBootCustomization
+                    : stepRemoteAccess
     }
 
     function getCustomizationSubstepLabels() {
@@ -165,10 +204,13 @@ Item {
         }
         
         var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote access")]
+        if (secureBootAvailable && secureBootKeyConfigured) {
+            labels.push(qsTr("Secure Boot"))
+        }
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
-        if (ccRpiAvailable) {
+        if (ccRpiAvailable && ifAndFeaturesAvailable) {
             labels.push(qsTr("Interfaces & Features"))
         }
 
@@ -186,6 +228,7 @@ Item {
         if (stepLabel === qsTr("User")) return userConfigured
         if (stepLabel === qsTr("Wi‑Fi")) return wifiConfigured
         if (stepLabel === qsTr("Remote access")) return sshEnabled
+        if (stepLabel === qsTr("Secure Boot")) return secureBootEnabled
         if (stepLabel === qsTr("Raspberry Pi Connect")) return piConnectEnabled
         if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || if1WireEnabled || ifSerial !== "" || featUsbGadgetEnabled)
         
@@ -224,8 +267,10 @@ Item {
         userConfigured = false
         wifiConfigured = false
         sshEnabled = false
+        secureBootEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
+        secureBootAvailable = false
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
@@ -253,6 +298,7 @@ Item {
         
         // Reset OS capability flags - these will be set correctly by OS selection
         piConnectAvailable = false
+        secureBootAvailable = false
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
@@ -264,14 +310,27 @@ Item {
 
     // Map sidebar index back to the first wizard step in that group
     function getWizardStepFromSidebarIndex(sidebarIndex) {
-        switch (sidebarIndex) {
-            case 0: return stepDeviceSelection
-            case 1: return stepOSSelection
-            case 2: return stepStorageSelection
-            case 3: return firstCustomizationStep
-            case 4: return stepWriting
-            case 5: return stepDone
-            default: return stepDeviceSelection
+        // When offline, device selection is not shown, so indices shift
+        if (hasNetworkConnectivity) {
+            switch (sidebarIndex) {
+                case 0: return stepDeviceSelection
+                case 1: return stepOSSelection
+                case 2: return stepStorageSelection
+                case 3: return firstCustomizationStep
+                case 4: return stepWriting
+                case 5: return stepDone
+                default: return stepDeviceSelection
+            }
+        } else {
+            // Offline: no device selection in sidebar
+            switch (sidebarIndex) {
+                case 0: return stepOSSelection
+                case 1: return stepStorageSelection
+                case 2: return firstCustomizationStep
+                case 3: return stepWriting
+                case 4: return stepDone
+                default: return stepOSSelection
+            }
         }
     }
     
@@ -706,21 +765,24 @@ Item {
             else if (!customizationSupported && nextIndex === firstCustomizationStep) {
                 nextIndex = stepWriting
             }
+            // Skip optional Secure Boot step when OS does not support it
+            if (!secureBootAvailable && nextIndex === stepSecureBootCustomization) {
+                nextIndex++
+            }
             // Skip optional Raspberry Pi Connect step when OS does not support it
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
                 nextIndex++
             }
-            // skip interfaces and features for Operating Systems that don't support the cc_raspberry_pi cloud-init module
-            if (!ccRpiAvailable && nextIndex == stepIfAndFeatures) {
+            // Skip interfaces and features if OS doesn't support it or no capabilities are available
+            if ((!ccRpiAvailable || !ifAndFeaturesAvailable) && nextIndex == stepIfAndFeatures) {
                 nextIndex++
             }
-            // Before entering the writing step, persist and apply customization (when supported)
+            // Before entering the writing step, apply customization (when supported)
             if (nextIndex === stepWriting && customizationSupported && imageWriter) {
-                // Persist whatever is currently staged in per-step UIs
-                var settings = imageWriter.getSavedCustomizationSettings()
-                imageWriter.setSavedCustomizationSettings(settings)
-                // Build and stage customization directly in C++
-                imageWriter.applyCustomizationFromSavedSettings()
+                // Pass the complete customizationSettings object directly to the generator
+                // This includes both persistent settings (hostname, wifi, etc.) and
+                // ephemeral settings (piConnectEnabled) from the current wizard session
+                imageWriter.applyCustomisationFromSettings(customizationSettings)
             }
             root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)
@@ -741,12 +803,20 @@ Item {
             if (root.currentStep === stepWriting && !customizationSupported) {
                 prevIndex = stepStorageSelection
             } else {
-                // skip interfaces and features for Operating Systems that don't support the cc_raspberry_pi cloud-init module
-                if (prevIndex == stepIfAndFeatures && !ccRpiAvailable) {
+                // Skip interfaces and features if OS doesn't support it or no capabilities are available
+                if (prevIndex == stepIfAndFeatures && (!ccRpiAvailable || !ifAndFeaturesAvailable)) {
                     prevIndex--
                 }
                 if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
                     prevIndex--
+                }
+                if (prevIndex === stepSecureBootCustomization && !secureBootAvailable) {
+                    prevIndex--
+                }
+                // Skip device selection if offline (it would be empty/useless)
+                if (prevIndex === stepDeviceSelection && !hasNetworkConnectivity) {
+                    // Can't go back further, stay at current step
+                    return
                 }
             }
             root.currentStep = prevIndex
@@ -761,6 +831,11 @@ Item {
     
     function jumpToStep(stepIndex) {
         if (stepIndex >= 0 && stepIndex < root.totalSteps) {
+            // Prevent jumping to device selection when offline
+            if (stepIndex === stepDeviceSelection && !hasNetworkConnectivity) {
+                console.log("Cannot jump to device selection when offline")
+                return
+            }
             root.currentStep = stepIndex
             var stepComponent = getStepComponent(stepIndex)
             if (stepComponent) {
@@ -781,6 +856,7 @@ Item {
             case stepUserCustomization: return userCustomizationStep
             case stepWifiCustomization: return wifiCustomizationStep
             case stepRemoteAccess: return remoteAccessStep
+            case stepSecureBootCustomization: return secureBootCustomizationStep
             case stepPiConnectCustomization: return piConnectCustomizationStep
             case stepIfAndFeatures: return ifAndFeaturesStep
             case stepWriting: return writingStep
@@ -823,6 +899,8 @@ Item {
         OSSelectionStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            // Hide back button when offline (device selection was skipped)
+            showBackButton: root.hasNetworkConnectivity
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
@@ -899,6 +977,20 @@ Item {
     Component {
         id: remoteAccessStep
         RemoteAccessStep {
+            imageWriter: root.imageWriter
+            wizardContainer: root
+            appOptionsButton: optionsButton
+            onNextClicked: root.nextStep()
+            onBackClicked: root.previousStep()
+            onSkipClicked: {
+                // Skip functionality is handled in the step itself
+            }
+        }
+    }
+    
+    Component {
+        id: secureBootCustomizationStep
+        SecureBootCustomizationStep {
             imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
@@ -1039,9 +1131,9 @@ Item {
             Accessible.role: Accessible.Heading
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
         }
 
         // Body / security note
@@ -1059,9 +1151,9 @@ Item {
             Accessible.role: Accessible.StaticText
             Accessible.name: text
             Accessible.ignored: false
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
         }
 
         // Buttons row
@@ -1152,7 +1244,8 @@ Item {
     
     function resetWizard() {
         // Reset all wizard state to initial values
-        currentStep = 0
+        // Start at OS selection if offline, device selection if online
+        currentStep = hasNetworkConnectivity ? 0 : 1
         permissibleStepsBitmap = 1  // Reset to only Device step permissible
         isWriting = false
         writeAnotherMode = false
@@ -1179,9 +1272,20 @@ Item {
         supportsSerialConsoleOnly = false
         supportsUsbGadget = false
         
-        // Navigate back to the first step
+        // Reset hardware model selection to prevent stale state
+        if (imageWriter) {
+            var hwModel = imageWriter.getHWList()
+            if (hwModel) {
+                hwModel.currentIndex = -1
+            }
+            // Also clear ImageWriter's internal source and destination state
+            imageWriter.setSrc("")
+            imageWriter.setDst("", 0)
+        }
+        
+        // Navigate back to the first step (device selection if online, OS selection if offline)
         wizardStack.clear()
-        wizardStack.push(deviceSelectionStep)
+        wizardStack.push(hasNetworkConnectivity ? deviceSelectionStep : osSelectionStep)
     }
     
     function resetToWriteStep() {

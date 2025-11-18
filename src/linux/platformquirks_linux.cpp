@@ -5,6 +5,11 @@
 
 #include "../platformquirks.h"
 #include <cstdlib>
+#include <unistd.h>
+#include <pwd.h>
+#include <sys/types.h>
+#include <cstdio>
+#include <cstring>
 #include <QDebug>
 #include <QProcess>
 #include <QFile>
@@ -14,11 +19,130 @@
 namespace PlatformQuirks {
 
 void applyQuirks() {
-    // Currently no platform-specific quirks needed for Linux
-    // This is a placeholder for future Linux-specific workarounds
-    
-    // Example of how to set environment variables without Qt:
-    // setenv("VARIABLE_NAME", "value", 1);
+    // When running as root via sudo or pkexec, ensure cache and settings directories
+    // are tied to the original user, not root
+    if (::geteuid() == 0) {
+        // Check if we're running via sudo or pkexec
+        const char* sudoUid = ::getenv("SUDO_UID");
+        const char* pkexecUid = ::getenv("PKEXEC_UID");
+        const char* originalUidStr = nullptr;
+        const char* elevationMethod = nullptr;
+        
+        if (sudoUid) {
+            originalUidStr = sudoUid;
+            elevationMethod = "sudo";
+        } else if (pkexecUid) {
+            originalUidStr = pkexecUid;
+            elevationMethod = "pkexec";
+        }
+        
+        if (originalUidStr) {
+            // We're running under sudo or pkexec - get the original user's information
+            uid_t originalUid = static_cast<uid_t>(::atoi(originalUidStr));
+            struct passwd* pw = ::getpwuid(originalUid);
+            
+            if (pw && pw->pw_dir) {
+                // Use C-style strings since this happens before Qt is fully initialized
+                char xdgCacheHome[512];
+                char xdgConfigHome[512];
+                char xdgDataHome[512];
+                char xdgRuntimeDir[512];
+                
+                std::snprintf(xdgCacheHome, sizeof(xdgCacheHome), "%s/.cache", pw->pw_dir);
+                std::snprintf(xdgConfigHome, sizeof(xdgConfigHome), "%s/.config", pw->pw_dir);
+                std::snprintf(xdgDataHome, sizeof(xdgDataHome), "%s/.local/share", pw->pw_dir);
+                std::snprintf(xdgRuntimeDir, sizeof(xdgRuntimeDir), "/run/user/%s", originalUidStr);
+                
+                std::fprintf(stderr, "Running as root via %s\n", elevationMethod);
+                std::fprintf(stderr, "Original user: %s\n", pw->pw_name);
+                std::fprintf(stderr, "Original UID: %s\n", originalUidStr);
+                std::fprintf(stderr, "Original home directory: %s\n", pw->pw_dir);
+                
+                // Override HOME to point to the original user's home directory
+                // This ensures QStandardPaths and QSettings use the correct user's directories
+                ::setenv("HOME", pw->pw_dir, 1);
+                
+                // Set XDG environment variables to ensure proper directory usage
+                // Qt respects XDG Base Directory specification on Linux
+                ::setenv("XDG_CACHE_HOME", xdgCacheHome, 1);
+                ::setenv("XDG_CONFIG_HOME", xdgConfigHome, 1);
+                ::setenv("XDG_DATA_HOME", xdgDataHome, 1);
+                
+                // Set XDG_RUNTIME_DIR to point to the original user's runtime directory
+                // This is crucial for D-Bus session bus communication
+                ::setenv("XDG_RUNTIME_DIR", xdgRuntimeDir, 1);
+                
+                // Try to construct the D-Bus session bus address from the original user's runtime directory
+                // This is needed for XDG Desktop Portal (file dialogs), suspend inhibitor, and other D-Bus services
+                char dbusSessionAddress[1024];
+                std::snprintf(dbusSessionAddress, sizeof(dbusSessionAddress), 
+                             "unix:path=%s/bus", xdgRuntimeDir);
+                ::setenv("DBUS_SESSION_BUS_ADDRESS", dbusSessionAddress, 1);
+                
+                // Preserve display-related environment variables from sudo/pkexec
+                // These are needed for xdg-open and other GUI operations
+                
+                // First, check if these are already in the environment (common with sudo)
+                const char* currentDisplay = ::getenv("DISPLAY");
+                const char* currentXauthority = ::getenv("XAUTHORITY");
+                const char* currentWaylandDisplay = ::getenv("WAYLAND_DISPLAY");
+                
+                // If not found, try to detect from the user's active session
+                // For X11, common display values are :0, :1, etc.
+                // For Wayland, common values are wayland-0, wayland-1, etc.
+                if (!currentDisplay && !currentWaylandDisplay) {
+                    // Try to find X11 socket in /tmp/.X11-unix/
+                    // This is a common location for X11 display sockets
+                    if (access("/tmp/.X11-unix/X0", F_OK) == 0) {
+                        ::setenv("DISPLAY", ":0", 1);
+                        std::fprintf(stderr, "Detected X11 display socket, set DISPLAY to: :0\n");
+                    }
+                    
+                    // Check for Wayland socket in the user's XDG_RUNTIME_DIR
+                    char waylandSocketPath[512];
+                    std::snprintf(waylandSocketPath, sizeof(waylandSocketPath), 
+                                 "%s/wayland-0", xdgRuntimeDir);
+                    if (access(waylandSocketPath, F_OK) == 0) {
+                        ::setenv("WAYLAND_DISPLAY", "wayland-0", 1);
+                        std::fprintf(stderr, "Detected Wayland socket, set WAYLAND_DISPLAY to: wayland-0\n");
+                    }
+                } else {
+                    // Display variables already set, just log them
+                    if (currentDisplay) {
+                        std::fprintf(stderr, "DISPLAY already set to: %s\n", currentDisplay);
+                    }
+                    if (currentWaylandDisplay) {
+                        std::fprintf(stderr, "WAYLAND_DISPLAY already set to: %s\n", currentWaylandDisplay);
+                    }
+                }
+                
+                // For XAUTHORITY, if not set, try common locations
+                if (!currentXauthority) {
+                    // Common location is ~/.Xauthority
+                    char xauthorityPath[512];
+                    std::snprintf(xauthorityPath, sizeof(xauthorityPath), 
+                                 "%s/.Xauthority", pw->pw_dir);
+                    if (access(xauthorityPath, R_OK) == 0) {
+                        ::setenv("XAUTHORITY", xauthorityPath, 1);
+                        std::fprintf(stderr, "Set XAUTHORITY to: %s\n", xauthorityPath);
+                    } else {
+                        std::fprintf(stderr, "Note: XAUTHORITY not found, X11 apps may have permission issues\n");
+                    }
+                } else {
+                    std::fprintf(stderr, "XAUTHORITY already set to: %s\n", currentXauthority);
+                }
+                
+                std::fprintf(stderr, "Set HOME to: %s\n", pw->pw_dir);
+                std::fprintf(stderr, "Set XDG_CACHE_HOME to: %s\n", xdgCacheHome);
+                std::fprintf(stderr, "Set XDG_CONFIG_HOME to: %s\n", xdgConfigHome);
+                std::fprintf(stderr, "Set XDG_DATA_HOME to: %s\n", xdgDataHome);
+                std::fprintf(stderr, "Set XDG_RUNTIME_DIR to: %s\n", xdgRuntimeDir);
+                std::fprintf(stderr, "Set DBUS_SESSION_BUS_ADDRESS to: %s\n", dbusSessionAddress);
+            } else {
+                std::fprintf(stderr, "WARNING: Could not retrieve original user information for UID: %s\n", originalUidStr);
+            }
+        }
+    }
 }
 
 void beep() {
@@ -115,6 +239,21 @@ bool isNetworkReady() {
     }
     
     return timeIsSynced;
+}
+
+void bringWindowToForeground(void* windowHandle) {
+    // No-op on Linux - window management is handled by the window manager
+    // and applications cannot force themselves to the foreground
+    Q_UNUSED(windowHandle);
+}
+
+bool hasElevatedPrivileges() {
+    // Check if running as root (UID 0)
+    return ::geteuid() == 0;
+}
+
+void attachConsole() {
+    // No-op on Linux - console is already available
 }
 
 } // namespace PlatformQuirks

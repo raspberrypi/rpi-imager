@@ -63,6 +63,7 @@
 #include <QRandomGenerator>
 #ifndef CLI_ONLY_BUILD
 #include <QDesktopServices>
+#include <QAccessible>
 #endif
 #include <stdlib.h>
 #include <QLocale>
@@ -84,6 +85,9 @@ namespace {
     constexpr uint MAX_SUBITEMS_DEPTH = 16;
 } // namespace anonymous
 
+// Initialize static member for secure boot CLI override
+bool ImageWriter::_forceSecureBootEnabled = false;
+
 ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent),
       _cacheManager(nullptr),
@@ -103,7 +107,7 @@ ImageWriter::ImageWriter(QObject *parent)
       _engine(nullptr),
       _networkchecktimer(),
       _osListRefreshTimer(),
-      _powersave(),
+      _suspendInhibitor(nullptr),
       _thread(nullptr),
       _verifyEnabled(true), _multipleFilesInZip(false), _online(false),
       _settings(),
@@ -318,6 +322,22 @@ void ImageWriter::setMainWindow(QObject *window)
 #endif
 }
 
+void ImageWriter::bringWindowToForeground()
+{
+#ifndef CLI_ONLY_BUILD
+    if (!_mainWindow) {
+        return;
+    }
+
+    // Get the native window handle and pass it to the platform-specific implementation
+    void* windowHandle = reinterpret_cast<void*>(_mainWindow->winId());
+    if (windowHandle) {
+        PlatformQuirks::bringWindowToForeground(windowHandle);
+        qDebug() << "Requested window to be brought to foreground for rpi-connect token";
+    }
+#endif
+}
+
 QString ImageWriter::getNativeOpenFileName(const QString &title,
                                            const QString &initialDir,
                                            const QString &filter)
@@ -381,6 +401,12 @@ ImageWriter::~ImageWriter()
         }
         delete _thread;
         _thread = nullptr;
+    }
+
+    // Cleanup suspend inhibitor if it's still active
+    if (_suspendInhibitor) {
+        delete _suspendInhibitor;
+        _suspendInhibitor = nullptr;
     }
 
     if (_trans)
@@ -682,7 +708,7 @@ void ImageWriter::startWrite()
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+    _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -1373,14 +1399,28 @@ OSListModel *ImageWriter::getOSList()
 
 void ImageWriter::startProgressPolling()
 {
-    _powersave.applyBlock(tr("Downloading and writing image"));
+    // Prevent system suspend and display sleep during imaging
+    try
+    {
+        if (_suspendInhibitor == nullptr)
+            _suspendInhibitor = CreateSuspendInhibitor();
+    }
+    catch (...)
+    {
+        // If we can't create the inhibitor, continue anyway
+    }
     _dlnow = 0;
     _verifynow = 0;
 }
 
 void ImageWriter::stopProgressPolling()
 {
-    _powersave.removeBlock();
+    // Release the inhibition on system suspend and display sleep
+    if (_suspendInhibitor != nullptr)
+    {
+        delete _suspendInhibitor;
+        _suspendInhibitor = nullptr;
+    }
 }
 
 void ImageWriter::setWriteState(WriteState state)
@@ -1974,13 +2014,38 @@ bool ImageWriter::getBoolSetting(const QString &key)
         return _settings.value(key).toBool();
 }
 
+QString ImageWriter::getStringSetting(const QString &key)
+{
+    return _settings.value(key).toString();
+}
+
+// Platform-specific implementation (defined in platform-specific source files)
+extern QString getRsaKeyFingerprint(const QString &keyPath);
+
+QString ImageWriter::getRsaKeyFingerprint(const QString &keyPath)
+{
+    // Delegate to platform-specific implementation
+    return ::getRsaKeyFingerprint(keyPath);
+}
+
 void ImageWriter::setSetting(const QString &key, const QVariant &value)
 {
     _settings.setValue(key, value);
     _settings.sync();
 }
 
-void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts)
+void ImageWriter::setForceSecureBootEnabled(bool enabled)
+{
+    _forceSecureBootEnabled = enabled;
+    qDebug() << "Secure boot force-enabled via CLI flag:" << enabled;
+}
+
+bool ImageWriter::isSecureBootForcedByCliFlag() const
+{
+    return _forceSecureBootEnabled;
+}
+
+void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts)
 {
     _config = config;
     _cmdline = cmdline;
@@ -1996,26 +2061,27 @@ void ImageWriter::setImageCustomization(const QByteArray &config, const QByteArr
     qDebug() << "Advanced options:" << opts;
 }
 
-void ImageWriter::applyCustomizationFromSavedSettings()
+void ImageWriter::applyCustomisationFromSettings(const QVariantMap &settings)
 {
-    // Build customization payloads from saved settings
-    QVariantMap s = getSavedCustomizationSettings();
+    // Build customisation payloads from provided settings map
+    // This method accepts settings directly (which may be a combination of
+    // persistent and ephemeral/runtime settings from the wizard)
 
-    // If the selected image does not support customization, ensure nothing is staged
+    // If the selected image does not support customisation, ensure nothing is staged
     if (_initFormat.isEmpty()) {
-        setImageCustomization(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray(), NoAdvancedOptions);
+        setImageCustomisation(QByteArray(), QByteArray(), QByteArray(), QByteArray(), QByteArray(), NoAdvancedOptions);
         return;
     }
 
     if (_initFormat == "systemd") {
-        _applySystemdCustomizationFromSettings(s);
+        _applySystemdCustomisationFromSettings(settings);
     } else {
-        // customization for cloudinit and cloudinit-rpi
-        _applyCloudInitCustomizationFromSettings(s);
+        // customisation for cloudinit and cloudinit-rpi
+        _applyCloudInitCustomisationFromSettings(settings);
     }
 }
 
-void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
+void ImageWriter::_applySystemdCustomisationFromSettings(const QVariantMap &s)
 {
     // Use CustomisationGenerator for script generation
     QByteArray script = rpi_imager::CustomisationGenerator::generateSystemdScript(s, _piConnectToken);
@@ -2027,10 +2093,19 @@ void ImageWriter::_applySystemdCustomizationFromSettings(const QVariantMap &s)
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
 
-    setImageCustomization(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), NoAdvancedOptions);
+    // Check if secure boot should be enabled
+    ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
+    bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+    QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+    if (secureBootEnabled && !rsaKeyPath.isEmpty() && QFile::exists(rsaKeyPath)) {
+        advOpts |= ImageOptions::EnableSecureBoot;
+        qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+    }
+
+    setImageCustomisation(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), advOpts);
 }
 
-void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
+void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
 {
     // Use CustomisationGenerator for cloud-init YAML generation
     const bool sshEnabled = s.value("sshEnabled").toBool();
@@ -2049,7 +2124,16 @@ void ImageWriter::_applyCloudInitCustomizationFromSettings(const QVariantMap &s)
         cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
     }
     
-    setImageCustomization(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, NoAdvancedOptions);
+    // Check if secure boot should be enabled
+    ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
+    bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+    QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+    if (secureBootEnabled && !rsaKeyPath.isEmpty() && QFile::exists(rsaKeyPath)) {
+        advOpts |= ImageOptions::EnableSecureBoot;
+        qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+    }
+    
+    setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, advOpts);
 }
 
 QString ImageWriter::crypt(const QByteArray &password)
@@ -2094,7 +2178,7 @@ QString ImageWriter::pbkdf2(const QByteArray &psk, const QByteArray &ssid)
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, psk, ssid, 4096, 32).toHex();
 }
 
-void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)
+void ImageWriter::setSavedCustomisationSettings(const QVariantMap &map)
 {
     _settings.beginGroup("imagecustomization");
     _settings.remove("");
@@ -2106,7 +2190,7 @@ void ImageWriter::setSavedCustomizationSettings(const QVariantMap &map)
     _settings.sync();
 }
 
-QVariantMap ImageWriter::getSavedCustomizationSettings()
+QVariantMap ImageWriter::getSavedCustomisationSettings()
 {
     QVariantMap result;
 
@@ -2145,22 +2229,20 @@ QVariantMap ImageWriter::getSavedCustomizationSettings()
     return result;
 }
 
-void ImageWriter::clearSavedCustomizationSettings()
+void ImageWriter::setPersistedCustomisationSetting(const QString &key, const QVariant &value)
 {
     _settings.beginGroup("imagecustomization");
-    _settings.remove("");
+    _settings.setValue(key, value);
     _settings.endGroup();
     _settings.sync();
 }
 
-bool ImageWriter::hasSavedCustomizationSettings()
+void ImageWriter::removePersistedCustomisationSetting(const QString &key)
 {
-    _settings.sync();
     _settings.beginGroup("imagecustomization");
-    bool result = !_settings.childKeys().isEmpty();
+    _settings.remove(key);
     _settings.endGroup();
-
-    return result;
+    _settings.sync();
 }
 
 bool ImageWriter::imageSupportsCustomization()
@@ -2328,6 +2410,15 @@ bool ImageWriter::hasMouse()
     return !isEmbeddedMode() || QFile::exists("/dev/input/mouse0");
 }
 
+bool ImageWriter::isScreenReaderActive() const
+{
+#ifndef CLI_ONLY_BUILD
+    return QAccessible::isActive();
+#else
+    return false;
+#endif
+}
+
 bool ImageWriter::customRepo()
 {
     return _repo.toString() != OSLIST_URL;
@@ -2475,7 +2566,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
-    _thread->setImageCustomization(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+    _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)
@@ -2533,7 +2624,7 @@ void MountUtilsLog(std::string msg) {
 void ImageWriter::reboot()
 {
     qDebug() << "Rebooting system.";
-    system("reboot");
+    (void)system("reboot");
 }
 
 void ImageWriter::openUrl(const QUrl &url)
@@ -2643,6 +2734,9 @@ void ImageWriter::overwriteConnectToken(const QString &token)
     // Ephemeral session-only Connect token (never persisted)
     _piConnectToken = token;
     emit connectTokenReceived(token);
+    
+    // Bring the window to the foreground on Windows when token is received
+    bringWindowToForeground();
 }
 
 QString ImageWriter::getRuntimeConnectToken() const

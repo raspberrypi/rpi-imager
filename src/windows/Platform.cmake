@@ -30,6 +30,8 @@ set(PLATFORM_SOURCES
     dependencies/drivelist/src/windows/list.cpp
     windows/winfile.cpp
     windows/winfile.h
+    windows/bootimgcreator_windows.cpp
+    windows/rsakeyfingerprint_windows.cpp
     windows/diskpart_util.cpp
     windows/diskpart_util.h
     windows/file_operations_windows.cpp
@@ -52,7 +54,7 @@ else()
 endif()
 
 set(DEPENDENCIES
-    windows/rpi-imager.rc
+    ${CMAKE_BINARY_DIR}/rpi-imager.rc
     wlanapi_delayed.lib
 )
 set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll ole32 oleaut32 wbemuuid)

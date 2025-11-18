@@ -156,6 +156,7 @@ WizardStepBase {
                 root.wizardContainer.sshEnabled = false
                 root.wizardContainer.piConnectEnabled = false
                 root.wizardContainer.piConnectAvailable = false
+                root.wizardContainer.secureBootAvailable = imageWriter.isSecureBootForcedByCliFlag()
             }
             root.customSelected = true
             root.customSelectedSize = imageWriter.getSelectedSourceSize()
@@ -300,15 +301,10 @@ WizardStepBase {
             required property string icon
             required property string release_date
             required property string url
-            required property string subitems_json
             required property string extract_sha256
             required property QtObject model
             required property double image_download_size
-            required property var capabilities
-            
-            property string website
-            property string tooltip
-            property string subitems_url
+            required property var devices
             
             // Get reference to the containing ListView
             // IMPORTANT: Cache ListView.view in a property for reliable access.
@@ -363,6 +359,13 @@ WizardStepBase {
                             // Set flag to indicate this is a mouse click
                             parentListView.currentSelectionIsFromMouse = true
                             parentListView.itemSelected(index, delegateItem)
+                        }
+                    }
+                    
+                    onDoubleClicked: {
+                        // Double-click acts like pressing Return - select and advance
+                        if (parentListView) {
+                            parentListView.itemDoubleClicked(index, delegateItem)
                         }
                     }
                 }
@@ -540,7 +543,8 @@ WizardStepBase {
                     tooltip: "",
                     website: "",
                     init_format: "",
-                    capabilities: ""
+                    capabilities: "",
+                    devices: []
                 })
                 
                 // Ensure this sublist can receive keyboard focus
@@ -579,6 +583,10 @@ WizardStepBase {
                     }
                 }
             })
+        } else if (typeof(model.subitems_url) === "string" && model.subitems_url === "internal://back") {
+            // Back button - just navigate back without setting any OS selection
+            osswipeview.decrementCurrentIndex()
+            categorySelected = ""
         } else {
             // Select this OS - explicit branching for clarity
             if (typeof(model.url) === "string" && model.url === "internal://custom") {
@@ -625,6 +633,7 @@ WizardStepBase {
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.wizardContainer.piConnectAvailable = false
+                root.wizardContainer.secureBootAvailable = imageWriter.isSecureBootForcedByCliFlag()
                 root.wizardContainer.ccRpiAvailable = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
@@ -648,19 +657,24 @@ WizardStepBase {
                 root.wizardContainer.selectedOsName = model.name
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.wizardContainer.piConnectAvailable = imageWriter.checkSWCapability("rpi_connect")
+                root.wizardContainer.secureBootAvailable = imageWriter.checkSWCapability("secure_boot") || imageWriter.isSecureBootForcedByCliFlag()
                 root.wizardContainer.ccRpiAvailable = imageWriter.imageSupportsCcRpi()
-                // If customization is not supported for this OS, clear any previously-staged UI flags
-                if (!root.wizardContainer.customizationSupported) {
-                    root.wizardContainer.hostnameConfigured = false
-                    root.wizardContainer.localeConfigured = false
-                    root.wizardContainer.userConfigured = false
-                    root.wizardContainer.wifiConfigured = false
-                    root.wizardContainer.sshEnabled = false
+                
+                // Clean up incompatible settings from customizationSettings based on OS capabilities
+                if (!root.wizardContainer.piConnectAvailable) {
+                    delete root.wizardContainer.customizationSettings.piConnectEnabled
                     root.wizardContainer.piConnectEnabled = false
-                } else if (!root.wizardContainer.piConnectAvailable) {
-                    // If Raspberry Pi Connect not available for this OS, ensure it's not marked enabled
-                    root.wizardContainer.piConnectEnabled = false
-                } else if (!root.wizardContainer.ccRpiAvailable) {
+                }
+                if (!root.wizardContainer.secureBootAvailable) {
+                    delete root.wizardContainer.customizationSettings.secureBootEnabled
+                    root.wizardContainer.secureBootEnabled = false
+                }
+                if (!root.wizardContainer.ccRpiAvailable) {
+                    delete root.wizardContainer.customizationSettings.enableI2C
+                    delete root.wizardContainer.customizationSettings.enableSPI
+                    delete root.wizardContainer.customizationSettings.enable1Wire
+                    delete root.wizardContainer.customizationSettings.enableSerial
+                    delete root.wizardContainer.customizationSettings.enableUsbGadget
                     root.wizardContainer.ifI2cEnabled = false
                     root.wizardContainer.ifSpiEnabled = false
                     root.wizardContainer.if1WireEnabled = false
@@ -674,13 +688,7 @@ WizardStepBase {
                     Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
                 }
             }
-
-            if (model.subitems_url === "internal://back") {
-                osswipeview.decrementCurrentIndex()
-                categorySelected = ""
-            } else {
-                // Stay on page; user must click Next
-            }
+            // Stay on page; user must click Next
         }
     }
     

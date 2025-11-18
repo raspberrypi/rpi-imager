@@ -30,7 +30,7 @@ ApplicationWindow {
     minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
-    title: qsTr("Raspberry Pi Imager v%1").arg(imageWriter.constantVersion())
+    title: qsTr("Raspberry Pi Imager %1").arg(imageWriter.constantVersion())
 
     Component.onCompleted: {
         // Set the main window for modal file dialogs
@@ -111,24 +111,25 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: errorDialog.imageWriter ? errorDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (errorDialog.imageWriter && errorDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: errorDialog.imageWriter ? errorDialog.imageWriter.isScreenReaderActive() : false
         }
 
         Text {
             id: errorMessage
             text: errorDialog.message
+            textFormat: Text.StyledText
             wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
-            Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
+            Accessible.focusable: errorDialog.imageWriter ? errorDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (errorDialog.imageWriter && errorDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: errorDialog.imageWriter ? errorDialog.imageWriter.isScreenReaderActive() : false
         }
 
         RowLayout {
@@ -179,9 +180,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.isScreenReaderActive() : false
         }
 
         Text {
@@ -194,9 +195,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: storageRemovedDialog.imageWriter ? storageRemovedDialog.imageWriter.isScreenReaderActive() : false
         }
 
         RowLayout {
@@ -247,9 +248,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.Heading
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: quitDialog.imageWriter ? quitDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (quitDialog.imageWriter && quitDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: quitDialog.imageWriter ? quitDialog.imageWriter.isScreenReaderActive() : false
         }
 
         Text {
@@ -262,9 +263,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: text
-            Accessible.focusable: true
-            focusPolicy: Qt.TabFocus
-            activeFocusOnTab: true
+            Accessible.focusable: quitDialog.imageWriter ? quitDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (quitDialog.imageWriter && quitDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: quitDialog.imageWriter ? quitDialog.imageWriter.isScreenReaderActive() : false
         }
 
         RowLayout {
@@ -311,6 +312,89 @@ ApplicationWindow {
         parent: overlayRoot
         onAccepted: {}
         onRejected: {}
+    }
+
+    // Permission warning dialog for when not running with elevated privileges
+    BaseDialog {
+        id: permissionWarningDialog
+        parent: overlayRoot
+        anchors.centerIn: parent
+        closePolicy: Popup.NoAutoClose  // Prevent closing with escape or clicking outside
+        
+        property string warningMessage: ""
+        
+        function showWarning(message) {
+            warningMessage = message
+            open()
+        }
+        
+        // Custom escape handling - exit the application
+        function escapePressed() {
+            Qt.quit()
+        }
+        
+        // Register focus groups when component is ready
+        Component.onCompleted: {
+            registerFocusGroup("heading", function(){ 
+                return [headingText] 
+            }, 0)
+            registerFocusGroup("message", function(){ 
+                return [messageText] 
+            }, 1)
+            registerFocusGroup("buttons", function(){ 
+                return [exitButton] 
+            }, 2)
+        }
+        
+        // Dialog content
+        Text {
+            id: headingText
+            text: qsTr("Insufficient Permissions")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelErrorColor
+            Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.description: text
+            Accessible.focusable: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.isScreenReaderActive() : false
+        }
+        
+        Text {
+            id: messageText
+            text: permissionWarningDialog.warningMessage
+            font.pixelSize: Style.fontSizeDescription
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.description: qsTr("Error message explaining why elevated privileges are required")
+            Accessible.focusable: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.isScreenReaderActive() : false
+            Accessible.ignored: false
+            focusPolicy: (permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: permissionWarningDialog.imageWriter ? permissionWarningDialog.imageWriter.isScreenReaderActive() : false
+        }
+        
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacingMedium
+            Item {
+                Layout.fillWidth: true
+            }
+            
+            ImButtonRed {
+                id: exitButton
+                text: qsTr("Exit")
+                accessibleDescription: qsTr("Exit Raspberry Pi Imager - you must restart with elevated privileges to write images")
+                activeFocusOnTab: true
+                onClicked: Qt.quit()
+            }
+        }
     }
 
     AppOptionsDialog {
@@ -408,4 +492,9 @@ ApplicationWindow {
             wizardContainer.jumpToStep(wizardContainer.stepOSSelection);
         }
     }
+    
+    function onPermissionWarning(message) {
+        permissionWarningDialog.showWarning(message);
+    }
+
 }
