@@ -486,13 +486,14 @@ int main(int argc, char *argv[])
 
     // Determine if we should show the language selection landing step
     // Consider language undetermined if QLocale::system() is AnyLanguage or C
+    // In embedded mode, always show language selection since we can't trust the host OS language
     bool couldDetermineLanguage = true;
     {
         QLocale::Language sysLang = QLocale::system().language();
         if (sysLang == QLocale::AnyLanguage || sysLang == QLocale::C)
             couldDetermineLanguage = false;
     }
-    const bool showLanguageSelection = enableLanguageSelection || !couldDetermineLanguage;
+    const bool showLanguageSelection = enableLanguageSelection || !couldDetermineLanguage || imageWriter.isEmbeddedMode();
 
     engine.setInitialProperties(QVariantMap{
         {"imageWriter", QVariant::fromValue(&imageWriter)},
