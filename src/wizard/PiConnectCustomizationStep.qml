@@ -162,6 +162,27 @@ WizardStepBase {
                 root.rebuildFocusOrder()
             }
         }
+
+        // Listen for token cleared signal (when write completes)
+        function onConnectTokenCleared() {
+            // Reset all Pi Connect customization state
+            root.connectTokenReceived = false
+            root.connectToken = ""
+            root.tokenFromBrowser = false
+            root.tokenFieldEnabled = false
+            root.countdownSeconds = 25
+            countdownTimer.stop()
+            useTokenPill.checked = false
+            root.wizardContainer.piConnectEnabled = false
+            // Clear the text field
+            if (fieldConnectToken) {
+                fieldConnectToken.text = ""
+            }
+            // Clear from customization settings
+            delete wizardContainer.customizationSettings.piConnectEnabled
+            // Rebuild focus order
+            root.rebuildFocusOrder()
+        }
     }
 
     Component.onCompleted: {

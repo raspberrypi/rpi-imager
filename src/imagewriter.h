@@ -288,6 +288,7 @@ public:
     Q_INVOKABLE void overwriteConnectToken(const QString &token);
     Q_INVOKABLE QString getRuntimeConnectToken() const;
     Q_INVOKABLE bool verifyAuthKey(const QString &token, bool strict = false) const;
+    Q_INVOKABLE void clearConnectToken();
     
     /* Override OS list refresh schedule (in minutes); pass negative to clear override */
     Q_INVOKABLE void setOsListRefreshOverride(int intervalMinutes, int jitterMinutes);
@@ -319,6 +320,7 @@ signals:
     void writeStateChanged();
     void connectTokenReceived(const QString &token);
     void connectTokenConflictDetected(const QString &token);
+    void connectTokenCleared();
     void cacheStatusChanged();
     void osListFetchFailed();
     void permissionWarning(QVariant msg);

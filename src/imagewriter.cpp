@@ -1447,6 +1447,10 @@ void ImageWriter::onSuccess()
 {
     setWriteState(WriteState::Succeeded);
     stopProgressPolling();
+    
+    // Clear Pi Connect token on successful write completion
+    clearConnectToken();
+    
     emit success();
 
     if (_settings.value("beep").toBool()) {
@@ -2831,4 +2835,10 @@ void ImageWriter::overwriteConnectToken(const QString &token)
 QString ImageWriter::getRuntimeConnectToken() const
 {
     return _piConnectToken;
+}
+
+void ImageWriter::clearConnectToken()
+{
+    _piConnectToken.clear();
+    emit connectTokenCleared();
 }
