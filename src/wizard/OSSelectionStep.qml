@@ -433,6 +433,7 @@ WizardStepBase {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                             color: Style.textMetadataColor
+                            font.pixelSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
                             // Hide for custom until a file is chosen; otherwise show status
                             visible: (typeof(delegateItem.url) === "string" && delegateItem.url !== "internal://custom" && delegateItem.url !== "internal://format")
