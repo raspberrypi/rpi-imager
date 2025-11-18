@@ -28,6 +28,7 @@
 #include <QFontDatabase>
 #include <QSessionManager>
 #include <QFileOpenEvent>
+#include <QtMath>
 #endif
 #include "platformquirks.h"
 #ifdef Q_OS_DARWIN
@@ -41,6 +42,7 @@
 #include <QTcpSocket>
 #endif
 #include "imageadvancedoptions.h"
+#include "embedded_config.h"
 
 static QTextStream cerr(stderr);
 
@@ -122,6 +124,39 @@ int main(int argc, char *argv[])
     app.setApplicationName("Raspberry Pi Imager");
     app.setApplicationVersion(ImageWriter::staticVersion());
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
+
+    // Log display scaling information for debugging (embedded mode only)
+    if (::isEmbeddedMode()) {
+        QScreen *screen = QGuiApplication::primaryScreen();
+        if (screen) {
+            qDebug() << "=== Display Scaling Debug Info ===";
+            qDebug() << "Environment variables:";
+            qDebug() << "  QT_AUTO_SCREEN_SCALE_FACTOR:" << qgetenv("QT_AUTO_SCREEN_SCALE_FACTOR");
+            qDebug() << "  QT_SCALE_FACTOR:" << qgetenv("QT_SCALE_FACTOR");
+            qDebug() << "  QT_SCREEN_SCALE_FACTORS:" << qgetenv("QT_SCREEN_SCALE_FACTORS");
+            qDebug() << "Screen geometry:" << screen->geometry();
+            qDebug() << "Screen available geometry:" << screen->availableGeometry();
+            qDebug() << "Screen physical size (mm):" << screen->physicalSize();
+            qDebug() << "Screen size (inches):" 
+                     << QString("W: %1, H: %2, Diagonal: %3")
+                        .arg(screen->physicalSize().width() / 25.4, 0, 'f', 1)
+                        .arg(screen->physicalSize().height() / 25.4, 0, 'f', 1)
+                        .arg(qSqrt(qPow(screen->physicalSize().width() / 25.4, 2) + 
+                                   qPow(screen->physicalSize().height() / 25.4, 2)), 0, 'f', 1);
+            qDebug() << "Logical DPI:" << screen->logicalDotsPerInch();
+            qDebug() << "Physical DPI:" << screen->physicalDotsPerInch();
+            qDebug() << "Physical DPI X:" << screen->physicalDotsPerInchX();
+            qDebug() << "Physical DPI Y:" << screen->physicalDotsPerInchY();
+            qDebug() << "Device pixel ratio:" << screen->devicePixelRatio();
+            qDebug() << "Qt High DPI scaling enabled:" 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+                     << "Yes (Qt6 - always on)";
+#else
+                     << (QCoreApplication::testAttribute(Qt::AA_EnableHighDpiScaling) ? "Yes" : "No");
+#endif
+            qDebug() << "==================================";
+        }
+    }
 
         // Early check for elevated privileges on platforms that require them (Linux/Windows)
         bool hasPermissionIssue = false;
