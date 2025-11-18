@@ -315,7 +315,8 @@ export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS}"
 
 # Disable desktop-specific features for embedded use
 export QT_QUICK_CONTROLS_STYLE=Material
-export QT_SCALE_FACTOR=1.0
+# Enable automatic screen scale factor based on display DPI
+export QT_AUTO_SCREEN_SCALE_FACTOR=1
 
 # GPU memory optimization for embedded systems
 export QT_QUICK_BACKEND=software
