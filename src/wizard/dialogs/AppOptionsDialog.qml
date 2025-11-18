@@ -18,7 +18,7 @@ BaseDialog {
     // Override default height for this more complex dialog
     height: Math.max(280, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280)
     
-    required property ImageWriter imageWriter
+    // imageWriter is inherited from BaseDialog
     // Optional reference to the wizard container for ephemeral flags
     property var wizardContainer: null
     
@@ -157,13 +157,19 @@ BaseDialog {
                     focusItem.activeFocusOnTab = true
                 }
                 onClicked: {
-                    var keyPath = imageWriter.getNativeOpenFileName(
-                        qsTr("Select RSA Private Key"), 
-                        "", 
-                        qsTr("PEM Files (*.pem);;All Files (*)")
-                    );
-                    if (keyPath) {
-                        rsaKeyPath.text = keyPath;
+                    // Prefer native file dialog via Imager's wrapper, but only if available
+                    if (imageWriter.nativeFileDialogAvailable()) {
+                        var keyPath = imageWriter.getNativeOpenFileName(
+                            qsTr("Select RSA Private Key"), 
+                            "", 
+                            qsTr("PEM Files (*.pem);;All Files (*)")
+                        );
+                        if (keyPath) {
+                            rsaKeyPath.text = keyPath;
+                        }
+                    } else {
+                        // Fallback to QML dialog (forced non-native)
+                        rsaKeyFileDialog.open();
                     }
                 }
                 
@@ -229,6 +235,41 @@ BaseDialog {
         wizardContainer: popup.wizardContainer
     }
 
+    // File dialog for RSA key selection (embedded mode)
+    ImFileDialog {
+        id: rsaKeyFileDialog
+        imageWriter: popup.imageWriter
+        parent: popup.parent
+        anchors.centerIn: parent
+        dialogTitle: qsTr("Select RSA Private Key")
+        nameFilters: [qsTr("PEM Files (*.pem)"), qsTr("All Files (*)")]
+        Component.onCompleted: {
+            // Default to ~/.ssh folder if it exists
+            if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
+                var home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+                var url = "file://" + home + "/.ssh"
+                rsaKeyFileDialog.currentFolder = url
+                rsaKeyFileDialog.folder = url
+            } else if (Qt.platform.os === "linux") {
+                var lhome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+                var lurl = "file://" + lhome + "/.ssh"
+                rsaKeyFileDialog.currentFolder = lurl
+                rsaKeyFileDialog.folder = lurl
+            } else if (Qt.platform.os === "windows") {
+                var whome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+                var wurl = "file:///" + whome + "/.ssh"
+                rsaKeyFileDialog.currentFolder = wurl
+                rsaKeyFileDialog.folder = wurl
+            }
+        }
+        onAccepted: {
+            if (selectedFile && selectedFile.toString().length > 0) {
+                var filePath = selectedFile.toString().replace(/^file:\/\//, "")
+                rsaKeyPath.text = filePath
+            }
+        }
+    }
+
     function initialize() {
         if (!initialized) {
             // Load current settings from ImageWriter
@@ -269,6 +310,7 @@ BaseDialog {
     // Confirmation dialog for disabling warnings
     BaseDialog {
         id: confirmDisableWarnings
+        imageWriter: popup.imageWriter
         parent: popup.contentItem
         anchors.centerIn: parent
 

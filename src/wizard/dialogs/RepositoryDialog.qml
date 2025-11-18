@@ -15,7 +15,7 @@ import RpiImager
 BaseDialog {
     id: popup
 
-    required property ImageWriter imageWriter
+    // imageWriter is inherited from BaseDialog
     property var wizardContainer: null
 
     property bool initialized: false
@@ -305,6 +305,7 @@ BaseDialog {
 
     ImFileDialog {
         id: repoFileDialog
+        imageWriter: popup.imageWriter
         dialogTitle: qsTr("Select custom repository")
         nameFilters: CommonStrings.repoFiltersList
         onAccepted: {

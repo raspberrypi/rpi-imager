@@ -23,6 +23,18 @@ Popup {
 
     property alias title: msgpopupheader.text
     property alias closeButton: closeButton
+    
+    // Access imageWriter from parent context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
 
     // Functions to be implemented by derived components
     property var getNextFocusableElement: function(startElement) { return startElement }
@@ -34,7 +46,9 @@ Popup {
 
     background: Rectangle {
         color: Style.listViewRowBackgroundColor
-        radius: Style.listItemBorderRadius
+        radius: (msgpopup.imageWriter && msgpopup.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+        antialiasing: true  // Smooth edges at non-integer scale factors
+        clip: true  // Prevent content overflow at non-integer scale factors
     }
 
     contentItem: Item {

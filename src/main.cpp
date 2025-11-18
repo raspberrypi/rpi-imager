@@ -117,6 +117,9 @@ int main(int argc, char *argv[])
     qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
 #endif
 
+    // Note: Scale factor detection is handled by the AppRun script for embedded mode
+    // by reading DRM EDID data and setting QT_SCALE_FACTOR before launching
+
     QGuiApplication app(argc, argv);
     
     app.setOrganizationName("Raspberry Pi");
@@ -137,23 +140,11 @@ int main(int argc, char *argv[])
             qDebug() << "Screen geometry:" << screen->geometry();
             qDebug() << "Screen available geometry:" << screen->availableGeometry();
             qDebug() << "Screen physical size (mm):" << screen->physicalSize();
-            qDebug() << "Screen size (inches):" 
-                     << QString("W: %1, H: %2, Diagonal: %3")
-                        .arg(screen->physicalSize().width() / 25.4, 0, 'f', 1)
-                        .arg(screen->physicalSize().height() / 25.4, 0, 'f', 1)
-                        .arg(qSqrt(qPow(screen->physicalSize().width() / 25.4, 2) + 
-                                   qPow(screen->physicalSize().height() / 25.4, 2)), 0, 'f', 1);
             qDebug() << "Logical DPI:" << screen->logicalDotsPerInch();
             qDebug() << "Physical DPI:" << screen->physicalDotsPerInch();
             qDebug() << "Physical DPI X:" << screen->physicalDotsPerInchX();
             qDebug() << "Physical DPI Y:" << screen->physicalDotsPerInchY();
             qDebug() << "Device pixel ratio:" << screen->devicePixelRatio();
-            qDebug() << "Qt High DPI scaling enabled:" 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-                     << "Yes (Qt6 - always on)";
-#else
-                     << (QCoreApplication::testAttribute(Qt::AA_EnableHighDpiScaling) ? "Yes" : "No");
-#endif
             qDebug() << "==================================";
         }
     }

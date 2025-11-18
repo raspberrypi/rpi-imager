@@ -13,6 +13,49 @@ CheckBox {
     Material.accent: Style.formControlActiveColor
     activeFocusOnTab: true
     
+    // Access imageWriter from parent context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+    
+    // Custom square indicator for embedded mode to avoid rendering artifacts
+    Component.onCompleted: {
+        if (control.imageWriter && control.imageWriter.isEmbeddedMode()) {
+            control.indicator = squareIndicatorComponent.createObject(control)
+        }
+    }
+    
+    Component {
+        id: squareIndicatorComponent
+        Rectangle {
+            implicitWidth: 20
+            implicitHeight: 20
+            x: control.leftPadding
+            y: control.height / 2 - height / 2
+            radius: 0  // Square checkbox
+            border.color: control.checked ? Style.formControlActiveColor : "#bdbebf"
+            border.width: 2
+            color: control.checked ? Style.formControlActiveColor : Style.mainBackgroundColor
+            
+            // Checkmark
+            Text {
+                anchors.centerIn: parent
+                text: "✓"
+                color: Style.mainBackgroundColor
+                font.pixelSize: 14
+                font.bold: true
+                visible: control.checked
+            }
+        }
+    }
+    
     // Accessibility properties
     Accessible.role: Accessible.CheckBox
     Accessible.name: text

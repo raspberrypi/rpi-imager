@@ -90,6 +90,52 @@ Item {
             checked: pill.checked
             activeFocusOnTab: true
             
+            // Access imageWriter from parent context
+            property var imageWriter: {
+                var item = parent;
+                while (item) {
+                    if (item.imageWriter !== undefined) {
+                        return item.imageWriter;
+                    }
+                    item = item.parent;
+                }
+                return null;
+            }
+            
+            // Custom rectangular indicator for embedded mode to avoid circular rendering artifacts
+            Component.onCompleted: {
+                if (sw.imageWriter && sw.imageWriter.isEmbeddedMode()) {
+                    sw.indicator = squareIndicatorComponent.createObject(sw)
+                }
+            }
+            
+            Component {
+                id: squareIndicatorComponent
+                Rectangle {
+                    implicitWidth: 48
+                    implicitHeight: 24
+                    x: sw.leftPadding
+                    y: sw.height / 2 - height / 2
+                    radius: 0  // Square track
+                    color: sw.checked ? Style.formControlActiveColor : "#bdbebf"
+                    border.color: sw.checked ? Style.formControlActiveColor : "#bdbebf"
+                    
+                    Rectangle {
+                        x: sw.checked ? parent.width - width - 2 : 2
+                        y: 2
+                        width: 20
+                        height: 20
+                        radius: 0  // Square thumb
+                        color: Style.mainBackgroundColor
+                        border.color: sw.checked ? Style.formControlActiveColor : "#bdbebf"
+                        
+                        Behavior on x {
+                            NumberAnimation { duration: 100 }
+                        }
+                    }
+                }
+            }
+            
             // Accessibility properties - combine label text with description
             Accessible.role: Accessible.CheckBox
             Accessible.name: {

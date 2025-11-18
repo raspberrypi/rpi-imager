@@ -79,6 +79,7 @@ ApplicationWindow {
     // Modern error dialog (replaces legacy MsgPopup for error/info cases)
     BaseDialog {
         id: errorDialog
+        imageWriter: window.imageWriter
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -151,6 +152,7 @@ ApplicationWindow {
     // Specific dialog for storage removal during write
     BaseDialog {
         id: storageRemovedDialog
+        imageWriter: window.imageWriter
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -219,6 +221,7 @@ ApplicationWindow {
     // Quit dialog (modern style)
     BaseDialog {
         id: quitDialog
+        imageWriter: window.imageWriter
         parent: overlayRoot
         anchors.centerIn: parent
 
@@ -297,6 +300,7 @@ ApplicationWindow {
 
     KeychainPermissionDialog {
         id: keychainpopup
+        imageWriter: window.imageWriter
         parent: overlayRoot
         onAccepted: {
             window.imageWriter.keychainPermissionResponse(true);
@@ -308,6 +312,7 @@ ApplicationWindow {
 
     UpdateAvailableDialog {
         id: updatepopup
+        imageWriter: window.imageWriter
         // parent can be set to overlayRoot if needed for centering above
         parent: overlayRoot
         onAccepted: {}
@@ -317,6 +322,7 @@ ApplicationWindow {
     // Permission warning dialog for when not running with elevated privileges
     BaseDialog {
         id: permissionWarningDialog
+        imageWriter: window.imageWriter
         parent: overlayRoot
         anchors.centerIn: parent
         closePolicy: Popup.NoAutoClose  // Prevent closing with escape or clicking outside

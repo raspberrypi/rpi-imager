@@ -15,6 +15,18 @@ Button {
     
     // Allow instances to provide a custom accessibility description
     property string accessibleDescription: ""
+    
+    // Access imageWriter from parent context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
 
     background: Rectangle {
         color: control.enabled
@@ -22,7 +34,9 @@ Button {
                    ? Style.button2HoveredBackgroundColor
                    : (control.hovered ? Style.button2HoveredBackgroundColor : Style.button2BackgroundColor))
                : Qt.rgba(0, 0, 0, 0.1)
-        radius: 4
+        radius: (control.imageWriter && control.imageWriter.isEmbeddedMode()) ? Style.buttonBorderRadiusEmbedded : 4
+        antialiasing: true  // Smooth edges at non-integer scale factors
+        clip: true  // Prevent content overflow at non-integer scale factors
     }
 
     contentItem: Text {

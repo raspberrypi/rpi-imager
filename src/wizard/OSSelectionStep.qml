@@ -184,6 +184,7 @@ WizardStepBase {
     property alias customImageFileDialog: customImageFileDialog
     ImFileDialog {
         id: customImageFileDialog
+        imageWriter: root.imageWriter
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         anchors.centerIn: parent
         nameFilters: CommonStrings.imageFiltersList

@@ -8,11 +8,55 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 
 RadioButton {
+    id: control
     Material.accent: Style.formControlActiveColor
     activeFocusOnTab: true
     
     // Allow custom accessibility description
     property string accessibleDescription: ""
+    
+    // Access imageWriter from parent context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+    
+    // Custom square indicator for embedded mode to avoid circular rendering artifacts
+    Component.onCompleted: {
+        if (control.imageWriter && control.imageWriter.isEmbeddedMode()) {
+            control.indicator = squareIndicatorComponent.createObject(control)
+        }
+    }
+    
+    Component {
+        id: squareIndicatorComponent
+        Rectangle {
+            implicitWidth: 20
+            implicitHeight: 20
+            x: control.leftPadding
+            y: control.height / 2 - height / 2
+            radius: 0  // Square instead of circle
+            border.color: control.checked ? Style.formControlActiveColor : "#bdbebf"
+            border.width: 2
+            color: Style.mainBackgroundColor
+            
+            Rectangle {
+                width: 10
+                height: 10
+                x: 5
+                y: 5
+                radius: 0  // Square dot instead of circle
+                color: Style.formControlActiveColor
+                visible: control.checked
+            }
+        }
+    }
     
     // Accessibility properties - combine text with description in name
     Accessible.role: Accessible.RadioButton
@@ -31,9 +75,9 @@ RadioButton {
         anchors.fill: parent
         anchors.margins: Style.focusOutlineMargin
         color: Style.transparent
-        border.color: parent.activeFocus ? Style.focusOutlineColor : Style.transparent
+        border.color: control.activeFocus ? Style.focusOutlineColor : Style.transparent
         border.width: Style.focusOutlineWidth
-        radius: Style.focusOutlineRadius
+        radius: (control.imageWriter && control.imageWriter.isEmbeddedMode()) ? 0 : Style.focusOutlineRadius
         z: -1
     }
     

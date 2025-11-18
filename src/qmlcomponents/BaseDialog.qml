@@ -15,17 +15,9 @@ import RpiImager
 Dialog {
     id: root
     
-    // Access imageWriter from ancestor context
-    property var imageWriter: {
-        var item = parent;
-        while (item) {
-            if (item.imageWriter !== undefined) {
-                return item.imageWriter;
-            }
-            item = item.parent;
-        }
-        return null;
-    }
+    // imageWriter property - child dialogs will provide the actual value
+    // We declare it here so bindings work, but children override it
+    property var imageWriter
     
     // Standard dialog properties
     modal: true
@@ -60,9 +52,11 @@ Dialog {
     // Set the dialog background directly
     background: Rectangle {
         color: Style.titleBackgroundColor
-        radius: Style.sectionBorderRadius
+        radius: (root.imageWriter && root.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
         border.color: Style.popupBorderColor
         border.width: Style.sectionBorderWidth
+        antialiasing: true  // Smooth edges at non-integer scale factors
+        clip: true  // Prevent content overflow at non-integer scale factors
     }
     
     // Main content wrapped in FocusScope with focus management system
@@ -144,6 +138,9 @@ Dialog {
             anchors.fill: parent
             anchors.margins: Style.cardPadding
             spacing: Style.spacingMedium
+            
+            // Make imageWriter available to all children via parent lookup
+            property var imageWriter: root.imageWriter
         }
     }
     

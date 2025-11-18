@@ -315,11 +315,98 @@ export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS}"
 
 # Disable desktop-specific features for embedded use
 export QT_QUICK_CONTROLS_STYLE=Material
-# Enable automatic screen scale factor based on display DPI
-export QT_AUTO_SCREEN_SCALE_FACTOR=1
+
+# Calculate appropriate scale factor based on display DPI
+# Qt6 auto-scaling doesn't always work correctly on embedded platforms
+
+# Try to get display info from DRM EDID data
+SCALE_FACTOR_SET=0
+
+for drm_connector in /sys/class/drm/card*/status; do
+    if [ ! -f "$drm_connector" ]; then
+        continue
+    fi
+    
+    connector_status=$(cat "$drm_connector")
+    if [ "$connector_status" != "connected" ]; then
+        continue
+    fi
+    
+    # Get the connector directory (remove /status suffix)
+    connector_dir="${drm_connector%/status}"
+    edid_file="${connector_dir}/edid"
+    modes_file="${connector_dir}/modes"
+    
+    if [ -f "$edid_file" ] && [ -f "$modes_file" ]; then
+        # Parse EDID to get physical screen dimensions
+        # Byte 21 (0x15): horizontal screen size in cm
+        # Byte 22 (0x16): vertical screen size in cm
+        # Note: sysfs files always show size 0, but can be read
+        EDID_BYTES=$(od -An -t u1 -N 128 "$edid_file" 2>/dev/null)
+        
+        if [ -n "$EDID_BYTES" ]; then
+            # Convert to array
+            set -- $EDID_BYTES
+            
+            # Get bytes at offset 21 and 22 (physical size in cm)
+            PHYS_WIDTH_CM=${22}  # 22nd element (offset 21)
+            PHYS_HEIGHT_CM=${23} # 23rd element (offset 22)
+            
+            if [ "$PHYS_WIDTH_CM" -gt 0 ] && [ "$PHYS_HEIGHT_CM" -gt 0 ] 2>/dev/null; then
+                # Convert cm to mm
+                PHYS_WIDTH=$((PHYS_WIDTH_CM * 10))
+                PHYS_HEIGHT=$((PHYS_HEIGHT_CM * 10))
+                
+                # Get resolution from first mode
+                RESOLUTION=$(head -1 "$modes_file")
+                VIRT_WIDTH=$(echo "$RESOLUTION" | cut -d'x' -f1)
+                VIRT_HEIGHT=$(echo "$RESOLUTION" | cut -d'x' -f2)
+                
+                if [ "$VIRT_WIDTH" -gt 0 ] && [ "$VIRT_HEIGHT" -gt 0 ] 2>/dev/null; then
+                    # Calculate DPI: pixels / (mm / 25.4)
+                    # We multiply by 254 and divide by 10 to avoid floating point
+                    DPI=$((VIRT_WIDTH * 254 / PHYS_WIDTH / 10))
+                    
+                    # Set scale factor based on DPI (base DPI = 96)
+                    # Use common scale factors: 1.0, 1.25, 1.5, 2.0, 2.5
+                    if [ "$DPI" -ge 216 ]; then
+                        export QT_SCALE_FACTOR=2.5
+                    elif [ "$DPI" -ge 168 ]; then
+                        export QT_SCALE_FACTOR=2.0
+                    elif [ "$DPI" -ge 132 ]; then
+                        export QT_SCALE_FACTOR=1.5
+                    elif [ "$DPI" -ge 108 ]; then
+                        export QT_SCALE_FACTOR=1.25
+                    else
+                        export QT_SCALE_FACTOR=1.0
+                    fi
+                    
+                    echo "Detected display (DRM): ${VIRT_WIDTH}x${VIRT_HEIGHT}px, ${PHYS_WIDTH}x${PHYS_HEIGHT}mm, ${DPI} DPI -> Scale: ${QT_SCALE_FACTOR}"
+                    SCALE_FACTOR_SET=1
+                    break
+                fi
+            fi
+        fi
+    fi
+done
+
+# Fallback if DRM detection didn't work
+if [ "$SCALE_FACTOR_SET" -eq 0 ]; then
+    export QT_AUTO_SCREEN_SCALE_FACTOR=1
+    echo "Could not detect display DPI from DRM, using Qt auto-scaling"
+fi
 
 # GPU memory optimization for embedded systems
 export QT_QUICK_BACKEND=software
+
+# Software renderer with DPI scaling fix
+# Use basic render loop which is simpler and handles scale factors better
+export QSG_RENDER_LOOP=basic
+# Disable distance field text rendering which has scaling artifacts
+export QT_QUICK_DEFAULT_TEXT_RENDER_TYPE=NativeRendering
+# Disable texture atlasing to prevent cached texture scaling issues
+export QSG_ATLAS_WIDTH=0
+export QSG_ATLAS_HEIGHT=0
 export QT_QPA_FB_DRM=/dev/dri/card1
 
 # Logging (can be disabled in production)

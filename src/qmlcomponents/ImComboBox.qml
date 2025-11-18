@@ -14,6 +14,18 @@ import RpiImager
 ComboBox {
     id: root
     
+    // Access imageWriter from parent context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+    
     // Focus properties
     activeFocusOnTab: true
     
@@ -207,9 +219,11 @@ ComboBox {
         closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
         background: Rectangle {
             color: Style.mainBackgroundColor
-            radius: Style.sectionBorderRadius
+            radius: (root.imageWriter && root.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
             border.color: Style.popupBorderColor
             border.width: Style.sectionBorderWidth
+            antialiasing: true  // Smooth edges at non-integer scale factors
+            clip: true  // Prevent content overflow at non-integer scale factors
         }
         contentItem: ListView {
             id: dropdownList
@@ -236,9 +250,10 @@ ComboBox {
             // Custom highlight that respects popup border radius
             highlight: Rectangle {
                 color: Style.listViewHighlightColor
-                radius: Style.sectionBorderRadius
+                radius: (root.imageWriter && root.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
                 border.color: dropdownList.activeFocus ? Style.buttonFocusedBackgroundColor : "transparent"
                 border.width: dropdownList.activeFocus ? 2 : 0
+                antialiasing: true  // Smooth edges at non-integer scale factors
                 
                 // Add consistent margins to keep highlight within popup's rounded borders
                 anchors.margins: 2

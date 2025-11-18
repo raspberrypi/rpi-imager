@@ -315,6 +315,7 @@ WizardStepBase {
     // Confirmation dialog
     BaseDialog {
         id: confirmDialog
+        imageWriter: root.imageWriter
         parent: wizardContainer && wizardContainer.overlayRootRef ? wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false

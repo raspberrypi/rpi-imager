@@ -419,7 +419,9 @@ Item {
                             color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                             border.color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                             border.width: 1
-                            radius: Style.sidebarItemBorderRadius
+                            radius: root.imageWriter.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
+                            antialiasing: true  // Smooth edges at non-integer scale factors
+                            clip: true  // Prevent content overflow at non-integer scale factors
 
                             MouseArea {
                                 anchors.fill: parent
@@ -478,10 +480,11 @@ Item {
                                     required property var modelData
                                     width: parent.width
                                     height: Style.sidebarSubItemHeight
-                                    radius: Style.sidebarItemBorderRadius
+                                    radius: root.imageWriter.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
                                     color: Style.transparent
                                     border.color: Style.transparent
                                     border.width: 0
+                                    antialiasing: true  // Smooth edges at non-integer scale factors
 
                                     property bool isCurrentStep: {
                                         if (root.currentStep < root.firstCustomizationStep || root.currentStep > root.getLastCustomizationStep()) {
@@ -1025,6 +1028,7 @@ Item {
     // Token conflict dialog — based on your BaseDialog pattern
     BaseDialog {
         id: tokenConflictDialog
+        imageWriter: root.imageWriter
         parent: root
         anchors.centerIn: parent
 
