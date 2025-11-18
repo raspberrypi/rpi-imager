@@ -136,6 +136,7 @@ FocusScope {
         
         // Navigation buttons and network info
         RowLayout {
+            id: buttonRow
             Layout.fillWidth: true
             spacing: Style.spacingMedium
             
@@ -152,11 +153,11 @@ FocusScope {
                 Layout.maximumWidth: parent.width * 0.4  // Don't let it take up too much space
             }
             
-            // Custom button container for steps that need custom button layouts
-            Item {
+            // Custom button container - a nested RowLayout for steps that need custom button layouts
+            RowLayout {
                 id: customButtonArea
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                spacing: Style.spacingMedium
                 visible: children.length > 0
             }
             
