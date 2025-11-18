@@ -23,6 +23,7 @@ BaseDialog {
     property var wizardContainer: null
     
     property bool initialized: false
+    property bool isInitializing: false
 
     // Custom escape handling
     function escapePressed() {
@@ -108,6 +109,11 @@ BaseDialog {
                     focusItem.activeFocusOnTab = true
                 }
                 onCheckedChanged: {
+                    // Don't trigger confirmation dialog during initialization
+                    if (popup.isInitializing) {
+                        return;
+                    }
+                    
                     if (checked) {
                         // Confirm before enabling this risky setting
                         confirmDisableWarnings.open();
@@ -272,6 +278,9 @@ BaseDialog {
 
     function initialize() {
         if (!initialized) {
+            // Set flag to prevent onCheckedChanged handlers from triggering dialogs
+            isInitializing = true;
+            
             // Load current settings from ImageWriter
             chkBeep.checked = imageWriter.getBoolSetting("beep");
             chkEject.checked = imageWriter.getBoolSetting("eject");
@@ -285,6 +294,9 @@ BaseDialog {
             }
 
             initialized = true;
+            // Clear initialization flag
+            isInitializing = false;
+            
             // Pre-compute final height before opening to avoid first-show reflow
             var desired = contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 280;
             popup.height = Math.max(280, desired);
