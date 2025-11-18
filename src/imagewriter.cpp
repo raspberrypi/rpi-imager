@@ -1639,7 +1639,22 @@ void ImageWriter::pollNetwork()
 
 void ImageWriter::onSTPdetected()
 {
-    emit networkInfo(tr("STP is enabled on your Ethernet switch. Getting IP will take long time."));
+    // Only show STP warning if we don't already have an IP address
+    QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+    bool hasIP = false;
+    foreach (QHostAddress a, addresses)
+    {
+        if (!a.isLoopback() && a.scopeId().isEmpty())
+        {
+            hasIP = true;
+            break;
+        }
+    }
+    
+    if (!hasIP)
+    {
+        emit networkInfo(tr("STP is enabled on your Ethernet switch. Getting IP will take long time."));
+    }
 }
 
 bool ImageWriter::isEmbeddedMode() const
