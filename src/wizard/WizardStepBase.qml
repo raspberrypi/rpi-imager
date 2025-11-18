@@ -26,6 +26,18 @@ FocusScope {
         return null;
     }
     
+    // Access networkInfoText from parent context (WizardContainer)
+    property string networkInfoText: {
+        var item = parent;
+        while (item) {
+            if (item.networkInfoText !== undefined) {
+                return item.networkInfoText;
+            }
+            item = item.parent;
+        }
+        return "";
+    }
+    
     property string title: ""
     property string subtitle: ""
     property bool showBackButton: true
@@ -121,10 +133,23 @@ FocusScope {
             Layout.fillHeight: true
         }
         
-        // Navigation buttons
+        // Navigation buttons and network info
         RowLayout {
             Layout.fillWidth: true
             spacing: Style.spacingMedium
+            
+            // Embedded mode network info on the left
+            Text {
+                id: networkInfoLabel
+                text: root.networkInfoText
+                font.pixelSize: Style.fontSizeCaption
+                font.family: Style.fontFamily
+                color: Style.textDescriptionColor
+                visible: root.imageWriter && root.imageWriter.isEmbeddedMode() && root.networkInfoText.length > 0
+                Layout.alignment: Qt.AlignVCenter
+                elide: Text.ElideRight
+                Layout.maximumWidth: parent.width * 0.4  // Don't let it take up too much space
+            }
             
             ImButton {
                 id: skipButton

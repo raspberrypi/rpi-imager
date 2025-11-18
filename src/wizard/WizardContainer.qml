@@ -578,57 +578,6 @@ Item {
                 Item {
                     Layout.fillHeight: true
                 }
-                // Embedded mode network info (hidden by default) with marquee scrolling
-                Item {
-                    id: networkInfoContainer
-                    Layout.fillWidth: true
-                    visible: root.imageWriter.isEmbeddedMode() && networkInfo.text.length > 0
-                    Layout.preferredHeight: networkInfo.implicitHeight
-                    clip: true
-
-                    // Scrolling row that contains two copies of the text for seamless loop
-                    RowLayout {
-                        id: marqueeRow
-                        anchors.fill: parent
-                        anchors.margins: 0
-                        spacing: Style.spacingMedium
-                        // Use x animation below; disable layout's x management
-                        Layout.fillWidth: false
-
-                        Text {
-                            id: networkInfo
-                            Layout.alignment: Qt.AlignVCenter
-                            font.pixelSize: Style.fontSizeCaption
-                            font.family: Style.fontFamily
-                            color: Style.textDescriptionColor
-                            text: ""
-                        }
-                        Text {
-                            id: networkInfoCopy
-                            Layout.alignment: Qt.AlignVCenter
-                            font.pixelSize: Style.fontSizeCaption
-                            font.family: Style.fontFamily
-                            color: Style.textDescriptionColor
-                            text: networkInfo.text
-                        }
-                    }
-
-                    PropertyAnimation {
-                        id: marqueeAnim
-                        target: marqueeRow
-                        property: "x"
-                        from: 0
-                        to: -(((networkInfo ? networkInfo.width : 0) + marqueeRow.spacing))
-                        duration: Math.max(4000, Math.round((((networkInfo ? networkInfo.width : 0) + marqueeRow.spacing + (networkInfoContainer ? networkInfoContainer.width : 0)) / 40) * 1000))
-                        loops: Animation.Infinite
-                        running: networkInfoContainer.visible && networkInfo && networkInfo.text && networkInfo.text.length > 0
-                    }
-
-                    onVisibleChanged: {
-                        if (visible) marqueeAnim.restart(); else marqueeAnim.stop()
-                    }
-                    Component.onCompleted: marqueeAnim.start()
-                }
                 
                 // [moved] Advanced options lives outside the scroll area
                 }
