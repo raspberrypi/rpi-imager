@@ -21,7 +21,7 @@ Item {
     // Reference to the full-window overlay root for dialog parenting
     property var overlayRootRef: null
     // Expose network info text for embedded mode status updates
-    property alias networkInfoText: networkInfo.text
+    property string networkInfoText: ""
     
     // Check network connectivity at startup
     readonly property bool hasNetworkConnectivity: PlatformHelper.hasNetworkConnectivity()
