@@ -14,6 +14,7 @@ fi
 ARCH=$(uname -m)  # Default to current architecture
 CLEAN_BUILD=1
 QT_ROOT_ARG=""
+INCLUDE_CJK_FONTS=0  # Default: do not include 4MB CJK font
 
 usage() {
     echo "Usage: $0 [options]"
@@ -21,12 +22,17 @@ usage() {
     echo "  --arch=ARCH            Target architecture (x86_64, aarch64, armv7l)"
     echo "  --qt-root=PATH         Path to Qt installation directory"
     echo "  --no-clean             Don't clean build directory"
+    echo "  --include-cjk-fonts    Include DroidSansFallbackFull.ttf for CJK support (+4MB)"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "This script creates an AppImage optimized for embedded systems:"
     echo "  - Uses linuxfb for direct rendering (no X11/Wayland required)"
     echo "  - Optimized for headless/embedded environments"
     echo "  - Smaller size by excluding desktop-specific libraries"
+    echo ""
+    echo "Font Configuration:"
+    echo "  By default, includes Roboto (Material Design) and DejaVu fonts (~2.7MB)"
+    echo "  Use --include-cjk-fonts to add comprehensive CJK character support (+4MB)"
     exit 1
 }
 
@@ -40,6 +46,9 @@ for arg in "$@"; do
             ;;
         --no-clean)
             CLEAN_BUILD=0
+            ;;
+        --include-cjk-fonts)
+            INCLUDE_CJK_FONTS=1
             ;;
         -h|--help)
             usage
@@ -301,6 +310,8 @@ QT_QPA_PLATFORM=linuxfb
 # Font configuration for bundled fontconfig
 export FONTCONFIG_PATH="${HERE}/etc/fonts"
 export FONTCONFIG_FILE="${HERE}/etc/fonts/fonts.conf"
+# Add our bundled fonts to the font path
+export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS}"
 
 # Disable desktop-specific features for embedded use
 export QT_QUICK_CONTROLS_STYLE=Material
@@ -328,6 +339,7 @@ cp -d "$QT_DIR/lib/libQt6DBus.so"* "$APPDIR/usr/lib/"  # Required by linuxfb plu
 # cp -d "$QT_DIR/lib/libQt6Widgets.so"* "$APPDIR/usr/lib/"    # QtWidgets excluded
 cp -d "$QT_DIR/lib/libQt6Quick.so"* "$APPDIR/usr/lib/"
 cp -d "$QT_DIR/lib/libQt6Qml.so"* "$APPDIR/usr/lib/"
+cp -d "$QT_DIR/lib/libQt6QmlCore.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
 cp -d "$QT_DIR/lib/libQt6Network.so"* "$APPDIR/usr/lib/"
 cp -d "$QT_DIR/lib/libQt6QmlMeta.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
 cp -d "$QT_DIR/lib/libQt6QuickTemplates2.so"* "$APPDIR/usr/lib/" 2>/dev/null || true
@@ -497,11 +509,70 @@ fi
 mkdir -p "$APPDIR/usr/share/fonts/truetype/dejavu"
 mkdir -p "$APPDIR/usr/share/fonts/truetype/freefont"
 mkdir -p "$APPDIR/usr/share/fonts/truetype/droid"
+mkdir -p "$APPDIR/usr/share/fonts/truetype/roboto"
 
+# Copy DejaVu fonts (default Qt fallback)
 cp src/fonts/DejaVuSans.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
 cp src/fonts/DejaVuSans-Bold.ttf "$APPDIR/usr/share/fonts/truetype/dejavu"
+
+# Copy FreeSans (additional fallback)
 cp src/fonts/FreeSans.ttf "$APPDIR/usr/share/fonts/truetype/freefont"
-# cp src/fonts/DroidSansFallbackFull.ttf "$APPDIR/usr/share/fonts/truetype/droid"
+
+# Copy Roboto fonts (Qt Material style default - CRITICAL for embedded!)
+cp src/fonts/Roboto-Regular.ttf "$APPDIR/usr/share/fonts/truetype/roboto"
+cp src/fonts/Roboto-Bold.ttf "$APPDIR/usr/share/fonts/truetype/roboto"
+cp src/fonts/Roboto-Light.ttf "$APPDIR/usr/share/fonts/truetype/roboto"
+
+# Copy Droid Sans Fallback (comprehensive Unicode support for special characters)
+if [ "$INCLUDE_CJK_FONTS" -eq 1 ]; then
+    echo "Including CJK font support (+4MB)"
+    cp src/fonts/DroidSansFallbackFull.ttf "$APPDIR/usr/share/fonts/truetype/droid"
+else
+    echo "Skipping CJK fonts (use --include-cjk-fonts to enable)"
+fi
+
+# Create custom fontconfig configuration for embedded deployment
+# This ensures Qt Material Controls can find our bundled fonts
+# XDG_DATA_DIRS in AppRun will point fontconfig to our bundled fonts
+cat > "$APPDIR/etc/fonts/local.conf" << 'FONTCONFIG_EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+    <!-- Set Roboto as the primary sans-serif font -->
+    <alias>
+        <family>sans-serif</family>
+        <prefer>
+            <family>Roboto</family>
+            <family>DejaVu Sans</family>
+            <family>FreeSans</family>
+            <family>Droid Sans Fallback</family>
+        </prefer>
+    </alias>
+    
+    <!-- Default to Roboto for system UI fonts -->
+    <alias>
+        <family>system-ui</family>
+        <prefer>
+            <family>Roboto</family>
+        </prefer>
+    </alias>
+    
+    <!-- Ensure Qt Material style finds Roboto -->
+    <match target="pattern">
+        <test name="family" compare="eq">
+            <string>Roboto</string>
+        </test>
+        <edit name="family" mode="assign" binding="strong">
+            <string>Roboto</string>
+        </edit>
+    </match>
+    
+    <!-- Cache directory for font cache -->
+    <cachedir>/tmp/fontconfig-cache-rpi-imager</cachedir>
+</fontconfig>
+FONTCONFIG_EOF
+
+echo "Created custom fontconfig configuration for bundled fonts"
 
 # Copy QML components
 if [ -d "$QT_DIR/qml" ]; then
