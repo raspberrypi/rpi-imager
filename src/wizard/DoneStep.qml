@@ -233,19 +233,11 @@ WizardStepBase {
     }
     ]
     
-    // Action buttons
-    RowLayout {
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.leftMargin: Style.stepContentMargins
-        anchors.rightMargin: Style.stepContentMargins
-        anchors.bottomMargin: Style.spacingSmall
-        spacing: Style.spacingMedium
-        
+    // Custom button container - network info is automatically added by WizardStepBase
+    customButtonContainer: [
         Item {
             Layout.fillWidth: true
-        }
+        },
         
         ImButton {
             id: writeAnotherButton
@@ -260,7 +252,7 @@ WizardStepBase {
                 // This preserves device, OS, and customization settings
                 wizardContainer.resetToWriteStep()
             }
-        }
+        },
         
         ImButtonRed {
             id: finishButton
@@ -280,7 +272,7 @@ WizardStepBase {
                 }
             }
         }
-    }
+    ]
     
     // Focus management - rebuild when customization visibility changes
     onAnyCustomizationsAppliedChanged: rebuildFocusOrder()
@@ -306,10 +298,15 @@ WizardStepBase {
             return [ejectInstruction]
         }, 2)
         
-        // Register buttons as fourth focus group
+        // Register custom buttons as fourth focus group
         registerFocusGroup("buttons", function() {
             return [writeAnotherButton, finishButton]
         }, 3)
+        
+        // Ensure focus order is built after custom buttons are fully instantiated
+        Qt.callLater(function() {
+            rebuildFocusOrder()
+        })
     }
 
 } 

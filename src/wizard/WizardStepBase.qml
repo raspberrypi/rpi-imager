@@ -53,6 +53,7 @@ FocusScope {
     property string backButtonAccessibleDescription: ""
     property string skipButtonAccessibleDescription: ""
     property alias content: contentArea.children
+    property alias customButtonContainer: customButtonArea.children
     // Step may set the first item to receive focus when the step becomes visible
     property var initialFocusItem: null
     // Expose action buttons for KeyNavigation in child content
@@ -151,10 +152,19 @@ FocusScope {
                 Layout.maximumWidth: parent.width * 0.4  // Don't let it take up too much space
             }
             
+            // Custom button container for steps that need custom button layouts
+            Item {
+                id: customButtonArea
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: children.length > 0
+            }
+            
+            // Standard buttons (only shown when no custom button container is provided)
             ImButton {
                 id: skipButton
                 text: root.skipButtonText
-                visible: root.showSkipButton
+                visible: customButtonArea.children.length === 0 && root.showSkipButton
                 enabled: root.skipButtonEnabled
                 accessibleDescription: root.skipButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthSkip
@@ -167,12 +177,13 @@ FocusScope {
             
             Item {
                 Layout.fillWidth: true
+                visible: customButtonArea.children.length === 0
             }
             
             ImButton {
                 id: backButton
                 text: root.backButtonText
-                visible: root.showBackButton
+                visible: customButtonArea.children.length === 0 && root.showBackButton
                 enabled: root.backButtonEnabled
                 accessibleDescription: root.backButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthMinimum
@@ -186,7 +197,7 @@ FocusScope {
             ImButtonRed {
                 id: nextButton
                 text: root.nextButtonText
-                visible: root.showNextButton
+                visible: customButtonArea.children.length === 0 && root.showNextButton
                 enabled: root.nextButtonEnabled
                 accessibleDescription: root.nextButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthMinimum
