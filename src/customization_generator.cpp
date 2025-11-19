@@ -475,8 +475,12 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     const bool hidden = settings.value("wifiHidden").toBool();
     const QString regDom = settings.value("recommendedWifiCountry").toString().trimmed().toUpper();
     
-    // Generate network config if we have a country code (regulatory domain) or an SSID
-    if (!regDom.isEmpty() || !ssid.isEmpty()) {
+    // Generate network config only if we have an SSID
+    // Cloud-init requires at least one access-point if wifis: is defined, so we can't
+    // generate network config with just a regulatory domain. When we have an SSID, we set
+    // the regulatory domain in the network config here. When there's no SSID, the regulatory
+    // domain is set via cmdline parameter (cfg80211.ieee80211_regdom) in imagewriter.cpp
+    if (!ssid.isEmpty()) {
         push(QStringLiteral("network:"), netcfg);
         push(QStringLiteral("  version: 2"), netcfg);
         push(QStringLiteral("  wifis:"), netcfg);
@@ -486,29 +490,26 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
             push(QStringLiteral("      regulatory-domain: \"") + regDom + QStringLiteral("\""), netcfg);
         }
         
-        // Only configure access points if we have an SSID
-        if (!ssid.isEmpty()) {
-            push(QStringLiteral("      access-points:"), netcfg);
-            {
-                QString key = ssid;
-                key.replace('"', QStringLiteral("\\\""));
-                push(QStringLiteral("        \"") + key + QStringLiteral("\":"), netcfg);
+        push(QStringLiteral("      access-points:"), netcfg);
+        {
+            QString key = ssid;
+            key.replace('"', QStringLiteral("\\\""));
+            push(QStringLiteral("        \"") + key + QStringLiteral("\":"), netcfg);
+        }
+        // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
+        QString effectiveCryptedPsk = cryptedPskFromSettings;
+        if (effectiveCryptedPsk.isEmpty()) {
+            const QString legacyPwd = settings.value("wifiPassword").toString();
+            if (!legacyPwd.isEmpty()) {
+                const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
+                effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
             }
-            // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
-            QString effectiveCryptedPsk = cryptedPskFromSettings;
-            if (effectiveCryptedPsk.isEmpty()) {
-                const QString legacyPwd = settings.value("wifiPassword").toString();
-                if (!legacyPwd.isEmpty()) {
-                    const bool isPassphrase = (legacyPwd.length() >= 8 && legacyPwd.length() < 64);
-                    effectiveCryptedPsk = isPassphrase ? pbkdf2(legacyPwd.toUtf8(), ssid.toUtf8()) : legacyPwd;
-                }
-            }
-            // Required because without a password and hidden netplan would read ssid: null and crash
-            effectiveCryptedPsk.replace('"', QStringLiteral("\\\""));
-            push(QStringLiteral("          password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
-            if (hidden) {
-                push(QStringLiteral("          hidden: true"), netcfg);
-            }
+        }
+        // Required because without a password and hidden netplan would read ssid: null and crash
+        effectiveCryptedPsk.replace('"', QStringLiteral("\\\""));
+        push(QStringLiteral("          password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
+        if (hidden) {
+            push(QStringLiteral("          hidden: true"), netcfg);
         }
         
         push(QStringLiteral("      optional: true"), netcfg);

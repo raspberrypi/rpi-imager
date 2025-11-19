@@ -693,16 +693,12 @@ TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[clo
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rfkill, unblock, wifi"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("/var/lib/systemd/rfkill/*:wlan"));
     
-    // Network config should include the FR regulatory domain even without SSID
-    // This verifies the country code makes it into the network configuration
+    // Network config should be empty when there's no SSID
+    // Cloud-init requires at least one access-point if wifis: is defined, so we can't
+    // generate network config with just a regulatory domain. The regulatory domain
+    // is set via cmdline parameter (cfg80211.ieee80211_regdom) instead.
     QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
-    QString netcfgYaml = QString::fromUtf8(netcfg);
-    REQUIRE_FALSE(netcfg.isEmpty());
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("regulatory-domain: \"FR\""));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("wlan0:"));
-    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("optional: true"));
-    // Should NOT have access-points section (no SSID configured)
-    REQUIRE_THAT(netcfgYaml.toStdString(), !ContainsSubstring("access-points:"));
+    REQUIRE(netcfg.isEmpty());
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with special characters in SSID", "[cloudinit][network][negative]") {
