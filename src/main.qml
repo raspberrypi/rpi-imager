@@ -461,10 +461,10 @@ ApplicationWindow {
         // If we are past storage selection, navigate back there
         if (wizardContainer && wizardContainer.currentStep > wizardContainer.stepStorageSelection) {
             wizardContainer.jumpToStep(wizardContainer.stepStorageSelection);
+            // Inform the user with the dedicated modern dialog (only if we navigated back)
+            storageRemovedDialog.open();
         }
-
-        // Inform the user with the dedicated modern dialog
-        storageRemovedDialog.open();
+        // If we're already on storage selection screen, don't show dialog - user can see the device disappeared
     }
 
     // Called from C++ when a write was cancelled because the storage device was removed

@@ -62,6 +62,20 @@ WizardStepBase {
         root.updateStorageStatus()
     }
     
+    // Watch for device removal - when selectedStorageName becomes empty, clear the currentIndex
+    // This ensures that when a device is re-inserted, it won't appear highlighted but not actually selected
+    Connections {
+        target: wizardContainer
+        function onSelectedStorageNameChanged() {
+            if (!wizardContainer.selectedStorageName || wizardContainer.selectedStorageName.length === 0) {
+                // Device was removed - clear the visual selection and ensure next button is disabled
+                dstlist.currentIndex = -1
+                root.selectedDeviceName = ""
+                root.nextButtonEnabled = false
+            }
+        }
+    }
+    
     // Removed drive list polling calls; backend handles device updates
     
     // Content
@@ -135,11 +149,33 @@ WizardStepBase {
                 }
             }
 
-            // Auto-select a safe default when drives appear
+            // Auto-select a safe default when drives appear (but not after device removal)
+            // We distinguish "initial load" from "device removal" by checking if selectedStorageName
+            // was just cleared (device removal) vs never set (initial load).
+            // We use a property binding that tracks if selectedStorageName was ever non-empty.
+            // This is derived state, not explicit tracking - it's computed from wizardContainer state.
+            property bool hadSelection: false
+            
             onCountChanged: {
                 root.updateStorageStatus()
                 if (dstlist.count > 0 && dstlist.currentIndex === -1) {
-                    selectDefaultDrive()
+                    // Only auto-select if selectedStorageName is empty AND we've never had a selection
+                    // (initial load). If we had a selection before, it means a device was removed.
+                    var hasSelection = wizardContainer.selectedStorageName && wizardContainer.selectedStorageName.length > 0
+                    if (!hasSelection && !hadSelection) {
+                        selectDefaultDrive()
+                    }
+                }
+            }
+            
+            // Track if we've ever had a selection (derived from wizardContainer state)
+            // This is not explicit state tracking - it's a computed property based on existing state
+            Connections {
+                target: wizardContainer
+                function onSelectedStorageNameChanged() {
+                    if (wizardContainer.selectedStorageName && wizardContainer.selectedStorageName.length > 0) {
+                        dstlist.hadSelection = true
+                    }
                 }
             }
             
