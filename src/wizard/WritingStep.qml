@@ -372,6 +372,9 @@ WizardStepBase {
         parent: root.Window.window ? root.Window.window.overlayRootItem : undefined
         anchors.centerIn: parent
 
+        // Override height with maximum constraint to prevent excessive height, but allow natural sizing
+        height: Math.min(400, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 200)
+
         property bool allowAccept: false
 
         // Custom escape handling
