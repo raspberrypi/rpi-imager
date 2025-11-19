@@ -1399,5 +1399,24 @@ bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
         return false;
     }
 
+    // Explicitly write customization files back to ensure they're not corrupted or lost
+    // This is critical because we extracted them earlier and they may have been affected
+    // by the file deletion process or file system operations
+    if (!customFiles.isEmpty()) {
+        emit preparationStatusUpdate(tr("Writing customization files..."));
+        qDebug() << "DownloadThread: writing" << customFiles.size() << "customization files back";
+        for (auto it = customFiles.constBegin(); it != customFiles.constEnd(); ++it) {
+            try {
+                fat->writeFile(it.key(), it.value());
+                qDebug() << "DownloadThread: wrote customization file:" << it.key();
+            }
+            catch (std::runtime_error &err) {
+                qDebug() << "DownloadThread: WARNING - failed to write customization file" << it.key() << ":" << err.what();
+                // Don't fail the entire process, but log the warning
+                // The file might still exist from before, but it could be corrupted
+            }
+        }
+    }
+
     return true;
 }
