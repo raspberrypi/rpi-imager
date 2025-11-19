@@ -403,56 +403,57 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     const QString wifiCountry = settings.value("recommendedWifiCountry").toString().trimmed();
     
     // Determine if we need runcmd section
-    bool needsRuncmd = (piConnectEnabled && !cleanToken.isEmpty()) || 
-                       (!wifiCountry.isEmpty() && ssid.isEmpty());
+    // Only create runcmd if we actually have commands to add
+    bool needsRuncmdForWifi = !wifiCountry.isEmpty() && ssid.isEmpty();
+    bool needsRuncmdForPiConnect = piConnectEnabled && !cleanToken.isEmpty();
+    bool needsRuncmd = needsRuncmdForPiConnect || needsRuncmdForWifi;
     
-    if (piConnectEnabled && !cleanToken.isEmpty()) {
-        // Use the same effective user decision as above
-        const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
-        const QString configDir = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/") + PI_CONNECT_CONFIG_PATH;
-        const QString targetPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
-        
-        // Use write_files with defer option to ensure user and directories exist first
-        push(QStringLiteral("write_files:"), cloud);
-        push(QStringLiteral("  - path: ") + targetPath, cloud);
-        push(QStringLiteral("    permissions: '0600'"), cloud);
-        push(QStringLiteral("    owner: ") + effectiveUser + QStringLiteral(":") + effectiveUser, cloud);
-        push(QStringLiteral("    defer: true"), cloud);
-        push(QStringLiteral("    content: |"), cloud);
-        QString indented = QStringLiteral("      ") + cleanToken;
-        push(indented, cloud);
-        
-        // Ensure directory exists with correct owner and enable systemd units
+    if (needsRuncmd) {
         push(QString(), cloud);
         push(QStringLiteral("runcmd:"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d ") + configDir + QStringLiteral("\" ]"), cloud);
-        // Enable Raspberry Pi Connect systemd units
-        QString userHome = QStringLiteral("/home/") + effectiveUser;
-        push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants ") + userHome + QStringLiteral("/.config/systemd/user/paths.target.wants\" ]"), cloud);
-        // Check both /usr/lib and /lib for systemd unit files (different distros use different paths)
-        push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect.service; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect.service\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect-signin.path; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-signin.path; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/paths.target.wants/rpi-connect-signin.path\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect-wayvnc.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-wayvnc.service; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect-wayvnc.service\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"chown -R ") + effectiveUser + QStringLiteral(":") + effectiveUser + QStringLiteral(" ") + userHome + QStringLiteral("/.config/systemd\" ]"), cloud);
-        // Set up systemd linger for auto-start
-        push(QStringLiteral("  - [ sh, -c, \"install -d -m 0755 /var/lib/systemd/linger\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"install -m 0644 /dev/null /var/lib/systemd/linger/") + effectiveUser + QStringLiteral("\" ]"), cloud);
-        // Start the user services now (linger ensures user manager is running)
-        push(QStringLiteral("  - [ sh, -c, \"loginctl enable-linger ") + effectiveUser + QStringLiteral(" 2>/dev/null || true\" ]"), cloud);
-        push(QStringLiteral("  - [ sleep, \"2\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host daemon-reload || true\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect.service || true\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-signin.path || true\" ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-wayvnc.service || true\" ]"), cloud);
-    } else if (needsRuncmd) {
-        // Start runcmd section if not already started
-        push(QStringLiteral("runcmd:"), cloud);
-    }
-    
-    // When Wi-Fi country is set but no SSID, unblock Wi-Fi to prevent "blocked by rfkill" message
-    if (!wifiCountry.isEmpty() && ssid.isEmpty()) {
-        push(QStringLiteral("  - [ rfkill, unblock, wifi ]"), cloud);
-        push(QStringLiteral("  - [ sh, -c, \"for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \\\"$f\\\"; done\" ]"), cloud);
+        
+        if (needsRuncmdForPiConnect) {
+            // Use the same effective user decision as above
+            const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
+            const QString configDir = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/") + PI_CONNECT_CONFIG_PATH;
+            const QString targetPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
+            
+            // Don't use write_files with defer:true because cloud-init tries to resolve the user/group
+            // at parse time using getpwnam(), which fails if the user doesn't exist yet.
+            // Instead, create the file via runcmd after the user is guaranteed to exist.
+            // Create directory and file in runcmd to ensure user exists first
+            push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d ") + configDir + QStringLiteral("\" ]"), cloud);
+            // Write the token file using printf with single-quoted string (safest for arbitrary content)
+            // Inside single quotes, only single quotes need escaping (break out, add escaped quote, resume)
+            QString escapedToken = cleanToken;
+            escapedToken.replace("'", "'\"'\"'");  // ' becomes '"'"' (end quote, add escaped quote, start quote)
+            QString writeTokenCmd = QStringLiteral("  - [ sh, -c, \"printf '%s\\n' '") + escapedToken + QStringLiteral("' > ") + targetPath + QStringLiteral(" && chown ") + effectiveUser + QStringLiteral(":") + effectiveUser + QStringLiteral(" ") + targetPath + QStringLiteral(" && chmod 600 ") + targetPath + QStringLiteral("\" ]");
+            push(writeTokenCmd, cloud);
+            // Enable Raspberry Pi Connect systemd units
+            QString userHome = QStringLiteral("/home/") + effectiveUser;
+            push(QStringLiteral("  - [ sh, -c, \"install -o ") + effectiveUser + QStringLiteral(" -m 700 -d ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants ") + userHome + QStringLiteral("/.config/systemd/user/paths.target.wants\" ]"), cloud);
+            // Check both /usr/lib and /lib for systemd unit files (different distros use different paths)
+            push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect.service; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect.service\" ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect-signin.path; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-signin.path; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/paths.target.wants/rpi-connect-signin.path\" ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"UNIT_SRC=/usr/lib/systemd/user/rpi-connect-wayvnc.service; [ -f $UNIT_SRC ] || UNIT_SRC=/lib/systemd/user/rpi-connect-wayvnc.service; ln -sf $UNIT_SRC ") + userHome + QStringLiteral("/.config/systemd/user/default.target.wants/rpi-connect-wayvnc.service\" ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"chown -R ") + effectiveUser + QStringLiteral(":") + effectiveUser + QStringLiteral(" ") + userHome + QStringLiteral("/.config/systemd\" ]"), cloud);
+            // Set up systemd linger for auto-start
+            push(QStringLiteral("  - [ sh, -c, \"install -d -m 0755 /var/lib/systemd/linger\" ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"install -m 0644 /dev/null /var/lib/systemd/linger/") + effectiveUser + QStringLiteral("\" ]"), cloud);
+            // Start the user services now (linger ensures user manager is running)
+            push(QStringLiteral("  - [ sh, -c, \"loginctl enable-linger ") + effectiveUser + QStringLiteral(" 2>/dev/null || true\" ]"), cloud);
+            push(QStringLiteral("  - [ sleep, \"2\" ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host daemon-reload || true\" ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect.service || true\" ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-signin.path || true\" ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"systemctl --quiet --user --machine=") + effectiveUser + QStringLiteral("@.host start rpi-connect-wayvnc.service || true\" ]"), cloud);
+        }
+        
+        if (needsRuncmdForWifi) {
+            // When Wi-Fi country is set but no SSID, unblock Wi-Fi to prevent "blocked by rfkill" message
+            push(QStringLiteral("  - [ rfkill, unblock, wifi ]"), cloud);
+            push(QStringLiteral("  - [ sh, -c, \"for f in /var/lib/systemd/rfkill/*:wlan; do echo 0 > \\\"$f\\\"; done\" ]"), cloud);
+        }
     }
     
     return cloud;
