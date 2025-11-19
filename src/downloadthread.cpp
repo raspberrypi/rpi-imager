@@ -1255,10 +1255,20 @@ bool DownloadThread::_createSecureBootFiles(DeviceWrapperFatPartition *fat)
     QMap<QString, QByteArray> bootFiles;
     QMap<QString, QByteArray> customFiles;
     
+    // Build a case-insensitive lookup for customization files
+    // FAT filesystems may store filenames in uppercase, so we need case-insensitive matching
+    QMap<QString, QString> customFileMap; // maps lowercase -> original case
+    for (const QString &customFile : customizationFiles) {
+        customFileMap[customFile.toLower()] = customFile;
+    }
+    
     for (auto it = allFiles.constBegin(); it != allFiles.constEnd(); ++it) {
-        if (customizationFiles.contains(it.key())) {
-            customFiles[it.key()] = it.value();
-            qDebug() << "DownloadThread: preserving customization file:" << it.key();
+        QString keyLower = it.key().toLower();
+        if (customFileMap.contains(keyLower)) {
+            // Use the original case from the map to preserve filename casing
+            QString originalKey = customFileMap[keyLower];
+            customFiles[originalKey] = it.value();
+            qDebug() << "DownloadThread: preserving customization file:" << it.key() << "(mapped to" << originalKey << ")";
         } else {
             bootFiles[it.key()] = it.value();
         }
