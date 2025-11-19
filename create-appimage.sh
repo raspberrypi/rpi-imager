@@ -249,8 +249,8 @@ cd ..
 if [ ! -f "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" ]; then
     mkdir -p "$APPDIR/usr/share/applications"
     cp "debian/com.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/"
-    # Update the Exec line to match the AppImage requirements
-    sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop"
+    # Update the Exec line to match the AppImage requirements (preserve %F for file arguments)
+    sed -i 's|Exec=.*|Exec=rpi-imager %F|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop"
 fi
 
 # Create the AppRun file if not created by the install process
