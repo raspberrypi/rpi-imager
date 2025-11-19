@@ -1145,6 +1145,14 @@ Item {
         function onConnectTokenConflictDetected(newToken) {
             tokenConflictDialog.openWithToken(newToken)
         }
+        
+        // Handle token cleared signal at container level to ensure it's always processed
+        // even when PiConnectCustomizationStep component is not loaded
+        function onConnectTokenCleared() {
+            // Reset Pi Connect state when token is cleared (e.g., after write completes)
+            piConnectEnabled = false
+            delete customizationSettings.piConnectEnabled
+        }
     }
 
     
@@ -1244,6 +1252,11 @@ Item {
         // Reset only the storage selection to allow choosing a new storage device
         // while preserving device, OS, and customization settings
         selectedStorageName = ""
+        
+        // Reset ephemeral Pi Connect state (session-only, not preserved)
+        // The token is already cleared when write completes, but ensure the enabled flag is reset
+        piConnectEnabled = false
+        delete customizationSettings.piConnectEnabled
         
         // Keep all steps permissible - they've already been completed
         // This allows backward navigation if needed
