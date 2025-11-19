@@ -1094,8 +1094,7 @@ Item {
             id: bodyText
             text: qsTr("A new Raspberry Pi Connect token was received that differs from your current one.\n\n") +
                   qsTr("Do you want to overwrite the existing token?\n\n") +
-                  qsTr("Warning: Only replace the token if you initiated this action. ") +
-                  qsTr("If you didn't, someone could be trying to push a bad token to RPi Imager.")
+                  qsTr("Warning: Only overwrite the token if you initiated this action.")
             font.pixelSize: Style.fontSizeFormLabel
             font.family: Style.fontFamily
             color: Style.formLabelColor
