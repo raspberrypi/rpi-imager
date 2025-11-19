@@ -149,34 +149,9 @@ WizardStepBase {
                 }
             }
 
-            // Auto-select a safe default when drives appear (but not after device removal)
-            // We distinguish "initial load" from "device removal" by checking if selectedStorageName
-            // was just cleared (device removal) vs never set (initial load).
-            // We use a property binding that tracks if selectedStorageName was ever non-empty.
-            // This is derived state, not explicit tracking - it's computed from wizardContainer state.
-            property bool hadSelection: false
-            
+            // Update storage status when device list changes
             onCountChanged: {
                 root.updateStorageStatus()
-                if (dstlist.count > 0 && dstlist.currentIndex === -1) {
-                    // Only auto-select if selectedStorageName is empty AND we've never had a selection
-                    // (initial load). If we had a selection before, it means a device was removed.
-                    var hasSelection = wizardContainer.selectedStorageName && wizardContainer.selectedStorageName.length > 0
-                    if (!hasSelection && !hadSelection) {
-                        selectDefaultDrive()
-                    }
-                }
-            }
-            
-            // Track if we've ever had a selection (derived from wizardContainer state)
-            // This is not explicit state tracking - it's a computed property based on existing state
-            Connections {
-                target: wizardContainer
-                function onSelectedStorageNameChanged() {
-                    if (wizardContainer.selectedStorageName && wizardContainer.selectedStorageName.length > 0) {
-                        dstlist.hadSelection = true
-                    }
-                }
             }
             
             // No storage devices or no valid options message (visually hidden, for screen readers only)
@@ -514,61 +489,6 @@ WizardStepBase {
         } else {
             return qsTr("No valid storage devices are currently available. Uncheck 'Exclude system drives' to show hidden system drives, or connect a new storage device.")
         }
-    }
-    
-    // Select default drive by priority (never system):
-    // 1) SD cards (not USB and not SCSI)
-    // 2) USB storage devices
-    // 3) Other non-system, non-readonly devices
-    function selectDefaultDrive() {
-        var model = root.imageWriter.getDriveList()
-        if (!model || model.rowCount() === 0) return
-
-        var deviceRole = 0x101
-        var descriptionRole = 0x102
-        var sizeRole = 0x103
-        var isUsbRole = 0x104
-        var isScsiRole = 0x105
-        var isReadOnlyRole = 0x106
-        var isSystemRole = 0x107
-        var mountpointsRole = 0x108
-
-        var sdIdx = -1
-        var usbIdx = -1
-        var otherIdx = -1
-
-        for (var i = 0; i < model.rowCount(); i++) {
-            var idx = model.index(i, 0)
-            var isSystem = model.data(idx, isSystemRole)
-            if (isSystem) continue
-            var isReadOnly = model.data(idx, isReadOnlyRole)
-            if (isReadOnly) continue
-            var isUsb = model.data(idx, isUsbRole)
-            var isScsi = model.data(idx, isScsiRole)
-
-            if (!isUsb && !isScsi && sdIdx === -1) {
-                sdIdx = i
-            } else if (isUsb && usbIdx === -1) {
-                usbIdx = i
-            } else if (otherIdx === -1) {
-                otherIdx = i
-            }
-        }
-
-        var chosen = sdIdx !== -1 ? sdIdx : (usbIdx !== -1 ? usbIdx : otherIdx)
-        if (chosen === -1) return
-
-        var cidx = model.index(chosen, 0)
-        var device = model.data(cidx, deviceRole)
-        var description = model.data(cidx, descriptionRole)
-        var size = model.data(cidx, sizeRole)
-        var mountpoints = model.data(cidx, mountpointsRole)
-
-        dstlist.currentIndex = chosen
-        root.imageWriter.setDst(device)
-        root.selectedDeviceName = description
-        root.wizardContainer.selectedStorageName = description
-        root.nextButtonEnabled = true
     }
     // Stern confirmation when disabling system drive filtering
     ConfirmUnfilterDialog {
