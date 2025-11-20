@@ -278,7 +278,9 @@ WizardStepBase {
         parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
         anchors.centerIn: parent
         visible: false
-        title: qsTr("Invalid Token")
+        
+        // Override height calculation to ensure proper sizing with wrapped text
+        height: contentLayout ? Math.max(200, contentLayout.implicitHeight + Style.cardPadding * 2) : 200
         
         function escapePressed() {
             invalidTokenDialog.close()
