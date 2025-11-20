@@ -41,6 +41,14 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #endif
+#ifdef Q_OS_LINUX
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusMessage>
+#include <QDBusReply>
+#include <QDBusMetaType>
+#include "linux/urihandler_dbus.h"
+#endif
 #include "imageadvancedoptions.h"
 #include "embedded_config.h"
 
@@ -387,6 +395,45 @@ int main(int argc, char *argv[])
         }
     }
 
+#ifdef Q_OS_LINUX
+    // Check if another instance is already running via D-Bus
+    // If so, send the URL to it and exit
+    if (!callbackUrl.isEmpty() || !url.isEmpty())
+    {
+        QDBusConnection bus = QDBusConnection::sessionBus();
+        if (bus.isConnected())
+        {
+            // Check if the service is already registered
+            QDBusInterface interface("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                                    "org.freedesktop.DBus", bus);
+            QDBusReply<QStringList> reply = interface.call("ListNames");
+            if (reply.isValid() && reply.value().contains("com.raspberrypi.rpi-imager"))
+            {
+                // Another instance is running - send URL to it via D-Bus
+                QUrl urlToSend = !callbackUrl.isEmpty() ? callbackUrl : url;
+                QDBusInterface iface("com.raspberrypi.rpi-imager", "/com/raspberrypi/rpi-imager", 
+                                   "com.raspberrypi.rpi-imager", bus);
+                QDBusMessage msg = QDBusMessage::createMethodCall(
+                    "com.raspberrypi.rpi-imager",
+                    "/com/raspberrypi/rpi-imager",
+                    "com.raspberrypi.rpi-imager",
+                    "HandleUrl");
+                msg << urlToSend.toString();
+                QDBusReply<void> callReply = bus.call(msg);
+                if (callReply.isValid())
+                {
+                    qDebug() << "Sent URL to existing instance via D-Bus:" << urlToSend.toString();
+                    return 0;
+                }
+                else
+                {
+                    qWarning() << "Failed to send URL to existing instance:" << callReply.error().message();
+                }
+            }
+        }
+    }
+#endif
+
 #ifdef Q_OS_WIN
     // callback server
     QTcpServer server;
@@ -407,6 +454,34 @@ int main(int argc, char *argv[])
     });
     if (!server.listen(QHostAddress::LocalHost, kPort)) {
         qWarning() << "TCP listen failed:" << server.errorString();
+    }
+#endif
+#ifdef Q_OS_LINUX
+    // D-Bus callback service for URI handling
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (bus.isConnected())
+    {
+        QObject *dbusObject = new QObject(&app);
+        UriHandlerAdaptor *adaptor = new UriHandlerAdaptor(&imageWriter, dbusObject);
+        if (bus.registerObject("/com/raspberrypi/rpi-imager", dbusObject))
+        {
+            if (bus.registerService("com.raspberrypi.rpi-imager"))
+            {
+                qDebug() << "Registered D-Bus service for URI callbacks";
+            }
+            else
+            {
+                qWarning() << "Failed to register D-Bus service:" << bus.lastError().message();
+            }
+        }
+        else
+        {
+            qWarning() << "Failed to register D-Bus object:" << bus.lastError().message();
+        }
+    }
+    else
+    {
+        qWarning() << "No D-Bus session bus available";
     }
 #endif
 

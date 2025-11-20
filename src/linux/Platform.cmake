@@ -21,6 +21,8 @@ if(NOT BUILD_CLI_ONLY)
         linux/networkmanagerapi.h
         linux/networkmanagerapi.cpp
         linux/nativefiledialog_linux.cpp
+        linux/urihandler_dbus.h
+        linux/urihandler_dbus.cpp
     )
 else()
     # Use stub implementations for CLI builds (no DBus dependency)

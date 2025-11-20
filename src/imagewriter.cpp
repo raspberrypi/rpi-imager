@@ -2661,69 +2661,47 @@ void ImageWriter::openUrl(const QUrl &url)
     // When running with elevated privileges (sudo/pkexec), we need to run xdg-open
     // as the original user, not as root, so it can access the user's desktop session
     if (::geteuid() == 0) {
-        // Running as root - need to drop privileges for xdg-open
-        pid_t pid = ::fork();
+        // Running as root - use pkexec to run xdg-open as the original user
+        // Determine the original user's UID and username
+        uid_t targetUid = 0;
+        QString targetUsername;
         
-        if (pid < 0) {
-            // Fork failed
-            qWarning() << "Failed to fork for xdg-open";
-            success = false;
-        } else if (pid == 0) {
-            // Child process - drop privileges and exec xdg-open
-            
-            // Determine target UID and GID to drop to
-            uid_t targetUid = 0;
-            gid_t targetGid = 0;
-            bool shouldDropPrivileges = false;
-            
-            if (::getuid() != ::geteuid()) {
-                // Running under sudo: real UID is the original user
-                targetUid = ::getuid();
-                targetGid = ::getgid();
-                shouldDropPrivileges = true;
-            } else if (::geteuid() == 0) {
-                // Running as root - check if we were invoked via pkexec
-                const char* pkexecUid = ::getenv("PKEXEC_UID");
-                if (pkexecUid) {
-                    // Running under pkexec: need to look up the original user's GID
-                    targetUid = static_cast<uid_t>(::atoi(pkexecUid));
-                    struct passwd* pw = ::getpwuid(targetUid);
-                    if (pw) {
-                        targetGid = pw->pw_gid;
-                        shouldDropPrivileges = true;
-                    }
-                }
+        // Check if we were invoked via pkexec or sudo
+        const char* pkexecUid = ::getenv("PKEXEC_UID");
+        const char* sudoUid = ::getenv("SUDO_UID");
+        
+        if (pkexecUid) {
+            // Running under pkexec
+            targetUid = static_cast<uid_t>(::atoi(pkexecUid));
+        } else if (sudoUid) {
+            // Running under sudo
+            targetUid = static_cast<uid_t>(::atoi(sudoUid));
+        } else if (::getuid() != ::geteuid()) {
+            // Running under sudo but SUDO_UID not set - use real UID
+            targetUid = ::getuid();
+        }
+        
+        if (targetUid != 0) {
+            // Look up the username for this UID
+            struct passwd* pw = ::getpwuid(targetUid);
+            if (pw && pw->pw_name) {
+                targetUsername = QString::fromUtf8(pw->pw_name);
             }
-            
-            if (shouldDropPrivileges) {
-                // Drop effective privileges back to the original user
-                if (::setgid(targetGid) != 0 || ::setuid(targetUid) != 0) {
-                    // Failed to drop privileges - abort for safety
-                    ::_exit(126);
-                }
+        }
+        
+        if (!targetUsername.isEmpty()) {
+            // Use pkexec to run xdg-open as the original user
+            // pkexec will properly set up the environment and session context
+            QStringList pkexecArgs;
+            pkexecArgs << "--user" << targetUsername << "xdg-open" << url.toString();
+            int result = QProcess::execute("pkexec", pkexecArgs);
+            success = (result == 0);
+            if (!success) {
+                qWarning() << "pkexec xdg-open failed with exit code:" << result;
             }
-            
-            // Execute xdg-open as the original user
-            QByteArray urlBytes = url.toString().toUtf8();
-            ::execlp("xdg-open", "xdg-open", urlBytes.constData(), nullptr);
-            
-            // If we get here, exec failed
-            ::_exit(127);
         } else {
-            // Parent process - wait for child to complete
-            int status;
-            ::waitpid(pid, &status, 0);
-            
-            if (WIFEXITED(status)) {
-                int exitCode = WEXITSTATUS(status);
-                success = (exitCode == 0);
-                if (!success) {
-                    qWarning() << "xdg-open failed with exit code:" << exitCode;
-                }
-            } else {
-                qWarning() << "xdg-open process terminated abnormally";
-                success = false;
-            }
+            qWarning() << "Could not determine original user for xdg-open";
+            success = false;
         }
     } else {
         // Not running as root - use normal QProcess::execute
