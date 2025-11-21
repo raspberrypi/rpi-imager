@@ -37,7 +37,10 @@ BaseDialog {
             // Include telemetry help link if visible
             if (chkTelemetry.helpLinkItem && chkTelemetry.helpLinkItem.visible)
                 items.push(chkTelemetry.helpLinkItem)
-            items.push(chkDisableWarnings.focusItem, editRepoButton.focusItem, secureBootKeyButton.focusItem)
+            items.push(chkDisableWarnings.focusItem, editRepoButton.focusItem)
+            // Only include secure boot key button if visible
+            if (secureBootKeyButton.visible)
+                items.push(secureBootKeyButton.focusItem)
             return items
         }, 0)
         registerFocusGroup("buttons", function(){ 
@@ -158,6 +161,10 @@ BaseDialog {
                 btnText: rsaKeyPath.text ? qsTr("Change") : qsTr("Select")
                 accessibleDescription: qsTr("Select an RSA 2048-bit private key for signing boot images in secure boot mode")
                 Layout.fillWidth: true
+                // Only show if secure boot is available (via OS capabilities or CLI flag)
+                visible: (wizardContainer && wizardContainer.secureBootAvailable) ||
+                         imageWriter.isSecureBootForcedByCliFlag() ||
+                         imageWriter.checkSWCapability("secure_boot")
                 // Disable while write is in progress
                 enabled: imageWriter.writeState === ImageWriter.Idle ||
                          imageWriter.writeState === ImageWriter.Succeeded ||

@@ -209,7 +209,7 @@ Item {
             ? stepIfAndFeatures
             : piConnectAvailable
                 ? stepPiConnectCustomization
-                : (secureBootAvailable && secureBootKeyConfigured)
+                : secureBootAvailable
                     ? stepSecureBootCustomization
                     : stepRemoteAccess
     }
@@ -221,7 +221,7 @@ Item {
         }
         
         var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote access")]
-        if (secureBootAvailable && secureBootKeyConfigured) {
+        if (secureBootAvailable) {
             labels.push(qsTr("Secure Boot"))
         }
         if (piConnectAvailable) {

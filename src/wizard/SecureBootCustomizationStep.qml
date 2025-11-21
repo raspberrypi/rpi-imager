@@ -6,6 +6,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtCore
 import "../qmlcomponents"
 import "components"
 
@@ -16,6 +17,9 @@ WizardStepBase {
     
     required property ImageWriter imageWriter
     required property var wizardContainer
+    
+    // Track RSA key path for reactive UI updates
+    property string rsaKeyPath: getRsaKeyPath()
     
     // Only show and enable this step if OS supports secure boot
     visible: wizardContainer.secureBootAvailable
@@ -38,15 +42,64 @@ WizardStepBase {
         spacing: Style.stepContentSpacing
         
         WizardSectionContainer {
+            // RSA Key selection button
+            ImOptionButton {
+                id: rsaKeyButton
+                text: qsTr("RSA Private Key")
+                btnText: root.rsaKeyPath ? qsTr("Change") : qsTr("Select")
+                accessibleDescription: qsTr("Select an RSA 2048-bit private key for signing boot images in secure boot mode")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+                onClicked: {
+                    // Prefer native file dialog via Imager's wrapper, but only if available
+                    if (imageWriter.nativeFileDialogAvailable()) {
+                        var home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
+                        var startDir = home && home.length > 0 ? home + "/.ssh" : ""
+                        var keyPath = imageWriter.getNativeOpenFileName(
+                            qsTr("Select RSA Private Key"), 
+                            startDir,
+                            qsTr("PEM Files (*.pem);;All Files (*)")
+                        );
+                        if (keyPath) {
+                            imageWriter.setSetting("secureboot_rsa_key", keyPath)
+                            // Update tracked property and wizard container state
+                            root.rsaKeyPath = keyPath
+                            wizardContainer.secureBootKeyConfigured = true
+                            // Rebuild focus order and update UI
+                            root.rebuildFocusOrder()
+                        }
+                    } else {
+                        // Fallback to QML dialog (forced non-native)
+                        rsaKeyFileDialog.open()
+                    }
+                }
+            }
+            
+            // Show key status if configured
+            Text {
+                Layout.fillWidth: true
+                visible: root.rsaKeyPath && root.rsaKeyPath.length > 0
+                text: qsTr("Selected: %1").arg(root.rsaKeyPath)
+                font.family: Style.fontFamily
+                font.pixelSize: Style.fontSizeCaption
+                color: Style.textDescriptionColor
+                elide: Text.ElideMiddle
+            }
+            
             // Enable/disable Secure Boot option pill
             ImOptionPill {
                 id: secureBootEnablePill
                 Layout.fillWidth: true
+                Layout.topMargin: Style.spacingMedium
                 text: qsTr("Enable Secure Boot Signing")
                 accessibleDescription: qsTr("Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi")
                 helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn about Secure Boot")
                 helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://github.com/raspberrypi/usbboot/blob/master/secure-boot-recovery/README.md"
                 checked: false
+                // Only enable if RSA key is configured
+                enabled: root.rsaKeyPath && root.rsaKeyPath.length > 0
                 onToggled: function(isChecked) { 
                     wizardContainer.secureBootEnabled = isChecked
                     // Rebuild focus order when pill state changes
@@ -62,7 +115,7 @@ WizardStepBase {
                 
             Text {
                 Layout.fillWidth: true
-                text: qsTr("Your boot partition will be signed using the RSA private key configured in App Options.")
+                text: qsTr("Your boot partition will be signed using the selected RSA private key.")
                 font.family: Style.fontFamily
                 font.pixelSize: Style.fontSizeDescription
                 color: Style.textDescriptionColor
@@ -85,15 +138,6 @@ WizardStepBase {
                     
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("Private Key: %1").arg(root.getRsaKeyPath() || qsTr("(not configured)"))
-                        font.family: Style.fontFamily
-                        font.pixelSize: Style.fontSizeCaption
-                        color: Style.textDescriptionColor
-                        elide: Text.ElideMiddle
-                    }
-                    
-                    Text {
-                        Layout.fillWidth: true
                         text: qsTr("Public Key Fingerprint: %1").arg(root.getRsaKeyFingerprint() || qsTr("(unavailable)"))
                         font.family: Style.fontFamily
                         font.pixelSize: Style.fontSizeCaption
@@ -101,6 +145,18 @@ WizardStepBase {
                         wrapMode: Text.WrapAnywhere
                     }
                 }
+            }
+            
+            // Warning if no key is configured but user tries to enable
+            Text {
+                Layout.fillWidth: true
+                Layout.topMargin: Style.spacingSmall
+                visible: !root.rsaKeyPath || root.rsaKeyPath.length === 0
+                text: qsTr("Please select an RSA private key above to enable secure boot signing.")
+                font.family: Style.fontFamily
+                font.pixelSize: Style.fontSizeDescription
+                color: Style.formLabelErrorColor
+                wrapMode: Text.WordWrap
             }
         }
     }
@@ -117,19 +173,49 @@ WizardStepBase {
     
     // Helper function to get the RSA key fingerprint
     function getRsaKeyFingerprint() {
-        if (imageWriter) {
-            var keyPath = getRsaKeyPath()
-            if (keyPath) {
-                var fingerprint = imageWriter.getRsaKeyFingerprint(keyPath)
-                return fingerprint || qsTr("(unable to compute)")
-            }
+        if (imageWriter && root.rsaKeyPath) {
+            var fingerprint = imageWriter.getRsaKeyFingerprint(root.rsaKeyPath)
+            return fingerprint || qsTr("(unable to compute)")
         }
         return ""
     }
 
+    // File dialog for RSA key selection (fallback when native dialog unavailable)
+    ImFileDialog {
+        id: rsaKeyFileDialog
+        imageWriter: root.imageWriter
+        parent: root.parent
+        anchors.centerIn: parent
+        dialogTitle: qsTr("Select RSA Private Key")
+        nameFilters: [qsTr("PEM Files (*.pem)"), qsTr("All Files (*)")]
+        Component.onCompleted: {
+            // Default to ~/.ssh folder if it exists
+            var home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
+            if (home && home.length > 0) {
+                var url = (Qt.platform.os === "windows") ? ("file:///" + home + "/.ssh") : ("file://" + home + "/.ssh")
+                rsaKeyFileDialog.currentFolder = url
+                rsaKeyFileDialog.folder = url
+            }
+        }
+        onAccepted: {
+            if (selectedFile && selectedFile.toString().length > 0) {
+                var filePath = selectedFile.toString().replace(/^file:\/\//, "")
+                imageWriter.setSetting("secureboot_rsa_key", filePath)
+                // Update tracked property and wizard container state
+                root.rsaKeyPath = filePath
+                wizardContainer.secureBootKeyConfigured = true
+                // Rebuild focus order and update UI
+                root.rebuildFocusOrder()
+            }
+        }
+    }
+
     Component.onCompleted: {
+        // Initialize RSA key path from settings
+        root.rsaKeyPath = getRsaKeyPath()
+        
         root.registerFocusGroup("secureboot_controller", function(){ 
-            var items = [secureBootEnablePill.focusItem]
+            var items = [rsaKeyButton.focusItem, secureBootEnablePill.focusItem]
             // Include help link if visible
             if (secureBootEnablePill.helpLinkItem && secureBootEnablePill.helpLinkItem.visible)
                 items.push(secureBootEnablePill.helpLinkItem)
