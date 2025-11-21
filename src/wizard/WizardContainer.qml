@@ -87,6 +87,23 @@ Item {
     // Individual steps read from and write to this object
     property var customizationSettings: ({})
     
+    // Snapshot of customization flags captured when write completes, for display on completion screen
+    // This readonly snapshot preserves the state even after token/flags are cleared
+    property var completionSnapshot: ({
+        customizationSupported: false,
+        hostnameConfigured: false,
+        localeConfigured: false,
+        userConfigured: false,
+        wifiConfigured: false,
+        sshEnabled: false,
+        piConnectEnabled: false,
+        ifI2cEnabled: false,
+        ifSpiEnabled: false,
+        if1WireEnabled: false,
+        ifSerial: "",
+        featUsbGadgetEnabled: false
+    })
+    
     // Wizard steps enum
     readonly property int stepDeviceSelection: 0
     readonly property int stepOSSelection: 1
@@ -730,11 +747,31 @@ Item {
                 nextIndex++
             }
             // Before entering the writing step, apply customization (when supported)
-            if (nextIndex === stepWriting && customizationSupported && imageWriter) {
-                // Pass the complete customizationSettings object directly to the generator
-                // This includes both persistent settings (hostname, wifi, etc.) and
-                // ephemeral settings (piConnectEnabled) from the current wizard session
-                imageWriter.applyCustomisationFromSettings(customizationSettings)
+            if (nextIndex === stepWriting) {
+                if (customizationSupported && imageWriter) {
+                    // Pass the complete customizationSettings object directly to the generator
+                    // This includes both persistent settings (hostname, wifi, etc.) and
+                    // ephemeral settings (piConnectEnabled) from the current wizard session
+                    imageWriter.applyCustomisationFromSettings(customizationSettings)
+                }
+                
+                // Capture snapshot of customization flags at write summary stage
+                // This preserves the state for the completion screen, before any write operations
+                // or token clearing happens. This is the most reliable place to capture it.
+                completionSnapshot = {
+                    customizationSupported: customizationSupported,
+                    hostnameConfigured: hostnameConfigured,
+                    localeConfigured: localeConfigured,
+                    userConfigured: userConfigured,
+                    wifiConfigured: wifiConfigured,
+                    sshEnabled: sshEnabled,
+                    piConnectEnabled: piConnectEnabled,
+                    ifI2cEnabled: ifI2cEnabled,
+                    ifSpiEnabled: ifSpiEnabled,
+                    if1WireEnabled: if1WireEnabled,
+                    ifSerial: ifSerial,
+                    featUsbGadgetEnabled: featUsbGadgetEnabled
+                }
             }
             root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)
@@ -1150,6 +1187,7 @@ Item {
         // even when PiConnectCustomizationStep component is not loaded
         function onConnectTokenCleared() {
             // Reset Pi Connect state when token is cleared (e.g., after write completes)
+            // Note: Snapshot is already captured when entering writing step, so no need to capture here
             piConnectEnabled = false
             delete customizationSettings.piConnectEnabled
         }

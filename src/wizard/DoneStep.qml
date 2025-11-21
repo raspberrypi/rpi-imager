@@ -20,19 +20,21 @@ WizardStepBase {
     showBackButton: false
     showNextButton: false
     readonly property bool autoEjectEnabled: imageWriter.getBoolSetting("eject")
+    // Use snapshot of customization flags captured when write completed
+    // This preserves the state even after token/flags are cleared for security
     readonly property bool anyCustomizationsApplied: (
-        wizardContainer.customizationSupported && (
-            wizardContainer.hostnameConfigured ||
-            wizardContainer.localeConfigured ||
-            wizardContainer.userConfigured ||
-            wizardContainer.wifiConfigured ||
-            wizardContainer.sshEnabled ||
-            wizardContainer.piConnectEnabled ||
-            wizardContainer.ifI2cEnabled ||
-            wizardContainer.ifSpiEnabled ||
-            wizardContainer.if1WireEnabled ||
-            wizardContainer.ifSerial !== ""  && wizardContainer.ifSerial !== "Disabled" ||
-            wizardContainer.featUsbGadgetEnabled
+        wizardContainer.completionSnapshot.customizationSupported && (
+            wizardContainer.completionSnapshot.hostnameConfigured ||
+            wizardContainer.completionSnapshot.localeConfigured ||
+            wizardContainer.completionSnapshot.userConfigured ||
+            wizardContainer.completionSnapshot.wifiConfigured ||
+            wizardContainer.completionSnapshot.sshEnabled ||
+            wizardContainer.completionSnapshot.piConnectEnabled ||
+            wizardContainer.completionSnapshot.ifI2cEnabled ||
+            wizardContainer.completionSnapshot.ifSpiEnabled ||
+            wizardContainer.completionSnapshot.if1WireEnabled ||
+            wizardContainer.completionSnapshot.ifSerial !== ""  && wizardContainer.completionSnapshot.ifSerial !== "Disabled" ||
+            wizardContainer.completionSnapshot.featUsbGadgetEnabled
         )
     )
     
@@ -164,19 +166,20 @@ WizardStepBase {
                 activeFocusOnTab: true
                 Accessible.role: Accessible.List
                 Accessible.name: {
-                    // Build a list of visible customizations to announce
+                    // Build a list of visible customizations to announce using snapshot
                     var items = []
-                    if (wizardContainer.hostnameConfigured) items.push(CommonStrings.hostnameConfigured)
-                    if (wizardContainer.localeConfigured) items.push(CommonStrings.localeConfigured)
-                    if (wizardContainer.userConfigured) items.push(CommonStrings.userAccountConfigured)
-                    if (wizardContainer.wifiConfigured) items.push(CommonStrings.wifiConfigured)
-                    if (wizardContainer.sshEnabled) items.push(CommonStrings.sshEnabled)
-                    if (wizardContainer.piConnectEnabled) items.push(CommonStrings.piConnectEnabled)
-                    if (wizardContainer.featUsbGadgetEnabled) items.push(CommonStrings.usbGadgetEnabled)
-                    if (wizardContainer.ifI2cEnabled) items.push(CommonStrings.i2cEnabled)
-                    if (wizardContainer.ifSpiEnabled) items.push(CommonStrings.spiEnabled)
-                    if (wizardContainer.if1WireEnabled) items.push(CommonStrings.onewireEnabled)
-                    if (wizardContainer.ifSerial !== "" && wizardContainer.ifSerial !== "Disabled") items.push(CommonStrings.serialConfigured)
+                    var snapshot = wizardContainer.completionSnapshot
+                    if (snapshot.hostnameConfigured) items.push(CommonStrings.hostnameConfigured)
+                    if (snapshot.localeConfigured) items.push(CommonStrings.localeConfigured)
+                    if (snapshot.userConfigured) items.push(CommonStrings.userAccountConfigured)
+                    if (snapshot.wifiConfigured) items.push(CommonStrings.wifiConfigured)
+                    if (snapshot.sshEnabled) items.push(CommonStrings.sshEnabled)
+                    if (snapshot.piConnectEnabled) items.push(CommonStrings.piConnectEnabled)
+                    if (snapshot.featUsbGadgetEnabled) items.push(CommonStrings.usbGadgetEnabled)
+                    if (snapshot.ifI2cEnabled) items.push(CommonStrings.i2cEnabled)
+                    if (snapshot.ifSpiEnabled) items.push(CommonStrings.spiEnabled)
+                    if (snapshot.if1WireEnabled) items.push(CommonStrings.onewireEnabled)
+                    if (snapshot.ifSerial !== "" && snapshot.ifSerial !== "Disabled") items.push(CommonStrings.serialConfigured)
                     
                     return items.length + " " + (items.length === 1 ? qsTr("customization") : qsTr("customizations")) + ": " + items.join(", ")
                 }
@@ -199,17 +202,18 @@ WizardStepBase {
                     Column {
                         id: customizationColumn
                         width: parent.width
-                        Text { text: "✓ " + CommonStrings.hostnameConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.hostnameConfigured }
-                        Text { text: "✓ " + CommonStrings.localeConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.localeConfigured }
-                        Text { text: "✓ " + CommonStrings.userAccountConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.userConfigured }
-                        Text { text: "✓ " + CommonStrings.wifiConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.wifiConfigured }
-                        Text { text: "✓ " + CommonStrings.sshEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.sshEnabled }
-                        Text { text: "✓ " + CommonStrings.piConnectEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.piConnectEnabled }
-                        Text { text: "✓ " + CommonStrings.usbGadgetEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.featUsbGadgetEnabled }
-                        Text { text: "✓ " + CommonStrings.i2cEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.ifI2cEnabled }
-                        Text { text: "✓ " + CommonStrings.spiEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.ifSpiEnabled }
-                        Text { text: "✓ " + CommonStrings.onewireEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.if1WireEnabled }
-                        Text { text: "✓ " + CommonStrings.serialConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: wizardContainer.ifSerial !== "" && wizardContainer.ifSerial !== "Disabled" }
+                        property var snapshot: wizardContainer.completionSnapshot
+                        Text { text: "✓ " + CommonStrings.hostnameConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.hostnameConfigured }
+                        Text { text: "✓ " + CommonStrings.localeConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.localeConfigured }
+                        Text { text: "✓ " + CommonStrings.userAccountConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.userConfigured }
+                        Text { text: "✓ " + CommonStrings.wifiConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.wifiConfigured }
+                        Text { text: "✓ " + CommonStrings.sshEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.sshEnabled }
+                        Text { text: "✓ " + CommonStrings.piConnectEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.piConnectEnabled }
+                        Text { text: "✓ " + CommonStrings.usbGadgetEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.featUsbGadgetEnabled }
+                        Text { text: "✓ " + CommonStrings.i2cEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifI2cEnabled }
+                        Text { text: "✓ " + CommonStrings.spiEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSpiEnabled }
+                        Text { text: "✓ " + CommonStrings.onewireEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.if1WireEnabled }
+                        Text { text: "✓ " + CommonStrings.serialConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSerial !== "" && customizationColumn.snapshot.ifSerial !== "Disabled" }
                     }
                 }
                 ScrollBar.vertical: ScrollBar { policy: contentItem.implicitHeight > height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff; width: Style.scrollBarWidth }
