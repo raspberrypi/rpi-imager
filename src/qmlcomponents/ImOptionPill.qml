@@ -26,6 +26,18 @@ Item {
     // Expose the help link for tab navigation (when visible)
     property alias helpLinkItem: helpText
 
+    // Access imageWriter from parent context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+
     implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
     implicitWidth: label.implicitWidth + sw.implicitWidth + Style.cardPadding
     
@@ -80,7 +92,13 @@ Item {
                 
                 TapHandler {
                     cursorShape: Qt.PointingHandCursor
-                    onTapped: Qt.openUrlExternally(pill.helpUrl)
+                    onTapped: {
+                        if (pill.imageWriter) {
+                            pill.imageWriter.openUrl(pill.helpUrl)
+                        } else {
+                            Qt.openUrlExternally(pill.helpUrl)
+                        }
+                    }
                 }
                 HoverHandler {
                     id: helpHover
@@ -89,11 +107,35 @@ Item {
                 }
                 
                 // Keyboard activation
-                Keys.onEnterPressed: Qt.openUrlExternally(pill.helpUrl)
-                Keys.onReturnPressed: Qt.openUrlExternally(pill.helpUrl)
-                Keys.onSpacePressed: Qt.openUrlExternally(pill.helpUrl)
+                Keys.onEnterPressed: {
+                    if (pill.imageWriter) {
+                        pill.imageWriter.openUrl(pill.helpUrl)
+                    } else {
+                        Qt.openUrlExternally(pill.helpUrl)
+                    }
+                }
+                Keys.onReturnPressed: {
+                    if (pill.imageWriter) {
+                        pill.imageWriter.openUrl(pill.helpUrl)
+                    } else {
+                        Qt.openUrlExternally(pill.helpUrl)
+                    }
+                }
+                Keys.onSpacePressed: {
+                    if (pill.imageWriter) {
+                        pill.imageWriter.openUrl(pill.helpUrl)
+                    } else {
+                        Qt.openUrlExternally(pill.helpUrl)
+                    }
+                }
                 
-                Accessible.onPressAction: Qt.openUrlExternally(pill.helpUrl)
+                Accessible.onPressAction: {
+                    if (pill.imageWriter) {
+                        pill.imageWriter.openUrl(pill.helpUrl)
+                    } else {
+                        Qt.openUrlExternally(pill.helpUrl)
+                    }
+                }
             }
         }
 

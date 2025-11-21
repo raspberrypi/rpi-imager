@@ -370,7 +370,13 @@ WizardStepBase {
             font.family: Style.fontFamilyBold
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
-            onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+            onLinkActivated: function(link) {
+                if (imageWriter) {
+                    imageWriter.openUrl(link)
+                } else {
+                    Qt.openUrlExternally(link)
+                }
+            }
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
             Accessible.name: qsTr("Please review the documentation before proceeding.")

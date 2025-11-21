@@ -25,6 +25,18 @@ Item {
     // Expose the help link for tab navigation (when visible)
     property alias helpLinkItem: helpText
 
+    // Access imageWriter from parent context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+
     implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
     implicitWidth: label.implicitWidth + optionButton.implicitWidth + Style.cardPadding
 
@@ -75,7 +87,13 @@ Item {
                 
                 TapHandler {
                     cursorShape: Qt.PointingHandCursor
-                    onTapped: Qt.openUrlExternally(control.helpUrl)
+                    onTapped: {
+                        if (control.imageWriter) {
+                            control.imageWriter.openUrl(control.helpUrl)
+                        } else {
+                            Qt.openUrlExternally(control.helpUrl)
+                        }
+                    }
                 }
                 HoverHandler {
                     id: helpHover
@@ -84,11 +102,35 @@ Item {
                 }
                 
                 // Keyboard activation
-                Keys.onEnterPressed: Qt.openUrlExternally(control.helpUrl)
-                Keys.onReturnPressed: Qt.openUrlExternally(control.helpUrl)
-                Keys.onSpacePressed: Qt.openUrlExternally(control.helpUrl)
+                Keys.onEnterPressed: {
+                    if (control.imageWriter) {
+                        control.imageWriter.openUrl(control.helpUrl)
+                    } else {
+                        Qt.openUrlExternally(control.helpUrl)
+                    }
+                }
+                Keys.onReturnPressed: {
+                    if (control.imageWriter) {
+                        control.imageWriter.openUrl(control.helpUrl)
+                    } else {
+                        Qt.openUrlExternally(control.helpUrl)
+                    }
+                }
+                Keys.onSpacePressed: {
+                    if (control.imageWriter) {
+                        control.imageWriter.openUrl(control.helpUrl)
+                    } else {
+                        Qt.openUrlExternally(control.helpUrl)
+                    }
+                }
                 
-                Accessible.onPressAction: Qt.openUrlExternally(control.helpUrl)
+                Accessible.onPressAction: {
+                    if (control.imageWriter) {
+                        control.imageWriter.openUrl(control.helpUrl)
+                    } else {
+                        Qt.openUrlExternally(control.helpUrl)
+                    }
+                }
             }
         }
 

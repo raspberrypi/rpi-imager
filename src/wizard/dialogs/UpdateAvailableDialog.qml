@@ -80,7 +80,11 @@ BaseDialog {
             activeFocusOnTab: true
             onClicked: {
                 if (root.url && root.url.toString && root.url.toString().length > 0) {
-                    Qt.openUrlExternally(root.url)
+                    if (root.imageWriter) {
+                        root.imageWriter.openUrl(root.url)
+                    } else {
+                        Qt.openUrlExternally(root.url)
+                    }
                 }
                 root.accept()
             }
