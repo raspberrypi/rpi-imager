@@ -2692,38 +2692,47 @@ void ImageWriter::openUrl(const QUrl &url)
         if (!targetUsername.isEmpty()) {
             // Use pkexec to run xdg-open as the original user
             // pkexec will properly set up the environment and session context
+            // Use startDetached to avoid blocking the UI thread (important if pkexec needs to prompt)
             QStringList pkexecArgs;
             pkexecArgs << "--user" << targetUsername << "xdg-open" << url.toString();
-            int result = QProcess::execute("pkexec", pkexecArgs);
-            success = (result == 0);
+            qint64 pid;
+            success = QProcess::startDetached("pkexec", pkexecArgs, QString(), &pid);
             if (!success) {
-                qWarning() << "pkexec xdg-open failed with exit code:" << result;
+                qWarning() << "Failed to start pkexec xdg-open process";
+            } else {
+                qDebug() << "Started pkexec xdg-open with PID:" << pid;
             }
         } else {
             qWarning() << "Could not determine original user for xdg-open";
             success = false;
         }
     } else {
-        // Not running as root - use normal QProcess::execute
-        int result = QProcess::execute("xdg-open", QStringList() << url.toString());
-        success = (result == 0);
+        // Not running as root - use startDetached to avoid blocking
+        qint64 pid;
+        success = QProcess::startDetached("xdg-open", QStringList() << url.toString(), QString(), &pid);
         if (!success) {
-            qWarning() << "xdg-open failed with exit code:" << result;
+            qWarning() << "Failed to start xdg-open process";
+        } else {
+            qDebug() << "Started xdg-open with PID:" << pid;
         }
     }
 #elif defined(Q_OS_DARWIN)
     // Use open on macOS
-    int result = QProcess::execute("open", QStringList() << url.toString());
-    success = (result == 0);
+    qint64 pid;
+    success = QProcess::startDetached("open", QStringList() << url.toString(), QString(), &pid);
     if (!success) {
-        qWarning() << "open failed with exit code:" << result;
+        qWarning() << "Failed to start open process";
+    } else {
+        qDebug() << "Started open with PID:" << pid;
     }
 #elif defined(Q_OS_WIN)
     // Use start on Windows
-    int result = QProcess::execute("cmd", QStringList() << "/c" << "start" << url.toString());
-    success = (result == 0);
+    qint64 pid;
+    success = QProcess::startDetached("cmd", QStringList() << "/c" << "start" << url.toString(), QString(), &pid);
     if (!success) {
-        qWarning() << "cmd /c start failed with exit code:" << result;
+        qWarning() << "Failed to start cmd /c start process";
+    } else {
+        qDebug() << "Started cmd /c start with PID:" << pid;
     }
 #endif
 
