@@ -68,6 +68,8 @@ TextField {
         MenuItem {
             text: qsTr("Cut")
             enabled: root.selectedText.length > 0 && !root.readOnly && root.echoMode === TextInput.Normal
+            Accessible.role: Accessible.MenuItem
+            Accessible.name: text
             onTriggered: {
                 // Copy to clipboard then remove selection
                 ClipboardHelper.setText(root.selectedText)
@@ -77,6 +79,8 @@ TextField {
         MenuItem {
             text: qsTr("Copy")
             enabled: root.selectedText.length > 0 && root.echoMode === TextInput.Normal
+            Accessible.role: Accessible.MenuItem
+            Accessible.name: text
             onTriggered: {
                 ClipboardHelper.setText(root.selectedText)
             }
@@ -84,6 +88,8 @@ TextField {
         MenuItem {
             text: qsTr("Paste")
             enabled: !root.readOnly && ClipboardHelper.hasText
+            Accessible.role: Accessible.MenuItem
+            Accessible.name: text
             onTriggered: {
                 var clipText = ClipboardHelper.getText()
                 if (clipText.length > 0) {
@@ -95,6 +101,8 @@ TextField {
         MenuItem {
             text: qsTr("Select All")
             enabled: root.text.length > 0
+            Accessible.role: Accessible.MenuItem
+            Accessible.name: text
             onTriggered: root.selectAll()
         }
     }

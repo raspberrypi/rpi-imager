@@ -24,6 +24,10 @@ Popup {
     property alias title: msgpopupheader.text
     property alias closeButton: closeButton
     
+    // Accessibility properties
+    Accessible.role: Accessible.Dialog
+    Accessible.name: msgpopupheader.text || qsTr("Dialog")
+    
     // Access imageWriter from parent context
     property var imageWriter: {
         var item = parent;
@@ -87,6 +91,9 @@ Popup {
             anchors.topMargin: Style.spacingSmall
             font.family: Style.fontFamily
             font.bold: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.ignored: false
         }
 
         ImCloseButton {

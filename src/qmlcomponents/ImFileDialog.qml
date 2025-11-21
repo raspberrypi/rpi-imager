@@ -306,6 +306,8 @@ BaseDialog {
                         width: (ListView.view ? ListView.view.width : 0)
                         text: model.label
                         highlighted: ListView.isCurrentItem
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: text
                         background: Rectangle {
                             color: {
                                 if (ListView.isCurrentItem && placesList.activeFocus)
@@ -393,6 +395,8 @@ BaseDialog {
                         width: (ListView.view ? ListView.view.width : 0)
                         text: "📁 " + fileName
                         highlighted: ListView.isCurrentItem
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: qsTr("Folder: %1").arg(fileName)
                         background: Rectangle {
                             color: {
                                 if (ListView.isCurrentItem && subfoldersList.activeFocus)
@@ -585,6 +589,8 @@ BaseDialog {
                             width: fileColumn.width
                             text: "📄 " + fileName
                             highlighted: ListView.isCurrentItem
+                            Accessible.role: Accessible.ListItem
+                            Accessible.name: qsTr("File: %1").arg(fileName)
                             background: Rectangle {
                                 color: {
                                     if (dialog.selectedFile === fileURL)

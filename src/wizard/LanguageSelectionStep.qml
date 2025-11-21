@@ -44,8 +44,8 @@ WizardStepBase {
         }
         comboLanguage.currentIndex = idx !== -1 ? idx : 0
 
-        // Focus first interactive control
-        root.registerFocusGroup("language_controls", function(){ return [comboLanguage] }, 0)
+        // Include label before combo box so users hear the explanation first (only focusable when screen reader is active)
+        root.registerFocusGroup("language_controls", function(){ return [labelLanguage, comboLanguage] }, 0)
         // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
     }
 
@@ -62,7 +62,10 @@ WizardStepBase {
                     Layout.fillWidth: true
                     spacing: Style.spacingMedium
 
-                    WizardFormLabel { text: qsTr("Language:") }
+                    WizardFormLabel { 
+                        id: labelLanguage
+                        text: qsTr("Language:") 
+                    }
                     ImComboBox {
                         id: comboLanguage
                         Layout.fillWidth: true
