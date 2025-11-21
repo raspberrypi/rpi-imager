@@ -188,6 +188,9 @@ WizardStepBase {
     Component.onCompleted: {
         root.registerFocusGroup("pi_connect", function(){
             var items = [useTokenPill.focusItem]
+            // Include help link if visible
+            if (useTokenPill.helpLinkItem && useTokenPill.helpLinkItem.visible)
+                items.push(useTokenPill.helpLinkItem)
             // Only include button if it's actually visible (checked and no token received yet)
             if (useTokenPill.checked && !root.connectTokenReceived)
                 items.push(btnOpenConnect)

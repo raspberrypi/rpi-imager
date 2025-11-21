@@ -139,7 +139,13 @@ WizardStepBase {
     ]
 
     Component.onCompleted: {
-        root.registerFocusGroup("ssh_controller", function(){ return [sshEnablePill.focusItem] }, 0)
+        root.registerFocusGroup("ssh_controller", function(){ 
+            var items = [sshEnablePill.focusItem]
+            // Include help link if visible
+            if (sshEnablePill.helpLinkItem && sshEnablePill.helpLinkItem.visible)
+                items.push(sshEnablePill.helpLinkItem)
+            return items
+        }, 0)
         // Include labels before their corresponding controls so users hear the explanation first
         root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [labelAuthMechanism, radioPassword, radioPublicKey] : [] }, 1)
         root.registerFocusGroup("ssh_key", function(){ return sshEnablePill.checked && radioPublicKey.checked ? [labelPublicKey, fieldPublicKey, browseButton] : [] }, 2)

@@ -128,7 +128,13 @@ WizardStepBase {
     }
 
     Component.onCompleted: {
-        root.registerFocusGroup("secureboot_controller", function(){ return [secureBootEnablePill.focusItem] }, 0)
+        root.registerFocusGroup("secureboot_controller", function(){ 
+            var items = [secureBootEnablePill.focusItem]
+            // Include help link if visible
+            if (secureBootEnablePill.helpLinkItem && secureBootEnablePill.helpLinkItem.visible)
+                items.push(secureBootEnablePill.helpLinkItem)
+            return items
+        }, 0)
         
         // Prefill from conserved customization settings
         var settings = wizardContainer.customizationSettings

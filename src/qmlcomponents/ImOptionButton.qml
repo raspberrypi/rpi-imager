@@ -22,6 +22,8 @@ Item {
 
     // Expose the actual focusable control for tab navigation
     property alias focusItem: optionButton
+    // Expose the help link for tab navigation (when visible)
+    property alias helpLinkItem: helpText
 
     implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
     implicitWidth: label.implicitWidth + optionButton.implicitWidth + Style.cardPadding
@@ -59,9 +61,18 @@ Item {
                 text: control.helpLabel
                 font.family: Style.fontFamily
                 font.pixelSize: Style.fontSizeDescription
-                color: Style.buttonForegroundColor
-                font.underline: helpHover.hovered
+                color: helpText.activeFocus ? Style.raspberryRed : Style.buttonForegroundColor
+                font.underline: helpHover.hovered || helpText.activeFocus
+                
+                // Keyboard accessibility
+                activeFocusOnTab: true
+                focusPolicy: Qt.TabFocus
+                
+                // Accessibility properties
+                Accessible.role: Accessible.Link
                 Accessible.name: text
+                Accessible.description: qsTr("Opens in browser")
+                
                 TapHandler {
                     cursorShape: Qt.PointingHandCursor
                     onTapped: Qt.openUrlExternally(control.helpUrl)
@@ -71,6 +82,13 @@ Item {
                     acceptedDevices: PointerDevice.Mouse
                     cursorShape: Qt.PointingHandCursor
                 }
+                
+                // Keyboard activation
+                Keys.onEnterPressed: Qt.openUrlExternally(control.helpUrl)
+                Keys.onReturnPressed: Qt.openUrlExternally(control.helpUrl)
+                Keys.onSpacePressed: Qt.openUrlExternally(control.helpUrl)
+                
+                Accessible.onPressAction: Qt.openUrlExternally(control.helpUrl)
             }
         }
 

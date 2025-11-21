@@ -231,7 +231,12 @@ WizardStepBase {
             }, 0)
 
             root.registerFocusGroup("if_section_features", function() {
-                return supportsUsbOtg ? [chkEnableUsbGadget.focusItem] : []
+                if (!supportsUsbOtg) return []
+                var items = [chkEnableUsbGadget.focusItem]
+                // Include help link if visible
+                if (chkEnableUsbGadget.helpLinkItem && chkEnableUsbGadget.helpLinkItem.visible)
+                    items.push(chkEnableUsbGadget.helpLinkItem)
+                return items
             }, 1)
 
             // Prefill from conserved customization settings

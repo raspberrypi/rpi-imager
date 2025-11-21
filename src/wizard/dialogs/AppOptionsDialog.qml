@@ -33,8 +33,12 @@ BaseDialog {
     // Register focus groups when component is ready
     Component.onCompleted: {
         registerFocusGroup("options", function(){ 
-            return [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem,
-                    chkDisableWarnings.focusItem, editRepoButton.focusItem, secureBootKeyButton.focusItem]
+            var items = [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem]
+            // Include telemetry help link if visible
+            if (chkTelemetry.helpLinkItem && chkTelemetry.helpLinkItem.visible)
+                items.push(chkTelemetry.helpLinkItem)
+            items.push(chkDisableWarnings.focusItem, editRepoButton.focusItem, secureBootKeyButton.focusItem)
+            return items
         }, 0)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, saveButton]
