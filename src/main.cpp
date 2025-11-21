@@ -41,6 +41,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #endif
+#ifndef CLI_ONLY_BUILD
 #ifdef Q_OS_LINUX
 #include <QDBusConnection>
 #include <QDBusInterface>
@@ -48,6 +49,7 @@
 #include <QDBusReply>
 #include <QDBusMetaType>
 #include "linux/urihandler_dbus.h"
+#endif
 #endif
 #include "imageadvancedoptions.h"
 #include "embedded_config.h"
