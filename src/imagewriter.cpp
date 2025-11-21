@@ -2690,17 +2690,82 @@ void ImageWriter::openUrl(const QUrl &url)
         }
         
         if (!targetUsername.isEmpty()) {
-            // Use pkexec to run xdg-open as the original user
-            // pkexec will properly set up the environment and session context
-            // Use startDetached to avoid blocking the UI thread (important if pkexec needs to prompt)
-            QStringList pkexecArgs;
-            pkexecArgs << "--user" << targetUsername << "xdg-open" << url.toString();
+            // Use runuser to run xdg-open as the original user
+            // runuser is better than pkexec --user because it preserves environment variables
+            // and doesn't require authentication when already running as root
+            // We need to pass the D-Bus session bus address and other environment variables
+            // so xdg-open can connect to the user's desktop session
+            
+            // Get environment variables needed for xdg-open to work
+            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+            
+            // Preserve critical environment variables for D-Bus and display
+            QString dbusSessionAddress = env.value("DBUS_SESSION_BUS_ADDRESS");
+            QString xdgRuntimeDir = env.value("XDG_RUNTIME_DIR");
+            QString display = env.value("DISPLAY");
+            QString waylandDisplay = env.value("WAYLAND_DISPLAY");
+            QString xauthority = env.value("XAUTHORITY");
+            
+            // Build environment for the child process
+            QProcessEnvironment childEnv;
+            if (!dbusSessionAddress.isEmpty()) {
+                childEnv.insert("DBUS_SESSION_BUS_ADDRESS", dbusSessionAddress);
+            }
+            if (!xdgRuntimeDir.isEmpty()) {
+                childEnv.insert("XDG_RUNTIME_DIR", xdgRuntimeDir);
+            }
+            if (!display.isEmpty()) {
+                childEnv.insert("DISPLAY", display);
+            }
+            if (!waylandDisplay.isEmpty()) {
+                childEnv.insert("WAYLAND_DISPLAY", waylandDisplay);
+            }
+            if (!xauthority.isEmpty()) {
+                childEnv.insert("XAUTHORITY", xauthority);
+            }
+            
+            // Use runuser with environment variables passed via env command
+            // Format: runuser -u <username> -- env VAR=value ... xdg-open <url>
+            QStringList runuserArgs;
+            runuserArgs << "-u" << targetUsername << "--";
+            
+            // Build env command with all necessary variables
+            QStringList envArgs;
+            envArgs << "env";
+            if (!dbusSessionAddress.isEmpty()) {
+                envArgs << QString("DBUS_SESSION_BUS_ADDRESS=%1").arg(dbusSessionAddress);
+            }
+            if (!xdgRuntimeDir.isEmpty()) {
+                envArgs << QString("XDG_RUNTIME_DIR=%1").arg(xdgRuntimeDir);
+            }
+            if (!display.isEmpty()) {
+                envArgs << QString("DISPLAY=%1").arg(display);
+            }
+            if (!waylandDisplay.isEmpty()) {
+                envArgs << QString("WAYLAND_DISPLAY=%1").arg(waylandDisplay);
+            }
+            if (!xauthority.isEmpty()) {
+                envArgs << QString("XAUTHORITY=%1").arg(xauthority);
+            }
+            envArgs << "xdg-open" << url.toString();
+            
+            runuserArgs << envArgs;
+            
             qint64 pid;
-            success = QProcess::startDetached("pkexec", pkexecArgs, QString(), &pid);
+            success = QProcess::startDetached("runuser", runuserArgs, QString(), &pid);
             if (!success) {
-                qWarning() << "Failed to start pkexec xdg-open process";
+                qWarning() << "Failed to start runuser xdg-open process, falling back to pkexec";
+                // Fallback to pkexec if runuser fails (might not be available on all systems)
+                QStringList pkexecArgs;
+                pkexecArgs << "--user" << targetUsername << "xdg-open" << url.toString();
+                success = QProcess::startDetached("pkexec", pkexecArgs, QString(), &pid);
+                if (!success) {
+                    qWarning() << "Failed to start pkexec xdg-open process";
+                } else {
+                    qDebug() << "Started pkexec xdg-open with PID:" << pid;
+                }
             } else {
-                qDebug() << "Started pkexec xdg-open with PID:" << pid;
+                qDebug() << "Started runuser xdg-open with PID:" << pid;
             }
         } else {
             qWarning() << "Could not determine original user for xdg-open";
