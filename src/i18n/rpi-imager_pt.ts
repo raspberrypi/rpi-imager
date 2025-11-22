@@ -993,7 +993,7 @@
     <name>LanguageSelectionStep</name>
     <message>
         <source>Welcome</source>
-        <translation>Bem-vindo</translation>
+        <translation>Bem-vindo(a)</translation>
     </message>
     <message>
         <source>Language:</source>
@@ -1211,7 +1211,7 @@
     </message>
     <message>
         <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the &apos;Open Raspberry Pi Connect&apos; button to sign in.</source>
-        <translation>Introduzir ou colar o token de autenticação do Raspberry Pi Connect. O token será preenchido automaticamente se utilizar o botão «Abrir Raspberry Pi Connect» para iniciar sessão.</translation>
+        <translation>Introduzir ou colar o token de autenticação do Raspberry Pi Connect. O token será preenchido automaticamente se utilizar o botão &apos;Abrir Raspberry Pi Connect&apos; para iniciar sessão.</translation>
     </message>
     <message>
         <source>Waiting for token (%1s)</source>
@@ -1227,7 +1227,7 @@
     </message>
     <message>
         <source>The token you entered is not valid. Please check the token and try again, or use the &apos;Open Raspberry Pi Connect&apos; button to get a valid token.</source>
-        <translation>O token que introduziu não é válido. Verifique o token e tente novamente ou utilize o botão «Abrir Raspberry Pi Connect» para obter um token válido.</translation>
+        <translation>O token que introduziu não é válido. Verifique o token e tente novamente ou utilize o botão &apos;Abrir Raspberry Pi Connect&apos; para obter um token válido.</translation>
     </message>
     <message>
         <source>OK</source>
@@ -1526,7 +1526,7 @@ Try connecting a new device, or uncheck
 &apos;Exclude system drives&apos; below.</source>
         <translation>Todos os dispositivos visíveis são de apenas-leitura.
 Tente ligar um novo dispositivo ou desmarcar
-«Excluir unidades do sistema» abaixo.</translation>
+&apos;Excluir unidades do sistema&apos; abaixo.</translation>
     </message>
     <message>
         <source>All devices are read-only.
@@ -1539,7 +1539,7 @@ Inserir um dispositivo de armazenamento gravável.</translation>
 Uncheck &apos;Exclude system drives&apos; below
 to show system drives.</source>
         <translation>Todos os dispositivos estão ocultos pelo filtro.
-Desmarcar «Excluir unidades do sistema» abaixo
+Desmarcar &apos;Excluir unidades do sistema&apos; abaixo
 para mostrar as unidades do sistema.</translation>
     </message>
     <message>
@@ -1552,7 +1552,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos; to show hidden system drives.</source>
-        <translation>Não há dispositivos de armazenamento válidos disponíveis no momento. Todos os dispositivos visíveis são de apenas-leitura. Tente inserir um novo dispositivo de armazenamento ou desmarcar a opção «Excluir unidades do sistema» para mostrar as unidades ocultas do sistema.</translation>
+        <translation>Não há dispositivos de armazenamento válidos disponíveis no momento. Todos os dispositivos visíveis são de apenas-leitura. Tente inserir um novo dispositivo de armazenamento ou desmarcar a opção &apos;Excluir unidades do sistema&apos; para mostrar as unidades ocultas do sistema.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.</source>
@@ -1560,7 +1560,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
-        <translation>Não há dispositivos de armazenamento válidos disponíveis no momento. Desmarcar a opção «Excluir unidades do sistema» para mostrar as unidades ocultas do sistema ou inserir um novo dispositivo de armazenamento.</translation>
+        <translation>Não há dispositivos de armazenamento válidos disponíveis no momento. Desmarcar a opção &apos;Excluir unidades do sistema&apos; para mostrar as unidades ocultas do sistema ou inserir um novo dispositivo de armazenamento.</translation>
     </message>
 </context>
 <context>
@@ -1571,11 +1571,11 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
-        <translation>Existe uma versão mais recente do Imager disponível. Deseja visitar o site para a transferir?</translation>
+        <translation>Existe uma versão mais recente do Imager disponível. Pretende visitar o site para a transferir?</translation>
     </message>
     <message>
         <source>Continue using the current version of Raspberry Pi Imager</source>
-        <translation>Continue a utilizar a versão atual do Raspberry Pi Imager</translation>
+        <translation>Continuar a utilizar a versão atual do Raspberry Pi Imager</translation>
     </message>
     <message>
         <source>Open the Raspberry Pi website in your browser to download the latest version</source>
@@ -1860,7 +1860,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Warning: Only replace the token if you initiated this action. </source>
-        <translation>Aviso: substitua o token apenas se tiver iniciado esta ação. </translation>
+        <translation>Aviso: substituir o token apenas se tiver iniciado esta ação. </translation>
     </message>
     <message>
         <source>If you didn&apos;t, someone could be trying to push a bad token to RPi Imager.</source>
@@ -1876,7 +1876,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Replace the current token with the newly received one</source>
-        <translation>Substitua o token atual pelo recém-recebido</translation>
+        <translation>Substituir o token atual pelo recém-recebido</translation>
     </message>
     <message>
         <source>Keep existing</source>
@@ -2061,7 +2061,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
-        <translation>O Raspberry Pi Imager ainda está ocupado. Tem a certeza de que deseja sair?</translation>
+        <translation>O Raspberry Pi Imager ainda está ocupado. Tem a certeza de que pretende sair?</translation>
     </message>
     <message>
         <source>Storage device removed</source>
@@ -2101,7 +2101,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Error message explaining why elevated privileges are required</source>
-        <translation>Mensagem de erro explicando por que são necessários privilégios elevados</translation>
+        <translation>Mensagem de erro a explicar por que são necessários privilégios elevados</translation>
     </message>
     <message>
         <source>Exit</source>
