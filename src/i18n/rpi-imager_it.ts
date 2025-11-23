@@ -196,7 +196,7 @@
     </message>
     <message>
         <source>Hostname configured</source>
-        <translation>Nome host configurato</translation>
+        <translation>Hostname configurato</translation>
     </message>
     <message>
         <source>User account configured</source>
@@ -695,15 +695,15 @@
     </message>
     <message>
         <source>Customisation: Choose hostname</source>
-        <translation>Personalizzazione: Scegli il nome host</translation>
+        <translation>Personalizzazione: Scegli l&apos;hostname</translation>
     </message>
     <message>
         <source>Enter your hostname</source>
-        <translation>Inserisci il tuo nome host</translation>
+        <translation>Inserisci l&apos;hostname</translation>
     </message>
     <message>
         <source>Save hostname and continue to next customisation step</source>
-        <translation>Salva il nome host e continua al passaggio successivo</translation>
+        <translation>Salva l&apos;hostname e continua al passaggio successivo</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -927,7 +927,7 @@
     </message>
     <message>
         <source>Unknown precondition failure.</source>
-        <translation>Errore di prerequisito sconosciuto.</translation>
+        <translation>Errore sconosciuto sui prerequisiti.</translation>
     </message>
     <message>
         <source>Cannot start write. %1</source>
@@ -939,7 +939,7 @@
     </message>
     <message>
         <source>Source is not a regular file: %1</source>
-        <translation>La sorgente non è un file regolare: %1</translation>
+        <translation>La sorgente non è un file: %1</translation>
     </message>
     <message>
         <source>Source file is not readable: %1</source>
@@ -1356,11 +1356,11 @@ Esegui con privilegi elevati: sudo %1</translation>
     <name>RepositoryDialog</name>
     <message>
         <source>Content Repository</source>
-        <translation>Archivio contenuti</translation>
+        <translation>Repository contenuti</translation>
     </message>
     <message>
         <source>Repository source:</source>
-        <translation>Sorgente archivio:</translation>
+        <translation>Sorgente repository:</translation>
     </message>
     <message>
         <source>Use custom file</source>
@@ -1368,11 +1368,11 @@ Esegui con privilegi elevati: sudo %1</translation>
     </message>
     <message>
         <source>Please select a custom repository json file</source>
-        <translation>Seleziona un file JSON di archivio personalizzato</translation>
+        <translation>Seleziona un file JSON di un repository personalizzato</translation>
     </message>
     <message>
         <source>Select Repository</source>
-        <translation>Seleziona archivio</translation>
+        <translation>Seleziona repository</translation>
     </message>
     <message>
         <source>Apply &amp; Restart</source>
@@ -1380,7 +1380,7 @@ Esegui con privilegi elevati: sudo %1</translation>
     </message>
     <message>
         <source>Select custom repository</source>
-        <translation>Seleziona archivio personalizzato</translation>
+        <translation>Seleziona repository personalizzato</translation>
     </message>
     <message>
         <source>Use custom URL</source>
@@ -1388,7 +1388,7 @@ Esegui con privilegi elevati: sudo %1</translation>
     </message>
     <message>
         <source>Select a custom repository JSON file from your computer</source>
-        <translation>Seleziona un file JSON di archivio dal computer</translation>
+        <translation>Seleziona un file JSON di un repository personalizzato dal computer</translation>
     </message>
     <message>
         <source>Close the repository dialog without changing the content source</source>
@@ -1396,7 +1396,7 @@ Esegui con privilegi elevati: sudo %1</translation>
     </message>
     <message>
         <source>Apply the new content repository and restart the wizard from the beginning</source>
-        <translation>Applica il nuovo archivio e riavvia la procedura dall&apos;inizio</translation>
+        <translation>Applica il nuovo repository e riavvia la procedura dall&apos;inizio</translation>
     </message>
     <message>
         <source>Choose the source for operating system images</source>
@@ -1404,7 +1404,7 @@ Esegui con privilegi elevati: sudo %1</translation>
     </message>
     <message>
         <source>Use the official Raspberry Pi operating system repository</source>
-        <translation>Usa l&apos;archivio ufficiale dei sistemi operativi Raspberry Pi</translation>
+        <translation>Usa il repository ufficiale dei sistemi operativi Raspberry Pi</translation>
     </message>
     <message>
         <source>Load operating system list from a JSON file on your computer</source>
@@ -1848,7 +1848,7 @@ nuovo dispositivo.</translation>
     </message>
     <message>
         <source>Open application settings to configure sound alerts, auto-eject, telemetry, and content repository</source>
-        <translation>Apri impostazioni applicazione per configurare avvisi sonori, espulsione automatica, telemetria e archivio contenuti</translation>
+        <translation>Apri impostazioni applicazione per configurare avvisi sonori, espulsione automatica, telemetria e repository contenuti</translation>
     </message>
     <message>
         <source>Replace existing Raspberry Pi Connect token?</source>
