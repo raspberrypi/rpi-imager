@@ -113,8 +113,7 @@ WizardStepBase {
                             if (imageWriter.nativeFileDialogAvailable()) {
                                 var home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
                                 var startDir = home && home.length > 0 ? home + "/.ssh" : ""
-                                var filters = CommonStrings.sshFiltersList
-                                var picked = imageWriter.getNativeOpenFileName(qsTr("Select SSH Public Key"), startDir, filters)
+                                var picked = imageWriter.getNativeOpenFileName(qsTr("Select SSH Public Key"), startDir, CommonStrings.sshFiltersString)
                                 if (picked && picked.length > 0) {
                                     var contents = imageWriter.readFileContents(picked)
                                     if (contents && contents.length > 0) {
