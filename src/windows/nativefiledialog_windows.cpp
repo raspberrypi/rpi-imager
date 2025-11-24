@@ -33,6 +33,8 @@ QString convertQtFilterToWindows(const QString &qtFilter)
         }
         windowsFilter += description + QChar('\0') + extensions;
     }
+    // Windows requires double-null termination (\0\0) at the end
+    windowsFilter += QChar('\0');
     windowsFilter += QChar('\0');
     
     return windowsFilter;
@@ -51,7 +53,9 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     
     // Convert filter from Qt format to Windows format
     QString windowsFilter = convertQtFilterToWindows(filter);
-    std::wstring filterStr = windowsFilter.toStdWString();
+    // Use utf16() to preserve embedded null characters in the filter string
+    // toStdWString() would stop at the first null, breaking the filter format
+    const wchar_t* filterPtr = reinterpret_cast<const wchar_t*>(windowsFilter.utf16());
     
     // Convert title to wide string
     std::wstring titleStr = title.toStdWString();
@@ -75,7 +79,7 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
     ofn.hwndOwner = hwndOwner;  // Set parent window for modal behavior
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
-    ofn.lpstrFilter = filterStr.empty() ? nullptr : filterStr.c_str();
+    ofn.lpstrFilter = windowsFilter.isEmpty() ? nullptr : filterPtr;
     ofn.nFilterIndex = 1;
     ofn.lpstrFileTitle = nullptr;
     ofn.nMaxFileTitle = 0;
