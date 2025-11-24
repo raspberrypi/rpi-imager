@@ -1,3 +1,11 @@
+rpi-imager (2.0.1) unstable; urgency=medium
+
+  * i18n: Updated Italian translation
+  * Windows: Migrate to modern IFileDialog for file selection
+  * Windows: Fix SSH key file selection filters
+
+  -- Tom Dewey <tom.dewey@raspberrypi.com>  Mon, 24 Nov 2025 13:00:00 +0100
+
 rpi-imager (2.0.0) unstable; urgency=medium
 
   * UI: Complete redesign, now as a wizard
