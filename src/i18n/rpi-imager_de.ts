@@ -85,42 +85,42 @@
     </message>
     <message>
         <source>Secure Boot RSA Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Secure Boot RSA Schlüssel</translation>
     </message>
     <message>
         <source>Change</source>
-        <translation type="unfinished"></translation>
+        <translation>Ändern</translation>
     </message>
     <message>
         <source>Select</source>
-        <translation type="unfinished"></translation>
+        <translation>Auswählen</translation>
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie einen privaten RSA-2048-Bit-Schlüssel zum Signieren von Boot-Images im Secure Boot-Modus</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Privaten RSA-Schlüssel auswählen</translation>
     </message>
     <message>
         <source>PEM Files (*.pem);;All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>PEM-Dateien (*.pem);;Alle Dateien (*)</translation>
     </message>
     <message>
         <source>PEM Files (*.pem)</source>
-        <translation type="unfinished"></translation>
+        <translation>PEM-Dateien (*.pem)</translation>
     </message>
     <message>
         <source>All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>Alle Dateien (*)</translation>
     </message>
 </context>
 <context>
     <name>AsyncCacheWriter</name>
     <message>
         <source>Cache write error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Cache-Schreibfehler: %1</translation>
     </message>
 </context>
 <context>
@@ -255,7 +255,7 @@
     </message>
     <message>
         <source>Authorized keys files (authorized_keys)</source>
-        <translation type="unfinished"></translation>
+        <translation>Autorisierte Schlüsseldateien (authorized_keys)</translation>
     </message>
 </context>
 <context>
@@ -582,95 +582,95 @@
     </message>
     <message>
         <source>Creating signed boot image...</source>
-        <translation type="unfinished"></translation>
+        <translation>Erzeuge signiertes Boot-Imag...</translation>
     </message>
     <message>
         <source>Failed to create secure boot files</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Erstellen der Secure Boot-Dateien</translation>
     </message>
     <message>
         <source>No RSA key configured for secure boot. Please select a key in App Options.</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein RSA-Schlüssel für Secure Boot konfiguriert. Bitte wählen Sie einen Schlüssel in den App-Optionen aus.</translation>
     </message>
     <message>
         <source>RSA key file not found: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>RSA-Schlüsseldatei nicht gefunden: %1</translation>
     </message>
     <message>
         <source>Extracting boot partition files...</source>
-        <translation type="unfinished"></translation>
+        <translation>Extrahiere Bootpartitions-Dateien...</translation>
     </message>
     <message>
         <source>Failed to extract boot partition files</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Extrahieren der Bootpartitions-Dateien</translation>
     </message>
     <message>
         <source>No boot files found to package</source>
-        <translation type="unfinished"></translation>
+        <translation>Keine Bootdateien zum Packen gefunden</translation>
     </message>
     <message>
         <source>Failed to create temporary directory</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Erstellen eines temporären Verzeichnis</translation>
     </message>
     <message>
         <source>Creating boot.img...</source>
-        <translation type="unfinished"></translation>
+        <translation>Erzeuge boot.img...</translation>
     </message>
     <message>
         <source>Failed to create boot.img</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Erstellen von boot.img</translation>
     </message>
     <message>
         <source>Signing boot image...</source>
-        <translation type="unfinished"></translation>
+        <translation>Signiere boot image...</translation>
     </message>
     <message>
         <source>Failed to generate boot.sig</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Erstellen von boot.sig</translation>
     </message>
     <message>
         <source>Failed to read boot.img</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Lesen von boot.img</translation>
     </message>
     <message>
         <source>Failed to read boot.sig</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Lesen von boot.sig</translation>
     </message>
     <message>
         <source>Cleaning up boot partition...</source>
-        <translation type="unfinished"></translation>
+        <translation>Bereinige Bootpartition...</translation>
     </message>
     <message>
         <source>Syncing deletions to disk...</source>
-        <translation type="unfinished"></translation>
+        <translation>Löschungen werden auf die Festplatte geschrieben...</translation>
     </message>
     <message>
         <source>Writing signed boot files...</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibe signierte Bootdateien...</translation>
     </message>
     <message>
         <source>Failed to write secure boot files: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Secure Boot Dateien konnten nicht geschrieben werden: %1</translation>
     </message>
     <message>
         <source>Unmounting volumes...</source>
-        <translation type="unfinished"></translation>
+        <translation>Volumes werden ausgehängt...</translation>
     </message>
     <message>
         <source>Cleaning disk...</source>
-        <translation type="unfinished">Datenträger wird bereinigt...</translation>
+        <translation>Bereinige Datenträger...</translation>
     </message>
     <message>
         <source>Cleaning disk (legacy method)...</source>
-        <translation type="unfinished"></translation>
+        <translation>Bereinige Datenträger (alte Methode)...</translation>
     </message>
     <message>
         <source>Writing customization files...</source>
-        <translation type="unfinished"></translation>
+        <translation>Schreibe Anpassungsdateien...</translation>
     </message>
     <message>
         <source>Failed to allocate buffer for MBR zeroing</source>
-        <translation type="unfinished"></translation>
+        <translation>Fehler beim Zuweisen eines Buffers für die MBR-Nullung</translation>
     </message>
 </context>
 <context>
@@ -705,7 +705,7 @@
     </message>
     <message>
         <source>Cleaning disk...</source>
-        <translation>Datenträger wird bereinigt...</translation>
+        <translation>Bereinige Datenträger...</translation>
     </message>
     <message>
         <source>Writing filesystem...</source>
@@ -869,7 +869,7 @@
     <name>ImComboBox</name>
     <message>
         <source>Type to search: &quot;%1&quot;</source>
-        <translation type="unfinished"></translation>
+        <translation>Zum Suchen eingeben: &quot;%1&quot;</translation>
     </message>
     <message>
         <source>(press again to cycle)</source>
@@ -908,95 +908,96 @@
     </message>
     <message>
         <source>Folder: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Ordner: %1</translation>
     </message>
     <message>
         <source>File: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Datei: %1</translation>
     </message>
     <message>
         <source>Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>Dokumente</translation>
     </message>
     <message>
         <source>Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Downloads</translation>
     </message>
     <message>
         <source>Home</source>
-        <translation type="unfinished"></translation>
+        <translation>Home</translation>
     </message>
     <message>
         <source>File name:</source>
-        <translation type="unfinished"></translation>
+        <translation>Dateiname:</translation>
     </message>
     <message>
         <source>Enter filename…</source>
-        <translation type="unfinished"></translation>
+        <translation>Dateiname eingeben...</translation>
     </message>
     <message>
         <source>Navigate to a folder using the panel on the left,
 or type a path in the address bar above.</source>
-        <translation type="unfinished"></translation>
+        <translation>Navigieren Sie über das Bedienfeld auf der linken Seite zu einem Ordner,
+oder geben Sie einen Pfad in die Adressleiste oben ein.</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Speichern</translation>
+        <translation>Speichern</translation>
     </message>
 </context>
 <context>
     <name>ImOptionButton</name>
     <message>
         <source>Opens in browser</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffnet sich im Browser</translation>
     </message>
 </context>
 <context>
     <name>ImOptionPill</name>
     <message>
         <source>Opens in browser</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffnet sich im Browser</translation>
     </message>
 </context>
 <context>
     <name>ImPasswordField</name>
     <message>
         <source>Password is visible. Press F2 to hide.</source>
-        <translation type="unfinished"></translation>
+        <translation>Das Passwort ist sichtbar. Drücken Sie F2, um es auszublenden.</translation>
     </message>
     <message>
         <source>Password is hidden. Press F2 to show.</source>
-        <translation type="unfinished"></translation>
+        <translation>Das Passwort ist ausgeblendet. Drücken Sie F2, um es anzuzeigen.</translation>
     </message>
     <message>
         <source>Hide password</source>
-        <translation type="unfinished"></translation>
+        <translation>Verberge Passwort</translation>
     </message>
     <message>
         <source>Show password</source>
-        <translation type="unfinished"></translation>
+        <translation>Zeige Passwort</translation>
     </message>
     <message>
         <source>Password is currently visible. Activate to hide it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Das Passwort ist derzeit sichtbar. Diese Option aktivieren, um es auszublenden.</translation>
     </message>
     <message>
         <source>Password is currently hidden. Activate to show it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Das Passwort ist derzeit ausgeblendet. Diese Option aktivieren, um es anzuzeigen.</translation>
     </message>
 </context>
 <context>
     <name>ImPopup</name>
     <message>
         <source>Dialog</source>
-        <translation type="unfinished"></translation>
+        <translation>Dialog</translation>
     </message>
 </context>
 <context>
     <name>ImSaveFileDialog</name>
     <message>
         <source>Save File</source>
-        <translation type="unfinished"></translation>
+        <translation>Datei speichern</translation>
     </message>
 </context>
 <context>
@@ -1106,11 +1107,11 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Save Performance Data</source>
-        <translation type="unfinished"></translation>
+        <translation>Leistungsdaten speichern</translation>
     </message>
     <message>
         <source>JSON files (*.json);;All files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>JSON-Dateien (*.json);;Alle Dateien (*)</translation>
     </message>
 </context>
 <context>
@@ -1233,14 +1234,14 @@ or type a path in the address bar above.</source>
     <name>MacFile</name>
     <message>
         <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imager benötigt Zugriff auf die Festplatte, um das Image zu schreiben.</translation>
     </message>
 </context>
 <context>
     <name>NativeFileDialog</name>
     <message>
         <source>File type:</source>
-        <translation type="unfinished"></translation>
+        <translation>Dateityp:</translation>
     </message>
 </context>
 <context>
@@ -1393,7 +1394,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Melden Sie sich an, um ein Token zu erhalten und Raspberry Pi Connect zu aktivieren</translation>
     </message>
 </context>
 <context>
@@ -1426,7 +1427,9 @@ Bitte führen Sie den Befehl mit erhöhten Rechten aus: sudo %1</translation>
         <source>You are not running as root.
 
 Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Sie sind nicht als Root angemeldet.
+
+Klicken Sie auf &quot;Autorisierung installieren&quot;, um die automatische Rechteerweiterung einzurichten, oder führen Sie den Befehl manuell mit folgendem Befehl aus: sudo %1</translation>
     </message>
 </context>
 <context>
@@ -1559,178 +1562,178 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Configure secure boot image signing</source>
-        <translation type="unfinished"></translation>
+        <translation>Signieren von Secure Boot-Images konfigurieren</translation>
     </message>
     <message>
         <source>Save secure boot settings and continue to next customisation step</source>
-        <translation type="unfinished"></translation>
+        <translation>Secure Boot Einstellungen speichern und mit dem nächsten Anpassungsschritt fortfahren</translation>
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished">Zurück zum vorherigen Schritt</translation>
+        <translation>Zurück zum vorherigen Schritt</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished">Alle Anpassungen überspringen und direkt mit dem Schreiben des Images beginnen</translation>
+        <translation>Alle Anpassungen überspringen und direkt mit dem Schreiben des Images beginnen</translation>
     </message>
     <message>
         <source>Enable Secure Boot Signing</source>
-        <translation type="unfinished"></translation>
+        <translation>Secure Boot Signieren aktivieren</translation>
     </message>
     <message>
         <source>Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Signieren Sie die Boot-Partition mit Ihrem RSA-Schlüssel, um die Secure Boot-Verifizierung auf dem Raspberry Pi zu aktivieren</translation>
     </message>
     <message>
         <source>Learn about Secure Boot</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
-        <translation type="unfinished"></translation>
+        <translation>Dadurch werden die für Raspberry Pi Secure Boot erforderlichen Dateien boot.img und boot.sig erstellt.</translation>
     </message>
     <message>
         <source>Public Key Fingerprint: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Fingerabdruck des öffentlichen Schlüssels: %1</translation>
     </message>
     <message>
         <source>(unavailable)</source>
-        <translation type="unfinished"></translation>
+        <translation>(nicht verfügbar)</translation>
     </message>
     <message>
         <source>(unable to compute)</source>
-        <translation type="unfinished"></translation>
+        <translation>(Berechnung nicht möglich)</translation>
     </message>
     <message>
         <source>RSA Private Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Privater RSA Schlüssel</translation>
     </message>
     <message>
         <source>Change</source>
-        <translation type="unfinished"></translation>
+        <translation>Ändern</translation>
     </message>
     <message>
         <source>Select</source>
-        <translation type="unfinished"></translation>
+        <translation>Auswählen</translation>
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Wählen Sie einen privaten RSA-2048-Bit-Schlüssel zum Signieren von Boot-Images im Secure Boot-Modus</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Privaten RSA-Schlüssel auswählen</translation>
     </message>
     <message>
         <source>PEM Files (*.pem);;All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>PEM-Dateien (*.pem);;Alle Dateien (*)</translation>
     </message>
     <message>
         <source>Selected: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgewählt: %1</translation>
     </message>
     <message>
         <source>Your boot partition will be signed using the selected RSA private key.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ihre Bootpartition wird mit dem ausgewählten privaten RSA-Schlüssel signiert.</translation>
     </message>
     <message>
         <source>Please select an RSA private key above to enable secure boot signing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bitte wählen Sie oben einen privaten RSA-Schlüssel aus, um Secure Boot Signing zu aktivieren.</translation>
     </message>
     <message>
         <source>PEM Files (*.pem)</source>
-        <translation type="unfinished"></translation>
+        <translation>PEM-Dateien (*.pem)</translation>
     </message>
     <message>
         <source>All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>Alle Dateien (*)</translation>
     </message>
 </context>
 <context>
     <name>SshKeyManager</name>
     <message>
         <source>No SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein SSH-Schlüssel konfiguriert</translation>
     </message>
     <message>
         <source>1 SSH key configured</source>
-        <translation type="unfinished"></translation>
+        <translation>1 SSH-Schlüssel konfiguriert</translation>
     </message>
     <message>
         <source>%1 SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 SSH-Schlüssel konfiguriert</translation>
     </message>
     <message>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>Verbergen</translation>
     </message>
     <message>
         <source>Show</source>
-        <translation type="unfinished"></translation>
+        <translation>Anzeigen</translation>
     </message>
     <message>
         <source>Hide the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Liste der SSH-Schlüssel ausblenden</translation>
     </message>
     <message>
         <source>Show the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Liste der SSH-Schlüssel anzeigen</translation>
     </message>
     <message>
         <source>SSH keys list</source>
-        <translation type="unfinished"></translation>
+        <translation>Liste der SSH-Schlüssel</translation>
     </message>
     <message>
         <source>SSH key %1: %2, %3</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-Schlüssel %1: %2, %3</translation>
     </message>
     <message>
         <source>SSH key %1: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-Schlüssel %1: %2</translation>
     </message>
     <message>
         <source>SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-Schlüssel %1</translation>
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished"></translation>
+        <translation>Entfernen</translation>
     </message>
     <message>
         <source>Remove SSH key: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-Schlüssel entfernen: %1</translation>
     </message>
     <message>
         <source>Remove SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-Schlüssel %1 entfernen</translation>
     </message>
     <message>
         <source>Paste key or click BROWSE to select file</source>
-        <translation type="unfinished"></translation>
+        <translation>Schlüssel einfügen oder auf DURCHSUCHEN klicken, um die Datei auszuwählen</translation>
     </message>
     <message>
         <source>SSH public key input</source>
-        <translation type="unfinished"></translation>
+        <translation>Eingabe Öffentlicher SSH-Schlüssel</translation>
     </message>
     <message>
         <source>Paste an SSH public key here or use the browse button to select a key file</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffentlichen SSH-Schlüssel hier einfügen oder über die &quot;Durchsuchen&quot;-Schlatfläche eine Schlüsseldatei auswählen</translation>
     </message>
     <message>
         <source>Add</source>
-        <translation type="unfinished"></translation>
+        <translation>Hinzufügen</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
-        <translation type="unfinished">Öffentlicher SSH Schlüssel auswählen</translation>
+        <translation>Öffentlicher SSH Schlüssel auswählen</translation>
     </message>
     <message>
         <source>Add the entered SSH key</source>
-        <translation type="unfinished"></translation>
+        <translation>Den eingegebenen SSH-Schlüssel hinzufügen</translation>
     </message>
     <message>
         <source>Select an SSH public key file to add</source>
-        <translation type="unfinished"></translation>
+        <translation>Öffentliche SSH-Schlüsseldatei zum Hinzufügen auswählen</translation>
     </message>
 </context>
 <context>
@@ -2139,7 +2142,7 @@ um die Systemlaufwerke anzuzeigen.</translation>
     </message>
     <message>
         <source>Warning: Only overwrite the token if you initiated this action.</source>
-        <translation type="unfinished"></translation>
+        <translation>Warnung: Überschreiben Sie das Token nur, wenn Sie diese Aktion veranlasst haben.</translation>
     </message>
 </context>
 <context>
@@ -2285,7 +2288,7 @@ um die Systemlaufwerke anzuzeigen.</translation>
     </message>
     <message>
         <source>Please wait... %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Bitte warten... %1</translation>
     </message>
 </context>
 <context>
@@ -2368,23 +2371,23 @@ um die Systemlaufwerke anzuzeigen.</translation>
     </message>
     <message>
         <source>Install Authorization</source>
-        <translation type="unfinished"></translation>
+        <translation>Autorisierung installieren</translation>
     </message>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
-        <translation type="unfinished"></translation>
+        <translation>Systemautorisierung installieren, um Raspberry Pi Imager die Ausführung mit erhöhten Rechten zu ermöglichen</translation>
     </message>
     <message>
         <source>Save Performance Data</source>
-        <translation type="unfinished"></translation>
+        <translation>Leistungsdaten speichern</translation>
     </message>
     <message>
         <source>JSON files (*.json)</source>
-        <translation type="unfinished"></translation>
+        <translation>JSON-Dateien (*.json)</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished">Alle Dateien (*)</translation>
+        <translation>Alle Dateien (*)</translation>
     </message>
 </context>
 </TS>
