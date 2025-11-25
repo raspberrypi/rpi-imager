@@ -118,11 +118,7 @@ WizardStepBase {
                 WizardFormLabel { 
                     id: labelCapitalCity
                     text: qsTr("Capital city:") 
-                    Accessible.ignored: false
-                    Accessible.focusable: true
-                    Accessible.description: qsTr("Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country's Wi-Fi regulations.")
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    accessibleDescription: qsTr("Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country's Wi-Fi regulations.")
                 }
                 ImComboBox {
                     id: comboCapitalCity
@@ -144,11 +140,7 @@ WizardStepBase {
                 WizardFormLabel { 
                     id: labelTimezone
                     text: qsTr("Time zone:") 
-                    Accessible.ignored: false
-                    Accessible.focusable: true
-                    Accessible.description: qsTr("Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.")
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    accessibleDescription: qsTr("Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.")
                 }
                 ImComboBox {
                     id: comboTimezone
@@ -169,11 +161,7 @@ WizardStepBase {
                 WizardFormLabel { 
                     id: labelKeyboard
                     text: qsTr("Keyboard layout:") 
-                    Accessible.ignored: false
-                    Accessible.focusable: true
-                    Accessible.description: qsTr("Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.")
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    accessibleDescription: qsTr("Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.")
                 }
                 ImComboBox {
                     id: comboKeyboard

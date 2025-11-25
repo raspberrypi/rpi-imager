@@ -242,11 +242,7 @@ WizardStepBase {
                     WizardFormLabel {
                         id: labelSSID
                         text: qsTr("SSID:")
-                        Accessible.ignored: false
-                        Accessible.focusable: true
-                        Accessible.description: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
-                        focusPolicy: Qt.TabFocus
-                        activeFocusOnTab: true
+                        accessibleDescription: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
                     }
 
                     ImTextField {
@@ -264,16 +260,12 @@ WizardStepBase {
                         id: lblPassword
                         text: CommonStrings.password
                         visible: showPw
-                        Accessible.ignored: false
-                        Accessible.focusable: true
-                        Accessible.description: {
+                        accessibleDescription: {
                             var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
                             return canKeep 
                                 ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
                                 : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
                         }
-                        focusPolicy: Qt.TabFocus
-                        activeFocusOnTab: true
                     }
 
                     ImTextField {
@@ -298,16 +290,12 @@ WizardStepBase {
                         id: lblPasswordConfirm
                         text: qsTr("Confirm password:")
                         visible: showPw
-                        Accessible.ignored: false
-                        Accessible.focusable: true
-                        Accessible.description: {
+                        accessibleDescription: {
                             var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
                             return canKeep 
                                 ? qsTr("Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.")
                                 : qsTr("Re-enter the Wi-Fi password to confirm it matches.")
                         }
-                        focusPolicy: Qt.TabFocus
-                        activeFocusOnTab: true
                     }
 
                     ImTextField {
