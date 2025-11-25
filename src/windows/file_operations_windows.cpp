@@ -173,14 +173,7 @@ FileError WindowsFileOperations::WriteAtOffset(
     bytes_written += written;
     retry_count = 0; // Reset retry count on successful write
   }
-
-  // Flush to ensure data is written
-  if (!FlushFileBuffers(handle_)) {
-    DWORD error = GetLastError();
-    std::cout << "WriteAtOffset: FlushFileBuffers failed, error=" << error << std::endl;
-    // Continue anyway, as this is not always critical
-  }
-  
+ 
   return FileError::kSuccess;
 }
 
