@@ -44,19 +44,30 @@ ComboBox {
     property real lastKeyTime: 0
     property int lastSearchIndex: -1
     
-    // Ultra-fast keyboard navigation settings
-    readonly property int searchResetTimeout: 300  // Very fast reset timeout
-    readonly property int scrollAnimationDuration: 30  // Very fast but smooth animation
-    readonly property double keyboardSpeedMultiplier: 50.0  // 50x faster than default
+    // Keyboard navigation settings - more discoverable timeout
+    readonly property int searchResetTimeout: 1500  // 1.5 seconds - gives users time to type multiple chars
+    readonly property int scrollAnimationDuration: 100  // Smooth animation for scrolling
+    
+    // Scroll settings for native-like wheel behavior
+    readonly property int itemHeight: 40
+    readonly property int wheelScrollItems: 3  // Scroll 3 items per wheel notch (native-like)
     
     // Configuration
     selectTextByMouse: true
     editable: false
     
+    // Clear search when popup closes
+    onPopupChanged: {
+        if (!popup.visible) {
+            searchString = ""
+            lastSearchIndex = -1
+        }
+    }
+    
     function performSearch(inputText) {
         var currentTime = new Date().getTime()
         
-        // Ultra-fast reset timeout for rapid typing
+        // Reset search after timeout
         if (currentTime - lastKeyTime > searchResetTimeout) {
             searchString = ""
             lastSearchIndex = -1
@@ -64,27 +75,31 @@ ComboBox {
         lastKeyTime = currentTime
         
         var inputLower = inputText.toLowerCase()
+        var previousSearch = searchString
         
-        // Always prioritize single character searches for speed
-        // If user types rapidly, reset to just the latest character
-        if (currentTime - lastKeyTime < 50) { // Very rapid typing
-            searchString = inputLower
+        // Check if this is the same single character being pressed repeatedly
+        var isSameCharRepeat = (searchString.length === 1 && 
+                                searchString === inputLower && 
+                                lastSearchIndex >= 0)
+        
+        if (isSameCharRepeat) {
+            // Don't append - just cycle to next match
         } else {
+            // Append to build up multi-character search
             searchString += inputLower
         }
         
-        // Start search from the next item if we're repeating the same character
+        // Determine where to start searching
         var startIndex = 0
-        if (searchString.length === 1 && searchString === inputLower && lastSearchIndex >= 0) {
-            // Same character repeated - instantly jump to next match
+        if (isSameCharRepeat) {
+            // Same character repeated - cycle to next match
             startIndex = (lastSearchIndex + 1) % model.length
         }
         
-        // Ultra-fast search - find first match immediately
+        // Search for match
         var foundIndex = -1
         var modelLen = model.length
         
-        // Primary search with accumulated string
         for (var i = 0; i < modelLen; i++) {
             var checkIndex = (startIndex + i) % modelLen
             var text = root.textAt ? root.textAt(checkIndex) : (model[checkIndex] + "")
@@ -94,14 +109,13 @@ ComboBox {
             }
         }
         
-        // Fallback: if no match, use just the new character
-        if (foundIndex === -1 && searchString !== inputLower) {
+        // Fallback: if multi-char search failed, try just the new character
+        if (foundIndex === -1 && searchString.length > 1) {
             searchString = inputLower
             for (var j = 0; j < modelLen; j++) {
-                var checkIndex2 = (startIndex + j) % modelLen
-                var text2 = root.textAt ? root.textAt(checkIndex2) : (model[checkIndex2] + "")
+                var text2 = root.textAt ? root.textAt(j) : (model[j] + "")
                 if (text2.toLowerCase().startsWith(searchString)) {
-                    foundIndex = checkIndex2
+                    foundIndex = j
                     break
                 }
             }
@@ -115,32 +129,27 @@ ComboBox {
                 var listView = popup.contentItem
                 listView.currentIndex = foundIndex
                 
-                // Fast but smooth positioning with 30ms animation
-                var itemHeight = 40
-                var targetY = (foundIndex * itemHeight) - (listView.height / 2)
+                // Smooth scroll to center the found item
+                var targetY = (foundIndex * itemHeight) - (listView.height / 2) + (itemHeight / 2)
                 var maxY = Math.max(0, listView.contentHeight - listView.height)
                 var finalY = Math.max(0, Math.min(targetY, maxY))
                 
-                // Create a quick animation for smooth scrolling
-                if (!listView.scrollAnimation) {
-                    listView.scrollAnimation = Qt.createQmlObject(`
-                        import QtQuick 2.15
-                        NumberAnimation {
-                            target: parent
-                            property: "contentY"
-                            duration: 30
-                            easing.type: Easing.OutQuad
-                        }
-                    `, listView, "scrollAnimation")
-                }
-                
-                listView.scrollAnimation.to = finalY
-                listView.scrollAnimation.restart()
+                scrollAnimation.to = finalY
+                scrollAnimation.restart()
             }
             return true
         }
         
         return false
+    }
+    
+    // Smooth scroll animation for keyboard navigation
+    NumberAnimation {
+        id: scrollAnimation
+        target: popup.contentItem
+        property: "contentY"
+        duration: scrollAnimationDuration
+        easing.type: Easing.OutCubic
     }
     
     // Custom delegate with key handling for dropdown
@@ -150,7 +159,7 @@ ComboBox {
         required property int index
         
         width: parent ? parent.width : 0
-        height: 40
+        height: root.itemHeight
         padding: 0
         leftPadding: Style.spacingTiny
         rightPadding: Style.spacingTiny
@@ -178,7 +187,7 @@ ComboBox {
     
     // Note: Key handling for open popup is left to the focused items inside the popup
     
-    // Improve mouse wheel behavior: step selection without opening the popup (no inertia)
+    // Improve mouse wheel behavior: step selection without opening the popup
     WheelHandler {
         id: wheelHandler
         enabled: root.enabled
@@ -210,13 +219,21 @@ ComboBox {
         }
     }
 
-    // Provide a default popup with inertial scrolling when the list is open
+    // Provide a default popup with smooth scrolling when the list is open
     popup: Popup {
+        id: popupComponent
         padding: 0
         y: root.height
         width: root.width
         height: Math.min(300, Math.max(150, contentItem.implicitHeight))
         closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+        
+        // Clear search string when popup opens or closes
+        onVisibleChanged: {
+            root.searchString = ""
+            root.lastSearchIndex = -1
+        }
+        
         background: Rectangle {
             color: Style.mainBackgroundColor
             radius: (root.imageWriter && root.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
@@ -224,24 +241,61 @@ ComboBox {
             border.width: Style.sectionBorderWidth
             antialiasing: true  // Smooth edges at non-integer scale factors
             clip: true  // Prevent content overflow at non-integer scale factors
+            
+            // Search indicator overlay - shows what user is typing
+            Rectangle {
+                id: searchIndicator
+                visible: root.searchString.length > 0
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Style.sectionBorderWidth
+                height: visible ? 28 : 0
+                color: Style.buttonFocusedBackgroundColor
+                z: 10
+                
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("Type to search: \"%1\"").arg(root.searchString)
+                    font.pixelSize: Style.fontSizeSmall
+                    font.italic: true
+                    color: Style.textDescriptionColor
+                }
+                
+                // Hint about cycling with same letter
+                Text {
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.spacingTiny
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.searchString.length === 1
+                    text: qsTr("(press again to cycle)")
+                    font.pixelSize: Style.fontSizeSmall - 2
+                    font.italic: true
+                    color: Style.textMetadataColor
+                }
+            }
         }
+        
         contentItem: ListView {
             id: dropdownList
             clip: true
             model: root.delegateModel
             currentIndex: root.highlightedIndex
             delegate: root.delegate
-            boundsBehavior: Flickable.DragAndOvershootBounds
-            // Ultra-fast scrolling - no deceleration limits
-            flickDeceleration: 100000  // Instant stop
-            maximumFlickVelocity: 500000  // Extremely fast velocity
+            boundsBehavior: Flickable.StopAtBounds  // Stop at bounds for native feel
+            
+            // Disable flickable behavior - we'll handle scrolling ourselves for smooth control
+            interactive: true
+            flickDeceleration: 3000  // Standard deceleration
+            maximumFlickVelocity: 2500  // Standard velocity limit
+            
             preferredHighlightBegin: 0
             preferredHighlightEnd: height
             highlightRangeMode: ListView.ApplyRange
             
-            // Very fast animations for smooth but responsive feel
-            highlightMoveDuration: 30
-            highlightResizeDuration: 30
+            // Smooth highlight animations
+            highlightMoveDuration: 100
+            highlightResizeDuration: 100
             add: null
             remove: null
             move: null
@@ -264,17 +318,43 @@ ComboBox {
                 policy: dropdownList.contentHeight > dropdownList.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
                 width: Style.scrollBarWidth
             }
-            // Wheel inertia inside the popup: convert wheel delta to a flick velocity
+            
+            // Smooth scroll animation for wheel events
+            NumberAnimation {
+                id: listScrollAnimation
+                target: dropdownList
+                property: "contentY"
+                duration: 150
+                easing.type: Easing.OutCubic
+            }
+            
+            // Native-like wheel scrolling: smooth, proportional, no flicking
             WheelHandler {
                 onWheel: (event) => {
-                    var dy = event.pixelDelta && Math.abs(event.pixelDelta.y) > 0 ? event.pixelDelta.y : event.angleDelta.y
-                    // Scale velocity based on OS wheel scroll lines setting
-                    // Note: Qt already handles natural scrolling in the delta values
-                    // flick() expects positive velocity to scroll down, negative to scroll up
-                    // angleDelta.y is negative for scroll down, so we negate to match flick() API
-                    var baseVelocity = -dy * 10
-                    var osAwareVelocity = baseVelocity * root.keyboardSpeedMultiplier
-                    dropdownList.flick(0, osAwareVelocity)
+                    // Stop any ongoing animation
+                    listScrollAnimation.stop()
+                    
+                    // Get scroll delta - prefer pixel delta for smooth trackpads
+                    var dy
+                    if (event.pixelDelta && Math.abs(event.pixelDelta.y) > 0) {
+                        // Trackpad or precision scroll - use pixel values directly
+                        dy = -event.pixelDelta.y
+                    } else {
+                        // Mouse wheel - convert angle to pixels
+                        // Standard: 120 units = 1 notch = 3 lines of scrolling
+                        var notches = event.angleDelta.y / 120.0
+                        dy = -notches * root.itemHeight * root.wheelScrollItems
+                    }
+                    
+                    // Calculate new position with bounds checking
+                    var newY = dropdownList.contentY + dy
+                    var maxY = Math.max(0, dropdownList.contentHeight - dropdownList.height)
+                    newY = Math.max(0, Math.min(newY, maxY))
+                    
+                    // Animate to new position for smoothness
+                    listScrollAnimation.to = newY
+                    listScrollAnimation.restart()
+                    
                     event.accepted = true
                 }
             }
