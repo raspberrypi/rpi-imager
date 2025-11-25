@@ -17,10 +17,20 @@ DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByt
     : QThread(parent), _url(TELEMETRY_URL)
 {
     QLocale locale;
+    
+    // Extract clean numeric version (X.Y.Z) from IMAGER_VERSION_STR for telemetry
+    // Handles formats like: v2.0.0, v2.0.0-rc4-60-geac7c2f0, 2.0.0, etc.
+    QString versionStr(IMAGER_VERSION_STR);
+    static QRegularExpression versionRx("^v?([0-9]+\\.[0-9]+\\.[0-9]+)");
+    QRegularExpressionMatch versionMatch = versionRx.match(versionStr);
+    QByteArray cleanVersion = versionMatch.hasMatch() 
+        ? versionMatch.captured(1).toLatin1() 
+        : QByteArray(IMAGER_VERSION_STR);
+    
     _postfields = "url="+QUrl::toPercentEncoding(url)
             +"&os="+QUrl::toPercentEncoding(parentcategory)
             +"&image="+QUrl::toPercentEncoding(osname)
-            +"&imagerVersion=" IMAGER_VERSION_STR
+            +"&imagerVersion="+QUrl::toPercentEncoding(cleanVersion)
             +"&imagerOsType="+(embedded ? "embedded" : QUrl::toPercentEncoding(QSysInfo::productType()))
             +"&imagerOsVersion="+QUrl::toPercentEncoding(QSysInfo::productVersion())
             +"&imagerOsArch="+QUrl::toPercentEncoding(QSysInfo::currentCpuArchitecture())

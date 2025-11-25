@@ -451,11 +451,6 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
         QFileInfo fi(url.toLocalFile());
         _downloadLen = fi.size();
     }
-    if (url.isLocalFile())
-    {
-        // For custom local images (including .img, .zip, etc.), do not offer customization
-        _initFormat = "";
-    }
 }
 
 /* Set device to write to */

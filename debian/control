@@ -7,7 +7,7 @@ Standards-Version: 4.1.2
 Homepage: https://www.raspberrypi.com/software
 
 Package: rpi-imager
-Build-Profiles: <!embedded !cli>
+Build-Profiles: <desktop>
 Architecture: amd64 arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37), pkexec
 Recommends: udisks2
