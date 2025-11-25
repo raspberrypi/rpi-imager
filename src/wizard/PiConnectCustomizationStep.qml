@@ -190,7 +190,7 @@ WizardStepBase {
             // Only include button if it's actually visible (checked and no token received yet)
             if (useTokenPill.checked && !root.connectTokenReceived)
                 items.push(btnOpenConnect)
-            // Include label before text field so users hear the explanation first
+            // Label is automatically skipped when screen reader is not active (via activeFocusOnTab)
             if (useTokenPill.checked && fieldConnectToken.enabled) {
                 items.push(labelConnectToken)
                 items.push(fieldConnectToken)

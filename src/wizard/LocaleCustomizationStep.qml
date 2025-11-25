@@ -63,7 +63,7 @@ WizardStepBase {
         else comboKeyboard.editText = kbToSet
 
         // Register focus group for locale controls in proper tab order
-        // Include labels before their corresponding controls so users hear the explanation first
+        // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("locale_controls", function(){ 
             return [labelCapitalCity, comboCapitalCity, labelTimezone, comboTimezone, labelKeyboard, comboKeyboard] 
         }, 0)

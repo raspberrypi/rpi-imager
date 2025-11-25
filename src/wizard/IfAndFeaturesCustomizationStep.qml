@@ -214,6 +214,7 @@ WizardStepBase {
             
             // Include label before combo box so users hear the explanation first
             // Build focus group dynamically based on which interfaces are supported
+            // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
             root.registerFocusGroup("if_section_interfaces", function() {
                 var items = []
                 if (supportsI2c) items.push(chkEnableI2C.focusItem)
