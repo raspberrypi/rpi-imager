@@ -74,11 +74,7 @@ WizardStepBase {
                 id: labelConnectToken
                 text: qsTr("Authentication token:")
                 visible: useTokenPill.checked
-                Accessible.ignored: false
-                Accessible.focusable: true
-                Accessible.description: qsTr("Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the 'Open Raspberry Pi Connect' button to sign in.")
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                accessibleDescription: qsTr("Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the 'Open Raspberry Pi Connect' button to sign in.")
             }
             
             ImTextField {

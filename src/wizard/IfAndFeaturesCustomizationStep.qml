@@ -113,11 +113,7 @@ WizardStepBase {
                                 text: qsTr("Enable Serial:")
                                 font.bold: true
                                 Layout.fillWidth: true
-                                Accessible.ignored: false
-                                Accessible.focusable: true
-                                Accessible.description: qsTr("Configure the serial interface: Disabled, Default (system decides), Console & Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).")
-                                focusPolicy: Qt.TabFocus
-                                activeFocusOnTab: true
+                                accessibleDescription: qsTr("Configure the serial interface: Disabled, Default (system decides), Console & Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).")
                             }
                             ImComboBox {
                                 id: comboSerial

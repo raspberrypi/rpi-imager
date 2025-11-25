@@ -13,6 +13,9 @@ Text {
     property bool isError: false
     property bool isDisabled: false
     
+    // When set, label becomes independently focusable for screen readers with this description
+    property string accessibleDescription: ""
+    
     // Access imageWriter from ancestor context
     property var imageWriter: {
         var item = parent;
@@ -36,9 +39,11 @@ Text {
     Layout.alignment: Qt.AlignVCenter
     
     // Accessibility - labels become keyboard-focusable when screen reader is active
+    // When accessibleDescription is set, label is independently focusable (not ignored)
     Accessible.role: Accessible.StaticText
     Accessible.name: text
-    Accessible.ignored: true  // Usually read as part of the associated control
+    Accessible.description: accessibleDescription
+    Accessible.ignored: accessibleDescription.length === 0
     Accessible.focusable: imageWriter ? imageWriter.isScreenReaderActive() : false
     focusPolicy: (imageWriter && imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
     activeFocusOnTab: imageWriter ? imageWriter.isScreenReaderActive() : false
