@@ -98,6 +98,7 @@ WizardStepBase {
     Component.onCompleted: {
         // Include labels before their corresponding fields so users hear the explanation first
         root.registerFocusGroup("user_fields", function(){
+            // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
             return [labelUsername, fieldUsername, labelPassword, fieldPassword, labelPasswordConfirm, fieldPasswordConfirm, helpText]
         }, 0)
         

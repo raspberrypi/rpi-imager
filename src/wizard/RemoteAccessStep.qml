@@ -146,6 +146,7 @@ WizardStepBase {
             return items
         }, 0)
         // Include labels before their corresponding controls so users hear the explanation first
+        // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [labelAuthMechanism, radioPassword, radioPublicKey] : [] }, 1)
         root.registerFocusGroup("ssh_key", function(){ return sshEnablePill.checked && radioPublicKey.checked ? [labelPublicKey, fieldPublicKey, browseButton] : [] }, 2)
         // Prefill from conserved customization settings

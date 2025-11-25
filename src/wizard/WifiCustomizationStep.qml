@@ -36,13 +36,12 @@ WizardStepBase {
         root.registerFocusGroup("wifi_modes", function() {
             return [tabSecure, tabOpen]
         }, 0)
-        // Include labels before their corresponding fields so users hear the explanation first
+        // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("wifi_fields", function(){
             var items = [labelSSID, fieldWifiSSID]
             if (showPw) {
                 items.push(lblPassword)
                 items.push(fieldWifiPassword)
-                // Always include confirm label and field when password is shown (like user customization step)
                 items.push(lblPasswordConfirm)
                 items.push(fieldWifiPasswordConfirm)
             }
