@@ -70,7 +70,7 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
   }
   
   // For regular files, use standard POSIX open
-  return OpenInternal(path.c_str(), O_RDWR | O_SYNC);
+  return OpenInternal(path.c_str(), O_RDWR);
 }
 
 FileError MacOSFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {

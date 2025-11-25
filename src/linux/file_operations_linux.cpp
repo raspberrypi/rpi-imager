@@ -10,10 +10,6 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-#ifndef O_SYNC
-#define O_SYNC O_DSYNC
-#endif
-
 namespace rpi_imager {
 
 LinuxFileOperations::LinuxFileOperations() : fd_(-1), last_error_code_(0) {}
@@ -23,7 +19,7 @@ LinuxFileOperations::~LinuxFileOperations() {
 }
 
 FileError LinuxFileOperations::OpenDevice(const std::string& path) {
-  return OpenInternal(path.c_str(), O_RDWR | O_SYNC);
+  return OpenInternal(path.c_str(), O_RDWR);
 }
 
 FileError LinuxFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
