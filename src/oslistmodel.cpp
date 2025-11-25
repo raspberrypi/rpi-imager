@@ -20,6 +20,60 @@
 
 namespace {
 
+    // Valid init_format values according to schema
+    static const QStringList VALID_INIT_FORMATS = {
+        QStringLiteral(""),
+        QStringLiteral("systemd"),
+        QStringLiteral("cloudinit"),
+        QStringLiteral("cloudinit-rpi"),
+        QStringLiteral("none")
+    };
+
+    // Validate init_format value and return true if valid
+    bool isValidInitFormat(const QString &initFormat) {
+        return VALID_INIT_FORMATS.contains(initFormat);
+    }
+
+    // Recursively filter OS entries with invalid init_format values
+    QJsonArray filterInvalidInitFormats(const QJsonArray &list) {
+        QJsonArray filtered;
+        
+        for (const auto &value : list) {
+            QJsonObject entry = value.toObject();
+            QString initFormat = entry["init_format"].toString();
+            
+            // Validate init_format if present (empty string is valid, means no customization)
+            if (!isValidInitFormat(initFormat)) {
+                QString name = entry["name"].toString();
+                qWarning() << "OSListModel: Pruning OS entry with invalid init_format '" 
+                           << initFormat << "':" << name
+                           << "(valid values: '', 'systemd', 'cloudinit', 'cloudinit-rpi', 'none')";
+                continue;
+            }
+            
+            // Check if this entry has subitems and process them recursively
+            if (entry.contains(QLatin1String("subitems"))) {
+                QJsonArray subitems = entry["subitems"].toArray();
+                QJsonArray filteredSubitems = filterInvalidInitFormats(subitems);
+                
+                // Only include parent entry if it has valid subitems
+                if (!filteredSubitems.isEmpty()) {
+                    entry["subitems"] = filteredSubitems;
+                    filtered.append(entry);
+                } else {
+                    // Parent has no valid subitems, skip it
+                    QString name = entry["name"].toString();
+                    qWarning() << "OSListModel: Pruning OS entry with no valid subitems:" << name;
+                }
+            } else {
+                // Leaf entry with valid init_format
+                filtered.append(entry);
+            }
+        }
+        
+        return filtered;
+    }
+
     QJsonArray getListForLocale(QJsonObject root) {
         // "os_list_<locale>" has priority
 
@@ -51,6 +105,9 @@ namespace {
             qWarning() << Q_FUNC_INFO << "Expected to find os_list key" << root.keys();
             return {};
         }
+
+        // Filter out entries with invalid init_format values
+        list = filterInvalidInitFormats(list);
 
         // Apply random shuffling to arrays containing 'random' flag
         std::function<void(QJsonArray&)> shuffleIfRandom = [&](QJsonArray &lst) {
