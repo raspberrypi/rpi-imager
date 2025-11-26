@@ -445,6 +445,49 @@ TEST_CASE("CustomisationGenerator handles multiline SSH key", "[customization][n
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssh-rsa AAAAB3...key2"));
 }
 
+TEST_CASE("CustomisationGenerator handles SSH public key only (no username/password)", "[customization][ssh]") {
+    // Regression test for issue: public key SSH without username/password caused
+    // initial setup wizard to appear because userconf wasn't run
+    QVariantMap settings;
+    settings["sshEnabled"] = true;
+    settings["sshPublicKey"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestPublicKey user@host";
+    // Note: NO sshUserName or sshUserPassword set
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // SSH key should be written
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("cat > \"$FIRSTUSERHOME/.ssh/authorized_keys\" <<'EOF'"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssh-ed25519"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("PasswordAuthentication no"));
+    
+    // Crucially: userconf should STILL run to mark system as configured
+    // This prevents the initial setup wizard from appearing
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/usr/lib/userconf-pi/userconf"));
+    // Should use default 'pi' user when no username specified
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("'pi'"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init handles SSH public key only (no username/password)", "[cloudinit][ssh]") {
+    // Regression test for issue: public key SSH without username/password caused
+    // users section to be omitted from cloud-init config
+    QVariantMap settings;
+    settings["sshPublicKey"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestPublicKey user@host";
+    // Note: NO sshUserName or sshUserPassword set
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Should generate users section even without explicit username
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("enable_ssh: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: pi"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh-ed25519"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+}
+
 TEST_CASE("CustomisationGenerator handles very long hostname", "[customization][negative]") {
     QVariantMap settings;
     // Hostnames should be max 63 chars, but test we don't crash with longer
