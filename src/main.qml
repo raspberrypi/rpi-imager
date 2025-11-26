@@ -352,7 +352,7 @@ ApplicationWindow {
                 return [messageText] 
             }, 1)
             registerFocusGroup("buttons", function(){ 
-                return [exitButton] 
+                return [installAuthButton, exitButton]
             }, 2)
         }
         
@@ -395,6 +395,21 @@ ApplicationWindow {
             spacing: Style.spacingMedium
             Item {
                 Layout.fillWidth: true
+            }
+            
+            // Install Authorization button - only visible for elevatable bundles (e.g., AppImage)
+            ImButton {
+                id: installAuthButton
+                text: qsTr("Install Authorization")
+                accessibleDescription: qsTr("Install system authorization to allow Raspberry Pi Imager to run with elevated privileges")
+                activeFocusOnTab: true
+                visible: permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.isElevatableBundle()
+                onClicked: {
+                    if (permissionWarningDialog.imageWriter.installElevationPolicy()) {
+                        // Policy installed successfully - restart with elevated privileges
+                        permissionWarningDialog.imageWriter.restartWithElevatedPrivileges()
+                    }
+                }
             }
             
             ImButtonRed {

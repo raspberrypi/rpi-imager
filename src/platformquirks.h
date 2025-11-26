@@ -6,6 +6,9 @@
 #ifndef PLATFORMQUIRKS_H
 #define PLATFORMQUIRKS_H
 
+#include <QString>
+#include <QStringList>
+
 namespace PlatformQuirks {
     /**
      * Apply platform-specific quirks and workarounds.
@@ -71,6 +74,69 @@ namespace PlatformQuirks {
      * On Linux/macOS: No-op (console is already available).
      */
     void attachConsole();
+
+    /**
+     * Check if running from a self-contained application bundle that supports
+     * privilege escalation (e.g., Linux AppImage).
+     * On Linux: Returns true if APPIMAGE environment variable is set
+     * On other platforms: Returns false
+     * @return true if running from an elevatable bundle
+     */
+    bool isElevatableBundle();
+
+    /**
+     * Get the path to the application bundle file (e.g., AppImage path).
+     * On Linux: Returns APPIMAGE environment variable value
+     * On other platforms: Returns nullptr
+     * @return Path to the bundle, or nullptr if not running from a bundle
+     */
+    const char* getBundlePath();
+
+    /**
+     * Check if the system is configured to allow automatic privilege elevation
+     * for this application bundle.
+     * On Linux: Checks if a polkit policy exists for the AppImage
+     * On other platforms: Returns false
+     * @return true if automatic elevation is configured
+     */
+    bool hasElevationPolicyInstalled();
+
+    /**
+     * Install system configuration to allow automatic privilege elevation
+     * for this application bundle.
+     * On Linux: Installs a polkit policy file for the AppImage
+     * On other platforms: No-op, returns false
+     * This function must be called with elevated privileges.
+     * @return true if policy was installed successfully, false otherwise
+     */
+    bool installElevationPolicy();
+
+    /**
+     * Attempt to re-execute the current process with elevated privileges.
+     * On Linux: Uses pkexec if a polkit policy is installed
+     * On other platforms: No-op, returns false
+     * This function only returns if elevation fails or is cancelled.
+     * On successful elevation, the process is replaced.
+     * 
+     * @param argc Argument count from main()
+     * @param argv Argument vector from main()
+     * @return false if elevation was not attempted or failed
+     */
+    bool tryElevate(int argc, char** argv);
+
+    /**
+     * Launch a detached process that will outlive the parent.
+     * On Linux: Uses double-fork pattern to fully detach the child
+     * On macOS/Windows: Uses platform-appropriate detached process creation
+     * 
+     * This is the preferred way to launch external processes like browsers,
+     * file managers, or other tools that should continue running independently.
+     * 
+     * @param program Path to the program to execute
+     * @param arguments List of arguments to pass to the program
+     * @return true if the process was successfully launched
+     */
+    bool launchDetached(const QString& program, const QStringList& arguments);
 }
 
 #endif // PLATFORMQUIRKS_H

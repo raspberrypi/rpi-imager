@@ -8,13 +8,19 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <cstdio>
 #include <cstring>
+#include <cerrno>
+#include <fcntl.h>
 #include <QDebug>
 #include <QProcess>
 #include <QFile>
 #include <QDir>
 #include <QFileInfo>
+#include <QCryptographicHash>
+#include <vector>
 
 namespace PlatformQuirks {
 
@@ -254,6 +260,263 @@ bool hasElevatedPrivileges() {
 
 void attachConsole() {
     // No-op on Linux - console is already available
+}
+
+const char* getBundlePath() {
+    // APPIMAGE is set by the AppImage runtime before our code runs
+    return ::getenv("APPIMAGE");
+}
+
+bool isElevatableBundle() {
+    const char* path = getBundlePath();
+    // Sanity check: verify the file actually exists
+    return path && access(path, F_OK) == 0;
+}
+
+// Internal helper to generate unique policy filename
+static bool generatePolkitPolicyFilename(const char* appImagePath, char* buffer, size_t bufferSize) {
+    if (!appImagePath || !buffer || bufferSize < 64) {
+        return false;
+    }
+    
+    // Generate a hash of the AppImage path to create a unique filename
+    // This ensures each AppImage location gets its own policy file
+    QByteArray pathBytes(appImagePath);
+    QByteArray hash = QCryptographicHash::hash(pathBytes, QCryptographicHash::Md5).toHex();
+    
+    // Create filename: com.raspberrypi.rpi-imager.appimage-HASH.policy
+    int written = std::snprintf(buffer, bufferSize, 
+        "com.raspberrypi.rpi-imager.appimage-%s.policy",
+        hash.left(12).constData());  // Use first 12 chars of hash
+    
+    return written > 0 && static_cast<size_t>(written) < bufferSize;
+}
+
+// Internal helper to check if policy exists for a specific path
+static bool hasPolkitPolicyForPath(const char* appImagePath) {
+    if (!appImagePath) {
+        return false;
+    }
+    
+    char policyFilename[256];
+    if (!generatePolkitPolicyFilename(appImagePath, policyFilename, sizeof(policyFilename))) {
+        return false;
+    }
+    
+    char policyPath[512];
+    std::snprintf(policyPath, sizeof(policyPath), 
+        "/usr/share/polkit-1/actions/%s", policyFilename);
+    
+    // Check if file exists
+    if (access(policyPath, F_OK) != 0) {
+        return false;
+    }
+    
+    // Verify the policy file contains the correct path
+    // (in case the AppImage was moved but hash collision occurred)
+    QFile policyFile(policyPath);
+    if (!policyFile.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+    
+    QByteArray content = policyFile.readAll();
+    policyFile.close();
+    
+    // Check if the policy contains the exact AppImage path
+    QString searchPath = QString("org.freedesktop.policykit.exec.path\">%1</annotate>")
+        .arg(QString::fromUtf8(appImagePath));
+    
+    return content.contains(searchPath.toUtf8());
+}
+
+bool hasElevationPolicyInstalled() {
+    const char* bundlePath = getBundlePath();
+    if (!bundlePath) {
+        return false;
+    }
+    return hasPolkitPolicyForPath(bundlePath);
+}
+
+// Internal helper to install polkit policy for a specific path
+static bool installPolkitPolicyForPath(const char* appImagePath) {
+    if (!appImagePath || ::geteuid() != 0) {
+        return false;
+    }
+    
+    // Verify the AppImage path exists and is a regular file
+    struct stat st;
+    if (stat(appImagePath, &st) != 0 || !S_ISREG(st.st_mode)) {
+        return false;
+    }
+    
+    char policyFilename[256];
+    if (!generatePolkitPolicyFilename(appImagePath, policyFilename, sizeof(policyFilename))) {
+        return false;
+    }
+    
+    char policyPath[512];
+    std::snprintf(policyPath, sizeof(policyPath), 
+        "/usr/share/polkit-1/actions/%s", policyFilename);
+    
+    // Generate unique action ID based on path hash
+    QByteArray pathBytes(appImagePath);
+    QByteArray hash = QCryptographicHash::hash(pathBytes, QCryptographicHash::Md5).toHex();
+    QString actionId = QString("com.raspberrypi.rpi-imager.appimage.%1").arg(QString::fromUtf8(hash.left(12)));
+    
+    // Create policy XML
+    QString policyContent = QString(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<!DOCTYPE policyconfig PUBLIC\n"
+        " \"-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN\"\n"
+        " \"http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd\">\n"
+        "<policyconfig>\n"
+        "  <vendor>Raspberry Pi Ltd</vendor>\n"
+        "  <vendor_url>https://www.raspberrypi.com/</vendor_url>\n"
+        "  <action id=\"%1\">\n"
+        "    <description>Run Raspberry Pi Imager</description>\n"
+        "    <message>Authentication is required to run Raspberry Pi Imager</message>\n"
+        "    <icon_name>rpi-imager</icon_name>\n"
+        "    <defaults>\n"
+        "      <allow_any>auth_admin</allow_any>\n"
+        "      <allow_inactive>auth_admin</allow_inactive>\n"
+        "      <allow_active>auth_admin_keep</allow_active>\n"
+        "    </defaults>\n"
+        "    <annotate key=\"org.freedesktop.policykit.exec.path\">%2</annotate>\n"
+        "    <annotate key=\"org.freedesktop.policykit.exec.allow_gui\">true</annotate>\n"
+        "  </action>\n"
+        "</policyconfig>\n"
+    ).arg(actionId, QString::fromUtf8(appImagePath));
+    
+    // Write policy file
+    int fd = open(policyPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        return false;
+    }
+    
+    QByteArray contentBytes = policyContent.toUtf8();
+    ssize_t written = write(fd, contentBytes.constData(), contentBytes.size());
+    close(fd);
+    
+    if (written != contentBytes.size()) {
+        unlink(policyPath);
+        return false;
+    }
+    
+    return true;
+}
+
+bool installElevationPolicy() {
+    const char* bundlePath = getBundlePath();
+    return bundlePath ? installPolkitPolicyForPath(bundlePath) : false;
+}
+
+bool launchDetached(const QString& program, const QStringList& arguments) {
+    // Use double-fork pattern to create a fully detached process
+    // that will outlive the parent and not become a zombie.
+    //
+    // Note: We do NOT call setsid() because that would create a new session
+    // and break D-Bus/display connections needed for GUI applications.
+    
+    pid_t pid = fork();
+    
+    if (pid < 0) {
+        qWarning() << "launchDetached: fork failed:" << strerror(errno);
+        return false;
+    }
+    
+    if (pid == 0) {
+        // First child - fork again to fully detach
+        pid_t pid2 = fork();
+        
+        if (pid2 < 0) {
+            _exit(1);
+        }
+        
+        if (pid2 > 0) {
+            // First child exits, orphaning the grandchild (adopted by init)
+            _exit(0);
+        }
+        
+        // Grandchild - build argv and exec
+        QByteArray programBytes = program.toUtf8();
+        std::vector<QByteArray> argBytes;
+        std::vector<char*> argv;
+        
+        argv.push_back(programBytes.data());
+        for (const QString& arg : arguments) {
+            argBytes.push_back(arg.toUtf8());
+            argv.push_back(argBytes.back().data());
+        }
+        argv.push_back(nullptr);
+        
+        execvp(programBytes.constData(), argv.data());
+        _exit(127);  // exec failed
+    }
+    
+    // Parent - wait for first child to exit
+    int status;
+    waitpid(pid, &status, 0);
+    
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+bool tryElevate(int argc, char** argv) {
+    // Only attempt elevation if running from AppImage, not root, and have policy
+    const char* appImagePath = getBundlePath();
+    if (!appImagePath || ::geteuid() == 0) {
+        return false;
+    }
+    
+    if (access("/usr/bin/pkexec", X_OK) != 0 || !hasPolkitPolicyForPath(appImagePath)) {
+        return false;
+    }
+    
+    // Build argument list: pkexec --disable-internal-agent /path/to/appimage [args...]
+    char** newArgv = new char*[argc + 3];
+    int newArgc = 0;
+    
+    newArgv[newArgc++] = strdup("/usr/bin/pkexec");
+    newArgv[newArgc++] = strdup("--disable-internal-agent");
+    newArgv[newArgc++] = strdup(appImagePath);
+    
+    for (int i = 1; i < argc; i++) {
+        newArgv[newArgc++] = strdup(argv[i]);
+    }
+    newArgv[newArgc] = nullptr;
+    
+    pid_t pid = fork();
+    
+    if (pid < 0) {
+        for (int i = 0; i < newArgc; i++) free(newArgv[i]);
+        delete[] newArgv;
+        return false;
+    }
+    
+    if (pid == 0) {
+        execv("/usr/bin/pkexec", newArgv);
+        _exit(127);
+    }
+    
+    int status;
+    waitpid(pid, &status, 0);
+    
+    for (int i = 0; i < newArgc; i++) free(newArgv[i]);
+    delete[] newArgv;
+    
+    if (WIFEXITED(status)) {
+        int exitCode = WEXITSTATUS(status);
+        if (exitCode == 0) {
+            _exit(0);  // Elevated process completed successfully
+        } else if (exitCode == 126 || exitCode == 127) {
+            return false;  // User cancelled or auth failed
+        } else {
+            _exit(exitCode);
+        }
+    } else if (WIFSIGNALED(status)) {
+        _exit(128 + WTERMSIG(status));
+    }
+    
+    return false;
 }
 
 } // namespace PlatformQuirks
