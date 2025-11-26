@@ -137,6 +137,28 @@ namespace PlatformQuirks {
      * @return true if the process was successfully launched
      */
     bool launchDetached(const QString& program, const QStringList& arguments);
+
+    /**
+     * Run the policy installer with elevated privileges (interactive).
+     * On Linux: Uses pkexec to run the bundle with --install-elevation-policy
+     * On other platforms: No-op, returns false
+     * 
+     * This is a blocking call that shows an authentication dialog.
+     * 
+     * @return true if policy was installed successfully
+     */
+    bool runElevatedPolicyInstaller();
+
+    /**
+     * Replace current process with an elevated instance.
+     * On Linux: exec() into pkexec with the bundle path
+     * On other platforms: No-op
+     * 
+     * This function does not return on success (process is replaced).
+     * 
+     * @param extraArgs Additional arguments to pass to the elevated process
+     */
+    void execElevated(const QStringList& extraArgs);
 }
 
 #endif // PLATFORMQUIRKS_H
