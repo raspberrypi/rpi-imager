@@ -344,4 +344,12 @@ bool launchDetached(const QString& program, const QStringList& arguments) {
     return QProcess::startDetached(program, arguments);
 }
 
+bool runElevatedPolicyInstaller() {
+    return false;
+}
+
+void execElevated(const QStringList& extraArgs) {
+    Q_UNUSED(extraArgs);
+}
+
 } // namespace PlatformQuirks

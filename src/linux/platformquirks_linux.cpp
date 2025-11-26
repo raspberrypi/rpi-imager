@@ -519,4 +519,57 @@ bool tryElevate(int argc, char** argv) {
     return false;
 }
 
+bool runElevatedPolicyInstaller() {
+    const char* bundlePath = getBundlePath();
+    if (!bundlePath) {
+        return false;
+    }
+    
+    // Use pkexec to run ourselves with --install-elevation-policy
+    QStringList args;
+    args << "--disable-internal-agent";
+    args << QString::fromUtf8(bundlePath);
+    args << "--install-elevation-policy";
+    
+    QProcess process;
+    process.start("/usr/bin/pkexec", args);
+    
+    if (!process.waitForStarted(5000) || !process.waitForFinished(60000)) {
+        process.kill();
+        return false;
+    }
+    
+    return process.exitCode() == 0;
+}
+
+void execElevated(const QStringList& extraArgs) {
+    const char* bundlePath = getBundlePath();
+    if (!bundlePath) {
+        return;
+    }
+    
+    // Build argument list for exec
+    std::vector<std::string> argStrings;
+    argStrings.push_back("pkexec");
+    argStrings.push_back("--disable-internal-agent");
+    argStrings.push_back(bundlePath);
+    
+    for (const QString& arg : extraArgs) {
+        argStrings.push_back(arg.toStdString());
+    }
+    
+    std::vector<char*> argv;
+    for (auto& s : argStrings) {
+        argv.push_back(const_cast<char*>(s.c_str()));
+    }
+    argv.push_back(nullptr);
+    
+    fflush(stdout);
+    fflush(stderr);
+    execvp("pkexec", argv.data());
+    
+    // Only reached if exec failed
+    qWarning() << "Failed to exec pkexec:" << strerror(errno);
+}
+
 } // namespace PlatformQuirks

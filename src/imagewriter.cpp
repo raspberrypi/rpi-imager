@@ -79,12 +79,7 @@
 #include "linux/stpanalyzer.h"
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <pwd.h>
-#include <cerrno>
-#include <cstring>
-#include <vector>
-#include <string>
 #endif
 
 using namespace ImageOptions;
@@ -2902,89 +2897,20 @@ bool ImageWriter::hasElevationPolicyInstalled()
 
 bool ImageWriter::installElevationPolicy()
 {
-    const char* bundlePath = PlatformQuirks::getBundlePath();
-    if (!bundlePath) {
-        qWarning() << "Cannot install elevation policy: not running from an elevatable bundle";
-        return false;
-    }
-    
-#ifdef Q_OS_LINUX
-    // Use pkexec to run ourselves with --install-elevation-policy
-    // --disable-internal-agent ensures we use the graphical polkit agent
-    QStringList args;
-    args << "--disable-internal-agent";
-    args << QString::fromUtf8(bundlePath);
-    args << "--install-elevation-policy";
-    
-    QProcess process;
-    process.start("/usr/bin/pkexec", args);
-    
-    if (!process.waitForStarted(5000)) {
-        qWarning() << "Failed to start pkexec for policy installation";
-        return false;
-    }
-    
-    if (!process.waitForFinished(60000)) {
-        qWarning() << "pkexec policy installation timed out";
-        process.kill();
-        return false;
-    }
-    
-    int exitCode = process.exitCode();
-    if (exitCode == 0) {
-        return true;
-    } else if (exitCode == 126) {
-        // User cancelled authentication
-        return false;
-    } else {
-        qWarning() << "Elevation policy installation failed:" << process.readAllStandardError();
-        return false;
-    }
-#else
-    return false;
-#endif
+    return PlatformQuirks::runElevatedPolicyInstaller();
 }
 
 void ImageWriter::restartWithElevatedPrivileges()
 {
-    const char* bundlePath = PlatformQuirks::getBundlePath();
-    if (!bundlePath) {
-        qWarning() << "Cannot restart with elevated privileges: not running from an elevatable bundle";
-        return;
-    }
-    
-#ifdef Q_OS_LINUX
-    // Build argument list for pkexec
-    // We exec() directly to preserve session context for polkit agent
-    std::vector<std::string> argStrings;
-    argStrings.push_back("pkexec");
-    argStrings.push_back("--disable-internal-agent");
-    argStrings.push_back(bundlePath);
-    
     // Pass through --log-file if present
+    QStringList extraArgs;
     QStringList appArgs = QCoreApplication::arguments();
     for (int i = 0; i < appArgs.size(); i++) {
         if (appArgs[i] == "--log-file" && i + 1 < appArgs.size()) {
-            argStrings.push_back("--log-file");
-            argStrings.push_back(appArgs[i + 1].toStdString());
+            extraArgs << "--log-file" << appArgs[i + 1];
             break;
         }
     }
     
-    // Build argv array and exec
-    std::vector<char*> argv;
-    for (auto& s : argStrings) {
-        argv.push_back(const_cast<char*>(s.c_str()));
-    }
-    argv.push_back(nullptr);
-    
-    fflush(stdout);
-    fflush(stderr);
-    execvp("pkexec", argv.data());
-    
-    // Only reached if exec failed
-    qWarning() << "Failed to exec pkexec:" << strerror(errno);
-#else
-    qWarning() << "Elevation restart not supported on this platform";
-#endif
+    PlatformQuirks::execElevated(extraArgs);
 }
