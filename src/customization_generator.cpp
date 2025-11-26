@@ -155,7 +155,11 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         escapedSsid.replace("\\", "\\\\");  // Backslash must be escaped first
         escapedSsid.replace("\"", "\\\"");  // Then escape quotes
         line(QStringLiteral("\tssid=\"") + escapedSsid + QStringLiteral("\""), script);
+        // Use WPA2/WPA3 transition mode for compatibility with both security types
+        line(QStringLiteral("\tkey_mgmt=WPA-PSK SAE"), script);
         line(QStringLiteral("\tpsk=") + cryptedPsk, script);
+        // ieee80211w=1 enables optional Protected Management Frames (required for WPA3, optional for WPA2)
+        line(QStringLiteral("\tieee80211w=1"), script);
         line(QStringLiteral("}"), script);
         line(QStringLiteral("WPAEOF"), script);
         line(QStringLiteral("   chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf"), script);
@@ -497,6 +501,12 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
             key.replace('"', QStringLiteral("\\\""));
             push(QStringLiteral("        \"") + key + QStringLiteral("\":"), netcfg);
         }
+        if (hidden) {
+            push(QStringLiteral("          hidden: true"), netcfg);
+        }
+        // Use auth block with WPA2/WPA3 transition mode for compatibility with both security types
+        push(QStringLiteral("          auth:"), netcfg);
+        push(QStringLiteral("            key-management: psk sae"), netcfg);
         // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
         QString effectiveCryptedPsk = cryptedPskFromSettings;
         if (effectiveCryptedPsk.isEmpty()) {
@@ -508,10 +518,7 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         }
         // Required because without a password and hidden netplan would read ssid: null and crash
         effectiveCryptedPsk.replace('"', QStringLiteral("\\\""));
-        push(QStringLiteral("          password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
-        if (hidden) {
-            push(QStringLiteral("          hidden: true"), netcfg);
-        }
+        push(QStringLiteral("            password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
         
         push(QStringLiteral("      optional: true"), netcfg);
     }
