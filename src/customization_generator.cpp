@@ -110,7 +110,9 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     }
 
     // User and password setup with userconf integration
-    if (!userName.isEmpty() || !userPass.isEmpty()) {
+    // Also run when SSH public keys are configured (even without password) to ensure
+    // the system is marked as configured and the initial setup wizard is skipped
+    if (!userName.isEmpty() || !userPass.isEmpty() || !keyList.isEmpty()) {
         line(QStringLiteral("if [ -f /usr/lib/userconf-pi/userconf ]; then"), script);
         line(QStringLiteral("   /usr/lib/userconf-pi/userconf ") + shellQuote(effectiveUser) + QStringLiteral(" ") + shellQuote(userPass), script);
         line(QStringLiteral("else"), script);
@@ -317,7 +319,9 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     if (sshEnabled) {
         push(QStringLiteral("enable_ssh: true"), cloud);
         
-        if (!userName.isEmpty()) {
+        // Generate users section when username is set, OR when SSH public keys are configured
+        // This ensures the system is properly configured even with key-only authentication
+        if (!userName.isEmpty() || !sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
             push(QStringLiteral("users:"), cloud);
             // Parity: legacy QML used the typed username even when not renaming the user.
             // Fall back to getCurrentUser() when SSH is enabled and no explicit username was saved.
