@@ -143,6 +143,73 @@ ComboBox {
         return false
     }
     
+    function handleBackspace() {
+        var currentTime = new Date().getTime()
+        
+        // Reset search after timeout
+        if (currentTime - lastKeyTime > searchResetTimeout) {
+            searchString = ""
+            lastSearchIndex = -1
+            return
+        }
+        lastKeyTime = currentTime
+        
+        // Remove last character from search string
+        if (searchString.length > 0) {
+            searchString = searchString.substring(0, searchString.length - 1)
+        } else {
+            // Already empty, nothing to do
+            return
+        }
+        
+        // Re-search with the shortened string
+        if (searchString.length === 0) {
+            // Empty search - reset to first item
+            lastSearchIndex = -1
+            if (model.length > 0) {
+                currentIndex = 0
+                if (popup.visible) {
+                    var listView = popup.contentItem
+                    listView.currentIndex = 0
+                    scrollAnimation.to = 0
+                    scrollAnimation.restart()
+                }
+            }
+            return
+        }
+        
+        // Search for match with shortened string
+        var foundIndex = -1
+        var modelLen = model.length
+        
+        // Start from beginning when backspacing
+        for (var i = 0; i < modelLen; i++) {
+            var text = root.textAt ? root.textAt(i) : (model[i] + "")
+            if (text.toLowerCase().startsWith(searchString)) {
+                foundIndex = i
+                break
+            }
+        }
+        
+        if (foundIndex !== -1) {
+            lastSearchIndex = foundIndex
+            currentIndex = foundIndex
+            
+            if (popup.visible) {
+                var listView = popup.contentItem
+                listView.currentIndex = foundIndex
+                
+                // Smooth scroll to center the found item
+                var targetY = (foundIndex * itemHeight) - (listView.height / 2) + (itemHeight / 2)
+                var maxY = Math.max(0, listView.contentHeight - listView.height)
+                var finalY = Math.max(0, Math.min(targetY, maxY))
+                
+                scrollAnimation.to = finalY
+                scrollAnimation.restart()
+            }
+        }
+    }
+    
     // Smooth scroll animation for keyboard navigation
     NumberAnimation {
         id: scrollAnimation
@@ -176,7 +243,13 @@ ComboBox {
         highlighted: root.highlightedIndex === delegateRoot.index
         
         Keys.onPressed: (event) => {
-            if (event.text && event.text.length === 1) {
+            // Handle backspace to delete last character
+            if (event.key === Qt.Key_Backspace) {
+                root.handleBackspace()
+                event.accepted = true
+            }
+            // Handle regular character input
+            else if (event.text && event.text.length === 1) {
                 root.performSearch(event.text)
                 event.accepted = true
             }
@@ -232,6 +305,10 @@ ComboBox {
         onVisibleChanged: {
             root.searchString = ""
             root.lastSearchIndex = -1
+            // Ensure ListView receives focus when popup opens for keyboard search
+            if (visible && contentItem) {
+                contentItem.forceActiveFocus()
+            }
         }
         
         background: Rectangle {
@@ -284,6 +361,9 @@ ComboBox {
             delegate: root.delegate
             boundsBehavior: Flickable.StopAtBounds  // Stop at bounds for native feel
             
+            // Enable focus so keyboard input works for search
+            focus: popupComponent.visible
+            
             // Disable flickable behavior - we'll handle scrolling ourselves for smooth control
             interactive: true
             flickDeceleration: 3000  // Standard deceleration
@@ -292,6 +372,20 @@ ComboBox {
             preferredHighlightBegin: 0
             preferredHighlightEnd: height
             highlightRangeMode: ListView.ApplyRange
+            
+            // Handle keyboard input for search when popup is open
+            Keys.onPressed: (event) => {
+                // Handle backspace to delete last character
+                if (event.key === Qt.Key_Backspace) {
+                    root.handleBackspace()
+                    event.accepted = true
+                }
+                // Handle regular character input
+                else if (event.text && event.text.length === 1) {
+                    root.performSearch(event.text)
+                    event.accepted = true
+                }
+            }
             
             // Smooth highlight animations
             highlightMoveDuration: 100
