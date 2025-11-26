@@ -228,7 +228,11 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("country=GB"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"TestNetwork\""));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("scan_ssid=1"));
+    // WPA2/WPA3 transition mode for compatibility with both security types
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("key_mgmt=WPA-PSK SAE"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("psk=hashed_password_here"));
+    // PMF optional for WPA3 compatibility
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ieee80211w=1"));
 }
 
 TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customization]") {
@@ -243,7 +247,10 @@ TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customiz
     // Should still include psk= line even when empty (matching old Imager behavior)
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("wpa_supplicant.conf"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"OpenNetwork\""));
+    // WPA2/WPA3 transition mode
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("key_mgmt=WPA-PSK SAE"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("\tpsk="));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ieee80211w=1"));
 }
 
 TEST_CASE("CustomisationGenerator WiFi country only (no SSID)", "[customization]") {
@@ -662,6 +669,9 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("regulatory-domain: \"DE\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("access-points:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"TestNetwork\":"));
+    // WPA2/WPA3 transition mode via auth block
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("auth:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("key-management: psk sae"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakecryptedhash123\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("optional: true"));
 }
@@ -677,6 +687,9 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidde
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"HiddenNetwork\":"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hidden: true"));
+    // WPA2/WPA3 transition mode via auth block
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("auth:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("key-management: psk sae"));
 }
 
 TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[cloudinit][network]") {
@@ -711,6 +724,9 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with speci
     
     // Quotes should be escaped
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Test \\\"Network\\\" (5GHz)"));
+    // WPA2/WPA3 transition mode via auth block
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("auth:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("key-management: psk sae"));
 }
 
 TEST_CASE("CustomisationGenerator handles empty cloud-init settings gracefully", "[cloudinit][negative]") {
