@@ -296,6 +296,12 @@ public:
     Q_INVOKABLE void refreshOsListFrom(const QUrl &url);
     Q_INVOKABLE void refreshOsListFromDefaultUrl();
 
+    /* Elevatable bundle (e.g., AppImage) privilege escalation support */
+    Q_INVOKABLE bool isElevatableBundle();
+    Q_INVOKABLE bool hasElevationPolicyInstalled();
+    Q_INVOKABLE bool installElevationPolicy();
+    Q_INVOKABLE void restartWithElevatedPrivileges();
+
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
 

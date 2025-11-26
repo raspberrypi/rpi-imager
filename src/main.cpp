@@ -259,16 +259,23 @@ int main(int argc, char *argv[])
             // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
             // Check if running from AppImage first
             QString execName;
+            QString statusAndAction;
             QByteArray appImagePath = qgetenv("APPIMAGE");
             if (!appImagePath.isEmpty()) {
                 execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
+                // AppImage-specific message with Install Authorization option
+                statusAndAction = QObject::tr(
+                    "You are not running as root.\n\n"
+                    "Click \"Install Authorization\" to set up automatic privilege elevation, "
+                    "or run manually with: sudo %1"
+                ).arg(execName);
             } else {
                 execName = QFileInfo(QString::fromUtf8(argv[0])).fileName();
+                statusAndAction = QObject::tr(
+                    "You are not running as root.\n\n"
+                    "Please run with elevated privileges: sudo %1"
+                ).arg(execName);
             }
-            QString statusAndAction = QObject::tr(
-                "You are not running as root.\n\n"
-                "Please run with elevated privileges: sudo %1"
-            ).arg(execName);
     #elif defined(Q_OS_WIN)
             QString statusAndAction = QObject::tr(
                 "You are not running as Administrator.\n\n"

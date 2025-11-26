@@ -263,6 +263,8 @@ export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="${HERE}/usr/plugins"
 export QML_IMPORT_PATH="${HERE}/usr/qml"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
+
+# The binary handles privilege elevation internally via pkexec if needed
 exec "${HERE}/usr/bin/rpi-imager" "$@"
 EOF
     chmod +x "$APPDIR/AppRun"

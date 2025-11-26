@@ -81,6 +81,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pwd.h>
+#include <cerrno>
+#include <cstring>
+#include <vector>
+#include <string>
 #endif
 
 using namespace ImageOptions;
@@ -2746,53 +2750,49 @@ void ImageWriter::openUrl(const QUrl &url)
             
             runuserArgs << envArgs;
             
-            qint64 pid;
-            success = QProcess::startDetached("runuser", runuserArgs, QString(), &pid);
+            success = PlatformQuirks::launchDetached("runuser", runuserArgs);
             if (!success) {
                 qWarning() << "Failed to start runuser xdg-open process, falling back to pkexec";
                 // Fallback to pkexec if runuser fails (might not be available on all systems)
                 QStringList pkexecArgs;
                 pkexecArgs << "--user" << targetUsername << "xdg-open" << url.toString();
-                success = QProcess::startDetached("pkexec", pkexecArgs, QString(), &pid);
+                success = PlatformQuirks::launchDetached("pkexec", pkexecArgs);
                 if (!success) {
                     qWarning() << "Failed to start pkexec xdg-open process";
                 } else {
-                    qDebug() << "Started pkexec xdg-open with PID:" << pid;
+                    qDebug() << "Started pkexec xdg-open";
                 }
             } else {
-                qDebug() << "Started runuser xdg-open with PID:" << pid;
+                qDebug() << "Started runuser xdg-open";
             }
         } else {
             qWarning() << "Could not determine original user for xdg-open";
             success = false;
         }
     } else {
-        // Not running as root - use startDetached to avoid blocking
-        qint64 pid;
-        success = QProcess::startDetached("xdg-open", QStringList() << url.toString(), QString(), &pid);
+        // Not running as root - launch detached to avoid blocking
+        success = PlatformQuirks::launchDetached("xdg-open", QStringList() << url.toString());
         if (!success) {
             qWarning() << "Failed to start xdg-open process";
         } else {
-            qDebug() << "Started xdg-open with PID:" << pid;
+            qDebug() << "Started xdg-open";
         }
     }
 #elif defined(Q_OS_DARWIN)
     // Use open on macOS
-    qint64 pid;
-    success = QProcess::startDetached("open", QStringList() << url.toString(), QString(), &pid);
+    success = PlatformQuirks::launchDetached("open", QStringList() << url.toString());
     if (!success) {
         qWarning() << "Failed to start open process";
     } else {
-        qDebug() << "Started open with PID:" << pid;
+        qDebug() << "Started open";
     }
 #elif defined(Q_OS_WIN)
     // Use start on Windows
-    qint64 pid;
-    success = QProcess::startDetached("cmd", QStringList() << "/c" << "start" << url.toString(), QString(), &pid);
+    success = PlatformQuirks::launchDetached("cmd", QStringList() << "/c" << "start" << url.toString());
     if (!success) {
         qWarning() << "Failed to start cmd /c start process";
     } else {
-        qDebug() << "Started cmd /c start with PID:" << pid;
+        qDebug() << "Started cmd /c start";
     }
 #endif
 
@@ -2888,4 +2888,103 @@ void ImageWriter::clearConnectToken()
 {
     _piConnectToken.clear();
     emit connectTokenCleared();
+}
+
+bool ImageWriter::isElevatableBundle()
+{
+    return PlatformQuirks::isElevatableBundle();
+}
+
+bool ImageWriter::hasElevationPolicyInstalled()
+{
+    return PlatformQuirks::hasElevationPolicyInstalled();
+}
+
+bool ImageWriter::installElevationPolicy()
+{
+    const char* bundlePath = PlatformQuirks::getBundlePath();
+    if (!bundlePath) {
+        qWarning() << "Cannot install elevation policy: not running from an elevatable bundle";
+        return false;
+    }
+    
+#ifdef Q_OS_LINUX
+    // Use pkexec to run ourselves with --install-elevation-policy
+    // --disable-internal-agent ensures we use the graphical polkit agent
+    QStringList args;
+    args << "--disable-internal-agent";
+    args << QString::fromUtf8(bundlePath);
+    args << "--install-elevation-policy";
+    
+    QProcess process;
+    process.start("/usr/bin/pkexec", args);
+    
+    if (!process.waitForStarted(5000)) {
+        qWarning() << "Failed to start pkexec for policy installation";
+        return false;
+    }
+    
+    if (!process.waitForFinished(60000)) {
+        qWarning() << "pkexec policy installation timed out";
+        process.kill();
+        return false;
+    }
+    
+    int exitCode = process.exitCode();
+    if (exitCode == 0) {
+        return true;
+    } else if (exitCode == 126) {
+        // User cancelled authentication
+        return false;
+    } else {
+        qWarning() << "Elevation policy installation failed:" << process.readAllStandardError();
+        return false;
+    }
+#else
+    return false;
+#endif
+}
+
+void ImageWriter::restartWithElevatedPrivileges()
+{
+    const char* bundlePath = PlatformQuirks::getBundlePath();
+    if (!bundlePath) {
+        qWarning() << "Cannot restart with elevated privileges: not running from an elevatable bundle";
+        return;
+    }
+    
+#ifdef Q_OS_LINUX
+    // Build argument list for pkexec
+    // We exec() directly to preserve session context for polkit agent
+    std::vector<std::string> argStrings;
+    argStrings.push_back("pkexec");
+    argStrings.push_back("--disable-internal-agent");
+    argStrings.push_back(bundlePath);
+    
+    // Pass through --log-file if present
+    QStringList appArgs = QCoreApplication::arguments();
+    for (int i = 0; i < appArgs.size(); i++) {
+        if (appArgs[i] == "--log-file" && i + 1 < appArgs.size()) {
+            argStrings.push_back("--log-file");
+            argStrings.push_back(appArgs[i + 1].toStdString());
+            break;
+        }
+    }
+    
+    // Build argv array and exec
+    std::vector<char*> argv;
+    for (auto& s : argStrings) {
+        argv.push_back(const_cast<char*>(s.c_str()));
+    }
+    argv.push_back(nullptr);
+    
+    fflush(stdout);
+    fflush(stderr);
+    execvp("pkexec", argv.data());
+    
+    // Only reached if exec failed
+    qWarning() << "Failed to exec pkexec:" << strerror(errno);
+#else
+    qWarning() << "Elevation restart not supported on this platform";
+#endif
 }

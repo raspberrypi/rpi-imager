@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cstdio>
 #include <iostream>
+#include <QProcess>
 
 namespace PlatformQuirks {
 
@@ -308,6 +309,39 @@ void attachConsole() {
         // Sync C++ iostreams with C stdio for consistency
         std::ios::sync_with_stdio();
     }
+}
+
+bool isElevatableBundle() {
+    // Windows uses UAC manifests for elevation, not this mechanism
+    return false;
+}
+
+const char* getBundlePath() {
+    // Not applicable on Windows
+    return nullptr;
+}
+
+bool hasElevationPolicyInstalled() {
+    // Not applicable on Windows
+    return false;
+}
+
+bool installElevationPolicy() {
+    // Not applicable on Windows
+    return false;
+}
+
+bool tryElevate(int argc, char** argv) {
+    // Windows uses UAC and ShellExecute with "runas" verb for elevation
+    (void)argc;
+    (void)argv;
+    return false;
+}
+
+bool launchDetached(const QString& program, const QStringList& arguments) {
+    // On Windows, QProcess::startDetached works correctly for launching
+    // detached processes that outlive the parent
+    return QProcess::startDetached(program, arguments);
 }
 
 } // namespace PlatformQuirks
