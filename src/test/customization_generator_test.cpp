@@ -660,20 +660,20 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, token, false, true, "testuser");
     QString yaml = QString::fromUtf8(userdata);
     
-    // Check deploy key file is written with defer option
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("write_files:"));
-    QString expectedPath = QString("- path: /home/testuser/") + PI_CONNECT_CONFIG_PATH + "/" + PI_CONNECT_DEPLOY_KEY_FILENAME;
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedPath.toStdString()));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("permissions: '0600'"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("owner: testuser:testuser"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("defer: true"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("content: |"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
-    
-    // Check runcmd section exists and creates config directory
+    // Check runcmd section exists (Pi Connect uses runcmd to ensure user exists first)
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
+    
+    // Check config directory is created
     QString expectedInstallDir = QString("install -o testuser -m 700 -d /home/testuser/") + PI_CONNECT_CONFIG_PATH;
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedInstallDir.toStdString()));
+    
+    // Check deploy key file is written via printf in runcmd (not write_files)
+    // This approach is used because cloud-init tries to resolve user/group at parse time
+    // with write_files defer:true, which fails if the user doesn't exist yet
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("printf"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(PI_CONNECT_DEPLOY_KEY_FILENAME));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chmod 600"));
     
     // Check systemd unit directories are created
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/default.target.wants"));
