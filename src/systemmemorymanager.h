@@ -92,6 +92,13 @@ public:
      */
     size_t getOptimalRingBufferSlots(size_t slotSize);
 
+    /**
+     * @brief Log a summary of all memory-based configuration
+     * 
+     * Useful for diagnostics - shows all adaptive settings based on detected memory.
+     */
+    void logConfigurationSummary();
+
 private:
     SystemMemoryManager() = default;
     ~SystemMemoryManager() = default;

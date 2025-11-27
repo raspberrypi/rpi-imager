@@ -16,6 +16,7 @@
 #include <functional>
 #include "acceleratedcryptographichash.h"
 #include "config.h"
+#include "systemmemorymanager.h"
 
 /**
  * @brief Asynchronous cache file writer
@@ -130,15 +131,18 @@ protected:
     void run() override;
 
 private:
-    // Queue management
-    static constexpr int MAX_QUEUE_SIZE = 32;  // Max pending write chunks
-    static constexpr int MAX_QUEUE_MEMORY_MB = 64;  // Max memory in queue
+    // Queue management - initialized based on system memory
+    int _maxQueueSize;       // Max pending write chunks
+    qint64 _maxQueueMemory;  // Max memory in queue (bytes)
     
     struct WriteChunk {
         QByteArray data;
     };
     
     QQueue<WriteChunk> _queue;
+    
+    // Initialize adaptive queue limits based on available system memory
+    void _initializeQueueLimits();
     QMutex _mutex;
     QWaitCondition _queueNotEmpty;
     QWaitCondition _queueNotFull;

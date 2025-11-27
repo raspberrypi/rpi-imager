@@ -9,6 +9,8 @@
 
 AsyncCacheWriter::AsyncCacheWriter(QObject *parent)
     : QThread(parent)
+    , _maxQueueSize(32)
+    , _maxQueueMemory(64 * 1024 * 1024)
     , _hash(OSLIST_HASH_ALGORITHM)
     , _isActive(false)
     , _shouldStop(false)
@@ -17,6 +19,39 @@ AsyncCacheWriter::AsyncCacheWriter(QObject *parent)
     , _bytesQueued(0)
     , _bytesWritten(0)
 {
+    _initializeQueueLimits();
+}
+
+void AsyncCacheWriter::_initializeQueueLimits()
+{
+    qint64 totalMemMB = SystemMemoryManager::instance().getTotalMemoryMB();
+    
+    // Adaptive queue sizing based on system memory
+    // Cache writing is less critical than main I/O, so we use conservative memory allocation
+    if (totalMemMB < 1024) {
+        // Very low memory (< 1GB): Minimal caching to preserve RAM
+        _maxQueueSize = 8;
+        _maxQueueMemory = 8 * 1024 * 1024;  // 8MB max
+    } else if (totalMemMB < 2048) {
+        // Low memory (1-2GB): Small cache buffer
+        _maxQueueSize = 16;
+        _maxQueueMemory = 16 * 1024 * 1024;  // 16MB max
+    } else if (totalMemMB < 4096) {
+        // Medium memory (2-4GB): Moderate cache buffer
+        _maxQueueSize = 24;
+        _maxQueueMemory = 32 * 1024 * 1024;  // 32MB max
+    } else if (totalMemMB < 8192) {
+        // High memory (4-8GB): Comfortable cache buffer
+        _maxQueueSize = 32;
+        _maxQueueMemory = 64 * 1024 * 1024;  // 64MB max
+    } else {
+        // Very high memory (> 8GB): Large cache buffer for best performance
+        _maxQueueSize = 48;
+        _maxQueueMemory = 128 * 1024 * 1024;  // 128MB max
+    }
+    
+    qDebug() << "AsyncCacheWriter: Queue limits set to" << _maxQueueSize << "chunks,"
+             << (_maxQueueMemory / (1024 * 1024)) << "MB for" << totalMemMB << "MB system";
 }
 
 AsyncCacheWriter::~AsyncCacheWriter()
@@ -85,16 +120,16 @@ bool AsyncCacheWriter::write(const char *data, size_t len)
         // 1. Brief wait (up to 500ms) to see if space becomes available
         // 2. If still full, disable caching rather than blocking the download
         
-        if (_queue.size() >= MAX_QUEUE_SIZE || 
-            queueMemoryUsage() >= MAX_QUEUE_MEMORY_MB * 1024 * 1024) {
+        if (_queue.size() >= _maxQueueSize || 
+            queueMemoryUsage() >= _maxQueueMemory) {
             
             // Try brief wait for space (don't block download for too long)
             static constexpr int MAX_BACKPRESSURE_WAIT_MS = 500;
             static constexpr int WAIT_INTERVAL_MS = 50;
             int waitedMs = 0;
             
-            while ((_queue.size() >= MAX_QUEUE_SIZE || 
-                    queueMemoryUsage() >= MAX_QUEUE_MEMORY_MB * 1024 * 1024) &&
+            while ((_queue.size() >= _maxQueueSize || 
+                    queueMemoryUsage() >= _maxQueueMemory) &&
                    waitedMs < MAX_BACKPRESSURE_WAIT_MS) {
                 
                 if (_shouldStop || _hasError) {
@@ -106,8 +141,8 @@ bool AsyncCacheWriter::write(const char *data, size_t len)
             }
             
             // If still full after waiting, cache I/O is too slow - disable caching
-            if (_queue.size() >= MAX_QUEUE_SIZE || 
-                queueMemoryUsage() >= MAX_QUEUE_MEMORY_MB * 1024 * 1024) {
+            if (_queue.size() >= _maxQueueSize || 
+                queueMemoryUsage() >= _maxQueueMemory) {
                 qDebug() << "AsyncCacheWriter: Queue still full after" << waitedMs 
                          << "ms wait. Cache I/O too slow, disabling caching to avoid blocking download.";
                 _hasError = true;  // Signal error state
