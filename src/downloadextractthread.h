@@ -7,9 +7,10 @@
  */
 
 #include "downloadthread.h"
-#include <deque>
+#include "ringbuffer.h"
 #include <condition_variable>
 #include <QFuture>
+#include <memory>
 
 class _extractThreadClass;
 
@@ -40,10 +41,12 @@ protected:
     char *_abuf[2];
     size_t _abufsize;
     _extractThreadClass *_extractThread;
-    std::deque<QByteArray> _queue;
-    static const int MAX_QUEUE_SIZE;
-    std::mutex _queueMutex;
-    std::condition_variable _cv;
+    
+    // Zero-copy ring buffer for producer-consumer data transfer
+    std::unique_ptr<RingBuffer> _ringBuffer;
+    static const int RING_BUFFER_SLOTS;  // Number of slots in ring buffer
+    RingBuffer::Slot* _currentReadSlot;  // Current slot being read by libarchive
+    
     bool _ethreadStarted, _isImage;
     AcceleratedCryptographicHash _inputHash;
     int _activeBuf;
@@ -54,7 +57,6 @@ protected:
     quint64 _lastEmittedDlNow, _lastLocalVerifyNow;
     bool _downloadComplete;
 
-    QByteArray _popQueue();
     void _pushQueue(const char *data, size_t len);
     void _cancelExtract();
     virtual size_t _writeData(const char *buf, size_t len);
