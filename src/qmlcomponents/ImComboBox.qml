@@ -43,6 +43,7 @@ ComboBox {
     property string searchString: ""
     property real lastKeyTime: 0
     property int lastSearchIndex: -1
+    property int originalIndex: -1  // Store original selection when popup opens
     
     // Keyboard navigation settings - more discoverable timeout
     readonly property int searchResetTimeout: 1500  // 1.5 seconds - gives users time to type multiple chars
@@ -243,10 +244,30 @@ ComboBox {
         highlighted: root.highlightedIndex === delegateRoot.index
         
         Keys.onPressed: (event) => {
+            // Handle Escape - restore original selection and close popup
+            if (event.key === Qt.Key_Escape) {
+                root.currentIndex = root.originalIndex
+                popupComponent.close()
+                event.accepted = true
+            }
+            // Handle Enter/Return - select current highlighted item and close popup
+            else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                // Use highlightedIndex to select the item
+                if (root.highlightedIndex >= 0 && root.highlightedIndex < root.model.length) {
+                    root.currentIndex = root.highlightedIndex
+                }
+                popupComponent.close()
+                event.accepted = true
+            }
             // Handle backspace to delete last character
-            if (event.key === Qt.Key_Backspace) {
+            else if (event.key === Qt.Key_Backspace) {
                 root.handleBackspace()
                 event.accepted = true
+            }
+            // Handle Tab - let it propagate for normal navigation
+            else if (event.key === Qt.Key_Tab) {
+                // Don't accept - let Tab navigate normally
+                event.accepted = false
             }
             // Handle regular character input
             else if (event.text && event.text.length === 1) {
@@ -303,11 +324,19 @@ ComboBox {
         
         // Clear search string when popup opens or closes
         onVisibleChanged: {
-            root.searchString = ""
-            root.lastSearchIndex = -1
-            // Ensure ListView receives focus when popup opens for keyboard search
-            if (visible && contentItem) {
-                contentItem.forceActiveFocus()
+            if (visible) {
+                // Store original selection when popup opens
+                root.originalIndex = root.currentIndex
+                root.searchString = ""
+                root.lastSearchIndex = -1
+                // Ensure ListView receives focus when popup opens for keyboard search
+                if (contentItem) {
+                    contentItem.forceActiveFocus()
+                }
+            } else {
+                // Clear search when popup closes
+                root.searchString = ""
+                root.lastSearchIndex = -1
             }
         }
         
@@ -375,10 +404,30 @@ ComboBox {
             
             // Handle keyboard input for search when popup is open
             Keys.onPressed: (event) => {
+                // Handle Escape - restore original selection and close popup
+                if (event.key === Qt.Key_Escape) {
+                    root.currentIndex = root.originalIndex
+                    popupComponent.close()
+                    event.accepted = true
+                }
+                // Handle Enter/Return - select current highlighted item and close popup
+                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    // Use highlightedIndex (which dropdownList.currentIndex is bound to) to select the item
+                    if (root.highlightedIndex >= 0 && root.highlightedIndex < root.model.length) {
+                        root.currentIndex = root.highlightedIndex
+                    }
+                    popupComponent.close()
+                    event.accepted = true
+                }
                 // Handle backspace to delete last character
-                if (event.key === Qt.Key_Backspace) {
+                else if (event.key === Qt.Key_Backspace) {
                     root.handleBackspace()
                     event.accepted = true
+                }
+                // Handle Tab - let it propagate for normal navigation
+                else if (event.key === Qt.Key_Tab) {
+                    // Don't accept - let Tab navigate normally
+                    event.accepted = false
                 }
                 // Handle regular character input
                 else if (event.text && event.text.length === 1) {
