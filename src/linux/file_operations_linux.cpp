@@ -12,14 +12,42 @@
 
 namespace rpi_imager {
 
-LinuxFileOperations::LinuxFileOperations() : fd_(-1), last_error_code_(0) {}
+LinuxFileOperations::LinuxFileOperations() : fd_(-1), last_error_code_(0), using_direct_io_(false) {}
+
+bool LinuxFileOperations::IsBlockDevicePath(const std::string& path) {
+  // Check for common block device paths
+  return (path.find("/dev/") == 0);
+}
 
 LinuxFileOperations::~LinuxFileOperations() {
   Close();
 }
 
 FileError LinuxFileOperations::OpenDevice(const std::string& path) {
-  return OpenInternal(path.c_str(), O_RDWR);
+  // Use O_DIRECT for block devices to bypass the page cache
+  // This provides:
+  // 1. Better performance by avoiding double-buffering
+  // 2. More accurate verification (reads from actual device, not cache)
+  // 3. Reduced memory pressure on the system
+  // Note: Requires sector-aligned buffers (already done via qMallocAligned with 4096 alignment)
+  
+  int flags = O_RDWR;
+  bool isBlockDevice = IsBlockDevicePath(path);
+  
+  if (isBlockDevice) {
+    flags |= O_DIRECT;
+    using_direct_io_ = true;
+  }
+  
+  FileError result = OpenInternal(path.c_str(), flags);
+  
+  // If O_DIRECT fails (e.g., filesystem doesn't support it), fall back to regular I/O
+  if (result != FileError::kSuccess && isBlockDevice && using_direct_io_) {
+    using_direct_io_ = false;
+    result = OpenInternal(path.c_str(), O_RDWR);
+  }
+  
+  return result;
 }
 
 FileError LinuxFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
@@ -83,11 +111,13 @@ FileError LinuxFileOperations::Close() {
   if (fd_ >= 0) {
     if (close(fd_) != 0) {
       fd_ = -1;
+      using_direct_io_ = false;
       return FileError::kCloseError;
     }
     fd_ = -1;
   }
   current_path_.clear();
+  using_direct_io_ = false;
   return FileError::kSuccess;
 }
 
