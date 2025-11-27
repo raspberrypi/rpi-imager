@@ -27,7 +27,7 @@ if(BUILD_CLI_ONLY)
     # Note: No icon or metainfo needed for CLI-only builds
 else()
     # GUI build: install full desktop integration
-    install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/rpi-imager.png" DESTINATION share/icons/hicolor/128x128/apps)
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/icon/rpi-imager.svg" DESTINATION share/icons/hicolor/scalable/apps)
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.desktop" DESTINATION share/applications)
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager.metainfo.xml" DESTINATION share/metainfo)
 endif()
