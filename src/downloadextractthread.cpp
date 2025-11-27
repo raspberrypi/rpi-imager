@@ -224,12 +224,20 @@ void DownloadExtractThread::extractImageRun()
     archive_read_support_filter_all(a);
     archive_read_support_format_all(a);
     archive_read_support_format_raw(a); // for .gz and such
+    
+    // Configure decompression options for optimal performance
+    // Note: These options are hints - libarchive ignores unsupported ones
+    _configureArchiveOptions(a);
+    
     archive_read_open(a, this, NULL, &DownloadExtractThread::_archive_read, &DownloadExtractThread::_archive_close);
 
     try
     {
         r = archive_read_next_header(a, &entry);
         _checkResult(r, a);
+        
+        // Log the compression filter(s) being used for diagnostics
+        _logCompressionFilters(a);
 
         while (true)
         {
@@ -405,10 +413,16 @@ void DownloadExtractThread::extractMultiFileRun()
     archive_read_support_filter_all(a);
     archive_read_support_format_all(a);
     archive_write_disk_set_options(ext, flags);
+    
+    // Configure decompression options for optimal performance
+    _configureArchiveOptions(a);
+    
     archive_read_open(a, this, NULL, &DownloadExtractThread::_archive_read, &DownloadExtractThread::_archive_close);
 
     try
     {
+        // Log the compression filter(s) being used
+        _logCompressionFilters(a);
         while ( (r = archive_read_next_header(a, &entry)) != ARCHIVE_EOF)
         {
           _checkResult(r, a);
@@ -578,6 +592,67 @@ int DownloadExtractThread::_on_close(struct archive *)
         _currentReadSlot = nullptr;
     }
     return 0;
+}
+
+void DownloadExtractThread::_configureArchiveOptions(struct archive *a)
+{
+    // Get number of CPU cores for multi-threading hints
+    int numCores = QThread::idealThreadCount();
+    if (numCores < 1) numCores = 1;
+    if (numCores > 8) numCores = 8;  // Cap at 8 to avoid excessive memory usage
+    
+    QString threadsStr = QString::number(numCores);
+    QByteArray threadsBytes = threadsStr.toLatin1();
+    
+    // XZ/LZMA: Enable multi-threaded decoding if file has multiple blocks
+    // Note: Only works if the .xz file was compressed with block threading
+    // libarchive 3.3+ supports "threads" option for xz filter
+    int ret = archive_read_set_option(a, "xz", "threads", threadsBytes.constData());
+    if (ret == ARCHIVE_OK) {
+        qDebug() << "XZ multi-threaded decoding enabled with" << numCores << "threads";
+    }
+    
+    // Also try lzma filter (some files use raw lzma)
+    archive_read_set_option(a, "lzma", "threads", threadsBytes.constData());
+    
+    // ZSTD: Standard decompression is single-threaded by design
+    // The zstd format requires sequential block processing due to dictionary dependencies
+    // However, we can hint for optimal buffer sizing
+    // Note: As of libarchive 3.8, there's no "threads" option for zstd decompression
+    
+    // Gzip: Single-threaded, no threading options available
+    // The gzip format doesn't support parallel decompression
+}
+
+void DownloadExtractThread::_logCompressionFilters(struct archive *a)
+{
+    // Log all active filters for diagnostics
+    int filterCount = archive_filter_count(a);
+    if (filterCount <= 1) {
+        qDebug() << "No compression filter detected (raw or uncompressed)";
+        return;
+    }
+    
+    QStringList filters;
+    for (int i = 0; i < filterCount; i++) {
+        const char* name = archive_filter_name(a, i);
+        if (name && strcmp(name, "none") != 0) {
+            filters << QString::fromUtf8(name);
+        }
+    }
+    
+    if (!filters.isEmpty()) {
+        qDebug() << "Decompression pipeline:" << filters.join(" -> ");
+        
+        // Provide performance hints based on compression format
+        if (filters.contains("xz") || filters.contains("lzma")) {
+            qDebug() << "XZ/LZMA: Multi-threaded decode enabled if file has multiple blocks";
+        } else if (filters.contains("zstd")) {
+            qDebug() << "ZSTD: Using single-threaded streaming decompression (format limitation)";
+        } else if (filters.contains("gzip")) {
+            qDebug() << "GZIP: Using single-threaded decompression (format limitation)";
+        }
+    }
 }
 
 // static callback functions that call object oriented equivalents
