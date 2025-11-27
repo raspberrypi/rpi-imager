@@ -31,7 +31,8 @@
 
 using namespace std;
 
-const int DownloadExtractThread::MAX_QUEUE_SIZE = 128;
+// Ring buffer slot count is now determined dynamically by SystemMemoryManager
+const int DownloadExtractThread::RING_BUFFER_SLOTS = 0;  // Placeholder, actual value set at runtime
 
 // Buffer optimization logic now handled by centralized SystemMemoryManager
 
@@ -57,6 +58,7 @@ protected:
 DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
     : DownloadThread(url, localfilename, expectedHash, parent), 
       _abufsize(SystemMemoryManager::instance().getOptimalWriteBufferSize()), 
+      _currentReadSlot(nullptr),
       _ethreadStarted(false),
       _isImage(true), 
       _inputHash(OSLIST_HASH_ALGORITHM), 
@@ -73,7 +75,14 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     _abuf[0] = (char *) qMallocAligned(_abufsize, pageSize);
     _abuf[1] = (char *) qMallocAligned(_abufsize, pageSize);
     
+    // Create zero-copy ring buffer for curl -> libarchive data transfer
+    // Both slot size and slot count are determined by SystemMemoryManager based on available RAM
+    size_t inputBufferSize = SystemMemoryManager::instance().getOptimalInputBufferSize();
+    size_t numSlots = SystemMemoryManager::instance().getOptimalRingBufferSlots(inputBufferSize);
+    _ringBuffer = std::make_unique<RingBuffer>(numSlots, inputBufferSize, pageSize);
+    
     qDebug() << "Using buffer size:" << _abufsize << "bytes with page size:" << pageSize << "bytes";
+    qDebug() << "Ring buffer:" << RING_BUFFER_SLOTS << "slots of" << inputBufferSize << "bytes";
 }
 
 DownloadExtractThread::~DownloadExtractThread()
@@ -87,6 +96,9 @@ DownloadExtractThread::~DownloadExtractThread()
     }
     qFreeAligned(_abuf[0]);
     qFreeAligned(_abuf[1]);
+    
+    // Ring buffer destructor handles memory cleanup
+    _ringBuffer.reset();
 }
 
 void DownloadExtractThread::_emitProgressUpdate()
@@ -154,12 +166,12 @@ size_t DownloadExtractThread::_writeData(const char *buf, size_t len)
 
 void DownloadExtractThread::_onDownloadSuccess()
 {
-    std::unique_lock<std::mutex> lock(_queueMutex);
     _downloadComplete = true;
-    lock.unlock();
     
-    // Notify the extraction thread that download is complete
-    _cv.notify_all();
+    // Signal ring buffer that producer is done
+    if (_ringBuffer) {
+        _ringBuffer->producerDone();
+    }
     
     // Wait for extraction thread to finish processing all data
     _extractThread->wait();
@@ -176,11 +188,9 @@ void DownloadExtractThread::_onDownloadError(const QString &msg)
 
 void DownloadExtractThread::_cancelExtract()
 {
-    std::unique_lock<std::mutex> lock(_queueMutex);
-    _queue.clear();
-    _queue.push_back(QByteArray());
-    lock.unlock();
-    _cv.notify_all();
+    if (_ringBuffer) {
+        _ringBuffer->cancel();
+    }
 }
 
 void DownloadExtractThread::cancelDownload()
@@ -530,42 +540,43 @@ void DownloadExtractThread::extractMultiFileRun()
 
 ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
 {
-    // Use synchronized queue access to check for completion
-    std::unique_lock<std::mutex> lock(_queueMutex);
-    
-    // Check if download is complete and queue is empty - if so, signal EOF
-    if (_downloadComplete && _queue.empty()) {
-        lock.unlock();
+    if (!_ringBuffer) {
         *buff = nullptr;
         return 0;
     }
     
-    // Wait for data to be available OR download completion with empty queue
-    _cv.wait(lock, [this]{
-        return _queue.size() != 0 || (_downloadComplete && _queue.empty());
-    });
-    
-    // Check again after wait - download might have completed while we were waiting
-    if (_downloadComplete && _queue.empty()) {
-        lock.unlock();
-        *buff = nullptr;
-        return 0;
+    // Release previous slot if any (it's been consumed by libarchive)
+    if (_currentReadSlot) {
+        _ringBuffer->releaseReadSlot(_currentReadSlot);
+        _currentReadSlot = nullptr;
     }
     
-    // Get the data
-    _buf = _queue.front();
-    _queue.pop_front();
+    // Acquire next read slot (blocks until data available or producer done)
+    _currentReadSlot = _ringBuffer->acquireReadSlot(100);  // 100ms timeout
     
-    // Notify any waiting pushers
-    lock.unlock();
-    _cv.notify_one();
+    // Handle timeout - retry
+    while (!_currentReadSlot && !_ringBuffer->isCancelled() && !_ringBuffer->isComplete()) {
+        _currentReadSlot = _ringBuffer->acquireReadSlot(100);
+    }
     
-    *buff = _buf.data();
-    return _buf.size();
+    // Check for EOF or cancellation
+    if (!_currentReadSlot) {
+        *buff = nullptr;
+        return 0;  // EOF or cancelled
+    }
+    
+    // Return pointer directly to pre-allocated buffer (zero-copy!)
+    *buff = _currentReadSlot->data;
+    return static_cast<ssize_t>(_currentReadSlot->size);
 }
 
 int DownloadExtractThread::_on_close(struct archive *)
 {
+    // Release final read slot if any
+    if (_currentReadSlot && _ringBuffer) {
+        _ringBuffer->releaseReadSlot(_currentReadSlot);
+        _currentReadSlot = nullptr;
+    }
     return 0;
 }
 
@@ -590,38 +601,33 @@ void DownloadExtractThread::enableMultipleFileExtraction()
     _isImage = false;
 }
 
-// Synchronized queue using monitor consumer/producer pattern
-QByteArray DownloadExtractThread::_popQueue()
-{
-    std::unique_lock<std::mutex> lock(_queueMutex);
-
-    _cv.wait(lock, [this]{
-            return _queue.size() != 0;
-    });
-
-    QByteArray result = _queue.front();
-    _queue.pop_front();
-    
-    // Always notify waiting pushers that space is available
-    lock.unlock();
-    _cv.notify_one();
-
-    return result;
-}
-
 void DownloadExtractThread::_pushQueue(const char *data, size_t len)
 {
-    std::unique_lock<std::mutex> lock(_queueMutex);
-
-    _cv.wait(lock, [this]{
-            return _queue.size() != MAX_QUEUE_SIZE;
-    });
-
-    _queue.emplace_back(QByteArray(data, static_cast<int>(len)));
+    if (!_ringBuffer || _cancelled) {
+        return;
+    }
     
-    // Always notify waiting poppers that data is available
-    lock.unlock();
-    _cv.notify_one();
+    // Handle data larger than slot capacity by chunking
+    size_t offset = 0;
+    while (offset < len && !_cancelled) {
+        // Acquire a write slot (blocks if buffer is full)
+        RingBuffer::Slot* slot = _ringBuffer->acquireWriteSlot(100);  // 100ms timeout
+        if (!slot) {
+            if (_ringBuffer->isCancelled() || _cancelled) {
+                return;
+            }
+            // Timeout - try again
+            continue;
+        }
+        
+        // Copy data directly into the pre-allocated slot buffer (zero-copy from slot's perspective)
+        size_t chunkSize = std::min(len - offset, slot->capacity);
+        memcpy(slot->data, data + offset, chunkSize);
+        
+        // Commit the slot
+        _ringBuffer->commitWriteSlot(slot, chunkSize);
+        offset += chunkSize;
+    }
 }
 
 bool DownloadExtractThread::_verify()

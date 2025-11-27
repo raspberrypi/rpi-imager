@@ -394,3 +394,54 @@ size_t SystemMemoryManager::getSystemPageSize()
 #endif
 }
 
+size_t SystemMemoryManager::getOptimalRingBufferSlots(size_t slotSize)
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    
+    // Target ring buffer memory usage as percentage of RAM
+    // We want enough slots for good pipelining but not excessive memory use
+    // Target: ~0.5% of RAM for ring buffer, with reasonable bounds
+    
+    size_t targetMemory;
+    size_t minSlots, maxSlots;
+    
+    if (totalMemMB < 1024) {
+        // Very low memory (< 1GB): Conservative, use ~1MB max
+        targetMemory = 1 * 1024 * 1024;
+        minSlots = 4;
+        maxSlots = 16;
+    } else if (totalMemMB < 2048) {
+        // Low memory (1-2GB): Use ~2MB max
+        targetMemory = 2 * 1024 * 1024;
+        minSlots = 8;
+        maxSlots = 24;
+    } else if (totalMemMB < 4096) {
+        // Medium memory (2-4GB): Use ~4MB max
+        targetMemory = 4 * 1024 * 1024;
+        minSlots = 12;
+        maxSlots = 32;
+    } else if (totalMemMB < 8192) {
+        // High memory (4-8GB): Use ~8MB max
+        targetMemory = 8 * 1024 * 1024;
+        minSlots = 16;
+        maxSlots = 48;
+    } else {
+        // Very high memory (> 8GB): Use ~16MB max for optimal pipelining
+        targetMemory = 16 * 1024 * 1024;
+        minSlots = 24;
+        maxSlots = 64;
+    }
+    
+    // Calculate slots based on target memory and slot size
+    size_t calculatedSlots = targetMemory / slotSize;
+    
+    // Apply bounds
+    calculatedSlots = qMax(minSlots, qMin(maxSlots, calculatedSlots));
+    
+    qDebug() << "Ring buffer slots:" << calculatedSlots 
+             << "(" << (calculatedSlots * slotSize) / (1024 * 1024) << "MB)"
+             << "for" << totalMemMB << "MB system";
+    
+    return calculatedSlots;
+}
+
