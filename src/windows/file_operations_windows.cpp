@@ -10,7 +10,13 @@
 
 namespace rpi_imager {
 
-WindowsFileOperations::WindowsFileOperations() : handle_(INVALID_HANDLE_VALUE), last_error_code_(0) {}
+WindowsFileOperations::WindowsFileOperations() : handle_(INVALID_HANDLE_VALUE), last_error_code_(0), using_direct_io_(false) {}
+
+bool WindowsFileOperations::IsPhysicalDrivePath(const std::string& path) {
+  // Check for physical drive paths like \\.\PHYSICALDRIVE0
+  return (path.find("\\\\.\\PHYSICALDRIVE") == 0) ||
+         (path.find("\\\\.\\PhysicalDrive") == 0);
+}
 
 WindowsFileOperations::~WindowsFileOperations() {
   Close();
@@ -21,7 +27,7 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   std::cout << "Opening Windows device: " << path << std::endl;
   
   // Check if this is a physical drive
-  bool isPhysicalDrive = (path.find("\\\\.\\PHYSICALDRIVE") == 0);
+  bool isPhysicalDrive = IsPhysicalDrivePath(path);
   
   if (isPhysicalDrive) {
     std::cout << "Detected physical drive, ensuring no volumes are mounted" << std::endl;
@@ -31,12 +37,38 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
     // but we can add additional safety here
   }
   
+  // Use direct I/O flags for physical drives to bypass OS page cache
+  // This provides:
+  // 1. Better performance by avoiding double-buffering
+  // 2. More accurate verification (reads from actual device, not cache)
+  // 3. Reduced memory pressure on the system
+  // Note: Requires sector-aligned buffers (already done via qMallocAligned with 4096 alignment)
+  DWORD flags = FILE_ATTRIBUTE_NORMAL;
+  if (isPhysicalDrive) {
+    flags = FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN;
+    using_direct_io_ = true;
+    std::cout << "Using direct I/O (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH) for physical drive" << std::endl;
+  }
+  
   FileError result = OpenInternal(path, 
                                   GENERIC_READ | GENERIC_WRITE,
-                                  OPEN_EXISTING);
+                                  OPEN_EXISTING,
+                                  flags);
   if (result != FileError::kSuccess) {
-    std::cout << "Failed to open device: " << path << std::endl;
-    return result;
+    // If direct I/O failed, try without it as a fallback
+    if (isPhysicalDrive && using_direct_io_) {
+      std::cout << "Direct I/O open failed, trying without FILE_FLAG_NO_BUFFERING" << std::endl;
+      using_direct_io_ = false;
+      result = OpenInternal(path, 
+                           GENERIC_READ | GENERIC_WRITE,
+                           OPEN_EXISTING,
+                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN);
+    }
+    
+    if (result != FileError::kSuccess) {
+      std::cout << "Failed to open device: " << path << std::endl;
+      return result;
+    }
   }
 
   // Enable extended DASD I/O for raw disk access
@@ -57,15 +89,18 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
     std::cout << "Skipping volume lock for physical drive" << std::endl;
   }
   
-  std::cout << "Successfully opened device: " << path << std::endl;
+  std::cout << "Successfully opened device: " << path 
+            << (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)") << std::endl;
   return FileError::kSuccess;
 }
 
 FileError WindowsFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
-  // For test files, create a regular file
+  // For test files, create a regular file (not using direct I/O)
+  using_direct_io_ = false;
   FileError result = OpenInternal(path,
                                   GENERIC_READ | GENERIC_WRITE,
-                                  CREATE_ALWAYS);
+                                  CREATE_ALWAYS,
+                                  FILE_ATTRIBUTE_NORMAL);
   if (result != FileError::kSuccess) {
     return result;
   }
@@ -209,18 +244,20 @@ FileError WindowsFileOperations::GetSize(std::uint64_t& size) {
 FileError WindowsFileOperations::Close() {
   if (handle_ != INVALID_HANDLE_VALUE) {
     // Only unlock volume if this is not a physical drive
-    bool isPhysicalDrive = (current_path_.find("\\\\.\\PHYSICALDRIVE") == 0);
+    bool isPhysicalDrive = IsPhysicalDrivePath(current_path_);
     if (!isPhysicalDrive) {
       UnlockVolume(); // Unlock if it was locked
     }
     
     if (!CloseHandle(handle_)) {
       handle_ = INVALID_HANDLE_VALUE;
+      using_direct_io_ = false;
       return FileError::kCloseError;
     }
     handle_ = INVALID_HANDLE_VALUE;
   }
   current_path_.clear();
+  using_direct_io_ = false;
   return FileError::kSuccess;
 }
 
@@ -259,7 +296,7 @@ FileError WindowsFileOperations::UnlockVolume() {
   return FileError::kSuccess;
 }
 
-FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD access, DWORD creation) {
+FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags) {
   // Close any existing handle
   Close();
 
@@ -268,7 +305,7 @@ FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD acc
                         FILE_SHARE_READ | FILE_SHARE_WRITE,
                         nullptr,
                         creation,
-                        FILE_ATTRIBUTE_NORMAL, // Removed FILE_FLAG_NO_BUFFERING to fix alignment issues
+                        flags,
                         nullptr);
 
   if (handle_ == INVALID_HANDLE_VALUE) {

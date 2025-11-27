@@ -54,8 +54,15 @@ class MacOSFileOperations : public FileOperations {
   int fd_;
   std::string current_path_;
   int last_error_code_;
+  bool using_direct_io_;  // Track if we're using F_NOCACHE
   
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
+  
+  // Helper to determine if path is a block device
+  static bool IsBlockDevicePath(const std::string& path);
+  
+  // Enable direct I/O mode using F_NOCACHE
+  bool EnableDirectIO();
 };
 
 } // namespace rpi_imager

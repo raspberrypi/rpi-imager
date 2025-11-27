@@ -54,8 +54,12 @@ class LinuxFileOperations : public FileOperations {
   int fd_;
   std::string current_path_;
   int last_error_code_;
+  bool using_direct_io_;  // Track if we opened with O_DIRECT
   
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
+  
+  // Helper to determine if path is a block device
+  static bool IsBlockDevicePath(const std::string& path);
 };
 
 } // namespace rpi_imager

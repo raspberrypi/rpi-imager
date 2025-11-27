@@ -57,10 +57,14 @@ class WindowsFileOperations : public FileOperations {
   HANDLE handle_;
   std::string current_path_;
   int last_error_code_;
+  bool using_direct_io_;  // Track if we opened with direct I/O flags
   
    FileError LockVolume();
    FileError UnlockVolume();
-   FileError OpenInternal(const std::string& path, DWORD access, DWORD creation);
+   FileError OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags = FILE_ATTRIBUTE_NORMAL);
+   
+   // Helper to determine if path is a physical drive
+   static bool IsPhysicalDrivePath(const std::string& path);
  };
 
 } // namespace rpi_imager
