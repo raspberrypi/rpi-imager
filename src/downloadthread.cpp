@@ -53,7 +53,8 @@ int DownloadThread::_curlCount = 0;
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
-    _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM)
+    _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM),
+    _hasPendingHash(false)
 {
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -78,6 +79,12 @@ DownloadThread::~DownloadThread()
 {
     _cancelled = true;
     wait();
+    
+    // Wait for any pending hash computation to complete before destroying
+    if (_hasPendingHash) {
+        _pendingHashFuture.waitForFinished();
+        _hasPendingHash = false;
+    }
     
     // Close unified file operations
     if (_file && _file->IsOpen()) {
@@ -699,11 +706,33 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
         qDebug() << "_writeFile: captured first block (" << len << ") and advanced file offset via seek";
         return (_file->Seek(len) == rpi_imager::FileError::kSuccess) ? len : 0;
     }
+
+    // Pipelined hash computation: wait for PREVIOUS hash before starting current one
+    // This allows hash(N) to run in parallel with write(N+1)
+    // The caller's double-buffering ensures buffer N stays valid until hash(N) completes
+    if (_hasPendingHash) {
+        if (!_pendingHashFuture.isFinished()) {
+            // Hash is still running - this is expected during normal pipelining
+            // Log only if we have to wait significantly (> 1ms indicates hash is slower than write)
+            QElapsedTimer waitTimer;
+            waitTimer.start();
+            _pendingHashFuture.waitForFinished();
+            qint64 waitMs = waitTimer.elapsed();
+            if (waitMs > 10) {
+                // Only log significant waits to avoid log spam
+                qDebug() << "Hash pipeline stall: waited" << waitMs << "ms for previous hash";
+            }
+        }
+        // Future is now finished, safe to reuse
+    }
+
+    // Start hash computation for current buffer (will be waited for in next iteration)
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QFuture<void> wh = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
+    _pendingHashFuture = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
 #else
-    QFuture<void> wh = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
+    _pendingHashFuture = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
 #endif
+    _hasPendingHash = true;
 
     // Use unified FileOperations for writing
     size_t bytes_written = 0;
@@ -718,7 +747,8 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
 
     qint64 written = static_cast<qint64>(bytes_written);
 
-    wh.waitForFinished();
+    // Don't wait for current hash - let it run in parallel with next write
+    // The next _writeFile call will wait for it
 
     // Cross-platform periodic sync to prevent page cache buildup
     _periodicSync();
@@ -914,8 +944,24 @@ void DownloadThread::_writeComplete()
     // Don't report errors if the operation was cancelled
     if (_cancelled)
     {
+        // Still need to wait for pending hash to avoid dangling futures
+        if (_hasPendingHash) {
+            _pendingHashFuture.waitForFinished();
+            _hasPendingHash = false;
+        }
         _closeFiles();
         return;
+    }
+
+    // Wait for final pending hash computation to complete before getting result
+    if (_hasPendingHash) {
+        if (!_pendingHashFuture.isFinished()) {
+            QElapsedTimer waitTimer;
+            waitTimer.start();
+            _pendingHashFuture.waitForFinished();
+            qDebug() << "Final hash wait:" << waitTimer.elapsed() << "ms";
+        }
+        _hasPendingHash = false;
     }
 
     QByteArray computedHash = _writehash.result().toHex();

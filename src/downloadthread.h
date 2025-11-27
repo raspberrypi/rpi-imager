@@ -14,6 +14,7 @@
 #include <QThread>
 #include <QFile>
 #include <QElapsedTimer>
+#include <QFuture>
 #include <atomic>
 #include <time.h>
 #include <curl/curl.h>
@@ -194,6 +195,10 @@ protected:
 #endif
 
     AcceleratedCryptographicHash _writehash, _verifyhash;
+
+    // Pipelined hash computation - store future for previous hash operation
+    QFuture<void> _pendingHashFuture;
+    bool _hasPendingHash;
 
     // Cross-platform adaptive page cache flushing
     qint64 _lastSyncBytes;
