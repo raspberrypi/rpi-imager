@@ -444,6 +444,21 @@ void DownloadThread::run()
     curl_easy_setopt(_c, CURLOPT_CONNECTTIMEOUT, 30);
     curl_easy_setopt(_c, CURLOPT_LOW_SPEED_TIME, 60);
     curl_easy_setopt(_c, CURLOPT_LOW_SPEED_LIMIT, 100);
+    
+    // Enable HTTP/2 for HTTPS connections (falls back to HTTP/1.1 for plain HTTP)
+    // Benefits: header compression, better connection utilization, multiplexing
+    // Note: We track HTTP/2 failures and fall back to HTTP/1.1 if needed (see retry loop below)
+    curl_easy_setopt(_c, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
+    
+    // Enable TCP keepalive to detect dead connections faster
+    curl_easy_setopt(_c, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(_c, CURLOPT_TCP_KEEPIDLE, 30L);   // Start keepalive after 30s idle
+    curl_easy_setopt(_c, CURLOPT_TCP_KEEPINTVL, 15L);  // Send keepalive every 15s
+    
+    // Track HTTP/2 failures for graceful fallback
+    int http2FailureCount = 0;
+    const int MAX_HTTP2_FAILURES = 3;
+    
     if (_inputBufferSize)
         curl_easy_setopt(_c, CURLOPT_BUFFERSIZE, _inputBufferSize);
 
@@ -493,10 +508,22 @@ void DownloadThread::run()
        And also reconnect if we detect from our end that transfer stalled for more than one minute */
     while (ret == CURLE_PARTIAL_FILE || ret == CURLE_OPERATION_TIMEDOUT
            || (ret == CURLE_HTTP2_STREAM && _lastDlNow != _lastFailureOffset)
+           || (ret == CURLE_HTTP2 && _lastDlNow != _lastFailureOffset)
            || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset) )
     {
         time_t t = time(NULL);
-        qDebug() << "HTTP connection lost. Time:" << t;
+        qDebug() << "HTTP connection lost. Error:" << curl_easy_strerror(ret) << "Time:" << t;
+
+        // Track HTTP/2 specific failures for graceful fallback
+        if (ret == CURLE_HTTP2_STREAM || ret == CURLE_HTTP2) {
+            http2FailureCount++;
+            qDebug() << "HTTP/2 failure count:" << http2FailureCount << "/" << MAX_HTTP2_FAILURES;
+            
+            if (http2FailureCount >= MAX_HTTP2_FAILURES) {
+                qDebug() << "Too many HTTP/2 failures, falling back to HTTP/1.1";
+                curl_easy_setopt(_c, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+            }
+        }
 
         /* If last failure happened less than 5 seconds ago, something else may
            be wrong. Sleep some time to prevent hammering server */
@@ -519,10 +546,28 @@ void DownloadThread::run()
     switch (ret)
     {
         case CURLE_OK:
+        {
             _successful = true;
-            qDebug() << "Download done in" << _timer.elapsed() / 1000 << "seconds";
+            
+            // Log HTTP version used for diagnostics
+            long httpVersion = 0;
+            if (curl_easy_getinfo(_c, CURLINFO_HTTP_VERSION, &httpVersion) == CURLE_OK) {
+                const char* versionStr = "unknown";
+                switch (httpVersion) {
+                    case CURL_HTTP_VERSION_1_0: versionStr = "HTTP/1.0"; break;
+                    case CURL_HTTP_VERSION_1_1: versionStr = "HTTP/1.1"; break;
+                    case CURL_HTTP_VERSION_2_0: versionStr = "HTTP/2"; break;
+                    case CURL_HTTP_VERSION_3: versionStr = "HTTP/3"; break;
+                    default: break;
+                }
+                qDebug() << "Download done in" << _timer.elapsed() / 1000 << "seconds using" << versionStr;
+            } else {
+                qDebug() << "Download done in" << _timer.elapsed() / 1000 << "seconds";
+            }
+            
             _onDownloadSuccess();
             break;
+        }
         case CURLE_WRITE_ERROR:
             deleteDownloadedFile();
             // If cancelled, treat write error as clean abort (user-initiated cancellation
