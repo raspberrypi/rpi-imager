@@ -157,10 +157,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         escapedSsid.replace("\\", "\\\\");  // Backslash must be escaped first
         escapedSsid.replace("\"", "\\\"");  // Then escape quotes
         line(QStringLiteral("\tssid=\"") + escapedSsid + QStringLiteral("\""), script);
-        // Use WPA2/WPA3 transition mode for compatibility with both security types
-        line(QStringLiteral("\tkey_mgmt=WPA-PSK SAE"), script);
         line(QStringLiteral("\tpsk=") + cryptedPsk, script);
-        // ieee80211w=1 enables optional Protected Management Frames (required for WPA3, optional for WPA2)
         line(QStringLiteral("\tieee80211w=1"), script);
         line(QStringLiteral("}"), script);
         line(QStringLiteral("WPAEOF"), script);
@@ -508,9 +505,8 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
-        // Use auth block with WPA2/WPA3 transition mode for compatibility with both security types
         push(QStringLiteral("          auth:"), netcfg);
-        push(QStringLiteral("            key-management: psk sae"), netcfg);
+        push(QStringLiteral("            key-management: psk"), netcfg);
         // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
         QString effectiveCryptedPsk = cryptedPskFromSettings;
         if (effectiveCryptedPsk.isEmpty()) {
