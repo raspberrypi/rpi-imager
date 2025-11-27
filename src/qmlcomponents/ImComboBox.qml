@@ -252,9 +252,12 @@ ComboBox {
             }
             // Handle Enter/Return - select current highlighted item and close popup
             else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                // Use highlightedIndex to select the item
-                if (root.highlightedIndex >= 0 && root.highlightedIndex < root.model.length) {
-                    root.currentIndex = root.highlightedIndex
+                // Use dropdownList.currentIndex which follows the visual highlight
+                // (root.highlightedIndex is read-only and not updated by search)
+                if (dropdownList.currentIndex >= 0 && dropdownList.currentIndex < root.model.length) {
+                    root.currentIndex = dropdownList.currentIndex
+                    // Emit activated signal so onActivated handlers run (same as clicking)
+                    root.activated(dropdownList.currentIndex)
                 }
                 popupComponent.close()
                 event.accepted = true
@@ -277,9 +280,21 @@ ComboBox {
         }
     }
     
-    // Note: Avoid global key handlers here to prevent interfering with TextFields elsewhere
-    
     // Note: Key handling for open popup is left to the focused items inside the popup
+    
+    // Handle Enter/Return to open popup when ComboBox is focused (but popup closed)
+    Keys.onReturnPressed: (event) => {
+        if (!popup.visible) {
+            popup.open()
+            event.accepted = true
+        }
+    }
+    Keys.onEnterPressed: (event) => {
+        if (!popup.visible) {
+            popup.open()
+            event.accepted = true
+        }
+    }
     
     // Improve mouse wheel behavior: step selection without opening the popup
     WheelHandler {
@@ -412,9 +427,12 @@ ComboBox {
                 }
                 // Handle Enter/Return - select current highlighted item and close popup
                 else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                    // Use highlightedIndex (which dropdownList.currentIndex is bound to) to select the item
-                    if (root.highlightedIndex >= 0 && root.highlightedIndex < root.model.length) {
-                        root.currentIndex = root.highlightedIndex
+                    // Use dropdownList.currentIndex which follows the visual highlight
+                    // (root.highlightedIndex is read-only and not updated by search)
+                    if (dropdownList.currentIndex >= 0 && dropdownList.currentIndex < root.model.length) {
+                        root.currentIndex = dropdownList.currentIndex
+                        // Emit activated signal so onActivated handlers run (same as clicking)
+                        root.activated(dropdownList.currentIndex)
                     }
                     popupComponent.close()
                     event.accepted = true
