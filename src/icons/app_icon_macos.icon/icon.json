@@ -1,0 +1,153 @@
+{
+  "fill-specializations" : [
+    {
+      "value" : "system-light"
+    },
+    {
+      "appearance" : "dark",
+      "value" : "system-dark"
+    }
+  ],
+  "groups" : [
+    {
+      "blur-material" : null,
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            }
+          ],
+          "glass" : false,
+          "hidden" : true,
+          "image-name" : "Logo Outline 2.svg",
+          "name" : "Logo Outline 2"
+        },
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "Logo.svg",
+          "name" : "Logo"
+        },
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "none"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "display-p3:0.73018,0.49562,0.96783,1.00000"
+              }
+            }
+          ],
+          "hidden" : false,
+          "image-name" : "SD Red.svg",
+          "name" : "SD Red",
+          "opacity" : 0.8
+        },
+        {
+          "blend-mode-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "normal"
+            }
+          ],
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.96863,0.78824,0.26667,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "display-p3:0.13054,0.10001,0.96863,1.00000"
+              }
+            }
+          ],
+          "hidden" : false,
+          "image-name" : "SD Green.svg",
+          "name" : "SD Green",
+          "opacity" : 0.8
+        },
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.33159,0.42158,0.96783,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "display-p3:0.00022,0.23758,0.96783,1.00000"
+              }
+            }
+          ],
+          "hidden" : false,
+          "image-name" : "SD Blue.svg",
+          "name" : "SD Blue",
+          "opacity" : 0.8
+        },
+        {
+          "fill" : {
+            "solid" : "display-p3:0.96783,0.88858,0.33878,1.00000"
+          },
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "SD Yellow.svg",
+          "name" : "SD Yellow",
+          "opacity" : 0.8
+        }
+      ],
+      "lighting" : "individual",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.5
+      },
+      "specular-specializations" : [
+        {
+          "value" : true
+        },
+        {
+          "appearance" : "tinted",
+          "value" : true
+        }
+      ],
+      "translucency-specializations" : [
+        {
+          "value" : {
+            "enabled" : true,
+            "value" : 0.5
+          }
+        },
+        {
+          "appearance" : "dark",
+          "value" : {
+            "enabled" : false,
+            "value" : 0.5
+          }
+        },
+        {
+          "appearance" : "tinted",
+          "value" : {
+            "enabled" : true,
+            "value" : 0.5
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}
