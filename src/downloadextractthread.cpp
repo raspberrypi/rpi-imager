@@ -430,7 +430,7 @@ void DownloadExtractThread::extractMultiFileRun()
 
         QByteArray computedHash = _inputHash.result().toHex();
         qDebug() << "Hash of compressed multi-file zip:" << computedHash;
-        if (!_expectedHash.isEmpty() && _expectedHash != computedHash)
+        if (!_cancelled && !_expectedHash.isEmpty() && _expectedHash != computedHash)
         {
             qDebug() << "Mismatch with expected hash:" << _expectedHash;
             throw runtime_error("Download corrupt. SHA256 does not match");
