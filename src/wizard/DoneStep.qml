@@ -85,13 +85,25 @@ WizardStepBase {
                     activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
                 Text {
+                    id: deviceValue
                     text: wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                     Accessible.ignored: true
+
+                    ToolTip.text: text
+                    ToolTip.visible: truncated && deviceValueMouseArea.containsMouse
+                    ToolTip.delay: 500
+                    MouseArea {
+                        id: deviceValueMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
                 
                 Text {
@@ -107,13 +119,25 @@ WizardStepBase {
                     activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
                 Text {
+                    id: osValue
                     text: wizardContainer.selectedOsName || CommonStrings.noImageSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                     Accessible.ignored: true
+
+                    ToolTip.text: text
+                    ToolTip.visible: truncated && osValueMouseArea.containsMouse
+                    ToolTip.delay: 500
+                    MouseArea {
+                        id: osValueMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
                 
                 Text {
@@ -129,13 +153,25 @@ WizardStepBase {
                     activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 }
                 Text {
+                    id: storageValue
                     text: wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                     Accessible.ignored: true
+
+                    ToolTip.text: text
+                    ToolTip.visible: truncated && storageValueMouseArea.containsMouse
+                    ToolTip.delay: 500
+                    MouseArea {
+                        id: storageValueMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
             }
             
