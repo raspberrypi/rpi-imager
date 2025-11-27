@@ -519,9 +519,13 @@ void DownloadThread::run()
             break;
         case CURLE_WRITE_ERROR:
             deleteDownloadedFile();
-            _onWriteError();
+            // If cancelled, treat write error as clean abort (user-initiated cancellation
+            // triggers CURLE_WRITE_ERROR because _writeData returns 0)
+            if (!_cancelled)
+                _onWriteError();
             break;
         case CURLE_ABORTED_BY_CALLBACK:
+            // Clean cancellation via progress callback
             deleteDownloadedFile();
             break;
         default:
@@ -544,7 +548,11 @@ void DownloadThread::run()
 
 size_t DownloadThread::_writeData(const char *buf, size_t len)
 {
-    // no-op debug removed
+    // Abort CURL cleanly if cancelled - returning 0 triggers CURLE_WRITE_ERROR
+    // which we handle by checking _cancelled before showing error dialogs
+    if (_cancelled)
+        return 0;
+
     _writeCache(buf, len);
 
     if (!_filename.isEmpty())
@@ -752,6 +760,11 @@ void DownloadThread::_onDownloadError(const QString &msg)
 
 void DownloadThread::_onWriteError()
 {
+    // Don't report write errors if the operation was cancelled
+    // (cancellation can cause writes to fail, which is expected)
+    if (_cancelled)
+        return;
+
 #ifdef Q_OS_WIN
     // TODO: Implement platform-specific error handling in FileOperations
     // For now, provide generic error message instead of: if (_file.errorCode() == ERROR_ACCESS_DENIED)
@@ -795,8 +808,6 @@ void DownloadThread::_onWriteError()
         _onDownloadError(tr("Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected."));
     }
 #endif
-    if (!_cancelled && false) // Disabled the old generic error
-        _onDownloadError(tr("Error writing file to disk"));
 }
 
 void DownloadThread::_closeFiles()
