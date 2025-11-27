@@ -437,27 +437,32 @@ void DownloadExtractThread::extractMultiFileRun()
         }
         if (_cacheEnabled && _expectedHash == computedHash)
         {
-            _cachefile.close();
-            
-            // Get both hashes: compressed cache file and uncompressed image data
-            QByteArray cacheFileHash = _cachehash.result().toHex();
-            
-            qDebug() << "Cache file created:";
-            qDebug() << "  Image hash (uncompressed):" << computedHash;
-            qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
-            
-            // Emit both hashes for proper cache verification
-            emit cacheFileHashUpdated(cacheFileHash, computedHash);
-            // Keep old signal for backward compatibility
-            emit cacheFileUpdated(computedHash);
+            // Finish async cache writer (waits for all pending writes to complete)
+            if (_asyncCacheWriter && _asyncCacheWriter->isActive()) {
+                _asyncCacheWriter->finish();
+                
+                // Get cache file hash from async writer
+                QByteArray cacheFileHash = _asyncCacheWriter->hash();
+                
+                qDebug() << "Cache file created (async):";
+                qDebug() << "  Image hash (uncompressed):" << computedHash;
+                qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
+                
+                // Emit both hashes for proper cache verification
+                emit cacheFileHashUpdated(cacheFileHash, computedHash);
+                // Keep old signal for backward compatibility
+                emit cacheFileUpdated(computedHash);
+            }
         }
 
         emit success();
     }
     catch (exception &e)
     {
-        if (_cachefile.isOpen())
-            _cachefile.remove();
+        // Cancel async cache writer (this will remove the cache file)
+        if (_asyncCacheWriter) {
+            _asyncCacheWriter->cancel();
+        }
 
         qDebug() << "Deleting extracted files";
         for (const auto& filename : filesExtracted)
