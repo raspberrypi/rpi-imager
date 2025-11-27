@@ -646,10 +646,9 @@ bool DownloadExtractThread::_verify()
     qDebug() << "Post-write verification using" << verifyBufferSize/1024 << "KB buffer for" 
              << _verifyTotal/(1024*1024) << "MB image";
 
-#ifdef Q_OS_LINUX
-    /* Make sure we are reading from the drive and not from cache */
-    posix_fadvise(_file->GetHandle(), 0, 0, POSIX_FADV_DONTNEED);
-#endif
+    // Platform-specific optimization for sequential read verification
+    // Invalidates cache and enables read-ahead hints
+    _file->PrepareForSequentialRead(0, _verifyTotal);
 
     if (!_firstBlock)
     {

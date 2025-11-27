@@ -420,6 +420,34 @@ FileError WindowsFileOperations::Flush() {
   return FileError::kSuccess;
 }
 
+void WindowsFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) {
+  if (!IsOpen()) {
+    return;
+  }
+
+  // Windows: FILE_FLAG_SEQUENTIAL_SCAN is already set during OpenDevice() for physical drives
+  // For additional optimization, we can flush the file buffers to ensure we read from disk
+  // Note: Windows doesn't have direct equivalents to posix_fadvise
+  
+  // Flush to ensure any cached writes are committed before verification read
+  if (!FlushFileBuffers(handle_)) {
+    DWORD error = GetLastError();
+    // Don't warn on ERROR_INVALID_FUNCTION - some devices don't support flush
+    if (error != ERROR_INVALID_FUNCTION) {
+      std::cout << "Warning: FlushFileBuffers failed before verification, error: " << error
+                << " - verification may read cached data" << std::endl;
+    }
+  }
+  
+  // The FILE_FLAG_SEQUENTIAL_SCAN hint (set at open time) tells Windows to:
+  // 1. Optimize for sequential access patterns
+  // 2. Use larger read-ahead buffers
+  // 3. Not cache data aggressively (since it won't be re-read)
+  
+  (void)offset;  // Unused on Windows - hints are file-wide, not range-specific
+  (void)length;
+}
+
 int WindowsFileOperations::GetHandle() const {
   // Note: This is a compatibility method. Windows HANDLE cannot be safely cast to int.
   // For proper Windows code, use the handle_ member directly or add a GetWindowsHandle() method.

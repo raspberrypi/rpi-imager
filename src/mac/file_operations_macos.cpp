@@ -289,6 +289,29 @@ FileError MacOSFileOperations::Flush() {
   return FileError::kSuccess;
 }
 
+void MacOSFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) {
+  if (!IsOpen()) {
+    return;
+  }
+
+  (void)offset;  // macOS hints are file-wide
+  (void)length;
+
+  // F_RDAHEAD: Enable read-ahead for sequential access
+  // This tells the kernel to speculatively read data ahead of the current position
+  if (fcntl(fd_, F_RDAHEAD, 1) == -1) {
+    qDebug() << "Warning: fcntl(F_RDAHEAD) failed, errno:" << errno
+             << "- sequential read performance may be suboptimal";
+  }
+  
+  // F_NOCACHE: Bypass the unified buffer cache
+  // Critical for verification - ensures we read from actual device, not cached writes
+  if (fcntl(fd_, F_NOCACHE, 1) == -1) {
+    qDebug() << "Warning: fcntl(F_NOCACHE) failed, errno:" << errno
+             << "- verification may read cached data";
+  }
+}
+
 int MacOSFileOperations::GetHandle() const {
   return fd_;
 }
