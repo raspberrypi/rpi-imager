@@ -53,7 +53,7 @@ int DownloadThread::_curlCount = 0;
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
-    _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _cachehash(OSLIST_HASH_ALGORITHM)
+    _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM)
 {
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -88,6 +88,12 @@ DownloadThread::~DownloadThread()
         _volumeFile->Close();
     }
 #endif
+    
+    // Cancel async cache writer if still running
+    if (_asyncCacheWriter) {
+        _asyncCacheWriter->cancel();
+        _asyncCacheWriter.reset();
+    }
     
     // Use _closeFiles() to ensure cache file is properly closed
     _closeFiles();
@@ -571,32 +577,61 @@ void DownloadThread::_writeCache(const char *buf, size_t len)
     if (!_cacheEnabled || _cancelled)
         return;
 
-    // Hash the data going into the cache file
-    _cachehash.addData(buf, len);
-
-    if (_cachefile.write(buf, len) != len)
-    {
-        qDebug() << "Error writing to cache file. Disabling caching.";
+    // Check if async writer exists and is still healthy
+    if (!_asyncCacheWriter) {
         _cacheEnabled = false;
-        _cachefile.remove();
+        return;
+    }
+    
+    // Check for async errors that may have occurred in the writer thread
+    if (_asyncCacheWriter->hasError()) {
+        qDebug() << "Async cache writer has error state. Disabling caching.";
+        _cacheEnabled = false;
+        _asyncCacheWriter->cancel();
+        return;
+    }
+
+    // Use async cache writer for non-blocking I/O
+    if (_asyncCacheWriter->isActive()) {
+        if (!_asyncCacheWriter->write(buf, len)) {
+            // write() returns false on backpressure timeout or error
+            if (_asyncCacheWriter->wasDisabledDueToBackpressure()) {
+                qDebug() << "Cache I/O too slow (backpressure). Disabling caching to avoid blocking download.";
+            } else {
+                qDebug() << "Async cache writer failed. Disabling caching.";
+            }
+            _cacheEnabled = false;
+            _asyncCacheWriter->cancel();
+        }
     }
 }
 
 void DownloadThread::setCacheFile(const QString &filename, qint64 filesize)
 {
-    _cachefile.setFileName(filename);
-    if (_cachefile.open(QIODevice::WriteOnly))
+    _cacheFilename = filename;
+    
+    // Create async cache writer
+    _asyncCacheWriter = std::make_unique<AsyncCacheWriter>(this);
+    
+    // Connect error signal for async error propagation from writer thread
+    // Using Qt::QueuedConnection to ensure thread-safe signal delivery
+    connect(_asyncCacheWriter.get(), &AsyncCacheWriter::error, 
+            this, [this](const QString &msg) {
+                qDebug() << "AsyncCacheWriter error (async):" << msg;
+                _cacheEnabled = false;
+                // Note: Don't cancel here - we're in a different thread context
+                // The writer thread will clean up on its own
+            }, Qt::QueuedConnection);
+    
+    if (_asyncCacheWriter->open(filename, filesize))
     {
         _cacheEnabled = true;
-        if (filesize)
-        {
-            /* Pre-allocate space */
-            _cachefile.resize(filesize);
-        }
+        qDebug() << "Async cache writer initialized for" << filename;
     }
     else
     {
         qDebug() << "Error opening cache file for writing. Disabling caching.";
+        _asyncCacheWriter.reset();
     }
 }
 
@@ -701,8 +736,10 @@ void DownloadThread::deleteDownloadedFile()
         if (_file && _file->IsOpen()) {
             _file->Close();
         }
-        if (_cachefile.isOpen())
-            _cachefile.remove();
+        // Cancel async cache writer (this will remove the cache file)
+        if (_asyncCacheWriter) {
+            _asyncCacheWriter->cancel();
+        }
 #ifdef Q_OS_WIN
         if (_volumeFile && _volumeFile->IsOpen()) {
             _volumeFile->Close();
@@ -821,8 +858,10 @@ void DownloadThread::_closeFiles()
         _volumeFile->Close();
     }
 #endif
-    if (_cachefile.isOpen())
-        _cachefile.close();
+    // Cancel async cache writer if still active (don't wait for completion on error/cancel)
+    if (_asyncCacheWriter && _asyncCacheWriter->isActive()) {
+        _asyncCacheWriter->cancel();
+    }
 }
 
 void DownloadThread::_writeComplete()
@@ -839,8 +878,11 @@ void DownloadThread::_writeComplete()
     if (!_expectedHash.isEmpty() && _expectedHash != computedHash)
     {
         qDebug() << "Mismatch with expected hash:" << _expectedHash;
-        if (_cachefile.isOpen())
-            _cachefile.remove();
+        
+        // Cancel async cache writer (this will remove the cache file)
+        if (_asyncCacheWriter) {
+            _asyncCacheWriter->cancel();
+        }
         
         // Provide more specific error message based on context
         QString errorMsg;
@@ -867,19 +909,22 @@ void DownloadThread::_writeComplete()
     }
     if (_cacheEnabled && _expectedHash == computedHash)
     {
-        _cachefile.close();
-        
-        // Get both hashes: compressed cache file and uncompressed image data
-        QByteArray cacheFileHash = _cachehash.result().toHex();
-        
-        qDebug() << "Cache file created:";
-        qDebug() << "  Image hash (uncompressed):" << computedHash;
-        qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
-        
-        // Emit both hashes for proper cache verification
-        emit cacheFileHashUpdated(cacheFileHash, computedHash);
-        // Keep old signal for backward compatibility
-        emit cacheFileUpdated(computedHash);
+        // Finish async cache writer (waits for all pending writes to complete)
+        if (_asyncCacheWriter && _asyncCacheWriter->isActive()) {
+            _asyncCacheWriter->finish();
+            
+            // Get cache file hash from async writer
+            QByteArray cacheFileHash = _asyncCacheWriter->hash();
+            
+            qDebug() << "Cache file created (async):";
+            qDebug() << "  Image hash (uncompressed):" << computedHash;
+            qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
+            
+            // Emit both hashes for proper cache verification
+            emit cacheFileHashUpdated(cacheFileHash, computedHash);
+            // Keep old signal for backward compatibility
+            emit cacheFileUpdated(computedHash);
+        }
     }
 
     if (_file->Flush() != rpi_imager::FileError::kSuccess)

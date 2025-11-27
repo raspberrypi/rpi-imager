@@ -21,6 +21,7 @@
 #include "imageadvancedoptions.h"
 #include "systemmemorymanager.h"
 #include "file_operations.h"
+#include "asynccachewriter.h"
 
 
 class DownloadThread : public QThread
@@ -181,7 +182,10 @@ protected:
 
     // Unified cross-platform file operations
     std::unique_ptr<rpi_imager::FileOperations> _file;
-    QFile _cachefile;
+    
+    // Async cache writer for non-blocking cache file I/O
+    std::unique_ptr<AsyncCacheWriter> _asyncCacheWriter;
+    QString _cacheFilename;  // Store filename for legacy signal emission
 
 #ifdef Q_OS_WIN
     // Windows-specific volume file for legacy compatibility
@@ -190,7 +194,6 @@ protected:
 #endif
 
     AcceleratedCryptographicHash _writehash, _verifyhash;
-    AcceleratedCryptographicHash _cachehash;
 
     // Cross-platform adaptive page cache flushing
     qint64 _lastSyncBytes;
