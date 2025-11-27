@@ -5,398 +5,398 @@
     <name>AppOptionsDialog</name>
     <message>
         <source>App Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Options app</translation>
     </message>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Jouer un son quand terminé</translation>
+        <translation>Jouer un son quand terminé</translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Éjecter le média quand terminé</translation>
+        <translation>Éjecter le média quand terminé</translation>
     </message>
     <message>
         <source>Enable anonymous statistics (telemetry)</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer les statistiques anonymes (télémétrie)</translation>
     </message>
     <message>
         <source>What is this?</source>
-        <translation type="unfinished"></translation>
+        <translation>Qu&apos;est-ce que c&apos;est&#xa0;?</translation>
     </message>
     <message>
         <source>Disable warnings</source>
-        <translation type="unfinished"></translation>
+        <translation>Désactiver les avertissements</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer</translation>
     </message>
     <message>
         <source>Disable warnings?</source>
-        <translation type="unfinished"></translation>
+        <translation>Désactiver les avertissements&#xa0;?</translation>
     </message>
     <message>
         <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
-        <translation type="unfinished"></translation>
+        <translation>Si vous désactivez les avertissements, Raspberry Pi Imager &lt;b&gt;n&apos;affichera pas de message de confirmation avant l&apos;écriture des images&lt;/b&gt;. Vous devrez cependant &lt;b&gt;saisir le nom exact&lt;/b&gt; lors de la séletion d&apos;un disque système.</translation>
     </message>
     <message>
         <source>Content Repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Dépôt de contenu</translation>
     </message>
     <message>
         <source>Edit</source>
-        <translation type="unfinished"></translation>
+        <translation>Modifier</translation>
     </message>
     <message>
         <source>Close the options dialog without saving any changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Fermer la fenêtre des options sans rien enregistrer</translation>
     </message>
     <message>
         <source>Save the selected options and apply them to Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer les options choisies et les appliquer à Raspberry Pi Imager</translation>
     </message>
     <message>
         <source>Keep warnings enabled and return to the options dialog</source>
-        <translation type="unfinished"></translation>
+        <translation>Garder les avertissements activés et retourner à la fenêtre des options</translation>
     </message>
     <message>
         <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer les messages de confirmation avant l&apos;écriture des images, et demander uniquement la saisie exacte du nom des disques système</translation>
     </message>
     <message>
         <source>Play an audio notification when the image write process completes</source>
-        <translation type="unfinished"></translation>
+        <translation>Jouer une notification audio quand l&apos;écriture de l&apos;image est terminée</translation>
     </message>
     <message>
         <source>Automatically eject the storage device when the write process completes successfully</source>
-        <translation type="unfinished"></translation>
+        <translation>Éjecter le disque quand l&apos;écriture de l&apos;image est terminée</translation>
     </message>
     <message>
         <source>Send anonymous usage statistics to help improve Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Envoyer des statistiques d&apos;usage anonymes pour aider à l&apos;amélioration de Raspberry Pi Imager</translation>
     </message>
     <message>
         <source>Skip confirmation dialogs before writing images (advanced users only)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ne pas afficher les fenêtres de confirmation avant l&apos;écriture des images (pour utilisateurs avancés)</translation>
     </message>
     <message>
         <source>Change the source of operating system images between official Raspberry Pi repository and custom sources</source>
-        <translation type="unfinished"></translation>
+        <translation>Échanger la source des images de systèmes d&apos;exploitation entre le dépôt officiel Raspberry Pi et les sources personnalisées</translation>
     </message>
     <message>
         <source>Secure Boot RSA Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Clé RSA démarrage sécurisé</translation>
     </message>
     <message>
         <source>Change</source>
-        <translation type="unfinished"></translation>
+        <translation>Changer</translation>
     </message>
     <message>
         <source>Select</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner</translation>
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner une clé privée RSA 2048 bits pour signer les images de démarrage en mode de démarrage sécurisé</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner une clé privée RSA</translation>
     </message>
     <message>
         <source>PEM Files (*.pem);;All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichiers PEM Files (*.pem);;Tous types de fichiers (*)</translation>
     </message>
 </context>
 <context>
     <name>CommonStrings</name>
     <message>
         <source>Only proceed if you fully understand the risks.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ne continuez que si vous comprenez totalement les risques.</translation>
     </message>
     <message>
         <source>Selecting the wrong drive will permanently erase data and can render your computer inoperable.</source>
-        <translation type="unfinished"></translation>
+        <translation>La sélection erronée d&apos;un disque supprimera de manière définitive ses données et peut rendre votre ordinateur inutilisable.</translation>
     </message>
     <message>
         <source>System drives typically contain files essential to the operation of your computer, and may include your personal files (photos, videos, documents).</source>
-        <translation type="unfinished"></translation>
+        <translation>Les disques système contiennent des fichiers essentiels au fonctionnement de votre ordinateur\&#xa0;; ils contiennent parfois aussi vos fichiers personnels (photos, vidéos, documents).</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>Tous types de fichiers (*)</translation>
     </message>
     <message>
         <source>Image files (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichiers image (%1)</translation>
     </message>
     <message>
         <source>Imager Repository Files (*.json)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichiers de dépôt Imager (*.json)</translation>
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichiers de clés publiques (*.pub)</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Yes</source>
-        <translation type="unfinished"></translation>
+        <translation>Oui</translation>
     </message>
     <message>
         <source>No</source>
-        <translation type="unfinished"></translation>
+        <translation>Non</translation>
     </message>
     <message>
         <source>Browse</source>
-        <translation type="unfinished"></translation>
+        <translation>Parcourir</translation>
     </message>
     <message>
         <source>Continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Continuer</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Retour</translation>
+        <translation>Retour</translation>
     </message>
     <message>
         <source>Finish</source>
-        <translation type="unfinished"></translation>
+        <translation>Terminer</translation>
     </message>
     <message>
         <source>Select image</source>
-        <translation type="unfinished">Sélectionner l&apos;image</translation>
+        <translation>Sélectionner l&apos;image</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Mot de passe&#xa0;:</translation>
+        <translation>Mot de passe&#xa0;:</translation>
     </message>
     <message>
         <source>Device:</source>
-        <translation type="unfinished"></translation>
+        <translation>Disque&#xa0;:</translation>
     </message>
     <message>
         <source>Storage:</source>
-        <translation type="unfinished"></translation>
+        <translation>Stockage&#xa0;:</translation>
     </message>
     <message>
         <source>No device selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun disque sélectionné</translation>
     </message>
     <message>
         <source>No image selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucune image sélectionnée</translation>
     </message>
     <message>
         <source>No storage selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun stockage sélectionné</translation>
     </message>
     <message>
         <source>Hostname configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Nom d&apos;hôte configuré</translation>
     </message>
     <message>
         <source>User account configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Compte utilisateur configuré</translation>
     </message>
     <message>
         <source>SSH enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH activé</translation>
     </message>
     <message>
         <source>Wi‑Fi configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Wi-Fi configuré</translation>
     </message>
     <message>
         <source>Raspberry Pi Connect enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Connect activé</translation>
     </message>
     <message>
         <source>I2C enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>I2C activé</translation>
     </message>
     <message>
         <source>SPI enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>SPI activé</translation>
     </message>
     <message>
         <source>USB Gadget mode enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>Mode Gagdet USB activé</translation>
     </message>
     <message>
         <source>1-Wire enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>1-Wire activé</translation>
     </message>
     <message>
         <source>Serial configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Port sériel activé</translation>
     </message>
     <message>
         <source>Localisation configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Localisation configurée</translation>
     </message>
 </context>
 <context>
     <name>ConfirmSystemDriveDialog</name>
     <message>
         <source>Size: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Taille&#xa0;: %1</translation>
     </message>
     <message>
         <source>Mounted as: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Monté sous&#xa0;: %1</translation>
     </message>
     <message>
         <source>Not mounted</source>
-        <translation type="unfinished"></translation>
+        <translation>Pas monté</translation>
     </message>
     <message>
         <source>To continue, type the exact drive name below:</source>
-        <translation type="unfinished"></translation>
+        <translation>Pour continuer, saisir ci-dessous le nom exact du disque&#xa0;:</translation>
     </message>
     <message>
         <source>Type drive name exactly as shown above</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir le nom du disque exactement comme indiqué ci-dessus</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>CONTINUE</source>
-        <translation type="unfinished">CONTINUER</translation>
+        <translation>CONTINUER</translation>
     </message>
     <message>
         <source>Cancel operation and return to storage selection to choose a different device</source>
-        <translation type="unfinished"></translation>
+        <translation>Annuler l&apos;opération et retourner à la sélection pour choisir un autre disque</translation>
     </message>
     <message>
         <source>Proceed to write the image to this system drive after confirming the drive name</source>
-        <translation type="unfinished"></translation>
+        <translation>Procéder à l&apos;écriture de l&apos;image sur ce disque système après avoir vérifié le nom du disque</translation>
     </message>
     <message>
         <source>Drive information</source>
-        <translation type="unfinished"></translation>
+        <translation>Infos du disque</translation>
     </message>
     <message>
         <source>Drive name to type: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Nom du disque à saisir&#xa0;: %1</translation>
     </message>
     <message>
         <source>Drive name input. Type exactly: %1. %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisie du nom du disque. Saisir exactement&#xa0;: %1. %2</translation>
     </message>
 </context>
 <context>
     <name>ConfirmUnfilterDialog</name>
     <message>
         <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
-        <translation type="unfinished"></translation>
+        <translation>Après désactivation du filtrage des disques système, &lt;b&gt;les disques système seront affichés&lt;/b&gt; dans la liste.</translation>
     </message>
     <message>
         <source>KEEP FILTER ON</source>
-        <translation type="unfinished"></translation>
+        <translation>CONTINUER À FILTRER</translation>
     </message>
     <message>
         <source>SHOW SYSTEM DRIVES</source>
-        <translation type="unfinished"></translation>
+        <translation>AFFICHER LES DISQUES SYSTÈME</translation>
     </message>
     <message>
         <source>Keep system drives hidden to prevent accidental damage to your operating system</source>
-        <translation type="unfinished"></translation>
+        <translation>Garder cachés les disques systèmes pour éviter des dégâts accidentels à votre système d&apos;exploitation</translation>
     </message>
     <message>
         <source>Remove the safety filter and display system drives in the storage device list</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer le filtre de sécurité et afficher les disques système dans la liste des périphériques de stockage</translation>
     </message>
 </context>
 <context>
     <name>DeviceSelectionStep</name>
     <message>
         <source>Select your Raspberry Pi device</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner votre appareil Raspberry Pi</translation>
     </message>
     <message>
         <source>Device selection list</source>
-        <translation type="unfinished"></translation>
+        <translation>Liste de sélection des appareils</translation>
     </message>
     <message>
         <source>No devices</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun appareil</translation>
     </message>
     <message>
         <source>1 device</source>
-        <translation type="unfinished"></translation>
+        <translation>1 appareil</translation>
     </message>
     <message>
         <source>%1 devices</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 appareils</translation>
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
-        <translation type="unfinished"></translation>
+        <translation>Utiliser les flèches pour naviguer, Entrée ou Espace pour sélectionner</translation>
     </message>
 </context>
 <context>
     <name>DoneStep</name>
     <message>
         <source>Your choices:</source>
-        <translation type="unfinished"></translation>
+        <translation>Vos choix&#xa0;:</translation>
     </message>
     <message>
         <source>The storage device was ejected automatically. You can now remove it safely.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le périphérique de stockage a été éjecté automatiquement. Vous pouvez le retirer sans risque.</translation>
     </message>
     <message>
         <source>Please eject the storage device before removing it from your computer.</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez électer le périphérique de stockage avant de le retirer de votre ordinateur.</translation>
     </message>
     <message>
         <source>Write Another</source>
-        <translation type="unfinished"></translation>
+        <translation>Écrire une autre</translation>
     </message>
     <message>
         <source>Write complete!</source>
-        <translation type="unfinished"></translation>
+        <translation>Écriture terminée&#xa0;!</translation>
     </message>
     <message>
         <source>Customisations applied:</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisations appliquées&#xa0;:</translation>
     </message>
     <message>
         <source>Reboot</source>
-        <translation type="unfinished"></translation>
+        <translation>Redémarrer</translation>
     </message>
     <message>
         <source>Operating system:</source>
-        <translation type="unfinished"></translation>
+        <translation>Système d&apos;exploitation&#xa0;:</translation>
     </message>
     <message>
         <source>Storage:</source>
-        <translation type="unfinished"></translation>
+        <translation>Stockage&#xa0;:</translation>
     </message>
     <message>
         <source>Reboot the system to apply changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Redémarrer le système pour appliquer les modifications</translation>
     </message>
     <message>
         <source>Close Raspberry Pi Imager and exit the application</source>
-        <translation type="unfinished"></translation>
+        <translation>Fermer Raspberry Pi Imager et quitter l&apos;application</translation>
     </message>
     <message>
         <source>Return to storage selection to write the same image to another storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Retourner à la sélection pour écrire la même image sur un autre périphérique de stockage</translation>
     </message>
     <message>
         <source>customization</source>
-        <translation type="unfinished"></translation>
+        <translation>personnalisation</translation>
     </message>
     <message>
         <source>customizations</source>
-        <translation type="unfinished"></translation>
+        <translation>personnalisations</translation>
     </message>
 </context>
 <context>
@@ -494,83 +494,83 @@
     </message>
     <message>
         <source>Error: Multiple partitions found on disk. Please ensure the disk is completely clean.</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur&#xa0;: plusieurs partitions trouvées sur le disque. Assurez-vous que le disque est comlètement vide.</translation>
     </message>
     <message>
         <source>The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le disque est peut-être protégé en écriture ou utilisé par une autre application. Assurez-vous que le disque n&apos;est pas monté et ré-essayez.</translation>
     </message>
     <message>
         <source>Disk is full. Please use a larger storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le disque est plein. Utilisez un périphérique de stockage de plus grande capacité.</translation>
     </message>
     <message>
         <source>The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le disque est protégé en écriture. Contrôler si le disque à un dispositif physique de protection ou s&apos;il est en lecture seule.</translation>
     </message>
     <message>
         <source>Media error detected. The storage device may be damaged or counterfeit. Please try a different device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur de disque. Le périphérique de stockage est peut-être endommagé ou c&apos;est une contrefaçon. Essayez avec un autre disque.</translation>
     </message>
     <message>
         <source>Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Paramètre de disque non valide. Le périphérique de stockage ne peut pas être reconnu correctement. Essayez de reconnecter le disque.</translation>
     </message>
     <message>
         <source>I/O device error. The storage device may have been disconnected or is malfunctioning.</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur d&apos;entrée-sortie. Le périphérique de stockage est peut-être déconnecté et il dysfontionne.</translation>
     </message>
     <message>
         <source>Error opening disk device &apos;%1&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur à l&apos;ouverture du disque &apos;%1&apos;</translation>
     </message>
     <message>
         <source>Error getting device size</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur lors de l&apos;obtention de la taille du périphérique</translation>
     </message>
     <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur lors de l&apos;écriture sur le périphérique. Vérifiez que le disque est accessible en écriture, qu&apos;il a assez d&apos;espace et qu&apos;il n&apos;est pas protégé en écriture.</translation>
     </message>
     <message>
         <source>Unmounting drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Démontage du disque...</translation>
     </message>
     <message>
         <source>Opening drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Ouverture du disque</translation>
     </message>
     <message>
         <source>Discarding existing data on drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Suppression des données existantes sur le disque...</translation>
     </message>
     <message>
         <source>Zero&apos;ing out first and last MB of drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Mise à zéro des premier et derniers Mo du disque...</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>Début du téléchargement...</translation>
     </message>
     <message>
         <source>Writing image...</source>
-        <translation type="unfinished"></translation>
+        <translation>Écriture de l&apos;image...</translation>
     </message>
     <message>
         <source>Customising OS...</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation de l&apos;OS</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos;. Please run with elevated privileges (sudo).</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossible d&apos;ouvrir le périphérique de stockage &apos;%1&apos;. Lancer l&apos;application avec des privilèges élevés (sudo).</translation>
     </message>
     <message>
         <source>Creating signed boot image...</source>
-        <translation type="unfinished"></translation>
+        <translation>Création de l&apos;image de démarrage signée</translation>
     </message>
     <message>
         <source>Failed to create secure boot files</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de création des fichiers de démarrage sécurisé</translation>
     </message>
     <message>
         <source>No RSA key configured for secure boot. Please select a key in App Options.</source>
@@ -1652,7 +1652,7 @@ to show system drives.</source>
     <name>WifiCustomizationStep</name>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">SSID&#xa0;:</translation>
+        <translation>SSID&#xa0;:</translation>
     </message>
     <message>
         <source>Network name</source>
@@ -1664,7 +1664,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation type="unfinished">SSID caché</translation>
+        <translation>SSID caché</translation>
     </message>
     <message>
         <source>Customisation: Choose Wi‑Fi</source>
@@ -1775,11 +1775,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">Stockage</translation>
+        <translation>Stockage</translation>
     </message>
     <message>
         <source>Writing</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Done</source>
@@ -1882,7 +1882,7 @@ to show system drives.</source>
     <name>WizardStepBase</name>
     <message>
         <source>Next</source>
-        <translation type="unfinished">Suivant</translation>
+        <translation>Suivant</translation>
     </message>
     <message>
         <source>Skip customisation</source>
@@ -1929,11 +1929,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>Writing... %1%</source>
-        <translation type="unfinished">Écriture... %1%</translation>
+        <translation>Écriture... %1%</translation>
     </message>
     <message>
         <source>Verifying... %1%</source>
-        <translation type="unfinished">Vérification... %1%</translation>
+        <translation>Vérification... %1%</translation>
     </message>
     <message>
         <source>Write completed successfully!</source>
