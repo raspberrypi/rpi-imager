@@ -445,3 +445,21 @@ size_t SystemMemoryManager::getOptimalRingBufferSlots(size_t slotSize)
     return calculatedSlots;
 }
 
+void SystemMemoryManager::logConfigurationSummary()
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    SyncConfiguration syncConfig = calculateSyncConfiguration();
+    size_t inputBuf = getOptimalInputBufferSize();
+    size_t writeBuf = getOptimalWriteBufferSize();
+    
+    qDebug() << "=== Memory-Adaptive Configuration Summary ===";
+    qDebug() << "Platform:" << getPlatformName();
+    qDebug() << "System Memory:" << totalMemMB << "MB";
+    qDebug() << "Memory Tier:" << syncConfig.memoryTier;
+    qDebug() << "Input Buffer:" << (inputBuf / 1024) << "KB";
+    qDebug() << "Write Buffer:" << (writeBuf / 1024) << "KB";
+    qDebug() << "Sync Interval:" << (syncConfig.syncIntervalBytes / (1024 * 1024)) << "MB /" 
+             << syncConfig.syncIntervalMs << "ms";
+    qDebug() << "=============================================";
+}
+
