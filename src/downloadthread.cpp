@@ -816,6 +816,13 @@ void DownloadThread::_closeFiles()
 
 void DownloadThread::_writeComplete()
 {
+    // Don't report errors if the operation was cancelled
+    if (_cancelled)
+    {
+        _closeFiles();
+        return;
+    }
+
     QByteArray computedHash = _writehash.result().toHex();
     qDebug() << "Hash of uncompressed image:" << computedHash;
     if (!_expectedHash.isEmpty() && _expectedHash != computedHash)
