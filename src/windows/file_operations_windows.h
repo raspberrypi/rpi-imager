@@ -47,6 +47,9 @@ class WindowsFileOperations : public FileOperations {
   FileError ForceSync() override;
   FileError Flush() override;
   
+  // Sequential read optimization
+  void PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) override;
+  
   // Handle access (Windows uses HANDLE, so we return a cast to int)
   int GetHandle() const override;
 

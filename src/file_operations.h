@@ -64,6 +64,10 @@ class FileOperations {
   virtual FileError ForceSync() = 0;
   virtual FileError Flush() = 0;
   
+  // Prepare for sequential read (e.g., verification)
+  // Invalidates cache and enables read-ahead hints for optimal sequential read performance
+  virtual void PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) = 0;
+  
   // Get platform-specific file handle (for compatibility with existing code)
   virtual int GetHandle() const = 0;
 

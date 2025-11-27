@@ -227,6 +227,28 @@ FileError LinuxFileOperations::Flush() {
   return FileError::kSuccess;
 }
 
+void LinuxFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) {
+  if (!IsOpen()) {
+    return;
+  }
+
+  // 1. POSIX_FADV_DONTNEED: Invalidate cache to ensure we read from actual device
+  //    This is critical for verification - we need to read what's on disk, not cached data
+  int ret = posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length), POSIX_FADV_DONTNEED);
+  if (ret != 0) {
+    qDebug() << "Warning: posix_fadvise(POSIX_FADV_DONTNEED) failed with error:" << ret
+             << "- verification may read cached data";
+  }
+  
+  // 2. POSIX_FADV_SEQUENTIAL: Hint to kernel for aggressive read-ahead
+  //    This doubles the read-ahead window and drops pages after reading
+  ret = posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length), POSIX_FADV_SEQUENTIAL);
+  if (ret != 0) {
+    qDebug() << "Warning: posix_fadvise(POSIX_FADV_SEQUENTIAL) failed with error:" << ret
+             << "- sequential read performance may be suboptimal";
+  }
+}
+
 int LinuxFileOperations::GetHandle() const {
   return fd_;
 }
