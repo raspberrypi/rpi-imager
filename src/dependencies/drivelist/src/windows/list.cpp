@@ -465,6 +465,7 @@ std::string GetBusType(STORAGE_ADAPTER_DESCRIPTOR *adapterDescriptor) {
     case STORAGE_BUS_TYPE::BusTypeSata: return "SATA";
     case STORAGE_BUS_TYPE::BusTypeSd: return "SD";  // Secure Digital (SD)
     case STORAGE_BUS_TYPE::BusTypeMmc: return "MMC";  // Multimedia card
+    case STORAGE_BUS_TYPE::BusTypeNvme: return "NVME";  // Non-Volatile Memory Express
     case STORAGE_BUS_TYPE::BusTypeVirtual: return "VIRTUAL";
     case STORAGE_BUS_TYPE::BusTypeFileBackedVirtual: return "FILEBACKEDVIRTUAL";
     default: return "INVALID";

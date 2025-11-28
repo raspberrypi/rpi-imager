@@ -112,7 +112,13 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
             const bool isSystemOverride = i.isSystem;
 #endif
 
-            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, i.isReadOnly, isSystemOverride, mountpoints, this);
+            // Treat NVMe drives like SCSI for icon purposes (use storage icon instead of SD card icon)
+            QString busType = QString::fromStdString(i.busType);
+            QString devicePath = QString::fromStdString(i.device);
+            bool isNvme = (busType.compare("NVME", Qt::CaseInsensitive) == 0) || devicePath.startsWith("/dev/nvme");
+            bool isScsiForIcon = i.isSCSI || isNvme;
+
+            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, isScsiForIcon, i.isReadOnly, isSystemOverride, mountpoints, this);
         }
     }
 
