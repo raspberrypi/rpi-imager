@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="ja_JP">
+<TS version="2.1" language="en_US">
 <context>
     <name>AppOptionsDialog</name>
     <message>
@@ -9,11 +9,11 @@
     </message>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">終わったときに音を鳴らす</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">終わったときにメディアを取り出す</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Enable anonymous statistics (telemetry)</source>
@@ -175,7 +175,7 @@
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">戻る</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Finish</source>
@@ -183,11 +183,11 @@
     </message>
     <message>
         <source>Select image</source>
-        <translation type="unfinished">イメージを選ぶ</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">パスワード:</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Device:</source>
@@ -282,7 +282,7 @@
     </message>
     <message>
         <source>CONTINUE</source>
-        <translation type="unfinished">続ける</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Cancel operation and return to storage selection to choose a different device</source>
@@ -418,74 +418,78 @@
     <name>DownloadExtractThread</name>
     <message>
         <source>Error extracting archive: %1</source>
-        <translation>アーカイブを展開するのに失敗しました</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error mounting FAT32 partition</source>
-        <translation>FAT32パーティションをマウントできませんでした</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Operating system did not mount FAT32 partition</source>
-        <translation>OSがFAT32パーティションをマウントしませんでした</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error changing to directory &apos;%1&apos;</source>
-        <translation>カレントディレクトリを%1に変更できませんでした</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">ストレージを読むのに失敗しました。SDカードが壊れている可能性があります。</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">確認中にエラーが発生しました。書き込んだはずのデータが実際にSDカードに記録されたデータと一致していません。</translation>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>DownloadThread</name>
     <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>Raspberry Pi Imagerがリムーバブルボリュームへアクセスすることが「プライバシーとセキュリティ」の「ファイルとフォルダー」の設定、または「フルディスクアクセス」の付与によって許可されているかを確認してください。</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos;.</source>
-        <translation>ストレージを開けませんでした。</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Write error while zero&apos;ing out MBR</source>
-        <translation>MBRを削除している際にエラーが発生しました。</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>カードの最後のパートを0で書き込む際書き込みエラーが発生しました。カードが示している容量と実際のカードの容量が違う可能性があります。</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
-        <translation>%1をダウンロードする際エラーが発生しました</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Access denied error while writing file to disk.</source>
-        <translation>ディスクにファイルを書き込む際にアクセスが拒否されました。</translation>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error writing to storage (while flushing)</source>
-        <translation>ストレージへの書き込み中にエラーが発生しました (フラッシング中)</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error writing to storage (while fsync)</source>
-        <translation>ストレージへの書き込み中にエラーが発生しました（fsync中)</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error writing first block (partition table)</source>
-        <translation>最初のブロック（パーティションテーブル）を書き込み中にエラーが発生しました</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>ストレージを読むのに失敗しました。SDカードが壊れている可能性があります。</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>確認中にエラーが発生しました。書き込んだはずのデータが実際にSDカードに記録されたデータと一致していません。</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
@@ -497,10 +501,6 @@
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -711,7 +711,7 @@
     <name>HWListModel</name>
     <message>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">デバイスを選択</translation>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -950,11 +950,11 @@
     <name>ImageWriter</name>
     <message>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation>入力されたファイルは適切なディスクイメージファイルではありません。ファイルサイズの%1は512バイトの倍数ではありません。</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Select image</source>
-        <translation>イメージを選ぶ</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
@@ -1087,7 +1087,7 @@
     <name>LocalFileExtractThread</name>
     <message>
         <source>Error opening image file</source>
-        <translation>イメージファイルを開く際にエラーが発生しました</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -1114,7 +1114,7 @@
     <name>LocaleCustomizationStep</name>
     <message>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">キーボードレイアウト:</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Time zone:</source>
@@ -1130,7 +1130,7 @@
     </message>
     <message>
         <source>Capital city:</source>
-        <translation type="unfinished"></translation>
+        <translation>National capital:</translation>
     </message>
     <message>
         <source>Save localisation settings and continue to next customisation step</source>
@@ -1172,11 +1172,11 @@
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">コンピュータにキャッシュされたファイル</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">ローカルファイル</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Online - %1 download</source>
@@ -1184,11 +1184,11 @@
     </message>
     <message>
         <source>Go back to main menu</source>
-        <translation type="unfinished">メインメニューへ戻る</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Select image</source>
-        <translation type="unfinished">イメージを選ぶ</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Choose operating system</source>
@@ -1375,11 +1375,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     <name>RemoteAccessStep</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">SSHを有効化する</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">パスワード認証を使う</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Use public key authentication</source>
@@ -1620,7 +1620,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Mounted as %1</source>
-        <translation type="unfinished">%1 としてマウントされています</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Read-only</source>
@@ -1696,7 +1696,7 @@ to show system drives.</source>
     <name>UpdateAvailableDialog</name>
     <message>
         <source>Update available</source>
-        <translation type="unfinished">アップデートがあります</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
@@ -1715,7 +1715,7 @@ to show system drives.</source>
     <name>UserCustomizationStep</name>
     <message>
         <source>Username:</source>
-        <translation type="unfinished">ユーザー名</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Enter password</source>
@@ -1790,7 +1790,7 @@ to show system drives.</source>
     <name>WifiCustomizationStep</name>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Network name</source>
@@ -1802,7 +1802,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation type="unfinished">ステルスSSID</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Customisation: Choose Wi‑Fi</source>
@@ -1913,7 +1913,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">ストレージ</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Writing</source>
@@ -2016,7 +2016,7 @@ to show system drives.</source>
     <name>WizardStepBase</name>
     <message>
         <source>Next</source>
-        <translation type="unfinished">次へ</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Skip customisation</source>
@@ -2063,11 +2063,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>Writing... %1%</source>
-        <translation type="unfinished">書き込み中... %1%</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Verifying... %1%</source>
-        <translation type="unfinished">確認中... %1%</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Write completed successfully!</source>
@@ -2162,27 +2162,27 @@ to show system drives.</source>
     <name>main</name>
     <message>
         <source>Are you sure you want to quit?</source>
-        <translation>本当にやめますか？</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Error</source>
-        <translation>エラー</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Erase</source>
-        <translation>削除</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Format card as FAT32</source>
-        <translation>カードをFAT32でフォーマットする</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Use custom</source>
-        <translation>カスタムイメージを使う</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Select a custom .img from your computer</source>
-        <translation>自分で用意したイメージファイルを使う</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
