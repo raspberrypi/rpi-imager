@@ -58,6 +58,20 @@ ApplicationWindow {
         z: 1000
     }
 
+    // Keyboard shortcut to export performance data (Ctrl+Shift+P)
+    Shortcut {
+        sequence: "Ctrl+Shift+P"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            if (imageWriter.hasPerformanceData()) {
+                console.log("Exporting performance data...")
+                imageWriter.exportPerformanceData()
+            } else {
+                console.log("No performance data available to export")
+            }
+        }
+    }
+
     // Main wizard interface
     Rectangle {
         id: wizardBackground
