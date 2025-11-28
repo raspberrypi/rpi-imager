@@ -107,6 +107,21 @@
         <source>PEM Files (*.pem);;All Files (*)</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AsyncCacheWriter</name>
+    <message>
+        <source>Cache write error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -454,10 +469,6 @@
         <translation>Zugriff verweigert-Fehler beim Schreiben auf den Datenträger.</translation>
     </message>
     <message>
-        <source>Error writing file to disk</source>
-        <translation>Fehler beim Schreiben der Datei auf den Speicher</translation>
-    </message>
-    <message>
         <source>Error writing to storage (while flushing)</source>
         <translation>Fehler beim Schreiben auf den Speicher (während flushing)</translation>
     </message>
@@ -635,6 +646,22 @@
     </message>
     <message>
         <source>Failed to write secure boot files: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unmounting volumes...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning disk...</source>
+        <translation type="unfinished">Datenträger wird bereinigt...</translation>
+    </message>
+    <message>
+        <source>Cleaning disk (legacy method)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing customization files...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -831,6 +858,17 @@
     </message>
 </context>
 <context>
+    <name>ImComboBox</name>
+    <message>
+        <source>Type to search: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(press again to cycle)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ImFileDialog</name>
     <message>
         <source>Select File</source>
@@ -859,6 +897,35 @@
     <message>
         <source>No files in this folder</source>
         <translation>Keine Dateien in diesem Ordner</translation>
+    </message>
+    <message>
+        <source>Folder: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionButton</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionPill</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImPopup</name>
+    <message>
+        <source>Dialog</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -965,6 +1032,14 @@
     <message>
         <source> or </source>
         <translation> oder </translation>
+    </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>JSON files (*.json);;All files (*)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1081,13 +1156,6 @@
     <message>
         <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
         <translation>Wählen Sie Ihr Tastaturlayout so, dass die Tasten beim Tippen die richtigen Zeichen erzeugen. Dies wird automatisch basierend auf Ihrer Hauptstadtauswahl empfohlen. Sie können es aber ändern, wenn Sie ein anderes Tastaturlayout verwenden.</translation>
-    </message>
-</context>
-<context>
-    <name>MacFile</name>
-    <message>
-        <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
-        <translation>Raspberry Pi Imager benötigt Zugriff auf das Laufwerk, um das Image zu schreiben.</translation>
     </message>
 </context>
 <context>
@@ -1269,6 +1337,44 @@ Please run with elevated privileges: sudo %1</source>
 
 Bitte führen Sie den Befehl mit erhöhten Rechten aus: sudo %1</translation>
     </message>
+    <message>
+        <source>Invalid Windows physical drive path: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open disk for cleaning. Error code: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clear partition table. Error code: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start disk cleanup utility. Please ensure you have administrator privileges.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disk cleaning operation timed out. The disk may be in use by another application.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clean disk. Error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clean disk after %1 attempts. %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as root.
+
+Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RemoteAccessStep</name>
@@ -1432,11 +1538,11 @@ Bitte führen Sie den Befehl mit erhöhten Rechten aus: sudo %1</translation>
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Zurück zum vorherigen Schritt</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Alle Anpassungen überspringen und direkt mit dem Schreiben des Images beginnen</translation>
     </message>
     <message>
         <source>Enable Secure Boot Signing</source>
@@ -1451,19 +1557,7 @@ Bitte führen Sie den Befehl mit erhöhten Rechten aus: sudo %1</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Your boot partition will be signed using the RSA private key configured in App Options.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Private Key: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>(not configured)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1476,6 +1570,50 @@ Bitte führen Sie den Befehl mit erhöhten Rechten aus: sudo %1</translation>
     </message>
     <message>
         <source>(unable to compute)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem);;All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Selected: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Your boot partition will be signed using the selected RSA private key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please select an RSA private key above to enable secure boot signing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1860,14 +1998,6 @@ um die Systemlaufwerke anzuzeigen.</translation>
 </translation>
     </message>
     <message>
-        <source>Warning: Only replace the token if you initiated this action. </source>
-        <translation>Warnung: Ersetzen Sie das Token nur, wenn Sie diese Aktion angestoßen haben. </translation>
-    </message>
-    <message>
-        <source>If you didn&apos;t, someone could be trying to push a bad token to RPi Imager.</source>
-        <translation>Wenn Sie das nicht waren, könnte jemand versuchen, ein ungültiges Token an den RPi Imager zu senden.</translation>
-    </message>
-    <message>
         <source>Replace token</source>
         <translation>Token ersetzen</translation>
     </message>
@@ -1890,6 +2020,10 @@ um die Systemlaufwerke anzuzeigen.</translation>
     <message>
         <source>Secure Boot</source>
         <translation>Secure Boot</translation>
+    </message>
+    <message>
+        <source>Warning: Only overwrite the token if you initiated this action.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2033,6 +2167,10 @@ um die Systemlaufwerke anzuzeigen.</translation>
         <source>Writing in progress — do not disconnect the storage device</source>
         <translation>Schreibvorgang läuft – Speichermedium nicht trennen</translation>
     </message>
+    <message>
+        <source>Please wait... %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -2111,6 +2249,14 @@ um die Systemlaufwerke anzuzeigen.</translation>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
         <translation>Raspberry Pi Imager beenden – Sie müssen mit erhöhten Rechten neu starten, um Images zu schreiben</translation>
+    </message>
+    <message>
+        <source>Install Authorization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>
