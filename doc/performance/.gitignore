@@ -1,5 +1,6 @@
-# Generated graph files from analyse_performance.py
+# Generated files from analyse_performance.py
 *-timeline.png
 *-throughput.png
 *-network.png
+*.html
 

@@ -134,6 +134,18 @@ signals:
     void cacheFileHashUpdated(QByteArray cacheFileHash, QByteArray imageHash);
     void finalizing();
     void preparationStatusUpdate(QString msg);
+    
+    // Performance event signals (connected by ImageWriter to PerformanceStats)
+    void eventDriveUnmount(quint32 durationMs, bool success);
+    void eventDriveUnmountVolumes(quint32 durationMs, bool success);  // Windows volume unmounting
+    void eventDriveDiskClean(quint32 durationMs, bool success);       // Windows disk cleaning
+    void eventDriveRescan(quint32 durationMs, bool success);          // Windows disk rescan
+    void eventDriveOpen(quint32 durationMs, bool success);
+    void eventCustomisation(quint32 durationMs, bool success, QString metadata);
+    void eventFinalSync(quint32 durationMs, bool success);
+    void eventVerify(quint32 durationMs, bool success);
+    void eventDecompressInit(quint32 durationMs, bool success);
+    void eventPeriodicSync(quint32 durationMs, bool success, quint64 bytesWritten);
 
 protected:
     virtual void run();

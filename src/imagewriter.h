@@ -373,6 +373,7 @@ private:
     // refer to an external JSON list, fetch the list and put it in place.
     void fillSubLists(QJsonArray &topLevel);
     QNetworkAccessManager _networkManager;
+    QHash<QNetworkReply*, qint64> _networkRequestStartTimes;  // Track request start times for performance
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter, _hwCapabilities, _swCapabilities;
     bool _deviceFilterIsInclusive;

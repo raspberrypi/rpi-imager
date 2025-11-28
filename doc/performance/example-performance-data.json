@@ -1,6 +1,35 @@
 {
-    "version": 2,
+    "version": 3,
     "exportTime": "2025-11-28T14:32:15",
+    "system": {
+        "memory": {
+            "totalBytes": 17179869184,
+            "availableBytes": 8589934592,
+            "totalMB": 16384,
+            "availableMB": 8192
+        },
+        "targetDevice": {
+            "path": "\\\\.\\PhysicalDrive2",
+            "sizeBytes": 32010928128,
+            "sizeMB": 30528,
+            "description": "Generic USB Flash Drive",
+            "isUsb": true,
+            "isRemovable": true
+        },
+        "platform": {
+            "os": "Windows",
+            "osVersion": "10.0.22631",
+            "cpuArchitecture": "x86_64",
+            "cpuCores": 8
+        },
+        "imager": {
+            "version": "v1.9.2-15-gabcdef0",
+            "buildType": "Release",
+            "binarySha256": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+            "qtRuntime": "6.6.2",
+            "qtBuild": "6.6.1"
+        }
+    },
     "summary": {
         "imageName": "Raspberry Pi OS (64-bit)",
         "deviceName": "\\\\.\\PhysicalDrive2",
@@ -26,10 +55,10 @@
             },
             "driveOpen": {
                 "count": 1,
-                "totalMs": 1234,
-                "avgMs": 1234,
-                "minMs": 1234,
-                "maxMs": 1234
+                "totalMs": 124,
+                "avgMs": 124,
+                "minMs": 124,
+                "maxMs": 124
             },
             "driveUnmount": {
                 "count": 1,
@@ -37,6 +66,27 @@
                 "avgMs": 350,
                 "minMs": 350,
                 "maxMs": 350
+            },
+            "driveUnmountVolumes": {
+                "count": 1,
+                "totalMs": 215,
+                "avgMs": 215,
+                "minMs": 215,
+                "maxMs": 215
+            },
+            "driveDiskClean": {
+                "count": 1,
+                "totalMs": 85,
+                "avgMs": 85,
+                "minMs": 85,
+                "maxMs": 85
+            },
+            "driveRescan": {
+                "count": 1,
+                "totalMs": 210,
+                "avgMs": 210,
+                "minMs": 210,
+                "maxMs": 210
             },
             "imageDecompressInit": {
                 "count": 1,
@@ -143,67 +193,71 @@
             "type": "driveUnmount",
             "startMs": 2600,
             "durationMs": 350,
-            "success": true,
-            "metadata": "\\\\.\\PhysicalDrive2"
+            "success": true
+        },
+        {
+            "type": "driveUnmountVolumes",
+            "startMs": 2950,
+            "durationMs": 215,
+            "success": true
+        },
+        {
+            "type": "driveDiskClean",
+            "startMs": 3165,
+            "durationMs": 85,
+            "success": true
+        },
+        {
+            "type": "driveRescan",
+            "startMs": 3250,
+            "durationMs": 210,
+            "success": true
         },
         {
             "type": "driveOpen",
-            "startMs": 2950,
-            "durationMs": 1234,
-            "success": true,
-            "metadata": "\\\\.\\PhysicalDrive2"
-        },
-        {
-            "type": "imageDecompressInit",
-            "startMs": 4200,
-            "durationMs": 85,
-            "success": true,
-            "metadata": "xz decompression"
+            "startMs": 3460,
+            "durationMs": 124,
+            "success": true
         },
         {
             "type": "pageCacheFlush",
             "startMs": 50000,
-            "durationMs": 800,
+            "durationMs": 850,
             "success": true,
-            "metadata": "Periodic sync"
+            "metadata": "at 1024 MB"
         },
         {
             "type": "pageCacheFlush",
             "startMs": 100000,
-            "durationMs": 1500,
+            "durationMs": 1200,
             "success": true,
-            "metadata": "Periodic sync"
+            "metadata": "at 2048 MB"
         },
         {
             "type": "pageCacheFlush",
             "startMs": 145000,
-            "durationMs": 2200,
+            "durationMs": 1850,
             "success": true,
-            "metadata": "Periodic sync"
+            "metadata": "at 3072 MB"
         },
         {
-            "type": "fatPartitionSetup",
-            "startMs": 147300,
-            "durationMs": 180,
-            "success": true
+            "type": "hashComputation",
+            "startMs": 150000,
+            "durationMs": 27500,
+            "success": true,
+            "metadata": "Post-write verification"
         },
         {
             "type": "customisation",
-            "startMs": 147500,
+            "startMs": 177600,
             "durationMs": 2456,
             "success": true,
-            "metadata": "hostname=raspberrypi; user=pi; wifi=configured"
+            "metadata": "config: set; cmdline: set; firstrun: set; cloudinit: set; network: set"
         },
         {
             "type": "finalSync",
-            "startMs": 168000,
+            "startMs": 180100,
             "durationMs": 8750,
-            "success": true
-        },
-        {
-            "type": "deviceClose",
-            "startMs": 177000,
-            "durationMs": 120,
             "success": true
         }
     ],

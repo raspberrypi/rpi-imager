@@ -22,16 +22,27 @@ PerformanceStats::PerformanceStats(QObject *parent)
     , _downloadTotal(0)
     , _writeTotal(0)
     , _verifyTotal(0)
+    , _hasSystemInfo(false)
 {
     std::memset(_phaseStartTimes, 0, sizeof(_phaseStartTimes));
     std::memset(_lastSampleTime, 0, sizeof(_lastSampleTime));
+    std::memset(&_systemInfo, 0, sizeof(_systemInfo));
 }
 
 void PerformanceStats::startSession(const QString &imageName, quint64 imageSize, const QString &deviceName)
 {
     QMutexLocker locker(&_mutex);
     
-    // Clear previous data
+    // Preserve pre-session events (OS list fetch, etc.) recorded before session started
+    QVector<TimedEvent> preSessionEvents;
+    for (const TimedEvent &e : _events) {
+        // Keep events that were recorded before any session (startMs == 0 means pre-session)
+        if (e.startMs == 0 && e.durationMs > 0) {
+            preSessionEvents.append(e);
+        }
+    }
+    
+    // Clear previous session data
     _events.clear();
     _pendingEvents.clear();
     _downloadSamples.clear();
@@ -43,6 +54,9 @@ void PerformanceStats::startSession(const QString &imageName, quint64 imageSize,
     _writeSamples.reserve(2000);
     _verifySamples.reserve(1000);
     _events.reserve(50);
+    
+    // Restore pre-session events (they'll keep startMs=0 to indicate pre-session timing)
+    _events.append(preSessionEvents);
     
     // Initialise session
     _imageName = imageName;
@@ -62,11 +76,26 @@ void PerformanceStats::startSession(const QString &imageName, quint64 imageSize,
     _verifyTotal = 0;
     
     _nextEventId = 1;
+    _hasSystemInfo = false;
+    std::memset(&_systemInfo, 0, sizeof(_systemInfo));
+    
     _sessionTimer.start();
     _sessionActive = true;
     
     qDebug() << "PerformanceStats: Started session for" << imageName 
              << "size:" << imageSize << "device:" << deviceName;
+}
+
+void PerformanceStats::setSystemInfo(const SystemInfo &info)
+{
+    QMutexLocker locker(&_mutex);
+    _systemInfo = info;
+    _hasSystemInfo = true;
+    
+    qDebug() << "PerformanceStats: System info set - RAM:" 
+             << (info.totalMemoryBytes / (1024*1024)) << "MB total,"
+             << (info.availableMemoryBytes / (1024*1024)) << "MB available"
+             << "Device:" << info.deviceDescription;
 }
 
 void PerformanceStats::endSession(bool success, const QString &errorMessage)
@@ -274,6 +303,9 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::DriveListPoll: return "driveListPoll";
         case EventType::DriveOpen: return "driveOpen";
         case EventType::DriveUnmount: return "driveUnmount";
+        case EventType::DriveUnmountVolumes: return "driveUnmountVolumes";
+        case EventType::DriveDiskClean: return "driveDiskClean";
+        case EventType::DriveRescan: return "driveRescan";
         case EventType::DriveFormat: return "driveFormat";
         
         // Cache operations
@@ -516,11 +548,57 @@ QJsonDocument PerformanceStats::exportToJson() const
     // All complex processing happens here, triggered by user action (keyboard shortcut)
     
     QJsonObject root;
-    root["version"] = 2;
+    root["version"] = 3;
     root["exportTime"] = QDateTime::currentDateTime().toString(Qt::ISODate);
     
     // Build summary (includes event and phase statistics)
     root["summary"] = buildSummary();
+    
+    // System information (no unique identifiers)
+    if (_hasSystemInfo) {
+        QJsonObject sysInfo;
+        
+        // Memory
+        QJsonObject memory;
+        memory["totalBytes"] = static_cast<qint64>(_systemInfo.totalMemoryBytes);
+        memory["availableBytes"] = static_cast<qint64>(_systemInfo.availableMemoryBytes);
+        memory["totalMB"] = static_cast<qint64>(_systemInfo.totalMemoryBytes / (1024 * 1024));
+        memory["availableMB"] = static_cast<qint64>(_systemInfo.availableMemoryBytes / (1024 * 1024));
+        sysInfo["memory"] = memory;
+        
+        // Target device (no serial numbers or unique IDs)
+        QJsonObject device;
+        device["path"] = _systemInfo.devicePath;
+        device["sizeBytes"] = static_cast<qint64>(_systemInfo.deviceSizeBytes);
+        device["sizeMB"] = static_cast<qint64>(_systemInfo.deviceSizeBytes / (1024 * 1024));
+        device["description"] = _systemInfo.deviceDescription;
+        device["isUsb"] = _systemInfo.deviceIsUsb;
+        device["isRemovable"] = _systemInfo.deviceIsRemovable;
+        sysInfo["targetDevice"] = device;
+        
+        // Platform
+        QJsonObject platform;
+        platform["os"] = _systemInfo.osName;
+        platform["osVersion"] = _systemInfo.osVersion;
+        platform["cpuArchitecture"] = _systemInfo.cpuArchitecture;
+        platform["cpuCores"] = _systemInfo.cpuCoreCount;
+        sysInfo["platform"] = platform;
+        
+        // Imager build info
+        QJsonObject imager;
+        imager["version"] = _systemInfo.imagerVersion;
+        if (!_systemInfo.imagerBuildType.isEmpty())
+            imager["buildType"] = _systemInfo.imagerBuildType;
+        if (!_systemInfo.imagerBinarySha256.isEmpty())
+            imager["binarySha256"] = _systemInfo.imagerBinarySha256;
+        if (!_systemInfo.qtVersion.isEmpty())
+            imager["qtRuntime"] = _systemInfo.qtVersion;
+        if (!_systemInfo.qtBuildVersion.isEmpty())
+            imager["qtBuild"] = _systemInfo.qtBuildVersion;
+        sysInfo["imager"] = imager;
+        
+        root["system"] = sysInfo;
+    }
     
     // Events with full detail
     QJsonArray eventsArray;

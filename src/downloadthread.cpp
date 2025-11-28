@@ -163,9 +163,13 @@ QByteArray DownloadThread::_fileGetContentsTrimmed(const QString &filename)
 
 bool DownloadThread::_openAndPrepareDevice()
 {
+    QElapsedTimer unmountTimer;
+    QElapsedTimer openTimer;
+    
     if (_filename.startsWith("/dev/"))
     {
         emit preparationStatusUpdate(tr("Unmounting drive..."));
+        unmountTimer.start();
 #ifdef Q_OS_DARWIN
         /* Also unmount any APFS volumes using this physical disk */
         auto l = Drivelist::ListStorageDevices();
@@ -184,8 +188,10 @@ bool DownloadThread::_openAndPrepareDevice()
 #endif
         qDebug() << "Unmounting:" << _filename;
         unmount_disk(_filename.constData());
+        emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), true);
     }
     emit preparationStatusUpdate(tr("Opening drive..."));
+    openTimer.start();
 
     // Convert QByteArray filename to std::string for FileOperations
     std::string filename_str = _filename.toStdString();
@@ -203,47 +209,40 @@ bool DownloadThread::_openAndPrepareDevice()
         if (!_nr.isEmpty()) {
             qDebug() << "Removing partition table from Windows drive #" << _nr << "(" << _filename << ")";
 
-            // First, try to unmount any volumes on this disk
-            auto l = Drivelist::ListStorageDevices();
-            QByteArray devlower = _filename.toLower();
-            for (auto i : l)
-            {
-                if (QByteArray::fromStdString(i.device).toLower() == devlower)
-                {
-                    for (const auto& mountpoint : i.mountpoints)
-                    {
-                        QString driveLetter = QString::fromStdString(mountpoint);
-                        if (driveLetter.endsWith("\\"))
-                            driveLetter.chop(1);
-                        
-                        qDebug() << "Attempting to unmount drive" << driveLetter;
-                        
-                        // Try to lock and unlock the volume to force unmount
-                        WinFile tempFile;
-                        tempFile.setFileName("\\\\.\\" + driveLetter);
-                        if (tempFile.open(QIODevice::ReadWrite))
-                        {
-                            if (tempFile.lockVolume())
-                            {
-                                tempFile.unlockVolume();
-                                qDebug() << "Successfully unlocked volume" << driveLetter;
-                            }
-                            tempFile.close();
-                        }
-                        
-                        // Give the system time to process the unmount
-                        QThread::msleep(500);
-                    }
-                    break;
+            // Create timing callback to emit performance events
+            auto timingCallback = [this](const QString &eventName, quint32 durationMs, bool success) {
+                if (eventName == "driveUnmountVolumes") {
+                    emit eventDriveUnmountVolumes(durationMs, success);
+                } else if (eventName == "driveDiskClean") {
+                    emit eventDriveDiskClean(durationMs, success);
+                } else if (eventName == "driveRescan") {
+                    emit eventDriveRescan(durationMs, success);
                 }
+            };
+
+            // Unmount volumes first (with performance instrumentation)
+            emit preparationStatusUpdate(tr("Unmounting volumes..."));
+            auto unmountResult = DiskpartUtil::unmountVolumes(_filename, timingCallback);
+            if (!unmountResult.success)
+            {
+                qDebug() << "Warning: Volume unmount had issues:" << unmountResult.errorMessage;
+                // Continue anyway - cleanDiskFast may still succeed
             }
 
-            // Clean disk with diskpart utility (standardized behavior: 60s timeout, 3 retries, always unmount volumes)
-            auto result = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::UnmountFirst);
-            if (!result.success)
+            // Clean disk using fast direct IOCTL method (replaces diskpart)
+            emit preparationStatusUpdate(tr("Cleaning disk..."));
+            auto cleanResult = DiskpartUtil::cleanDiskFast(_filename, timingCallback);
+            if (!cleanResult.success)
             {
-                emit error(result.errorMessage);
-                return false;
+                // Fall back to legacy diskpart method if direct IOCTLs fail
+                qDebug() << "Fast disk clean failed, falling back to diskpart:" << cleanResult.errorMessage;
+                emit preparationStatusUpdate(tr("Cleaning disk (legacy method)..."));
+                cleanResult = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::SkipUnmounting);
+                if (!cleanResult.success)
+                {
+                    emit error(cleanResult.errorMessage);
+                    return false;
+                }
             }
         }
     }
@@ -414,6 +413,7 @@ bool DownloadThread::_openAndPrepareDevice()
     _sectorsStart = _sectorsWritten();
 #endif
 
+    emit eventDriveOpen(static_cast<quint32>(openTimer.elapsed()), true);
     return true;
 }
 
@@ -1070,8 +1070,12 @@ void DownloadThread::_writeComplete()
         _firstBlock = nullptr;
     }
 
+    QElapsedTimer syncTimer;
+    syncTimer.start();
+    
     if (_file->Flush() != rpi_imager::FileError::kSuccess)
     {
+        emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), false);
         DownloadThread::_onDownloadError(tr("Error writing to storage (while flushing)"));
         _closeFiles();
         return;
@@ -1079,12 +1083,14 @@ void DownloadThread::_writeComplete()
 
 #ifndef Q_OS_WIN
     if (_file->ForceSync() != rpi_imager::FileError::kSuccess) {
+        emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), false);
         DownloadThread::_onDownloadError(tr("Error writing to storage (while fsync)"));
         _closeFiles();
         return;
     }
 #endif
 
+    emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), true);
     _closeFiles();
 
 #ifdef Q_OS_DARWIN
@@ -1153,10 +1159,12 @@ bool DownloadThread::_verify()
 
     if (_verifyhash.result() == _writehash.result() || !_verifyEnabled || _cancelled)
     {
+        emit eventVerify(static_cast<quint32>(t1.elapsed()), true);
         return true;
     }
     else
     {
+        emit eventVerify(static_cast<quint32>(t1.elapsed()), false);
         DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of SD card is different from what was written to it."));
     }
 
@@ -1181,6 +1189,9 @@ void DownloadThread::_periodicSync()
          (timeSinceLastSync >= _syncConfig.syncIntervalMs && bytesSinceLastSync > 0)) &&
         !_cancelled)
     {
+        QElapsedTimer syncTimer;
+        syncTimer.start();
+        
         qDebug() << "Performing periodic sync at" << currentBytes << "bytes written"
                  << "(" << bytesSinceLastSync << "bytes since last sync,"
                  << timeSinceLastSync << "ms elapsed)"
@@ -1188,21 +1199,25 @@ void DownloadThread::_periodicSync()
         
         // Use unified FileOperations for flushing and syncing
         if (_file->Flush() != rpi_imager::FileError::kSuccess) {
+            emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), false, currentBytes);
             qDebug() << "Warning: Flush() failed during periodic sync";
             return;
         }
         
         // Force filesystem sync using unified FileOperations
         if (_file->ForceSync() != rpi_imager::FileError::kSuccess) {
+            emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), false, currentBytes);
             qDebug() << "Warning: ForceSync() failed during periodic sync";
             return;
         }
+        
+        emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), true, currentBytes);
         
         // Update tracking variables
         _lastSyncBytes = currentBytes;
         _lastSyncTime.restart();
         
-        qDebug() << "Periodic sync completed successfully";
+        qDebug() << "Periodic sync completed successfully in" << syncTimer.elapsed() << "ms";
     }
 }
 
@@ -1261,6 +1276,18 @@ void DownloadThread::setImageCustomisation(const QByteArray &config, const QByte
 bool DownloadThread::_customizeImage()
 {
     emit preparationStatusUpdate(tr("Customising OS..."));
+    QElapsedTimer customTimer;
+    customTimer.start();
+    
+    // Build metadata for performance tracking (what was configured, not values)
+    QStringList configuredItems;
+    if (!_config.isEmpty()) configuredItems << "config: set";
+    if (!_cmdline.isEmpty()) configuredItems << "cmdline: set";
+    if (!_firstrun.isEmpty()) configuredItems << "firstrun: set";
+    if (!_cloudinit.isEmpty()) configuredItems << "cloudinit: set";
+    if (!_cloudinitNetwork.isEmpty()) configuredItems << "network: set";
+    if (_advancedOptions.testFlag(ImageOptions::EnableSecureBoot)) configuredItems << "secureboot: enabled";
+    QString metadata = configuredItems.join("; ");
 
     // Use DeviceWrapper with existing FileOperations for image customization
     try
@@ -1355,10 +1382,12 @@ bool DownloadThread::_customizeImage()
     }
     catch (std::runtime_error &err)
     {
+        emit eventCustomisation(static_cast<quint32>(customTimer.elapsed()), false, metadata);
         emit error(err.what());
         return false;
     }
 
+    emit eventCustomisation(static_cast<quint32>(customTimer.elapsed()), true, metadata);
     emit finalizing();
 
     return true;

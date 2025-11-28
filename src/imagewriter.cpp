@@ -722,6 +722,45 @@ void ImageWriter::startWrite()
                         setWriteState(WriteState::Verifying);
                 });
     }
+    
+    // Connect performance event signals from DownloadThread
+    connect(_thread, &DownloadThread::eventDriveUnmount,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmount, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveUnmountVolumes,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmountVolumes, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveDiskClean,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveDiskClean, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveRescan,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveRescan, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveOpen,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventCustomisation,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::Customisation, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventFinalSync,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventVerify,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, "Post-write verification");
+            });
+    connect(_thread, &DownloadThread::eventPeriodicSync,
+            this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
+                QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
+                _performanceStats->recordEvent(PerformanceStats::EventType::PageCacheFlush, durationMs, success, metadata);
+            });
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
@@ -1011,6 +1050,10 @@ namespace {
         return true;
     }
 
+    // Custom attribute to store request start time for performance tracking
+    static const QNetworkRequest::Attribute RequestStartTimeAttribute = 
+        static_cast<QNetworkRequest::Attribute>(QNetworkRequest::User + 1);
+    
     void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager &manager, uint8_t count) {
         if (count > MAX_SUBITEMS_DEPTH) {
             qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
@@ -1033,6 +1076,8 @@ namespace {
                 request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                         QNetworkRequest::NoLessSafeRedirectPolicy);
                 request.setMaximumRedirectsAllowed(3);
+                // Store start time in request attribute for performance tracking
+                request.setAttribute(RequestStartTimeAttribute, QDateTime::currentMSecsSinceEpoch());
                 manager.get(request);
             }
         }
@@ -1096,6 +1141,25 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
     // Defer deletion
     data->deleteLater();
     
+    // Calculate request duration for performance tracking
+    quint32 durationMs = 0;
+    qint64 bytesReceived = data->bytesAvailable();
+    
+    // Check for start time in hash map (top-level requests)
+    if (_networkRequestStartTimes.contains(data)) {
+        qint64 startTime = _networkRequestStartTimes.take(data);
+        durationMs = static_cast<quint32>(QDateTime::currentMSecsSinceEpoch() - startTime);
+    } 
+    // Check for start time in request attribute (sublist requests)
+    else {
+        QVariant startTimeAttr = data->request().attribute(
+            static_cast<QNetworkRequest::Attribute>(QNetworkRequest::User + 1));
+        if (startTimeAttr.isValid()) {
+            qint64 startTime = startTimeAttr.toLongLong();
+            durationMs = static_cast<quint32>(QDateTime::currentMSecsSinceEpoch() - startTime);
+        }
+    }
+    
     // Track if this is the top-level OS list request
     bool isTopLevelRequest = (data->request().url() == osListUrl());
 
@@ -1127,6 +1191,15 @@ void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
 
                 findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager, 1);
                 emit osListPrepared();
+                
+                // Record performance event for OS list fetch
+                if (durationMs > 0) {
+                    PerformanceStats::EventType eventType = isTopLevelRequest 
+                        ? PerformanceStats::EventType::OsListFetch 
+                        : PerformanceStats::EventType::SublistFetch;
+                    QString metadata = data->request().url().toString();
+                    _performanceStats->recordTransferEvent(eventType, durationMs, bytesReceived, true, metadata);
+                }
 
                 // After processing a top-level list fetch, (re)schedule the next refresh
                 if (isTopLevelRequest) {
@@ -1306,7 +1379,8 @@ void ImageWriter::beginOSListFetch() {
     request.setMaximumRedirectsAllowed(3);
     // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
     // a complete cached OS list.
-   _networkManager.get(request);
+    QNetworkReply *reply = _networkManager.get(request);
+    _networkRequestStartTimes[reply] = QDateTime::currentMSecsSinceEpoch();
 }
 
 void ImageWriter::refreshOsListFrom(const QUrl &url) {
@@ -2689,6 +2763,45 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                         setWriteState(WriteState::Verifying);
                 });
     }
+    
+    // Connect performance event signals from DownloadThread
+    connect(_thread, &DownloadThread::eventDriveUnmount,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmount, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveUnmountVolumes,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveUnmountVolumes, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveDiskClean,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveDiskClean, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveRescan,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveRescan, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveOpen,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventCustomisation,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::Customisation, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventFinalSync,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventVerify,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, "Post-write verification");
+            });
+    connect(_thread, &DownloadThread::eventPeriodicSync,
+            this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
+                QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
+                _performanceStats->recordEvent(PerformanceStats::EventType::PageCacheFlush, durationMs, success, metadata);
+            });
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
