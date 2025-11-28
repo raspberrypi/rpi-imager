@@ -9,8 +9,16 @@
 #include <cstdint>
 #include <string>
 #include <memory>
+#include <functional>
 
 namespace rpi_imager {
+
+// Logging callback type - allows Qt layer to capture debug output without Qt dependency
+using LogCallback = std::function<void(const std::string&)>;
+void SetFileOperationsLogCallback(LogCallback callback);
+
+// Internal helper for platform implementations to log messages
+void FileOperationsLog(const std::string& msg);
 
 // Error types for file operations
 enum class FileError {
@@ -73,6 +81,20 @@ class FileOperations {
 
   // Get the last platform-specific error code (Windows error code, errno on Unix)
   virtual int GetLastErrorCode() const = 0;
+
+  // Check if direct I/O (bypassing page cache) is enabled
+  virtual bool IsDirectIOEnabled() const = 0;
+  
+  // Get direct I/O attempt details (for performance logging)
+  // Returns: attempted (bool), succeeded (bool), error_code (int), error_message (string)
+  struct DirectIOInfo {
+      bool attempted = false;      // Did we try to enable direct I/O?
+      bool succeeded = false;      // Did it succeed?
+      bool currently_enabled = false; // Is direct I/O currently active? (should match succeeded)
+      int error_code = 0;          // Platform error code if failed
+      std::string error_message;   // Human-readable error description
+  };
+  virtual DirectIOInfo GetDirectIOInfo() const = 0;
 
   // Factory method to create platform-specific implementation
   static std::unique_ptr<FileOperations> Create();

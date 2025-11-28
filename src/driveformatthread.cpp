@@ -17,6 +17,7 @@
 #endif
 
 #ifdef Q_OS_WIN
+#include <windows.h>
 #include <regex>
 #include <chrono>
 #include "windows/diskpart_util.h"
@@ -48,6 +49,15 @@ std::uint64_t DriveFormatThread::getDeviceSize(const QByteArray &device)
 
 void DriveFormatThread::run()
 {
+#ifdef Q_OS_WIN
+    // Suppress Windows "Insert a disk" / "not accessible" system error dialogs
+    // for this thread. Error mode is per-thread, so we set it once at thread start.
+    DWORD oldMode;
+    if (!SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &oldMode)) {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+    }
+#endif
+
 #ifdef Q_OS_LINUX
     // Linux-specific: Check permissions
     if (::access(_device.constData(), W_OK) != 0)

@@ -514,6 +514,7 @@ def plot_throughput(data: dict, analysis: dict, output_path: Path = None) -> Non
         # Network (blue)
         'osListFetch': '#1565C0', 'osListParse': '#1565C0', 
         'sublistFetch': '#1565C0', 'networkLatency': '#1565C0',
+        'networkRetry': '#D32F2F', 'networkConnectionStats': '#1565C0',
         # Drive (purple)
         'driveListPoll': '#7B1FA2', 'driveOpen': '#7B1FA2', 
         'driveUnmount': '#7B1FA2', 'driveUnmountVolumes': '#7B1FA2',
@@ -522,9 +523,9 @@ def plot_throughput(data: dict, analysis: dict, output_path: Path = None) -> Non
         # Cache (cyan)
         'cacheLookup': '#00838F', 'cacheVerification': '#00838F',
         'cacheWrite': '#00838F', 'cacheFlush': '#00838F',
-        # Memory (grey)
+        # Memory (grey) - ringBufferStarvation in RED to highlight issues
         'memoryAllocation': '#455A64', 'bufferResize': '#455A64',
-        'pageCacheFlush': '#455A64',
+        'pageCacheFlush': '#455A64', 'ringBufferStarvation': '#D32F2F',
         # Image processing (brown)
         'imageDecompressInit': '#5D4037', 'imageExtraction': '#5D4037',
         'hashComputation': '#5D4037',
@@ -641,12 +642,15 @@ def create_timeline_figure(data: dict):
     category_colours = {
         'osListFetch': '#2196F3', 'osListParse': '#2196F3', 
         'sublistFetch': '#2196F3', 'networkLatency': '#2196F3',
+        'networkRetry': '#D32F2F', 'networkConnectionStats': '#2196F3',
         'driveListPoll': '#9C27B0', 'driveOpen': '#9C27B0', 
         'driveUnmount': '#9C27B0', 'driveFormat': '#9C27B0',
+        'driveUnmountVolumes': '#9C27B0', 'driveDiskClean': '#9C27B0',
+        'driveRescan': '#9C27B0',
         'cacheLookup': '#00BCD4', 'cacheVerification': '#00BCD4',
         'cacheWrite': '#00BCD4', 'cacheFlush': '#00BCD4',
         'memoryAllocation': '#607D8B', 'bufferResize': '#607D8B',
-        'pageCacheFlush': '#607D8B',
+        'pageCacheFlush': '#607D8B', 'ringBufferStarvation': '#D32F2F',
         'imageDecompressInit': '#795548', 'imageExtraction': '#795548',
         'hashComputation': '#795548',
         'customisation': '#E91E63', 'cloudInitGeneration': '#E91E63',

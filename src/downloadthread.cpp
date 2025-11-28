@@ -413,12 +413,35 @@ bool DownloadThread::_openAndPrepareDevice()
     _sectorsStart = _sectorsWritten();
 #endif
 
-    emit eventDriveOpen(static_cast<quint32>(openTimer.elapsed()), true);
+    // Include I/O mode in drive open event for diagnostics
+    QString ioModeMetadata = QString("direct_io: %1; platform: %2")
+        .arg(_file->IsDirectIOEnabled() ? "yes" : "no")
+        .arg(SystemMemoryManager::instance().getPlatformName());
+    emit eventDriveOpen(static_cast<quint32>(openTimer.elapsed()), true, ioModeMetadata);
+    
+    // Emit detailed direct I/O attempt info for performance analysis
+    auto directIOInfo = _file->GetDirectIOInfo();
+    emit eventDirectIOAttempt(
+        directIOInfo.attempted,
+        directIOInfo.succeeded,
+        directIOInfo.currently_enabled,
+        directIOInfo.error_code,
+        QString::fromStdString(directIOInfo.error_message));
+    
     return true;
 }
 
 void DownloadThread::run()
 {
+#ifdef Q_OS_WIN
+    // Suppress Windows "Insert a disk" / "not accessible" system error dialogs
+    // for this thread. Error mode is per-thread, so we set it once at thread start.
+    DWORD oldMode;
+    if (!SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &oldMode)) {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+    }
+#endif
+
     qDebug() << "Download thread starting. isImage?" << isImage() << "filename:" << _filename;
     if (isImage() && !_openAndPrepareDevice())
     {
@@ -534,11 +557,21 @@ void DownloadThread::run()
 
         /* If last failure happened less than 5 seconds ago, something else may
            be wrong. Sleep some time to prevent hammering server */
+        quint32 sleepMs = 0;
         if (t - _lastFailureTime < 5)
         {
             qDebug() << "Sleeping 5 seconds";
+            sleepMs = 5000;
             ::sleep(5);
         }
+        
+        // Emit network retry event for performance tracking
+        QString retryMetadata = QString("error: %1; offset: %2 MB; http2_failures: %3")
+            .arg(curl_easy_strerror(ret))
+            .arg(_lastDlNow / (1024 * 1024))
+            .arg(http2FailureCount);
+        emit eventNetworkRetry(sleepMs, retryMetadata);
+        
         _lastFailureTime = t;
 
         _startOffset = _lastDlNow;
@@ -556,21 +589,44 @@ void DownloadThread::run()
         {
             _successful = true;
             
-            // Log HTTP version used for diagnostics
+            // Collect CURL connection timing metrics for performance analysis
+            double dnsTime = 0, connectTime = 0, tlsTime = 0, startTransferTime = 0, totalTime = 0;
+            curl_off_t downloadSpeed = 0;
+            curl_off_t downloadSize = 0;
             long httpVersion = 0;
-            if (curl_easy_getinfo(_c, CURLINFO_HTTP_VERSION, &httpVersion) == CURLE_OK) {
-                const char* versionStr = "unknown";
-                switch (httpVersion) {
-                    case CURL_HTTP_VERSION_1_0: versionStr = "HTTP/1.0"; break;
-                    case CURL_HTTP_VERSION_1_1: versionStr = "HTTP/1.1"; break;
-                    case CURL_HTTP_VERSION_2_0: versionStr = "HTTP/2"; break;
-                    case CURL_HTTP_VERSION_3: versionStr = "HTTP/3"; break;
-                    default: break;
-                }
-                qDebug() << "Download done in" << _timer.elapsed() / 1000 << "seconds using" << versionStr;
-            } else {
-                qDebug() << "Download done in" << _timer.elapsed() / 1000 << "seconds";
+            
+            curl_easy_getinfo(_c, CURLINFO_NAMELOOKUP_TIME, &dnsTime);
+            curl_easy_getinfo(_c, CURLINFO_CONNECT_TIME, &connectTime);
+            curl_easy_getinfo(_c, CURLINFO_APPCONNECT_TIME, &tlsTime);
+            curl_easy_getinfo(_c, CURLINFO_STARTTRANSFER_TIME, &startTransferTime);
+            curl_easy_getinfo(_c, CURLINFO_TOTAL_TIME, &totalTime);
+            curl_easy_getinfo(_c, CURLINFO_SPEED_DOWNLOAD_T, &downloadSpeed);
+            curl_easy_getinfo(_c, CURLINFO_SIZE_DOWNLOAD_T, &downloadSize);
+            curl_easy_getinfo(_c, CURLINFO_HTTP_VERSION, &httpVersion);
+            
+            const char* versionStr = "unknown";
+            switch (httpVersion) {
+                case CURL_HTTP_VERSION_1_0: versionStr = "HTTP/1.0"; break;
+                case CURL_HTTP_VERSION_1_1: versionStr = "HTTP/1.1"; break;
+                case CURL_HTTP_VERSION_2_0: versionStr = "HTTP/2"; break;
+                case CURL_HTTP_VERSION_3: versionStr = "HTTP/3"; break;
+                default: break;
             }
+            
+            qDebug() << "Download done in" << _timer.elapsed() / 1000 << "seconds using" << versionStr;
+            
+            // Emit connection stats for performance tracking
+            // Times are in seconds from CURL, convert to ms for consistency
+            QString statsMetadata = QString("dns_ms: %1; connect_ms: %2; tls_ms: %3; ttfb_ms: %4; total_ms: %5; speed_kbps: %6; size_bytes: %7; http: %8")
+                .arg(static_cast<int>(dnsTime * 1000))
+                .arg(static_cast<int>(connectTime * 1000))
+                .arg(static_cast<int>(tlsTime * 1000))
+                .arg(static_cast<int>(startTransferTime * 1000))
+                .arg(static_cast<int>(totalTime * 1000))
+                .arg(static_cast<qint64>(downloadSpeed / 1024))
+                .arg(static_cast<qint64>(downloadSize))
+                .arg(versionStr);
+            emit eventNetworkConnectionStats(statsMetadata);
             
             _onDownloadSuccess();
             break;

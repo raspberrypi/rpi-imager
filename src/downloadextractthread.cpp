@@ -71,7 +71,11 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
       _lastEmittedDecompressNow(0),
       _lastEmittedWriteNow(0),
       _bytesDecompressed(0),
-      _downloadComplete(false)
+      _downloadComplete(false),
+      _totalDecompressionMs(0),
+      _totalWriteWaitMs(0),
+      _totalRingBufferWaitMs(0),
+      _bytesReadFromRingBuffer(0)
 {
     _extractThread = new _extractThreadClass(this);
     size_t pageSize = SystemMemoryManager::instance().getSystemPageSize();
@@ -106,21 +110,37 @@ DownloadExtractThread::~DownloadExtractThread()
 
 void DownloadExtractThread::_emitProgressUpdate()
 {
-    static QElapsedTimer timer;
     bool firstProgressUpdate = false;
     if (!_progressStarted) {
         _progressStarted = true;
         firstProgressUpdate = true;
-        timer.start();
+        _sessionTimer.start();
+        
+        // Set session timer on ring buffer for stall event timestamps
+        if (_ringBuffer) {
+            _ringBuffer->setSessionTimer(&_sessionTimer);
+        }
+        
         qDebug() << "Started progress updates after successful drive opening";
     }
     
     // Only emit progress updates every 100ms to avoid flooding (but always emit the first one)
-    qint64 currentTime = timer.elapsed();
+    qint64 currentTime = _sessionTimer.elapsed();
     if (!firstProgressUpdate && currentTime - _lastProgressTime < PROGRESS_UPDATE_INTERVAL) {
         return;
     }
     _lastProgressTime = currentTime;
+    
+    // Emit any pending ring buffer stall events for time-series correlation
+    if (_ringBuffer) {
+        auto stallEvents = _ringBuffer->getPendingStallEvents();
+        for (const auto& event : stallEvents) {
+            QString metadata = QString("type: %1; duration_ms: %2")
+                .arg(event.isProducer ? "producer_stall" : "consumer_stall")
+                .arg(event.durationMs);
+            emit eventRingBufferStats(event.timestampMs, event.durationMs, metadata);
+        }
+    }
     
     quint64 currentDlNow = this->dlNow();
     quint64 currentDlTotal = this->dlTotal();
@@ -264,9 +284,17 @@ void DownloadExtractThread::extractImageRun()
         // Emit image extraction setup event (archive opened and header read)
         emit eventImageExtraction(static_cast<quint32>(extractionTimer.elapsed()), true);
 
+        // Timers for pipeline instrumentation
+        QElapsedTimer decompressTimer;
+        QElapsedTimer writeWaitTimer;
+        
         while (true)
         {
+            // Time decompression (includes ring buffer wait inside libarchive's read callback)
+            decompressTimer.start();
             ssize_t size = archive_read_data(a, _abuf[_activeBuf], _abufsize);
+            _totalDecompressionMs.fetch_add(static_cast<quint64>(decompressTimer.elapsed()));
+            
             if (size < 0) {
                 const char* errorStr = archive_error_string(a);
                 
@@ -296,8 +324,12 @@ void DownloadExtractThread::extractImageRun()
 
             if (_writeThreadStarted)
             {
-                //if (_writeFile(_abuf, size) != (size_t) size)
-                if (!_writeFuture.result())
+                // Time waiting for previous write to complete
+                writeWaitTimer.start();
+                bool writeResult = _writeFuture.result();
+                _totalWriteWaitMs.fetch_add(static_cast<quint64>(writeWaitTimer.elapsed()));
+                
+                if (!writeResult)
                 {
                     if (!_cancelled)
                     {
@@ -332,6 +364,23 @@ void DownloadExtractThread::extractImageRun()
     }
 
     archive_read_free(a);
+    
+    // Emit pipeline timing summary events for performance analysis
+    // These show where time was spent in the extraction pipeline
+    emit eventPipelineDecompressionTime(
+        static_cast<quint32>(_totalDecompressionMs.load()),
+        _bytesDecompressed.load());
+    emit eventPipelineWriteWaitTime(
+        static_cast<quint32>(_totalWriteWaitMs.load()),
+        bytesWritten());
+    emit eventPipelineRingBufferWaitTime(
+        static_cast<quint32>(_totalRingBufferWaitMs.load()),
+        _bytesReadFromRingBuffer.load());
+    
+    qDebug() << "Pipeline timing summary:"
+             << "decompress=" << _totalDecompressionMs.load() << "ms"
+             << "(ring_wait=" << _totalRingBufferWaitMs.load() << "ms)"
+             << "write_wait=" << _totalWriteWaitMs.load() << "ms";
 }
 
 #ifdef Q_OS_LINUX
@@ -593,6 +642,10 @@ ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
         _currentReadSlot = nullptr;
     }
     
+    // Time how long we wait for ring buffer data
+    QElapsedTimer ringBufferWaitTimer;
+    ringBufferWaitTimer.start();
+    
     // Acquire next read slot (blocks until data available or producer done)
     _currentReadSlot = _ringBuffer->acquireReadSlot(100);  // 100ms timeout
     
@@ -601,11 +654,17 @@ ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
         _currentReadSlot = _ringBuffer->acquireReadSlot(100);
     }
     
+    // Record ring buffer wait time
+    _totalRingBufferWaitMs.fetch_add(static_cast<quint64>(ringBufferWaitTimer.elapsed()));
+    
     // Check for EOF or cancellation
     if (!_currentReadSlot) {
         *buff = nullptr;
         return 0;  // EOF or cancelled
     }
+    
+    // Track bytes read from ring buffer
+    _bytesReadFromRingBuffer.fetch_add(static_cast<quint64>(_currentReadSlot->size));
     
     // Return pointer directly to pre-allocated buffer (zero-copy!)
     *buff = _currentReadSlot->data;

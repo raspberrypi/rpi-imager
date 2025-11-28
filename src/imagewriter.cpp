@@ -7,6 +7,7 @@
 #include "imagewriter.h"
 #include "embedded_config.h"
 #include "config.h"
+#include "file_operations.h"
 #include "drivelistitem.h"
 #include "customization_generator.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
@@ -130,6 +131,12 @@ ImageWriter::ImageWriter(QObject *parent)
     
     // Initialise PerformanceStats
     _performanceStats = new PerformanceStats(this);
+    
+    // Set up file operations logging to use Qt's debug output
+    rpi_imager::SetFileOperationsLogCallback([](const std::string& msg) {
+        qDebug() << "[FileOps]" << msg.c_str();
+    });
+    qDebug() << "FileOperations log callback installed";
 
     QString platform;
 #ifndef CLI_ONLY_BUILD
@@ -634,7 +641,20 @@ void ImageWriter::startWrite()
         return;
     }
 
-    if (!_expectedHash.isEmpty() && _cacheManager->isCached(_expectedHash))
+    // Start performance stats session early so cache lookup is captured
+    _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
+                                    _extrLen > 0 ? _extrLen : _downloadLen, 
+                                    _dst);
+
+    // Time cache lookup for performance tracking
+    QElapsedTimer cacheLookupTimer;
+    cacheLookupTimer.start();
+    bool cacheHit = !_expectedHash.isEmpty() && _cacheManager->isCached(_expectedHash);
+    _performanceStats->recordEvent(PerformanceStats::EventType::CacheLookup,
+        static_cast<quint32>(cacheLookupTimer.elapsed()), true,
+        cacheHit ? "hit" : (_expectedHash.isEmpty() ? "no_hash" : "miss"));
+    
+    if (cacheHit)
     {
         // Use background cache manager to check cache file integrity
         CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
@@ -662,6 +682,9 @@ void ImageWriter::startWrite()
             connect(_cacheManager, &CacheManager::cacheVerificationComplete,
                     this, &ImageWriter::onCacheVerificationComplete);
 
+            // Start timing cache verification
+            _cacheVerificationTimer.start();
+            
             if (!cacheStatus.verificationComplete)
             {
                 qDebug() << "Starting cache verification";
@@ -711,11 +734,6 @@ void ImageWriter::startWrite()
         }
     });
 
-    // Start performance stats session
-    _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
-                                    _extrLen > 0 ? _extrLen : _downloadLen, 
-                                    _dst);
-
     // Connect to progress signals if this is a DownloadExtractThread
     DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
     if (downloadThread) {
@@ -748,6 +766,43 @@ void ImageWriter::startWrite()
                     if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing && _writeState != WriteState::Succeeded)
                         setWriteState(WriteState::Verifying);
                 });
+        
+        // Capture ring buffer stall events for time-series correlation
+        connect(downloadThread, &DownloadExtractThread::eventRingBufferStats,
+                this, [this](qint64 timestampMs, quint32 durationMs, QString metadata){
+                    // Record as an event with explicit startMs from the stall timestamp
+                    PerformanceStats::TimedEvent event;
+                    event.type = PerformanceStats::EventType::RingBufferStarvation;
+                    event.startMs = static_cast<uint32_t>(timestampMs);
+                    event.durationMs = durationMs;
+                    event.metadata = metadata;
+                    event.success = true;
+                    event.bytesTransferred = 0;
+                    _performanceStats->addEvent(event);
+                });
+        
+        // Pipeline timing summary events (emitted at end of extraction)
+        connect(downloadThread, &DownloadExtractThread::eventPipelineDecompressionTime,
+                this, [this](quint32 totalMs, quint64 bytesDecompressed){
+                    _performanceStats->recordTransferEvent(
+                        PerformanceStats::EventType::PipelineDecompressionTime,
+                        totalMs, bytesDecompressed, true,
+                        QString("bytes: %1 MB").arg(bytesDecompressed / (1024*1024)));
+                });
+        connect(downloadThread, &DownloadExtractThread::eventPipelineWriteWaitTime,
+                this, [this](quint32 totalMs, quint64 bytesWritten){
+                    _performanceStats->recordTransferEvent(
+                        PerformanceStats::EventType::PipelineWriteWaitTime,
+                        totalMs, bytesWritten, true,
+                        QString("bytes: %1 MB").arg(bytesWritten / (1024*1024)));
+                });
+        connect(downloadThread, &DownloadExtractThread::eventPipelineRingBufferWaitTime,
+                this, [this](quint32 totalMs, quint64 bytesRead){
+                    _performanceStats->recordTransferEvent(
+                        PerformanceStats::EventType::PipelineRingBufferWaitTime,
+                        totalMs, bytesRead, true,
+                        QString("bytes: %1 MB").arg(bytesRead / (1024*1024)));
+                });
     }
     
     // Connect performance event signals from DownloadThread
@@ -768,8 +823,18 @@ void ImageWriter::startWrite()
                 _performanceStats->recordEvent(PerformanceStats::EventType::DriveRescan, durationMs, success);
             });
     connect(_thread, &DownloadThread::eventDriveOpen,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success);
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventDirectIOAttempt,
+            this, [this](bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage){
+                QString metadata = QString("attempted: %1; succeeded: %2; currently_enabled: %3; error_code: %4; error: %5")
+                    .arg(attempted ? "yes" : "no")
+                    .arg(succeeded ? "yes" : "no")
+                    .arg(currentlyEnabled ? "yes" : "no")
+                    .arg(errorCode)
+                    .arg(errorMessage.isEmpty() ? "none" : errorMessage);
+                _performanceStats->recordEvent(PerformanceStats::EventType::DirectIOAttempt, 0, currentlyEnabled, metadata);
             });
     connect(_thread, &DownloadThread::eventCustomisation,
             this, [this](quint32 durationMs, bool success, QString metadata){
@@ -803,6 +868,14 @@ void ImageWriter::startWrite()
     connect(_thread, &DownloadThread::eventDeviceClose,
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventNetworkRetry,
+            this, [this](quint32 sleepMs, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkRetry, sleepMs, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventNetworkConnectionStats,
+            this, [this](QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, metadata);
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);
@@ -2655,6 +2728,12 @@ void ImageWriter::onCacheVerificationComplete(bool isValid)
         return; // Not waiting for this verification
     }
 
+    // Record cache verification duration for performance tracking
+    quint32 verificationDurationMs = static_cast<quint32>(_cacheVerificationTimer.elapsed());
+    _performanceStats->recordEvent(PerformanceStats::EventType::CacheVerification,
+        verificationDurationMs, isValid,
+        isValid ? "valid" : "invalid");
+
     _waitingForCacheVerification = false;
 
     // Disconnect signals to avoid receiving future notifications
@@ -2663,7 +2742,7 @@ void ImageWriter::onCacheVerificationComplete(bool isValid)
     disconnect(_cacheManager, &CacheManager::cacheVerificationComplete,
                this, &ImageWriter::onCacheVerificationComplete);
 
-    qDebug() << "Cache verification completed - valid:" << isValid;
+    qDebug() << "Cache verification completed - valid:" << isValid << "duration:" << verificationDurationMs << "ms";
 
     // Emit signal to update UI (cache verification finished)
     emit cacheVerificationFinished();
@@ -2771,11 +2850,6 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         }
     });
 
-    // Start performance stats session
-    _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
-                                    _extrLen > 0 ? _extrLen : _downloadLen, 
-                                    _dst);
-
     // Connect to progress signals if this is a DownloadExtractThread
     DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
     if (downloadThread) {
@@ -2808,6 +2882,43 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                     if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing && _writeState != WriteState::Succeeded)
                         setWriteState(WriteState::Verifying);
                 });
+        
+        // Capture ring buffer stall events for time-series correlation
+        connect(downloadThread, &DownloadExtractThread::eventRingBufferStats,
+                this, [this](qint64 timestampMs, quint32 durationMs, QString metadata){
+                    // Record as an event with explicit startMs from the stall timestamp
+                    PerformanceStats::TimedEvent event;
+                    event.type = PerformanceStats::EventType::RingBufferStarvation;
+                    event.startMs = static_cast<uint32_t>(timestampMs);
+                    event.durationMs = durationMs;
+                    event.metadata = metadata;
+                    event.success = true;
+                    event.bytesTransferred = 0;
+                    _performanceStats->addEvent(event);
+                });
+        
+        // Pipeline timing summary events (emitted at end of extraction)
+        connect(downloadThread, &DownloadExtractThread::eventPipelineDecompressionTime,
+                this, [this](quint32 totalMs, quint64 bytesDecompressed){
+                    _performanceStats->recordTransferEvent(
+                        PerformanceStats::EventType::PipelineDecompressionTime,
+                        totalMs, bytesDecompressed, true,
+                        QString("bytes: %1 MB").arg(bytesDecompressed / (1024*1024)));
+                });
+        connect(downloadThread, &DownloadExtractThread::eventPipelineWriteWaitTime,
+                this, [this](quint32 totalMs, quint64 bytesWritten){
+                    _performanceStats->recordTransferEvent(
+                        PerformanceStats::EventType::PipelineWriteWaitTime,
+                        totalMs, bytesWritten, true,
+                        QString("bytes: %1 MB").arg(bytesWritten / (1024*1024)));
+                });
+        connect(downloadThread, &DownloadExtractThread::eventPipelineRingBufferWaitTime,
+                this, [this](quint32 totalMs, quint64 bytesRead){
+                    _performanceStats->recordTransferEvent(
+                        PerformanceStats::EventType::PipelineRingBufferWaitTime,
+                        totalMs, bytesRead, true,
+                        QString("bytes: %1 MB").arg(bytesRead / (1024*1024)));
+                });
     }
     
     // Connect performance event signals from DownloadThread
@@ -2828,8 +2939,18 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 _performanceStats->recordEvent(PerformanceStats::EventType::DriveRescan, durationMs, success);
             });
     connect(_thread, &DownloadThread::eventDriveOpen,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success);
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success, metadata);
+            });
+    connect(_thread, &DownloadThread::eventDirectIOAttempt,
+            this, [this](bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage){
+                QString metadata = QString("attempted: %1; succeeded: %2; currently_enabled: %3; error_code: %4; error: %5")
+                    .arg(attempted ? "yes" : "no")
+                    .arg(succeeded ? "yes" : "no")
+                    .arg(currentlyEnabled ? "yes" : "no")
+                    .arg(errorCode)
+                    .arg(errorMessage.isEmpty() ? "none" : errorMessage);
+                _performanceStats->recordEvent(PerformanceStats::EventType::DirectIOAttempt, 0, currentlyEnabled, metadata);
             });
     connect(_thread, &DownloadThread::eventCustomisation,
             this, [this](quint32 durationMs, bool success, QString metadata){
@@ -2863,6 +2984,14 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     connect(_thread, &DownloadThread::eventDeviceClose,
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventNetworkRetry,
+            this, [this](quint32 sleepMs, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkRetry, sleepMs, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventNetworkConnectionStats,
+            this, [this](QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, metadata);
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);

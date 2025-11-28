@@ -21,6 +21,7 @@ RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
     , _consumerStalls(0)
     , _producerWaitMs(0)
     , _consumerWaitMs(0)
+    , _sessionTimer(nullptr)
 {
     _slots.resize(numSlots);
     _memory.reserve(numSlots);
@@ -108,6 +109,16 @@ RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
         auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
         _producerWaitMs += waitDuration;
         
+        // Record significant stalls for time-series correlation
+        if (waitDuration >= STALL_THRESHOLD_MS) {
+            std::lock_guard<std::mutex> eventLock(_stallEventsMutex);
+            StallEvent event;
+            event.timestampMs = _sessionTimer ? _sessionTimer->elapsed() : 0;
+            event.durationMs = static_cast<uint32_t>(waitDuration);
+            event.isProducer = true;
+            _stallEvents.push(event);
+        }
+        
         if (waitDuration > 100) {  // Log waits > 100ms
             qDebug() << "RingBuffer: Producer stall - waited" << waitDuration 
                      << "ms for free slot. Consumer may be slow. Total stalls:" << _producerStalls.load();
@@ -173,6 +184,16 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
         auto waitEnd = std::chrono::steady_clock::now();
         auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
         _consumerWaitMs += waitDuration;
+        
+        // Record significant stalls for time-series correlation
+        if (waitDuration >= STALL_THRESHOLD_MS) {
+            std::lock_guard<std::mutex> eventLock(_stallEventsMutex);
+            StallEvent event;
+            event.timestampMs = _sessionTimer ? _sessionTimer->elapsed() : 0;
+            event.durationMs = static_cast<uint32_t>(waitDuration);
+            event.isProducer = false;
+            _stallEvents.push(event);
+        }
         
         if (waitDuration > 500) {  // Log waits > 500ms (significant network/download delay)
             qDebug() << "RingBuffer: Consumer stall - waited" << waitDuration 
@@ -284,5 +305,18 @@ void RingBuffer::getStarvationStats(uint64_t& producerStalls, uint64_t& consumer
     consumerStalls = _consumerStalls.load();
     totalProducerWaitMs = _producerWaitMs.load();
     totalConsumerWaitMs = _consumerWaitMs.load();
+}
+
+std::vector<RingBuffer::StallEvent> RingBuffer::getPendingStallEvents()
+{
+    std::lock_guard<std::mutex> lock(_stallEventsMutex);
+    std::vector<StallEvent> events;
+    
+    while (!_stallEvents.empty()) {
+        events.push_back(_stallEvents.front());
+        _stallEvents.pop();
+    }
+    
+    return events;
 }
 

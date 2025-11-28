@@ -27,12 +27,14 @@ The following operations are timed individually, grouped by category:
 | `osListParse` | Time to parse the OS list JSON |
 | `sublistFetch` | Time to fetch OS sublists |
 | `networkLatency` | Network round-trip measurements |
+| `networkRetry` | Network connection retry (includes error type, offset, sleep duration) |
+| `networkConnectionStats` | CURL connection timing (DNS, connect, TLS, TTFB, speed, HTTP version) |
 
 **Drive Operations**
 | Event | Description |
 |-------|-------------|
 | `driveListPoll` | Time for drive enumeration |
-| `driveOpen` | Time to open and prepare the drive for writing (overall) |
+| `driveOpen` | Time to open and prepare the drive for writing (includes direct_io mode) |
 | `driveUnmount` | Time to unmount drive partitions (Linux/macOS) |
 | `driveUnmountVolumes` | Time to unmount/lock volumes (Windows) |
 | `driveDiskClean` | Time to clean disk/remove partitions (Windows) |
@@ -53,6 +55,7 @@ The following operations are timed individually, grouped by category:
 | `memoryAllocation` | Time for large memory allocations |
 | `bufferResize` | Time to resize buffers |
 | `pageCacheFlush` | Time to flush system page cache |
+| `ringBufferStarvation` | Ring buffer stall (producer waiting for disk, or consumer waiting for network) |
 
 **Image Processing**
 | Event | Description |
@@ -217,6 +220,8 @@ pip install matplotlib numpy
 | Long `driveDiskClean` time (Windows) | Disk locked or antivirus scanning |
 | Long `customisation` time | Complex customisation or slow FAT operations |
 | Long `finalSync` time | Large page cache, slow drive flush |
+| `ringBufferStarvation` with `producer_stall` | Disk/decompression slower than download; ring buffer full |
+| `ringBufferStarvation` with `consumer_stall` | Network slower than processing; ring buffer empty |
 
 ## Adding Instrumentation
 

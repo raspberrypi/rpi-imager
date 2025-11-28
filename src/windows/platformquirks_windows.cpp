@@ -170,6 +170,17 @@ static bool hasNvidiaGraphicsCard() {
 }
 
 void applyQuirks() {
+    // Suppress Windows "Insert a disk" / "not accessible" system error dialogs
+    // for the main thread. This prevents Windows from showing modal dialogs
+    // when accessing removable drives that may not have media inserted.
+    // Worker threads set their own error mode in their run() methods.
+    // Use SetThreadErrorMode (modern API) with fallback to SetErrorMode.
+    DWORD oldMode;
+    if (!SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &oldMode)) {
+        // Fallback for older Windows versions
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+    }
+
     // Check for NVIDIA graphics cards and apply software renderer workaround
     if (hasNvidiaGraphicsCard()) {
         SetEnvironmentVariableA("QSG_RHI_PREFER_SOFTWARE_RENDERER", "1");

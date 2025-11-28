@@ -13,7 +13,9 @@
 #include <condition_variable>
 #include <atomic>
 #include <vector>
+#include <queue>
 #include <QDebug>
+#include <QElapsedTimer>
 
 /**
  * @brief Lock-free (for single producer/consumer) ring buffer with pre-allocated slots
@@ -40,6 +42,15 @@ public:
         size_t size;        // Actual data size written
         
         Slot() : data(nullptr), capacity(0), size(0) {}
+    };
+
+    /**
+     * @brief A stall event for performance tracking
+     */
+    struct StallEvent {
+        qint64 timestampMs;  // When the stall occurred (from session start)
+        uint32_t durationMs; // How long the stall lasted
+        bool isProducer;     // true = producer stall (download waiting), false = consumer stall
     };
 
     /**
@@ -143,6 +154,18 @@ public:
     void getStarvationStats(uint64_t& producerStalls, uint64_t& consumerStalls,
                            uint64_t& totalProducerWaitMs, uint64_t& totalConsumerWaitMs) const;
 
+    /**
+     * @brief Set the session timer for stall event timestamps
+     * @param timer Pointer to QElapsedTimer started at session begin
+     */
+    void setSessionTimer(QElapsedTimer* timer) { _sessionTimer = timer; }
+
+    /**
+     * @brief Get and clear pending stall events (for performance logging)
+     * @return Vector of stall events since last call
+     */
+    std::vector<StallEvent> getPendingStallEvents();
+
 private:
     size_t _numSlots;
     size_t _slotSize;
@@ -171,6 +194,12 @@ private:
     std::atomic<uint64_t> _consumerStalls;      // Times consumer waited for data
     std::atomic<uint64_t> _producerWaitMs;      // Total producer wait time
     std::atomic<uint64_t> _consumerWaitMs;      // Total consumer wait time
+    
+    // Stall event queue for time-series correlation
+    QElapsedTimer* _sessionTimer;               // External timer for timestamps (not owned)
+    std::queue<StallEvent> _stallEvents;        // Queue of significant stall events
+    std::mutex _stallEventsMutex;               // Protects _stallEvents
+    static const uint32_t STALL_THRESHOLD_MS = 50;  // Minimum stall duration to record
 };
 
 #endif // RINGBUFFER_H

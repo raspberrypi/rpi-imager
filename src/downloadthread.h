@@ -140,7 +140,8 @@ signals:
     void eventDriveUnmountVolumes(quint32 durationMs, bool success);  // Windows volume unmounting
     void eventDriveDiskClean(quint32 durationMs, bool success);       // Windows disk cleaning
     void eventDriveRescan(quint32 durationMs, bool success);          // Windows disk rescan
-    void eventDriveOpen(quint32 durationMs, bool success);
+    void eventDriveOpen(quint32 durationMs, bool success, QString metadata);
+    void eventDirectIOAttempt(bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage);
     void eventCustomisation(quint32 durationMs, bool success, QString metadata);
     void eventFinalSync(quint32 durationMs, bool success);
     void eventVerify(quint32 durationMs, bool success);
@@ -150,6 +151,8 @@ signals:
     void eventPartitionTableWrite(quint32 durationMs, bool success);  // MBR/partition table write
     void eventFatPartitionSetup(quint32 durationMs, bool success);    // FAT partition parsing
     void eventDeviceClose(quint32 durationMs, bool success);          // Device handle close
+    void eventNetworkRetry(quint32 sleepMs, QString metadata);        // Network retry with reason
+    void eventNetworkConnectionStats(QString metadata);               // CURL connection timing stats
 
 protected:
     virtual void run();
