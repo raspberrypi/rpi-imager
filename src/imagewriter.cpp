@@ -1425,7 +1425,51 @@ void ImageWriter::setWriteState(WriteState state)
 {
     if (_writeState == state)
         return;
+    
+    WriteState oldState = _writeState;
     _writeState = state;
+    
+    // Adaptive drive scanning based on write state
+    // Reduce scanning during write operations to minimize I/O contention
+    // while still detecting device removal for user-friendly error messages
+    switch (state) {
+        case WriteState::Idle:
+            // Back to device selection - resume normal scanning
+            _drivelist.resumePolling();
+            break;
+            
+        case WriteState::Preparing:
+            // About to open the drive - pause briefly to avoid device lock conflicts
+            // (especially important on Windows where drive enumeration can block device access)
+            qDebug() << "Pausing drive scanning during write preparation";
+            _drivelist.pausePolling();
+            break;
+            
+        case WriteState::Writing:
+        case WriteState::Verifying:
+        case WriteState::Finalizing:
+            // Active I/O - use slow polling (every 5 seconds)
+            // This allows device removal detection for user-friendly errors
+            // while minimizing I/O contention during critical operations
+            if (oldState == WriteState::Preparing) {
+                qDebug() << "Switching to slow drive scanning during write/verify";
+                _drivelist.setSlowPolling();
+            }
+            break;
+            
+        case WriteState::Succeeded:
+        case WriteState::Failed:
+        case WriteState::Cancelled:
+            // Operation complete - keep slow polling (user may eject device)
+            // Full resume happens when user navigates back to device selection
+            if (oldState != WriteState::Writing && 
+                oldState != WriteState::Verifying && 
+                oldState != WriteState::Finalizing) {
+                _drivelist.setSlowPolling();
+            }
+            break;
+    }
+    
     emit writeStateChanged();
 }
 
@@ -1454,6 +1498,15 @@ void ImageWriter::onSuccess()
 
 void ImageWriter::onError(QString msg)
 {
+    // Guard against duplicate errors - device removal disconnects error signal,
+    // but this catches any already-queued signals
+    if (_cancelledDueToDeviceRemoval || 
+        _writeState == WriteState::Failed || 
+        _writeState == WriteState::Cancelled) {
+        qDebug() << "Ignoring duplicate/late error:" << msg;
+        return;
+    }
+    
     setWriteState(WriteState::Failed);
     stopProgressPolling();
     emit error(msg);
@@ -2490,6 +2543,13 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
         if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing || _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing) {
             _selectedDeviceValid = false;
             qDebug() << "Cancelling write operation due to device removal";
+            
+            // Disconnect error signal BEFORE setting flag and cancelling
+            // This prevents race where thread emits error() after we decide to show device removal message
+            if (_thread) {
+                disconnect(_thread, SIGNAL(error(QString)), this, SLOT(onError(QString)));
+            }
+            
             _cancelledDueToDeviceRemoval = true;
             cancelWrite();
             // Will show specific error message in onCancelled()
@@ -2497,9 +2557,12 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
             // Write completed successfully and now drive was ejected - this is normal
             qDebug() << "Device removed after successful write - ignoring (likely ejected)";
             // Don't notify UI - this is expected behavior after successful write
+        } else if (_writeState == WriteState::Failed || _writeState == WriteState::Cancelled) {
+            // Write already failed or was cancelled - error message already shown
+            qDebug() << "Device removed but write already failed/cancelled - suppressing duplicate notification";
+            // Don't notify UI - error already displayed
         } else {
-            _selectedDeviceValid = false;
-            // Normal case - device removed when not writing
+            // Idle state - device removed when not writing
             emit selectedDeviceRemoved();
         }
     }

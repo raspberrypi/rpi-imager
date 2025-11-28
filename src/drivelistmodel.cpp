@@ -150,3 +150,18 @@ void DriveListModel::stopPolling()
 {
     _thread.stop();
 }
+
+void DriveListModel::pausePolling()
+{
+    _thread.pause();
+}
+
+void DriveListModel::resumePolling()
+{
+    _thread.resume();
+}
+
+void DriveListModel::setSlowPolling()
+{
+    _thread.setScanMode(DriveListModelPollThread::ScanMode::Slow);
+}

@@ -29,6 +29,30 @@ public:
     virtual QVariant data(const QModelIndex &index, int role) const;
     void startPolling();
     void stopPolling();
+    
+    /**
+     * @brief Pause drive scanning (during write operations)
+     * 
+     * Call this when starting a write operation to avoid I/O contention
+     * and device lock conflicts, especially on Windows.
+     */
+    void pausePolling();
+    
+    /**
+     * @brief Resume normal drive scanning
+     * 
+     * Call this after write operation completes and user returns to
+     * device selection.
+     */
+    void resumePolling();
+    
+    /**
+     * @brief Set slow polling mode (reduced frequency)
+     * 
+     * Use this after write completion when user is viewing results
+     * but doesn't need frequent drive list updates.
+     */
+    void setSlowPolling();
 
     enum driveListRoles {
         deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole
