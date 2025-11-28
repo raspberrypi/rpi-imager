@@ -1573,8 +1573,8 @@ void ImageWriter::setWriteState(WriteState state)
     _writeState = state;
     
     // Adaptive drive scanning based on write state
-    // Reduce scanning during write operations to minimize I/O contention
-    // while still detecting device removal for user-friendly error messages
+    // Pause scanning during write/verify to avoid I/O contention
+    // Windows drive enumeration is expensive (~1.5-2 seconds per poll)
     switch (state) {
         case WriteState::Idle:
             // Back to device selection - resume normal scanning
@@ -1582,34 +1582,25 @@ void ImageWriter::setWriteState(WriteState state)
             break;
             
         case WriteState::Preparing:
-            // About to open the drive - pause briefly to avoid device lock conflicts
-            // (especially important on Windows where drive enumeration can block device access)
-            qDebug() << "Pausing drive scanning during write preparation";
-            _drivelist.pausePolling();
-            break;
-            
         case WriteState::Writing:
         case WriteState::Verifying:
         case WriteState::Finalizing:
-            // Active I/O - use slow polling (every 5 seconds)
-            // This allows device removal detection for user-friendly errors
-            // while minimizing I/O contention during critical operations
-            if (oldState == WriteState::Preparing) {
-                qDebug() << "Switching to slow drive scanning during write/verify";
-                _drivelist.setSlowPolling();
+            // Pause all scanning during write operations
+            // Device removal will be detected by I/O errors in the write thread
+            // This avoids 20+ seconds of overhead from drive enumeration
+            if (oldState == WriteState::Idle) {
+                qDebug() << "Pausing drive scanning during write operation";
+                _drivelist.pausePolling();
             }
             break;
             
         case WriteState::Succeeded:
         case WriteState::Failed:
         case WriteState::Cancelled:
-            // Operation complete - keep slow polling (user may eject device)
-            // Full resume happens when user navigates back to device selection
-            if (oldState != WriteState::Writing && 
-                oldState != WriteState::Verifying && 
-                oldState != WriteState::Finalizing) {
-                _drivelist.setSlowPolling();
-            }
+            // Operation complete - use slow polling until user navigates away
+            // Full resume happens when returning to device selection (Idle state)
+            qDebug() << "Write complete, switching to slow drive scanning";
+            _drivelist.setSlowPolling();
             break;
     }
     
