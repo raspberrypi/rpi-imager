@@ -68,6 +68,9 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
       _lastProgressTime(0),
       _lastEmittedDlNow(0),
       _lastLocalVerifyNow(0),
+      _lastEmittedDecompressNow(0),
+      _lastEmittedWriteNow(0),
+      _bytesDecompressed(0),
       _downloadComplete(false)
 {
     _extractThread = new _extractThreadClass(this);
@@ -123,11 +126,27 @@ void DownloadExtractThread::_emitProgressUpdate()
     quint64 currentDlTotal = this->dlTotal();
     quint64 currentVerifyNow = this->verifyNow();
     quint64 currentVerifyTotal = this->verifyTotal();
+    quint64 currentDecompressNow = _bytesDecompressed.load();
+    quint64 currentWriteNow = this->bytesWritten();
+    
+    // For decompressed images, the total is the extract size (uncompressed)
+    // We use the same total for both decompress and write since they're the same data
+    quint64 decompressTotal = currentDlTotal > 0 ? currentDlTotal : 0;  // Will be updated by caller
     
     // Only emit signals if values have changed
     if (currentDlNow != _lastEmittedDlNow || (currentDlTotal > 0 && _lastEmittedDlNow == 0)) {
         _lastEmittedDlNow = currentDlNow;
         emit downloadProgressChanged(currentDlNow, currentDlTotal);
+    }
+    
+    if (currentDecompressNow != _lastEmittedDecompressNow) {
+        _lastEmittedDecompressNow = currentDecompressNow;
+        emit decompressProgressChanged(currentDecompressNow, decompressTotal);
+    }
+    
+    if (currentWriteNow != _lastEmittedWriteNow) {
+        _lastEmittedWriteNow = currentWriteNow;
+        emit writeProgressChanged(currentWriteNow, decompressTotal);
     }
     
     if (currentVerifyNow != _lastLocalVerifyNow || (currentVerifyTotal > 0 && _lastLocalVerifyNow == 0)) {
@@ -217,6 +236,9 @@ static inline void _checkResult(int r, struct archive *a)
 // libarchive thread
 void DownloadExtractThread::extractImageRun()
 {
+    QElapsedTimer extractionTimer;
+    extractionTimer.start();
+    
     struct archive *a = archive_read_new();
     struct archive_entry *entry;
     int r;
@@ -238,6 +260,9 @@ void DownloadExtractThread::extractImageRun()
         
         // Log the compression filter(s) being used for diagnostics
         _logCompressionFilters(a);
+        
+        // Emit image extraction setup event (archive opened and header read)
+        emit eventImageExtraction(static_cast<quint32>(extractionTimer.elapsed()), true);
 
         while (true)
         {
@@ -262,6 +287,9 @@ void DownloadExtractThread::extractImageRun()
                 memset(_abuf[_activeBuf]+size, 0, paddingBytes);
                 size += paddingBytes;
             }
+            
+            // Track decompressed bytes
+            _bytesDecompressed.fetch_add(static_cast<quint64>(size));
 
             // Emit progress updates during extraction
             _emitProgressUpdate();

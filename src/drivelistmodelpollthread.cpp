@@ -95,8 +95,13 @@ void DriveListModelPollThread::run()
         // Perform the scan
         t1.start();
         emit newDriveList( Drivelist::ListStorageDevices() );
-        if (t1.elapsed() > 1000)
-            qDebug() << "Enumerating drives took a long time:" << t1.elapsed()/1000.0 << "seconds";
+        quint32 elapsed = static_cast<quint32>(t1.elapsed());
+        
+        // Emit timing event for performance tracking (always, but listeners can filter)
+        emit eventDriveListPoll(elapsed);
+        
+        if (elapsed > 1000)
+            qDebug() << "Enumerating drives took a long time:" << elapsed/1000.0 << "seconds";
         
         // Sleep based on current mode
         int sleepSeconds = (currentMode == ScanMode::Slow) ? 5 : 1;

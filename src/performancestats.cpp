@@ -20,6 +20,7 @@ PerformanceStats::PerformanceStats(QObject *parent)
     , _currentPhase(Phase::Idle)
     , _nextEventId(1)
     , _downloadTotal(0)
+    , _decompressTotal(0)
     , _writeTotal(0)
     , _verifyTotal(0)
     , _hasSystemInfo(false)
@@ -46,11 +47,13 @@ void PerformanceStats::startSession(const QString &imageName, quint64 imageSize,
     _events.clear();
     _pendingEvents.clear();
     _downloadSamples.clear();
+    _decompressSamples.clear();
     _writeSamples.clear();
     _verifySamples.clear();
     
     // Reserve capacity for raw samples
     _downloadSamples.reserve(1000);
+    _decompressSamples.reserve(2000);
     _writeSamples.reserve(2000);
     _verifySamples.reserve(1000);
     _events.reserve(50);
@@ -72,6 +75,7 @@ void PerformanceStats::startSession(const QString &imageName, quint64 imageSize,
     std::memset(_lastSampleTime, 0, sizeof(_lastSampleTime));
     
     _downloadTotal = 0;
+    _decompressTotal = 0;
     _writeTotal = 0;
     _verifyTotal = 0;
     
@@ -114,6 +118,7 @@ void PerformanceStats::endSession(bool success, const QString &errorMessage)
     qDebug() << "PerformanceStats: Session ended, success:" << success
              << "events:" << _events.size()
              << "samples: dl=" << _downloadSamples.size()
+             << "dec=" << _decompressSamples.size()
              << "wr=" << _writeSamples.size()
              << "vfy=" << _verifySamples.size();
 }
@@ -208,6 +213,14 @@ void PerformanceStats::recordDownloadProgress(quint64 bytesNow, quint64 bytesTot
     _downloadTotal = bytesTotal;
 }
 
+void PerformanceStats::recordDecompressProgress(quint64 bytesDecompressed, quint64 bytesTotal)
+{
+    addRawSample(Phase::Decompressing, bytesDecompressed, bytesTotal);
+    
+    QMutexLocker locker(&_mutex);
+    _decompressTotal = bytesTotal;
+}
+
 void PerformanceStats::recordWriteProgress(quint64 bytesWritten, quint64 bytesTotal)
 {
     addRawSample(Phase::Writing, bytesWritten, bytesTotal);
@@ -242,9 +255,15 @@ void PerformanceStats::addRawSample(Phase phase, quint64 bytesNow, quint64 bytes
     if (!_sessionActive)
         return;
     
-    int phaseIdx = static_cast<int>(phase) - 1;  // 0=download, 1=write, 2=verify
-    if (phaseIdx < 0 || phaseIdx > 2)
-        return;
+    // Map phase to array index: 0=download, 1=decompress, 2=write, 3=verify
+    int phaseIdx = -1;
+    switch (phase) {
+        case Phase::Downloading: phaseIdx = 0; break;
+        case Phase::Decompressing: phaseIdx = 1; break;
+        case Phase::Writing: phaseIdx = 2; break;
+        case Phase::Verifying: phaseIdx = 3; break;
+        default: return;
+    }
     
     qint64 currentTime = _sessionTimer.elapsed();
     
@@ -263,6 +282,7 @@ void PerformanceStats::addRawSample(Phase phase, quint64 bytesNow, quint64 bytes
     QVector<RawSample> *samples = nullptr;
     switch (phase) {
         case Phase::Downloading: samples = &_downloadSamples; break;
+        case Phase::Decompressing: samples = &_decompressSamples; break;
         case Phase::Writing: samples = &_writeSamples; break;
         case Phase::Verifying: samples = &_verifySamples; break;
         default: return;
@@ -286,6 +306,7 @@ bool PerformanceStats::hasData() const
     QMutexLocker locker(&_mutex);
     return !_events.isEmpty() || 
            !_downloadSamples.isEmpty() || 
+           !_decompressSamples.isEmpty() ||
            !_writeSamples.isEmpty() || 
            !_verifySamples.isEmpty();
 }
@@ -435,6 +456,9 @@ QJsonObject PerformanceStats::buildHistograms() const
     if (!_downloadSamples.isEmpty()) {
         histograms["download"] = buildHistogramForPhase(_downloadSamples);
     }
+    if (!_decompressSamples.isEmpty()) {
+        histograms["decompress"] = buildHistogramForPhase(_decompressSamples);
+    }
     if (!_writeSamples.isEmpty()) {
         histograms["write"] = buildHistogramForPhase(_writeSamples);
     }
@@ -534,6 +558,7 @@ QJsonObject PerformanceStats::buildSummary() const
     
     QJsonObject phases;
     phases["download"] = buildPhaseStats(_downloadSamples, _downloadTotal);
+    phases["decompress"] = buildPhaseStats(_decompressSamples, _decompressTotal);
     phases["write"] = buildPhaseStats(_writeSamples, _writeTotal);
     phases["verify"] = buildPhaseStats(_verifySamples, _verifyTotal);
     summary["phases"] = phases;
