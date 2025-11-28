@@ -300,6 +300,9 @@ FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD acc
   // Close any existing handle
   Close();
 
+  // Suppress Windows "Insert a disk" system error dialog for removable drives
+  UINT oldErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
+
   handle_ = CreateFileA(path.c_str(),
                         access,
                         FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -307,6 +310,9 @@ FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD acc
                         creation,
                         flags,
                         nullptr);
+
+  // Restore previous error mode
+  SetErrorMode(oldErrorMode);
 
   if (handle_ == INVALID_HANDLE_VALUE) {
     last_error_code_ = static_cast<int>(GetLastError());
