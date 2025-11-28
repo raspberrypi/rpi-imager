@@ -125,8 +125,11 @@ ImageWriter::ImageWriter(QObject *parent)
       _piConnectToken()
 #endif
 {
-    // Initialize CacheManager
+    // Initialise CacheManager
     _cacheManager = new CacheManager(this);
+    
+    // Initialise PerformanceStats
+    _performanceStats = new PerformanceStats(this);
 
     QString platform;
 #ifndef CLI_ONLY_BUILD
@@ -689,6 +692,11 @@ void ImageWriter::startWrite()
         }
     });
 
+    // Start performance stats session
+    _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
+                                    _extrLen > 0 ? _extrLen : _downloadLen, 
+                                    _dst);
+
     // Connect to progress signals if this is a DownloadExtractThread
     DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
     if (downloadThread) {
@@ -696,6 +704,17 @@ void ImageWriter::startWrite()
                 this, &ImageWriter::downloadProgress);
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, &ImageWriter::verifyProgress);
+        
+        // Capture progress for performance stats (lightweight - just stores raw samples)
+        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordDownloadProgress(now, total);
+                });
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordVerifyProgress(now, total);
+                });
+        
         // Also transition state to Verifying when verify progress first arrives
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, [this](quint64 /*now*/, quint64 /*total*/){
@@ -825,6 +844,9 @@ void ImageWriter::onCancelled()
     {
         _thread = nullptr;
     }
+
+    // End performance stats session
+    _performanceStats->endSession(false, _cancelledDueToDeviceRemoval ? "Device removed" : "Cancelled by user");
 
     // If cancellation was due to device removal, emit a dedicated signal (localization-safe for QML routing)
     if (_cancelledDueToDeviceRemoval) {
@@ -1486,6 +1508,9 @@ void ImageWriter::onSuccess()
     setWriteState(WriteState::Succeeded);
     stopProgressPolling();
     
+    // End performance stats session
+    _performanceStats->endSession(true);
+    
     // Clear Pi Connect token on successful write completion
     clearConnectToken();
     
@@ -1509,6 +1534,10 @@ void ImageWriter::onError(QString msg)
     
     setWriteState(WriteState::Failed);
     stopProgressPolling();
+    
+    // End performance stats session with error
+    _performanceStats->endSession(false, msg);
+    
     emit error(msg);
 
     if (_settings.value("beep").toBool()) {
@@ -1519,6 +1548,7 @@ void ImageWriter::onError(QString msg)
 void ImageWriter::onFinalizing()
 {
     setWriteState(WriteState::Finalizing);
+    _performanceStats->recordFinalising();
     emit finalizing();
 }
 
@@ -2629,6 +2659,11 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         }
     });
 
+    // Start performance stats session
+    _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
+                                    _extrLen > 0 ? _extrLen : _downloadLen, 
+                                    _dst);
+
     // Connect to progress signals if this is a DownloadExtractThread
     DownloadExtractThread *downloadThread = qobject_cast<DownloadExtractThread*>(_thread);
     if (downloadThread) {
@@ -2636,6 +2671,17 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 this, &ImageWriter::downloadProgress);
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, &ImageWriter::verifyProgress);
+        
+        // Capture progress for performance stats (lightweight - just stores raw samples)
+        connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordDownloadProgress(now, total);
+                });
+        connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordVerifyProgress(now, total);
+                });
+        
         // Also transition state to Verifying when verify progress first arrives
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, [this](quint64 /*now*/, quint64 /*total*/){
@@ -2976,4 +3022,52 @@ void ImageWriter::restartWithElevatedPrivileges()
     }
     
     PlatformQuirks::execElevated(extraArgs);
+}
+
+bool ImageWriter::hasPerformanceData()
+{
+    return _performanceStats->hasData();
+}
+
+bool ImageWriter::exportPerformanceData()
+{
+#ifndef CLI_ONLY_BUILD
+    if (!_performanceStats->hasData()) {
+        qDebug() << "No performance data to export";
+        return false;
+    }
+    
+    // Generate default filename with timestamp
+    QString defaultFilename = QString("rpi-imager-performance-%1.json")
+        .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
+    
+    // Get save location from user using native file dialog
+    QString initialDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QString filePath = NativeFileDialog::getSaveFileName(
+        tr("Save Performance Data"),
+        initialDir + "/" + defaultFilename,
+        tr("JSON files (*.json);;All files (*)"),
+        _mainWindow
+    );
+    
+    if (filePath.isEmpty()) {
+        qDebug() << "Performance data export cancelled by user";
+        return false;
+    }
+    
+    // Ensure .json extension
+    if (!filePath.endsWith(".json", Qt::CaseInsensitive)) {
+        filePath += ".json";
+    }
+    
+    // Export data - all complex processing happens here, triggered by user action
+    bool success = _performanceStats->exportToFile(filePath);
+    if (success) {
+        qDebug() << "Performance data exported to:" << filePath;
+    }
+    return success;
+#else
+    qDebug() << "Performance data export not available in CLI build";
+    return false;
+#endif
 }
