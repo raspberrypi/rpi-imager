@@ -412,6 +412,7 @@ WizardStepBase {
         height: Math.min(400, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 200)
 
         property bool allowAccept: false
+        property int countdown: 2
 
         // Custom escape handling
         function escapePressed() {
@@ -430,11 +431,13 @@ WizardStepBase {
 
         onOpened: {
             allowAccept = false
+            countdown = 2
             confirmDelay.start()
         }
         onClosed: {
             confirmDelay.stop()
             allowAccept = false
+            countdown = 2
         }
 
         // Dialog content - now using BaseDialog's contentLayout
@@ -471,11 +474,24 @@ WizardStepBase {
             activeFocusOnTab: confirmDialog.imageWriter ? confirmDialog.imageWriter.isScreenReaderActive() : false
         }
 
+        Text {
+            id: waitText
+            text: qsTr("Please wait... %1").arg(confirmDialog.countdown)
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamily
+            color: Style.textMetadataColor
+            horizontalAlignment: Text.AlignRight
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            visible: !confirmDialog.allowAccept
+        }
+
         RowLayout {
             id: confirmButtonRow
             Layout.fillWidth: true
             Layout.topMargin: Style.spacingSmall
             spacing: Style.spacingMedium
+            visible: confirmDialog.allowAccept
             Item { Layout.fillWidth: true }
 
             ImButton {
@@ -503,13 +519,17 @@ WizardStepBase {
     // Delay accept for 2 seconds - moved outside dialog content
     Timer {
         id: confirmDelay
-        interval: 2000
+        interval: 1000
         running: false
-        repeat: false
+        repeat: true
         onTriggered: {
-            confirmDialog.allowAccept = true
-            // Rebuild focus order now that accept button is enabled
-            confirmDialog.rebuildFocusOrder()
+            confirmDialog.countdown--
+            if (confirmDialog.countdown <= 0) {
+                confirmDelay.stop()
+                confirmDialog.allowAccept = true
+                // Rebuild focus order now that accept button is enabled
+                confirmDialog.rebuildFocusOrder()
+            }
         }
     }
 
