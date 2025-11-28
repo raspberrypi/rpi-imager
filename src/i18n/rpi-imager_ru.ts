@@ -1701,7 +1701,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Configure Wi-Fi for an unencrypted network without password protection</source>
-        <translation type="unfinished"Настроить Wi-Fi для незашифрованной сети без защиты паролем</translation>
+        <translation type="unfinished">Настроить Wi-Fi для незашифрованной сети без защиты паролем</translation>
     </message>
     <message>
         <source>Enter a password</source>
@@ -1828,7 +1828,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Localisation</source>
-        <translation type="unfinished"Локализация></translation>
+        <translation type="unfinished">Локализация</translation>
     </message>
     <message>
         <source>Remote access</source>
