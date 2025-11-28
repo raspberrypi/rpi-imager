@@ -43,8 +43,11 @@ public:
         
         // Drive operations
         DriveListPoll,         // Time for drive enumeration
-        DriveOpen,             // Time to open/prepare drive for writing
-        DriveUnmount,          // Time to unmount drive partitions
+        DriveOpen,             // Time to open/prepare drive for writing (overall)
+        DriveUnmount,          // Time to unmount drive partitions (Linux/macOS)
+        DriveUnmountVolumes,   // Time to unmount/lock volumes (Windows)
+        DriveDiskClean,        // Time to clean disk/remove partitions (Windows)
+        DriveRescan,           // Time to rescan disk after cleaning (Windows)
         DriveFormat,           // Time to format drive (for multi-file zips)
         
         // Cache operations
@@ -112,6 +115,35 @@ public:
         uint64_t bytesTransferred;  // Bytes transferred (for network/IO events)
     };
 
+    /**
+     * @brief System information captured at session start (no unique identifiers)
+     */
+    struct SystemInfo {
+        // Memory
+        quint64 totalMemoryBytes;
+        quint64 availableMemoryBytes;
+        
+        // Target storage device (no serial numbers)
+        QString devicePath;
+        quint64 deviceSizeBytes;
+        QString deviceDescription;  // e.g., "USB Mass Storage Device"
+        bool deviceIsUsb;
+        bool deviceIsRemovable;
+        
+        // OS/Platform
+        QString osName;
+        QString osVersion;
+        QString cpuArchitecture;
+        int cpuCoreCount;
+        
+        // Imager version and build info
+        QString imagerVersion;          // e.g., "v1.9.2" or "v1.9.2-15-gabcdef0"
+        QString imagerBuildType;        // e.g., "Release", "Debug", "RelWithDebInfo"
+        QString imagerBinarySha256;     // SHA256 of the executable binary
+        QString qtVersion;              // Qt runtime version
+        QString qtBuildVersion;         // Qt version used at compile time
+    };
+
     explicit PerformanceStats(QObject *parent = nullptr);
     ~PerformanceStats() = default;
 
@@ -121,6 +153,12 @@ public:
      * @brief Start a new recording session (clears previous data)
      */
     void startSession(const QString &imageName, quint64 imageSize, const QString &deviceName);
+    
+    /**
+     * @brief Set system information for the session
+     * Call after startSession() to add hardware context
+     */
+    void setSystemInfo(const SystemInfo &info);
     
     /**
      * @brief End the current session
@@ -237,6 +275,10 @@ private:
     qint64 _sessionEndTime;
     bool _sessionSuccess;
     QString _errorMessage;
+    
+    // System information
+    SystemInfo _systemInfo;
+    bool _hasSystemInfo;
 
     // Phase tracking
     Phase _currentPhase;

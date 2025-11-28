@@ -32,8 +32,11 @@ The following operations are timed individually, grouped by category:
 | Event | Description |
 |-------|-------------|
 | `driveListPoll` | Time for drive enumeration |
-| `driveOpen` | Time to open and prepare the drive for writing |
-| `driveUnmount` | Time to unmount drive partitions |
+| `driveOpen` | Time to open and prepare the drive for writing (overall) |
+| `driveUnmount` | Time to unmount drive partitions (Linux/macOS) |
+| `driveUnmountVolumes` | Time to unmount/lock volumes (Windows) |
+| `driveDiskClean` | Time to clean disk/remove partitions (Windows) |
+| `driveRescan` | Time to rescan disk after cleaning (Windows) |
 | `driveFormat` | Time to format drive (for multi-file zips) |
 
 **Cache Operations**
@@ -195,6 +198,8 @@ pip install matplotlib numpy
 | Low write throughput, high verify throughput | Slow SD card write speed |
 | Periodic throughput drops | USB hub or driver issues |
 | Long `driveOpen` time | Drive enumeration problems |
+| Long `driveUnmountVolumes` time (Windows) | Volume in use by another application |
+| Long `driveDiskClean` time (Windows) | Disk locked or antivirus scanning |
 | Long `customisation` time | Complex customisation or slow FAT operations |
 | Long `finalSync` time | Large page cache, slow drive flush |
 
@@ -248,12 +253,27 @@ Performance data contains:
 - The name of the OS image written
 - The device path (e.g., `/dev/sdb` or `\\.\PhysicalDrive2`)
 - Timing information
+- System information (RAM, CPU cores, OS version)
+- Target device description (e.g., "USB Flash Drive", size)
+- Customisation choices (what was configured, not values)
+- Full Imager build info (version, build type, binary SHA256, Qt versions)
 
 It does **not** contain:
 - Any image content
-- Personal information
-- Network credentials or customisation details
-- Hostnames or user-configured settings
+- Personal information or unique identifiers
+- Network credentials, passwords, or SSIDs
+- Hostnames, usernames, or other user-configured values
+- Device serial numbers
+
+For customisation events, we log *what* was configured and relevant characteristics, but never actual values:
+
+- `hostname: set` — a hostname was configured (not the actual name)
+- `username: set` — a user account was configured (not the username)
+- `wifi: secured (WPA2)` or `wifi: open` — network type, not SSID or password
+- `ssh: key-auth` or `ssh: password-auth` — auth method, not the actual keys/passwords
+- `locale: set`, `timezone: set` — that these were configured
+
+This helps diagnose issues like "key generation is slow" or "WPA3 setup takes longer" without exposing credentials.
 
 The data is stored locally and only exported when you explicitly trigger the export.
 
