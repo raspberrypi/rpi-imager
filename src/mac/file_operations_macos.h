@@ -53,6 +53,18 @@ class MacOSFileOperations : public FileOperations {
   // Get the last errno error code
   int GetLastErrorCode() const override;
 
+  // Check if direct I/O is enabled
+  bool IsDirectIOEnabled() const override { return using_direct_io_; }
+  
+  // Get direct I/O attempt details (macOS: F_NOCACHE always attempted)
+  DirectIOInfo GetDirectIOInfo() const override { 
+    DirectIOInfo info;
+    info.attempted = true;
+    info.succeeded = using_direct_io_;
+    info.currently_enabled = using_direct_io_;
+    return info;
+  }
+
  private:
   int fd_;
   std::string current_path_;

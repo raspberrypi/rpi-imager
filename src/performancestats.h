@@ -40,10 +40,13 @@ public:
         OsListParse,           // Time to parse OS list JSON
         SublistFetch,          // Time to fetch a sublist
         NetworkLatency,        // Network round-trip measurement
+        NetworkRetry,          // Network connection retry (with reason)
+        NetworkConnectionStats,// CURL connection timing metrics
         
         // Drive operations
         DriveListPoll,         // Time for drive enumeration
         DriveOpen,             // Time to open/prepare drive for writing (overall)
+        DirectIOAttempt,       // Direct I/O attempt result (success/failure with error code)
         DriveUnmount,          // Time to unmount drive partitions (Linux/macOS)
         DriveUnmountVolumes,   // Time to unmount/lock volumes (Windows)
         DriveDiskClean,        // Time to clean disk/remove partitions (Windows)
@@ -60,11 +63,17 @@ public:
         MemoryAllocation,      // Time for large memory allocations
         BufferResize,          // Time to resize buffers
         PageCacheFlush,        // Time to flush system page cache
+        RingBufferStarvation,  // Ring buffer starvation stats (producer/consumer waits)
         
         // Image processing
         ImageDecompressInit,   // Time to initialise decompression
         ImageExtraction,       // Time for archive extraction setup
         HashComputation,       // Time spent on hash computations
+        
+        // Pipeline timing (summary events emitted at end of extraction)
+        PipelineDecompressionTime, // Total time spent in libarchive decompression
+        PipelineWriteWaitTime,     // Total time blocked waiting for disk writes
+        PipelineRingBufferWaitTime,// Total time waiting for ring buffer data
         
         // Customisation
         Customisation,         // Time to apply customisation (config, firstrun, etc.)
@@ -194,6 +203,11 @@ public:
      */
     void recordTransferEvent(EventType type, uint32_t durationMs, uint64_t bytesTransferred, 
                             bool success = true, const QString &metadata = QString());
+
+    /**
+     * @brief Add a pre-constructed event directly (for events with explicit timestamps)
+     */
+    void addEvent(const TimedEvent &event);
 
     // ===== Lightweight Progress Recording =====
     // These just store raw (timestamp, bytes) pairs - very fast

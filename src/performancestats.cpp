@@ -205,6 +205,12 @@ void PerformanceStats::recordTransferEvent(EventType type, uint32_t durationMs, 
     _events.append(event);
 }
 
+void PerformanceStats::addEvent(const TimedEvent &event)
+{
+    QMutexLocker locker(&_mutex);
+    _events.append(event);
+}
+
 void PerformanceStats::recordDownloadProgress(quint64 bytesNow, quint64 bytesTotal)
 {
     addRawSample(Phase::Downloading, bytesNow, bytesTotal);
@@ -319,10 +325,13 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::OsListParse: return "osListParse";
         case EventType::SublistFetch: return "sublistFetch";
         case EventType::NetworkLatency: return "networkLatency";
+        case EventType::NetworkRetry: return "networkRetry";
+        case EventType::NetworkConnectionStats: return "networkConnectionStats";
         
         // Drive operations
         case EventType::DriveListPoll: return "driveListPoll";
         case EventType::DriveOpen: return "driveOpen";
+        case EventType::DirectIOAttempt: return "directIOAttempt";
         case EventType::DriveUnmount: return "driveUnmount";
         case EventType::DriveUnmountVolumes: return "driveUnmountVolumes";
         case EventType::DriveDiskClean: return "driveDiskClean";
@@ -339,11 +348,17 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::MemoryAllocation: return "memoryAllocation";
         case EventType::BufferResize: return "bufferResize";
         case EventType::PageCacheFlush: return "pageCacheFlush";
+        case EventType::RingBufferStarvation: return "ringBufferStarvation";
         
         // Image processing
         case EventType::ImageDecompressInit: return "imageDecompressInit";
         case EventType::ImageExtraction: return "imageExtraction";
         case EventType::HashComputation: return "hashComputation";
+        
+        // Pipeline timing
+        case EventType::PipelineDecompressionTime: return "pipelineDecompressionTime";
+        case EventType::PipelineWriteWaitTime: return "pipelineWriteWaitTime";
+        case EventType::PipelineRingBufferWaitTime: return "pipelineRingBufferWaitTime";
         
         // Customisation
         case EventType::Customisation: return "customisation";

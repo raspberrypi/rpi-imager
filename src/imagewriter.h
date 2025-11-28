@@ -364,6 +364,7 @@ private:
     // Cache management
     CacheManager* _cacheManager;
     bool _waitingForCacheVerification;
+    QElapsedTimer _cacheVerificationTimer;  // Tracks cache verification duration
     
     // Keychain permission tracking
     bool _keychainPermissionGranted;

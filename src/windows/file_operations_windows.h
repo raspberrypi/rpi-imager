@@ -56,11 +56,22 @@ class WindowsFileOperations : public FileOperations {
   // Get the last Windows error code
   int GetLastErrorCode() const override;
 
+  // Check if direct I/O is enabled
+  bool IsDirectIOEnabled() const override { return using_direct_io_; }
+  
+  // Get direct I/O attempt details
+  DirectIOInfo GetDirectIOInfo() const override { 
+      DirectIOInfo info = direct_io_info_;
+      info.currently_enabled = using_direct_io_;  // Capture current state
+      return info;
+  }
+
  private:
   HANDLE handle_;
   std::string current_path_;
   int last_error_code_;
   bool using_direct_io_;  // Track if we opened with direct I/O flags
+  DirectIOInfo direct_io_info_;  // Details of direct I/O attempt
   
    FileError LockVolume();
    FileError UnlockVolume();

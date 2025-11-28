@@ -1,6 +1,9 @@
 #include "drivelistmodelpollthread.h"
 #include <QElapsedTimer>
 #include <QDebug>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 /*
  * SPDX-License-Identifier: Apache-2.0
@@ -72,6 +75,15 @@ void DriveListModelPollThread::resume()
 
 void DriveListModelPollThread::run()
 {
+#ifdef Q_OS_WIN
+    // Suppress Windows "Insert a disk" / "not accessible" system error dialogs
+    // for this thread. Error mode is per-thread, so we set it once at thread start.
+    DWORD oldMode;
+    if (!SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &oldMode)) {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+    }
+#endif
+
     QElapsedTimer t1;
 
     while (!_terminate)

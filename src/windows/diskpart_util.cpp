@@ -15,8 +15,32 @@
 
 #include <windows.h>
 #include <winioctl.h>
+#include <shlobj.h>
 
 namespace DiskpartUtil {
+
+// Notify Windows Explorer that a drive has changed/been removed
+// This prevents Explorer from showing "Insert a disk" dialogs
+static void notifyShellDriveRemoved(const QString &driveLetter)
+{
+    if (driveLetter.isEmpty())
+        return;
+    
+    // Get the drive path (e.g., "E:\")
+    QString drivePath = driveLetter;
+    if (!drivePath.endsWith("\\"))
+        drivePath += "\\";
+    
+    wchar_t pathW[MAX_PATH];
+    drivePath.toWCharArray(pathW);
+    pathW[drivePath.length()] = 0;
+    
+    // Notify shell that media was removed - this tells Explorer to stop trying to access the drive
+    SHChangeNotify(SHCNE_MEDIAREMOVED, SHCNF_PATH, pathW, NULL);
+    SHChangeNotify(SHCNE_DRIVEREMOVED, SHCNF_PATH, pathW, NULL);
+    
+    qDebug() << "Notified Explorer that drive" << driveLetter << "was removed";
+}
 
 // Helper to extract disk number from path like \\.\PHYSICALDRIVE0
 static bool extractDiskNumber(const QByteArray &device, int &diskNumber)
@@ -60,6 +84,10 @@ DiskpartResult unmountVolumes(const QByteArray &device, TimingCallback timingCal
                     driveLetter.chop(1);
                 
                 qDebug() << "Unmounting volume" << driveLetter;
+                
+                // Notify Explorer BEFORE we start - this helps prevent "Insert a disk" dialogs
+                // by telling Explorer to release handles and stop monitoring the drive
+                notifyShellDriveRemoved(driveLetter);
                 
                 // Open the volume
                 QString volumePath = "\\\\.\\" + driveLetter;
@@ -105,6 +133,10 @@ DiskpartResult unmountVolumes(const QByteArray &device, TimingCallback timingCal
                 // Unlock and close
                 DeviceIoControl(hVolume, FSCTL_UNLOCK_VOLUME, nullptr, 0, nullptr, 0, &bytesReturned, nullptr);
                 CloseHandle(hVolume);
+                
+                // Notify Explorer that the drive has been removed
+                // This prevents Explorer from showing "Insert a disk" dialogs
+                notifyShellDriveRemoved(driveLetter);
                 
                 volumesProcessed++;
                 

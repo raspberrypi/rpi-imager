@@ -38,6 +38,12 @@ signals:
     void decompressProgressChanged(quint64 now, quint64 total);
     void writeProgressChanged(quint64 now, quint64 total);
     void verifyProgressChanged(quint64 now, quint64 total);
+    void eventRingBufferStats(qint64 timestampMs, quint32 durationMs, QString metadata);  // Ring buffer stall event
+    
+    // Pipeline timing summary events (emitted at end of extraction)
+    void eventPipelineDecompressionTime(quint32 totalMs, quint64 bytesDecompressed);
+    void eventPipelineWriteWaitTime(quint32 totalMs, quint64 bytesWritten);
+    void eventPipelineRingBufferWaitTime(quint32 totalMs, quint64 bytesRead);
 
 protected:
     char *_abuf[2];
@@ -60,6 +66,13 @@ protected:
     quint64 _lastEmittedDecompressNow, _lastEmittedWriteNow;
     std::atomic<quint64> _bytesDecompressed;  // Total bytes output from decompressor
     bool _downloadComplete;
+    QElapsedTimer _sessionTimer;  // Timer for stall event timestamps
+    
+    // Pipeline timing accumulators (for performance analysis)
+    std::atomic<quint64> _totalDecompressionMs;   // Time spent in archive_read_data()
+    std::atomic<quint64> _totalWriteWaitMs;       // Time blocked waiting for _writeFuture.result()
+    std::atomic<quint64> _totalRingBufferWaitMs;  // Time in _on_read() waiting for data
+    std::atomic<quint64> _bytesReadFromRingBuffer;// Bytes read from ring buffer
 
     void _pushQueue(const char *data, size_t len);
     void _cancelExtract();

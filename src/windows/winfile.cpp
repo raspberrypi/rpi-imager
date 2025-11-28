@@ -28,9 +28,6 @@ bool WinFile::open(QIODevice::OpenMode)
 {
     QByteArray n = _name.toLatin1();
 
-    // Suppress Windows "Insert a disk" system error dialog for removable drives
-    UINT oldErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
-
     for (int attempt = 0; attempt < 20; attempt++)
     {
         _h = CreateFileA(n.data(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
@@ -44,9 +41,6 @@ bool WinFile::open(QIODevice::OpenMode)
     // Try with FILE_SHARE_WRITE
     if (_h == INVALID_HANDLE_VALUE)
         _h = CreateFileA(n.data(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);;
-
-    // Restore previous error mode
-    SetErrorMode(oldErrorMode);
 
     if (_h == INVALID_HANDLE_VALUE)
     {
