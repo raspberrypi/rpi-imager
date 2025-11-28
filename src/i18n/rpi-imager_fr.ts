@@ -585,67 +585,67 @@
     </message>
     <message>
         <source>No RSA key configured for secure boot. Please select a key in App Options.</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucune clé RSA n&apos;est configurée pour le démarrage sécurisé. Sélectionnez une clé dans les options de l&apos;app.</translation>
     </message>
     <message>
         <source>RSA key file not found: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichier de clé RSA introuvable&#xa0;: %1</translation>
     </message>
     <message>
         <source>Extracting boot partition files...</source>
-        <translation type="unfinished"></translation>
+        <translation>Extraction des fichiers de la partition de démarrage...</translation>
     </message>
     <message>
         <source>Failed to extract boot partition files</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;extraction des fichiers de la partition de démarrage</translation>
     </message>
     <message>
         <source>No boot files found to package</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun fichier de démarrage trouvé</translation>
     </message>
     <message>
         <source>Failed to create temporary directory</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de création de dossier temporaire</translation>
     </message>
     <message>
         <source>Creating boot.img...</source>
-        <translation type="unfinished"></translation>
+        <translation>Création de boot.img...</translation>
     </message>
     <message>
         <source>Failed to create boot.img</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de création de boot.img</translation>
     </message>
     <message>
         <source>Signing boot image...</source>
-        <translation type="unfinished"></translation>
+        <translation>Signature de l&apos;image de démarrage...</translation>
     </message>
     <message>
         <source>Failed to generate boot.sig</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de génération de boot.sig</translation>
     </message>
     <message>
         <source>Failed to read boot.img</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de lecture de boot.img</translation>
     </message>
     <message>
         <source>Failed to read boot.sig</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de lecture de boot.sig</translation>
     </message>
     <message>
         <source>Cleaning up boot partition...</source>
-        <translation type="unfinished"></translation>
+        <translation>Nettoyage de la partition de démarrage</translation>
     </message>
     <message>
         <source>Syncing deletions to disk...</source>
-        <translation type="unfinished"></translation>
+        <translation>Synchronisation des suppressions...</translation>
     </message>
     <message>
         <source>Writing signed boot files...</source>
-        <translation type="unfinished"></translation>
+        <translation>Écriture des fichiers de démarrage signés...</translation>
     </message>
     <message>
         <source>Failed to write secure boot files: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;écriture des fichiers de démarrage sécurisés&#xa0;: %1</translation>
     </message>
     <message>
         <source>Unmounting volumes...</source>
@@ -692,19 +692,19 @@
     </message>
     <message>
         <source>Preparing disk for formatting...</source>
-        <translation type="unfinished"></translation>
+        <translation>Préparation du disque au formatage...</translation>
     </message>
     <message>
         <source>Cleaning disk...</source>
-        <translation type="unfinished"></translation>
+        <translation>Nettoyage du disque...</translation>
     </message>
     <message>
         <source>Writing filesystem...</source>
-        <translation type="unfinished"></translation>
+        <translation>Écriture du système de fichiers...</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossible de formater le disque&#xa0;: permissions insuffisantes. Lancer l&apos;application avec des privilèges élevés (sudo).</translation>
     </message>
 </context>
 <context>
@@ -718,118 +718,118 @@
     <name>HostnameCustomizationStep</name>
     <message>
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
-        <translation type="unfinished"></translation>
+        <translation>Un nom d&apos;hôte est un nom unique qui identifie votre Raspberry Pi sur le réseau. Il ne doit contenir que des lettres, des nombres et des tirets.</translation>
     </message>
     <message>
         <source>Customisation: Choose hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation&#xa0;: choisir un nom d&apos;hôte</translation>
     </message>
     <message>
         <source>Enter your hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir votre nom d&apos;hôte</translation>
     </message>
     <message>
         <source>Save hostname and continue to next customisation step</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer le nom d&apos;hôte et continuer vers l&apos;étape de personnalisation suivante</translation>
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation>Retour à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter toute la personnalisation et écrire directement l&apos;image</translation>
     </message>
 </context>
 <context>
     <name>IfAndFeaturesCustomizationStep</name>
     <message>
         <source>Enable hardware interfaces and connectivity options.</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer les interfaces matérielles et les options de connectivité.</translation>
     </message>
     <message>
         <source>Interfaces</source>
-        <translation type="unfinished"></translation>
+        <translation>Interfaces</translation>
     </message>
     <message>
         <source>Enable SPI</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer SPI</translation>
     </message>
     <message>
         <source>Enable Serial:</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer le port sériel&#xa0;:</translation>
     </message>
     <message>
         <source>Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Fonctionnalités</translation>
     </message>
     <message>
         <source>Enable USB Gadget Mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer le mode Gagdet USB</translation>
     </message>
     <message>
         <source>Learn more about USB Gadget Mode</source>
-        <translation type="unfinished"></translation>
+        <translation>En savoir plus sur le mode Gagdet USB</translation>
     </message>
     <message>
         <source>Console</source>
-        <translation type="unfinished"></translation>
+        <translation>Console</translation>
     </message>
     <message>
         <source>USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le mode Gagdet USB peut modifier le comportement de votre appareil et peut modifier la connectivité et l&apos;interaction avec les hôtes.</translation>
     </message>
     <message>
         <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez consulter la &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; avant de continuer.</translation>
     </message>
     <message>
         <source>Only continue if you are sure you know what you are doing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ne continuez que si vous êtes sûr de ce que vous faites.</translation>
     </message>
     <message>
         <source>I understand, continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Je comprends, continuer</translation>
     </message>
     <message>
         <source>Customisation: Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation&#xa0;: interfaces &amp; fonctionnalités</translation>
     </message>
     <message>
         <source>Enable I2C</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer I2C</translation>
     </message>
     <message>
         <source>Enable 1-Wire</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer 1-Wire</translation>
     </message>
     <message>
         <source>Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals</source>
-        <translation type="unfinished"></translation>
+        <translation>Active l&apos;interface I2C (Inter-Integrated Circuit) pour la connexion de capteur et autres périphériques à basse vitesse</translation>
     </message>
     <message>
         <source>Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors</source>
-        <translation type="unfinished"></translation>
+        <translation>Active SPI (Serial Peripheral Interface) pour la communication à haute vitesse avec des moniteurs ou des capteurs</translation>
     </message>
     <message>
         <source>Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices</source>
-        <translation type="unfinished"></translation>
+        <translation>Active l&apos;interface 1-Wire pour la connexion de capteurs de températures et autres appareils Dallas/Maxim</translation>
     </message>
     <message>
         <source>Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage</source>
-        <translation type="unfinished"></translation>
+        <translation>Active le mode Gagdet USB pour utiliser votre Raspberry Pi comme périphérique USB pour le réseau et le stockage</translation>
     </message>
     <message>
         <source>Save interface and feature settings and continue to writing step</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer les réglages d&apos;interface et de fonctionnalités et continuer vers l&apos;étape d&apos;écriture</translation>
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation>Retour à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter toute la personnalisation et écrire directement l&apos;image</translation>
     </message>
     <message>
         <source>Configure the serial interface: Disabled, Default (system decides), Console &amp; Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).</source>
@@ -1138,11 +1138,11 @@
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation>Retour à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter toute la personnalisation et écrire directement l&apos;image</translation>
     </message>
     <message>
         <source>Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country&apos;s Wi-Fi regulations.</source>
@@ -1285,11 +1285,11 @@
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Retour à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter toute la personnalisation et écrire directement l&apos;image</translation>
     </message>
     <message>
         <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the &apos;Open Raspberry Pi Connect&apos; button to sign in.</source>
@@ -1409,11 +1409,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Retour à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter toute la personnalisation et écrire directement l&apos;image</translation>
     </message>
     <message>
         <source>Allow SSH login using the username and password you configured in the previous step.</source>
@@ -1515,11 +1515,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation>Retour à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter toute la personnalisation et écrire directement l&apos;image</translation>
     </message>
     <message>
         <source>Enable Secure Boot Signing</source>
@@ -1741,11 +1741,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation>Retour à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter toute la personnalisation et écrire directement l&apos;image</translation>
     </message>
     <message>
         <source>Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
@@ -1844,11 +1844,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>Return to previous step</source>
-        <translation type="unfinished"></translation>
+        <translation>Retour à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>Skip all customisation and proceed directly to writing the image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter toute la personnalisation et écrire directement l&apos;image</translation>
     </message>
     <message>
         <source>Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.</source>
