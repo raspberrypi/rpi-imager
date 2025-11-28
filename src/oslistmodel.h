@@ -81,6 +81,9 @@ public:
     // Adds "(Recommended)" to the description of the first OS
     Q_INVOKABLE void markFirstAsRecommended();
 
+signals:
+    void eventOsListParse(quint32 durationMs, bool success);
+
 public slots:
 
 protected:

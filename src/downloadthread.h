@@ -146,6 +146,10 @@ signals:
     void eventVerify(quint32 durationMs, bool success);
     void eventDecompressInit(quint32 durationMs, bool success);
     void eventPeriodicSync(quint32 durationMs, bool success, quint64 bytesWritten);
+    void eventImageExtraction(quint32 durationMs, bool success);      // Archive extraction setup
+    void eventPartitionTableWrite(quint32 durationMs, bool success);  // MBR/partition table write
+    void eventFatPartitionSetup(quint32 durationMs, bool success);    // FAT partition parsing
+    void eventDeviceClose(quint32 durationMs, bool success);          // Device handle close
 
 protected:
     virtual void run();

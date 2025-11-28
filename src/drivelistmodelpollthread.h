@@ -87,6 +87,12 @@ signals:
      * @param mode New scan mode
      */
     void scanModeChanged(ScanMode mode);
+    
+    /**
+     * @brief Emitted after each drive enumeration with timing
+     * @param durationMs Time taken for drive enumeration
+     */
+    void eventDriveListPoll(quint32 durationMs);
 };
 
 #endif // DRIVELISTMODELPOLLTHREAD_H

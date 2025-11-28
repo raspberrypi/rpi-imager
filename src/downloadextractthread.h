@@ -35,6 +35,8 @@ public:
 
 signals:
     void downloadProgressChanged(quint64 now, quint64 total);
+    void decompressProgressChanged(quint64 now, quint64 total);
+    void writeProgressChanged(quint64 now, quint64 total);
     void verifyProgressChanged(quint64 now, quint64 total);
 
 protected:
@@ -55,6 +57,8 @@ protected:
     bool _progressStarted;
     qint64 _lastProgressTime;
     quint64 _lastEmittedDlNow, _lastLocalVerifyNow;
+    quint64 _lastEmittedDecompressNow, _lastEmittedWriteNow;
+    std::atomic<quint64> _bytesDecompressed;  // Total bytes output from decompressor
     bool _downloadComplete;
 
     void _pushQueue(const char *data, size_t len);

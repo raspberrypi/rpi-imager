@@ -88,9 +88,10 @@ public:
     enum class Phase : uint8_t {
         Idle = 0,
         Downloading = 1,
-        Writing = 2,
-        Verifying = 3,
-        Finalising = 4
+        Decompressing = 2,
+        Writing = 3,
+        Verifying = 4,
+        Finalising = 5
     };
     Q_ENUM(Phase)
 
@@ -203,7 +204,14 @@ public:
     void recordDownloadProgress(quint64 bytesNow, quint64 bytesTotal);
     
     /**
+     * @brief Record decompression progress (lightweight - just stores raw sample)
+     * This tracks bytes output from the decompressor (uncompressed size)
+     */
+    void recordDecompressProgress(quint64 bytesDecompressed, quint64 bytesTotal);
+    
+    /**
      * @brief Record write progress (lightweight - just stores raw sample)
+     * This tracks bytes actually written to the storage device
      */
     void recordWriteProgress(quint64 bytesWritten, quint64 bytesTotal);
     
@@ -282,7 +290,7 @@ private:
 
     // Phase tracking
     Phase _currentPhase;
-    qint64 _phaseStartTimes[5];
+    qint64 _phaseStartTimes[6];  // Idle, Downloading, Decompressing, Writing, Verifying, Finalising
 
     // Event tracking
     QVector<TimedEvent> _events;
@@ -296,16 +304,18 @@ private:
 
     // Raw sample storage - minimal overhead during collection
     QVector<RawSample> _downloadSamples;
+    QVector<RawSample> _decompressSamples;
     QVector<RawSample> _writeSamples;
     QVector<RawSample> _verifySamples;
     
     // Totals for each phase
     quint64 _downloadTotal;
+    quint64 _decompressTotal;
     quint64 _writeTotal;
     quint64 _verifyTotal;
 
     // Rate limiting state
-    qint64 _lastSampleTime[3];  // Per-phase last sample time
+    qint64 _lastSampleTime[4];  // Per-phase last sample time (download, decompress, write, verify)
 };
 
 #endif // PERFORMANCESTATS_H

@@ -25,6 +25,10 @@ DriveListModel::DriveListModel(QObject *parent)
 
     // Enumerate drives in seperate thread, but process results in UI thread
     connect(&_thread, SIGNAL(newDriveList(std::vector<Drivelist::DeviceDescriptor>)), SLOT(processDriveList(std::vector<Drivelist::DeviceDescriptor>)));
+    
+    // Forward performance event signal
+    connect(&_thread, &DriveListModelPollThread::eventDriveListPoll,
+            this, &DriveListModel::eventDriveListPoll);
 }
 
 int DriveListModel::rowCount(const QModelIndex &) const

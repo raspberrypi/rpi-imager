@@ -290,6 +290,21 @@ ImageWriter::ImageWriter(QObject *parent)
     // Connect to specific device removal events
     connect(&_drivelist, &DriveListModel::deviceRemoved,
             this, &ImageWriter::onSelectedDeviceRemoved);
+    
+    // Connect drive list poll timing events for performance tracking
+    // Only record polls that take longer than 200ms to avoid noise from normal fast polls
+    connect(&_drivelist, &DriveListModel::eventDriveListPoll,
+            this, [this](quint32 durationMs){
+                if (durationMs >= 200) {
+                    _performanceStats->recordEvent(PerformanceStats::EventType::DriveListPoll, durationMs, true);
+                }
+            });
+    
+    // Connect OS list parse timing events for performance tracking
+    connect(&_oslist, &OSListModel::eventOsListParse,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::OsListParse, durationMs, success);
+            });
 
     // Start background cache operations early
     _cacheManager->startBackgroundOperations();
@@ -556,6 +571,10 @@ void ImageWriter::startWrite()
         connect(dft, SIGNAL(success()), SLOT(onSuccess()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
         connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+        connect(dft, &DriveFormatThread::eventDriveFormat,
+                this, [this](quint32 durationMs, bool success){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
+                });
         dft->start();
         return;
     }
@@ -710,6 +729,14 @@ void ImageWriter::startWrite()
                 this, [this](quint64 now, quint64 total){
                     _performanceStats->recordDownloadProgress(now, total);
                 });
+        connect(downloadThread, &DownloadExtractThread::decompressProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordDecompressProgress(now, total);
+                });
+        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordWriteProgress(now, total);
+                });
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, [this](quint64 now, quint64 total){
                     _performanceStats->recordVerifyProgress(now, total);
@@ -761,6 +788,22 @@ void ImageWriter::startWrite()
                 QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
                 _performanceStats->recordEvent(PerformanceStats::EventType::PageCacheFlush, durationMs, success, metadata);
             });
+    connect(_thread, &DownloadThread::eventImageExtraction,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::ImageExtraction, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventPartitionTableWrite,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::PartitionTableWrite, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventFatPartitionSetup,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FatPartitionSetup, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDeviceClose,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
+            });
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
@@ -800,6 +843,10 @@ void ImageWriter::startWrite()
         connect(dft, SIGNAL(success()), _thread, SLOT(start()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
         connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+        connect(dft, &DriveFormatThread::eventDriveFormat,
+                this, [this](quint32 durationMs, bool success){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
+                });
         dft->start();
         setWriteState(WriteState::Writing);
     }
@@ -2751,6 +2798,14 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 this, [this](quint64 now, quint64 total){
                     _performanceStats->recordDownloadProgress(now, total);
                 });
+        connect(downloadThread, &DownloadExtractThread::decompressProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordDecompressProgress(now, total);
+                });
+        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordWriteProgress(now, total);
+                });
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, [this](quint64 now, quint64 total){
                     _performanceStats->recordVerifyProgress(now, total);
@@ -2802,6 +2857,22 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
                 _performanceStats->recordEvent(PerformanceStats::EventType::PageCacheFlush, durationMs, success, metadata);
             });
+    connect(_thread, &DownloadThread::eventImageExtraction,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::ImageExtraction, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventPartitionTableWrite,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::PartitionTableWrite, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventFatPartitionSetup,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FatPartitionSetup, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDeviceClose,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
+            });
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
@@ -2843,6 +2914,10 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         connect(dft, SIGNAL(success()), _thread, SLOT(start()));
         connect(dft, SIGNAL(error(QString)), SLOT(onError(QString)));
         connect(dft, SIGNAL(preparationStatusUpdate(QString)), SLOT(onPreparationStatusUpdate(QString)));
+        connect(dft, &DriveFormatThread::eventDriveFormat,
+                this, [this](quint32 durationMs, bool success){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::DriveFormat, durationMs, success);
+                });
         dft->start();
         setWriteState(WriteState::Writing);
     }

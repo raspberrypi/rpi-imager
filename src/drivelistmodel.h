@@ -60,6 +60,7 @@ public:
 
 signals:
     void deviceRemoved(const QString &device);
+    void eventDriveListPoll(quint32 durationMs);
 
 public slots:
     void processDriveList(std::vector<Drivelist::DeviceDescriptor> l);

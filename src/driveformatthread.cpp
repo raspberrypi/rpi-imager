@@ -10,6 +10,7 @@
 #include <QDebug>
 #include <QProcess>
 #include <QTemporaryFile>
+#include <QElapsedTimer>
 
 #ifdef Q_OS_LINUX
 #include <unistd.h>
@@ -86,13 +87,20 @@ void DriveFormatThread::run()
 #endif
 
     // Use cross-platform disk formatter
+    QElapsedTimer formatTimer;
+    formatTimer.start();
+    
     rpi_imager::DiskFormatter formatter;
     auto formatResult = formatter.FormatDrive(_device.toStdString());
 
+    quint32 formatDurationMs = static_cast<quint32>(formatTimer.elapsed());
+    
     if (!formatResult) {
+        emit eventDriveFormat(formatDurationMs, false);
         emit error(formatErrorToString(formatResult.error()));
     } else {
-        qDebug() << "Cross-platform disk formatter succeeded";
+        emit eventDriveFormat(formatDurationMs, true);
+        qDebug() << "Cross-platform disk formatter succeeded in" << formatDurationMs << "ms";
         emit success();
     }
 }

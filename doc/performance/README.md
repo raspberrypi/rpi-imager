@@ -79,7 +79,7 @@ The following operations are timed individually, grouped by category:
 
 ### Throughput Histograms
 
-For the download, write, and verify phases, throughput is captured as a time-series of histograms. Each one-second window contains:
+For the download, decompress, write, and verify phases, throughput is captured as a time-series of histograms. Each one-second window contains:
 
 - **Timestamp** (milliseconds from operation start)
 - **Min/Max/Average throughput** for that window
@@ -89,6 +89,14 @@ The histogram uses logarithmic buckets (in MB/s):
 - 0–1, 1–2, 2–4, 4–8, 8–16, 16–32, 32–64, 64–128, 128–256, 256–512, 512–1024, 1024+
 
 This approach captures both the typical throughput and any variability or stalls.
+
+**Phase descriptions:**
+- **Download**: Compressed bytes received from network or read from cache
+- **Decompress**: Uncompressed bytes output from the decompressor (xz, gzip, zstd, etc.)
+- **Write**: Uncompressed bytes written to the storage device
+- **Verify**: Bytes read back from the device during verification
+
+By separating decompress from write, you can identify whether the bottleneck is CPU-bound decompression or I/O-bound disk writes.
 
 ## JSON Schema
 
@@ -122,6 +130,7 @@ This approach captures both the typical throughput and any variability or stalls
                 "maxThroughputKBps": 65536,
                 "avgThroughputKBps": 42000
             },
+            "decompress": { ... },
             "write": { ... },
             "verify": { ... }
         }
@@ -136,10 +145,13 @@ This approach captures both the typical throughput and any variability or stalls
         }
     ],
     "histograms": {
+        "download": [ ... ],
+        "decompress": [ ... ],
         "write": [
             [0, 28672, 45056, 35000, 0, 0, 2, 8, 5, 1, 0, 0, 0, 0, 0, 0],
             [1000, 30720, 43008, 36500, 0, 0, 1, 9, 6, 0, 0, 0, 0, 0, 0, 0]
-        ]
+        ],
+        "verify": [ ... ]
     },
     "schema": {
         "histogramSliceFormat": [
@@ -195,6 +207,9 @@ pip install matplotlib numpy
 
 | Symptom | Likely Cause |
 |---------|--------------|
+| Low decompress throughput | Single-threaded decompression (gzip/zstd) or slow CPU |
+| Decompress faster than write | I/O-bound; SD card/USB is the bottleneck |
+| Write faster than decompress | CPU-bound; consider images with faster compression |
 | Low write throughput, high verify throughput | Slow SD card write speed |
 | Periodic throughput drops | USB hub or driver issues |
 | Long `driveOpen` time | Drive enumeration problems |

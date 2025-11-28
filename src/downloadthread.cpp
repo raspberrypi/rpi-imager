@@ -924,6 +924,9 @@ void DownloadThread::_onWriteError()
 
 void DownloadThread::_closeFiles()
 {
+    QElapsedTimer closeTimer;
+    closeTimer.start();
+    
     // Close unified file operations
     if (_file && _file->IsOpen()) {
         _file->Close();
@@ -936,6 +939,11 @@ void DownloadThread::_closeFiles()
     // Cancel async cache writer if still active (don't wait for completion on error/cancel)
     if (_asyncCacheWriter && _asyncCacheWriter->isActive()) {
         _asyncCacheWriter->cancel();
+    }
+    
+    quint32 closeDurationMs = static_cast<quint32>(closeTimer.elapsed());
+    if (closeDurationMs > 0) {
+        emit eventDeviceClose(closeDurationMs, true);
     }
 }
 
@@ -1306,7 +1314,12 @@ bool DownloadThread::_customizeImage()
             qFreeAligned(_firstBlock);
             _firstBlock = nullptr;
         }
+        
+        // Parse FAT partition (can be slow for large partitions)
+        QElapsedTimer fatTimer;
+        fatTimer.start();
         DeviceWrapperFatPartition *fat = dw.fatPartition(1);
+        emit eventFatPartitionSetup(static_cast<quint32>(fatTimer.elapsed()), fat != nullptr);
 
         if (!_config.isEmpty())
         {
@@ -1366,8 +1379,11 @@ bool DownloadThread::_customizeImage()
             fat->writeFile("cmdline.txt", cmdline);
         }
         
-        // Sync before secure boot processing
+        // Sync before secure boot processing (writes partition table/MBR)
+        QElapsedTimer syncTimer;
+        syncTimer.start();
         dw.sync();
+        emit eventPartitionTableWrite(static_cast<quint32>(syncTimer.elapsed()), true);
         
         // Generate secure boot files if enabled
         if (_advancedOptions.testFlag(ImageOptions::EnableSecureBoot))
