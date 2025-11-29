@@ -239,7 +239,7 @@
     </message>
     <message>
         <source>USB Gadget mode enabled</source>
-        <translation>Mode Gagdet USB activé</translation>
+        <translation>Mode Gadget USB activé</translation>
     </message>
     <message>
         <source>1-Wire enabled</source>
@@ -765,11 +765,11 @@
     </message>
     <message>
         <source>Enable USB Gadget Mode</source>
-        <translation>Activer le mode Gagdet USB</translation>
+        <translation>Activer le mode Gadget USB</translation>
     </message>
     <message>
         <source>Learn more about USB Gadget Mode</source>
-        <translation>En savoir plus sur le mode Gagdet USB</translation>
+        <translation>En savoir plus sur le mode Gadget USB</translation>
     </message>
     <message>
         <source>Console</source>
@@ -777,7 +777,7 @@
     </message>
     <message>
         <source>USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.</source>
-        <translation>Le mode Gagdet USB peut modifier le comportement de votre appareil et peut modifier la connectivité et l&apos;interaction avec les hôtes.</translation>
+        <translation>Le mode Gadget USB peut modifier le comportement de votre appareil et peut modifier la connectivité et l&apos;interaction avec les hôtes.</translation>
     </message>
     <message>
         <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
@@ -817,7 +817,7 @@
     </message>
     <message>
         <source>Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage</source>
-        <translation>Active le mode Gagdet USB pour utiliser votre Raspberry Pi comme périphérique USB pour le réseau et le stockage</translation>
+        <translation>Active le mode Gadget USB pour utiliser votre Raspberry Pi comme périphérique USB pour le réseau et le stockage</translation>
     </message>
     <message>
         <source>Save interface and feature settings and continue to writing step</source>
@@ -833,27 +833,27 @@
     </message>
     <message>
         <source>Configure the serial interface: Disabled, Default (system decides), Console &amp; Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).</source>
-        <translation type="unfinished"></translation>
+        <translation>Configure l&apos;interface sérielle&#xa0;: Désactivé, Défaut (le système décide), Console &amp; matériel (console et UART), Matériel (UART seulement) ou or Console (console seulement sur les appareils pris en charge).</translation>
     </message>
     <message>
         <source>USB Gadget Mode Warning</source>
-        <translation type="unfinished"></translation>
+        <translation>Avertissement mode Gadget USB</translation>
     </message>
     <message>
         <source>Please review the documentation before proceeding.</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez consulter la documentation avant de continuer.</translation>
     </message>
     <message>
         <source>Cancel and return to the interfaces and features settings without enabling USB Gadget Mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Annuler et retourner aux réglages des interfaces et fonctionnalités sans activer le mode USB Gadget</translation>
     </message>
     <message>
         <source>Confirm that you understand the risks and continue with USB Gadget Mode enabled</source>
-        <translation type="unfinished"></translation>
+        <translation>Confimez que vous comprenez les risques et continuez avec le mode USB Gadget activé.</translation>
     </message>
     <message>
         <source>This button will be enabled after 2 seconds</source>
-        <translation type="unfinished"></translation>
+        <translation>Ce bouton sera activé dans 2 secondes</translation>
     </message>
 </context>
 <context>
@@ -871,31 +871,31 @@
     <name>ImFileDialog</name>
     <message>
         <source>Select File</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner fichier</translation>
     </message>
     <message>
         <source>Enter path or URL…</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir le chemin ou l&apos;URL…</translation>
     </message>
     <message>
         <source>Folders</source>
-        <translation type="unfinished"></translation>
+        <translation>Dossiers</translation>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished"></translation>
+        <translation>Ouvrir</translation>
     </message>
     <message>
         <source>Removable drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Disques amovibles</translation>
     </message>
     <message>
         <source>Go up a folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Monter d&apos;un dossier</translation>
     </message>
     <message>
         <source>No files in this folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun fichier dans ce dossier</translation>
     </message>
     <message>
         <source>Folder: %1</source>
@@ -931,19 +931,19 @@
     <name>ImTextField</name>
     <message>
         <source>Cut</source>
-        <translation type="unfinished"></translation>
+        <translation>Couper</translation>
     </message>
     <message>
         <source>Copy</source>
-        <translation type="unfinished"></translation>
+        <translation>Copier</translation>
     </message>
     <message>
         <source>Paste</source>
-        <translation type="unfinished"></translation>
+        <translation>Coller</translation>
     </message>
     <message>
         <source>Select All</source>
-        <translation type="unfinished"></translation>
+        <translation>Tout sélectionner</translation>
     </message>
 </context>
 <context>
@@ -962,75 +962,75 @@
     </message>
     <message>
         <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1.</source>
-        <translation type="unfinished"></translation>
+        <translation>La capacité de stockage est insuffisante.&lt;br&gt;Elle doit être d&apos;au moins %1.</translation>
     </message>
     <message>
         <source>B</source>
-        <translation type="unfinished"></translation>
+        <translation>o</translation>
     </message>
     <message>
         <source>TB</source>
-        <translation type="unfinished"></translation>
+        <translation>To</translation>
     </message>
     <message>
         <source>GB</source>
-        <translation type="unfinished">Go</translation>
+        <translation>Go</translation>
     </message>
     <message>
         <source>MB</source>
-        <translation type="unfinished"></translation>
+        <translation>Mo</translation>
     </message>
     <message>
         <source>KB</source>
-        <translation type="unfinished"></translation>
+        <translation>ko</translation>
     </message>
     <message>
         <source>%1 %2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 %2</translation>
     </message>
     <message>
         <source>%1.%2 %3</source>
-        <translation type="unfinished"></translation>
+        <translation>%1.%2 %3</translation>
     </message>
     <message>
         <source>Unknown precondition failure.</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de précondition inconnu.</translation>
     </message>
     <message>
         <source>Cannot start write. %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossible de commencer l&apos;écriture. %1</translation>
     </message>
     <message>
         <source>Source file not found: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichier source introuvable. %1</translation>
     </message>
     <message>
         <source>Source is not a regular file: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Le fichier source n&apos;est pas régulier&#xa0;: %1</translation>
     </message>
     <message>
         <source>Source file is not readable: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Le fichier source n&apos;est pas lisible&#xa0;: %1</translation>
     </message>
     <message>
         <source>image</source>
-        <translation type="unfinished"></translation>
+        <translation>image</translation>
     </message>
     <message>
         <source>storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>périphérique de stockage</translation>
     </message>
     <message>
         <source>valid storage device (device no longer available)</source>
-        <translation type="unfinished"></translation>
+        <translation>périphérique de stockage valide (le périphérique n&apos;est plus disponible)</translation>
     </message>
     <message>
         <source>No %1 selected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Pas de %1 sélectionné.</translation>
     </message>
     <message>
         <source> or </source>
-        <translation type="unfinished"></translation>
+        <translation> ou </translation>
     </message>
     <message>
         <source>Save Performance Data</source>
@@ -1045,42 +1045,42 @@
     <name>KeychainPermissionDialog</name>
     <message>
         <source>Keychain Access</source>
-        <translation type="unfinished"></translation>
+        <translation>Accès trousseau</translation>
     </message>
     <message>
         <source>Would you like to prefill the Wi‑Fi password from the system keychain?</source>
-        <translation type="unfinished"></translation>
+        <translation>Voulez-vous pré-remplir le mot de passe Wi-Fi depuis le trousseau système&#xa0;?</translation>
     </message>
     <message>
         <source>This will require administrator authentication on macOS.</source>
-        <translation type="unfinished"></translation>
+        <translation>Sur macOS, ceci nécessitera l&apos;authentification d&apos;un administrateur</translation>
     </message>
     <message>
         <source>Skip keychain access and manually enter the Wi-Fi password</source>
-        <translation type="unfinished"></translation>
+        <translation>Ne pas accéder au trousseau et saisir manuellement le mot de passe Wi-Fi</translation>
     </message>
     <message>
         <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Récupérer le mot de passe dans le trousseau à l&apos;aide de l&apos;authentification d&apos;un administrateur</translation>
     </message>
 </context>
 <context>
     <name>LanguageSelectionStep</name>
     <message>
         <source>Welcome</source>
-        <translation type="unfinished"></translation>
+        <translation>Bienvenue</translation>
     </message>
     <message>
         <source>Language:</source>
-        <translation type="unfinished"></translation>
+        <translation>Langue&#xa0;:</translation>
     </message>
     <message>
         <source>Choose your language for Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Choisir la langue de Raspberry Pi Imager</translation>
     </message>
     <message>
         <source>Select the language for the Raspberry Pi Imager interface</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner la langue de l&apos;interface de Raspberry Pi Imager</translation>
     </message>
 </context>
 <context>
