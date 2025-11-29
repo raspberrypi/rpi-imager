@@ -1602,7 +1602,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
-        <translation>用户名必须为小写，且只能包含字母、数字、下划线和连字符。</translation>
+        <translation>用户名必须为小写，且只能包含字母、数字、下划线和中划线。</translation>
     </message>
     <message>
         <source>Customisation: Choose username</source>
@@ -1638,7 +1638,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
-        <translation>输入您的 Raspberry Pi 账户用户名。用户名必须为小写，且只能包含字母、数字、下划线和连字符。</translation>
+        <translation>输入您的 Raspberry Pi 账户用户名。用户名必须为小写，且只能包含字母、数字、下划线和中划线。</translation>
     </message>
     <message>
         <source>Enter a new password for this account, or leave blank to keep the previously saved password.</source>
