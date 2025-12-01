@@ -371,7 +371,8 @@ def plot_timeline(data: dict, output_path: Path = None) -> None:
         'cacheWrite': '#00BCD4', 'cacheFlush': '#00BCD4',
         # Memory management
         'memoryAllocation': '#607D8B', 'bufferResize': '#607D8B',
-        'pageCacheFlush': '#607D8B',
+        'pageCacheFlush': '#607D8B', 'ringBufferStarvation': '#D32F2F',
+        'writeRingBufferStats': '#8BC34A',  # Light green for write buffer stats
         # Image processing
         'imageDecompressInit': '#795548', 'imageExtraction': '#795548',
         'hashComputation': '#795548',
@@ -526,6 +527,7 @@ def plot_throughput(data: dict, analysis: dict, output_path: Path = None) -> Non
         # Memory (grey) - ringBufferStarvation in RED to highlight issues
         'memoryAllocation': '#455A64', 'bufferResize': '#455A64',
         'pageCacheFlush': '#455A64', 'ringBufferStarvation': '#D32F2F',
+        'writeRingBufferStats': '#8BC34A',  # Light green for write buffer stats
         # Image processing (brown)
         'imageDecompressInit': '#5D4037', 'imageExtraction': '#5D4037',
         'hashComputation': '#5D4037',
@@ -651,6 +653,7 @@ def create_timeline_figure(data: dict):
         'cacheWrite': '#00BCD4', 'cacheFlush': '#00BCD4',
         'memoryAllocation': '#607D8B', 'bufferResize': '#607D8B',
         'pageCacheFlush': '#607D8B', 'ringBufferStarvation': '#D32F2F',
+        'writeRingBufferStats': '#8BC34A',  # Light green for write buffer stats
         'imageDecompressInit': '#795548', 'imageExtraction': '#795548',
         'hashComputation': '#795548',
         'customisation': '#E91E63', 'cloudInitGeneration': '#E91E63',

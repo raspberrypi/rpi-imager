@@ -37,6 +37,28 @@ if stalls:
     total_stall = sum(e['durationMs'] for e in stalls)
     print(f'Total stall time: {total_stall}ms ({total_stall/1000:.1f}s)')
 
+# Input ring buffer breakdown by buffer type
+input_stalls = [e for e in stalls if 'buffer: input' in e.get('metadata', '')]
+write_stalls = [e for e in stalls if 'buffer: write' in e.get('metadata', '')]
+if input_stalls or write_stalls:
+    print(f'  Input ring buffer stalls: {len(input_stalls)}')
+    print(f'  Write ring buffer stalls: {len(write_stalls)}')
+
+print()
+print('=== WRITE RING BUFFER STATS ===')
+write_rb = [e for e in data['events'] if e['type'] == 'writeRingBufferStats']
+if write_rb:
+    for e in write_rb:
+        metadata = e.get('metadata', '')
+        print(f'{metadata}')
+        duration = e.get('durationMs', 0)
+        if duration > 0:
+            print(f'Total wait time: {duration}ms')
+        else:
+            print('No stalls detected - pipeline running smoothly!')
+else:
+    print('No write ring buffer stats recorded')
+
 print()
 print('=== DRIVE ===')
 drive = [e for e in data['events'] if e['type'] == 'driveOpen']

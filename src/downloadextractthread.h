@@ -44,20 +44,25 @@ signals:
     void eventPipelineDecompressionTime(quint32 totalMs, quint64 bytesDecompressed);
     void eventPipelineWriteWaitTime(quint32 totalMs, quint64 bytesWritten);
     void eventPipelineRingBufferWaitTime(quint32 totalMs, quint64 bytesRead);
+    void eventWriteRingBufferStats(quint64 producerStalls, quint64 consumerStalls, 
+                                   quint64 producerWaitMs, quint64 consumerWaitMs);
 
 protected:
-    char *_abuf[2];
-    size_t _abufsize;
+    size_t _writeBufferSize;
     _extractThreadClass *_extractThread;
     
-    // Zero-copy ring buffer for producer-consumer data transfer
+    // Zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
     std::unique_ptr<RingBuffer> _ringBuffer;
     static const int RING_BUFFER_SLOTS;  // Number of slots in ring buffer
     RingBuffer::Slot* _currentReadSlot;  // Current slot being read by libarchive
     
+    // Ring buffer for decompress -> write path (decompressed data)
+    // Uses 4 slots to ensure buffers aren't reused while hash computation is pending
+    std::unique_ptr<RingBuffer> _writeRingBuffer;
+    RingBuffer::Slot* _currentWriteSlot;  // Current slot being written
+    
     bool _ethreadStarted, _isImage;
     AcceleratedCryptographicHash _inputHash;
-    int _activeBuf;
     bool _writeThreadStarted;
     QFuture<size_t> _writeFuture;
     bool _progressStarted;

@@ -57,12 +57,12 @@ protected:
 
 DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
     : DownloadThread(url, localfilename, expectedHash, parent), 
-      _abufsize(SystemMemoryManager::instance().getOptimalWriteBufferSize()), 
+      _writeBufferSize(SystemMemoryManager::instance().getOptimalWriteBufferSize()), 
       _currentReadSlot(nullptr),
+      _currentWriteSlot(nullptr),
       _ethreadStarted(false),
       _isImage(true), 
       _inputHash(OSLIST_HASH_ALGORITHM), 
-      _activeBuf(0), 
       _writeThreadStarted(false),
       _progressStarted(false),
       _lastProgressTime(0),
@@ -79,17 +79,26 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
 {
     _extractThread = new _extractThreadClass(this);
     size_t pageSize = SystemMemoryManager::instance().getSystemPageSize();
-    _abuf[0] = (char *) qMallocAligned(_abufsize, pageSize);
-    _abuf[1] = (char *) qMallocAligned(_abufsize, pageSize);
     
-    // Create zero-copy ring buffer for curl -> libarchive data transfer
+    // Create zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
     // Both slot size and slot count are determined by SystemMemoryManager based on available RAM
     size_t inputBufferSize = SystemMemoryManager::instance().getOptimalInputBufferSize();
     size_t numSlots = SystemMemoryManager::instance().getOptimalRingBufferSlots(inputBufferSize);
     _ringBuffer = std::make_unique<RingBuffer>(numSlots, inputBufferSize, pageSize);
     
-    qDebug() << "Using buffer size:" << _abufsize << "bytes with page size:" << pageSize << "bytes";
+    // Create ring buffer for decompress -> write path (decompressed data)
+    // Uses 4 slots to provide enough pipeline slack:
+    // - Slot N: being decompressed into
+    // - Slot N-1: write in progress, hash computation running
+    // - Slot N-2: hash being finalized
+    // - Slot N-3: available for reuse
+    // This eliminates the race condition where a buffer was reused before its hash completed
+    static const size_t WRITE_RING_BUFFER_SLOTS = 4;
+    _writeRingBuffer = std::make_unique<RingBuffer>(WRITE_RING_BUFFER_SLOTS, _writeBufferSize, pageSize);
+    
+    qDebug() << "Using buffer size:" << _writeBufferSize << "bytes with page size:" << pageSize << "bytes";
     qDebug() << "Ring buffer:" << RING_BUFFER_SLOTS << "slots of" << inputBufferSize << "bytes";
+    qDebug() << "Write ring buffer:" << WRITE_RING_BUFFER_SLOTS << "slots of" << _writeBufferSize << "bytes";
 }
 
 DownloadExtractThread::~DownloadExtractThread()
@@ -101,10 +110,9 @@ DownloadExtractThread::~DownloadExtractThread()
     {
         _extractThread->terminate();
     }
-    qFreeAligned(_abuf[0]);
-    qFreeAligned(_abuf[1]);
     
-    // Ring buffer destructor handles memory cleanup
+    // Ring buffer destructors handle memory cleanup
+    _writeRingBuffer.reset();
     _ringBuffer.reset();
 }
 
@@ -116,9 +124,12 @@ void DownloadExtractThread::_emitProgressUpdate()
         firstProgressUpdate = true;
         _sessionTimer.start();
         
-        // Set session timer on ring buffer for stall event timestamps
+        // Set session timer on ring buffers for stall event timestamps
         if (_ringBuffer) {
             _ringBuffer->setSessionTimer(&_sessionTimer);
+        }
+        if (_writeRingBuffer) {
+            _writeRingBuffer->setSessionTimer(&_sessionTimer);
         }
         
         qDebug() << "Started progress updates after successful drive opening";
@@ -132,10 +143,22 @@ void DownloadExtractThread::_emitProgressUpdate()
     _lastProgressTime = currentTime;
     
     // Emit any pending ring buffer stall events for time-series correlation
+    // Input ring buffer (download -> decompress)
     if (_ringBuffer) {
         auto stallEvents = _ringBuffer->getPendingStallEvents();
         for (const auto& event : stallEvents) {
-            QString metadata = QString("type: %1; duration_ms: %2")
+            QString metadata = QString("buffer: input; type: %1; duration_ms: %2")
+                .arg(event.isProducer ? "producer_stall" : "consumer_stall")
+                .arg(event.durationMs);
+            emit eventRingBufferStats(event.timestampMs, event.durationMs, metadata);
+        }
+    }
+    
+    // Write ring buffer (decompress -> write)
+    if (_writeRingBuffer) {
+        auto stallEvents = _writeRingBuffer->getPendingStallEvents();
+        for (const auto& event : stallEvents) {
+            QString metadata = QString("buffer: write; type: %1; duration_ms: %2")
                 .arg(event.isProducer ? "producer_stall" : "consumer_stall")
                 .arg(event.durationMs);
             emit eventRingBufferStats(event.timestampMs, event.durationMs, metadata);
@@ -288,15 +311,32 @@ void DownloadExtractThread::extractImageRun()
         QElapsedTimer decompressTimer;
         QElapsedTimer writeWaitTimer;
         
+        // Track the previous write slot so we can release it after the write completes
+        RingBuffer::Slot* previousWriteSlot = nullptr;
+        
         while (true)
         {
+            // Acquire a slot from the write ring buffer
+            // This blocks if all slots are in use (back-pressure from slow writes)
+            RingBuffer::Slot* slot = _writeRingBuffer->acquireWriteSlot(100);
+            while (!slot && !_cancelled && !_writeRingBuffer->isCancelled()) {
+                slot = _writeRingBuffer->acquireWriteSlot(100);
+            }
+            if (!slot) {
+                if (_cancelled) break;
+                throw runtime_error("Failed to acquire write buffer slot");
+            }
+            
             // Time decompression (includes ring buffer wait inside libarchive's read callback)
             decompressTimer.start();
-            ssize_t size = archive_read_data(a, _abuf[_activeBuf], _abufsize);
+            ssize_t size = archive_read_data(a, slot->data, slot->capacity);
             _totalDecompressionMs.fetch_add(static_cast<quint64>(decompressTimer.elapsed()));
             
             if (size < 0) {
                 const char* errorStr = archive_error_string(a);
+                
+                // Release the slot we acquired but won't use
+                _writeRingBuffer->releaseReadSlot(slot);
                 
                 // Check if this is the expected "No progress is possible" error after download completion
                 if (size == ARCHIVE_FATAL && errorStr && strstr(errorStr, "No progress is possible")) {
@@ -305,14 +345,17 @@ void DownloadExtractThread::extractImageRun()
                 
                 throw runtime_error(errorStr);
             }
-            if (size == 0)
+            if (size == 0) {
+                // Release the slot we acquired but won't use
+                _writeRingBuffer->releaseReadSlot(slot);
                 break;
+            }
             if (size % 512 != 0)
             {
                 size_t paddingBytes = 512-(size % 512);
                 qDebug() << "Image is NOT a valid disk image, as its length is not a multiple of the sector size of 512 bytes long";
                 qDebug() << "Last write() would be" << size << "bytes, but padding to" << size + paddingBytes << "bytes";
-                memset(_abuf[_activeBuf]+size, 0, paddingBytes);
+                memset(slot->data + size, 0, paddingBytes);
                 size += paddingBytes;
             }
             
@@ -329,8 +372,16 @@ void DownloadExtractThread::extractImageRun()
                 bool writeResult = _writeFuture.result();
                 _totalWriteWaitMs.fetch_add(static_cast<quint64>(writeWaitTimer.elapsed()));
                 
+                // Previous write is complete (including hash), release its slot
+                if (previousWriteSlot) {
+                    _writeRingBuffer->releaseReadSlot(previousWriteSlot);
+                    previousWriteSlot = nullptr;
+                }
+                
                 if (!writeResult)
                 {
+                    // Release current slot before returning
+                    _writeRingBuffer->releaseReadSlot(slot);
                     if (!_cancelled)
                     {
                         _onWriteError();
@@ -340,17 +391,25 @@ void DownloadExtractThread::extractImageRun()
                 }
             }
 
+            // Remember this slot so we can release it after the write completes
+            previousWriteSlot = slot;
+            
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread*>(this), _abuf[_activeBuf], size);
+            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread*>(this), slot->data, static_cast<size_t>(size));
 #else
-            _writeFuture = QtConcurrent::run(static_cast<DownloadThread*>(this), &DownloadThread::_writeFile, _abuf[_activeBuf], size);
+            _writeFuture = QtConcurrent::run(static_cast<DownloadThread*>(this), &DownloadThread::_writeFile, slot->data, static_cast<size_t>(size));
 #endif
-            _activeBuf = _activeBuf ? 0 : 1;
             _writeThreadStarted = true;
         }
 
-        if (_writeThreadStarted)
+        if (_writeThreadStarted) {
             _writeFuture.waitForFinished();
+            // Release the final slot
+            if (previousWriteSlot) {
+                _writeRingBuffer->releaseReadSlot(previousWriteSlot);
+                previousWriteSlot = nullptr;
+            }
+        }
         _writeComplete();
     }
     catch (exception &e)
@@ -381,6 +440,19 @@ void DownloadExtractThread::extractImageRun()
              << "decompress=" << _totalDecompressionMs.load() << "ms"
              << "(ring_wait=" << _totalRingBufferWaitMs.load() << "ms)"
              << "write_wait=" << _totalWriteWaitMs.load() << "ms";
+    
+    // Log and emit write ring buffer statistics
+    if (_writeRingBuffer) {
+        uint64_t producerStalls, consumerStalls, producerWaitMs, consumerWaitMs;
+        _writeRingBuffer->getStarvationStats(producerStalls, consumerStalls, producerWaitMs, consumerWaitMs);
+        if (producerStalls > 0 || consumerStalls > 0) {
+            qDebug() << "Write ring buffer stats:"
+                     << "producer stalls:" << producerStalls << "(" << producerWaitMs << "ms),"
+                     << "consumer stalls:" << consumerStalls << "(" << consumerWaitMs << "ms)";
+        }
+        // Emit for performance tracking even if no stalls (shows buffer was used)
+        emit eventWriteRingBufferStats(producerStalls, consumerStalls, producerWaitMs, consumerWaitMs);
+    }
 }
 
 #ifdef Q_OS_LINUX

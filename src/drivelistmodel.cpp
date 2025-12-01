@@ -79,14 +79,12 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         if (i.size == 0)
             continue;
 
-#ifdef Q_OS_DARWIN
         // Allow read/write virtual devices (mounted disk images) but filter out:
         // - Read-only virtual devices
-        // - System virtual devices (like APFS volumes)
+        // - System virtual devices (like APFS volumes on macOS)
         // - Virtual devices that are not removable/ejectable (likely system virtual devices)
         if (i.isVirtual && (i.isReadOnly || i.isSystem || !i.isRemovable))
             continue;
-#endif
 
         QString deviceNamePlusSize = QString::fromStdString(i.device)+":"+QString::number(i.size);
         if (i.isReadOnly)
@@ -102,15 +100,10 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
                 changes = true;
             }
 
-            // TEMPORARY TEST ONLY: Mark Apple Disk Image Media as system drives on macOS
-            // Reason: to exercise the wizard's system-drive confirmation flow.
-            // To undo: remove this override block and pass i.isSystem directly.
-#ifdef Q_OS_DARWIN
-            const QString desc = QString::fromStdString(i.description);
-            const bool isSystemOverride = i.isSystem || desc.contains("Apple Disk Image Media", Qt::CaseInsensitive);
-#else
-            const bool isSystemOverride = i.isSystem;
-#endif
+            // Mark virtual disks as system drives to trigger confirmation dialog
+            // This allows virtual disks (disk images, VHDs, etc.) to appear in the list
+            // but ensures users must confirm before writing to them
+            const bool isSystemOverride = i.isSystem || i.isVirtual;
 
             // Treat NVMe drives like SCSI for icon purposes (use storage icon instead of SD card icon)
             QString busType = QString::fromStdString(i.busType);
