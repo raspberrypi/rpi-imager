@@ -172,17 +172,31 @@ bool DownloadThread::_openAndPrepareDevice()
         unmountTimer.start();
 #ifdef Q_OS_DARWIN
         /* Also unmount any APFS volumes using this physical disk */
-        auto l = Drivelist::ListStorageDevices();
-        for (const auto &i : l)
+        if (_childDevicesProvided)
         {
-            if (QByteArray::fromStdString(i.device) == _filename)
+            // Use cached child device info (skips expensive ListStorageDevices() call, saving ~1 second)
+            for (const QString &childDevice : _childDevices)
             {
-                for (const auto &j : i.childDevices)
+                qDebug() << "Unmounting APFS volume (cached):" << childDevice;
+                unmount_disk(childDevice.toUtf8().constData());
+            }
+        }
+        else
+        {
+            // Fallback: scan for child devices if not cached (e.g., CLI usage)
+            qDebug() << "No cached child device info, scanning for APFS volumes...";
+            auto l = Drivelist::ListStorageDevices();
+            for (const auto &i : l)
+            {
+                if (QByteArray::fromStdString(i.device) == _filename)
                 {
-                    qDebug() << "Unmounting APFS volume:" << j.c_str();
-                    unmount_disk(j.c_str());
+                    for (const auto &j : i.childDevices)
+                    {
+                        qDebug() << "Unmounting APFS volume:" << j.c_str();
+                        unmount_disk(j.c_str());
+                    }
+                    break;
                 }
-                break;
             }
         }
 #endif
@@ -1339,6 +1353,17 @@ void DownloadThread::setImageCustomisation(const QByteArray &config, const QByte
     _cloudinitNetwork = cloudInitNetwork;
     _initFormat = initFormat;
     _advancedOptions = opts;
+}
+
+void DownloadThread::setChildDevices(const QStringList &devices)
+{
+    _childDevices = devices;
+    _childDevicesProvided = true;
+}
+
+void DownloadThread::setChildDevicesProvided(bool provided)
+{
+    _childDevicesProvided = provided;
 }
 
 bool DownloadThread::_customizeImage()

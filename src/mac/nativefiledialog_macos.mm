@@ -5,11 +5,8 @@
 
 #include "../nativefiledialog.h"
 #include <QStandardPaths>
-#include <QDebug>
-#include <QTimer>
-#include <QEventLoop>
 #include <QCoreApplication>
-#include <QWindow>
+#include <QElapsedTimer>
 #include <Cocoa/Cocoa.h>
 
 // Delegate class to handle file type popup changes
@@ -164,45 +161,77 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                                            const QString &initialDir, const QString &filter,
                                            bool saveDialog, void *parentWindow)
 {
-    // Defer dialog presentation to avoid interfering with Qt QML object destruction
-    QString result;
-    QEventLoop loop;
-    
-    // Process events once to allow QML cleanup, then show dialog with minimal delay
-    QCoreApplication::processEvents();
-    
     // Parent window parameter is unused on macOS
     // Native panels always run as application-modal dialogs
     Q_UNUSED(parentWindow);
     
-    // Use a very short timer to minimize delay while still avoiding Qt conflicts
-    QTimer::singleShot(1, [&]() {
-        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    // Initialize timing info
+    TimingInfo timing;
+    timing.isSaveDialog = saveDialog;
+    
+    QElapsedTimer totalTimer;
+    totalTimer.start();
+    
+    @autoreleasepool {
+        QElapsedTimer timer;
+        timer.start();
         
         NSString *nsTitle = title.isEmpty() ? nil : title.toNSString();
         
-        // Convert initial directory
-        NSString *nsInitialDir = nil;
+        // Parse initial directory and filename using string operations only (no filesystem access)
+        // This avoids slow stat() calls on iCloud-synced directories
+        QString dirPath;
+        QString filename;
+        
         if (!initialDir.isEmpty()) {
-            nsInitialDir = initialDir.toNSString();
-        } else {
-            QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-            nsInitialDir = homeDir.toNSString();
+            int lastSlash = initialDir.lastIndexOf('/');
+            if (lastSlash > 0) {
+                QString lastComponent = initialDir.mid(lastSlash + 1);
+                // For save dialogs, assume last component with an extension is a filename
+                // For open dialogs, treat the whole path as a directory
+                if (saveDialog && lastComponent.contains('.')) {
+                    dirPath = initialDir.left(lastSlash);
+                    filename = lastComponent;
+                } else {
+                    dirPath = initialDir;
+                }
+            } else {
+                dirPath = initialDir;
+            }
         }
         
-        NSString *modalResult = nil;
+        if (dirPath.isEmpty()) {
+            dirPath = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
+        }
+        
+        NSString *nsInitialDir = dirPath.toNSString();
+        NSString *nsInitialFilename = filename.isEmpty() ? nil : filename.toNSString();
+        
+        timing.pathParsingMs = timer.elapsed();
+        timing.directory = dirPath;
+        timer.restart();
         
         // Parse filters once for either dialog type
         NSArray<NSDictionary*>* parsedFilters = parseQtFilters(filter);
         FileTypeAccessoryController* controller = [[FileTypeAccessoryController alloc] init];
         
+        timing.filterParsingMs = timer.elapsed();
+        timer.restart();
+        
         if (saveDialog) {
             NSSavePanel *panel = [NSSavePanel savePanel];
+            timing.panelCreationMs = timer.elapsed();
+            timer.restart();
+            
             [panel setTitle:nsTitle];
             
-            if (nsInitialDir) {
-                NSURL *dirUrl = [NSURL fileURLWithPath:nsInitialDir];
-                [panel setDirectoryURL:dirUrl];
+            NSURL *dirUrl = [NSURL fileURLWithPath:nsInitialDir];
+            [panel setDirectoryURL:dirUrl];
+            timing.setDirectoryMs = timer.elapsed();
+            timer.restart();
+            
+            if (nsInitialFilename) {
+                [panel setNameFieldStringValue:nsInitialFilename];
             }
             
             // Set up file type filter UI
@@ -220,25 +249,37 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 }
             }
             
-            // Simply run as application modal dialog
-            // Sheet modals require async handling which complicates Qt integration
+            timing.panelSetupMs = timer.elapsed();
+            timing.totalBeforeShowMs = totalTimer.elapsed();
+            timer.restart();
+            
+            // Run as application modal dialog - this blocks until dismissed
+            // No QEventLoop needed since runModal handles its own run loop
             NSInteger buttonPressed = [panel runModal];
+            
+            timing.userInteractionMs = timer.elapsed();
+            
+            // Store timing info for later retrieval
+            s_lastTimingInfo = timing;
             
             if (buttonPressed == NSModalResponseOK) {
                 NSURL *url = [panel URL];
-                modalResult = [url path];
+                return QString::fromNSString([url path]);
             }
         } else {
             NSOpenPanel *panel = [NSOpenPanel openPanel];
+            timing.panelCreationMs = timer.elapsed();
+            timer.restart();
+            
             [panel setTitle:nsTitle];
             [panel setCanChooseFiles:YES];
             [panel setCanChooseDirectories:NO];
             [panel setAllowsMultipleSelection:NO];
             
-            if (nsInitialDir) {
-                NSURL *dirUrl = [NSURL fileURLWithPath:nsInitialDir];
-                [panel setDirectoryURL:dirUrl];
-            }
+            NSURL *dirUrl = [NSURL fileURLWithPath:nsInitialDir];
+            [panel setDirectoryURL:dirUrl];
+            timing.setDirectoryMs = timer.elapsed();
+            timer.restart();
             
             // Set up file type filter UI
             if ([parsedFilters count] > 1) {
@@ -255,30 +296,30 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 }
             }
             
-            // Simply run as application modal dialog
-            // Sheet modals require async handling which complicates Qt integration
+            timing.panelSetupMs = timer.elapsed();
+            timing.totalBeforeShowMs = totalTimer.elapsed();
+            timer.restart();
+            
+            // Run as application modal dialog - this blocks until dismissed
+            // No QEventLoop needed since runModal handles its own run loop
             NSInteger buttonPressed = [panel runModal];
+            
+            timing.userInteractionMs = timer.elapsed();
+            
+            // Store timing info for later retrieval
+            s_lastTimingInfo = timing;
             
             if (buttonPressed == NSModalResponseOK) {
                 NSArray *urls = [panel URLs];
                 if ([urls count] > 0) {
                     NSURL *url = [urls objectAtIndex:0];
-                    modalResult = [url path];
+                    return QString::fromNSString([url path]);
                 }
             }
         }
         
-        result = modalResult ? QString::fromNSString(modalResult) : QString();
-        [pool release];
-        
-        // Exit the event loop
-        loop.quit();
-    });
-    
-    // Wait for the dialog to complete
-    loop.exec();
-    
-    return result;
+        return QString();
+    }
 }
 
 bool NativeFileDialog::areNativeDialogsAvailablePlatform()
