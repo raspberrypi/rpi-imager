@@ -373,6 +373,9 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::FinalSync: return "finalSync";
         case EventType::DeviceClose: return "deviceClose";
         
+        // UI operations
+        case EventType::FileDialogOpen: return "fileDialogOpen";
+        
         default: return "unknown";
     }
 }

@@ -20,7 +20,8 @@ DriveListModel::DriveListModel(QObject *parent)
         {isScsiRole, "isScsi"},
         {isReadOnlyRole, "isReadOnly"},
         {isSystemRole, "isSystem"},
-        {mountpointsRole, "mountpoints"}
+        {mountpointsRole, "mountpoints"},
+        {childDevicesRole, "childDevices"}
     };
 
     // Enumerate drives in seperate thread, but process results in UI thread
@@ -111,7 +112,14 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
             bool isNvme = (busType.compare("NVME", Qt::CaseInsensitive) == 0) || devicePath.startsWith("/dev/nvme");
             bool isScsiForIcon = i.isSCSI || isNvme;
 
-            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, isScsiForIcon, i.isReadOnly, isSystemOverride, mountpoints, this);
+            // Convert child devices (APFS volumes on macOS) to QStringList
+            QStringList childDevices;
+            for (auto &s: i.childDevices)
+            {
+                childDevices.append(QString::fromStdString(s));
+            }
+
+            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, isScsiForIcon, i.isReadOnly, isSystemOverride, mountpoints, childDevices, this);
         }
     }
 
@@ -167,4 +175,18 @@ void DriveListModel::resumePolling()
 void DriveListModel::setSlowPolling()
 {
     _thread.setScanMode(DriveListModelPollThread::ScanMode::Slow);
+}
+
+QStringList DriveListModel::getChildDevices(const QString &device) const
+{
+    // Search through cached drive list for matching device
+    for (auto it = _drivelist.cbegin(); it != _drivelist.cend(); ++it)
+    {
+        DriveListItem *item = it.value();
+        if (item && item->property("device").toString() == device)
+        {
+            return item->property("childDevices").toStringList();
+        }
+    }
+    return QStringList();
 }

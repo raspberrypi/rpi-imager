@@ -11,8 +11,30 @@
 #include <QDebug>
 // QML-side fallback is handled at callsites; no QML engine usage here
 
-// Initialize static member
+// Initialize static members
 bool NativeFileDialog::s_forceQmlDialogs = false;
+NativeFileDialog::TimingInfo NativeFileDialog::s_lastTimingInfo;
+
+NativeFileDialog::TimingInfo NativeFileDialog::lastTimingInfo()
+{
+    return s_lastTimingInfo;
+}
+
+QString fileDialogTimingToString(const NativeFileDialog::TimingInfo &info)
+{
+    return QString("pathParsing=%1ms, filterParsing=%2ms, panelCreation=%3ms, "
+                   "setDirectory=%4ms, panelSetup=%5ms, totalBeforeShow=%6ms, "
+                   "userInteraction=%7ms, dir=%8, isSave=%9")
+        .arg(info.pathParsingMs)
+        .arg(info.filterParsingMs)
+        .arg(info.panelCreationMs)
+        .arg(info.setDirectoryMs)
+        .arg(info.panelSetupMs)
+        .arg(info.totalBeforeShowMs)
+        .arg(info.userInteractionMs)
+        .arg(info.directory)
+        .arg(info.isSaveDialog ? "true" : "false");
+}
 
 QString NativeFileDialog::getOpenFileName(const QString &title,
                                           const QString &initialDir, const QString &filter,

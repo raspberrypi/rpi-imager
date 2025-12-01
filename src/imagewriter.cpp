@@ -487,6 +487,15 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     // Reset write completion state when device selection changes
     if (device.isEmpty()) {
         setWriteState(WriteState::Idle);
+        _dstChildDevices.clear();
+    } else {
+#ifdef Q_OS_DARWIN
+        // Cache child devices (APFS volumes on macOS) to avoid re-scanning during unmount
+        _dstChildDevices = _drivelist.getChildDevices(device);
+        if (!_dstChildDevices.isEmpty()) {
+            qDebug() << "Cached" << _dstChildDevices.count() << "child devices for" << device;
+        }
+#endif
     }
 
     qDebug() << "Device selection changed to:" << device;
@@ -893,6 +902,11 @@ void ImageWriter::startWrite()
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+#ifdef Q_OS_DARWIN
+    // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
+    // Always call setChildDevices (even with empty list) so we skip the expensive scan
+    _thread->setChildDevices(_dstChildDevices);
+#endif
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -3042,6 +3056,11 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+#ifdef Q_OS_DARWIN
+    // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
+    // Always call setChildDevices (even with empty list) so we skip the expensive scan
+    _thread->setChildDevices(_dstChildDevices);
+#endif
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)
@@ -3401,6 +3420,15 @@ bool ImageWriter::exportPerformanceData()
         initialDir + "/" + defaultFilename,
         tr("JSON files (*.json);;All files (*)"),
         _mainWindow
+    );
+    
+    // Record file dialog timing as a performance event
+    NativeFileDialog::TimingInfo dialogTiming = NativeFileDialog::lastTimingInfo();
+    _performanceStats->recordEvent(
+        PerformanceStats::EventType::FileDialogOpen,
+        static_cast<uint32_t>(dialogTiming.totalBeforeShowMs + dialogTiming.userInteractionMs),
+        !filePath.isEmpty(),
+        fileDialogTimingToString(dialogTiming)
     );
     
     if (filePath.isEmpty()) {

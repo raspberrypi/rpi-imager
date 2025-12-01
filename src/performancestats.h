@@ -88,6 +88,9 @@ public:
         FinalSync,             // Time for final sync/flush
         DeviceClose,           // Time to close device handles
         
+        // UI operations
+        FileDialogOpen,        // Time to open native file dialog (with detailed breakdown)
+        
         _Count                 // Sentinel for array sizing
     };
     Q_ENUM(EventType)

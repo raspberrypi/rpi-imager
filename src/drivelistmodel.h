@@ -53,9 +53,20 @@ public:
      * but doesn't need frequent drive list updates.
      */
     void setSlowPolling();
+    
+    /**
+     * @brief Get child devices (e.g., APFS volumes) for a given device path
+     * 
+     * This avoids re-scanning the drive list during unmount operations.
+     * Returns cached child devices from the last drive list poll.
+     * 
+     * @param device Device path (e.g., "/dev/disk6")
+     * @return List of child device paths, empty if device not found
+     */
+    Q_INVOKABLE QStringList getChildDevices(const QString &device) const;
 
     enum driveListRoles {
-        deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole
+        deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole, childDevicesRole
     };
 
 signals:
