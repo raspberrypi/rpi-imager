@@ -32,7 +32,8 @@ BaseDialog {
     // Register focus groups when component is ready
     Component.onCompleted: {
         registerFocusGroup("warning", function(){ 
-            return [warningText] 
+            // Only include warning text when screen reader is active (otherwise it's not focusable)
+            return (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? [warningText] : []
         }, 0)
         registerFocusGroup("buttons", function(){ 
             return [keepFilterButton, showSystemButton] 

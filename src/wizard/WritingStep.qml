@@ -422,10 +422,15 @@ WizardStepBase {
         // Register focus groups when component is ready
         Component.onCompleted: {
             registerFocusGroup("warning", function(){ 
-                return [warningText, permanentText] 
+                // Only include warning texts when screen reader is active (otherwise they're not focusable)
+                if (confirmDialog.imageWriter && confirmDialog.imageWriter.isScreenReaderActive()) {
+                    return [warningText, permanentText]
+                }
+                return []
             }, 0)
             registerFocusGroup("buttons", function(){ 
-                return [cancelButton, acceptBtn] 
+                // Only include buttons when they're visible (after allowAccept becomes true)
+                return confirmDialog.allowAccept ? [cancelButton, acceptBtn] : []
             }, 1)
         }
 
@@ -530,7 +535,7 @@ WizardStepBase {
             if (confirmDialog.countdown <= 0) {
                 confirmDelay.stop()
                 confirmDialog.allowAccept = true
-                // Rebuild focus order now that accept button is enabled
+                // Rebuild focus order now that buttons are visible
                 confirmDialog.rebuildFocusOrder()
             }
         }

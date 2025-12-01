@@ -1079,7 +1079,11 @@ Item {
             interval: 1500
             running: false
             repeat: false
-            onTriggered: tokenConflictDialog.allowAccept = true
+            onTriggered: {
+                tokenConflictDialog.allowAccept = true
+                // Rebuild focus order now that replace button is enabled
+                tokenConflictDialog.rebuildFocusOrder()
+            }
         }
 
         function openWithToken(tok) {
@@ -1095,7 +1099,11 @@ Item {
         Component.onCompleted: {
             // match your focus group style
             registerFocusGroup("token_conflict_content", function() {
-                return [titleText, bodyText]
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.isScreenReaderActive()) {
+                    return [titleText, bodyText]
+                }
+                return []
             }, 0)
             registerFocusGroup("token_conflict_buttons", function() {
                 return [keepBtn, replaceBtn]

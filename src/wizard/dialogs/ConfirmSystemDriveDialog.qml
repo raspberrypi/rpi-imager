@@ -35,10 +35,17 @@ BaseDialog {
     // Register focus groups when component is ready
     Component.onCompleted: {
         registerFocusGroup("warning", function(){ 
-            return [warningTextElement] 
+            // Only include warning text when screen reader is active (otherwise it's not focusable)
+            return (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? [warningTextElement] : []
         }, 0)
         registerFocusGroup("input", function(){ 
-            return [driveNameText, nameInput] 
+            // Only include drive name text when screen reader is active (otherwise it's not focusable)
+            var items = []
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                items.push(driveNameText)
+            }
+            items.push(nameInput)
+            return items
         }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, continueButton] 

@@ -32,6 +32,13 @@ BaseDialog {
 
     // Register focus groups when component is ready
     Component.onCompleted: {
+        registerFocusGroup("header", function(){ 
+            // Only include header text when screen reader is active (otherwise it's not focusable)
+            if (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) {
+                return [headerText]
+            }
+            return []
+        }, 0)
         registerFocusGroup("options", function(){ 
             var items = [chkBeep.focusItem, chkEject.focusItem, chkTelemetry.focusItem]
             // Include telemetry help link if visible
@@ -42,7 +49,7 @@ BaseDialog {
             if (secureBootKeyButton.visible)
                 items.push(secureBootKeyButton.focusItem)
             return items
-        }, 0)
+        }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, saveButton]
         }, 2)
@@ -50,6 +57,7 @@ BaseDialog {
 
     // Header
     Text {
+        id: headerText
         text: qsTr("App Options")
         font.pixelSize: Style.fontSizeLargeHeading
         font.family: Style.fontFamilyBold
@@ -354,13 +362,21 @@ BaseDialog {
 
         // Register focus groups when component is ready
         Component.onCompleted: {
+            registerFocusGroup("content", function(){ 
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) {
+                    return [confirmTitleText, confirmDescriptionText]
+                }
+                return []
+            }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [confirmCancelButton, confirmDisableButton] 
-            }, 0)
+            }, 1)
         }
 
         // Dialog content
         Text {
+            id: confirmTitleText
             text: qsTr("Disable warnings?")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
@@ -375,6 +391,7 @@ BaseDialog {
         }
 
         Text {
+            id: confirmDescriptionText
             textFormat: Text.StyledText
             wrapMode: Text.WordWrap
             font.pixelSize: Style.fontSizeDescription

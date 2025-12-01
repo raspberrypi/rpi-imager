@@ -105,7 +105,8 @@ Dialog {
                 if (!arr || !arr.length) continue
                 for (var k = 0; k < arr.length; k++) {
                     var it = arr[k]
-                    if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function') {
+                    // Skip items that have activeFocusOnTab explicitly set to false (e.g. text labels when screen reader inactive)
+                    if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function' && it.activeFocusOnTab !== false) {
                         items.push(it)
                     }
                 }
