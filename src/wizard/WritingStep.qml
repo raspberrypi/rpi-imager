@@ -514,6 +514,9 @@ WizardStepBase {
                 }
             }
         }
+
+        // Bottom spacer to balance the dialog's internal top padding
+        Item { Layout.preferredHeight: Style.cardPadding }
     }
 
     // Delay accept for 2 seconds - moved outside dialog content
