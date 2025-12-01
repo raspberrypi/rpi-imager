@@ -9,8 +9,14 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <sstream>
 
 namespace rpi_imager {
+
+// Use the common logging function from file_operations.cpp
+static void Log(const std::string& msg) {
+    FileOperationsLog(msg);
+}
 
 LinuxFileOperations::LinuxFileOperations() : fd_(-1), last_error_code_(0), using_direct_io_(false) {}
 
@@ -236,16 +242,20 @@ void LinuxFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::ui
   //    This is critical for verification - we need to read what's on disk, not cached data
   int ret = posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length), POSIX_FADV_DONTNEED);
   if (ret != 0) {
-    qDebug() << "Warning: posix_fadvise(POSIX_FADV_DONTNEED) failed with error:" << ret
-             << "- verification may read cached data";
+    std::ostringstream oss;
+    oss << "Warning: posix_fadvise(POSIX_FADV_DONTNEED) failed with error: " << ret
+        << " - verification may read cached data";
+    Log(oss.str());
   }
   
   // 2. POSIX_FADV_SEQUENTIAL: Hint to kernel for aggressive read-ahead
   //    This doubles the read-ahead window and drops pages after reading
   ret = posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length), POSIX_FADV_SEQUENTIAL);
   if (ret != 0) {
-    qDebug() << "Warning: posix_fadvise(POSIX_FADV_SEQUENTIAL) failed with error:" << ret
-             << "- sequential read performance may be suboptimal";
+    std::ostringstream oss;
+    oss << "Warning: posix_fadvise(POSIX_FADV_SEQUENTIAL) failed with error: " << ret
+        << " - sequential read performance may be suboptimal";
+    Log(oss.str());
   }
 }
 

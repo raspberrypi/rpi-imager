@@ -13,9 +13,14 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <iostream>
-#include <QDebug>
+#include <sstream>
 
 namespace rpi_imager {
+
+// Use the common logging function from file_operations.cpp
+static void Log(const std::string& msg) {
+    FileOperationsLog(msg);
+}
 
 MacOSFileOperations::MacOSFileOperations() : fd_(-1), last_error_code_(0), using_direct_io_(false) {}
 
@@ -300,15 +305,19 @@ void MacOSFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::ui
   // F_RDAHEAD: Enable read-ahead for sequential access
   // This tells the kernel to speculatively read data ahead of the current position
   if (fcntl(fd_, F_RDAHEAD, 1) == -1) {
-    qDebug() << "Warning: fcntl(F_RDAHEAD) failed, errno:" << errno
-             << "- sequential read performance may be suboptimal";
+    std::ostringstream oss;
+    oss << "Warning: fcntl(F_RDAHEAD) failed, errno: " << errno
+        << " - sequential read performance may be suboptimal";
+    Log(oss.str());
   }
   
   // F_NOCACHE: Bypass the unified buffer cache
   // Critical for verification - ensures we read from actual device, not cached writes
   if (fcntl(fd_, F_NOCACHE, 1) == -1) {
-    qDebug() << "Warning: fcntl(F_NOCACHE) failed, errno:" << errno
-             << "- verification may read cached data";
+    std::ostringstream oss;
+    oss << "Warning: fcntl(F_NOCACHE) failed, errno: " << errno
+        << " - verification may read cached data";
+    Log(oss.str());
   }
 }
 
