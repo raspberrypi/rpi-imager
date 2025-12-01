@@ -107,6 +107,21 @@
         <source>PEM Files (*.pem);;All Files (*)</source>
         <translation type="unfinished">Файлы PEM (*.pem);;Все файлы (*)</translation>
     </message>
+        <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished">Файлы PEM (*.pem)</translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished">Все файлы (*)</translation>
+    </message>
+</context>
+<context>
+    <name>AsyncCacheWriter</name>
+    <message>
+        <source>Cache write error: %1</source>
+        <translation type="unfinished">Ошибка записи в кэш: %1</translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -636,6 +651,22 @@
         <source>Failed to write secure boot files: %1</source>
         <translation type="unfinished">Не удалось записать файлы безопасной загрузки: %1</translation>
     </message>
+        <message>
+        <source>Unmounting volumes...</source>
+        <translation type="unfinished">Размонтирование томов...</translation>
+    </message>
+    <message>
+        <source>Cleaning disk...</source>
+        <translation type="unfinished">Очистка диска...</translation>
+    </message>
+    <message>
+        <source>Cleaning disk (legacy method)...</source>
+        <translation type="unfinished">Очистка диска (устаревший метод)...</translation>
+    </message>
+    <message>
+        <source>Writing customization files...</source>
+        <translation type="unfinished">Запись файлов настройки...</translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
@@ -830,6 +861,17 @@
     </message>
 </context>
 <context>
+    <name>ImComboBox</name>
+    <message>
+        <source>Type to search: &quot;%1&quot;</source>
+        <translation type="unfinished">Введите для поиска: &quot;%1&quot;</translation>
+    </message>
+    <message>
+        <source>(press again to cycle)</source>
+        <translation type="unfinished">(нажмите еще раз для переключения)</translation>
+    </message>
+</context>
+<context>
     <name>ImFileDialog</name>
     <message>
         <source>Select File</source>
@@ -858,6 +900,35 @@
     <message>
         <source>No files in this folder</source>
         <translation type="unfinished">В этой папке нет файлов</translation>
+    </message>
+    <message>
+        <source>Folder: %1</source>
+        <translation type="unfinished">Папка: %1</translation>
+    </message>
+    <message>
+        <source>File: %1</source>
+        <translation type="unfinished">Файл: %1</translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionButton</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished">Открывается в браузере</translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionPill</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished">Открывается в браузере</translation>
+    </message>
+</context>
+<context>
+    <name>ImPopup</name>
+    <message>
+        <source>Dialog</source>
+        <translation type="unfinished">Диалог</translation>
     </message>
 </context>
 <context>
@@ -964,6 +1035,14 @@
     <message>
         <source> or </source>
         <translation type="unfinished"> или </translation>
+    </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished">Сохранить данные о производительности</translation>
+    </message>
+    <message>
+        <source>JSON files (*.json);;All files (*)</source>
+        <translation type="unfinished">Файлы JSON (*.json);;Все файлы (*)</translation>
     </message>
 </context>
 <context>
@@ -1268,6 +1347,44 @@ Please run with elevated privileges: sudo %1</source>
 
 Пожалуйста, запустите программу с повышенными привилегиями: sudo% 1</translation>
     </message>
+        <message>
+        <source>Invalid Windows physical drive path: %1</source>
+        <translation type="unfinished">Неверный путь к физическому диску Windows: %1</translation>
+    </message>
+    <message>
+        <source>Failed to open disk for cleaning. Error code: %1</source>
+        <translation type="unfinished">Не удалось открыть диск для очистки. Код ошибки: %1</translation>
+    </message>
+    <message>
+        <source>Failed to clear partition table. Error code: %1</source>
+        <translation type="unfinished">Не удалось очистить таблицу разделов. Код ошибки: %1</translation>
+    </message>
+    <message>
+        <source>Failed to start disk cleanup utility. Please ensure you have administrator privileges.</source>
+        <translation type="unfinished">Не удалось запустить утилиту очистки диска. Пожалуйста, убедитесь, что у вас есть права администратора.</translation>
+    </message>
+    <message>
+        <source>Disk cleaning operation timed out. The disk may be in use by another application.</source>
+        <translation type="unfinished">Время выполнения операции очистки диска истекло. Возможно, диск используется другим приложением.</translation>
+    </message>
+    <message>
+        <source>Failed to clean disk. Error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clean disk after %1 attempts. %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as root.
+
+Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RemoteAccessStep</name>
@@ -1450,20 +1567,8 @@ Please run with elevated privileges: sudo %1</source>
         <translation type="unfinished">Узнайте больше о безопасной загрузке</translation>
     </message>
     <message>
-        <source>Your boot partition will be signed using the RSA private key configured in App Options.</source>
-        <translation type="unfinished">Ваш загрузочный раздел будет подписан с использованием закрытого ключа RSA, настроенного в параметрах приложения.</translation>
-    </message>
-    <message>
         <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
         <translation type="unfinished">Это создаст файлы boot.img и boot.sig, необходимые для безопасной загрузки Raspberry Pi.</translation>
-    </message>
-    <message>
-        <source>Private Key: %1</source>
-        <translation type="unfinished">Закрытый ключ: %1</translation>
-    </message>
-    <message>
-        <source>(not configured)</source>
-        <translation type="unfinished">(не настроено)</translation>
     </message>
     <message>
         <source>Public Key Fingerprint: %1</source>
@@ -1476,6 +1581,50 @@ Please run with elevated privileges: sudo %1</source>
     <message>
         <source>(unable to compute)</source>
         <translation type="unfinished">(невозможно вычислить)</translation>
+    </message>
+    <message>
+        <source>RSA Private Key</source>
+        <translation type="unfinished">Закрытый ключ RSA</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished">Изменить</translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="unfinished">Выбрать</translation>
+    </message>
+    <message>
+        <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
+        <translation type="unfinished">Выберите закрытый ключ RSA 2048 бит для подписи загрузочных образов в режиме безопасной загрузки</translation>
+    </message>
+    <message>
+        <source>Select RSA Private Key</source>
+        <translation type="unfinished">Выберать закрытый ключ RSA</translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem);;All Files (*)</source>
+        <translation type="unfinished">Файлы PEM (*.pem);;Все файлы (*)</translation>
+    </message>
+    <message>
+        <source>Selected: %1</source>
+        <translation type="unfinished">Выбрано: %1</translation>
+    </message>
+    <message>
+        <source>Your boot partition will be signed using the selected RSA private key.</source>
+        <translation type="unfinished">Ваш загрузочный раздел будет подписан с использованием выбранного закрытого ключа RSA.</translation>
+    </message>
+    <message>
+        <source>Please select an RSA private key above to enable secure boot signing.</source>
+        <translation type="unfinished">Пожалуйста, выберите закрытый ключ RSA, указанный выше, чтобы включить безопасную загрузочную подпись.</translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished">Файлы PEM (*.pem)</translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished">Все файлы (*)</translation>
     </message>
 </context>
 <context>
@@ -1859,10 +2008,6 @@ to show system drives.</source>
 </translation>
     </message>
     <message>
-        <source>Warning: Only replace the token if you initiated this action. </source>
-        <translation type="unfinished">Внимание: заменяйте токен только в том случае, если вы инициировали это действие. </translation>
-    </message>
-    <message>
         <source>If you didn&apos;t, someone could be trying to push a bad token to RPi Imager.</source>
         <translation type="unfinished">Если вы этого не делали, возможно, кто-то пытается передать неверный токен в RPi Imager.</translation>
     </message>
@@ -1889,6 +2034,10 @@ to show system drives.</source>
     <message>
         <source>Secure Boot</source>
         <translation type="unfinished">Безопасная загрузка</translation>
+    </message>
+    <message>
+        <source>Warning: Only replace the token if you initiated this action. </source>
+        <translation type="unfinished">Внимание: заменяйте токен только в том случае, если вы инициировали это действие. </translation>
     </message>
 </context>
 <context>
@@ -2032,6 +2181,10 @@ to show system drives.</source>
         <source>Writing in progress — do not disconnect the storage device</source>
         <translation type="unfinished">Выполняется запись — не отключайте запоминающее устройство</translation>
     </message>
+    <message>
+        <source>Please wait... %1</source>
+        <translation type="unfinished">Пожалуйста, подождите... %1</translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -2110,6 +2263,14 @@ to show system drives.</source>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
         <translation type="unfinished">Выйти из Raspberry Pi Imager — вам потребуется перезапустить его с повышенными привилегиями для записи образов.</translation>
+    </message>
+    <message>
+        <source>Install Authorization</source>
+        <translation type="unfinished">Авторизация установки</translation>
+    </message>
+    <message>
+        <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
+        <translation type="unfinished">Установите системную авторизацию, чтобы разрешить запуск Raspberry Pi Imager с повышенными привилегиями.</translation>
     </message>
 </context>
 </TS>
