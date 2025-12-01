@@ -112,7 +112,11 @@ ApplicationWindow {
         // Register focus groups when component is ready
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
-                return [errorTitle, errorMessage] 
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (errorDialog.imageWriter && errorDialog.imageWriter.isScreenReaderActive()) {
+                    return [errorTitle, errorMessage]
+                }
+                return []
             }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [errorContinueButton] 
@@ -182,7 +186,11 @@ ApplicationWindow {
         // Register focus groups when component is ready
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
-                return [storageRemovedTitle, storageRemovedMessage] 
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.isScreenReaderActive()) {
+                    return [storageRemovedTitle, storageRemovedMessage]
+                }
+                return []
             }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [storageOkButton] 
@@ -251,7 +259,11 @@ ApplicationWindow {
         // Register focus groups when component is ready
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
-                return [quitTitle, quitMessage] 
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (quitDialog.imageWriter && quitDialog.imageWriter.isScreenReaderActive()) {
+                    return [quitTitle, quitMessage]
+                }
+                return []
             }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [quitNoButton, quitYesButton] 

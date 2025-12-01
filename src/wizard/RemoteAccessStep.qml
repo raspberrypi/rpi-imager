@@ -55,11 +55,7 @@ WizardStepBase {
                 WizardFormLabel {
                     id: labelAuthMechanism
                     text: qsTr("Authentication mechanism:")
-                    Accessible.ignored: false
-                    Accessible.focusable: true
-                    Accessible.description: qsTr("Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.")
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    accessibleDescription: qsTr("Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.")
                 }
 
                 ButtonGroup { id: authGroup }
@@ -84,11 +80,7 @@ WizardStepBase {
                     id: labelPublicKey
                     text: qsTr("Public key:")
                     visible: radioPublicKey.checked
-                    Accessible.ignored: false
-                    Accessible.focusable: true
-                    Accessible.description: qsTr("Enter or paste your SSH public key, or use the Browse button to select a public key file (typically id_rsa.pub or id_ed25519.pub).")
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    accessibleDescription: qsTr("Enter or paste your SSH public key, or use the Browse button to select a public key file (typically id_rsa.pub or id_ed25519.pub).")
                 }
                 
                 RowLayout {

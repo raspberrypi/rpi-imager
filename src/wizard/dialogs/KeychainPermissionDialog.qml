@@ -29,9 +29,16 @@ BaseDialog {
 
     // Register focus groups when component is ready
     Component.onCompleted: {
+        registerFocusGroup("content", function(){ 
+            // Only include text elements when screen reader is active (otherwise they're not focusable)
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                return [titleText, descriptionText, subText]
+            }
+            return []
+        }, 0)
         registerFocusGroup("buttons", function(){ 
             return [yesButton, noButton] 
-        }, 0)
+        }, 1)
     }
 
     // Dialog content goes directly into the BaseDialog's contentLayout

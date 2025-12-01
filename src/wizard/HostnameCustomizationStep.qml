@@ -24,7 +24,15 @@ WizardStepBase {
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
     
     Component.onCompleted: {
-        root.registerFocusGroup("hostname_fields", function(){ return [helpText, fieldHostname] }, 0)
+        root.registerFocusGroup("hostname_fields", function(){ 
+            // Only include help text when screen reader is active (otherwise it's not focusable)
+            var items = []
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                items.push(helpText)
+            }
+            items.push(fieldHostname)
+            return items
+        }, 0)
         
         // Initial focus will automatically go to title, then help text, then field (handled by WizardStepBase)
         
