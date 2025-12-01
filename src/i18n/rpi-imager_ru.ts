@@ -468,10 +468,6 @@
         <translation>Ошибка доступа при записи файла на диск.</translation>
     </message>
     <message>
-        <source>Error writing file to disk</source>
-        <translation>Ошибка записи файла на диск</translation>
-    </message>
-    <message>
         <source>Error writing to storage (while flushing)</source>
         <translation>Ошибка записи на запоминающее устройство (при сбросе)</translation>
     </message>
@@ -1159,13 +1155,6 @@
     <message>
         <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
         <translation type="unfinished">Выберите раскладку клавиатуры, чтобы клавиши отображали правильные символы при наборе текста. Эта раскладка автоматически рекомендуется в зависимости от выбранной столицы, но вы можете изменить её, если используете другую раскладку.</translation>
-    </message>
-</context>
-<context>
-    <name>MacFile</name>
-    <message>
-        <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
-        <translation type="unfinished">Для записи образа Raspberry Pi Imager необходим доступ к диску.</translation>
     </message>
 </context>
 <context>
