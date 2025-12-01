@@ -340,6 +340,7 @@ signals:
     void cacheStatusChanged();
     void osListFetchFailed();
     void permissionWarning(QVariant msg);
+    void locationPermissionGranted();
 
 protected slots:
     void startProgressPolling();

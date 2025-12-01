@@ -2209,8 +2209,29 @@ QVariantMap ImageWriter::getLocaleDataForCapital(const QString &capitalCity)
     return result;
 }
 
+#ifdef Q_OS_DARWIN
+#include "mac/location_helper.h"
+
+// Static callback for location permission - called when permission is granted after timeout
+static void locationPermissionCallback(int authorized, void *context)
+{
+    if (authorized && context) {
+        ImageWriter *writer = static_cast<ImageWriter*>(context);
+        qDebug() << "Location permission granted via callback, emitting signal";
+        QMetaObject::invokeMethod(writer, "locationPermissionGranted", Qt::QueuedConnection);
+    }
+}
+#endif
+
 QString ImageWriter::getSSID()
 {
+#ifdef Q_OS_DARWIN
+    // On macOS, set up a callback to be notified if location permission is granted
+    // after the initial timeout. This handles the race condition where the user
+    // takes longer than 5 seconds to click "Allow" in the permission dialog.
+    // Pass 'this' as context so the callback can emit the signal.
+    rpiimager_request_location_permission_async(locationPermissionCallback, this);
+#endif
     return WlanCredentials::instance()->getSSID();
 }
 
