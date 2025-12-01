@@ -803,6 +803,18 @@ void ImageWriter::startWrite()
                         totalMs, bytesRead, true,
                         QString("bytes: %1 MB").arg(bytesRead / (1024*1024)));
                 });
+        connect(downloadThread, &DownloadExtractThread::eventWriteRingBufferStats,
+                this, [this](quint64 producerStalls, quint64 consumerStalls, 
+                             quint64 producerWaitMs, quint64 consumerWaitMs){
+                    QString metadata = QString("producer_stalls: %1 (%2 ms); consumer_stalls: %3 (%4 ms)")
+                        .arg(producerStalls).arg(producerWaitMs)
+                        .arg(consumerStalls).arg(consumerWaitMs);
+                    // Use combined wait time as duration for the event
+                    quint32 totalWaitMs = static_cast<quint32>(producerWaitMs + consumerWaitMs);
+                    _performanceStats->recordEvent(
+                        PerformanceStats::EventType::WriteRingBufferStats,
+                        totalWaitMs, true, metadata);
+                });
     }
     
     // Connect performance event signals from DownloadThread
@@ -2918,6 +2930,18 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                         PerformanceStats::EventType::PipelineRingBufferWaitTime,
                         totalMs, bytesRead, true,
                         QString("bytes: %1 MB").arg(bytesRead / (1024*1024)));
+                });
+        connect(downloadThread, &DownloadExtractThread::eventWriteRingBufferStats,
+                this, [this](quint64 producerStalls, quint64 consumerStalls, 
+                             quint64 producerWaitMs, quint64 consumerWaitMs){
+                    QString metadata = QString("producer_stalls: %1 (%2 ms); consumer_stalls: %3 (%4 ms)")
+                        .arg(producerStalls).arg(producerWaitMs)
+                        .arg(consumerStalls).arg(consumerWaitMs);
+                    // Use combined wait time as duration for the event
+                    quint32 totalWaitMs = static_cast<quint32>(producerWaitMs + consumerWaitMs);
+                    _performanceStats->recordEvent(
+                        PerformanceStats::EventType::WriteRingBufferStats,
+                        totalWaitMs, true, metadata);
                 });
     }
     

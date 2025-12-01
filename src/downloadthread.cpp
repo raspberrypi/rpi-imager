@@ -803,8 +803,12 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
 
     qint64 written = static_cast<qint64>(bytes_written);
 
-    // Don't wait for current hash - let it run in parallel with next write
-    // The next _writeFile call will wait for it
+    // Wait for current hash to complete before returning
+    // This ensures the buffer can be safely reused by the caller
+    // (The caller may be using a ring buffer that releases slots after _writeFile returns)
+    if (_hasPendingHash && !_pendingHashFuture.isFinished()) {
+        _pendingHashFuture.waitForFinished();
+    }
 
     // Cross-platform periodic sync to prevent page cache buildup
     _periodicSync();

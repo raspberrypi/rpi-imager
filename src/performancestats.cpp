@@ -359,6 +359,7 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::PipelineDecompressionTime: return "pipelineDecompressionTime";
         case EventType::PipelineWriteWaitTime: return "pipelineWriteWaitTime";
         case EventType::PipelineRingBufferWaitTime: return "pipelineRingBufferWaitTime";
+        case EventType::WriteRingBufferStats: return "writeRingBufferStats";
         
         // Customisation
         case EventType::Customisation: return "customisation";

@@ -73,7 +73,8 @@ public:
         // Pipeline timing (summary events emitted at end of extraction)
         PipelineDecompressionTime, // Total time spent in libarchive decompression
         PipelineWriteWaitTime,     // Total time blocked waiting for disk writes
-        PipelineRingBufferWaitTime,// Total time waiting for ring buffer data
+        PipelineRingBufferWaitTime,// Total time waiting for ring buffer data (input buffer)
+        WriteRingBufferStats,      // Write ring buffer stall statistics (decompress->write)
         
         // Customisation
         Customisation,         // Time to apply customisation (config, firstrun, etc.)
