@@ -497,6 +497,7 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImOptionPill.qml
         qmlcomponents/ImOptionButton.qml
         qmlcomponents/ImTextField.qml
+        qmlcomponents/ImPasswordField.qml
         qmlcomponents/ImToggleTab.qml
         qmlcomponents/SelectionListView.qml
         qmlcomponents/OSSelectionListView.qml

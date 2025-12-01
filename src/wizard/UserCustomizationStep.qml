@@ -64,11 +64,10 @@ WizardStepBase {
                     accessibleDescription: root.hasSavedUserPassword ? qsTr("Enter a new password for this account, or leave blank to keep the previously saved password.") : qsTr("Enter a password for this account. You will need to re-enter it in the next field to confirm.")
                 }
                 
-                ImTextField {
+                ImPasswordField {
                     id: fieldPassword
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Saved (hidden) — leave blank to keep") : qsTr("Enter password")
-                    echoMode: TextInput.Password
                     font.pixelSize: Style.fontSizeInput
                 }
                 
@@ -78,11 +77,10 @@ WizardStepBase {
                     accessibleDescription: root.hasSavedUserPassword ? qsTr("Re-enter the new password to confirm, or leave blank to keep the previously saved password.") : qsTr("Re-enter the password to confirm it matches.")
                 }
                 
-                ImTextField {
+                ImPasswordField {
                     id: fieldPasswordConfirm
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
-                    echoMode: TextInput.Password
                     font.pixelSize: Style.fontSizeInput
                 }
             }

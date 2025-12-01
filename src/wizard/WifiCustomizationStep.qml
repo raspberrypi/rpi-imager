@@ -299,18 +299,17 @@ WizardStepBase {
                         }
                     }
 
-                    ImTextField {
+                    ImPasswordField {
                         id: fieldWifiPassword
                         Layout.fillWidth: true
-                        echoMode: TextInput.Password
                         font.pixelSize: Style.fontSizeInput
                         visible: showPw
 
-                        onActiveFocusChanged: {
-                            if (activeFocus)
-                                wifiScroll.scrollToItem(this);
+                        textField.onActiveFocusChanged: {
+                            if (textField.activeFocus)
+                                wifiScroll.scrollToItem(fieldWifiPassword);
                         }
-                        onTextChanged: {
+                        textField.onTextChanged: {
                             updatePasswordFieldUI()
                             wifiScroll.scrollToItem(fieldWifiPassword)
                         }
@@ -329,21 +328,20 @@ WizardStepBase {
                         }
                     }
 
-                    ImTextField {
+                    ImPasswordField {
                         id: fieldWifiPasswordConfirm
                         Layout.fillWidth: true
-                        echoMode: TextInput.Password
                         font.pixelSize: Style.fontSizeInput
                         placeholderText: {
                             var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
                             return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                         }
                         visible: showPw
-                        onActiveFocusChanged: {
-                            if (activeFocus)
-                                wifiScroll.scrollToItem(this);
+                        textField.onActiveFocusChanged: {
+                            if (textField.activeFocus)
+                                wifiScroll.scrollToItem(fieldWifiPasswordConfirm);
                         }
-                        onTextChanged: {
+                        textField.onTextChanged: {
                             // keep scroll behavior pleasant while typing
                             wifiScroll.scrollToItem(fieldWifiPasswordConfirm);
                         }
