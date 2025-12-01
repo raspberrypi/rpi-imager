@@ -1158,6 +1158,20 @@
     </message>
 </context>
 <context>
+    <name>MacFile</name>
+    <message>
+        <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>NativeFileDialog</name>
+    <message>
+        <source>File type:</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
@@ -1335,38 +1349,6 @@ Please run with elevated privileges: sudo %1</source>
         <translation>Non stai eseguendo come root.
 
 Esegui con privilegi elevati: sudo %1</translation>
-    </message>
-    <message>
-        <source>Invalid Windows physical drive path: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Failed to open disk for cleaning. Error code: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Failed to clear partition table. Error code: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Failed to start disk cleanup utility. Please ensure you have administrator privileges.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Disk cleaning operation timed out. The disk may be in use by another application.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Failed to clean disk. Error: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Unknown error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Failed to clean disk after %1 attempts. %2</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>You are not running as root.
