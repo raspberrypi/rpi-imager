@@ -32,6 +32,9 @@ WizardStepBase {
     
     // Initial focus will automatically go to title, then subtitle (if present), then first control (handled by WizardStepBase)
 
+    // Track whether we've already auto-detected SSID/PSK to avoid re-prompting
+    property bool ssidAutoDetected: false
+
     Component.onCompleted: {
         root.registerFocusGroup("wifi_modes", function() {
             return [tabSecure, tabOpen]
@@ -69,6 +72,7 @@ WizardStepBase {
             console.log("WifiCustomizationStep: detected SSID:", detectedSsid)
             if (detectedSsid && detectedSsid.length > 0) {
                 fieldWifiSSID.text = detectedSsid
+                ssidAutoDetected = true
             }
         }
         if (settings.wifiHidden !== undefined) {
@@ -101,6 +105,34 @@ WizardStepBase {
         updatePasswordFieldUI()
         // UpdatePasswordFieldUI already takes care of this
         //root.rebuildFocusOrder()
+    }
+
+    // Handle location permission granted after timeout (macOS race condition fix)
+    // This is called when the user clicks "Allow" in the macOS location permission dialog
+    // after the initial 5-second timeout has expired
+    Connections {
+        target: imageWriter
+        function onLocationPermissionGranted() {
+            console.log("WifiCustomizationStep: Location permission granted, retrying SSID detection")
+            // Only retry if SSID field is still empty (user hasn't manually entered one)
+            if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
+                var detectedSsid = imageWriter.getSSID()
+                console.log("WifiCustomizationStep: re-detected SSID:", detectedSsid)
+                if (detectedSsid && detectedSsid.length > 0) {
+                    fieldWifiSSID.text = detectedSsid
+                    ssidAutoDetected = true
+                    
+                    // Also try to auto-populate the password if we don't have one saved
+                    if (!hadSavedCrypt && (!fieldWifiPassword.text || fieldWifiPassword.text.length === 0)) {
+                        var psk = imageWriter.getPSKForSSID(detectedSsid)
+                        if (psk && psk.length > 0) {
+                            fieldWifiPassword.text = psk
+                            fieldWifiPasswordConfirm.text = psk
+                        }
+                    }
+                }
+            }
+        }
     }
 
     function updatePasswordFieldUI() {
