@@ -157,7 +157,10 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         escapedSsid.replace("\\", "\\\\");  // Backslash must be escaped first
         escapedSsid.replace("\"", "\\\"");  // Then escape quotes
         line(QStringLiteral("\tssid=\"") + escapedSsid + QStringLiteral("\""), script);
+        // WPA2/WPA3 transition mode: allow connection to both WPA2-PSK and WPA3-SAE networks
+        line(QStringLiteral("\tkey_mgmt=WPA-PSK SAE"), script);
         line(QStringLiteral("\tpsk=") + cryptedPsk, script);
+        // ieee80211w=1 enables optional Protected Management Frames (required for WPA3, optional for WPA2)
         line(QStringLiteral("\tieee80211w=1"), script);
         line(QStringLiteral("}"), script);
         line(QStringLiteral("WPAEOF"), script);
@@ -505,8 +508,6 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
-        push(QStringLiteral("          auth:"), netcfg);
-        push(QStringLiteral("            key-management: psk"), netcfg);
         // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
         QString effectiveCryptedPsk = cryptedPskFromSettings;
         if (effectiveCryptedPsk.isEmpty()) {
@@ -518,7 +519,10 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         }
         // Required because without a password and hidden netplan would read ssid: null and crash
         effectiveCryptedPsk.replace('"', QStringLiteral("\\\""));
-        push(QStringLiteral("            password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
+        // Use password shorthand at access-point level (not inside auth: block)
+        // This makes netplan automatically enable WPA2/WPA3 transition mode with PMF optional
+        // See: https://github.com/canonical/netplan/blob/main/src/parse.c (handle_access_point_password)
+        push(QStringLiteral("          password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
         
         push(QStringLiteral("      optional: true"), netcfg);
     }
