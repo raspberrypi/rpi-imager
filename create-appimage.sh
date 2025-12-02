@@ -263,6 +263,53 @@ export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="${HERE}/usr/plugins"
 export QML_IMPORT_PATH="${HERE}/usr/qml"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
+
+# Handle X11 authorization when running as root (via sudo or pkexec)
+# This fixes "Authorization required, but no authorization protocol specified" errors
+if [ "$(id -u)" = "0" ]; then
+    # Determine original user from sudo or pkexec
+    ORIGINAL_USER=""
+    ORIGINAL_UID=""
+    ORIGINAL_HOME=""
+    
+    if [ -n "$SUDO_USER" ]; then
+        ORIGINAL_USER="$SUDO_USER"
+        ORIGINAL_UID="$SUDO_UID"
+        ORIGINAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    elif [ -n "$PKEXEC_UID" ]; then
+        ORIGINAL_UID="$PKEXEC_UID"
+        ORIGINAL_USER=$(getent passwd "$PKEXEC_UID" | cut -d: -f1)
+        ORIGINAL_HOME=$(getent passwd "$PKEXEC_UID" | cut -d: -f6)
+    fi
+    
+    if [ -n "$ORIGINAL_USER" ] && [ -n "$ORIGINAL_HOME" ]; then
+        # Try to grant root access to the X display using xhost
+        # This must be run as the original user who owns the display
+        if command -v xhost >/dev/null 2>&1; then
+            if [ -n "$DISPLAY" ]; then
+                # Run xhost as the original user to grant root access
+                su "$ORIGINAL_USER" -c "xhost +local:root" >/dev/null 2>&1 || true
+            fi
+        fi
+        
+        # Set XAUTHORITY to the original user's .Xauthority if not already set
+        if [ -z "$XAUTHORITY" ]; then
+            if [ -f "$ORIGINAL_HOME/.Xauthority" ]; then
+                export XAUTHORITY="$ORIGINAL_HOME/.Xauthority"
+            fi
+        fi
+        
+        # Ensure DISPLAY is set (for pkexec which may not preserve it)
+        if [ -z "$DISPLAY" ]; then
+            # Try common X11 display socket
+            if [ -S "/tmp/.X11-unix/X0" ]; then
+                export DISPLAY=":0"
+            fi
+        fi
+    fi
+fi
+
+# The binary handles privilege elevation internally via pkexec if needed
 exec "${HERE}/usr/bin/rpi-imager" "$@"
 EOF
     chmod +x "$APPDIR/AppRun"

@@ -113,11 +113,7 @@ WizardStepBase {
                                 text: qsTr("Enable Serial:")
                                 font.bold: true
                                 Layout.fillWidth: true
-                                Accessible.ignored: false
-                                Accessible.focusable: true
-                                Accessible.description: qsTr("Configure the serial interface: Disabled, Default (system decides), Console & Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).")
-                                focusPolicy: Qt.TabFocus
-                                activeFocusOnTab: true
+                                accessibleDescription: qsTr("Configure the serial interface: Disabled, Default (system decides), Console & Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).")
                             }
                             ImComboBox {
                                 id: comboSerial
@@ -218,6 +214,7 @@ WizardStepBase {
             
             // Include label before combo box so users hear the explanation first
             // Build focus group dynamically based on which interfaces are supported
+            // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
             root.registerFocusGroup("if_section_interfaces", function() {
                 var items = []
                 if (supportsI2c) items.push(chkEnableI2C.focusItem)

@@ -56,6 +56,7 @@ int Cli::run()
         {"disable-eject", "Disable automatic ejection of storage media after verification"},
         {"debug", "Output debug messages to console"},
         {"quiet", "Only write to console on error"},
+        {"log-file", "Log output to file (for debugging)", "path", ""},
         {"secure-boot-key", "Path to RSA private key (PEM format) for secure boot signing", "key-file", ""},
     });
 

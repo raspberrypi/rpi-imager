@@ -58,6 +58,20 @@ ApplicationWindow {
         z: 1000
     }
 
+    // Keyboard shortcut to export performance data (Ctrl+Shift+P)
+    Shortcut {
+        sequence: "Ctrl+Shift+P"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            if (imageWriter.hasPerformanceData()) {
+                console.log("Exporting performance data...")
+                imageWriter.exportPerformanceData()
+            } else {
+                console.log("No performance data available to export")
+            }
+        }
+    }
+
     // Main wizard interface
     Rectangle {
         id: wizardBackground
@@ -98,7 +112,11 @@ ApplicationWindow {
         // Register focus groups when component is ready
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
-                return [errorTitle, errorMessage] 
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (errorDialog.imageWriter && errorDialog.imageWriter.isScreenReaderActive()) {
+                    return [errorTitle, errorMessage]
+                }
+                return []
             }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [errorContinueButton] 
@@ -168,7 +186,11 @@ ApplicationWindow {
         // Register focus groups when component is ready
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
-                return [storageRemovedTitle, storageRemovedMessage] 
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (storageRemovedDialog.imageWriter && storageRemovedDialog.imageWriter.isScreenReaderActive()) {
+                    return [storageRemovedTitle, storageRemovedMessage]
+                }
+                return []
             }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [storageOkButton] 
@@ -237,7 +259,11 @@ ApplicationWindow {
         // Register focus groups when component is ready
         Component.onCompleted: {
             registerFocusGroup("content", function(){ 
-                return [quitTitle, quitMessage] 
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (quitDialog.imageWriter && quitDialog.imageWriter.isScreenReaderActive()) {
+                    return [quitTitle, quitMessage]
+                }
+                return []
             }, 0)
             registerFocusGroup("buttons", function(){ 
                 return [quitNoButton, quitYesButton] 
@@ -352,7 +378,7 @@ ApplicationWindow {
                 return [messageText] 
             }, 1)
             registerFocusGroup("buttons", function(){ 
-                return [exitButton] 
+                return [installAuthButton, exitButton]
             }, 2)
         }
         
@@ -395,6 +421,21 @@ ApplicationWindow {
             spacing: Style.spacingMedium
             Item {
                 Layout.fillWidth: true
+            }
+            
+            // Install Authorization button - only visible for elevatable bundles (e.g., AppImage)
+            ImButton {
+                id: installAuthButton
+                text: qsTr("Install Authorization")
+                accessibleDescription: qsTr("Install system authorization to allow Raspberry Pi Imager to run with elevated privileges")
+                activeFocusOnTab: true
+                visible: permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.isElevatableBundle()
+                onClicked: {
+                    if (permissionWarningDialog.imageWriter.installElevationPolicy()) {
+                        // Policy installed successfully - restart with elevated privileges
+                        permissionWarningDialog.imageWriter.restartWithElevatedPrivileges()
+                    }
+                }
             }
             
             ImButtonRed {

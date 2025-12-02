@@ -17,6 +17,7 @@
 #include <QRegularExpression>
 #include <QUrl>
 #include <QFileInfo>
+#include <QElapsedTimer>
 
 namespace {
 
@@ -279,11 +280,15 @@ OSListModel::OSListModel(ImageWriter &imageWriter)
 
 bool OSListModel::reload()
 {
+    QElapsedTimer parseTimer;
+    parseTimer.start();
+    
     QJsonDocument doc = _imageWriter.getFilteredOSlistDocument();
     QJsonObject root = doc.object();
 
     QJsonArray list = parseOSJson(root);
     if (list.isEmpty()) {
+        emit eventOsListParse(static_cast<quint32>(parseTimer.elapsed()), false);
         return false;
     }
 
@@ -351,6 +356,8 @@ bool OSListModel::reload()
     markFirstAsRecommended();
 
     endResetModel();
+    
+    emit eventOsListParse(static_cast<quint32>(parseTimer.elapsed()), true);
 
     return true;
 }

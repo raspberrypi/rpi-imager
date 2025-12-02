@@ -32,17 +32,19 @@ WizardStepBase {
     
     // Initial focus will automatically go to title, then subtitle (if present), then first control (handled by WizardStepBase)
 
+    // Track whether we've already auto-detected SSID/PSK to avoid re-prompting
+    property bool ssidAutoDetected: false
+
     Component.onCompleted: {
         root.registerFocusGroup("wifi_modes", function() {
             return [tabSecure, tabOpen]
         }, 0)
-        // Include labels before their corresponding fields so users hear the explanation first
+        // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("wifi_fields", function(){
             var items = [labelSSID, fieldWifiSSID]
             if (showPw) {
                 items.push(lblPassword)
                 items.push(fieldWifiPassword)
-                // Always include confirm label and field when password is shown (like user customization step)
                 items.push(lblPasswordConfirm)
                 items.push(fieldWifiPasswordConfirm)
             }
@@ -70,6 +72,7 @@ WizardStepBase {
             console.log("WifiCustomizationStep: detected SSID:", detectedSsid)
             if (detectedSsid && detectedSsid.length > 0) {
                 fieldWifiSSID.text = detectedSsid
+                ssidAutoDetected = true
             }
         }
         if (settings.wifiHidden !== undefined) {
@@ -102,6 +105,34 @@ WizardStepBase {
         updatePasswordFieldUI()
         // UpdatePasswordFieldUI already takes care of this
         //root.rebuildFocusOrder()
+    }
+
+    // Handle location permission granted after timeout (macOS race condition fix)
+    // This is called when the user clicks "Allow" in the macOS location permission dialog
+    // after the initial 5-second timeout has expired
+    Connections {
+        target: imageWriter
+        function onLocationPermissionGranted() {
+            console.log("WifiCustomizationStep: Location permission granted, retrying SSID detection")
+            // Only retry if SSID field is still empty (user hasn't manually entered one)
+            if (!fieldWifiSSID.text || fieldWifiSSID.text.length === 0) {
+                var detectedSsid = imageWriter.getSSID()
+                console.log("WifiCustomizationStep: re-detected SSID:", detectedSsid)
+                if (detectedSsid && detectedSsid.length > 0) {
+                    fieldWifiSSID.text = detectedSsid
+                    ssidAutoDetected = true
+                    
+                    // Also try to auto-populate the password if we don't have one saved
+                    if (!hadSavedCrypt && (!fieldWifiPassword.text || fieldWifiPassword.text.length === 0)) {
+                        var psk = imageWriter.getPSKForSSID(detectedSsid)
+                        if (psk && psk.length > 0) {
+                            fieldWifiPassword.text = psk
+                            fieldWifiPasswordConfirm.text = psk
+                        }
+                    }
+                }
+            }
+        }
     }
 
     function updatePasswordFieldUI() {
@@ -242,11 +273,7 @@ WizardStepBase {
                     WizardFormLabel {
                         id: labelSSID
                         text: qsTr("SSID:")
-                        Accessible.ignored: false
-                        Accessible.focusable: true
-                        Accessible.description: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
-                        focusPolicy: Qt.TabFocus
-                        activeFocusOnTab: true
+                        accessibleDescription: qsTr("Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.")
                     }
 
                     ImTextField {
@@ -264,30 +291,25 @@ WizardStepBase {
                         id: lblPassword
                         text: CommonStrings.password
                         visible: showPw
-                        Accessible.ignored: false
-                        Accessible.focusable: true
-                        Accessible.description: {
+                        accessibleDescription: {
                             var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
                             return canKeep 
                                 ? qsTr("Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.")
                                 : qsTr("Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.")
                         }
-                        focusPolicy: Qt.TabFocus
-                        activeFocusOnTab: true
                     }
 
-                    ImTextField {
+                    ImPasswordField {
                         id: fieldWifiPassword
                         Layout.fillWidth: true
-                        echoMode: TextInput.Password
                         font.pixelSize: Style.fontSizeInput
                         visible: showPw
 
-                        onActiveFocusChanged: {
-                            if (activeFocus)
-                                wifiScroll.scrollToItem(this);
+                        textField.onActiveFocusChanged: {
+                            if (textField.activeFocus)
+                                wifiScroll.scrollToItem(fieldWifiPassword);
                         }
-                        onTextChanged: {
+                        textField.onTextChanged: {
                             updatePasswordFieldUI()
                             wifiScroll.scrollToItem(fieldWifiPassword)
                         }
@@ -298,33 +320,28 @@ WizardStepBase {
                         id: lblPasswordConfirm
                         text: qsTr("Confirm password:")
                         visible: showPw
-                        Accessible.ignored: false
-                        Accessible.focusable: true
-                        Accessible.description: {
+                        accessibleDescription: {
                             var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
                             return canKeep 
                                 ? qsTr("Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.")
                                 : qsTr("Re-enter the Wi-Fi password to confirm it matches.")
                         }
-                        focusPolicy: Qt.TabFocus
-                        activeFocusOnTab: true
                     }
 
-                    ImTextField {
+                    ImPasswordField {
                         id: fieldWifiPasswordConfirm
                         Layout.fillWidth: true
-                        echoMode: TextInput.Password
                         font.pixelSize: Style.fontSizeInput
                         placeholderText: {
                             var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
                             return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
                         }
                         visible: showPw
-                        onActiveFocusChanged: {
-                            if (activeFocus)
-                                wifiScroll.scrollToItem(this);
+                        textField.onActiveFocusChanged: {
+                            if (textField.activeFocus)
+                                wifiScroll.scrollToItem(fieldWifiPasswordConfirm);
                         }
-                        onTextChanged: {
+                        textField.onTextChanged: {
                             // keep scroll behavior pleasant while typing
                             wifiScroll.scrollToItem(fieldWifiPasswordConfirm);
                         }

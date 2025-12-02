@@ -44,18 +44,35 @@ class LinuxFileOperations : public FileOperations {
   FileError ForceSync() override;
   FileError Flush() override;
   
+  // Sequential read optimization
+  void PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) override;
+  
   // Handle access
   int GetHandle() const override;
 
   // Get the last errno error code
   int GetLastErrorCode() const override;
 
+  // Check if direct I/O is enabled
+  bool IsDirectIOEnabled() const override { return using_direct_io_; }
+  
+  // Get direct I/O attempt details (Linux: not yet implemented)
+  DirectIOInfo GetDirectIOInfo() const override { 
+      DirectIOInfo info;
+      info.currently_enabled = using_direct_io_;
+      return info;
+  }
+
  private:
   int fd_;
   std::string current_path_;
   int last_error_code_;
+  bool using_direct_io_;  // Track if we opened with O_DIRECT
   
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
+  
+  // Helper to determine if path is a block device
+  static bool IsBlockDevicePath(const std::string& path);
 };
 
 } // namespace rpi_imager

@@ -1,0 +1,309 @@
+{
+    "version": 3,
+    "exportTime": "2025-11-28T14:32:15",
+    "system": {
+        "memory": {
+            "totalBytes": 17179869184,
+            "availableBytes": 8589934592,
+            "totalMB": 16384,
+            "availableMB": 8192
+        },
+        "targetDevice": {
+            "path": "\\\\.\\PhysicalDrive2",
+            "sizeBytes": 32010928128,
+            "sizeMB": 30528,
+            "description": "Generic USB Flash Drive",
+            "isUsb": true,
+            "isRemovable": true
+        },
+        "platform": {
+            "os": "Windows",
+            "osVersion": "10.0.22631",
+            "cpuArchitecture": "x86_64",
+            "cpuCores": 8
+        },
+        "imager": {
+            "version": "v1.9.2-15-gabcdef0",
+            "buildType": "Release",
+            "binarySha256": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+            "qtRuntime": "6.6.2",
+            "qtBuild": "6.6.1"
+        }
+    },
+    "summary": {
+        "imageName": "Raspberry Pi OS (64-bit)",
+        "deviceName": "\\\\.\\PhysicalDrive2",
+        "imageSize": 4294967296,
+        "sessionStartTime": 1732800735000,
+        "sessionEndTime": 1732800915000,
+        "durationMs": 180000,
+        "success": true,
+        "events": {
+            "cacheLookup": {
+                "count": 1,
+                "totalMs": 15,
+                "avgMs": 15,
+                "minMs": 15,
+                "maxMs": 15
+            },
+            "cacheVerification": {
+                "count": 1,
+                "totalMs": 2500,
+                "avgMs": 2500,
+                "minMs": 2500,
+                "maxMs": 2500
+            },
+            "driveOpen": {
+                "count": 1,
+                "totalMs": 124,
+                "avgMs": 124,
+                "minMs": 124,
+                "maxMs": 124
+            },
+            "driveUnmount": {
+                "count": 1,
+                "totalMs": 350,
+                "avgMs": 350,
+                "minMs": 350,
+                "maxMs": 350
+            },
+            "driveUnmountVolumes": {
+                "count": 1,
+                "totalMs": 215,
+                "avgMs": 215,
+                "minMs": 215,
+                "maxMs": 215
+            },
+            "driveDiskClean": {
+                "count": 1,
+                "totalMs": 85,
+                "avgMs": 85,
+                "minMs": 85,
+                "maxMs": 85
+            },
+            "driveRescan": {
+                "count": 1,
+                "totalMs": 210,
+                "avgMs": 210,
+                "minMs": 210,
+                "maxMs": 210
+            },
+            "imageDecompressInit": {
+                "count": 1,
+                "totalMs": 85,
+                "avgMs": 85,
+                "minMs": 85,
+                "maxMs": 85
+            },
+            "pageCacheFlush": {
+                "count": 3,
+                "totalMs": 4500,
+                "avgMs": 1500,
+                "minMs": 800,
+                "maxMs": 2200
+            },
+            "customisation": {
+                "count": 1,
+                "totalMs": 2456,
+                "avgMs": 2456,
+                "minMs": 2456,
+                "maxMs": 2456
+            },
+            "fatPartitionSetup": {
+                "count": 1,
+                "totalMs": 180,
+                "avgMs": 180,
+                "minMs": 180,
+                "maxMs": 180
+            },
+            "finalSync": {
+                "count": 1,
+                "totalMs": 8750,
+                "avgMs": 8750,
+                "minMs": 8750,
+                "maxMs": 8750
+            },
+            "deviceClose": {
+                "count": 1,
+                "totalMs": 120,
+                "avgMs": 120,
+                "minMs": 120,
+                "maxMs": 120
+            }
+        },
+        "phases": {
+            "download": {
+                "sampleCount": 0,
+                "bytesTotal": 0
+            },
+            "write": {
+                "sampleCount": 120,
+                "bytesTotal": 4294967296,
+                "durationMs": 145000,
+                "minThroughputKBps": 18432,
+                "maxThroughputKBps": 45056,
+                "avgThroughputKBps": 30720
+            },
+            "verify": {
+                "sampleCount": 35,
+                "bytesTotal": 4294967296,
+                "durationMs": 32000,
+                "minThroughputKBps": 122880,
+                "maxThroughputKBps": 143360,
+                "avgThroughputKBps": 133120
+            }
+        }
+    },
+    "events": [
+        {
+            "type": "osListFetch",
+            "startMs": 0,
+            "durationMs": 450,
+            "success": true,
+            "metadata": "https://downloads.raspberrypi.com/os_list_imagingutility_v4.json",
+            "bytesTransferred": 156000,
+            "throughputKBps": 338
+        },
+        {
+            "type": "sublistFetch",
+            "startMs": 20,
+            "durationMs": 280,
+            "success": true,
+            "metadata": "Raspberry Pi OS sublist",
+            "bytesTransferred": 45000,
+            "throughputKBps": 156
+        },
+        {
+            "type": "cacheLookup",
+            "startMs": 50,
+            "durationMs": 15,
+            "success": true,
+            "metadata": "SHA256:abc123..."
+        },
+        {
+            "type": "cacheVerification",
+            "startMs": 70,
+            "durationMs": 2500,
+            "success": true,
+            "metadata": "Verified 1.2 GB cached file",
+            "bytesTransferred": 1288490188,
+            "throughputKBps": 503320
+        },
+        {
+            "type": "driveUnmount",
+            "startMs": 2600,
+            "durationMs": 350,
+            "success": true
+        },
+        {
+            "type": "driveUnmountVolumes",
+            "startMs": 2950,
+            "durationMs": 215,
+            "success": true
+        },
+        {
+            "type": "driveDiskClean",
+            "startMs": 3165,
+            "durationMs": 85,
+            "success": true
+        },
+        {
+            "type": "driveRescan",
+            "startMs": 3250,
+            "durationMs": 210,
+            "success": true
+        },
+        {
+            "type": "driveOpen",
+            "startMs": 3460,
+            "durationMs": 124,
+            "success": true
+        },
+        {
+            "type": "pageCacheFlush",
+            "startMs": 50000,
+            "durationMs": 850,
+            "success": true,
+            "metadata": "at 1024 MB"
+        },
+        {
+            "type": "pageCacheFlush",
+            "startMs": 100000,
+            "durationMs": 1200,
+            "success": true,
+            "metadata": "at 2048 MB"
+        },
+        {
+            "type": "pageCacheFlush",
+            "startMs": 145000,
+            "durationMs": 1850,
+            "success": true,
+            "metadata": "at 3072 MB"
+        },
+        {
+            "type": "hashComputation",
+            "startMs": 150000,
+            "durationMs": 27500,
+            "success": true,
+            "metadata": "Post-write verification"
+        },
+        {
+            "type": "customisation",
+            "startMs": 177600,
+            "durationMs": 2456,
+            "success": true,
+            "metadata": "config: set; cmdline: set; firstrun: set; cloudinit: set; network: set"
+        },
+        {
+            "type": "finalSync",
+            "startMs": 180100,
+            "durationMs": 8750,
+            "success": true
+        }
+    ],
+    "histograms": {
+        "write": [
+            [4500, 28672, 35840, 32256, 0, 0, 0, 0, 5, 3, 2, 0, 0, 0, 0, 0],
+            [5500, 30720, 38912, 34816, 0, 0, 0, 0, 4, 4, 2, 0, 0, 0, 0, 0],
+            [6500, 32768, 40960, 36864, 0, 0, 0, 0, 3, 5, 2, 0, 0, 0, 0, 0],
+            [7500, 28672, 36864, 32768, 0, 0, 0, 0, 5, 4, 1, 0, 0, 0, 0, 0],
+            [8500, 30720, 38912, 34816, 0, 0, 0, 0, 4, 4, 2, 0, 0, 0, 0, 0],
+            [50500, 18432, 24576, 21504, 0, 0, 0, 1, 6, 3, 0, 0, 0, 0, 0, 0],
+            [51500, 20480, 28672, 24576, 0, 0, 0, 0, 7, 3, 0, 0, 0, 0, 0, 0],
+            [100500, 28672, 36864, 32768, 0, 0, 0, 0, 5, 4, 1, 0, 0, 0, 0, 0],
+            [101500, 32768, 43008, 37888, 0, 0, 0, 0, 3, 4, 3, 0, 0, 0, 0, 0],
+            [145500, 34816, 45056, 39936, 0, 0, 0, 0, 2, 4, 4, 0, 0, 0, 0, 0],
+            [146500, 30720, 40960, 35840, 0, 0, 0, 0, 4, 4, 2, 0, 0, 0, 0, 0],
+            [147000, 28672, 38912, 33792, 0, 0, 0, 0, 5, 4, 1, 0, 0, 0, 0, 0]
+        ],
+        "verify": [
+            [150000, 122880, 133120, 128000, 0, 0, 0, 0, 0, 0, 0, 0, 8, 2, 0, 0],
+            [151000, 128000, 140288, 134144, 0, 0, 0, 0, 0, 0, 0, 0, 6, 4, 0, 0],
+            [155000, 133120, 143360, 138240, 0, 0, 0, 0, 0, 0, 0, 0, 4, 6, 0, 0],
+            [160000, 130048, 141312, 135680, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0],
+            [165000, 126976, 138240, 132608, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 0, 0]
+        ]
+    },
+    "schema": {
+        "histogramSliceFormat": [
+            "timestampMs",
+            "minKBps",
+            "maxKBps",
+            "avgKBps",
+            "bucket_0-1MB",
+            "bucket_1-2MB",
+            "bucket_2-4MB",
+            "bucket_4-8MB",
+            "bucket_8-16MB",
+            "bucket_16-32MB",
+            "bucket_32-64MB",
+            "bucket_64-128MB",
+            "bucket_128-256MB",
+            "bucket_256-512MB",
+            "bucket_512-1024MB",
+            "bucket_1024+MB"
+        ],
+        "histogramWindowMs": 1000,
+        "throughputUnit": "KB/s"
+    }
+}

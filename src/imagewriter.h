@@ -33,6 +33,7 @@
 #include "cachemanager.h"
 #include "device_info.h"
 #include "imageadvancedoptions.h"
+#include "performancestats.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
@@ -296,6 +297,21 @@ public:
     Q_INVOKABLE void refreshOsListFrom(const QUrl &url);
     Q_INVOKABLE void refreshOsListFromDefaultUrl();
 
+    /* Elevatable bundle (e.g., AppImage) privilege escalation support */
+    Q_INVOKABLE bool isElevatableBundle();
+    Q_INVOKABLE bool hasElevationPolicyInstalled();
+    Q_INVOKABLE bool installElevationPolicy();
+    Q_INVOKABLE void restartWithElevatedPrivileges();
+
+    /* Performance data export - opens native save dialog and writes performance data to file */
+    Q_INVOKABLE bool exportPerformanceData();
+    
+    /* Check if performance data is available */
+    Q_INVOKABLE bool hasPerformanceData();
+
+    /* Get access to performance stats for instrumentation */
+    PerformanceStats* performanceStats() { return _performanceStats; }
+
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
 
@@ -324,6 +340,7 @@ signals:
     void cacheStatusChanged();
     void osListFetchFailed();
     void permissionWarning(QVariant msg);
+    void locationPermissionGranted();
 
 protected slots:
     void startProgressPolling();
@@ -348,6 +365,7 @@ private:
     // Cache management
     CacheManager* _cacheManager;
     bool _waitingForCacheVerification;
+    QElapsedTimer _cacheVerificationTimer;  // Tracks cache verification duration
     
     // Keychain permission tracking
     bool _keychainPermissionGranted;
@@ -357,6 +375,7 @@ private:
     // refer to an external JSON list, fetch the list and put it in place.
     void fillSubLists(QJsonArray &topLevel);
     QNetworkAccessManager _networkManager;
+    QHash<QNetworkReply*, qint64> _networkRequestStartTimes;  // Track request start times for performance
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter, _hwCapabilities, _swCapabilities;
     bool _deviceFilterIsInclusive;
@@ -367,6 +386,7 @@ private:
 protected:
     QUrl _src, _repo;
     QString _dst, _parentCategory, _osName, _osReleaseDate, _currentLang, _currentLangcode, _currentKeyboard;
+    QStringList _dstChildDevices;  // macOS APFS child volumes to unmount (cached at device selection)
     QByteArray _expectedHash, _cmdline, _config, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
     ImageOptions::AdvancedOptions _advancedOptions;
     quint64 _downloadLen, _extrLen, _devLen, _dlnow, _verifynow;
@@ -394,6 +414,9 @@ protected:
 #ifndef CLI_ONLY_BUILD
     QWindow *_mainWindow;
 #endif
+
+    // Performance statistics capture
+    PerformanceStats *_performanceStats;
 
     void _parseCompressedFile();
     void _parseXZFile();

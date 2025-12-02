@@ -52,6 +52,17 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Installing custom Info.plist"
 )
 
+# Copy Icon Composer .icon file for dark mode support (macOS Tahoe+)
+set(ICON_COMPOSER_OUTPUT "${CMAKE_BINARY_DIR}/AppIcon.icon")
+if(EXISTS "${ICON_COMPOSER_OUTPUT}" OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/icons/app_icon_macos.icon")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory 
+            "${CMAKE_CURRENT_SOURCE_DIR}/icons/app_icon_macos.icon"
+            "${APP_BUNDLE_PATH}/Contents/Resources/AppIcon.icon"
+        COMMENT "Installing Icon Composer file for dark mode support"
+    )
+endif()
+
 find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt6_ROOT}/bin")
 if (NOT MACDEPLOYQT)
     message(FATAL_ERROR "Unable to locate macdeployqt in ${Qt6_ROOT}/bin - ensure Qt was built with tools")

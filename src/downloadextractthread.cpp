@@ -31,7 +31,8 @@
 
 using namespace std;
 
-const int DownloadExtractThread::MAX_QUEUE_SIZE = 128;
+// Ring buffer slot count is now determined dynamically by SystemMemoryManager
+const int DownloadExtractThread::RING_BUFFER_SLOTS = 0;  // Placeholder, actual value set at runtime
 
 // Buffer optimization logic now handled by centralized SystemMemoryManager
 
@@ -56,24 +57,48 @@ protected:
 
 DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent)
     : DownloadThread(url, localfilename, expectedHash, parent), 
-      _abufsize(SystemMemoryManager::instance().getOptimalWriteBufferSize()), 
+      _writeBufferSize(SystemMemoryManager::instance().getOptimalWriteBufferSize()), 
+      _currentReadSlot(nullptr),
+      _currentWriteSlot(nullptr),
       _ethreadStarted(false),
       _isImage(true), 
       _inputHash(OSLIST_HASH_ALGORITHM), 
-      _activeBuf(0), 
       _writeThreadStarted(false),
       _progressStarted(false),
       _lastProgressTime(0),
       _lastEmittedDlNow(0),
       _lastLocalVerifyNow(0),
-      _downloadComplete(false)
+      _lastEmittedDecompressNow(0),
+      _lastEmittedWriteNow(0),
+      _bytesDecompressed(0),
+      _downloadComplete(false),
+      _totalDecompressionMs(0),
+      _totalWriteWaitMs(0),
+      _totalRingBufferWaitMs(0),
+      _bytesReadFromRingBuffer(0)
 {
     _extractThread = new _extractThreadClass(this);
     size_t pageSize = SystemMemoryManager::instance().getSystemPageSize();
-    _abuf[0] = (char *) qMallocAligned(_abufsize, pageSize);
-    _abuf[1] = (char *) qMallocAligned(_abufsize, pageSize);
     
-    qDebug() << "Using buffer size:" << _abufsize << "bytes with page size:" << pageSize << "bytes";
+    // Create zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
+    // Both slot size and slot count are determined by SystemMemoryManager based on available RAM
+    size_t inputBufferSize = SystemMemoryManager::instance().getOptimalInputBufferSize();
+    size_t numSlots = SystemMemoryManager::instance().getOptimalRingBufferSlots(inputBufferSize);
+    _ringBuffer = std::make_unique<RingBuffer>(numSlots, inputBufferSize, pageSize);
+    
+    // Create ring buffer for decompress -> write path (decompressed data)
+    // Uses 4 slots to provide enough pipeline slack:
+    // - Slot N: being decompressed into
+    // - Slot N-1: write in progress, hash computation running
+    // - Slot N-2: hash being finalized
+    // - Slot N-3: available for reuse
+    // This eliminates the race condition where a buffer was reused before its hash completed
+    static const size_t WRITE_RING_BUFFER_SLOTS = 4;
+    _writeRingBuffer = std::make_unique<RingBuffer>(WRITE_RING_BUFFER_SLOTS, _writeBufferSize, pageSize);
+    
+    qDebug() << "Using buffer size:" << _writeBufferSize << "bytes with page size:" << pageSize << "bytes";
+    qDebug() << "Ring buffer:" << RING_BUFFER_SLOTS << "slots of" << inputBufferSize << "bytes";
+    qDebug() << "Write ring buffer:" << WRITE_RING_BUFFER_SLOTS << "slots of" << _writeBufferSize << "bytes";
 }
 
 DownloadExtractThread::~DownloadExtractThread()
@@ -85,37 +110,86 @@ DownloadExtractThread::~DownloadExtractThread()
     {
         _extractThread->terminate();
     }
-    qFreeAligned(_abuf[0]);
-    qFreeAligned(_abuf[1]);
+    
+    // Ring buffer destructors handle memory cleanup
+    _writeRingBuffer.reset();
+    _ringBuffer.reset();
 }
 
 void DownloadExtractThread::_emitProgressUpdate()
 {
-    static QElapsedTimer timer;
     bool firstProgressUpdate = false;
     if (!_progressStarted) {
         _progressStarted = true;
         firstProgressUpdate = true;
-        timer.start();
+        _sessionTimer.start();
+        
+        // Set session timer on ring buffers for stall event timestamps
+        if (_ringBuffer) {
+            _ringBuffer->setSessionTimer(&_sessionTimer);
+        }
+        if (_writeRingBuffer) {
+            _writeRingBuffer->setSessionTimer(&_sessionTimer);
+        }
+        
         qDebug() << "Started progress updates after successful drive opening";
     }
     
     // Only emit progress updates every 100ms to avoid flooding (but always emit the first one)
-    qint64 currentTime = timer.elapsed();
+    qint64 currentTime = _sessionTimer.elapsed();
     if (!firstProgressUpdate && currentTime - _lastProgressTime < PROGRESS_UPDATE_INTERVAL) {
         return;
     }
     _lastProgressTime = currentTime;
     
+    // Emit any pending ring buffer stall events for time-series correlation
+    // Input ring buffer (download -> decompress)
+    if (_ringBuffer) {
+        auto stallEvents = _ringBuffer->getPendingStallEvents();
+        for (const auto& event : stallEvents) {
+            QString metadata = QString("buffer: input; type: %1; duration_ms: %2")
+                .arg(event.isProducer ? "producer_stall" : "consumer_stall")
+                .arg(event.durationMs);
+            emit eventRingBufferStats(event.timestampMs, event.durationMs, metadata);
+        }
+    }
+    
+    // Write ring buffer (decompress -> write)
+    if (_writeRingBuffer) {
+        auto stallEvents = _writeRingBuffer->getPendingStallEvents();
+        for (const auto& event : stallEvents) {
+            QString metadata = QString("buffer: write; type: %1; duration_ms: %2")
+                .arg(event.isProducer ? "producer_stall" : "consumer_stall")
+                .arg(event.durationMs);
+            emit eventRingBufferStats(event.timestampMs, event.durationMs, metadata);
+        }
+    }
+    
     quint64 currentDlNow = this->dlNow();
     quint64 currentDlTotal = this->dlTotal();
     quint64 currentVerifyNow = this->verifyNow();
     quint64 currentVerifyTotal = this->verifyTotal();
+    quint64 currentDecompressNow = _bytesDecompressed.load();
+    quint64 currentWriteNow = this->bytesWritten();
+    
+    // For decompressed images, the total is the extract size (uncompressed)
+    // We use the same total for both decompress and write since they're the same data
+    quint64 decompressTotal = currentDlTotal > 0 ? currentDlTotal : 0;  // Will be updated by caller
     
     // Only emit signals if values have changed
     if (currentDlNow != _lastEmittedDlNow || (currentDlTotal > 0 && _lastEmittedDlNow == 0)) {
         _lastEmittedDlNow = currentDlNow;
         emit downloadProgressChanged(currentDlNow, currentDlTotal);
+    }
+    
+    if (currentDecompressNow != _lastEmittedDecompressNow) {
+        _lastEmittedDecompressNow = currentDecompressNow;
+        emit decompressProgressChanged(currentDecompressNow, decompressTotal);
+    }
+    
+    if (currentWriteNow != _lastEmittedWriteNow) {
+        _lastEmittedWriteNow = currentWriteNow;
+        emit writeProgressChanged(currentWriteNow, decompressTotal);
     }
     
     if (currentVerifyNow != _lastLocalVerifyNow || (currentVerifyTotal > 0 && _lastLocalVerifyNow == 0)) {
@@ -154,12 +228,12 @@ size_t DownloadExtractThread::_writeData(const char *buf, size_t len)
 
 void DownloadExtractThread::_onDownloadSuccess()
 {
-    std::unique_lock<std::mutex> lock(_queueMutex);
     _downloadComplete = true;
-    lock.unlock();
     
-    // Notify the extraction thread that download is complete
-    _cv.notify_all();
+    // Signal ring buffer that producer is done
+    if (_ringBuffer) {
+        _ringBuffer->producerDone();
+    }
     
     // Wait for extraction thread to finish processing all data
     _extractThread->wait();
@@ -176,11 +250,9 @@ void DownloadExtractThread::_onDownloadError(const QString &msg)
 
 void DownloadExtractThread::_cancelExtract()
 {
-    std::unique_lock<std::mutex> lock(_queueMutex);
-    _queue.clear();
-    _queue.push_back(QByteArray());
-    lock.unlock();
-    _cv.notify_all();
+    if (_ringBuffer) {
+        _ringBuffer->cancel();
+    }
 }
 
 void DownloadExtractThread::cancelDownload()
@@ -207,6 +279,9 @@ static inline void _checkResult(int r, struct archive *a)
 // libarchive thread
 void DownloadExtractThread::extractImageRun()
 {
+    QElapsedTimer extractionTimer;
+    extractionTimer.start();
+    
     struct archive *a = archive_read_new();
     struct archive_entry *entry;
     int r;
@@ -214,18 +289,54 @@ void DownloadExtractThread::extractImageRun()
     archive_read_support_filter_all(a);
     archive_read_support_format_all(a);
     archive_read_support_format_raw(a); // for .gz and such
+    
+    // Configure decompression options for optimal performance
+    // Note: These options are hints - libarchive ignores unsupported ones
+    _configureArchiveOptions(a);
+    
     archive_read_open(a, this, NULL, &DownloadExtractThread::_archive_read, &DownloadExtractThread::_archive_close);
 
     try
     {
         r = archive_read_next_header(a, &entry);
         _checkResult(r, a);
+        
+        // Log the compression filter(s) being used for diagnostics
+        _logCompressionFilters(a);
+        
+        // Emit image extraction setup event (archive opened and header read)
+        emit eventImageExtraction(static_cast<quint32>(extractionTimer.elapsed()), true);
 
+        // Timers for pipeline instrumentation
+        QElapsedTimer decompressTimer;
+        QElapsedTimer writeWaitTimer;
+        
+        // Track the previous write slot so we can release it after the write completes
+        RingBuffer::Slot* previousWriteSlot = nullptr;
+        
         while (true)
         {
-            ssize_t size = archive_read_data(a, _abuf[_activeBuf], _abufsize);
+            // Acquire a slot from the write ring buffer
+            // This blocks if all slots are in use (back-pressure from slow writes)
+            RingBuffer::Slot* slot = _writeRingBuffer->acquireWriteSlot(100);
+            while (!slot && !_cancelled && !_writeRingBuffer->isCancelled()) {
+                slot = _writeRingBuffer->acquireWriteSlot(100);
+            }
+            if (!slot) {
+                if (_cancelled) break;
+                throw runtime_error("Failed to acquire write buffer slot");
+            }
+            
+            // Time decompression (includes ring buffer wait inside libarchive's read callback)
+            decompressTimer.start();
+            ssize_t size = archive_read_data(a, slot->data, slot->capacity);
+            _totalDecompressionMs.fetch_add(static_cast<quint64>(decompressTimer.elapsed()));
+            
             if (size < 0) {
                 const char* errorStr = archive_error_string(a);
+                
+                // Release the slot we acquired but won't use
+                _writeRingBuffer->releaseReadSlot(slot);
                 
                 // Check if this is the expected "No progress is possible" error after download completion
                 if (size == ARCHIVE_FATAL && errorStr && strstr(errorStr, "No progress is possible")) {
@@ -234,25 +345,43 @@ void DownloadExtractThread::extractImageRun()
                 
                 throw runtime_error(errorStr);
             }
-            if (size == 0)
+            if (size == 0) {
+                // Release the slot we acquired but won't use
+                _writeRingBuffer->releaseReadSlot(slot);
                 break;
+            }
             if (size % 512 != 0)
             {
                 size_t paddingBytes = 512-(size % 512);
                 qDebug() << "Image is NOT a valid disk image, as its length is not a multiple of the sector size of 512 bytes long";
                 qDebug() << "Last write() would be" << size << "bytes, but padding to" << size + paddingBytes << "bytes";
-                memset(_abuf[_activeBuf]+size, 0, paddingBytes);
+                memset(slot->data + size, 0, paddingBytes);
                 size += paddingBytes;
             }
+            
+            // Track decompressed bytes
+            _bytesDecompressed.fetch_add(static_cast<quint64>(size));
 
             // Emit progress updates during extraction
             _emitProgressUpdate();
 
             if (_writeThreadStarted)
             {
-                //if (_writeFile(_abuf, size) != (size_t) size)
-                if (!_writeFuture.result())
+                // Time waiting for previous write to complete
+                writeWaitTimer.start();
+                bool writeResult = _writeFuture.result();
+                _totalWriteWaitMs.fetch_add(static_cast<quint64>(writeWaitTimer.elapsed()));
+                
+                // Previous write is complete (including hash), release its slot
+                if (previousWriteSlot) {
+                    _writeRingBuffer->releaseReadSlot(previousWriteSlot);
+                    previousWriteSlot = nullptr;
+                }
+                
+                if (!writeResult)
                 {
+                    // Release current slot before returning
+                    _writeRingBuffer->releaseReadSlot(slot);
                     if (!_cancelled)
                     {
                         _onWriteError();
@@ -262,17 +391,25 @@ void DownloadExtractThread::extractImageRun()
                 }
             }
 
+            // Remember this slot so we can release it after the write completes
+            previousWriteSlot = slot;
+            
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread*>(this), _abuf[_activeBuf], size);
+            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread*>(this), slot->data, static_cast<size_t>(size));
 #else
-            _writeFuture = QtConcurrent::run(static_cast<DownloadThread*>(this), &DownloadThread::_writeFile, _abuf[_activeBuf], size);
+            _writeFuture = QtConcurrent::run(static_cast<DownloadThread*>(this), &DownloadThread::_writeFile, slot->data, static_cast<size_t>(size));
 #endif
-            _activeBuf = _activeBuf ? 0 : 1;
             _writeThreadStarted = true;
         }
 
-        if (_writeThreadStarted)
+        if (_writeThreadStarted) {
             _writeFuture.waitForFinished();
+            // Release the final slot
+            if (previousWriteSlot) {
+                _writeRingBuffer->releaseReadSlot(previousWriteSlot);
+                previousWriteSlot = nullptr;
+            }
+        }
         _writeComplete();
     }
     catch (exception &e)
@@ -286,6 +423,36 @@ void DownloadExtractThread::extractImageRun()
     }
 
     archive_read_free(a);
+    
+    // Emit pipeline timing summary events for performance analysis
+    // These show where time was spent in the extraction pipeline
+    emit eventPipelineDecompressionTime(
+        static_cast<quint32>(_totalDecompressionMs.load()),
+        _bytesDecompressed.load());
+    emit eventPipelineWriteWaitTime(
+        static_cast<quint32>(_totalWriteWaitMs.load()),
+        bytesWritten());
+    emit eventPipelineRingBufferWaitTime(
+        static_cast<quint32>(_totalRingBufferWaitMs.load()),
+        _bytesReadFromRingBuffer.load());
+    
+    qDebug() << "Pipeline timing summary:"
+             << "decompress=" << _totalDecompressionMs.load() << "ms"
+             << "(ring_wait=" << _totalRingBufferWaitMs.load() << "ms)"
+             << "write_wait=" << _totalWriteWaitMs.load() << "ms";
+    
+    // Log and emit write ring buffer statistics
+    if (_writeRingBuffer) {
+        uint64_t producerStalls, consumerStalls, producerWaitMs, consumerWaitMs;
+        _writeRingBuffer->getStarvationStats(producerStalls, consumerStalls, producerWaitMs, consumerWaitMs);
+        if (producerStalls > 0 || consumerStalls > 0) {
+            qDebug() << "Write ring buffer stats:"
+                     << "producer stalls:" << producerStalls << "(" << producerWaitMs << "ms),"
+                     << "consumer stalls:" << consumerStalls << "(" << consumerWaitMs << "ms)";
+        }
+        // Emit for performance tracking even if no stalls (shows buffer was used)
+        emit eventWriteRingBufferStats(producerStalls, consumerStalls, producerWaitMs, consumerWaitMs);
+    }
 }
 
 #ifdef Q_OS_LINUX
@@ -395,10 +562,16 @@ void DownloadExtractThread::extractMultiFileRun()
     archive_read_support_filter_all(a);
     archive_read_support_format_all(a);
     archive_write_disk_set_options(ext, flags);
+    
+    // Configure decompression options for optimal performance
+    _configureArchiveOptions(a);
+    
     archive_read_open(a, this, NULL, &DownloadExtractThread::_archive_read, &DownloadExtractThread::_archive_close);
 
     try
     {
+        // Log the compression filter(s) being used
+        _logCompressionFilters(a);
         while ( (r = archive_read_next_header(a, &entry)) != ARCHIVE_EOF)
         {
           _checkResult(r, a);
@@ -430,34 +603,39 @@ void DownloadExtractThread::extractMultiFileRun()
 
         QByteArray computedHash = _inputHash.result().toHex();
         qDebug() << "Hash of compressed multi-file zip:" << computedHash;
-        if (!_expectedHash.isEmpty() && _expectedHash != computedHash)
+        if (!_cancelled && !_expectedHash.isEmpty() && _expectedHash != computedHash)
         {
             qDebug() << "Mismatch with expected hash:" << _expectedHash;
             throw runtime_error("Download corrupt. SHA256 does not match");
         }
         if (_cacheEnabled && _expectedHash == computedHash)
         {
-            _cachefile.close();
-            
-            // Get both hashes: compressed cache file and uncompressed image data
-            QByteArray cacheFileHash = _cachehash.result().toHex();
-            
-            qDebug() << "Cache file created:";
-            qDebug() << "  Image hash (uncompressed):" << computedHash;
-            qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
-            
-            // Emit both hashes for proper cache verification
-            emit cacheFileHashUpdated(cacheFileHash, computedHash);
-            // Keep old signal for backward compatibility
-            emit cacheFileUpdated(computedHash);
+            // Finish async cache writer (waits for all pending writes to complete)
+            if (_asyncCacheWriter && _asyncCacheWriter->isActive()) {
+                _asyncCacheWriter->finish();
+                
+                // Get cache file hash from async writer
+                QByteArray cacheFileHash = _asyncCacheWriter->hash();
+                
+                qDebug() << "Cache file created (async):";
+                qDebug() << "  Image hash (uncompressed):" << computedHash;
+                qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
+                
+                // Emit both hashes for proper cache verification
+                emit cacheFileHashUpdated(cacheFileHash, computedHash);
+                // Keep old signal for backward compatibility
+                emit cacheFileUpdated(computedHash);
+            }
         }
 
         emit success();
     }
     catch (exception &e)
     {
-        if (_cachefile.isOpen())
-            _cachefile.remove();
+        // Cancel async cache writer (this will remove the cache file)
+        if (_asyncCacheWriter) {
+            _asyncCacheWriter->cancel();
+        }
 
         qDebug() << "Deleting extracted files";
         for (const auto& filename : filesExtracted)
@@ -525,43 +703,115 @@ void DownloadExtractThread::extractMultiFileRun()
 
 ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
 {
-    // Use synchronized queue access to check for completion
-    std::unique_lock<std::mutex> lock(_queueMutex);
-    
-    // Check if download is complete and queue is empty - if so, signal EOF
-    if (_downloadComplete && _queue.empty()) {
-        lock.unlock();
+    if (!_ringBuffer) {
         *buff = nullptr;
         return 0;
     }
     
-    // Wait for data to be available OR download completion with empty queue
-    _cv.wait(lock, [this]{
-        return _queue.size() != 0 || (_downloadComplete && _queue.empty());
-    });
-    
-    // Check again after wait - download might have completed while we were waiting
-    if (_downloadComplete && _queue.empty()) {
-        lock.unlock();
-        *buff = nullptr;
-        return 0;
+    // Release previous slot if any (it's been consumed by libarchive)
+    if (_currentReadSlot) {
+        _ringBuffer->releaseReadSlot(_currentReadSlot);
+        _currentReadSlot = nullptr;
     }
     
-    // Get the data
-    _buf = _queue.front();
-    _queue.pop_front();
+    // Time how long we wait for ring buffer data
+    QElapsedTimer ringBufferWaitTimer;
+    ringBufferWaitTimer.start();
     
-    // Notify any waiting pushers
-    lock.unlock();
-    _cv.notify_one();
+    // Acquire next read slot (blocks until data available or producer done)
+    _currentReadSlot = _ringBuffer->acquireReadSlot(100);  // 100ms timeout
     
-    *buff = _buf.data();
-    return _buf.size();
+    // Handle timeout - retry
+    while (!_currentReadSlot && !_ringBuffer->isCancelled() && !_ringBuffer->isComplete()) {
+        _currentReadSlot = _ringBuffer->acquireReadSlot(100);
+    }
+    
+    // Record ring buffer wait time
+    _totalRingBufferWaitMs.fetch_add(static_cast<quint64>(ringBufferWaitTimer.elapsed()));
+    
+    // Check for EOF or cancellation
+    if (!_currentReadSlot) {
+        *buff = nullptr;
+        return 0;  // EOF or cancelled
+    }
+    
+    // Track bytes read from ring buffer
+    _bytesReadFromRingBuffer.fetch_add(static_cast<quint64>(_currentReadSlot->size));
+    
+    // Return pointer directly to pre-allocated buffer (zero-copy!)
+    *buff = _currentReadSlot->data;
+    return static_cast<ssize_t>(_currentReadSlot->size);
 }
 
 int DownloadExtractThread::_on_close(struct archive *)
 {
+    // Release final read slot if any
+    if (_currentReadSlot && _ringBuffer) {
+        _ringBuffer->releaseReadSlot(_currentReadSlot);
+        _currentReadSlot = nullptr;
+    }
     return 0;
+}
+
+void DownloadExtractThread::_configureArchiveOptions(struct archive *a)
+{
+    // Get number of CPU cores for multi-threading hints
+    int numCores = QThread::idealThreadCount();
+    if (numCores < 1) numCores = 1;
+    if (numCores > 8) numCores = 8;  // Cap at 8 to avoid excessive memory usage
+    
+    QString threadsStr = QString::number(numCores);
+    QByteArray threadsBytes = threadsStr.toLatin1();
+    
+    // XZ/LZMA: Enable multi-threaded decoding if file has multiple blocks
+    // Note: Only works if the .xz file was compressed with block threading
+    // libarchive 3.3+ supports "threads" option for xz filter
+    int ret = archive_read_set_option(a, "xz", "threads", threadsBytes.constData());
+    if (ret == ARCHIVE_OK) {
+        qDebug() << "XZ multi-threaded decoding enabled with" << numCores << "threads";
+    }
+    
+    // Also try lzma filter (some files use raw lzma)
+    archive_read_set_option(a, "lzma", "threads", threadsBytes.constData());
+    
+    // ZSTD: Standard decompression is single-threaded by design
+    // The zstd format requires sequential block processing due to dictionary dependencies
+    // However, we can hint for optimal buffer sizing
+    // Note: As of libarchive 3.8, there's no "threads" option for zstd decompression
+    
+    // Gzip: Single-threaded, no threading options available
+    // The gzip format doesn't support parallel decompression
+}
+
+void DownloadExtractThread::_logCompressionFilters(struct archive *a)
+{
+    // Log all active filters for diagnostics
+    int filterCount = archive_filter_count(a);
+    if (filterCount <= 1) {
+        qDebug() << "No compression filter detected (raw or uncompressed)";
+        return;
+    }
+    
+    QStringList filters;
+    for (int i = 0; i < filterCount; i++) {
+        const char* name = archive_filter_name(a, i);
+        if (name && strcmp(name, "none") != 0) {
+            filters << QString::fromUtf8(name);
+        }
+    }
+    
+    if (!filters.isEmpty()) {
+        qDebug() << "Decompression pipeline:" << filters.join(" -> ");
+        
+        // Provide performance hints based on compression format
+        if (filters.contains("xz") || filters.contains("lzma")) {
+            qDebug() << "XZ/LZMA: Multi-threaded decode enabled if file has multiple blocks";
+        } else if (filters.contains("zstd")) {
+            qDebug() << "ZSTD: Using single-threaded streaming decompression (format limitation)";
+        } else if (filters.contains("gzip")) {
+            qDebug() << "GZIP: Using single-threaded decompression (format limitation)";
+        }
+    }
 }
 
 // static callback functions that call object oriented equivalents
@@ -585,38 +835,33 @@ void DownloadExtractThread::enableMultipleFileExtraction()
     _isImage = false;
 }
 
-// Synchronized queue using monitor consumer/producer pattern
-QByteArray DownloadExtractThread::_popQueue()
-{
-    std::unique_lock<std::mutex> lock(_queueMutex);
-
-    _cv.wait(lock, [this]{
-            return _queue.size() != 0;
-    });
-
-    QByteArray result = _queue.front();
-    _queue.pop_front();
-    
-    // Always notify waiting pushers that space is available
-    lock.unlock();
-    _cv.notify_one();
-
-    return result;
-}
-
 void DownloadExtractThread::_pushQueue(const char *data, size_t len)
 {
-    std::unique_lock<std::mutex> lock(_queueMutex);
-
-    _cv.wait(lock, [this]{
-            return _queue.size() != MAX_QUEUE_SIZE;
-    });
-
-    _queue.emplace_back(QByteArray(data, static_cast<int>(len)));
+    if (!_ringBuffer || _cancelled) {
+        return;
+    }
     
-    // Always notify waiting poppers that data is available
-    lock.unlock();
-    _cv.notify_one();
+    // Handle data larger than slot capacity by chunking
+    size_t offset = 0;
+    while (offset < len && !_cancelled) {
+        // Acquire a write slot (blocks if buffer is full)
+        RingBuffer::Slot* slot = _ringBuffer->acquireWriteSlot(100);  // 100ms timeout
+        if (!slot) {
+            if (_ringBuffer->isCancelled() || _cancelled) {
+                return;
+            }
+            // Timeout - try again
+            continue;
+        }
+        
+        // Copy data directly into the pre-allocated slot buffer (zero-copy from slot's perspective)
+        size_t chunkSize = std::min(len - offset, slot->capacity);
+        memcpy(slot->data, data + offset, chunkSize);
+        
+        // Commit the slot
+        _ringBuffer->commitWriteSlot(slot, chunkSize);
+        offset += chunkSize;
+    }
 }
 
 bool DownloadExtractThread::_verify()
@@ -635,10 +880,9 @@ bool DownloadExtractThread::_verify()
     qDebug() << "Post-write verification using" << verifyBufferSize/1024 << "KB buffer for" 
              << _verifyTotal/(1024*1024) << "MB image";
 
-#ifdef Q_OS_LINUX
-    /* Make sure we are reading from the drive and not from cache */
-    posix_fadvise(_file->GetHandle(), 0, 0, POSIX_FADV_DONTNEED);
-#endif
+    // Platform-specific optimization for sequential read verification
+    // Invalidates cache and enables read-ahead hints
+    _file->PrepareForSequentialRead(0, _verifyTotal);
 
     if (!_firstBlock)
     {

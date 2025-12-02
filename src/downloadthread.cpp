@@ -53,7 +53,8 @@ int DownloadThread::_curlCount = 0;
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
-    _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM), _cachehash(OSLIST_HASH_ALGORITHM)
+    _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM),
+    _hasPendingHash(false)
 {
     if (!_curlCount)
         curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -79,6 +80,12 @@ DownloadThread::~DownloadThread()
     _cancelled = true;
     wait();
     
+    // Wait for any pending hash computation to complete before destroying
+    if (_hasPendingHash) {
+        _pendingHashFuture.waitForFinished();
+        _hasPendingHash = false;
+    }
+    
     // Close unified file operations
     if (_file && _file->IsOpen()) {
         _file->Close();
@@ -88,6 +95,12 @@ DownloadThread::~DownloadThread()
         _volumeFile->Close();
     }
 #endif
+    
+    // Cancel async cache writer if still running
+    if (_asyncCacheWriter) {
+        _asyncCacheWriter->cancel();
+        _asyncCacheWriter.reset();
+    }
     
     // Use _closeFiles() to ensure cache file is properly closed
     _closeFiles();
@@ -150,29 +163,49 @@ QByteArray DownloadThread::_fileGetContentsTrimmed(const QString &filename)
 
 bool DownloadThread::_openAndPrepareDevice()
 {
+    QElapsedTimer unmountTimer;
+    QElapsedTimer openTimer;
+    
     if (_filename.startsWith("/dev/"))
     {
         emit preparationStatusUpdate(tr("Unmounting drive..."));
+        unmountTimer.start();
 #ifdef Q_OS_DARWIN
         /* Also unmount any APFS volumes using this physical disk */
-        auto l = Drivelist::ListStorageDevices();
-        for (const auto &i : l)
+        if (_childDevicesProvided)
         {
-            if (QByteArray::fromStdString(i.device) == _filename)
+            // Use cached child device info (skips expensive ListStorageDevices() call, saving ~1 second)
+            for (const QString &childDevice : _childDevices)
             {
-                for (const auto &j : i.childDevices)
+                qDebug() << "Unmounting APFS volume (cached):" << childDevice;
+                unmount_disk(childDevice.toUtf8().constData());
+            }
+        }
+        else
+        {
+            // Fallback: scan for child devices if not cached (e.g., CLI usage)
+            qDebug() << "No cached child device info, scanning for APFS volumes...";
+            auto l = Drivelist::ListStorageDevices();
+            for (const auto &i : l)
+            {
+                if (QByteArray::fromStdString(i.device) == _filename)
                 {
-                    qDebug() << "Unmounting APFS volume:" << j.c_str();
-                    unmount_disk(j.c_str());
+                    for (const auto &j : i.childDevices)
+                    {
+                        qDebug() << "Unmounting APFS volume:" << j.c_str();
+                        unmount_disk(j.c_str());
+                    }
+                    break;
                 }
-                break;
             }
         }
 #endif
         qDebug() << "Unmounting:" << _filename;
         unmount_disk(_filename.constData());
+        emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), true);
     }
     emit preparationStatusUpdate(tr("Opening drive..."));
+    openTimer.start();
 
     // Convert QByteArray filename to std::string for FileOperations
     std::string filename_str = _filename.toStdString();
@@ -190,47 +223,40 @@ bool DownloadThread::_openAndPrepareDevice()
         if (!_nr.isEmpty()) {
             qDebug() << "Removing partition table from Windows drive #" << _nr << "(" << _filename << ")";
 
-            // First, try to unmount any volumes on this disk
-            auto l = Drivelist::ListStorageDevices();
-            QByteArray devlower = _filename.toLower();
-            for (auto i : l)
-            {
-                if (QByteArray::fromStdString(i.device).toLower() == devlower)
-                {
-                    for (const auto& mountpoint : i.mountpoints)
-                    {
-                        QString driveLetter = QString::fromStdString(mountpoint);
-                        if (driveLetter.endsWith("\\"))
-                            driveLetter.chop(1);
-                        
-                        qDebug() << "Attempting to unmount drive" << driveLetter;
-                        
-                        // Try to lock and unlock the volume to force unmount
-                        WinFile tempFile;
-                        tempFile.setFileName("\\\\.\\" + driveLetter);
-                        if (tempFile.open(QIODevice::ReadWrite))
-                        {
-                            if (tempFile.lockVolume())
-                            {
-                                tempFile.unlockVolume();
-                                qDebug() << "Successfully unlocked volume" << driveLetter;
-                            }
-                            tempFile.close();
-                        }
-                        
-                        // Give the system time to process the unmount
-                        QThread::msleep(500);
-                    }
-                    break;
+            // Create timing callback to emit performance events
+            auto timingCallback = [this](const QString &eventName, quint32 durationMs, bool success) {
+                if (eventName == "driveUnmountVolumes") {
+                    emit eventDriveUnmountVolumes(durationMs, success);
+                } else if (eventName == "driveDiskClean") {
+                    emit eventDriveDiskClean(durationMs, success);
+                } else if (eventName == "driveRescan") {
+                    emit eventDriveRescan(durationMs, success);
                 }
+            };
+
+            // Unmount volumes first (with performance instrumentation)
+            emit preparationStatusUpdate(tr("Unmounting volumes..."));
+            auto unmountResult = DiskpartUtil::unmountVolumes(_filename, timingCallback);
+            if (!unmountResult.success)
+            {
+                qDebug() << "Warning: Volume unmount had issues:" << unmountResult.errorMessage;
+                // Continue anyway - cleanDiskFast may still succeed
             }
 
-            // Clean disk with diskpart utility (standardized behavior: 60s timeout, 3 retries, always unmount volumes)
-            auto result = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::UnmountFirst);
-            if (!result.success)
+            // Clean disk using fast direct IOCTL method (replaces diskpart)
+            emit preparationStatusUpdate(tr("Cleaning disk..."));
+            auto cleanResult = DiskpartUtil::cleanDiskFast(_filename, timingCallback);
+            if (!cleanResult.success)
             {
-                emit error(result.errorMessage);
-                return false;
+                // Fall back to legacy diskpart method if direct IOCTLs fail
+                qDebug() << "Fast disk clean failed, falling back to diskpart:" << cleanResult.errorMessage;
+                emit preparationStatusUpdate(tr("Cleaning disk (legacy method)..."));
+                cleanResult = DiskpartUtil::cleanDisk(_filename, std::chrono::seconds(60), 3, DiskpartUtil::VolumeHandling::SkipUnmounting);
+                if (!cleanResult.success)
+                {
+                    emit error(cleanResult.errorMessage);
+                    return false;
+                }
             }
         }
     }
@@ -401,11 +427,35 @@ bool DownloadThread::_openAndPrepareDevice()
     _sectorsStart = _sectorsWritten();
 #endif
 
+    // Include I/O mode in drive open event for diagnostics
+    QString ioModeMetadata = QString("direct_io: %1; platform: %2")
+        .arg(_file->IsDirectIOEnabled() ? "yes" : "no")
+        .arg(SystemMemoryManager::instance().getPlatformName());
+    emit eventDriveOpen(static_cast<quint32>(openTimer.elapsed()), true, ioModeMetadata);
+    
+    // Emit detailed direct I/O attempt info for performance analysis
+    auto directIOInfo = _file->GetDirectIOInfo();
+    emit eventDirectIOAttempt(
+        directIOInfo.attempted,
+        directIOInfo.succeeded,
+        directIOInfo.currently_enabled,
+        directIOInfo.error_code,
+        QString::fromStdString(directIOInfo.error_message));
+    
     return true;
 }
 
 void DownloadThread::run()
 {
+#ifdef Q_OS_WIN
+    // Suppress Windows "Insert a disk" / "not accessible" system error dialogs
+    // for this thread. Error mode is per-thread, so we set it once at thread start.
+    DWORD oldMode;
+    if (!SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &oldMode)) {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+    }
+#endif
+
     qDebug() << "Download thread starting. isImage?" << isImage() << "filename:" << _filename;
     if (isImage() && !_openAndPrepareDevice())
     {
@@ -438,6 +488,21 @@ void DownloadThread::run()
     curl_easy_setopt(_c, CURLOPT_CONNECTTIMEOUT, 30);
     curl_easy_setopt(_c, CURLOPT_LOW_SPEED_TIME, 60);
     curl_easy_setopt(_c, CURLOPT_LOW_SPEED_LIMIT, 100);
+    
+    // Enable HTTP/2 for HTTPS connections (falls back to HTTP/1.1 for plain HTTP)
+    // Benefits: header compression, better connection utilization, multiplexing
+    // Note: We track HTTP/2 failures and fall back to HTTP/1.1 if needed (see retry loop below)
+    curl_easy_setopt(_c, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
+    
+    // Enable TCP keepalive to detect dead connections faster
+    curl_easy_setopt(_c, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(_c, CURLOPT_TCP_KEEPIDLE, 30L);   // Start keepalive after 30s idle
+    curl_easy_setopt(_c, CURLOPT_TCP_KEEPINTVL, 15L);  // Send keepalive every 15s
+    
+    // Track HTTP/2 failures for graceful fallback
+    int http2FailureCount = 0;
+    const int MAX_HTTP2_FAILURES = 3;
+    
     if (_inputBufferSize)
         curl_easy_setopt(_c, CURLOPT_BUFFERSIZE, _inputBufferSize);
 
@@ -487,18 +552,40 @@ void DownloadThread::run()
        And also reconnect if we detect from our end that transfer stalled for more than one minute */
     while (ret == CURLE_PARTIAL_FILE || ret == CURLE_OPERATION_TIMEDOUT
            || (ret == CURLE_HTTP2_STREAM && _lastDlNow != _lastFailureOffset)
+           || (ret == CURLE_HTTP2 && _lastDlNow != _lastFailureOffset)
            || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset) )
     {
         time_t t = time(NULL);
-        qDebug() << "HTTP connection lost. Time:" << t;
+        qDebug() << "HTTP connection lost. Error:" << curl_easy_strerror(ret) << "Time:" << t;
+
+        // Track HTTP/2 specific failures for graceful fallback
+        if (ret == CURLE_HTTP2_STREAM || ret == CURLE_HTTP2) {
+            http2FailureCount++;
+            qDebug() << "HTTP/2 failure count:" << http2FailureCount << "/" << MAX_HTTP2_FAILURES;
+            
+            if (http2FailureCount >= MAX_HTTP2_FAILURES) {
+                qDebug() << "Too many HTTP/2 failures, falling back to HTTP/1.1";
+                curl_easy_setopt(_c, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+            }
+        }
 
         /* If last failure happened less than 5 seconds ago, something else may
            be wrong. Sleep some time to prevent hammering server */
+        quint32 sleepMs = 0;
         if (t - _lastFailureTime < 5)
         {
             qDebug() << "Sleeping 5 seconds";
+            sleepMs = 5000;
             ::sleep(5);
         }
+        
+        // Emit network retry event for performance tracking
+        QString retryMetadata = QString("error: %1; offset: %2 MB; http2_failures: %3")
+            .arg(curl_easy_strerror(ret))
+            .arg(_lastDlNow / (1024 * 1024))
+            .arg(http2FailureCount);
+        emit eventNetworkRetry(sleepMs, retryMetadata);
+        
         _lastFailureTime = t;
 
         _startOffset = _lastDlNow;
@@ -513,15 +600,60 @@ void DownloadThread::run()
     switch (ret)
     {
         case CURLE_OK:
+        {
             _successful = true;
-            qDebug() << "Download done in" << _timer.elapsed() / 1000 << "seconds";
+            
+            // Collect CURL connection timing metrics for performance analysis
+            double dnsTime = 0, connectTime = 0, tlsTime = 0, startTransferTime = 0, totalTime = 0;
+            curl_off_t downloadSpeed = 0;
+            curl_off_t downloadSize = 0;
+            long httpVersion = 0;
+            
+            curl_easy_getinfo(_c, CURLINFO_NAMELOOKUP_TIME, &dnsTime);
+            curl_easy_getinfo(_c, CURLINFO_CONNECT_TIME, &connectTime);
+            curl_easy_getinfo(_c, CURLINFO_APPCONNECT_TIME, &tlsTime);
+            curl_easy_getinfo(_c, CURLINFO_STARTTRANSFER_TIME, &startTransferTime);
+            curl_easy_getinfo(_c, CURLINFO_TOTAL_TIME, &totalTime);
+            curl_easy_getinfo(_c, CURLINFO_SPEED_DOWNLOAD_T, &downloadSpeed);
+            curl_easy_getinfo(_c, CURLINFO_SIZE_DOWNLOAD_T, &downloadSize);
+            curl_easy_getinfo(_c, CURLINFO_HTTP_VERSION, &httpVersion);
+            
+            const char* versionStr = "unknown";
+            switch (httpVersion) {
+                case CURL_HTTP_VERSION_1_0: versionStr = "HTTP/1.0"; break;
+                case CURL_HTTP_VERSION_1_1: versionStr = "HTTP/1.1"; break;
+                case CURL_HTTP_VERSION_2_0: versionStr = "HTTP/2"; break;
+                case CURL_HTTP_VERSION_3: versionStr = "HTTP/3"; break;
+                default: break;
+            }
+            
+            qDebug() << "Download done in" << _timer.elapsed() / 1000 << "seconds using" << versionStr;
+            
+            // Emit connection stats for performance tracking
+            // Times are in seconds from CURL, convert to ms for consistency
+            QString statsMetadata = QString("dns_ms: %1; connect_ms: %2; tls_ms: %3; ttfb_ms: %4; total_ms: %5; speed_kbps: %6; size_bytes: %7; http: %8")
+                .arg(static_cast<int>(dnsTime * 1000))
+                .arg(static_cast<int>(connectTime * 1000))
+                .arg(static_cast<int>(tlsTime * 1000))
+                .arg(static_cast<int>(startTransferTime * 1000))
+                .arg(static_cast<int>(totalTime * 1000))
+                .arg(static_cast<qint64>(downloadSpeed / 1024))
+                .arg(static_cast<qint64>(downloadSize))
+                .arg(versionStr);
+            emit eventNetworkConnectionStats(statsMetadata);
+            
             _onDownloadSuccess();
             break;
+        }
         case CURLE_WRITE_ERROR:
             deleteDownloadedFile();
-            _onWriteError();
+            // If cancelled, treat write error as clean abort (user-initiated cancellation
+            // triggers CURLE_WRITE_ERROR because _writeData returns 0)
+            if (!_cancelled)
+                _onWriteError();
             break;
         case CURLE_ABORTED_BY_CALLBACK:
+            // Clean cancellation via progress callback
             deleteDownloadedFile();
             break;
         default:
@@ -544,7 +676,11 @@ void DownloadThread::run()
 
 size_t DownloadThread::_writeData(const char *buf, size_t len)
 {
-    // no-op debug removed
+    // Abort CURL cleanly if cancelled - returning 0 triggers CURLE_WRITE_ERROR
+    // which we handle by checking _cancelled before showing error dialogs
+    if (_cancelled)
+        return 0;
+
     _writeCache(buf, len);
 
     if (!_filename.isEmpty())
@@ -563,32 +699,61 @@ void DownloadThread::_writeCache(const char *buf, size_t len)
     if (!_cacheEnabled || _cancelled)
         return;
 
-    // Hash the data going into the cache file
-    _cachehash.addData(buf, len);
-
-    if (_cachefile.write(buf, len) != len)
-    {
-        qDebug() << "Error writing to cache file. Disabling caching.";
+    // Check if async writer exists and is still healthy
+    if (!_asyncCacheWriter) {
         _cacheEnabled = false;
-        _cachefile.remove();
+        return;
+    }
+    
+    // Check for async errors that may have occurred in the writer thread
+    if (_asyncCacheWriter->hasError()) {
+        qDebug() << "Async cache writer has error state. Disabling caching.";
+        _cacheEnabled = false;
+        _asyncCacheWriter->cancel();
+        return;
+    }
+
+    // Use async cache writer for non-blocking I/O
+    if (_asyncCacheWriter->isActive()) {
+        if (!_asyncCacheWriter->write(buf, len)) {
+            // write() returns false on backpressure timeout or error
+            if (_asyncCacheWriter->wasDisabledDueToBackpressure()) {
+                qDebug() << "Cache I/O too slow (backpressure). Disabling caching to avoid blocking download.";
+            } else {
+                qDebug() << "Async cache writer failed. Disabling caching.";
+            }
+            _cacheEnabled = false;
+            _asyncCacheWriter->cancel();
+        }
     }
 }
 
 void DownloadThread::setCacheFile(const QString &filename, qint64 filesize)
 {
-    _cachefile.setFileName(filename);
-    if (_cachefile.open(QIODevice::WriteOnly))
+    _cacheFilename = filename;
+    
+    // Create async cache writer
+    _asyncCacheWriter = std::make_unique<AsyncCacheWriter>(this);
+    
+    // Connect error signal for async error propagation from writer thread
+    // Using Qt::QueuedConnection to ensure thread-safe signal delivery
+    connect(_asyncCacheWriter.get(), &AsyncCacheWriter::error, 
+            this, [this](const QString &msg) {
+                qDebug() << "AsyncCacheWriter error (async):" << msg;
+                _cacheEnabled = false;
+                // Note: Don't cancel here - we're in a different thread context
+                // The writer thread will clean up on its own
+            }, Qt::QueuedConnection);
+    
+    if (_asyncCacheWriter->open(filename, filesize))
     {
         _cacheEnabled = true;
-        if (filesize)
-        {
-            /* Pre-allocate space */
-            _cachefile.resize(filesize);
-        }
+        qDebug() << "Async cache writer initialized for" << filename;
     }
     else
     {
         qDebug() << "Error opening cache file for writing. Disabling caching.";
+        _asyncCacheWriter.reset();
     }
 }
 
@@ -611,11 +776,33 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
         qDebug() << "_writeFile: captured first block (" << len << ") and advanced file offset via seek";
         return (_file->Seek(len) == rpi_imager::FileError::kSuccess) ? len : 0;
     }
+
+    // Pipelined hash computation: wait for PREVIOUS hash before starting current one
+    // This allows hash(N) to run in parallel with write(N+1)
+    // The caller's double-buffering ensures buffer N stays valid until hash(N) completes
+    if (_hasPendingHash) {
+        if (!_pendingHashFuture.isFinished()) {
+            // Hash is still running - this is expected during normal pipelining
+            // Log only if we have to wait significantly (> 1ms indicates hash is slower than write)
+            QElapsedTimer waitTimer;
+            waitTimer.start();
+            _pendingHashFuture.waitForFinished();
+            qint64 waitMs = waitTimer.elapsed();
+            if (waitMs > 10) {
+                // Only log significant waits to avoid log spam
+                qDebug() << "Hash pipeline stall: waited" << waitMs << "ms for previous hash";
+            }
+        }
+        // Future is now finished, safe to reuse
+    }
+
+    // Start hash computation for current buffer (will be waited for in next iteration)
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QFuture<void> wh = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
+    _pendingHashFuture = QtConcurrent::run(&DownloadThread::_hashData, this, buf, len);
 #else
-    QFuture<void> wh = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
+    _pendingHashFuture = QtConcurrent::run(this, &DownloadThread::_hashData, buf, len);
 #endif
+    _hasPendingHash = true;
 
     // Use unified FileOperations for writing
     size_t bytes_written = 0;
@@ -630,7 +817,12 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
 
     qint64 written = static_cast<qint64>(bytes_written);
 
-    wh.waitForFinished();
+    // Wait for current hash to complete before returning
+    // This ensures the buffer can be safely reused by the caller
+    // (The caller may be using a ring buffer that releases slots after _writeFile returns)
+    if (_hasPendingHash && !_pendingHashFuture.isFinished()) {
+        _pendingHashFuture.waitForFinished();
+    }
 
     // Cross-platform periodic sync to prevent page cache buildup
     _periodicSync();
@@ -693,8 +885,10 @@ void DownloadThread::deleteDownloadedFile()
         if (_file && _file->IsOpen()) {
             _file->Close();
         }
-        if (_cachefile.isOpen())
-            _cachefile.remove();
+        // Cancel async cache writer (this will remove the cache file)
+        if (_asyncCacheWriter) {
+            _asyncCacheWriter->cancel();
+        }
 #ifdef Q_OS_WIN
         if (_volumeFile && _volumeFile->IsOpen()) {
             _volumeFile->Close();
@@ -752,6 +946,11 @@ void DownloadThread::_onDownloadError(const QString &msg)
 
 void DownloadThread::_onWriteError()
 {
+    // Don't report write errors if the operation was cancelled
+    // (cancellation can cause writes to fail, which is expected)
+    if (_cancelled)
+        return;
+
 #ifdef Q_OS_WIN
     // TODO: Implement platform-specific error handling in FileOperations
     // For now, provide generic error message instead of: if (_file.errorCode() == ERROR_ACCESS_DENIED)
@@ -795,12 +994,13 @@ void DownloadThread::_onWriteError()
         _onDownloadError(tr("Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected."));
     }
 #endif
-    if (!_cancelled && false) // Disabled the old generic error
-        _onDownloadError(tr("Error writing file to disk"));
 }
 
 void DownloadThread::_closeFiles()
 {
+    QElapsedTimer closeTimer;
+    closeTimer.start();
+    
     // Close unified file operations
     if (_file && _file->IsOpen()) {
         _file->Close();
@@ -810,19 +1010,52 @@ void DownloadThread::_closeFiles()
         _volumeFile->Close();
     }
 #endif
-    if (_cachefile.isOpen())
-        _cachefile.close();
+    // Cancel async cache writer if still active (don't wait for completion on error/cancel)
+    if (_asyncCacheWriter && _asyncCacheWriter->isActive()) {
+        _asyncCacheWriter->cancel();
+    }
+    
+    quint32 closeDurationMs = static_cast<quint32>(closeTimer.elapsed());
+    if (closeDurationMs > 0) {
+        emit eventDeviceClose(closeDurationMs, true);
+    }
 }
 
 void DownloadThread::_writeComplete()
 {
+    // Don't report errors if the operation was cancelled
+    if (_cancelled)
+    {
+        // Still need to wait for pending hash to avoid dangling futures
+        if (_hasPendingHash) {
+            _pendingHashFuture.waitForFinished();
+            _hasPendingHash = false;
+        }
+        _closeFiles();
+        return;
+    }
+
+    // Wait for final pending hash computation to complete before getting result
+    if (_hasPendingHash) {
+        if (!_pendingHashFuture.isFinished()) {
+            QElapsedTimer waitTimer;
+            waitTimer.start();
+            _pendingHashFuture.waitForFinished();
+            qDebug() << "Final hash wait:" << waitTimer.elapsed() << "ms";
+        }
+        _hasPendingHash = false;
+    }
+
     QByteArray computedHash = _writehash.result().toHex();
     qDebug() << "Hash of uncompressed image:" << computedHash;
     if (!_expectedHash.isEmpty() && _expectedHash != computedHash)
     {
         qDebug() << "Mismatch with expected hash:" << _expectedHash;
-        if (_cachefile.isOpen())
-            _cachefile.remove();
+        
+        // Cancel async cache writer (this will remove the cache file)
+        if (_asyncCacheWriter) {
+            _asyncCacheWriter->cancel();
+        }
         
         // Provide more specific error message based on context
         QString errorMsg;
@@ -849,19 +1082,22 @@ void DownloadThread::_writeComplete()
     }
     if (_cacheEnabled && _expectedHash == computedHash)
     {
-        _cachefile.close();
-        
-        // Get both hashes: compressed cache file and uncompressed image data
-        QByteArray cacheFileHash = _cachehash.result().toHex();
-        
-        qDebug() << "Cache file created:";
-        qDebug() << "  Image hash (uncompressed):" << computedHash;
-        qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
-        
-        // Emit both hashes for proper cache verification
-        emit cacheFileHashUpdated(cacheFileHash, computedHash);
-        // Keep old signal for backward compatibility
-        emit cacheFileUpdated(computedHash);
+        // Finish async cache writer (waits for all pending writes to complete)
+        if (_asyncCacheWriter && _asyncCacheWriter->isActive()) {
+            _asyncCacheWriter->finish();
+            
+            // Get cache file hash from async writer
+            QByteArray cacheFileHash = _asyncCacheWriter->hash();
+            
+            qDebug() << "Cache file created (async):";
+            qDebug() << "  Image hash (uncompressed):" << computedHash;
+            qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
+            
+            // Emit both hashes for proper cache verification
+            emit cacheFileHashUpdated(cacheFileHash, computedHash);
+            // Keep old signal for backward compatibility
+            emit cacheFileUpdated(computedHash);
+        }
     }
 
     if (_file->Flush() != rpi_imager::FileError::kSuccess)
@@ -916,8 +1152,12 @@ void DownloadThread::_writeComplete()
         _firstBlock = nullptr;
     }
 
+    QElapsedTimer syncTimer;
+    syncTimer.start();
+    
     if (_file->Flush() != rpi_imager::FileError::kSuccess)
     {
+        emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), false);
         DownloadThread::_onDownloadError(tr("Error writing to storage (while flushing)"));
         _closeFiles();
         return;
@@ -925,12 +1165,14 @@ void DownloadThread::_writeComplete()
 
 #ifndef Q_OS_WIN
     if (_file->ForceSync() != rpi_imager::FileError::kSuccess) {
+        emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), false);
         DownloadThread::_onDownloadError(tr("Error writing to storage (while fsync)"));
         _closeFiles();
         return;
     }
 #endif
 
+    emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), true);
     _closeFiles();
 
 #ifdef Q_OS_DARWIN
@@ -961,11 +1203,9 @@ bool DownloadThread::_verify()
     qDebug() << "Post-write verification using" << verifyBufferSize/1024 << "KB buffer for" 
              << _verifyTotal/(1024*1024) << "MB image";
 
-#ifdef Q_OS_LINUX
-    /* Make sure we are reading from the drive and not from cache */
-    //fcntl(_file->GetHandle(), F_SETFL, O_DIRECT | fcntl(_file->GetHandle(), F_GETFL));
-    posix_fadvise(_file->GetHandle(), 0, 0, POSIX_FADV_DONTNEED);
-#endif
+    // Platform-specific optimization for sequential read verification
+    // Invalidates cache and enables read-ahead hints
+    _file->PrepareForSequentialRead(0, _verifyTotal);
 
     if (!_firstBlock)
     {
@@ -1001,10 +1241,12 @@ bool DownloadThread::_verify()
 
     if (_verifyhash.result() == _writehash.result() || !_verifyEnabled || _cancelled)
     {
+        emit eventVerify(static_cast<quint32>(t1.elapsed()), true);
         return true;
     }
     else
     {
+        emit eventVerify(static_cast<quint32>(t1.elapsed()), false);
         DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of SD card is different from what was written to it."));
     }
 
@@ -1029,6 +1271,9 @@ void DownloadThread::_periodicSync()
          (timeSinceLastSync >= _syncConfig.syncIntervalMs && bytesSinceLastSync > 0)) &&
         !_cancelled)
     {
+        QElapsedTimer syncTimer;
+        syncTimer.start();
+        
         qDebug() << "Performing periodic sync at" << currentBytes << "bytes written"
                  << "(" << bytesSinceLastSync << "bytes since last sync,"
                  << timeSinceLastSync << "ms elapsed)"
@@ -1036,21 +1281,25 @@ void DownloadThread::_periodicSync()
         
         // Use unified FileOperations for flushing and syncing
         if (_file->Flush() != rpi_imager::FileError::kSuccess) {
+            emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), false, currentBytes);
             qDebug() << "Warning: Flush() failed during periodic sync";
             return;
         }
         
         // Force filesystem sync using unified FileOperations
         if (_file->ForceSync() != rpi_imager::FileError::kSuccess) {
+            emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), false, currentBytes);
             qDebug() << "Warning: ForceSync() failed during periodic sync";
             return;
         }
+        
+        emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), true, currentBytes);
         
         // Update tracking variables
         _lastSyncBytes = currentBytes;
         _lastSyncTime.restart();
         
-        qDebug() << "Periodic sync completed successfully";
+        qDebug() << "Periodic sync completed successfully in" << syncTimer.elapsed() << "ms";
     }
 }
 
@@ -1106,9 +1355,32 @@ void DownloadThread::setImageCustomisation(const QByteArray &config, const QByte
     _advancedOptions = opts;
 }
 
+void DownloadThread::setChildDevices(const QStringList &devices)
+{
+    _childDevices = devices;
+    _childDevicesProvided = true;
+}
+
+void DownloadThread::setChildDevicesProvided(bool provided)
+{
+    _childDevicesProvided = provided;
+}
+
 bool DownloadThread::_customizeImage()
 {
     emit preparationStatusUpdate(tr("Customising OS..."));
+    QElapsedTimer customTimer;
+    customTimer.start();
+    
+    // Build metadata for performance tracking (what was configured, not values)
+    QStringList configuredItems;
+    if (!_config.isEmpty()) configuredItems << "config: set";
+    if (!_cmdline.isEmpty()) configuredItems << "cmdline: set";
+    if (!_firstrun.isEmpty()) configuredItems << "firstrun: set";
+    if (!_cloudinit.isEmpty()) configuredItems << "cloudinit: set";
+    if (!_cloudinitNetwork.isEmpty()) configuredItems << "network: set";
+    if (_advancedOptions.testFlag(ImageOptions::EnableSecureBoot)) configuredItems << "secureboot: enabled";
+    QString metadata = configuredItems.join("; ");
 
     // Use DeviceWrapper with existing FileOperations for image customization
     try
@@ -1127,7 +1399,12 @@ bool DownloadThread::_customizeImage()
             qFreeAligned(_firstBlock);
             _firstBlock = nullptr;
         }
+        
+        // Parse FAT partition (can be slow for large partitions)
+        QElapsedTimer fatTimer;
+        fatTimer.start();
         DeviceWrapperFatPartition *fat = dw.fatPartition(1);
+        emit eventFatPartitionSetup(static_cast<quint32>(fatTimer.elapsed()), fat != nullptr);
 
         if (!_config.isEmpty())
         {
@@ -1187,8 +1464,11 @@ bool DownloadThread::_customizeImage()
             fat->writeFile("cmdline.txt", cmdline);
         }
         
-        // Sync before secure boot processing
+        // Sync before secure boot processing (writes partition table/MBR)
+        QElapsedTimer syncTimer;
+        syncTimer.start();
         dw.sync();
+        emit eventPartitionTableWrite(static_cast<quint32>(syncTimer.elapsed()), true);
         
         // Generate secure boot files if enabled
         if (_advancedOptions.testFlag(ImageOptions::EnableSecureBoot))
@@ -1203,10 +1483,12 @@ bool DownloadThread::_customizeImage()
     }
     catch (std::runtime_error &err)
     {
+        emit eventCustomisation(static_cast<quint32>(customTimer.elapsed()), false, metadata);
         emit error(err.what());
         return false;
     }
 
+    emit eventCustomisation(static_cast<quint32>(customTimer.elapsed()), true, metadata);
     emit finalizing();
 
     return true;

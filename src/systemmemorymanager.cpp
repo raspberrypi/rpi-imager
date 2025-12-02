@@ -48,9 +48,20 @@ qint64 SystemMemoryManager::getTotalMemoryMB()
 
 qint64 SystemMemoryManager::getAvailableMemoryMB()
 {
-    // For sync calculation purposes, we use total memory as the baseline
-    // Available memory fluctuates too much to be reliable for this use case
-    return getTotalMemoryMB();
+    // Use cached value if available (cache for short period to avoid constant syscalls)
+    if (_cachedAvailableMemoryMB > 0) {
+        return _cachedAvailableMemoryMB;
+    }
+    
+    qint64 availableMB = getPlatformAvailableMemoryMB();
+    
+    // Fall back to total memory if platform detection failed
+    if (availableMB <= 0) {
+        availableMB = getTotalMemoryMB();
+    }
+    
+    _cachedAvailableMemoryMB = availableMB;
+    return availableMB;
 }
 
 SystemMemoryManager::SyncConfiguration SystemMemoryManager::calculateSyncConfiguration()
@@ -355,22 +366,36 @@ size_t SystemMemoryManager::getOptimalInputBufferSize()
 {
     qint64 totalMemMB = getTotalMemoryMB();
     
-    // Input buffer for downloads/streams - should be smaller than write buffers
-    // to avoid excessive memory usage during concurrent operations
+    // Input buffer (ring buffer slot size) for downloads/streams.
+    // Larger buffers reduce per-chunk overhead and improve throughput,
+    // especially for decompression which works more efficiently on larger blocks.
+    // The ring buffer will have multiple slots of this size.
+    //
+    // For high-speed scenarios (10G + NVMe), we want large slots to:
+    // - Reduce lock contention between producer/consumer
+    // - Allow decompressor to work on larger blocks efficiently
+    // - Reduce syscall overhead for network reads
     size_t inputBufferSize;
     
     if (totalMemMB < 1024) {
-        // Very low memory: 64KB
-        inputBufferSize = 64 * 1024;
-    } else if (totalMemMB < 2048) {
-        // Low memory: 128KB
+        // Very low memory: 128KB
         inputBufferSize = 128 * 1024;
-    } else if (totalMemMB < 4096) {
-        // Medium memory: 256KB
+    } else if (totalMemMB < 2048) {
+        // Low memory: 256KB
         inputBufferSize = 256 * 1024;
-    } else {
-        // High memory: 512KB
+    } else if (totalMemMB < 4096) {
+        // Medium memory: 512KB
         inputBufferSize = 512 * 1024;
+    } else if (totalMemMB < 8192) {
+        // High memory: 1MB - good for Gbps networks
+        inputBufferSize = 1024 * 1024;
+    } else if (totalMemMB < 16384) {
+        // Very high memory: 2MB - optimal for fast SSDs
+        inputBufferSize = 2 * 1024 * 1024;
+    } else {
+        // Extreme memory (16GB+): 4MB - optimal for 10G + NVMe
+        // Large slots reduce producer/consumer handoff overhead at high speeds
+        inputBufferSize = 4 * 1024 * 1024;
     }
     
     // Align to page boundaries
@@ -392,5 +417,68 @@ size_t SystemMemoryManager::getSystemPageSize()
 #else
     return 4096; // Fallback to common page size
 #endif
+}
+
+size_t SystemMemoryManager::getOptimalRingBufferSlots(size_t slotSize)
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    qint64 availableMemMB = getAvailableMemoryMB();
+    
+    // AGGRESSIVE STRATEGY: Maximize throughput on ALL systems.
+    // 
+    // Users run Imager as their primary task - they're waiting for it to complete.
+    // Use available RAM aggressively regardless of system size.
+    //
+    // Strategy:
+    // - Use 30% of AVAILABLE RAM (adapts to actual system state)
+    // - Minimum 2 MB (baseline for any system)
+    // - Maximum 16 GB (sanity cap)
+    //
+    // For 10G + NVMe with 500 MB/s burst accumulation:
+    // - 1 GB buffer = 2 seconds of absorption
+    // - 5 GB buffer = 10 seconds of absorption
+    
+    // Calculate target: 30% of available RAM
+    size_t targetFromAvailable = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 3 / 10;
+    
+    // Minimum: 2 MB (ensures basic functionality)
+    const size_t minimumBuffer = 2 * 1024 * 1024;
+    
+    // Maximum: 16 GB (sanity cap)
+    const size_t maximumBuffer = static_cast<size_t>(16) * 1024 * 1024 * 1024;
+    
+    // Apply bounds
+    size_t targetMemory = qMax(minimumBuffer, qMin(maximumBuffer, targetFromAvailable));
+    
+    // Calculate slots based on target memory and slot size
+    size_t calculatedSlots = targetMemory / slotSize;
+    
+    // Ensure reasonable slot counts (at least 8 for pipelining, at most 8192)
+    calculatedSlots = qMax(static_cast<size_t>(8), qMin(static_cast<size_t>(8192), calculatedSlots));
+    
+    size_t actualBufferMB = (calculatedSlots * slotSize) / (1024 * 1024);
+    qDebug() << "Ring buffer:" << calculatedSlots << "slots x" << (slotSize / 1024) << "KB ="
+             << actualBufferMB << "MB"
+             << "(available:" << availableMemMB << "MB, total:" << totalMemMB << "MB)";
+    
+    return calculatedSlots;
+}
+
+void SystemMemoryManager::logConfigurationSummary()
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    SyncConfiguration syncConfig = calculateSyncConfiguration();
+    size_t inputBuf = getOptimalInputBufferSize();
+    size_t writeBuf = getOptimalWriteBufferSize();
+    
+    qDebug() << "=== Memory-Adaptive Configuration Summary ===";
+    qDebug() << "Platform:" << getPlatformName();
+    qDebug() << "System Memory:" << totalMemMB << "MB";
+    qDebug() << "Memory Tier:" << syncConfig.memoryTier;
+    qDebug() << "Input Buffer:" << (inputBuf / 1024) << "KB";
+    qDebug() << "Write Buffer:" << (writeBuf / 1024) << "KB";
+    qDebug() << "Sync Interval:" << (syncConfig.syncIntervalBytes / (1024 * 1024)) << "MB /" 
+             << syncConfig.syncIntervalMs << "ms";
+    qDebug() << "=============================================";
 }
 

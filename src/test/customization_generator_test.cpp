@@ -228,7 +228,11 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("country=GB"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"TestNetwork\""));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("scan_ssid=1"));
+    // WPA2/WPA3 transition mode for compatibility with both security types
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("key_mgmt=WPA-PSK SAE"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("psk=hashed_password_here"));
+    // PMF optional for WPA3 compatibility
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ieee80211w=1"));
 }
 
 TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customization]") {
@@ -243,7 +247,10 @@ TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customiz
     // Should still include psk= line even when empty (matching old Imager behavior)
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("wpa_supplicant.conf"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"OpenNetwork\""));
+    // WPA2/WPA3 transition mode
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("key_mgmt=WPA-PSK SAE"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("\tpsk="));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ieee80211w=1"));
 }
 
 TEST_CASE("CustomisationGenerator WiFi country only (no SSID)", "[customization]") {
@@ -438,6 +445,49 @@ TEST_CASE("CustomisationGenerator handles multiline SSH key", "[customization][n
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssh-rsa AAAAB3...key2"));
 }
 
+TEST_CASE("CustomisationGenerator handles SSH public key only (no username/password)", "[customization][ssh]") {
+    // Regression test for issue: public key SSH without username/password caused
+    // initial setup wizard to appear because userconf wasn't run
+    QVariantMap settings;
+    settings["sshEnabled"] = true;
+    settings["sshPublicKey"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestPublicKey user@host";
+    // Note: NO sshUserName or sshUserPassword set
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // SSH key should be written
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("cat > \"$FIRSTUSERHOME/.ssh/authorized_keys\" <<'EOF'"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssh-ed25519"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("PasswordAuthentication no"));
+    
+    // Crucially: userconf should STILL run to mark system as configured
+    // This prevents the initial setup wizard from appearing
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("/usr/lib/userconf-pi/userconf"));
+    // Should use default 'pi' user when no username specified
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("'pi'"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init handles SSH public key only (no username/password)", "[cloudinit][ssh]") {
+    // Regression test for issue: public key SSH without username/password caused
+    // users section to be omitted from cloud-init config
+    QVariantMap settings;
+    settings["sshPublicKey"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestPublicKey user@host";
+    // Note: NO sshUserName or sshUserPassword set
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Should generate users section even without explicit username
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("enable_ssh: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: pi"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh-ed25519"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+}
+
 TEST_CASE("CustomisationGenerator handles very long hostname", "[customization][negative]") {
     QVariantMap settings;
     // Hostnames should be max 63 chars, but test we don't crash with longer
@@ -610,20 +660,20 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, token, false, true, "testuser");
     QString yaml = QString::fromUtf8(userdata);
     
-    // Check deploy key file is written with defer option
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("write_files:"));
-    QString expectedPath = QString("- path: /home/testuser/") + PI_CONNECT_CONFIG_PATH + "/" + PI_CONNECT_DEPLOY_KEY_FILENAME;
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedPath.toStdString()));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("permissions: '0600'"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("owner: testuser:testuser"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("defer: true"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("content: |"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
-    
-    // Check runcmd section exists and creates config directory
+    // Check runcmd section exists (Pi Connect uses runcmd to ensure user exists first)
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
+    
+    // Check config directory is created
     QString expectedInstallDir = QString("install -o testuser -m 700 -d /home/testuser/") + PI_CONNECT_CONFIG_PATH;
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(expectedInstallDir.toStdString()));
+    
+    // Check deploy key file is written via printf in runcmd (not write_files)
+    // This approach is used because cloud-init tries to resolve user/group at parse time
+    // with write_files defer:true, which fails if the user doesn't exist yet
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("printf"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("test-token-abcd-1234"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(PI_CONNECT_DEPLOY_KEY_FILENAME));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chmod 600"));
     
     // Check systemd unit directories are created
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(".config/systemd/user/default.target.wants"));
@@ -662,6 +712,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("regulatory-domain: \"DE\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("access-points:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"TestNetwork\":"));
+    // Use password shorthand (not auth: block) for automatic WPA2/WPA3 transition mode
+    // See: https://github.com/canonical/netplan/blob/main/src/parse.c (handle_access_point_password)
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password: \"fakecryptedhash123\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("optional: true"));
 }
@@ -677,6 +729,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidde
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"HiddenNetwork\":"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hidden: true"));
+    // Use password shorthand (not auth: block) for automatic WPA2/WPA3 transition mode
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password:"));
 }
 
 TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[cloudinit][network]") {
@@ -711,6 +765,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with speci
     
     // Quotes should be escaped
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Test \\\"Network\\\" (5GHz)"));
+    // Use password shorthand (not auth: block) for automatic WPA2/WPA3 transition mode
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password:"));
 }
 
 TEST_CASE("CustomisationGenerator handles empty cloud-init settings gracefully", "[cloudinit][negative]") {

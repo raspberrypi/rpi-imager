@@ -107,6 +107,21 @@
         <source>PEM Files (*.pem);;All Files (*)</source>
         <translation>File PEM (*.pem);;Tutti i file (*)</translation>
     </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AsyncCacheWriter</name>
+    <message>
+        <source>Cache write error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -453,10 +468,6 @@
         <translation>Errore accesso negato durante la scrittura del file su disco.</translation>
     </message>
     <message>
-        <source>Error writing file to disk</source>
-        <translation>Errore scrittura file su disco</translation>
-    </message>
-    <message>
         <source>Error writing to storage (while flushing)</source>
         <translation>Errore scrittura nello storage (durante flushing)</translation>
     </message>
@@ -635,6 +646,22 @@
     <message>
         <source>Failed to write secure boot files: %1</source>
         <translation>Impossibile scrivere i file di Secure Boot: %1</translation>
+    </message>
+    <message>
+        <source>Unmounting volumes...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning disk...</source>
+        <translation type="unfinished">Pulizia del disco...</translation>
+    </message>
+    <message>
+        <source>Cleaning disk (legacy method)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing customization files...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -830,6 +857,17 @@
     </message>
 </context>
 <context>
+    <name>ImComboBox</name>
+    <message>
+        <source>Type to search: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(press again to cycle)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ImFileDialog</name>
     <message>
         <source>Select File</source>
@@ -858,6 +896,35 @@
     <message>
         <source>No files in this folder</source>
         <translation>Nessun file in questa cartella</translation>
+    </message>
+    <message>
+        <source>Folder: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionButton</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionPill</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImPopup</name>
+    <message>
+        <source>Dialog</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -964,6 +1031,14 @@
     <message>
         <source> or </source>
         <translation> o </translation>
+    </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>JSON files (*.json);;All files (*)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1086,7 +1161,14 @@
     <name>MacFile</name>
     <message>
         <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
-        <translation>Raspberry Pi Imager deve accedere al disco per scrivere l&apos;immagine.</translation>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>NativeFileDialog</name>
+    <message>
+        <source>File type:</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1267,6 +1349,12 @@ Please run with elevated privileges: sudo %1</source>
         <translation>Non stai eseguendo come root.
 
 Esegui con privilegi elevati: sudo %1</translation>
+    </message>
+    <message>
+        <source>You are not running as root.
+
+Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1450,20 +1538,8 @@ Esegui con privilegi elevati: sudo %1</translation>
         <translation>Scopri di più su Secure Boot</translation>
     </message>
     <message>
-        <source>Your boot partition will be signed using the RSA private key configured in App Options.</source>
-        <translation>La partizione di boot verrà firmata usando la chiave privata RSA configurata nelle Opzioni App.</translation>
-    </message>
-    <message>
         <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
         <translation>Questo creerà i file boot.img e boot.sig richiesti per Secure Boot di Raspberry Pi.</translation>
-    </message>
-    <message>
-        <source>Private Key: %1</source>
-        <translation>Chiave privata: %1</translation>
-    </message>
-    <message>
-        <source>(not configured)</source>
-        <translation>(non configurata)</translation>
     </message>
     <message>
         <source>Public Key Fingerprint: %1</source>
@@ -1476,6 +1552,50 @@ Esegui con privilegi elevati: sudo %1</translation>
     <message>
         <source>(unable to compute)</source>
         <translation>(impossibile calcolare)</translation>
+    </message>
+    <message>
+        <source>RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished">Cambia</translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="unfinished">Seleziona</translation>
+    </message>
+    <message>
+        <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
+        <translation type="unfinished">Seleziona una chiave privata RSA 2048-bit per firmare le immagini di avvio in modalità Secure Boot</translation>
+    </message>
+    <message>
+        <source>Select RSA Private Key</source>
+        <translation type="unfinished">Seleziona chiave privata RSA</translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem);;All Files (*)</source>
+        <translation type="unfinished">File PEM (*.pem);;Tutti i file (*)</translation>
+    </message>
+    <message>
+        <source>Selected: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Your boot partition will be signed using the selected RSA private key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please select an RSA private key above to enable secure boot signing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1543,36 +1663,24 @@ Deseleziona &apos;Escludi le unità di sistema&apos;
 per visualizzare le unità di sistema.</translation>
     </message>
     <message>
-        <source>When checked, system drives are hidden from the list. Uncheck to show all drives
-including system drives.</source>
-        <translation>Se attivato, le unità di sistema vengono nascoste dall’elenco. Disattiva
-per mostrare tutte le unità, incluse quelle di sistema.</translation>
-    </message>
-    <message>
         <source>No storage devices found. Please connect a storage device to continue.</source>
         <translation>Nessun dispositivo di archiviazione trovato. Collega un dispositivo per continuare.</translation>
     </message>
     <message>
-        <source>No valid storage devices are currently available. All visible devices are
-read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos;
-to show hidden system drives.</source>
-        <translation>Nessun dispositivo di archiviazione valido è attualmente disponibile. Tutti
-i dispositivi visibili sono in sola lettura. Prova a collegare un nuovo dispositivo
-o deseleziona &apos;Escludi le unità di sistema&apos; per mostrare quelle nascoste.</translation>
+        <source>When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No valid storage devices are currently available. All devices are read-only.
-Please connect a writable storage device to continue.</source>
-        <translation>Nessun dispositivo di archiviazione valido è attualmente disponibile. Tutti
-i dispositivi sono in sola lettura. Collega un dispositivo scrivibile per
-continuare.</translation>
+        <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos; to show hidden system drives.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No valid storage devices are currently available. Uncheck &apos;Exclude system
-drives&apos; to show hidden system drives, or connect a new storage device.</source>
-        <translation>Nessun dispositivo di archiviazione valido è attualmente disponibile.
-Deseleziona &apos;Escludi le unità di sistema&apos; per mostrare quelle nascoste o collega un
-nuovo dispositivo.</translation>
+        <source>No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1871,14 +1979,6 @@ nuovo dispositivo.</translation>
 </translation>
     </message>
     <message>
-        <source>Warning: Only replace the token if you initiated this action. </source>
-        <translation>Attenzione: Sostituisci il token solo se hai avviato tu questa azione. </translation>
-    </message>
-    <message>
-        <source>If you didn&apos;t, someone could be trying to push a bad token to RPi Imager.</source>
-        <translation>Se non sei stato tu, qualcuno potrebbe star cercando di inviare un token malevolo a RPi Imager.</translation>
-    </message>
-    <message>
         <source>Replace token</source>
         <translation>Sostituisci token</translation>
     </message>
@@ -1901,6 +2001,10 @@ nuovo dispositivo.</translation>
     <message>
         <source>Secure Boot</source>
         <translation>Secure Boot</translation>
+    </message>
+    <message>
+        <source>Warning: Only overwrite the token if you initiated this action.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2044,6 +2148,10 @@ nuovo dispositivo.</translation>
         <source>Writing in progress — do not disconnect the storage device</source>
         <translation>Scrittura in corso — non scollegare il dispositivo di archiviazione</translation>
     </message>
+    <message>
+        <source>Please wait... %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -2122,6 +2230,14 @@ nuovo dispositivo.</translation>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
         <translation>Esci da Raspberry Pi Imager - devi riavviare con privilegi elevati per scrivere immagini</translation>
+    </message>
+    <message>
+        <source>Install Authorization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

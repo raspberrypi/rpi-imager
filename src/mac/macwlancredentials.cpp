@@ -12,8 +12,9 @@
 
 QByteArray MacWlanCredentials::getSSID()
 {
-    /* Request location permission (needed for SSID access on newer macOS) */
-    rpiimager_request_location_permission();
+    /* Note: Location permission request with async callback is handled by ImageWriter::getSSID()
+     * to enable notification when permission is granted after the initial timeout.
+     * Here we just check if we have permission and try to get the SSID. */
 
     /* Prefer CoreWLAN via Objective-C++ helper */
     if (_ssid.isEmpty())
@@ -25,6 +26,14 @@ QByteArray MacWlanCredentials::getSSID()
             free((void*)ssid_c);
             if (!_ssid.isEmpty())
                 qDebug() << "Detected SSID via CoreWLAN:" << _ssid;
+        }
+        else
+        {
+            /* Check if we have location permission - if not, SSID detection may have failed due to that */
+            if (!rpiimager_check_location_permission())
+            {
+                qDebug() << "SSID detection failed - location permission not (yet) granted";
+            }
         }
     }
 

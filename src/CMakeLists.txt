@@ -249,7 +249,8 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
-    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp")
+    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
+    "performancestats.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
@@ -442,6 +443,11 @@ if(GENERATE_COUNTRIES_FROM_REGDB AND DEFINED GENERATE_COUNTRIES_TGT)
     set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_COUNTRIES_TGT})
 endif()
 
+# Add Icon Composer dependency for macOS dark mode icons
+if(APPLE AND DEFINED ICON_COMPOSER_TARGET AND NOT "${ICON_COMPOSER_TARGET}" STREQUAL "")
+    add_dependencies(${PROJECT_NAME} ${ICON_COMPOSER_TARGET})
+endif()
+
 if(ENABLE_TELEMETRY)
     add_definitions(-DTELEMETRY_ENABLED_DEFAULT=true)
 else()
@@ -491,6 +497,7 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImOptionPill.qml
         qmlcomponents/ImOptionButton.qml
         qmlcomponents/ImTextField.qml
+        qmlcomponents/ImPasswordField.qml
         qmlcomponents/ImToggleTab.qml
         qmlcomponents/SelectionListView.qml
         qmlcomponents/OSSelectionListView.qml

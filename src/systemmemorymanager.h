@@ -81,6 +81,24 @@ public:
      */
     size_t getSystemPageSize();
 
+    /**
+     * @brief Calculate optimal ring buffer slot count based on available memory
+     * 
+     * Balances pipelining depth against memory usage. More slots allow
+     * better overlap between producer and consumer, but use more memory.
+     * 
+     * @param slotSize Size of each slot in bytes
+     * @return Optimal number of slots for the ring buffer
+     */
+    size_t getOptimalRingBufferSlots(size_t slotSize);
+
+    /**
+     * @brief Log a summary of all memory-based configuration
+     * 
+     * Useful for diagnostics - shows all adaptive settings based on detected memory.
+     */
+    void logConfigurationSummary();
+
 private:
     SystemMemoryManager() = default;
     ~SystemMemoryManager() = default;

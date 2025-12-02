@@ -14,6 +14,7 @@
 #include <QThread>
 #include <QFile>
 #include <QElapsedTimer>
+#include <QFuture>
 #include <atomic>
 #include <time.h>
 #include <curl/curl.h>
@@ -21,6 +22,7 @@
 #include "imageadvancedoptions.h"
 #include "systemmemorymanager.h"
 #include "file_operations.h"
+#include "asynccachewriter.h"
 
 
 class DownloadThread : public QThread
@@ -114,6 +116,19 @@ public:
     void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const ImageOptions::AdvancedOptions opts);
 
     /*
+     * Set child devices to unmount (macOS APFS volumes)
+     * This avoids re-scanning the drive list during unmount, saving ~1 second
+     * Call with empty list if device has no child devices (still skips the scan)
+     */
+    void setChildDevices(const QStringList &devices);
+    
+    /*
+     * Mark that child device info was provided (even if empty)
+     * This allows skipping the scan when we know there are no child devices
+     */
+    void setChildDevicesProvided(bool provided);
+
+    /*
      * Thread safe download progress query functions
      */
     uint64_t dlNow();
@@ -132,6 +147,25 @@ signals:
     void cacheFileHashUpdated(QByteArray cacheFileHash, QByteArray imageHash);
     void finalizing();
     void preparationStatusUpdate(QString msg);
+    
+    // Performance event signals (connected by ImageWriter to PerformanceStats)
+    void eventDriveUnmount(quint32 durationMs, bool success);
+    void eventDriveUnmountVolumes(quint32 durationMs, bool success);  // Windows volume unmounting
+    void eventDriveDiskClean(quint32 durationMs, bool success);       // Windows disk cleaning
+    void eventDriveRescan(quint32 durationMs, bool success);          // Windows disk rescan
+    void eventDriveOpen(quint32 durationMs, bool success, QString metadata);
+    void eventDirectIOAttempt(bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage);
+    void eventCustomisation(quint32 durationMs, bool success, QString metadata);
+    void eventFinalSync(quint32 durationMs, bool success);
+    void eventVerify(quint32 durationMs, bool success);
+    void eventDecompressInit(quint32 durationMs, bool success);
+    void eventPeriodicSync(quint32 durationMs, bool success, quint64 bytesWritten);
+    void eventImageExtraction(quint32 durationMs, bool success);      // Archive extraction setup
+    void eventPartitionTableWrite(quint32 durationMs, bool success);  // MBR/partition table write
+    void eventFatPartitionSetup(quint32 durationMs, bool success);    // FAT partition parsing
+    void eventDeviceClose(quint32 durationMs, bool success);          // Device handle close
+    void eventNetworkRetry(quint32 sleepMs, QString metadata);        // Network retry with reason
+    void eventNetworkConnectionStats(QString metadata);               // CURL connection timing stats
 
 protected:
     virtual void run();
@@ -169,6 +203,8 @@ protected:
     std::uint64_t _lastFailureOffset;
     qint64 _sectorsStart;
     QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash, _config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
+    QStringList _childDevices;  // macOS APFS child volumes to unmount
+    bool _childDevicesProvided = false;  // true if child device info was provided (even if empty list)
     ImageOptions::AdvancedOptions _advancedOptions;
     char *_firstBlock;
     size_t _firstBlockSize;
@@ -181,7 +217,10 @@ protected:
 
     // Unified cross-platform file operations
     std::unique_ptr<rpi_imager::FileOperations> _file;
-    QFile _cachefile;
+    
+    // Async cache writer for non-blocking cache file I/O
+    std::unique_ptr<AsyncCacheWriter> _asyncCacheWriter;
+    QString _cacheFilename;  // Store filename for legacy signal emission
 
 #ifdef Q_OS_WIN
     // Windows-specific volume file for legacy compatibility
@@ -190,7 +229,10 @@ protected:
 #endif
 
     AcceleratedCryptographicHash _writehash, _verifyhash;
-    AcceleratedCryptographicHash _cachehash;
+
+    // Pipelined hash computation - store future for previous hash operation
+    QFuture<void> _pendingHashFuture;
+    bool _hasPendingHash;
 
     // Cross-platform adaptive page cache flushing
     qint64 _lastSyncBytes;

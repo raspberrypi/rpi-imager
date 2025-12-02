@@ -4,6 +4,7 @@
  */
 
 #include "../dependencies/drivelist/src/drivelist.hpp"
+#include "../embedded_config.h"
 #include <QProcess>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -142,22 +143,31 @@ namespace Drivelist
             dp.removeAll("");
             d.description = dp.join(" ").toStdString();
 
-            /* Mark internal NVMe drives as non-system if not mounted
-               anywhere else than under /media */
+            /* Mark NVMe drives as system drives by default to avoid showing
+               internal NVMe drives in the drive list. In embedded mode (typically
+               Raspberry Pi devices), allow NVMe drives that are not mounted
+               (or only mounted under /media/) to appear as they might be
+               external storage devices. */
             if (d.isSystem && subsystems.contains("nvme"))
             {
-                bool isMounted = false;
-                for (const std::string& mp : d.mountpoints)
+                // Only allow NVMe drives to appear in embedded mode
+                if (::isEmbeddedMode())
                 {
-                    if (!QByteArray::fromStdString(mp).startsWith("/media/")) {
-                        isMounted = true;
-                        break;
+                    bool isMounted = false;
+                    for (const std::string& mp : d.mountpoints)
+                    {
+                        if (!QByteArray::fromStdString(mp).startsWith("/media/")) {
+                            isMounted = true;
+                            break;
+                        }
+                    }
+                    if (!isMounted)
+                    {
+                        d.isSystem = false;
                     }
                 }
-                if (!isMounted)
-                {
-                    d.isSystem = false;
-                }
+                // In non-embedded mode, keep NVMe drives marked as system
+                // so they are filtered out from the drive list
             }
 
             deviceList.push_back(d);

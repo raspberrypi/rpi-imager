@@ -110,7 +110,9 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     }
 
     // User and password setup with userconf integration
-    if (!userName.isEmpty() || !userPass.isEmpty()) {
+    // Also run when SSH public keys are configured (even without password) to ensure
+    // the system is marked as configured and the initial setup wizard is skipped
+    if (!userName.isEmpty() || !userPass.isEmpty() || !keyList.isEmpty()) {
         line(QStringLiteral("if [ -f /usr/lib/userconf-pi/userconf ]; then"), script);
         line(QStringLiteral("   /usr/lib/userconf-pi/userconf ") + shellQuote(effectiveUser) + QStringLiteral(" ") + shellQuote(userPass), script);
         line(QStringLiteral("else"), script);
@@ -155,7 +157,11 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         escapedSsid.replace("\\", "\\\\");  // Backslash must be escaped first
         escapedSsid.replace("\"", "\\\"");  // Then escape quotes
         line(QStringLiteral("\tssid=\"") + escapedSsid + QStringLiteral("\""), script);
+        // WPA2/WPA3 transition mode: allow connection to both WPA2-PSK and WPA3-SAE networks
+        line(QStringLiteral("\tkey_mgmt=WPA-PSK SAE"), script);
         line(QStringLiteral("\tpsk=") + cryptedPsk, script);
+        // ieee80211w=1 enables optional Protected Management Frames (required for WPA3, optional for WPA2)
+        line(QStringLiteral("\tieee80211w=1"), script);
         line(QStringLiteral("}"), script);
         line(QStringLiteral("WPAEOF"), script);
         line(QStringLiteral("   chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf"), script);
@@ -313,7 +319,9 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     if (sshEnabled) {
         push(QStringLiteral("enable_ssh: true"), cloud);
         
-        if (!userName.isEmpty()) {
+        // Generate users section when username is set, OR when SSH public keys are configured
+        // This ensures the system is properly configured even with key-only authentication
+        if (!userName.isEmpty() || !sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
             push(QStringLiteral("users:"), cloud);
             // Parity: legacy QML used the typed username even when not renaming the user.
             // Fall back to getCurrentUser() when SSH is enabled and no explicit username was saved.
@@ -497,6 +505,9 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
             key.replace('"', QStringLiteral("\\\""));
             push(QStringLiteral("        \"") + key + QStringLiteral("\":"), netcfg);
         }
+        if (hidden) {
+            push(QStringLiteral("          hidden: true"), netcfg);
+        }
         // Prefer persisted crypted PSK; fallback to deriving from legacy plaintext setting
         QString effectiveCryptedPsk = cryptedPskFromSettings;
         if (effectiveCryptedPsk.isEmpty()) {
@@ -508,10 +519,10 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         }
         // Required because without a password and hidden netplan would read ssid: null and crash
         effectiveCryptedPsk.replace('"', QStringLiteral("\\\""));
+        // Use password shorthand at access-point level (not inside auth: block)
+        // This makes netplan automatically enable WPA2/WPA3 transition mode with PMF optional
+        // See: https://github.com/canonical/netplan/blob/main/src/parse.c (handle_access_point_password)
         push(QStringLiteral("          password: \"") + effectiveCryptedPsk + QStringLiteral("\""), netcfg);
-        if (hidden) {
-            push(QStringLiteral("          hidden: true"), netcfg);
-        }
         
         push(QStringLiteral("      optional: true"), netcfg);
     }

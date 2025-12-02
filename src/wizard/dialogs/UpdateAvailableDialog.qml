@@ -24,13 +24,21 @@ BaseDialog {
 
     // Register focus groups when component is ready
     Component.onCompleted: {
+        registerFocusGroup("content", function(){ 
+            // Only include text elements when screen reader is active (otherwise they're not focusable)
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                return [titleText, descriptionText]
+            }
+            return []
+        }, 0)
         registerFocusGroup("buttons", function(){ 
             return [yesButton, noButton] 
-        }, 0)
+        }, 1)
     }
 
     // Dialog content
     Text {
+        id: titleText
         text: qsTr("Update available")
         font.pixelSize: Style.fontSizeHeading
         font.family: Style.fontFamilyBold
@@ -45,6 +53,7 @@ BaseDialog {
     }
 
     Text {
+        id: descriptionText
         text: qsTr("There is a newer version of Imager available. Would you like to visit the website to download it?")
         wrapMode: Text.WordWrap
         font.pixelSize: Style.fontSizeDescription

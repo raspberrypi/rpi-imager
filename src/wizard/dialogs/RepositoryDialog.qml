@@ -24,18 +24,25 @@ BaseDialog {
     property string originalRepo: ""
 
     Component.onCompleted: {
+        registerFocusGroup("header", function(){
+            // Only include header text when screen reader is active (otherwise it's not focusable)
+            if (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) {
+                return [headerText]
+            }
+            return []
+        }, 0)
         registerFocusGroup("sourceTypes", function(){
             return [radioOfficial, radioCustomFile, radioCustomUri]
-        }, 0)
+        }, 1)
         registerFocusGroup("customFile", function(){
             return radioCustomFile.checked ? [fieldCustomRepository, browseButton] : []
-        }, 1)
+        }, 2)
         registerFocusGroup("customUri", function(){
             return radioCustomUri.checked ? [fieldCustomUri] : []
-        }, 2)
+        }, 3)
         registerFocusGroup("buttons", function(){
             return [cancelButton, saveButton]
-        }, 3)
+        }, 4)
     }
 
     Connections {
@@ -47,6 +54,7 @@ BaseDialog {
 
     // Header
     Text {
+        id: headerText
         text: qsTr("Content Repository")
         font.pixelSize: Style.fontSizeLargeHeading
         font.family: Style.fontFamilyBold

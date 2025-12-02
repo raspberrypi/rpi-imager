@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cstdio>
 #include <iostream>
+#include <QProcess>
 
 namespace PlatformQuirks {
 
@@ -169,6 +170,17 @@ static bool hasNvidiaGraphicsCard() {
 }
 
 void applyQuirks() {
+    // Suppress Windows "Insert a disk" / "not accessible" system error dialogs
+    // for the main thread. This prevents Windows from showing modal dialogs
+    // when accessing removable drives that may not have media inserted.
+    // Worker threads set their own error mode in their run() methods.
+    // Use SetThreadErrorMode (modern API) with fallback to SetErrorMode.
+    DWORD oldMode;
+    if (!SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &oldMode)) {
+        // Fallback for older Windows versions
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+    }
+
     // Check for NVIDIA graphics cards and apply software renderer workaround
     if (hasNvidiaGraphicsCard()) {
         SetEnvironmentVariableA("QSG_RHI_PREFER_SOFTWARE_RENDERER", "1");
@@ -308,6 +320,47 @@ void attachConsole() {
         // Sync C++ iostreams with C stdio for consistency
         std::ios::sync_with_stdio();
     }
+}
+
+bool isElevatableBundle() {
+    // Windows uses UAC manifests for elevation, not this mechanism
+    return false;
+}
+
+const char* getBundlePath() {
+    // Not applicable on Windows
+    return nullptr;
+}
+
+bool hasElevationPolicyInstalled() {
+    // Not applicable on Windows
+    return false;
+}
+
+bool installElevationPolicy() {
+    // Not applicable on Windows
+    return false;
+}
+
+bool tryElevate(int argc, char** argv) {
+    // Windows uses UAC and ShellExecute with "runas" verb for elevation
+    (void)argc;
+    (void)argv;
+    return false;
+}
+
+bool launchDetached(const QString& program, const QStringList& arguments) {
+    // On Windows, QProcess::startDetached works correctly for launching
+    // detached processes that outlive the parent
+    return QProcess::startDetached(program, arguments);
+}
+
+bool runElevatedPolicyInstaller() {
+    return false;
+}
+
+void execElevated(const QStringList& extraArgs) {
+    Q_UNUSED(extraArgs);
 }
 
 } // namespace PlatformQuirks

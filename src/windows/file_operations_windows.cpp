@@ -6,37 +6,119 @@
 #include "file_operations_windows.h"
 
 #include <winioctl.h>
-#include <iostream>
+#include <sstream>
 
 namespace rpi_imager {
 
-WindowsFileOperations::WindowsFileOperations() : handle_(INVALID_HANDLE_VALUE), last_error_code_(0) {}
+// Use the common logging function from file_operations.cpp
+// Note: We're inside namespace rpi_imager, so no prefix needed
+static void Log(const std::string& msg) {
+    FileOperationsLog(msg);
+}
+
+WindowsFileOperations::WindowsFileOperations() : handle_(INVALID_HANDLE_VALUE), last_error_code_(0), using_direct_io_(false) {}
+
+bool WindowsFileOperations::IsPhysicalDrivePath(const std::string& path) {
+  // Check for physical drive paths like \\.\PHYSICALDRIVE0 (case-insensitive)
+  if (path.length() < 17) return false;  // Minimum: \\.\PHYSICALDRIVE0
+  
+  std::string prefix = path.substr(0, 17);
+  // Convert to uppercase for comparison
+  for (char& c : prefix) {
+    c = static_cast<char>(toupper(static_cast<unsigned char>(c)));
+  }
+  
+  return prefix == "\\\\.\\PHYSICALDRIVE";
+}
 
 WindowsFileOperations::~WindowsFileOperations() {
   Close();
 }
 
 FileError WindowsFileOperations::OpenDevice(const std::string& path) {
+  // Reset direct I/O info
+  direct_io_info_ = DirectIOInfo();
+  
   // Windows device paths like \\.\PHYSICALDRIVE0
-  std::cout << "Opening Windows device: " << path << std::endl;
+  Log("Opening Windows device: " + path);
   
   // Check if this is a physical drive
-  bool isPhysicalDrive = (path.find("\\\\.\\PHYSICALDRIVE") == 0);
+  bool isPhysicalDrive = IsPhysicalDrivePath(path);
+  Log("Path '" + path + "' isPhysicalDrive=" + (isPhysicalDrive ? "YES" : "NO"));
   
   if (isPhysicalDrive) {
-    std::cout << "Detected physical drive, ensuring no volumes are mounted" << std::endl;
-    
-    // For physical drives, we need to ensure no volumes are mounted
-    // This is handled by the calling code in downloadthread.cpp
-    // but we can add additional safety here
+    Log("Detected physical drive, will attempt direct I/O");
+    direct_io_info_.attempted = true;
+  }
+  
+  // Use direct I/O flags for physical drives to bypass OS page cache
+  // This provides:
+  // 1. Better performance by avoiding double-buffering
+  // 2. More accurate verification (reads from actual device, not cache)
+  // 3. Reduced memory pressure on the system
+  // Note: Requires sector-aligned buffers (already done via qMallocAligned with 4096 alignment)
+  DWORD flags = FILE_ATTRIBUTE_NORMAL;
+  bool attemptingDirectIO = false;
+  if (isPhysicalDrive) {
+    flags = FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN;
+    attemptingDirectIO = true;
+    Log("Using direct I/O (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH) for physical drive");
   }
   
   FileError result = OpenInternal(path, 
                                   GENERIC_READ | GENERIC_WRITE,
-                                  OPEN_EXISTING);
+                                  OPEN_EXISTING,
+                                  flags);
   if (result != FileError::kSuccess) {
-    std::cout << "Failed to open device: " << path << std::endl;
-    return result;
+    // If direct I/O failed, try without it as a fallback
+    if (isPhysicalDrive && attemptingDirectIO) {
+      DWORD directIoError = static_cast<DWORD>(last_error_code_);
+      direct_io_info_.error_code = static_cast<int>(directIoError);
+      
+      std::ostringstream oss;
+      oss << "Direct I/O open failed with error " << directIoError << " (0x" << std::hex << directIoError << ")";
+      Log(oss.str());
+      
+      // Common error codes:
+      // ERROR_INVALID_PARAMETER (87) - alignment/size issues
+      // ERROR_ACCESS_DENIED (5) - permission or volume in use
+      // ERROR_SHARING_VIOLATION (32) - file in use by another process
+      switch (directIoError) {
+        case ERROR_INVALID_PARAMETER:
+          direct_io_info_.error_message = "ERROR_INVALID_PARAMETER: Sector size/alignment issue";
+          Log("  -> ERROR_INVALID_PARAMETER: May be sector size/alignment issue");
+          break;
+        case ERROR_ACCESS_DENIED:
+          direct_io_info_.error_message = "ERROR_ACCESS_DENIED: Volume in use or need admin rights";
+          Log("  -> ERROR_ACCESS_DENIED: Volume may still be in use or need admin rights");
+          break;
+        case ERROR_SHARING_VIOLATION:
+          direct_io_info_.error_message = "ERROR_SHARING_VIOLATION: Another process has device open";
+          Log("  -> ERROR_SHARING_VIOLATION: Another process has the device open");
+          break;
+        default:
+          direct_io_info_.error_message = "Unknown error, fell back to buffered I/O";
+          Log("  -> Falling back to buffered I/O");
+          break;
+      }
+      
+      using_direct_io_ = false;
+      result = OpenInternal(path, 
+                           GENERIC_READ | GENERIC_WRITE,
+                           OPEN_EXISTING,
+                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN);
+    }
+    
+    if (result != FileError::kSuccess) {
+      std::ostringstream oss;
+      oss << "Failed to open device: " << path << " (error " << last_error_code_ << ")";
+      Log(oss.str());
+      return result;
+    }
+  } else if (isPhysicalDrive) {
+    // Direct I/O succeeded!
+    using_direct_io_ = true;  // Set AFTER OpenInternal (which calls Close() and resets it)
+    direct_io_info_.succeeded = true;
   }
 
   // Enable extended DASD I/O for raw disk access
@@ -44,28 +126,30 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   if (!DeviceIoControl(handle_, FSCTL_ALLOW_EXTENDED_DASD_IO, 
                        nullptr, 0, nullptr, 0, &bytes_returned, nullptr)) {
     // This may fail on some systems, but we can continue
-    std::cout << "Warning: FSCTL_ALLOW_EXTENDED_DASD_IO failed, continuing anyway" << std::endl;
+    Log("Warning: FSCTL_ALLOW_EXTENDED_DASD_IO failed, continuing anyway");
   }
 
   // Only try to lock volume if this is not a physical drive
   if (!isPhysicalDrive) {
     FileError lock_result = LockVolume();
     if (lock_result != FileError::kSuccess) {
-      std::cout << "Warning: Failed to lock volume, continuing anyway" << std::endl;
+      Log("Warning: Failed to lock volume, continuing anyway");
     }
   } else {
-    std::cout << "Skipping volume lock for physical drive" << std::endl;
+    Log("Skipping volume lock for physical drive");
   }
   
-  std::cout << "Successfully opened device: " << path << std::endl;
+  Log("Successfully opened device: " + path + (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)"));
   return FileError::kSuccess;
 }
 
 FileError WindowsFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
-  // For test files, create a regular file
+  // For test files, create a regular file (not using direct I/O)
+  using_direct_io_ = false;
   FileError result = OpenInternal(path,
                                   GENERIC_READ | GENERIC_WRITE,
-                                  CREATE_ALWAYS);
+                                  CREATE_ALWAYS,
+                                  FILE_ATTRIBUTE_NORMAL);
   if (result != FileError::kSuccess) {
     return result;
   }
@@ -93,7 +177,7 @@ FileError WindowsFileOperations::WriteAtOffset(
     std::size_t size) {
   
   if (!IsOpen()) {
-    std::cout << "WriteAtOffset: Device not open" << std::endl;
+    Log("WriteAtOffset: Device not open");
     return FileError::kOpenError;
   }
 
@@ -103,7 +187,9 @@ FileError WindowsFileOperations::WriteAtOffset(
   
   if (!SetFilePointerEx(handle_, offset_large, nullptr, FILE_BEGIN)) {
     DWORD error = GetLastError();
-    std::cout << "WriteAtOffset: SetFilePointerEx failed, offset=" << offset << ", error=" << error << std::endl;
+    std::ostringstream oss;
+    oss << "WriteAtOffset: SetFilePointerEx failed, offset=" << offset << ", error=" << error;
+    Log(oss.str());
     return FileError::kSeekError;
   }
 
@@ -119,35 +205,41 @@ FileError WindowsFileOperations::WriteAtOffset(
     
     if (!WriteFile(handle_, data + bytes_written, chunk_size, &written, nullptr)) {
       DWORD error = GetLastError();
-      std::cout << "WriteAtOffset: WriteFile failed, offset=" << offset + bytes_written 
-                << ", chunk_size=" << chunk_size << ", error=" << error << std::endl;
+      {
+        std::ostringstream oss;
+        oss << "WriteAtOffset: WriteFile failed, offset=" << (offset + bytes_written)
+            << ", chunk_size=" << chunk_size << ", error=" << error;
+        Log(oss.str());
+      }
       
       // Handle specific Windows errors
       if (error == ERROR_ACCESS_DENIED) {
-        std::cout << "WriteAtOffset: Access denied - volume may be locked or protected" << std::endl;
+        Log("WriteAtOffset: Access denied - volume may be locked or protected");
         return FileError::kWriteError;
       } else if (error == ERROR_DISK_FULL) {
-        std::cout << "WriteAtOffset: Disk full" << std::endl;
+        Log("WriteAtOffset: Disk full");
         return FileError::kWriteError;
       } else if (error == ERROR_WRITE_PROTECT) {
-        std::cout << "WriteAtOffset: Write protected" << std::endl;
+        Log("WriteAtOffset: Write protected");
         return FileError::kWriteError;
       } else if (error == ERROR_SECTOR_NOT_FOUND || error == ERROR_CRC) {
-        std::cout << "WriteAtOffset: Media error detected" << std::endl;
+        Log("WriteAtOffset: Media error detected");
         return FileError::kWriteError;
       }
       
       // For other errors, try to retry
       if (retry_count < max_retries) {
         retry_count++;
-        std::cout << "WriteAtOffset: Retrying write operation, attempt " << retry_count << std::endl;
+        std::ostringstream oss;
+        oss << "WriteAtOffset: Retrying write operation, attempt " << retry_count;
+        Log(oss.str());
         
         // Wait a bit before retry
         Sleep(100 * retry_count);
         
         // Reset file pointer
         if (!SetFilePointerEx(handle_, offset_large, nullptr, FILE_BEGIN)) {
-          std::cout << "WriteAtOffset: Failed to reset file pointer for retry" << std::endl;
+          Log("WriteAtOffset: Failed to reset file pointer for retry");
           return FileError::kSeekError;
         }
         
@@ -158,11 +250,13 @@ FileError WindowsFileOperations::WriteAtOffset(
     }
     
     if (written == 0) {
-      std::cout << "WriteAtOffset: WriteFile returned 0 bytes written" << std::endl;
+      Log("WriteAtOffset: WriteFile returned 0 bytes written");
       
       if (retry_count < max_retries) {
         retry_count++;
-        std::cout << "WriteAtOffset: Retrying write operation, attempt " << retry_count << std::endl;
+        std::ostringstream oss;
+        oss << "WriteAtOffset: Retrying write operation, attempt " << retry_count;
+        Log(oss.str());
         Sleep(100 * retry_count);
         continue;
       }
@@ -173,14 +267,7 @@ FileError WindowsFileOperations::WriteAtOffset(
     bytes_written += written;
     retry_count = 0; // Reset retry count on successful write
   }
-
-  // Flush to ensure data is written
-  if (!FlushFileBuffers(handle_)) {
-    DWORD error = GetLastError();
-    std::cout << "WriteAtOffset: FlushFileBuffers failed, error=" << error << std::endl;
-    // Continue anyway, as this is not always critical
-  }
-  
+ 
   return FileError::kSuccess;
 }
 
@@ -216,18 +303,22 @@ FileError WindowsFileOperations::GetSize(std::uint64_t& size) {
 FileError WindowsFileOperations::Close() {
   if (handle_ != INVALID_HANDLE_VALUE) {
     // Only unlock volume if this is not a physical drive
-    bool isPhysicalDrive = (current_path_.find("\\\\.\\PHYSICALDRIVE") == 0);
+    bool isPhysicalDrive = IsPhysicalDrivePath(current_path_);
     if (!isPhysicalDrive) {
       UnlockVolume(); // Unlock if it was locked
     }
     
     if (!CloseHandle(handle_)) {
       handle_ = INVALID_HANDLE_VALUE;
+      using_direct_io_ = false;
+      direct_io_info_ = DirectIOInfo();  // Reset to keep in sync
       return FileError::kCloseError;
     }
     handle_ = INVALID_HANDLE_VALUE;
   }
   current_path_.clear();
+  using_direct_io_ = false;
+  direct_io_info_ = DirectIOInfo();  // Reset to keep in sync
   return FileError::kSuccess;
 }
 
@@ -266,7 +357,7 @@ FileError WindowsFileOperations::UnlockVolume() {
   return FileError::kSuccess;
 }
 
-FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD access, DWORD creation) {
+FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags) {
   // Close any existing handle
   Close();
 
@@ -275,7 +366,7 @@ FileError WindowsFileOperations::OpenInternal(const std::string& path, DWORD acc
                         FILE_SHARE_READ | FILE_SHARE_WRITE,
                         nullptr,
                         creation,
-                        FILE_ATTRIBUTE_NORMAL, // Removed FILE_FLAG_NO_BUFFERING to fix alignment issues
+                        flags,
                         nullptr);
 
   if (handle_ == INVALID_HANDLE_VALUE) {
@@ -388,6 +479,36 @@ FileError WindowsFileOperations::Flush() {
   }
 
   return FileError::kSuccess;
+}
+
+void WindowsFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) {
+  if (!IsOpen()) {
+    return;
+  }
+
+  // Windows: FILE_FLAG_SEQUENTIAL_SCAN is already set during OpenDevice() for physical drives
+  // For additional optimization, we can flush the file buffers to ensure we read from disk
+  // Note: Windows doesn't have direct equivalents to posix_fadvise
+  
+  // Flush to ensure any cached writes are committed before verification read
+  if (!FlushFileBuffers(handle_)) {
+    DWORD error = GetLastError();
+    // Don't warn on ERROR_INVALID_FUNCTION - some devices don't support flush
+    if (error != ERROR_INVALID_FUNCTION) {
+      std::ostringstream oss;
+      oss << "Warning: FlushFileBuffers failed before verification, error: " << error
+          << " - verification may read cached data";
+      Log(oss.str());
+    }
+  }
+  
+  // The FILE_FLAG_SEQUENTIAL_SCAN hint (set at open time) tells Windows to:
+  // 1. Optimize for sequential access patterns
+  // 2. Use larger read-ahead buffers
+  // 3. Not cache data aggressively (since it won't be re-read)
+  
+  (void)offset;  // Unused on Windows - hints are file-wide, not range-specific
+  (void)length;
 }
 
 int WindowsFileOperations::GetHandle() const {

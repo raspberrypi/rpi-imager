@@ -22,6 +22,7 @@ signals:
     void success();
     void error(QString msg);
     void preparationStatusUpdate(QString msg);
+    void eventDriveFormat(quint32 durationMs, bool success);
 
 protected:
     QByteArray _device;

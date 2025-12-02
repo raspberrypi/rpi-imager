@@ -4,6 +4,6 @@ rpi-imager-embedded.AppImage => /usr/bin/rpi-imager-embedded
 
 debian/embedded-imager.service        lib/systemd/system/
 
-debian/rpi-imager.png /usr/share/icons/hicolor/128x128/apps/
+src/linux/icon/rpi-imager.svg /usr/share/icons/hicolor/scalable/apps/
 
 debian/com.raspberrypi.rpi-imager-embedded.desktop /usr/share/applications/ 

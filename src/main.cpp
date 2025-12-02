@@ -12,6 +12,9 @@
 #include <QLocale>
 #include <QSettings>
 #include <QCommandLineParser>
+#ifdef Q_OS_UNIX
+#include <unistd.h>
+#endif
 #include "cli.h"
 
 #ifndef CLI_ONLY_BUILD
@@ -63,6 +66,30 @@ static QTextStream cerr(stderr);
 #define endl  Qt::endl
 #endif
 
+// File logging support for debugging (enabled via --log-file)
+static FILE* g_logFile = nullptr;
+
+static void fileLogHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg) {
+    const char* typeStr = "";
+    switch (type) {
+        case QtDebugMsg: typeStr = "DEBUG"; break;
+        case QtInfoMsg: typeStr = "INFO"; break;
+        case QtWarningMsg: typeStr = "WARNING"; break;
+        case QtCriticalMsg: typeStr = "CRITICAL"; break;
+        case QtFatalMsg: typeStr = "FATAL"; break;
+    }
+    
+    QByteArray localMsg = msg.toLocal8Bit();
+    
+    if (g_logFile) {
+        fprintf(g_logFile, "[%s] %s\n", typeStr, localMsg.constData());
+        fflush(g_logFile);
+    }
+    
+    // Also print to stderr
+    fprintf(stderr, "[%s] %s\n", typeStr, localMsg.constData());
+}
+
 #ifdef Q_OS_WIN
 static void consoleMsgHandler(QtMsgType, const QMessageLogContext &, const QString &str) {
     cerr << str << endl;
@@ -81,6 +108,62 @@ static constexpr quint16 kPort =
 
 int main(int argc, char *argv[])
 {
+    // Parse --log-file early, before Qt initialization
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--log-file") == 0 && i + 1 < argc) {
+            const char* logPath = argv[i + 1];
+            
+#ifdef Q_OS_LINUX
+            // On Linux, use separate log files for unprivileged vs elevated instances
+            static char logPathBuffer[512];
+            if (geteuid() == 0) {
+                const char* dot = strrchr(logPath, '.');
+                if (dot && dot > strrchr(logPath, '/')) {
+                    size_t prefixLen = dot - logPath;
+                    snprintf(logPathBuffer, sizeof(logPathBuffer), "%.*s-elevated%s", 
+                             (int)prefixLen, logPath, dot);
+                } else {
+                    snprintf(logPathBuffer, sizeof(logPathBuffer), "%s-elevated", logPath);
+                }
+                logPath = logPathBuffer;
+            }
+#endif
+            
+            g_logFile = fopen(logPath, "a");
+            if (g_logFile) {
+#ifdef Q_OS_UNIX
+                fprintf(g_logFile, "\n=== Raspberry Pi Imager started (PID %d, EUID %d) ===\n", 
+                        getpid(), geteuid());
+#else
+                fprintf(g_logFile, "\n=== Raspberry Pi Imager started ===\n");
+#endif
+                fflush(g_logFile);
+                qInstallMessageHandler(fileLogHandler);
+            }
+            break;
+        }
+    }
+
+    // Handle --install-elevation-policy before Qt initialization
+    // Called via pkexec to install polkit policy (runs as root)
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--install-elevation-policy") == 0) {
+            bool success = PlatformQuirks::installElevationPolicy();
+            if (g_logFile) fclose(g_logFile);
+            return success ? 0 : 1;
+        }
+    }
+    
+    // Attempt automatic elevation if running from an elevatable bundle without privileges
+    // This happens BEFORE Qt initialization to avoid overhead
+    // If elevation succeeds, this process is replaced; if it fails, we continue
+    if (PlatformQuirks::isElevatableBundle() && !PlatformQuirks::hasElevatedPrivileges()) {
+        // Try to elevate - this will only work if an elevation policy is installed
+        PlatformQuirks::tryElevate(argc, argv);
+        // If we get here, elevation failed or wasn't possible
+        // Continue running without elevation - the UI will show a warning
+    }
+
     // Apply platform-specific quirks and workarounds FIRST
     // This must happen before any Qt initialization (QCoreApplication/QGuiApplication)
     PlatformQuirks::applyQuirks();
@@ -176,16 +259,23 @@ int main(int argc, char *argv[])
             // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
             // Check if running from AppImage first
             QString execName;
+            QString statusAndAction;
             QByteArray appImagePath = qgetenv("APPIMAGE");
             if (!appImagePath.isEmpty()) {
                 execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
+                // AppImage-specific message with Install Authorization option
+                statusAndAction = QObject::tr(
+                    "You are not running as root.\n\n"
+                    "Click \"Install Authorization\" to set up automatic privilege elevation, "
+                    "or run manually with: sudo %1"
+                ).arg(execName);
             } else {
                 execName = QFileInfo(QString::fromUtf8(argv[0])).fileName();
+                statusAndAction = QObject::tr(
+                    "You are not running as root.\n\n"
+                    "Please run with elevated privileges: sudo %1"
+                ).arg(execName);
             }
-            QString statusAndAction = QObject::tr(
-                "You are not running as root.\n\n"
-                "Please run with elevated privileges: sudo %1"
-            ).arg(execName);
     #elif defined(Q_OS_WIN)
             QString statusAndAction = QObject::tr(
                 "You are not running as Administrator.\n\n"
@@ -268,6 +358,7 @@ int main(int argc, char *argv[])
         {"repo", "Custom OS list repository URL or local file", "url-or-file", ""},
         {"qm", "Custom translation .qm file", "file", ""},
         {"debug", "Output debug messages to console"},
+        {"log-file", "Log output to file (for debugging)", "path", ""},
         {"refresh-interval", "OS list refresh base interval (minutes)", "minutes", ""},
         {"refresh-jitter", "OS list refresh jitter (minutes)", "minutes", ""},
         {"enable-language-selection", "Show language selection on startup"},

@@ -74,11 +74,7 @@ WizardStepBase {
                 id: labelConnectToken
                 text: qsTr("Authentication token:")
                 visible: useTokenPill.checked
-                Accessible.ignored: false
-                Accessible.focusable: true
-                Accessible.description: qsTr("Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the 'Open Raspberry Pi Connect' button to sign in.")
-                focusPolicy: Qt.TabFocus
-                activeFocusOnTab: true
+                accessibleDescription: qsTr("Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the 'Open Raspberry Pi Connect' button to sign in.")
             }
             
             ImTextField {
@@ -194,7 +190,7 @@ WizardStepBase {
             // Only include button if it's actually visible (checked and no token received yet)
             if (useTokenPill.checked && !root.connectTokenReceived)
                 items.push(btnOpenConnect)
-            // Include label before text field so users hear the explanation first
+            // Label is automatically skipped when screen reader is not active (via activeFocusOnTab)
             if (useTokenPill.checked && fieldConnectToken.enabled) {
                 items.push(labelConnectToken)
                 items.push(fieldConnectToken)

@@ -44,11 +44,7 @@ WizardStepBase {
                 WizardFormLabel {
                     id: labelUsername
                     text: qsTr("Username:")
-                    Accessible.ignored: false
-                    Accessible.focusable: true
-                    Accessible.description: qsTr("Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    accessibleDescription: qsTr("Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
                 }
                 
                 ImTextField {
@@ -65,36 +61,26 @@ WizardStepBase {
                 WizardFormLabel {
                     id: labelPassword
                     text: CommonStrings.password
-                    Accessible.ignored: false
-                    Accessible.focusable: true
-                    Accessible.description: root.hasSavedUserPassword ? qsTr("Enter a new password for this account, or leave blank to keep the previously saved password.") : qsTr("Enter a password for this account. You will need to re-enter it in the next field to confirm.")
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    accessibleDescription: root.hasSavedUserPassword ? qsTr("Enter a new password for this account, or leave blank to keep the previously saved password.") : qsTr("Enter a password for this account. You will need to re-enter it in the next field to confirm.")
                 }
                 
-                ImTextField {
+                ImPasswordField {
                     id: fieldPassword
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Saved (hidden) — leave blank to keep") : qsTr("Enter password")
-                    echoMode: TextInput.Password
                     font.pixelSize: Style.fontSizeInput
                 }
                 
                 WizardFormLabel {
                     id: labelPasswordConfirm
                     text: qsTr("Confirm password:")
-                    Accessible.ignored: false
-                    Accessible.focusable: true
-                    Accessible.description: root.hasSavedUserPassword ? qsTr("Re-enter the new password to confirm, or leave blank to keep the previously saved password.") : qsTr("Re-enter the password to confirm it matches.")
-                    focusPolicy: Qt.TabFocus
-                    activeFocusOnTab: true
+                    accessibleDescription: root.hasSavedUserPassword ? qsTr("Re-enter the new password to confirm, or leave blank to keep the previously saved password.") : qsTr("Re-enter the password to confirm it matches.")
                 }
                 
-                ImTextField {
+                ImPasswordField {
                     id: fieldPasswordConfirm
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
-                    echoMode: TextInput.Password
                     font.pixelSize: Style.fontSizeInput
                 }
             }
@@ -110,6 +96,7 @@ WizardStepBase {
     Component.onCompleted: {
         // Include labels before their corresponding fields so users hear the explanation first
         root.registerFocusGroup("user_fields", function(){
+            // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
             return [labelUsername, fieldUsername, labelPassword, fieldPassword, labelPasswordConfirm, fieldPasswordConfirm, helpText]
         }, 0)
         

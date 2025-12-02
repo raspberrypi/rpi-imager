@@ -135,13 +135,25 @@ WizardStepBase {
                 }
 
                 Text {
+                    id: deviceValue
                     text: wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                     Accessible.ignored: true  // Read as part of the label
+
+                    ToolTip.text: text
+                    ToolTip.visible: truncated && deviceValueMouseArea.containsMouse
+                    ToolTip.delay: 500
+                    MouseArea {
+                        id: deviceValueMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
 
                 Text {
@@ -158,13 +170,25 @@ WizardStepBase {
                 }
 
                 Text {
+                    id: osValue
                     text: wizardContainer.selectedOsName || CommonStrings.noImageSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                     Accessible.ignored: true  // Read as part of the label
+
+                    ToolTip.text: text
+                    ToolTip.visible: truncated && osValueMouseArea.containsMouse
+                    ToolTip.delay: 500
+                    MouseArea {
+                        id: osValueMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
 
                 Text {
@@ -181,13 +205,25 @@ WizardStepBase {
                 }
 
                 Text {
+                    id: storageValue
                     text: wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
                     font.pixelSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                     Accessible.ignored: true  // Read as part of the label
+
+                    ToolTip.text: text
+                    ToolTip.visible: truncated && storageValueMouseArea.containsMouse
+                    ToolTip.delay: 500
+                    MouseArea {
+                        id: storageValueMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
             }
         }
@@ -376,6 +412,7 @@ WizardStepBase {
         height: Math.min(400, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 200)
 
         property bool allowAccept: false
+        property int countdown: 2
 
         // Custom escape handling
         function escapePressed() {
@@ -385,20 +422,27 @@ WizardStepBase {
         // Register focus groups when component is ready
         Component.onCompleted: {
             registerFocusGroup("warning", function(){ 
-                return [warningText, permanentText] 
+                // Only include warning texts when screen reader is active (otherwise they're not focusable)
+                if (confirmDialog.imageWriter && confirmDialog.imageWriter.isScreenReaderActive()) {
+                    return [warningText, permanentText]
+                }
+                return []
             }, 0)
             registerFocusGroup("buttons", function(){ 
-                return [cancelButton, acceptBtn] 
+                // Only include buttons when they're visible (after allowAccept becomes true)
+                return confirmDialog.allowAccept ? [cancelButton, acceptBtn] : []
             }, 1)
         }
 
         onOpened: {
             allowAccept = false
+            countdown = 2
             confirmDelay.start()
         }
         onClosed: {
             confirmDelay.stop()
             allowAccept = false
+            countdown = 2
         }
 
         // Dialog content - now using BaseDialog's contentLayout
@@ -435,11 +479,24 @@ WizardStepBase {
             activeFocusOnTab: confirmDialog.imageWriter ? confirmDialog.imageWriter.isScreenReaderActive() : false
         }
 
+        Text {
+            id: waitText
+            text: qsTr("Please wait... %1").arg(confirmDialog.countdown)
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamily
+            color: Style.textMetadataColor
+            horizontalAlignment: Text.AlignRight
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            visible: !confirmDialog.allowAccept
+        }
+
         RowLayout {
             id: confirmButtonRow
             Layout.fillWidth: true
             Layout.topMargin: Style.spacingSmall
             spacing: Style.spacingMedium
+            visible: confirmDialog.allowAccept
             Item { Layout.fillWidth: true }
 
             ImButton {
@@ -462,18 +519,25 @@ WizardStepBase {
                 }
             }
         }
+
+        // Bottom spacer to balance the dialog's internal top padding
+        Item { Layout.preferredHeight: Style.cardPadding }
     }
 
     // Delay accept for 2 seconds - moved outside dialog content
     Timer {
         id: confirmDelay
-        interval: 2000
+        interval: 1000
         running: false
-        repeat: false
+        repeat: true
         onTriggered: {
-            confirmDialog.allowAccept = true
-            // Rebuild focus order now that accept button is enabled
-            confirmDialog.rebuildFocusOrder()
+            confirmDialog.countdown--
+            if (confirmDialog.countdown <= 0) {
+                confirmDelay.stop()
+                confirmDialog.allowAccept = true
+                // Rebuild focus order now that buttons are visible
+                confirmDialog.rebuildFocusOrder()
+            }
         }
     }
 

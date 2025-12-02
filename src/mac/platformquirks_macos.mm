@@ -5,6 +5,7 @@
 
 #include "../platformquirks.h"
 #include <cstdlib>
+#include <QProcess>
 #import <AppKit/AppKit.h>
 #import <SystemConfiguration/SystemConfiguration.h>
 
@@ -66,6 +67,47 @@ bool hasElevatedPrivileges() {
 
 void attachConsole() {
     // No-op on macOS - console is already available
+}
+
+bool isElevatableBundle() {
+    // macOS .app bundles don't need this mechanism - Authorization Services handles elevation
+    return false;
+}
+
+const char* getBundlePath() {
+    // Not applicable on macOS
+    return nullptr;
+}
+
+bool hasElevationPolicyInstalled() {
+    // Not applicable on macOS
+    return false;
+}
+
+bool installElevationPolicy() {
+    // Not applicable on macOS
+    return false;
+}
+
+bool tryElevate(int argc, char** argv) {
+    // macOS uses Authorization Services, not polkit-style elevation
+    (void)argc;
+    (void)argv;
+    return false;
+}
+
+bool launchDetached(const QString& program, const QStringList& arguments) {
+    // On macOS, QProcess::startDetached works correctly for launching
+    // detached processes that outlive the parent
+    return QProcess::startDetached(program, arguments);
+}
+
+bool runElevatedPolicyInstaller() {
+    return false;
+}
+
+void execElevated(const QStringList& extraArgs) {
+    Q_UNUSED(extraArgs);
 }
 
 } // namespace PlatformQuirks

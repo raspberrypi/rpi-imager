@@ -20,11 +20,16 @@ DriveListModel::DriveListModel(QObject *parent)
         {isScsiRole, "isScsi"},
         {isReadOnlyRole, "isReadOnly"},
         {isSystemRole, "isSystem"},
-        {mountpointsRole, "mountpoints"}
+        {mountpointsRole, "mountpoints"},
+        {childDevicesRole, "childDevices"}
     };
 
     // Enumerate drives in seperate thread, but process results in UI thread
     connect(&_thread, SIGNAL(newDriveList(std::vector<Drivelist::DeviceDescriptor>)), SLOT(processDriveList(std::vector<Drivelist::DeviceDescriptor>)));
+    
+    // Forward performance event signal
+    connect(&_thread, &DriveListModelPollThread::eventDriveListPoll,
+            this, &DriveListModel::eventDriveListPoll);
 }
 
 int DriveListModel::rowCount(const QModelIndex &) const
@@ -75,14 +80,12 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         if (i.size == 0)
             continue;
 
-#ifdef Q_OS_DARWIN
         // Allow read/write virtual devices (mounted disk images) but filter out:
         // - Read-only virtual devices
-        // - System virtual devices (like APFS volumes)
+        // - System virtual devices (like APFS volumes on macOS)
         // - Virtual devices that are not removable/ejectable (likely system virtual devices)
         if (i.isVirtual && (i.isReadOnly || i.isSystem || !i.isRemovable))
             continue;
-#endif
 
         QString deviceNamePlusSize = QString::fromStdString(i.device)+":"+QString::number(i.size);
         if (i.isReadOnly)
@@ -98,17 +101,25 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
                 changes = true;
             }
 
-            // TEMPORARY TEST ONLY: Mark Apple Disk Image Media as system drives on macOS
-            // Reason: to exercise the wizard's system-drive confirmation flow.
-            // To undo: remove this override block and pass i.isSystem directly.
-#ifdef Q_OS_DARWIN
-            const QString desc = QString::fromStdString(i.description);
-            const bool isSystemOverride = i.isSystem || desc.contains("Apple Disk Image Media", Qt::CaseInsensitive);
-#else
-            const bool isSystemOverride = i.isSystem;
-#endif
+            // Mark virtual disks as system drives to trigger confirmation dialog
+            // This allows virtual disks (disk images, VHDs, etc.) to appear in the list
+            // but ensures users must confirm before writing to them
+            const bool isSystemOverride = i.isSystem || i.isVirtual;
 
-            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, i.isSCSI, i.isReadOnly, isSystemOverride, mountpoints, this);
+            // Treat NVMe drives like SCSI for icon purposes (use storage icon instead of SD card icon)
+            QString busType = QString::fromStdString(i.busType);
+            QString devicePath = QString::fromStdString(i.device);
+            bool isNvme = (busType.compare("NVME", Qt::CaseInsensitive) == 0) || devicePath.startsWith("/dev/nvme");
+            bool isScsiForIcon = i.isSCSI || isNvme;
+
+            // Convert child devices (APFS volumes on macOS) to QStringList
+            QStringList childDevices;
+            for (auto &s: i.childDevices)
+            {
+                childDevices.append(QString::fromStdString(s));
+            }
+
+            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, isScsiForIcon, i.isReadOnly, isSystemOverride, mountpoints, childDevices, this);
         }
     }
 
@@ -149,4 +160,33 @@ void DriveListModel::startPolling()
 void DriveListModel::stopPolling()
 {
     _thread.stop();
+}
+
+void DriveListModel::pausePolling()
+{
+    _thread.pause();
+}
+
+void DriveListModel::resumePolling()
+{
+    _thread.resume();
+}
+
+void DriveListModel::setSlowPolling()
+{
+    _thread.setScanMode(DriveListModelPollThread::ScanMode::Slow);
+}
+
+QStringList DriveListModel::getChildDevices(const QString &device) const
+{
+    // Search through cached drive list for matching device
+    for (auto it = _drivelist.cbegin(); it != _drivelist.cend(); ++it)
+    {
+        DriveListItem *item = it.value();
+        if (item && item->property("device").toString() == device)
+        {
+            return item->property("childDevices").toStringList();
+        }
+    }
+    return QStringList();
 }

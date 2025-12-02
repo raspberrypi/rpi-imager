@@ -1,9 +1,22 @@
 rpi-imager (2.0.2) unstable; urgency=medium
 
-  * OS customisation: Fixup init_format validation
-  * OS customisation: Fixup telemetry version string
-  
-  -- Tom Dewey <tom.dewey@raspberrypi.com>  Tue, 25 Nov 2025 13:00:00 +0100
+  * OS customisation:
+    - Fixup init_format validation
+    - Fixup telemetry version string
+    - Update cloud-init user-data generation for Pi Connect
+    - Support SSH public key authentication without username/password
+    - Enhance WiFi configuration for WPA2/WPA3 compatibility
+  * UI:
+    - Improve focus handling for labels in wizard steps
+    - Update accessibility properties for form labels
+    - Enhance ComboBox keyboard navigation and search functionality
+  * macOS: Enhance file dialog with file type selection popup
+  * Linux: Implement privilege escalation support for elevatable bundles
+  * all:
+    - Add file logging support for debugging
+    - Remove O_SYNC flag from file open operations
+
+  -- Tom Dewey <tom.dewey@raspberrypi.com>  Wed, 26 Nov 2025 13:00:00 +0100
 
 rpi-imager (2.0.1) unstable; urgency=medium
 
@@ -41,7 +54,7 @@ rpi-imager (1.9.7) unstable; urgency=medium
   * Embedded: Unified build
   * macOS: Build custom Qt 6.9.1
 
- -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 31 Jul 2025 17:00:00 +0100
+  -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 31 Jul 2025 17:00:00 +0100
 
 rpi-imager (1.9.6) unstable; urgency=medium
 

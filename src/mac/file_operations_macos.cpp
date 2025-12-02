@@ -13,11 +13,38 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <iostream>
-#include <QDebug>
+#include <sstream>
 
 namespace rpi_imager {
 
-MacOSFileOperations::MacOSFileOperations() : fd_(-1), last_error_code_(0) {}
+// Use the common logging function from file_operations.cpp
+static void Log(const std::string& msg) {
+    FileOperationsLog(msg);
+}
+
+MacOSFileOperations::MacOSFileOperations() : fd_(-1), last_error_code_(0), using_direct_io_(false) {}
+
+bool MacOSFileOperations::IsBlockDevicePath(const std::string& path) {
+  // Check for block device paths (e.g., /dev/disk2, /dev/rdisk2)
+  return (path.find("/dev/") == 0);
+}
+
+bool MacOSFileOperations::EnableDirectIO() {
+  if (fd_ < 0) {
+    return false;
+  }
+  
+  // macOS uses F_NOCACHE to disable file caching (equivalent to O_DIRECT on Linux)
+  // This provides direct I/O to bypass the unified buffer cache
+  if (fcntl(fd_, F_NOCACHE, 1) == 0) {
+    using_direct_io_ = true;
+    std::cout << "Enabled F_NOCACHE for direct I/O" << std::endl;
+    return true;
+  }
+  
+  std::cout << "Warning: Failed to enable F_NOCACHE, errno=" << errno << std::endl;
+  return false;
+}
 
 MacOSFileOperations::~MacOSFileOperations() {
   Close();
@@ -26,9 +53,11 @@ MacOSFileOperations::~MacOSFileOperations() {
 FileError MacOSFileOperations::OpenDevice(const std::string& path) {
   std::cout << "Opening macOS device: " << path << std::endl;
   
+  bool isBlockDevice = IsBlockDevicePath(path);
+  
   // For raw device access on macOS, we need to use the authorization mechanism
   // Similar to how MacFile::authOpen() works
-  if (path.find("/dev/") == 0) {
+  if (isBlockDevice) {
     std::cout << "Device path detected, using macOS authorization..." << std::endl;
     
     // Create a MacFile instance to handle authorization
@@ -65,12 +94,22 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
     fd_ = duplicated_fd;
     current_path_ = path;
     
-    std::cout << "Successfully opened device with authorization, fd=" << fd_ << std::endl;
+    // Enable direct I/O via F_NOCACHE for block devices
+    // This bypasses the unified buffer cache for:
+    // 1. Better performance by avoiding double-buffering
+    // 2. More accurate verification (reads from actual device, not cache)
+    // 3. Reduced memory pressure on the system
+    if (!EnableDirectIO()) {
+      std::cout << "Warning: Could not enable direct I/O, continuing with buffered I/O" << std::endl;
+    }
+    
+    std::cout << "Successfully opened device with authorization, fd=" << fd_ 
+              << (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)") << std::endl;
     return FileError::kSuccess;
   }
   
   // For regular files, use standard POSIX open
-  return OpenInternal(path.c_str(), O_RDWR | O_SYNC);
+  return OpenInternal(path.c_str(), O_RDWR);
 }
 
 FileError MacOSFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
@@ -138,11 +177,13 @@ FileError MacOSFileOperations::Close() {
   if (fd_ >= 0) {
     if (close(fd_) != 0) {
       fd_ = -1;
+      using_direct_io_ = false;
       return FileError::kCloseError;
     }
     fd_ = -1;
   }
   current_path_.clear();
+  using_direct_io_ = false;
   return FileError::kSuccess;
 }
 
@@ -251,6 +292,33 @@ FileError MacOSFileOperations::Flush() {
   }
 
   return FileError::kSuccess;
+}
+
+void MacOSFileOperations::PrepareForSequentialRead(std::uint64_t offset, std::uint64_t length) {
+  if (!IsOpen()) {
+    return;
+  }
+
+  (void)offset;  // macOS hints are file-wide
+  (void)length;
+
+  // F_RDAHEAD: Enable read-ahead for sequential access
+  // This tells the kernel to speculatively read data ahead of the current position
+  if (fcntl(fd_, F_RDAHEAD, 1) == -1) {
+    std::ostringstream oss;
+    oss << "Warning: fcntl(F_RDAHEAD) failed, errno: " << errno
+        << " - sequential read performance may be suboptimal";
+    Log(oss.str());
+  }
+  
+  // F_NOCACHE: Bypass the unified buffer cache
+  // Critical for verification - ensures we read from actual device, not cached writes
+  if (fcntl(fd_, F_NOCACHE, 1) == -1) {
+    std::ostringstream oss;
+    oss << "Warning: fcntl(F_NOCACHE) failed, errno: " << errno
+        << " - verification may read cached data";
+    Log(oss.str());
+  }
 }
 
 int MacOSFileOperations::GetHandle() const {
