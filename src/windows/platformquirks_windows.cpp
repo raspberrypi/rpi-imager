@@ -363,4 +363,30 @@ void execElevated(const QStringList& extraArgs) {
     Q_UNUSED(extraArgs);
 }
 
+bool isScrollInverted(bool qtInvertedFlag) {
+    // On Windows, Qt doesn't correctly report the scroll direction setting.
+    // We read directly from the registry instead of trusting qtInvertedFlag.
+    Q_UNUSED(qtInvertedFlag);
+    
+    // Check Windows registry for scroll direction setting
+    // This setting is stored in PrecisionTouchPad for touchpads
+    // Value: 0 = natural (down scrolls up), 1 = traditional (down scrolls down)
+    
+    HKEY hKey;
+    DWORD scrollDirection = 1;  // Default to traditional
+    DWORD dataSize = sizeof(scrollDirection);
+    
+    // Check precision touchpad setting
+    if (RegOpenKeyExW(HKEY_CURRENT_USER,
+                      L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\PrecisionTouchPad",
+                      0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        RegQueryValueExW(hKey, L"ScrollDirection", NULL, NULL,
+                        (LPBYTE)&scrollDirection, &dataSize);
+        RegCloseKey(hKey);
+    }
+    
+    // 0 = natural scrolling (invert), 1 = traditional (don't invert)
+    return scrollDirection == 0;
+}
+
 } // namespace PlatformQuirks

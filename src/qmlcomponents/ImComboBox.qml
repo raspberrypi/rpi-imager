@@ -499,12 +499,17 @@ ComboBox {
                     var dy
                     if (event.pixelDelta && Math.abs(event.pixelDelta.y) > 0) {
                         // Trackpad or precision scroll - use pixel values directly
-                        dy = -event.pixelDelta.y
+                        dy = event.pixelDelta.y
                     } else {
                         // Mouse wheel - convert angle to pixels
                         // Standard: 120 units = 1 notch = 3 lines of scrolling
                         var notches = event.angleDelta.y / 120.0
-                        dy = -notches * root.itemHeight * root.wheelScrollItems
+                        dy = notches * root.itemHeight * root.wheelScrollItems
+                    }
+                    
+                    // Handle OS scroll direction preference (natural vs traditional)
+                    if (PlatformHelper.isScrollInverted(event.inverted)) {
+                        dy = -dy
                     }
                     
                     // Calculate new position with bounds checking

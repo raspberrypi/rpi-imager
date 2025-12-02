@@ -16,3 +16,8 @@ void PlatformHelper::beep() const
     PlatformQuirks::beep();
 }
 
+bool PlatformHelper::isScrollInverted(bool qtInvertedFlag) const
+{
+    return PlatformQuirks::isScrollInverted(qtInvertedFlag);
+}
+

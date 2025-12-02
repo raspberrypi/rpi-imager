@@ -110,4 +110,10 @@ void execElevated(const QStringList& extraArgs) {
     Q_UNUSED(extraArgs);
 }
 
+bool isScrollInverted(bool qtInvertedFlag) {
+    // On macOS, Qt correctly reports the inverted flag in WheelEvent
+    // so we just pass through the Qt value.
+    return qtInvertedFlag;
+}
+
 } // namespace PlatformQuirks
