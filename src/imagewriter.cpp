@@ -1900,29 +1900,31 @@ bool ImageWriter::isOnline()
     // Use platform abstraction for network connectivity check
     bool hasBasicConnectivity = PlatformQuirks::hasNetworkConnectivity();
     
-    if (hasBasicConnectivity) {
-        /* Report detected IP addresses for embedded mode status display */
-        QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
-        foreach (QHostAddress a, addresses)
-        {
-            if (!a.isLoopback() && a.scopeId().isEmpty())
+    // For embedded mode, report IP addresses on status display and check time sync
+    if (isEmbeddedMode()) {
+        if (hasBasicConnectivity) {
+            /* Report detected IP addresses for embedded mode status display */
+            QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
+            foreach (QHostAddress a, addresses)
             {
-                qDebug() << "IP DETECTED: " << a.toString();
-                emit networkInfo(QString("IP: %1").arg(a.toString()));
-                break;
+                if (!a.isLoopback() && a.scopeId().isEmpty())
+                {
+                    qDebug() << "IP DETECTED: " << a.toString();
+                    emit networkInfo(QString("IP: %1").arg(a.toString()));
+                    break;
+                }
             }
+            
+            // Check if network is truly ready (including time sync)
+            bool networkReady = PlatformQuirks::isNetworkReady();
+            if (networkReady) {
+                _networkchecktimer.stop();
+                beginOSListFetch();
+                emit networkOnline();
+            }
+            return networkReady;
         }
-    }
-    
-    // For embedded mode, check if network is truly ready (including time sync)
-    if (hasBasicConnectivity && isEmbeddedMode()) {
-        bool networkReady = PlatformQuirks::isNetworkReady();
-        if (networkReady) {
-            _networkchecktimer.stop();
-            beginOSListFetch();
-            emit networkOnline();
-        }
-        return networkReady;
+        return false;
     }
     
     return hasBasicConnectivity;
