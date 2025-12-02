@@ -1,8 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 #
 # Common configuration and functions for Qt build scripts
 # This file should be sourced by all Qt build scripts to ensure consistency
 #
+# POSIX-compliant shell script
 
 # Prevent multiple sourcing
 if [ -n "$QT_BUILD_COMMON_LOADED" ]; then
@@ -52,7 +53,7 @@ QT_VERSION_PLATFORM_DEFAULT="$QT_VERSION_DEFAULT"
 # Function to initialize common variables with defaults
 # Usage: init_common_variables [platform_specific_version]
 init_common_variables() {
-    local platform_version="${1:-$QT_VERSION_PLATFORM_DEFAULT}"
+    platform_version="${1:-$QT_VERSION_PLATFORM_DEFAULT}"
     
     # Set defaults if not already set by the calling script
     QT_VERSION="${QT_VERSION:-$platform_version}"
@@ -68,7 +69,10 @@ init_common_variables() {
     QT_MAJOR_VERSION=$(echo "$QT_VERSION" | cut -d. -f1)
     
     # Directory containing the calling script (resolves relative invocation)
-    BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")" >/dev/null 2>&1 && pwd)"
+    # Note: Caller should set BASE_DIR before calling if $0 is not reliable
+    if [ -z "$BASE_DIR" ]; then
+        BASE_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+    fi
     
     # Common build directories
     DOWNLOAD_DIR="$PWD/qt-src"
@@ -79,11 +83,11 @@ init_common_variables() {
 
 # Function to parse common command line arguments
 # Usage: parse_common_args "$@"
-# Sets: COMMON_REMAINING_ARGS array with arguments that weren't processed
+# Sets: COMMON_REMAINING_ARGS (space-separated string) with arguments that weren't processed
 parse_common_args() {
-    COMMON_REMAINING_ARGS=()
+    COMMON_REMAINING_ARGS=""
     
-    while [[ $# -gt 0 ]]; do
+    while [ $# -gt 0 ]; do
         case $1 in
             --version=*)
                 QT_VERSION="${1#*=}"
@@ -118,35 +122,48 @@ parse_common_args() {
                 ;;
             -h|--help)
                 # Let the calling script handle help
-                COMMON_REMAINING_ARGS+=("$1")
+                COMMON_REMAINING_ARGS="$COMMON_REMAINING_ARGS $1"
                 ;;
             *)
                 # Pass through unknown arguments
-                COMMON_REMAINING_ARGS+=("$1")
+                COMMON_REMAINING_ARGS="$COMMON_REMAINING_ARGS $1"
                 ;;
         esac
         shift
     done
+    # Trim leading space
+    COMMON_REMAINING_ARGS="${COMMON_REMAINING_ARGS# }"
 }
 
 # Function to validate common inputs
 validate_common_inputs() {
     # Validate cores is a number
-    if ! [[ $CORES =~ ^[0-9]+$ ]]; then
-        echo "Error: Cores must be a number, got: $CORES"
-        return 1
-    fi
+    case "$CORES" in
+        ''|*[!0-9]*)
+            echo "Error: Cores must be a number, got: $CORES"
+            return 1
+            ;;
+    esac
     
-    # Validate Qt version format
-    if ! [[ $QT_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "Error: Qt version must be in format X.Y.Z, got: $QT_VERSION"
-        return 1
-    fi
+    # Validate Qt version format (X.Y.Z)
+    case "$QT_VERSION" in
+        [0-9]*.[0-9]*.[0-9]*)
+            # Basic format check passed
+            ;;
+        *)
+            echo "Error: Qt version must be in format X.Y.Z, got: $QT_VERSION"
+            return 1
+            ;;
+    esac
     
     # In unprivileged mode, suggest a user-writable prefix if using default
-    if [ "$UNPRIVILEGED" -eq 1 ] && [[ "$PREFIX" == "$PREFIX_DEFAULT"* ]]; then
-        PREFIX="$HOME/Qt/${QT_VERSION}"
-        echo "Unprivileged mode: Using user-writable prefix: $PREFIX"
+    if [ "$UNPRIVILEGED" -eq 1 ]; then
+        case "$PREFIX" in
+            "$PREFIX_DEFAULT"*)
+                PREFIX="$HOME/Qt/${QT_VERSION}"
+                echo "Unprivileged mode: Using user-writable prefix: $PREFIX"
+                ;;
+        esac
     fi
     
     return 0
@@ -154,7 +171,7 @@ validate_common_inputs() {
 
 # Function to print common configuration
 print_common_config() {
-    local script_name="${1:-Qt build}"
+    script_name="${1:-Qt build}"
     
     echo "$script_name configuration:"
     echo "  Version: $QT_VERSION"
@@ -169,7 +186,7 @@ print_common_config() {
 
 # Function to create common build directories
 create_build_directories() {
-    local build_dir_suffix="${1:-}"
+    build_dir_suffix="${1:-}"
     
     if [ -n "$build_dir_suffix" ]; then
         BUILD_DIR="$PWD/qt-build-$build_dir_suffix"
@@ -186,16 +203,16 @@ create_build_directories() {
 # Function to download Qt source code
 download_qt_source() {
     echo "Downloading Qt $QT_VERSION source code..."
-    cd "$DOWNLOAD_DIR"
+    cd "$DOWNLOAD_DIR" || return 1
     
     if [ ! -d "qt-everywhere-src-$QT_VERSION" ]; then
         if [ ! -f "qt-everywhere-src-$QT_VERSION.tar.xz" ]; then
             echo "Downloading Qt source archive..."
-            local download_url="https://download.qt.io/official_releases/qt/${QT_VERSION%.*}/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz"
+            download_url="https://download.qt.io/official_releases/qt/${QT_VERSION%.*}/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz"
             
-            if command -v wget &> /dev/null; then
+            if command -v wget >/dev/null 2>&1; then
                 wget "$download_url"
-            elif command -v curl &> /dev/null; then
+            elif command -v curl >/dev/null 2>&1; then
                 curl -L -o "qt-everywhere-src-$QT_VERSION.tar.xz" "$download_url"
             else
                 echo "Error: Neither wget nor curl found. Please install one of them."
@@ -220,22 +237,23 @@ clean_build_directory() {
 }
 
 # Function to apply feature and module exclusions
-# Usage: apply_exclusions CONFIG_OPTS_ARRAY_NAME [features_list_file] [modules_list_file]
+# Usage: apply_exclusions [features_list_file] [modules_list_file]
+# Sets: EXCLUSION_OPTS variable with the exclusion options
 apply_exclusions() {
-    local -n config_opts_ref=$1
-    local features_list="${2:-$BASE_DIR/features_exclude.list}"
-    local modules_list="${3:-$BASE_DIR/modules_exclude.list}"
+    features_list="${1:-$BASE_DIR/features_exclude.list}"
+    modules_list="${2:-$BASE_DIR/modules_exclude.list}"
+    EXCLUSION_OPTS=""
     
     # Apply feature exclusions
     if [ -f "$features_list" ]; then
         echo "Using features exclusion list: $(basename "$features_list")"
         while IFS= read -r feature || [ -n "$feature" ]; do
             case "$feature" in
-                ''|'#'*|' '*'#'*|$'\t'*'#'*)
-                    # Skip empty lines and comments
+                ''|'#'*|' '*'#'*|'	'*'#'*)
+                    # Skip empty lines and comments (tab character in last pattern)
                     ;;
                 *)
-                    config_opts_ref+=( -no-feature-"$feature" )
+                    EXCLUSION_OPTS="$EXCLUSION_OPTS -no-feature-$feature"
                     echo "Excluding feature: $feature"
                     ;;
             esac
@@ -249,11 +267,11 @@ apply_exclusions() {
         echo "Using modules exclusion list: $(basename "$modules_list")"
         while IFS= read -r module || [ -n "$module" ]; do
             case "$module" in
-                ''|'#'*|' '*'#'*|$'\t'*'#'*)
-                    # Skip empty lines and comments
+                ''|'#'*|' '*'#'*|'	'*'#'*)
+                    # Skip empty lines and comments (tab character in last pattern)
                     ;;
                 *)
-                    config_opts_ref+=( -skip "$module" )
+                    EXCLUSION_OPTS="$EXCLUSION_OPTS -skip $module"
                     echo "Excluding module: $module"
                     ;;
             esac
@@ -261,23 +279,25 @@ apply_exclusions() {
     else
         echo "Warning: No modules exclusion list found at $modules_list"
     fi
+    
+    export EXCLUSION_OPTS
 }
 
 # Function to create environment setup script
 # Usage: create_qt_env_script [script_suffix] [additional_vars_function]
 create_qt_env_script() {
-    local script_suffix="${1:-}"
-    local additional_vars_function="${2:-}"
-    local env_script_name="qtenv"
+    script_suffix="${1:-}"
+    additional_vars_function="${2:-}"
+    env_script_name="qtenv"
     
     if [ -n "$script_suffix" ]; then
         env_script_name="qtenv-$script_suffix"
     fi
     
-    local env_script="$PREFIX/bin/${env_script_name}.sh"
+    env_script="$PREFIX/bin/${env_script_name}.sh"
     
     cat > "$env_script" << EOF
-#!/bin/bash
+#!/bin/sh
 # Source this file to set up the Qt environment
 export PATH="$PREFIX/bin:\$PATH"
 export LD_LIBRARY_PATH="$PREFIX/lib:\$LD_LIBRARY_PATH"
@@ -289,7 +309,7 @@ export Qt${QT_MAJOR_VERSION}_ROOT="$PREFIX"
 EOF
 
     # Add additional environment variables if function provided
-    if [ -n "$additional_vars_function" ] && declare -f "$additional_vars_function" > /dev/null; then
+    if [ -n "$additional_vars_function" ] && type "$additional_vars_function" >/dev/null 2>&1; then
         "$additional_vars_function" >> "$env_script"
     fi
 
@@ -306,15 +326,15 @@ EOF
 # Function to create CMake toolchain file
 # Usage: create_cmake_toolchain [toolchain_suffix] [additional_cmake_function]
 create_cmake_toolchain() {
-    local toolchain_suffix="${1:-}"
-    local additional_cmake_function="${2:-}"
-    local toolchain_name="qt$QT_MAJOR_VERSION"
+    toolchain_suffix="${1:-}"
+    additional_cmake_function="${2:-}"
+    toolchain_name="qt$QT_MAJOR_VERSION"
     
     if [ -n "$toolchain_suffix" ]; then
         toolchain_name="qt$QT_MAJOR_VERSION-$toolchain_suffix"
     fi
     
-    local toolchain_file="$PREFIX/${toolchain_name}-toolchain.cmake"
+    toolchain_file="$PREFIX/${toolchain_name}-toolchain.cmake"
     
     cat > "$toolchain_file" << EOF
 # CMake toolchain file for Qt $QT_VERSION
@@ -325,7 +345,7 @@ set(Qt${QT_MAJOR_VERSION}_ROOT "${PREFIX}")
 EOF
 
     # Add additional CMake settings if function provided
-    if [ -n "$additional_cmake_function" ] && declare -f "$additional_cmake_function" > /dev/null; then
+    if [ -n "$additional_cmake_function" ] && type "$additional_cmake_function" >/dev/null 2>&1; then
         "$additional_cmake_function" >> "$toolchain_file"
     fi
 
@@ -334,19 +354,23 @@ EOF
 }
 
 # Function to run Qt configure with common error handling
-# Usage: run_qt_configure CONFIG_OPTS_ARRAY_NAME
+# Usage: run_qt_configure "config_opts_string"
+# The config options should be passed as a single string
 run_qt_configure() {
-    local -n config_opts_ref=$1
+    config_opts="$1"
     
-    echo "Configuring Qt with options: ${config_opts_ref[*]}"
+    echo "Configuring Qt with options: $config_opts"
     
     if [ "$VERBOSE_BUILD" -eq 1 ]; then
-        "$DOWNLOAD_DIR/qt-everywhere-src-$QT_VERSION/configure" "${config_opts_ref[@]}" -verbose
+        # shellcheck disable=SC2086
+        "$DOWNLOAD_DIR/qt-everywhere-src-$QT_VERSION/configure" $config_opts -verbose
     else
-        "$DOWNLOAD_DIR/qt-everywhere-src-$QT_VERSION/configure" "${config_opts_ref[@]}"
+        # shellcheck disable=SC2086
+        "$DOWNLOAD_DIR/qt-everywhere-src-$QT_VERSION/configure" $config_opts
     fi
     
-    if [ $? -ne 0 ]; then
+    configure_result=$?
+    if [ $configure_result -ne 0 ]; then
         echo "Configure failed. Try with --verbose for more details."
         echo "Common issues:"
         echo "  - Missing build dependencies"
@@ -362,7 +386,7 @@ build_qt() {
     echo "Building Qt (this may take a while)..."
     
     # Map BUILD_TYPE to CMAKE_BUILD_TYPE
-    local cmake_build_type=""
+    cmake_build_type=""
     case "${BUILD_TYPE}" in
         "Release")
             cmake_build_type="Release"
@@ -384,7 +408,8 @@ build_qt() {
         cmake --build . --parallel "$CORES" --config "$cmake_build_type"
     fi
     
-    if [ $? -ne 0 ]; then
+    build_result=$?
+    if [ $build_result -ne 0 ]; then
         echo "Build failed. Try with --verbose for more details."
         echo "Common solutions:"
         echo "  - Reduce parallel jobs: --cores=2"
@@ -407,7 +432,8 @@ install_qt() {
         sudo cmake --install .
     fi
     
-    if [ $? -ne 0 ]; then
+    install_result=$?
+    if [ $install_result -ne 0 ]; then
         echo "Installation failed."
         return 1
     fi
@@ -417,7 +443,7 @@ install_qt() {
 
 # Function to print final usage instructions
 print_usage_instructions() {
-    local build_type="${1:-Qt}"
+    build_type="${1:-Qt}"
     
     echo ""
     echo "$build_type build completed successfully!"
@@ -461,51 +487,71 @@ EOF
 
 # Function to detect Raspberry Pi model and set optimization flags
 detect_rpi_optimizations() {
-    local rpi_model=""
-    local rpi_cflags=""
+    RPI_MODEL=""
+    RPI_CFLAGS=""
     
     if [ -f /proc/cpuinfo ] && grep -q "Raspberry Pi" /proc/cpuinfo; then
         echo "Detected Raspberry Pi system"
-        rpi_model=$(grep "Model" /proc/cpuinfo | sed 's/.*: //')
-        echo "  Model: $rpi_model"
+        RPI_MODEL=$(grep "Model" /proc/cpuinfo | sed 's/.*: //')
+        echo "  Model: $RPI_MODEL"
         
         # Set optimization flags based on model
-        if echo "$rpi_model" | grep -q "Pi 4"; then
-            echo "  Optimizing for Raspberry Pi 4"
-            rpi_cflags="-march=armv8-a+crc -mtune=cortex-a72 -mfpu=neon-fp-armv8"
-        elif echo "$rpi_model" | grep -q "Pi 3"; then
-            echo "  Optimizing for Raspberry Pi 3"
-            rpi_cflags="-march=armv8-a+crc -mtune=cortex-a53 -mfpu=neon-fp-armv8"
-        elif echo "$rpi_model" | grep -q "Pi 2"; then
-            echo "  Optimizing for Raspberry Pi 2"
-            rpi_cflags="-march=armv7-a -mtune=cortex-a7 -mfpu=neon-vfpv4"
-        elif echo "$rpi_model" | grep -q "Pi 5"; then
-            echo "  Optimizing for Raspberry Pi 5"
-            rpi_cflags="-march=armv8.2-a+crypto -mtune=cortex-a76"
-        fi
+        case "$RPI_MODEL" in
+            *"Pi 5"*)
+                echo "  Optimizing for Raspberry Pi 5"
+                RPI_CFLAGS="-march=armv8.2-a+crypto -mtune=cortex-a76"
+                ;;
+            *"Pi 4"*)
+                echo "  Optimizing for Raspberry Pi 4"
+                RPI_CFLAGS="-march=armv8-a+crc -mtune=cortex-a72 -mfpu=neon-fp-armv8"
+                ;;
+            *"Pi 3"*)
+                echo "  Optimizing for Raspberry Pi 3"
+                RPI_CFLAGS="-march=armv8-a+crc -mtune=cortex-a53 -mfpu=neon-fp-armv8"
+                ;;
+            *"Pi 2"*)
+                echo "  Optimizing for Raspberry Pi 2"
+                RPI_CFLAGS="-march=armv7-a -mtune=cortex-a7 -mfpu=neon-vfpv4"
+                ;;
+        esac
     fi
     
     # Export for use by calling script
-    export RPI_MODEL="$rpi_model"
-    export RPI_CFLAGS="$rpi_cflags"
+    export RPI_MODEL RPI_CFLAGS
 }
 
 # Function to set architecture-specific prefix suffix
 set_arch_prefix_suffix() {
-    local suffix="${1:-}"
+    suffix="${1:-}"
     
     case "$ARCH" in
         "x86_64")
-            PREFIX="$PREFIX/gcc_64${suffix:+_$suffix}"
+            if [ -n "$suffix" ]; then
+                PREFIX="$PREFIX/gcc_64_$suffix"
+            else
+                PREFIX="$PREFIX/gcc_64"
+            fi
             ;;
         "aarch64"|"arm64")
-            PREFIX="$PREFIX/gcc_arm64${suffix:+_$suffix}"
+            if [ -n "$suffix" ]; then
+                PREFIX="$PREFIX/gcc_arm64_$suffix"
+            else
+                PREFIX="$PREFIX/gcc_arm64"
+            fi
             ;;
         arm*)
-            PREFIX="$PREFIX/gcc_arm32${suffix:+_$suffix}"
+            if [ -n "$suffix" ]; then
+                PREFIX="$PREFIX/gcc_arm32_$suffix"
+            else
+                PREFIX="$PREFIX/gcc_arm32"
+            fi
             ;;
         *)
-            PREFIX="$PREFIX/gcc_${ARCH}${suffix:+_$suffix}"
+            if [ -n "$suffix" ]; then
+                PREFIX="$PREFIX/gcc_${ARCH}_$suffix"
+            else
+                PREFIX="$PREFIX/gcc_${ARCH}"
+            fi
             ;;
     esac
     
@@ -530,7 +576,7 @@ install_linux_basic_deps() {
 install_macos_deps() {
     if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
         echo "Installing macOS build dependencies..."
-        if ! command -v brew &> /dev/null; then
+        if ! command -v brew >/dev/null 2>&1; then
             echo "Error: Homebrew is required but not installed"
             echo "Install from: https://brew.sh"
             return 1
@@ -556,7 +602,7 @@ export OBJDUMP="$OBJDUMP"
 export RANLIB="$RANLIB"
 export PKG_CONFIG_LIBDIR="$PKG_CONFIG_LIBDIR"
 export PKG_CONFIG_SYSROOT_DIR="$PKG_CONFIG_SYSROOT_DIR"
-export CMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE"
+export CMAKE_TOOLCHAIN_FILE="$CROSS_TOOLCHAIN_FILE"
 echo "Sysroot: $SYSROOT"
 echo "Toolchain: $TOOLCHAIN_PREFIX"
 EOF
@@ -568,7 +614,7 @@ add_cross_compilation_cmake() {
     cat << EOF
 
 # Include the base cross-compilation toolchain
-include("$TOOLCHAIN_FILE")
+include("$CROSS_TOOLCHAIN_FILE")
 
 # Additional settings for application cross-compilation
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
@@ -583,16 +629,15 @@ EOF
 # Function to get the recommended ICU version for a given Qt version
 # Usage: get_icu_version_for_qt QT_VERSION
 get_icu_version_for_qt() {
-    local qt_version="${1:-$QT_VERSION}"
-    local qt_major_minor="${qt_version%.*}"  # Extract X.Y from X.Y.Z
+    qt_ver="${1:-$QT_VERSION}"
     
-    case "$qt_version" in
+    case "$qt_ver" in
         6.9.3)
             echo "76.1"
             ;;
         *)
-            echo "Unknown Qt version $qt_version"
-            echo "Please add the ICU version to the static mapping in get_icu_version_for_qt()"
+            echo "Unknown Qt version $qt_ver" >&2
+            echo "Please add the ICU version to the static mapping in get_icu_version_for_qt()" >&2
             return 1
             ;;
     esac
@@ -601,15 +646,15 @@ get_icu_version_for_qt() {
 # Function to convert ICU version to git tag format
 # Usage: icu_version_to_tag "76.1" -> "release-76-1"
 icu_version_to_tag() {
-    local icu_version="$1"
-    echo "release-${icu_version//./-}"
+    icu_version="$1"
+    echo "release-$(echo "$icu_version" | tr '.' '-')"
 }
 
 # Function to convert ICU version to data package format
 # Usage: icu_version_to_data_package "76.1" -> "icu4c-76_1-data.zip"
 icu_version_to_data_package() {
-    local icu_version="$1"
-    echo "icu4c-${icu_version//./_}-data.zip"
+    icu_version="$1"
+    echo "icu4c-$(echo "$icu_version" | tr '.' '_')-data.zip"
 }
 
-echo "Qt build common configuration loaded (version: 1.1)"
+echo "Qt build common configuration loaded (version: 1.2)"
