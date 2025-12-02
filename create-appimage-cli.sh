@@ -259,12 +259,7 @@ echo "Creating CLI-only AppDir..."
 make DESTDIR="$APPDIR" install
 cd ..
 
-# Desktop file is already installed by CMake from debian/com.raspberrypi.rpi-imager-cli.desktop
-# No need to create it here
-
-# Copy the icon for AppImage tools (required even though NoDisplay=true)
-mkdir -p "$APPDIR/usr/share/icons/hicolor/128x128/apps"
-cp "debian/rpi-imager.png" "$APPDIR/usr/share/icons/hicolor/128x128/apps/com.raspberrypi.rpi-imager.png"
+# Desktop file and icon are already installed by CMake
 
 # Create the AppRun file for CLI operation
 cat > "$APPDIR/AppRun" << 'EOF'
