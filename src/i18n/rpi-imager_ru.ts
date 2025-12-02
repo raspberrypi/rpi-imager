@@ -1154,7 +1154,7 @@
     </message>
     <message>
         <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Выберите раскладку клавиатуры, чтобы клавиши отображали правильные символы при наборе текста. Эта раскладка автоматически рекомендуется в зависимости от выбранной столицы, но вы можете изменить её, если используете другую раскладку.</translation>
     </message>
 </context>
 <context>
@@ -1168,7 +1168,7 @@
     <name>NativeFileDialog</name>
     <message>
         <source>File type:</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Тип файла:</translation>
     </message>
 </context>
 <context>
@@ -1348,13 +1348,15 @@ Please run as Administrator.</source>
 Please run with elevated privileges: sudo %1</source>
         <translation type="unfinished">Вы работаете не от имени пользователя root.
 
-Пожалуйста, запустите программу с повышенными привилегиями: sudo% 1</translation>
+Пожалуйста, запустите программу с повышенными привилегиями: sudo %1</translation>
     </message>
     <message>
         <source>You are not running as root.
 
 Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Вы работаете не от имени пользователя root.
+
+Нажмите &quot;Установить авторизацию&quot;, чтобы настроить автоматическое повышение привилегий, или запустите вручную с помощью: sudo %1</translation>
     </message>
 </context>
 <context>
@@ -1979,10 +1981,6 @@ to show system drives.</source>
 </translation>
     </message>
     <message>
-        <source>If you didn&apos;t, someone could be trying to push a bad token to RPi Imager.</source>
-        <translation type="unfinished">Если вы этого не делали, возможно, кто-то пытается передать неверный токен в RPi Imager.</translation>
-    </message>
-    <message>
         <source>Replace token</source>
         <translation type="unfinished">Заменить токен</translation>
     </message>
@@ -2007,12 +2005,8 @@ to show system drives.</source>
         <translation type="unfinished">Безопасная загрузка</translation>
     </message>
     <message>
-        <source>Warning: Only replace the token if you initiated this action. </source>
-        <translation type="unfinished">Внимание: заменяйте токен только в том случае, если вы инициировали это действие. </translation>
-    </message>
-    <message>
         <source>Warning: Only overwrite the token if you initiated this action.</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Внимание: перезаписывайте токен только в том случае, если вы инициировали это действие.</translation>
     </message>
 </context>
 <context>
