@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Script to create AppImage for CLI-only rpi-imager
@@ -48,8 +48,11 @@ done
 
 # Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
 if [ -n "$QT_ROOT_ARG" ]; then
-    # Expand tilde if present
-    QT_ROOT_ARG="${QT_ROOT_ARG/#\~/$HOME}"
+    # Expand tilde if present at the start
+    case "$QT_ROOT_ARG" in
+        "~"/*) QT_ROOT_ARG="$HOME/${QT_ROOT_ARG#\~/}" ;;
+        "~")   QT_ROOT_ARG="$HOME" ;;
+    esac
     # Convert to absolute path if it exists
     if [ -e "$QT_ROOT_ARG" ]; then
         QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
@@ -60,7 +63,7 @@ if [ -n "$QT_ROOT_ARG" ]; then
 fi
 
 # Validate architecture
-if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" && "$ARCH" != "armv7l" ]]; then
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
     echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
     exit 1
 fi
@@ -75,10 +78,12 @@ CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
 
 # Extract numeric version components for compatibility
-if [[ $GIT_VERSION =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-    MAJOR="${BASH_REMATCH[1]}"
-    MINOR="${BASH_REMATCH[2]}"
-    PATCH="${BASH_REMATCH[3]}"
+# Match versions like: v1.2.3, 1.2.3, v1.2.3-extra, etc.
+MAJOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}\([0-9]\{1,\}\)\.[0-9]\{1,\}\.[0-9]\{1,\}.*/\1/p')
+MINOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.\([0-9]\{1,\}\)\.[0-9]\{1,\}.*/\1/p')
+PATCH=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.[0-9]\{1,\}\.\([0-9]\{1,\}\).*/\1/p')
+
+if [ -n "$MAJOR" ] && [ -n "$MINOR" ] && [ -n "$PATCH" ]; then
     PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
 else
     MAJOR="0"
@@ -247,7 +252,7 @@ CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DBUILD_CLI_ONLY=ON"
 
 # shellcheck disable=SC2086
 cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
-make -j$(nproc)
+make -j"$(nproc)"
 
 echo "Creating CLI-only AppDir..."
 # Install to AppDir
@@ -320,12 +325,15 @@ find "$APPDIR" -name "*.prl" -delete 2>/dev/null || true
 find "$APPDIR" -type f -executable -exec strip {} \; 2>/dev/null || true
 
 echo "Stripping shared libraries..."
-pushd "$APPDIR"
-if [ -n "$(find . -name "*.so*")" ]; then
-    echo $(find . -name "*.so*")
-    strip --strip-unneeded $(find . -name "*.so*")
+SAVED_DIR="$PWD"
+cd "$APPDIR"
+SO_FILES=$(find . -name "*.so*" 2>/dev/null || true)
+if [ -n "$SO_FILES" ]; then
+    echo "$SO_FILES"
+    # shellcheck disable=SC2086
+    strip --strip-unneeded $SO_FILES 2>/dev/null || true
 fi
-popd
+cd "$SAVED_DIR"
 
 echo "Creating CLI-only AppImage..."
 # Remove old symlinks for CLI variant only
@@ -362,18 +370,20 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
             break
         fi
         # Only rename if this contains "CLI" (linuxdeploy creates Raspberry_Pi_Imager_(CLI)-arch.AppImage)
-        if [[ "$appimage" == *"CLI"* ]] && [[ "$appimage" == *"${ARCH}"* ]]; then
-            echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
-            mv "$appimage" "$OUTPUT_FILE"
-            RENAMED=true
-            break
-        fi
+        case "$appimage" in
+            *"CLI"*"${ARCH}"*)
+                echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
+                mv "$appimage" "$OUTPUT_FILE"
+                RENAMED=true
+                break
+                ;;
+        esac
     done
     
     # Check if we successfully found/created the output file
-    if [ "$RENAMED" = false ] && [ ! -f "$OUTPUT_FILE" ]; then
+    if [ "$RENAMED" = "false" ] && [ ! -f "$OUTPUT_FILE" ]; then
         echo "Warning: Could not find CLI AppImage to rename. Looking for any matching AppImage..."
-        ls -la *.AppImage 2>/dev/null || true
+        ls -la ./*.AppImage 2>/dev/null || true
     fi
 else
     # Manual AppImage creation (basic implementation)
