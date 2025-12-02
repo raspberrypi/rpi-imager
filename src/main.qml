@@ -18,10 +18,7 @@ ApplicationWindow {
     visible: true
 
     required property ImageWriter imageWriter
-    
-    // Accessibility properties
-    Accessible.role: Accessible.Application
-    Accessible.name: title
+
     // Whether to show the landing Language Selection step (set from C++)
     property bool showLanguageSelection: false
     // Wizard manages drive list and selection state
