@@ -211,10 +211,10 @@ rpi-imager (1.8.2) unstable; urgency=medium
   * Home: Device filtering reworked to download OS list eagerly
   * OS List: Fixed 'Recommended' tag annotation
   * i18n: Added zh-TW Traditional Chinese translation
-  * i18n: Updated Korean, German, Ukranian, translations
+  * i18n: Updated Korean, German, Ukrainian, translations
   * build: Linux: Fix libdrm dependency requirement on non-embedded
                   build.
-  * Commmon: Disable QML caching entirely
+  * Common: Disable QML caching entirely
   * OS customisation: Allow use if only cloudinit payload available
   * OS customisation: Allow empty PSK for 'Open' WiFi networks.
   * OS List: Use ImageList v4 URL
@@ -241,7 +241,7 @@ rpi-imager (1.8.0) unstable; urgency=medium
   * i18n: Adds Spanish/Ukrainian translations
   * i18n: Updates French, Catalan, Italian, German, Spanish, Russian,
           Japanese translations
-  * i18n: Use en_US as refernce string, and make en_GB a translation
+  * i18n: Use en_US as reference string, and make en_GB a translation
   * Workaround for ArchLinux's lsblk labeling internal SD card readers
     (mmcblk0) as non-removable storage.
   * Allow drag-dropping image files to Imager.
@@ -295,7 +295,7 @@ rpi-imager (1.7.3) unstable; urgency=medium
 
 rpi-imager (1.7.2) unstable; urgency=medium
 
-  * Remove overscan/piwiz supression advanced options
+  * Remove overscan/piwiz suppression advanced options
   * gz/xz/zstd custom images: pad if image size is not dividable by 512 byte
   * Store saved wifi password hashed
   * Make buttons blue on keyboard navigation
