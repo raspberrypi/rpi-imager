@@ -44,6 +44,18 @@ public:
      * Uses platform-specific audio APIs to play a system beep.
      */
     Q_INVOKABLE void beep() const;
+    
+    /**
+     * @brief Determine if scroll direction should be inverted for natural scrolling
+     * 
+     * Encapsulates platform-specific scroll direction detection:
+     * - On Windows: Reads from registry (Qt doesn't report this correctly)
+     * - On macOS/Linux: Passes through Qt's inverted flag
+     * 
+     * @param qtInvertedFlag The inverted flag from Qt's WheelEvent
+     * @return true if scroll direction should be inverted (natural scrolling)
+     */
+    Q_INVOKABLE bool isScrollInverted(bool qtInvertedFlag) const;
 };
 
 #endif // PLATFORMHELPER_H

@@ -739,9 +739,12 @@ int main(int argc, char *argv[])
     qmlwindow->setProperty("x", x);
     qmlwindow->setProperty("y", y);
 
-    // Only fetch OS list if we have network connectivity
-    if (imageWriter.isOnline() && PlatformQuirks::hasNetworkConnectivity())
-        imageWriter.beginOSListFetch();
+    // Defer OS list fetch to after event loop starts to avoid blocking first draw
+    // The network connectivity check can be slow (DNS lookups, interface enumeration)
+    QTimer::singleShot(0, &imageWriter, [&imageWriter]() {
+        if (imageWriter.isOnline())
+            imageWriter.beginOSListFetch();
+    });
 
     // Emit permission warning signal after UI is loaded so dialog can be shown
     if (hasPermissionIssue)

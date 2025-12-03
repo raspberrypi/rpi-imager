@@ -159,6 +159,20 @@ namespace PlatformQuirks {
      * @param extraArgs Additional arguments to pass to the elevated process
      */
     void execElevated(const QStringList& extraArgs);
+
+    /**
+     * Determine if scroll direction should be inverted for natural scrolling.
+     * 
+     * This method encapsulates platform-specific scroll direction detection:
+     * - On Windows: Qt doesn't report the system scroll setting, so we read
+     *   from the registry and ignore the qtInvertedFlag.
+     * - On macOS/Linux: Qt correctly reports the inverted flag, so we pass
+     *   through the qtInvertedFlag value.
+     * 
+     * @param qtInvertedFlag The inverted flag from Qt's WheelEvent
+     * @return true if scroll direction should be inverted (natural scrolling)
+     */
+    bool isScrollInverted(bool qtInvertedFlag);
 }
 
 #endif // PLATFORMQUIRKS_H

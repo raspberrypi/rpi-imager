@@ -4,4 +4,6 @@
 [linux-arm64] rpi-imager-cli-aarch64.AppImage => /usr/bin/rpi-imager-cli
 [linux-armhf] rpi-imager-cli-armhf.AppImage => /usr/bin/rpi-imager-cli
 
-debian/com.raspberrypi.rpi-imager.desktop /usr/share/applications/
+src/linux/icon/rpi-imager.svg /usr/share/icons/hicolor/scalable/apps/
+
+debian/com.raspberrypi.rpi-imager-cli.desktop /usr/share/applications/

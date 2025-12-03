@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Parse command line arguments
@@ -39,8 +39,11 @@ done
 
 # Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
 if [ -n "$QT_ROOT_ARG" ]; then
-    # Expand tilde if present
-    QT_ROOT_ARG="${QT_ROOT_ARG/#\~/$HOME}"
+    # Expand tilde if present at the start
+    case "$QT_ROOT_ARG" in
+        "~"/*) QT_ROOT_ARG="$HOME/${QT_ROOT_ARG#\~/}" ;;
+        "~")   QT_ROOT_ARG="$HOME" ;;
+    esac
     # Convert to absolute path if it exists
     if [ -e "$QT_ROOT_ARG" ]; then
         QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
@@ -51,7 +54,7 @@ if [ -n "$QT_ROOT_ARG" ]; then
 fi
 
 # Validate architecture
-if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; then
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ]; then
     echo "Error: Architecture must be one of: x86_64, aarch64"
     exit 1
 fi
@@ -66,10 +69,12 @@ CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
 
 # Extract numeric version components for compatibility
-if [[ $GIT_VERSION =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-    MAJOR="${BASH_REMATCH[1]}"
-    MINOR="${BASH_REMATCH[2]}"
-    PATCH="${BASH_REMATCH[3]}"
+# Match versions like: v1.2.3, 1.2.3, v1.2.3-extra, etc.
+MAJOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}\([0-9]\{1,\}\)\.[0-9]\{1,\}\.[0-9]\{1,\}.*/\1/p')
+MINOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.\([0-9]\{1,\}\)\.[0-9]\{1,\}.*/\1/p')
+PATCH=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.[0-9]\{1,\}\.\([0-9]\{1,\}\).*/\1/p')
+
+if [ -n "$MAJOR" ] && [ -n "$MINOR" ] && [ -n "$PATCH" ]; then
     PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
 else
     MAJOR="0"
@@ -238,7 +243,7 @@ CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
 
 # shellcheck disable=SC2086
 cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
-make -j$(nproc)
+make -j"$(nproc)"
 
 echo "Creating AppDir..."
 # Install to AppDir
@@ -256,7 +261,7 @@ fi
 # Create the AppRun file if not created by the install process
 if [ ! -f "$APPDIR/AppRun" ]; then
     cat > "$APPDIR/AppRun" << 'EOF'
-#!/bin/bash
+#!/bin/sh
 HERE="$(dirname "$(readlink -f "${0}")")"
 export PATH="${HERE}/usr/bin:${PATH}"
 export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
@@ -394,22 +399,26 @@ for appimage in *.AppImage; do
         break
     fi
     # Skip if this is a CLI or embedded variant (has those keywords in the name)
-    if [[ "$appimage" == *"CLI"* ]] || [[ "$appimage" == *"Embedded"* ]]; then
-        continue
-    fi
-    # Rename the generic AppImage created by linuxdeploy to our standardized desktop variant name
-    if [[ "$appimage" =~ ^Raspberry_Pi_Imager(-[0-9.]+)?-${ARCH}\.AppImage$ ]]; then
-        echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
-        mv "$appimage" "$OUTPUT_FILE"
-        RENAMED=true
-        break
-    fi
+    case "$appimage" in
+        *"CLI"*|*"Embedded"*)
+            continue
+            ;;
+    esac
+    # Check if this matches the expected linuxdeploy output pattern
+    case "$appimage" in
+        Raspberry_Pi_Imager-*"-${ARCH}.AppImage"|Raspberry_Pi_Imager"-${ARCH}.AppImage")
+            echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
+            mv "$appimage" "$OUTPUT_FILE"
+            RENAMED=true
+            break
+            ;;
+    esac
 done
 
 # Check if we successfully found/created the output file
-if [ "$RENAMED" = false ] && [ ! -f "$OUTPUT_FILE" ]; then
+if [ "$RENAMED" = "false" ] && [ ! -f "$OUTPUT_FILE" ]; then
     echo "Warning: Could not find AppImage to rename. Looking for any matching AppImage..."
-    ls -la *.AppImage 2>/dev/null || true
+    ls -la ./*.AppImage 2>/dev/null || true
 fi
 
 echo "AppImage created at $OUTPUT_FILE"
@@ -431,4 +440,4 @@ fi
 ln -s "$(basename "$OUTPUT_FILE")" "$DESCRIPTIVE_SYMLINK"
 echo "Created symlink: $DESCRIPTIVE_SYMLINK -> $(basename "$OUTPUT_FILE")"
 
-echo "Build completed successfully for $ARCH architecture." 
+echo "Build completed successfully for $ARCH architecture."

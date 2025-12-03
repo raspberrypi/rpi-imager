@@ -1,13 +1,13 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Script to create AppImage for embedded systems using linuxfb as a renderer
 # This creates an AppImage that runs with direct rendering (no window manager required)
 
 # Source common build functions for ICU version detection
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$SCRIPT_DIR/qt/qt-build-common.sh" ]; then
-    source "$SCRIPT_DIR/qt/qt-build-common.sh"
+    . "$SCRIPT_DIR/qt/qt-build-common.sh"
 fi
 
 # Parse command line arguments
@@ -62,8 +62,11 @@ done
 
 # Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
 if [ -n "$QT_ROOT_ARG" ]; then
-    # Expand tilde if present
-    QT_ROOT_ARG="${QT_ROOT_ARG/#\~/$HOME}"
+    # Expand tilde if present at the start
+    case "$QT_ROOT_ARG" in
+        "~"/*) QT_ROOT_ARG="$HOME/${QT_ROOT_ARG#\~/}" ;;
+        "~")   QT_ROOT_ARG="$HOME" ;;
+    esac
     # Convert to absolute path if it exists
     if [ -e "$QT_ROOT_ARG" ]; then
         QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
@@ -74,7 +77,7 @@ if [ -n "$QT_ROOT_ARG" ]; then
 fi
 
 # Validate architecture
-if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" && "$ARCH" != "armv7l" ]]; then
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
     echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
     exit 1
 fi
@@ -89,10 +92,12 @@ CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
 
 # Extract numeric version components for compatibility
-if [[ $GIT_VERSION =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-    MAJOR="${BASH_REMATCH[1]}"
-    MINOR="${BASH_REMATCH[2]}"
-    PATCH="${BASH_REMATCH[3]}"
+# Match versions like: v1.2.3, 1.2.3, v1.2.3-extra, etc.
+MAJOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}\([0-9]\{1,\}\)\.[0-9]\{1,\}\.[0-9]\{1,\}.*/\1/p')
+MINOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.\([0-9]\{1,\}\)\.[0-9]\{1,\}.*/\1/p')
+PATCH=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.[0-9]\{1,\}\.\([0-9]\{1,\}\).*/\1/p')
+
+if [ -n "$MAJOR" ] && [ -n "$MINOR" ] && [ -n "$PATCH" ]; then
     PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
 else
     MAJOR="0"
@@ -176,7 +181,8 @@ if [ -f "$QT_DIR/bin/qmake" ]; then
 fi
 
 # Detect ICU version for this Qt version
-if declare -f get_icu_version_for_qt > /dev/null 2>&1; then
+# Check if the function exists (was sourced from qt-build-common.sh)
+if type get_icu_version_for_qt >/dev/null 2>&1; then
     ICU_VERSION=$(get_icu_version_for_qt "$QT_VERSION")
     ICU_MAJOR_VERSION="${ICU_VERSION%%.*}"  # Extract major version (e.g., 76 from 76.1)
     echo "Using ICU version: $ICU_VERSION (major: $ICU_MAJOR_VERSION)"
@@ -189,7 +195,6 @@ fi
 
 # Configuration
 BUILD_TYPE="MinSizeRel"  # Optimize for size in embedded systems
-QML_SOURCES_PATH="$PWD/src/qmlcomponents/"
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-embedded-$ARCH"
@@ -276,7 +281,7 @@ CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DBUILD_EMBEDDED=ON"
 
 # shellcheck disable=SC2086
 cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
-make -j$(nproc)
+make -j"$(nproc)"
 
 echo "Creating embedded AppDir..."
 # Install to AppDir
@@ -442,35 +447,35 @@ cp -d "$QT_DIR/lib/libQt6LabsFolderListModel.so.6"* "$APPDIR/usr/lib/" 2>/dev/nu
 
 # Copy font-related system libraries (required for embedded systems without desktop environment)
 echo "Copying font rendering libraries..."
-if [ -f "/lib/$ARCH-linux-gnu/libfontconfig.so.1" ] || [ -f "/usr/lib/$ARCH-linux-gnu/libfontconfig.so.1" ]; then
-    cp -d /lib/$ARCH-linux-gnu/libfontconfig.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-        cp -d /usr/lib/$ARCH-linux-gnu/libfontconfig.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+if [ -f "/lib/${ARCH}-linux-gnu/libfontconfig.so.1" ] || [ -f "/usr/lib/${ARCH}-linux-gnu/libfontconfig.so.1" ]; then
+    cp -d "/lib/${ARCH}-linux-gnu"/libfontconfig.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d "/usr/lib/${ARCH}-linux-gnu"/libfontconfig.so* "$APPDIR/usr/lib/" 2>/dev/null || \
         echo "Warning: Could not find libfontconfig"
     
-    cp -d /lib/$ARCH-linux-gnu/libfreetype.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-        cp -d /usr/lib/$ARCH-linux-gnu/libfreetype.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/lib/${ARCH}-linux-gnu"/libfreetype.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d "/usr/lib/${ARCH}-linux-gnu"/libfreetype.so* "$APPDIR/usr/lib/" 2>/dev/null || \
         echo "Warning: Could not find libfreetype"
     
     # Copy dependencies of fontconfig and freetype
     # Direct dependencies of fontconfig
-    cp -d /lib/$ARCH-linux-gnu/libexpat.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-        cp -d /usr/lib/$ARCH-linux-gnu/libexpat.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    cp -d "/lib/${ARCH}-linux-gnu"/libexpat.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d "/usr/lib/${ARCH}-linux-gnu"/libexpat.so* "$APPDIR/usr/lib/" 2>/dev/null || true
     
     # Dependencies of freetype (fontconfig -> freetype -> these)
-    cp -d /lib/$ARCH-linux-gnu/libz.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-        cp -d /usr/lib/$ARCH-linux-gnu/libz.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    cp -d "/lib/${ARCH}-linux-gnu"/libz.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d "/usr/lib/${ARCH}-linux-gnu"/libz.so* "$APPDIR/usr/lib/" 2>/dev/null || true
     
-    cp -d /lib/$ARCH-linux-gnu/libbz2.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-        cp -d /usr/lib/$ARCH-linux-gnu/libbz2.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    cp -d "/lib/${ARCH}-linux-gnu"/libbz2.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d "/usr/lib/${ARCH}-linux-gnu"/libbz2.so* "$APPDIR/usr/lib/" 2>/dev/null || true
     
-    cp -d /lib/$ARCH-linux-gnu/libpng16.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-        cp -d /usr/lib/$ARCH-linux-gnu/libpng16.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    cp -d "/lib/${ARCH}-linux-gnu"/libpng16.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d "/usr/lib/${ARCH}-linux-gnu"/libpng16.so* "$APPDIR/usr/lib/" 2>/dev/null || true
     
-    cp -d /lib/$ARCH-linux-gnu/libbrotlidec.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-        cp -d /usr/lib/$ARCH-linux-gnu/libbrotlidec.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    cp -d "/lib/${ARCH}-linux-gnu"/libbrotlidec.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d "/usr/lib/${ARCH}-linux-gnu"/libbrotlidec.so* "$APPDIR/usr/lib/" 2>/dev/null || true
     
-    cp -d /lib/$ARCH-linux-gnu/libbrotlicommon.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-        cp -d /usr/lib/$ARCH-linux-gnu/libbrotlicommon.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+    cp -d "/lib/${ARCH}-linux-gnu"/libbrotlicommon.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+        cp -d "/usr/lib/${ARCH}-linux-gnu"/libbrotlicommon.so* "$APPDIR/usr/lib/" 2>/dev/null || true
     
     # Copy font configuration files for fontconfig to work properly
     mkdir -p "$APPDIR/etc/fonts"
@@ -487,61 +492,61 @@ fi
 
 # Copy input device libraries (required by linuxfb platform plugin)
 echo "Copying input device libraries for linuxfb..."
-cp -d /lib/$ARCH-linux-gnu/libudev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libudev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libudev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libudev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libinput.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libinput.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libinput.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libinput.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libmtdev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libmtdev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libmtdev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libmtdev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libevdev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libevdev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libevdev.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libevdev.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libxkbcommon.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libxkbcommon.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libxkbcommon.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libxkbcommon.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libdrm.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libdrm.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libdrm.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libdrm.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libwacom.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libwacom.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libwacom.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libwacom.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
 # Copy GLib libraries (required by libinput)
-cp -d /lib/$ARCH-linux-gnu/libglib-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libglib-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libglib-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libglib-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libgobject-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libgobject-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libgobject-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libgobject-2.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libgudev-1.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libgudev-1.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libgudev-1.0.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libgudev-1.0.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
 # Copy additional system libraries
-cp -d /lib/$ARCH-linux-gnu/libdbus-1.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libdbus-1.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libdbus-1.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libdbus-1.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libsystemd.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libsystemd.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libsystemd.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libsystemd.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libcap.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libcap.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libcap.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libcap.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libatomic.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libatomic.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libatomic.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libatomic.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libdouble-conversion.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libdouble-conversion.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libdouble-conversion.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libdouble-conversion.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libpcre2-*.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libpcre2-*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libpcre2-*.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libpcre2-*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libzstd.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libzstd.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libzstd.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libzstd.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d /lib/$ARCH-linux-gnu/libffi.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d /usr/lib/$ARCH-linux-gnu/libffi.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -d "/lib/${ARCH}-linux-gnu"/libffi.so* "$APPDIR/usr/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH}-linux-gnu"/libffi.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
 echo "Input device libraries packaged for embedded deployment"
 
@@ -725,10 +730,15 @@ find "$APPDIR" -name "*.prl" -delete 2>/dev/null || true
 find "$APPDIR" -type f -executable -exec strip {} \; 2>/dev/null || true
 
 echo "Stripping shared libraries..."
-pushd "$APPDIR"
-echo $(find . -name "*.so*")
-strip --strip-unneeded $(find . -name "*.so*")
-popd
+SAVED_DIR="$PWD"
+cd "$APPDIR"
+SO_FILES=$(find . -name "*.so*" 2>/dev/null || true)
+if [ -n "$SO_FILES" ]; then
+    echo "$SO_FILES"
+    # shellcheck disable=SC2086
+    strip --strip-unneeded $SO_FILES 2>/dev/null || true
+fi
+cd "$SAVED_DIR"
 
 echo "Creating embedded AppImage..."
 # Remove old symlinks for embedded variant only
@@ -764,18 +774,20 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
             break
         fi
         # Only rename if this contains "Embedded" (linuxdeploy creates Raspberry_Pi_Imager_(Embedded)-arch.AppImage)
-        if [[ "$appimage" == *"Embedded"* ]] && [[ "$appimage" == *"${ARCH}"* ]]; then
-            echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
-            mv "$appimage" "$OUTPUT_FILE"
-            RENAMED=true
-            break
-        fi
+        case "$appimage" in
+            *"Embedded"*"${ARCH}"*)
+                echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
+                mv "$appimage" "$OUTPUT_FILE"
+                RENAMED=true
+                break
+                ;;
+        esac
     done
     
     # Check if we successfully found/created the output file
-    if [ "$RENAMED" = false ] && [ ! -f "$OUTPUT_FILE" ]; then
+    if [ "$RENAMED" = "false" ] && [ ! -f "$OUTPUT_FILE" ]; then
         echo "Warning: Could not find Embedded AppImage to rename. Looking for any matching AppImage..."
-        ls -la *.AppImage 2>/dev/null || true
+        ls -la ./*.AppImage 2>/dev/null || true
     fi
 else
     # Manual AppImage creation (basic implementation)
@@ -823,4 +835,3 @@ else
     echo "AppImage creation completed, but output file verification failed."
     echo "Check the build process for any errors."
 fi
-

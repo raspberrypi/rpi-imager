@@ -23,8 +23,9 @@ install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
 if(BUILD_CLI_ONLY)
     # CLI-only build: install CLI-specific desktop file (marked as NoDisplay)
+    # Icon is still required for AppImage tooling (linuxdeploy) even though NoDisplay=true
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/icon/rpi-imager.svg" DESTINATION share/icons/hicolor/scalable/apps)
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/../../debian/com.raspberrypi.rpi-imager-cli.desktop" DESTINATION share/applications)
-    # Note: No icon or metainfo needed for CLI-only builds
 else()
     # GUI build: install full desktop integration
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/icon/rpi-imager.svg" DESTINATION share/icons/hicolor/scalable/apps)
