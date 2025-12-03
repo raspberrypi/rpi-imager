@@ -345,7 +345,6 @@ int main(int argc, char *argv[])
 
     /* Parse commandline arguments (if any) using QCommandLineParser */
     QString customRepo;
-    QUrl url;
     QUrl callbackUrl;
     int cliRefreshInterval = -1;
     int cliRefreshJitter = -1;
@@ -368,7 +367,9 @@ int main(int argc, char *argv[])
         {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"}
     });
 
-    parser.addPositionalArgument("image", "Image file/URL or rpi-imager:// callback URL (optional)", "[image]");
+    // Accept rpi-imager:// callback URLs as positional argument (used by callback relay on Windows)
+    // Note: This is NOT for passing image files - use --cli mode for that
+    parser.addPositionalArgument("callback-url", "rpi-imager:// callback URL (internal use)", "[callback-url]");
     parser.process(app);
 
 
@@ -462,36 +463,27 @@ int main(int argc, char *argv[])
         ImageWriter::setForceSecureBootEnabled(true);
     }
 
+    // Only accept rpi-imager:// callback URLs as positional argument
+    // Image files/URLs should be passed via --cli mode, not the desktop GUI
     const QStringList posArgs = parser.positionalArguments();
     if (!posArgs.isEmpty())
     {
         const QString firstPos = posArgs.first();
-        if (firstPos.startsWith("http:", Qt::CaseInsensitive) || firstPos.startsWith("https:", Qt::CaseInsensitive))
-        {
-            url = firstPos;
-        }
-        else if (firstPos.startsWith("rpi-imager:", Qt::CaseInsensitive))
+        if (firstPos.startsWith("rpi-imager:", Qt::CaseInsensitive))
         {
             callbackUrl = QUrl(firstPos);
         }
         else
         {
-            QFileInfo fi(firstPos);
-            if (fi.isFile())
-            {
-                url = QUrl::fromLocalFile(firstPos);
-            }
-            else
-            {
-                cerr << "Argument ignored because it is not a regular file: " << firstPos << endl;
-            }
+            cerr << "Unknown positional argument ignored: " << firstPos << endl;
+            cerr << "Note: To write an image file, use --cli mode instead." << endl;
         }
     }
 
 #ifdef Q_OS_LINUX
     // Check if another instance is already running via D-Bus
-    // If so, send the URL to it and exit
-    if (!callbackUrl.isEmpty() || !url.isEmpty())
+    // If so, send the callback URL to it and exit
+    if (!callbackUrl.isEmpty())
     {
         QDBusConnection bus = QDBusConnection::sessionBus();
         if (bus.isConnected())
@@ -502,8 +494,7 @@ int main(int argc, char *argv[])
             QDBusReply<QStringList> reply = interface.call("ListNames");
             if (reply.isValid() && reply.value().contains("com.raspberrypi.rpi-imager"))
             {
-                // Another instance is running - send URL to it via D-Bus
-                QUrl urlToSend = !callbackUrl.isEmpty() ? callbackUrl : url;
+                // Another instance is running - send callback URL to it via D-Bus
                 QDBusInterface iface("com.raspberrypi.rpi-imager", "/com/raspberrypi/rpi-imager", 
                                    "com.raspberrypi.rpi-imager", bus);
                 QDBusMessage msg = QDBusMessage::createMethodCall(
@@ -511,11 +502,11 @@ int main(int argc, char *argv[])
                     "/com/raspberrypi/rpi-imager",
                     "com.raspberrypi.rpi-imager",
                     "HandleUrl");
-                msg << urlToSend.toString();
+                msg << callbackUrl.toString();
                 QDBusReply<void> callReply = bus.call(msg);
                 if (callReply.isValid())
                 {
-                    qDebug() << "Sent URL to existing instance via D-Bus:" << urlToSend.toString();
+                    qDebug() << "Sent callback URL to existing instance via D-Bus:" << callbackUrl.toString();
                     return 0;
                 }
                 else
@@ -629,8 +620,6 @@ int main(int argc, char *argv[])
             delete translator;
     }
 
-    if (!url.isEmpty())
-        imageWriter.setSrc(url);
     if (cliRefreshInterval >= 0 || cliRefreshJitter >= 0)
     {
         // Sanitize CLI overrides: enforce minimums when non-zero
