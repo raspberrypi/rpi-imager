@@ -492,6 +492,7 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImCloseButton.qml
         qmlcomponents/ImComboBox.qml
         qmlcomponents/ImFileDialog.qml
+        qmlcomponents/ImSaveFileDialog.qml
         qmlcomponents/ImPopup.qml
         qmlcomponents/ImRadioButton.qml
         qmlcomponents/ImOptionPill.qml
