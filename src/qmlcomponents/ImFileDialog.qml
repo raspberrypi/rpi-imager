@@ -27,15 +27,9 @@ BaseDialog {
 
     // Use Dialog's built-in accepted/rejected signals; do not redeclare to avoid overrides
 
-    property bool _firstOpenDone: false
     property string _currentFilename: suggestedFilename
     
     function open() {
-        if (!dialog._firstOpenDone) {
-            dialog.currentFolder = "file:///"
-            dialog.folder = dialog.currentFolder
-            dialog._firstOpenDone = true
-        }
         // For save dialogs, initialize filename from suggestion
         if (isSaveDialog) {
             _currentFilename = suggestedFilename
