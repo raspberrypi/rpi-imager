@@ -109,9 +109,22 @@ namespace Drivelist
             {
                 d.size       = bdev["size"].toDouble();
             }
-            d.isSystem   = !d.isRemovable && !d.isVirtual;
+            
+            /* Detect SD/MMC cards - internal card readers use the mmc subsystem */
+            d.isCard     = subsystems.contains("mmc");
             d.isUSB      = subsystems.contains("usb");
             d.isSCSI     = subsystems.contains("scsi") && !d.isUSB;
+            
+            /* Fix for internal SD card readers and USB-attached SD cards being
+               incorrectly marked as system drives:
+               - Internal SD card readers (MMC subsystem) have rm=0 because the
+                 reader slot is fixed, even though the SD card is removable media
+               - USB devices should always be considered removable/non-system
+               - SD/MMC cards should never be considered system drives */
+            if (d.isCard || d.isUSB) {
+                d.isRemovable = true;
+            }
+            d.isSystem   = !d.isRemovable && !d.isVirtual;
             d.blockSize  = bdev["phy-sec"].toInt();
             d.logicalBlockSize = bdev["log-sec"].toInt();
 
