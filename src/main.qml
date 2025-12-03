@@ -454,6 +454,40 @@ ApplicationWindow {
 
     // Removed embeddedFinishedPopup; handled by Wizard Done step
 
+    // QML fallback save dialog for performance data export
+    ImSaveFileDialog {
+        id: performanceSaveDialog
+        parent: overlayRoot
+        anchors.centerIn: parent
+        dialogTitle: qsTr("Save Performance Data")
+        nameFilters: [qsTr("JSON files (*.json)"), qsTr("All files (*)")]
+        
+        onAccepted: {
+            var filePath = String(selectedFile)
+            // Strip file:// prefix for the C++ call
+            if (filePath.indexOf("file://") === 0) {
+                filePath = filePath.substring(7)
+            }
+            if (filePath.length > 0) {
+                console.log("Saving performance data to:", filePath)
+                imageWriter.exportPerformanceDataToFile(filePath)
+            }
+        }
+    }
+
+    // Handle signal from C++ when native save dialog isn't available
+    Connections {
+        target: imageWriter
+        function onPerformanceSaveDialogNeeded(suggestedFilename, initialDir) {
+            console.log("Native save dialog not available, using QML fallback")
+            performanceSaveDialog.suggestedFilename = suggestedFilename
+            var folderUrl = (Qt.platform.os === "windows") ? ("file:///" + initialDir) : ("file://" + initialDir)
+            performanceSaveDialog.currentFolder = folderUrl
+            performanceSaveDialog.folder = folderUrl
+            performanceSaveDialog.open()
+        }
+    }
+
     /* Slots for signals imagewrite emits */
     function onDownloadProgress(now, total) {
         // Forward to wizard container

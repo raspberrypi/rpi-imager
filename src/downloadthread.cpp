@@ -4,6 +4,7 @@
  */
 
 #include "downloadthread.h"
+#include "aligned_buffer.h"
 #include "config.h"
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
@@ -393,12 +394,20 @@ bool DownloadThread::_openAndPrepareDevice()
         return false;
     }
     
-    QByteArray emptyMB(1024*1024, 0);
+    // Use aligned buffer for O_DIRECT compatibility on Linux
+    // O_DIRECT requires buffers to be aligned to the filesystem's logical block size
+    constexpr size_t emptyMBSize = 1024 * 1024;
+    rpi_imager::AlignedBuffer emptyMB(emptyMBSize);
+    if (!emptyMB) {
+        emit error(tr("Failed to allocate buffer for MBR zeroing"));
+        return false;
+    }
+    
     emit preparationStatusUpdate(tr("Zero'ing out first and last MB of drive..."));
     qDebug() << "Zeroing out first and last MB of drive";
     _timer.start();
 
-    if (_file->WriteSequential(reinterpret_cast<const std::uint8_t*>(emptyMB.data()), emptyMB.size()) != rpi_imager::FileError::kSuccess ||
+    if (_file->WriteSequential(emptyMB.data(), emptyMBSize) != rpi_imager::FileError::kSuccess ||
         _file->Flush() != rpi_imager::FileError::kSuccess)
     {
         emit error(tr("Write error while zero'ing out MBR"));
@@ -406,10 +415,10 @@ bool DownloadThread::_openAndPrepareDevice()
     }
 
     // Zero out last part of card (may have GPT backup table)
-    if (knownsize > static_cast<std::uint64_t>(emptyMB.size()))
+    if (knownsize > emptyMBSize)
     {
-        if (_file->Seek(knownsize - emptyMB.size()) != rpi_imager::FileError::kSuccess ||
-            _file->WriteSequential(reinterpret_cast<const std::uint8_t*>(emptyMB.data()), emptyMB.size()) != rpi_imager::FileError::kSuccess ||
+        if (_file->Seek(knownsize - emptyMBSize) != rpi_imager::FileError::kSuccess ||
+            _file->WriteSequential(emptyMB.data(), emptyMBSize) != rpi_imager::FileError::kSuccess ||
             _file->Flush() != rpi_imager::FileError::kSuccess ||
             _file->ForceSync() != rpi_imager::FileError::kSuccess)
         {
@@ -418,7 +427,6 @@ bool DownloadThread::_openAndPrepareDevice()
             return false;
         }
     }
-    emptyMB.clear();
     _file->Seek(0);
     qDebug() << "Done zero'ing out start and end of drive. Took" << _timer.elapsed() / 1000 << "seconds";
 #endif

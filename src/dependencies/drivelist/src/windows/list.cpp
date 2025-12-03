@@ -790,8 +790,16 @@ std::vector<DeviceDescriptor> ListStorageDevices() {
     device.devicePathNull = true;
 
     if (GetDetailData(&device, hDeviceInfo, deviceInfoData)) {
-      device.isSystem = device.isSystem || IsSystemDevice(hDeviceInfo, &device);
       device.isCard = device.busType == "SD" || device.busType == "MMC";
+      /* SD/MMC cards and USB devices should never be marked as system drives.
+         - Internal SD card readers may not report as "removable"
+         - SD cards may contain system folders from previous OS installs
+         - USB-attached storage is inherently removable/non-system */
+      if (!device.isCard && !device.isUSB) {
+        device.isSystem = device.isSystem || IsSystemDevice(hDeviceInfo, &device);
+      } else {
+        device.isSystem = false;
+      }
       device.isUAS = device.enumerator == "SCSI" && device.busType == "USB";
       device.isVirtual = device.isVirtual ||
         device.busType == "VIRTUAL" ||

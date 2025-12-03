@@ -303,8 +303,15 @@ public:
     Q_INVOKABLE bool installElevationPolicy();
     Q_INVOKABLE void restartWithElevatedPrivileges();
 
-    /* Performance data export - opens native save dialog and writes performance data to file */
+    /* Performance data export - opens native save dialog and writes performance data to file.
+       If native dialogs aren't available, emits performanceSaveDialogNeeded for QML fallback. */
     Q_INVOKABLE bool exportPerformanceData();
+    
+    /* Export performance data to a specific file path (used by QML fallback) */
+    Q_INVOKABLE bool exportPerformanceDataToFile(const QString &filePath);
+    
+    /* Get suggested filename for performance data export */
+    Q_INVOKABLE QString getPerformanceDataFilename();
     
     /* Check if performance data is available */
     Q_INVOKABLE bool hasPerformanceData();
@@ -341,6 +348,7 @@ signals:
     void osListFetchFailed();
     void permissionWarning(QVariant msg);
     void locationPermissionGranted();
+    void performanceSaveDialogNeeded(const QString &suggestedFilename, const QString &initialDir);
 
 protected slots:
     void startProgressPolling();

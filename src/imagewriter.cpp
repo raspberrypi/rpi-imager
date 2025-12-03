@@ -3403,6 +3403,12 @@ bool ImageWriter::hasPerformanceData()
     return _performanceStats->hasData();
 }
 
+QString ImageWriter::getPerformanceDataFilename()
+{
+    return QString("rpi-imager-performance-%1.json")
+        .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
+}
+
 bool ImageWriter::exportPerformanceData()
 {
 #ifndef CLI_ONLY_BUILD
@@ -3412,11 +3418,18 @@ bool ImageWriter::exportPerformanceData()
     }
     
     // Generate default filename with timestamp
-    QString defaultFilename = QString("rpi-imager-performance-%1.json")
-        .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
+    QString defaultFilename = getPerformanceDataFilename();
+    QString initialDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    
+    // Check if native dialogs are available
+    if (!NativeFileDialog::areNativeDialogsAvailable()) {
+        // Emit signal for QML to handle the save dialog
+        qDebug() << "Native file dialog not available, requesting QML fallback";
+        emit performanceSaveDialogNeeded(defaultFilename, initialDir);
+        return true; // Signal emitted, QML will handle the rest
+    }
     
     // Get save location from user using native file dialog
-    QString initialDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     QString filePath = NativeFileDialog::getSaveFileName(
         tr("Save Performance Data"),
         initialDir + "/" + defaultFilename,
@@ -3438,18 +3451,36 @@ bool ImageWriter::exportPerformanceData()
         return false;
     }
     
+    return exportPerformanceDataToFile(filePath);
+#else
+    qDebug() << "Performance data export not available in CLI build";
+    return false;
+#endif
+}
+
+bool ImageWriter::exportPerformanceDataToFile(const QString &filePath)
+{
+#ifndef CLI_ONLY_BUILD
+    if (!_performanceStats->hasData()) {
+        qDebug() << "No performance data to export";
+        return false;
+    }
+    
+    QString finalPath = filePath;
+    
     // Ensure .json extension
-    if (!filePath.endsWith(".json", Qt::CaseInsensitive)) {
-        filePath += ".json";
+    if (!finalPath.endsWith(".json", Qt::CaseInsensitive)) {
+        finalPath += ".json";
     }
     
     // Export data - all complex processing happens here, triggered by user action
-    bool success = _performanceStats->exportToFile(filePath);
+    bool success = _performanceStats->exportToFile(finalPath);
     if (success) {
-        qDebug() << "Performance data exported to:" << filePath;
+        qDebug() << "Performance data exported to:" << finalPath;
     }
     return success;
 #else
+    Q_UNUSED(filePath);
     qDebug() << "Performance data export not available in CLI build";
     return false;
 #endif
