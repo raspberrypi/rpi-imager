@@ -192,10 +192,6 @@ void CacheManager::invalidateCache()
 
 void CacheManager::updateCacheFile(const QByteArray& uncompressedHash, const QByteArray& compressedHash)
 {
-    qDebug() << "Updating cache file:";
-    qDebug() << "  Uncompressed hash (extract_sha256):" << uncompressedHash;
-    qDebug() << "  Compressed hash (image_download_sha256):" << compressedHash;
-    
     bool customCache = false;
     QString cacheFileName;
     
@@ -210,24 +206,14 @@ void CacheManager::updateCacheFile(const QByteArray& uncompressedHash, const QBy
     
     // Save settings (but not for custom cache files)
     if (!customCache) {
-        qDebug() << "Saving cache settings:";
-        qDebug() << "  File name:" << cacheFileName;
-        qDebug() << "  Uncompressed hash (extract_sha256):" << uncompressedHash;
-        qDebug() << "  Compressed hash (image_download_sha256):" << compressedHash;
-        
         settings_.beginGroup("caching");
         settings_.setValue("lastDownloadSHA256", uncompressedHash);   // Store uncompressed hash for UI matching
         settings_.setValue("lastCacheFileHash", compressedHash);      // Store compressed hash for verification
         settings_.setValue("lastFileName", cacheFileName);
         settings_.endGroup();
         settings_.sync();
-        
-        qDebug() << "Cache settings saved successfully";
-    } else {
-        qDebug() << "Not saving cache settings - custom cache file in use";
     }
     
-    qDebug() << "Emitting cacheFileUpdated signal to refresh UI";
     emit cacheFileUpdated(uncompressedHash); // UI matches against uncompressed hash
 }
 
@@ -252,12 +238,6 @@ void CacheManager::startVerification(const QByteArray& expectedHash)
         status.verificationComplete = false;
     });
     
-    qDebug() << "Starting cache verification:";
-    qDebug() << "  File name:" << cacheFileName;
-    qDebug() << "  Expected uncompressed hash (extract_sha256):" << expectedHash;
-    qDebug() << "  Hash to verify (image_download_sha256):" << hashToVerify;
-    qDebug() << "  Custom cache:" << getCacheStatus().customCacheFile;
-    
     // Start verification on background thread
     QMetaObject::invokeMethod(worker_, "verifyCacheFile", Qt::QueuedConnection,
                               Q_ARG(QString, cacheFileName), Q_ARG(QByteArray, hashToVerify));
@@ -268,7 +248,6 @@ bool CacheManager::setupCacheForDownload(const QByteArray& expectedHash, qint64 
     QMutexLocker locker(&mutex_);
     
     if (!cachingEnabled_) {
-        qDebug() << "Caching disabled";
         return false;
     }
     
@@ -281,12 +260,10 @@ bool CacheManager::setupCacheForDownload(const QByteArray& expectedHash, qint64 
     
     // Check disk space
     if (!status_.diskSpaceCheckComplete || !status_.hasAvailableSpace) {
-        qDebug() << "Disk space check incomplete or insufficient space";
         return false;
     }
     
     if (status_.availableBytes - downloadSize < IMAGEWRITER_MINIMAL_SPACE_FOR_CACHING) {
-        qDebug() << "Insufficient disk space for caching";
         return false;
     }
     
@@ -298,16 +275,11 @@ bool CacheManager::setupCacheForDownload(const QByteArray& expectedHash, qint64 
         status_.cacheFileName = cacheFilePath;
     }
     
-    qDebug() << "Cache setup - file path:" << cacheFilePath << "custom:" << status_.customCacheFile;
-    
-    qDebug() << "Cache setup complete for download:" << cacheFilePath;
     return true;
 }
 
 void CacheManager::onVerificationComplete(bool isValid, const QString& fileName, const QByteArray& hash)
 {
-    qDebug() << "Cache verification complete for" << fileName << "- Valid:" << isValid;
-    
     QByteArray uncompressedHashForUI;
     
     updateCacheStatus([&](CacheStatus& status) {
@@ -319,19 +291,12 @@ void CacheManager::onVerificationComplete(bool isValid, const QString& fileName,
         uncompressedHashForUI = status.cachedHash; // Get the uncompressed hash for UI update
     });
     
-    qDebug() << "Updated cache status after verification:";
-    qDebug() << "  isValid:" << isValid;
-    qDebug() << "  verificationComplete:" << true;
-    qDebug() << "  cacheFileName:" << fileName;
-    qDebug() << "  cachedHash (uncompressed, extract_sha256):" << getCacheStatus().cachedHash;
-    qDebug() << "  cacheFileHash (compressed, image_download_sha256):" << getCacheStatus().cacheFileHash;
-    qDebug() << "  verified against hash:" << hash;
+    qDebug() << "Cache verification:" << (isValid ? "valid" : "invalid") << fileName;
     
     emit cacheVerificationComplete(isValid);
     
     // Also emit cacheFileUpdated when verification succeeds to trigger UI update
     if (isValid && !uncompressedHashForUI.isEmpty()) {
-        qDebug() << "Emitting cacheFileUpdated signal after successful verification";
         emit cacheFileUpdated(uncompressedHashForUI); // UI matches against uncompressed hash
     }
     
@@ -342,7 +307,6 @@ void CacheManager::onVerificationComplete(bool isValid, const QString& fileName,
 
 void CacheManager::onDiskSpaceCheckComplete(qint64 availableBytes, const QString& directory)
 {
-    qDebug() << "Disk space check complete:" << availableBytes / (1024*1024*1024) << "GiB available in" << directory;
     
     updateCacheStatus([&](CacheStatus& status) {
         status.availableBytes = availableBytes;
@@ -378,12 +342,6 @@ void CacheManager::loadCacheSettings()
     QByteArray lastHash = settings_.value("lastDownloadSHA256").toByteArray();
     QByteArray cacheFileHash = settings_.value("lastCacheFileHash").toByteArray();
     
-    qDebug() << "Loading cache settings:";
-    qDebug() << "  Caching enabled:" << cachingEnabled_;
-    qDebug() << "  Last file name:" << lastFileName;
-    qDebug() << "  Uncompressed hash (extract_sha256):" << (lastHash.isEmpty() ? "(empty)" : QString(lastHash));
-    qDebug() << "  Compressed hash (image_download_sha256):" << (cacheFileHash.isEmpty() ? "(empty)" : QString(cacheFileHash));
-    
     settings_.endGroup();
     
     // Validate cache file exists and is accessible
@@ -402,10 +360,8 @@ void CacheManager::loadCacheSettings()
                     status.customCacheFile = false;
                     status.verificationComplete = false;
                 });
-                
-                qDebug() << "Loaded cache file info:" << lastFileName << "(" << fileInfo.size() << "bytes)";
             } else {
-                qDebug() << "Cache file exists but cannot be opened, clearing settings";
+                qDebug() << "Cache file cannot be opened, clearing settings";
                 invalidateCache();
             }
         } else {
@@ -451,8 +407,6 @@ CacheVerificationWorker::CacheVerificationWorker(QObject *parent)
 
 void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QByteArray& expectedHash)
 {
-    qDebug() << "Background: Starting cache file verification for" << fileName;
-    
     bool isValid = false;
     
     if (!expectedHash.isEmpty() && !fileName.isEmpty()) {
@@ -469,9 +423,6 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
             // Allocate buffer on heap for large sizes
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(bufferSize);
             qint64 totalBytes = 0;
-            
-            qDebug() << "Background: Cache verification using" << bufferSize/1024 << "KB buffer for" 
-                     << fileSize/(1024*1024) << "MiB file";
             
             // Emit initial progress
             emit verificationProgress(0, fileSize);
@@ -504,14 +455,8 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
             
             QByteArray computedHash = hash.result().toHex();
             isValid = (computedHash == expectedHash);
-            
-            qDebug() << "Background: Cache verification complete";
-            qDebug() << "  File size:" << totalBytes << "bytes";
-            qDebug() << "  Expected hash:" << expectedHash;
-            qDebug() << "  Computed hash:" << computedHash;
-            qDebug() << "  Valid:" << isValid;
         } else {
-            qDebug() << "Background: Cache file does not exist or cannot be opened:" << fileName;
+            qDebug() << "Cache file missing or inaccessible:" << fileName;
         }
     }
     
@@ -520,11 +465,9 @@ void CacheVerificationWorker::verifyCacheFile(const QString& fileName, const QBy
 
 void CacheVerificationWorker::checkDiskSpace()
 {
-    qDebug() << "Background: Checking disk space for cache operations";
-    
     // Ensure cache directory exists
     if (!ensureCacheDirectoryExists()) {
-        qDebug() << "Background: Failed to create cache directory";
+        qDebug() << "Failed to create cache directory";
         emit diskSpaceCheckComplete(0, QString());
         return;
     }
@@ -532,9 +475,6 @@ void CacheVerificationWorker::checkDiskSpace()
     QString cacheDir = getCacheDirectory();
     QStorageInfo storageInfo(cacheDir);
     qint64 availableBytes = storageInfo.bytesAvailable();
-    
-    qDebug() << "Background: Cache directory:" << cacheDir;
-    qDebug() << "Background: Available space:" << availableBytes / (1024*1024*1024) << "GiB";
     
     emit diskSpaceCheckComplete(availableBytes, cacheDir);
 }
@@ -544,24 +484,22 @@ bool CacheVerificationWorker::ensureCacheDirectoryExists()
     QString cacheDir = getCacheDirectory();
     
     if (cacheDir.isEmpty()) {
-        qDebug() << "Background: Cannot determine cache directory location";
         return false;
     }
     
     QDir dir(cacheDir);
     if (!dir.exists()) {
         if (!dir.mkpath(cacheDir)) {
-            qDebug() << "Background: Failed to create cache directory:" << cacheDir;
+            qDebug() << "Failed to create cache directory:" << cacheDir;
             return false;
         }
-        qDebug() << "Background: Created cache directory:" << cacheDir;
     }
     
     // Test write access
     QString testFile = cacheDir + QDir::separator() + "test_write_access.tmp";
     QFile test(testFile);
     if (!test.open(QIODevice::WriteOnly)) {
-        qDebug() << "Background: Cache directory exists but is not writable:" << cacheDir;
+        qDebug() << "Cache directory not writable:" << cacheDir;
         return false;
     }
     test.write("test");
