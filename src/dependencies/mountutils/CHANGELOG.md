@@ -33,7 +33,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## v1.3.13 - 2018-06-08
 
-* Upgrade(package): Bump dependencies #67 [Jonas Hermsmeier]
+* Upgrade(package): Bump depenencies #67 [Jonas Hermsmeier]
 
 ## v1.3.12 - 2018-05-25
 

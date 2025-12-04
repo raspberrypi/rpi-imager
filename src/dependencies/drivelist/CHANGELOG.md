@@ -15,7 +15,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## 8.0.7 - 2019-09-20
 
-* Update nan to ^2.14 to fix builds targeting electron 6 [Alexis Svinartchouk]
+* Update nan to ^2.14 to fix builds targetting electron 6 [Alexis Svinartchouk]
 
 ## 8.0.6 - 2019-03-20
 
@@ -384,7 +384,7 @@ This version is equal to v5.0.12, but was released from a UNIX based system.
 
 ## v5.0.9
 
-- Print platform scripts `stderr` output to a debug channel instead of throwing if the script exited with code zero.
+- Print platform scripts `stderr` output to a debug channel instead of throwing if the script exitted with code zero.
 - Fix bug where only the first mount point is reported on GNU/Linux.
 - Ensure every potentially problematic value is double quoted in the GNU/Linux and macOS scripts.
 
@@ -575,7 +575,7 @@ This version is equal to v5.0.12, but was released from a UNIX based system.
 
 ## v1.3.1
 
-- Surround Windows script path in double quotes to avoid issues with paths including white space.
+- Surround Windows script path in double quotes to avoid issues with paths incuding white space.
 
 ## v1.3.0
 
