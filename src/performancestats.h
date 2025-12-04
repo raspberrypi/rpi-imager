@@ -76,6 +76,10 @@ public:
         PipelineRingBufferWaitTime,// Total time waiting for ring buffer data (input buffer)
         WriteRingBufferStats,      // Write ring buffer stall statistics (decompress->write)
         
+        // Cycle boundaries (for multi-write sessions)
+        CycleStart,            // Start of a new imaging cycle (metadata: image name, device)
+        CycleEnd,              // End of an imaging cycle (metadata: success/failure reason)
+        
         // Customisation
         Customisation,         // Time to apply customisation (config, firstrun, etc.)
         CloudInitGeneration,   // Time to generate cloud-init config
@@ -164,7 +168,9 @@ public:
     // ===== Session Management =====
     
     /**
-     * @brief Start a new recording session (clears previous data)
+     * @brief Start a new imaging cycle within the current capture session
+     * Emits a CycleStart event - does NOT clear previous data.
+     * Multiple cycles can be captured in a single session for analysis.
      */
     void startSession(const QString &imageName, quint64 imageSize, const QString &deviceName);
     
@@ -175,9 +181,16 @@ public:
     void setSystemInfo(const SystemInfo &info);
     
     /**
-     * @brief End the current session
+     * @brief End the current imaging cycle
+     * Emits a CycleEnd event with success/failure status.
      */
     void endSession(bool success, const QString &errorMessage = QString());
+    
+    /**
+     * @brief Reset all captured data (start fresh)
+     * Call this when you want to clear all accumulated cycles and start over.
+     */
+    void reset();
     
     /**
      * @brief Check if a session is active
