@@ -1175,6 +1175,9 @@ namespace {
     }
 
     // Centralized URL preflight validation for fetches
+    // Note: We intentionally skip filesystem validation (exists/isFile) for local files
+    // as these calls can be slow on iCloud-synced directories or network volumes.
+    // Invalid local files will fail gracefully when the actual fetch is attempted.
     bool preflightValidateUrl(const QUrl &url, const QString &context)
     {
         if (!url.isValid() || url.scheme().isEmpty()) {
@@ -1186,13 +1189,7 @@ namespace {
             qWarning() << context << "invalid URL (no host):" << url.toString();
             return false;
         }
-        if (url.isLocalFile()) {
-            QFileInfo fi(url.toLocalFile());
-            if (!fi.exists() || !fi.isFile()) {
-                qWarning() << context << "invalid URL (local file missing/not regular):" << url.toString();
-                return false;
-            }
-        }
+        // Local file URLs are allowed through - actual file access will validate existence
         return true;
     }
 
@@ -1774,9 +1771,12 @@ void ImageWriter::openFileDialog(const QString &title, const QString &filter)
 #ifndef CLI_ONLY_BUILD
     QSettings settings;
     QString path = settings.value("lastpath").toString();
-    QFileInfo fi(path);
 
-    if (path.isEmpty() || !fi.exists() || !fi.isReadable() )
+    // Don't validate the path with filesystem calls (exists/isReadable) - these can be
+    // extremely slow on macOS with iCloud-synced directories or network volumes.
+    // The native file dialog handles invalid/missing paths gracefully by falling back
+    // to its default location.
+    if (path.isEmpty())
         path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
     // Use native file dialog with modal behavior to main window
@@ -2428,10 +2428,12 @@ void ImageWriter::_applySystemdCustomisationFromSettings(const QVariantMap &s)
     }
 
     // Check if secure boot should be enabled
+    // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
+    // iCloud-synced or network paths. The actual write operation will validate the file.
     ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
     bool secureBootEnabled = s.value("secureBootEnabled").toBool();
     QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
-    if (secureBootEnabled && !rsaKeyPath.isEmpty() && QFile::exists(rsaKeyPath)) {
+    if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
         advOpts |= ImageOptions::EnableSecureBoot;
         qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
     }
@@ -2459,10 +2461,12 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
     }
     
     // Check if secure boot should be enabled
+    // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
+    // iCloud-synced or network paths. The actual write operation will validate the file.
     ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
     bool secureBootEnabled = s.value("secureBootEnabled").toBool();
     QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
-    if (secureBootEnabled && !rsaKeyPath.isEmpty() && QFile::exists(rsaKeyPath)) {
+    if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
         advOpts |= ImageOptions::EnableSecureBoot;
         qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
     }

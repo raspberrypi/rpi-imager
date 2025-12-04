@@ -251,14 +251,12 @@ namespace {
                     return QString();
                 }
             } else if (scheme == QLatin1String("file")) {
+                // Allow local file URLs without filesystem validation - exists()/isFile()
+                // calls can be slow on iCloud-synced directories or network volumes,
+                // and this function is called for every icon during model population.
+                // QML's Image component handles missing files gracefully.
                 if (url.isLocalFile()) {
-                    QFileInfo fi(url.toLocalFile());
-                    if (fi.exists() && fi.isFile()) {
-                        return raw;
-                    } else {
-                        qWarning() << "OSListModel: dropping icon pointing to missing local file:" << raw;
-                        return QString();
-                    }
+                    return raw;
                 }
                 // Non-local file URL; drop
                 qWarning() << "OSListModel: dropping non-local file URL icon:" << raw;
