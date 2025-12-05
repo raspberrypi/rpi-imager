@@ -48,6 +48,10 @@ ListView {
     boundsBehavior: Flickable.StopAtBounds
     currentIndex: -1
     
+    // Keep delegates instantiated beyond the visible area to prevent
+    // itemAtIndex() returning null during keyboard/accessibility navigation
+    cacheBuffer: 2000
+    
     // Accessibility properties
     Accessible.role: Accessible.List
     Accessible.name: root.accessibleName
