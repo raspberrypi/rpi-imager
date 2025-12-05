@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <Cocoa/Cocoa.h>
+#include <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 // Delegate class to handle file type popup changes
 @interface FileTypeAccessoryController : NSObject
@@ -17,6 +18,39 @@
 - (void)filterChanged:(id)sender;
 @end
 
+// Helper function to convert file extensions to UTTypes
+static NSArray<UTType*>* extensionsToContentTypes(NSArray<NSString*>* extensions) API_AVAILABLE(macos(11.0)) {
+    if (!extensions || [extensions count] == 0) {
+        return nil;
+    }
+    
+    NSMutableArray<UTType*>* types = [NSMutableArray array];
+    for (NSString* ext in extensions) {
+        if ([ext isEqualToString:@"*"]) {
+            return nil;  // All files
+        }
+        UTType* type = [UTType typeWithFilenameExtension:ext];
+        if (type) {
+            [types addObject:type];
+        }
+    }
+    return [types count] > 0 ? types : nil;
+}
+
+// Helper function to set allowed file types on a panel (handles API availability)
+static void setAllowedExtensions(NSSavePanel* panel, NSArray<NSString*>* extensions) {
+    if (@available(macOS 11.0, *)) {
+        NSArray<UTType*>* types = extensionsToContentTypes(extensions);
+        [panel setAllowedContentTypes:(types ? types : @[])];
+    } else {
+        // Fallback for older macOS versions
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        [panel setAllowedFileTypes:extensions];
+#pragma clang diagnostic pop
+    }
+}
+
 @implementation FileTypeAccessoryController
 - (void)filterChanged:(id)sender {
     NSInteger idx = [self.popup indexOfSelectedItem];
@@ -24,9 +58,9 @@
         NSArray<NSString*>* exts = self.filterExtensions[idx];
         if ([exts count] == 0 || ([exts count] == 1 && [exts[0] isEqualToString:@"*"])) {
             // "All files" - allow everything
-            [self.panel setAllowedFileTypes:nil];
+            setAllowedExtensions(self.panel, nil);
         } else {
-            [self.panel setAllowedFileTypes:exts];
+            setAllowedExtensions(self.panel, exts);
         }
         // Force panel to refresh file list
         [self.panel validateVisibleColumns];
@@ -244,7 +278,7 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 // Single filter: just apply it without UI
                 NSArray<NSString*>* exts = getFirstFilterExtensions(parsedFilters);
                 if (exts) {
-                    [panel setAllowedFileTypes:exts];
+                    setAllowedExtensions(panel, exts);
                 }
             }
             
@@ -291,7 +325,7 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
                 // Single filter: just apply it without UI
                 NSArray<NSString*>* exts = getFirstFilterExtensions(parsedFilters);
                 if (exts) {
-                    [panel setAllowedFileTypes:exts];
+                    setAllowedExtensions(panel, exts);
                 }
             }
             
