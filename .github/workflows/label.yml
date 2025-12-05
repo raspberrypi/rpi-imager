@@ -5,26 +5,18 @@
 # file with configuration.  For more information, see:
 # https://github.com/actions/labeler
 
-name: Labeler Manager
-
-# on: [pull_request_target]
-
-on:
-  schedule:
-    - cron: "30 20 * * *"
+name: Labeler
+on: [pull_request_target]
 
 jobs:
-  labeler:
+  label:
+
     runs-on: ubuntu-latest
     permissions:
-      issues: write
       contents: read
       pull-requests: write
 
     steps:
-      - name: Run Labeler
-        uses: actions/labeler@v4
-        with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
-          yaml-file: .github/labels.yml
-          skip-delete: true
+    - uses: actions/labeler@v4
+      with:
+        repo-token: "${{ secrets.GITHUB_TOKEN }}"
