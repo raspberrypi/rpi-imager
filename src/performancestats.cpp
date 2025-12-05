@@ -34,34 +34,30 @@ void PerformanceStats::startSession(const QString &imageName, quint64 imageSize,
 {
     QMutexLocker locker(&_mutex);
     
-    // Preserve pre-session events (OS list fetch, etc.) recorded before session started
-    QVector<TimedEvent> preSessionEvents;
-    for (const TimedEvent &e : _events) {
-        // Keep events that were recorded before any session (startMs == 0 means pre-session)
-        if (e.startMs == 0 && e.durationMs > 0) {
-            preSessionEvents.append(e);
-        }
+    // If this is the very first session, initialise capacity
+    if (_events.isEmpty()) {
+        _downloadSamples.reserve(1000);
+        _decompressSamples.reserve(2000);
+        _writeSamples.reserve(2000);
+        _verifySamples.reserve(1000);
+        _events.reserve(100);
     }
     
-    // Clear previous session data
-    _events.clear();
-    _pendingEvents.clear();
-    _downloadSamples.clear();
-    _decompressSamples.clear();
-    _writeSamples.clear();
-    _verifySamples.clear();
+    // Emit CycleStart event to mark the beginning of a new imaging cycle
+    // This allows multiple cycles to be captured and analysed separately
+    TimedEvent cycleStartEvent;
+    cycleStartEvent.type = EventType::CycleStart;
+    cycleStartEvent.startMs = _sessionActive ? static_cast<uint32_t>(_sessionTimer.elapsed()) : 0;
+    cycleStartEvent.durationMs = 0;
+    cycleStartEvent.metadata = QString("image: %1; device: %2; size: %3")
+                                .arg(imageName)
+                                .arg(deviceName)
+                                .arg(imageSize);
+    cycleStartEvent.success = true;
+    cycleStartEvent.bytesTransferred = imageSize;
+    _events.append(cycleStartEvent);
     
-    // Reserve capacity for raw samples
-    _downloadSamples.reserve(1000);
-    _decompressSamples.reserve(2000);
-    _writeSamples.reserve(2000);
-    _verifySamples.reserve(1000);
-    _events.reserve(50);
-    
-    // Restore pre-session events (they'll keep startMs=0 to indicate pre-session timing)
-    _events.append(preSessionEvents);
-    
-    // Initialise session
+    // Update session state
     _imageName = imageName;
     _deviceName = deviceName;
     _imageSize = imageSize;
@@ -79,15 +75,53 @@ void PerformanceStats::startSession(const QString &imageName, quint64 imageSize,
     _writeTotal = 0;
     _verifyTotal = 0;
     
+    _hasSystemInfo = false;
+    std::memset(&_systemInfo, 0, sizeof(_systemInfo));
+    
+    // Start/restart the session timer for this cycle
+    _sessionTimer.start();
+    _sessionActive = true;
+    
+    qDebug() << "PerformanceStats: Started cycle for" << imageName 
+             << "size:" << imageSize << "device:" << deviceName
+             << "total events:" << _events.size();
+}
+
+void PerformanceStats::reset()
+{
+    QMutexLocker locker(&_mutex);
+    
+    // Clear all accumulated data
+    _events.clear();
+    _pendingEvents.clear();
+    _downloadSamples.clear();
+    _decompressSamples.clear();
+    _writeSamples.clear();
+    _verifySamples.clear();
+    
+    _imageName.clear();
+    _deviceName.clear();
+    _imageSize = 0;
+    _sessionStartTime = 0;
+    _sessionEndTime = 0;
+    _sessionSuccess = false;
+    _errorMessage.clear();
+    _sessionActive = false;
+    
+    _currentPhase = Phase::Idle;
+    std::memset(_phaseStartTimes, 0, sizeof(_phaseStartTimes));
+    std::memset(_lastSampleTime, 0, sizeof(_lastSampleTime));
+    
+    _downloadTotal = 0;
+    _decompressTotal = 0;
+    _writeTotal = 0;
+    _verifyTotal = 0;
+    
     _nextEventId = 1;
     _hasSystemInfo = false;
     std::memset(&_systemInfo, 0, sizeof(_systemInfo));
     
-    _sessionTimer.start();
-    _sessionActive = true;
-    
-    qDebug() << "PerformanceStats: Started session for" << imageName 
-             << "size:" << imageSize << "device:" << deviceName;
+    qDebug() << "PerformanceStats: Reset all data";
 }
 
 void PerformanceStats::setSystemInfo(const SystemInfo &info)
@@ -109,13 +143,23 @@ void PerformanceStats::endSession(bool success, const QString &errorMessage)
     if (!_sessionActive)
         return;
     
+    // Emit CycleEnd event to mark the end of this imaging cycle
+    TimedEvent cycleEndEvent;
+    cycleEndEvent.type = EventType::CycleEnd;
+    cycleEndEvent.startMs = static_cast<uint32_t>(_sessionTimer.elapsed());
+    cycleEndEvent.durationMs = 0;
+    cycleEndEvent.metadata = success ? "completed" : QString("failed: %1").arg(errorMessage);
+    cycleEndEvent.success = success;
+    cycleEndEvent.bytesTransferred = 0;
+    _events.append(cycleEndEvent);
+    
     _sessionEndTime = QDateTime::currentMSecsSinceEpoch();
     _sessionSuccess = success;
     _errorMessage = errorMessage;
     _sessionActive = false;
     _currentPhase = Phase::Idle;
     
-    qDebug() << "PerformanceStats: Session ended, success:" << success
+    qDebug() << "PerformanceStats: Cycle ended, success:" << success
              << "events:" << _events.size()
              << "samples: dl=" << _downloadSamples.size()
              << "dec=" << _decompressSamples.size()
@@ -358,6 +402,12 @@ QString PerformanceStats::eventTypeName(EventType type)
         // Pipeline timing
         case EventType::PipelineDecompressionTime: return "pipelineDecompressionTime";
         case EventType::PipelineWriteWaitTime: return "pipelineWriteWaitTime";
+        case EventType::PipelineRingBufferWaitTime: return "pipelineRingBufferWaitTime";
+        case EventType::WriteRingBufferStats: return "writeRingBufferStats";
+        
+        // Cycle boundaries
+        case EventType::CycleStart: return "cycleStart";
+        case EventType::CycleEnd: return "cycleEnd";
         case EventType::PipelineRingBufferWaitTime: return "pipelineRingBufferWaitTime";
         case EventType::WriteRingBufferStats: return "writeRingBufferStats";
         

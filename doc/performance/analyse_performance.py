@@ -60,6 +60,634 @@ def format_throughput(kbps: int) -> str:
         return f"{kbps / (1024 * 1024):.2f} GB/s"
 
 
+# =============================================================================
+# IMAGING CYCLE DETECTION
+# =============================================================================
+
+class ImagingCycle:
+    """Represents a single select-download-write cycle."""
+    
+    # Events that indicate a cycle completed successfully
+    COMPLETION_EVENTS = {'deviceClose', 'finalSync', 'verifyComplete'}
+    
+    # Events that indicate a cycle failed
+    FAILURE_EVENTS = {'writeError', 'verifyError', 'downloadError', 'cancelled'}
+    
+    def __init__(self, cycle_id: int):
+        self.id = cycle_id
+        self.start_ms: int = 0
+        self.end_ms: int = 0
+        self.events: list = []
+        self.histogram_slices: dict = {'download': [], 'decompress': [], 'write': [], 'verify': []}
+        
+        # Derived stats
+        self.image_name: str = ''
+        self.device_name: str = ''
+        self.cache_hit: bool = False
+        self.direct_io: bool = False
+        self.success: bool = True
+        self.is_complete: bool = False  # True if we saw completion events
+        self.is_final_cycle: bool = False  # True if this is the last cycle in the capture
+        self.completion_reason: str = ''  # 'completed', 'failed', 'in_progress', 'exported_early'
+        
+    @property
+    def duration_ms(self) -> int:
+        return self.end_ms - self.start_ms if self.end_ms > self.start_ms else 0
+    
+    def get_phase_stats(self, phase: str) -> dict:
+        """Calculate throughput stats for a phase from histogram slices."""
+        slices = self.histogram_slices.get(phase, [])
+        if not slices:
+            return {}
+        
+        throughputs = [s[3] for s in slices]  # avg throughput is index 3
+        timestamps = [s[0] for s in slices]
+        
+        return {
+            'sampleCount': len(slices),
+            'minThroughputKBps': min(throughputs),
+            'maxThroughputKBps': max(throughputs),
+            'avgThroughputKBps': sum(throughputs) // len(throughputs),
+            'startMs': min(timestamps),
+            'endMs': max(timestamps),
+            'durationMs': max(timestamps) - min(timestamps) + 1000,  # Add window duration
+        }
+    
+    def get_bottleneck(self) -> str:
+        """Determine the bottleneck for this cycle."""
+        # Look for pipeline timing events
+        decomp_time = 0
+        write_wait = 0
+        ring_wait = 0
+        
+        for event in self.events:
+            if event.get('type') == 'pipelineDecompressionTime':
+                decomp_time = event.get('durationMs', 0)
+            elif event.get('type') == 'pipelineWriteWaitTime':
+                write_wait = event.get('durationMs', 0)
+            elif event.get('type') == 'pipelineRingBufferWaitTime':
+                ring_wait = event.get('durationMs', 0)
+        
+        if decomp_time == 0:
+            return 'unknown'
+        
+        actual_decomp = decomp_time - ring_wait
+        
+        if ring_wait > write_wait and ring_wait > actual_decomp:
+            return 'network'
+        elif write_wait > ring_wait and write_wait > actual_decomp:
+            return 'disk'
+        else:
+            return 'cpu'
+
+
+def detect_cycles(data: dict, gap_threshold_ms: int = 30000) -> list:
+    """
+    Detect imaging cycles from performance data.
+    
+    Detection methods (in order of preference):
+    1. Explicit cycleStart/cycleEnd events (new format)
+    2. Large gaps (>gap_threshold_ms) in histogram data (legacy fallback)
+    
+    Returns list of ImagingCycle objects.
+    """
+    events = data.get('events', [])
+    histograms = data.get('histograms', {})
+    
+    # First, try to detect cycles from explicit cycleStart/cycleEnd events
+    cycles = _detect_cycles_from_events(events, histograms)
+    if cycles:
+        return cycles
+    
+    # Fallback: detect cycles from gaps in histogram data (for older captures)
+    return _detect_cycles_from_gaps(data, events, histograms, gap_threshold_ms)
+
+
+def _detect_cycles_from_events(events: list, histograms: dict) -> list:
+    """Detect cycles from explicit cycleStart/cycleEnd events."""
+    cycles = []
+    current_cycle = None
+    
+    for event in events:
+        event_type = event.get('type', '')
+        
+        if event_type == 'cycleStart':
+            # Start a new cycle
+            if current_cycle is not None:
+                # Previous cycle wasn't ended - mark it as incomplete
+                current_cycle.is_complete = False
+                current_cycle.completion_reason = 'no_end_event'
+                cycles.append(current_cycle)
+            
+            current_cycle = ImagingCycle(len(cycles) + 1)
+            current_cycle.start_ms = event.get('startMs', 0)
+            current_cycle.events.append(event)
+            
+            # Parse metadata for image/device info
+            metadata = event.get('metadata', '')
+            if 'image:' in metadata:
+                parts = {p.split(':')[0].strip(): p.split(':', 1)[1].strip() 
+                        for p in metadata.split(';') if ':' in p}
+                current_cycle.image_name = parts.get('image', '')
+                current_cycle.device_name = parts.get('device', '')
+                
+        elif event_type == 'cycleEnd':
+            if current_cycle is not None:
+                current_cycle.end_ms = event.get('startMs', 0)
+                current_cycle.events.append(event)
+                current_cycle.is_complete = True
+                current_cycle.success = event.get('success', False)
+                current_cycle.completion_reason = 'completed' if current_cycle.success else 'failed'
+                cycles.append(current_cycle)
+                current_cycle = None
+        else:
+            # Add other events to current cycle
+            if current_cycle is not None:
+                current_cycle.events.append(event)
+                _update_cycle_from_event(current_cycle, event)
+    
+    # Handle incomplete final cycle
+    if current_cycle is not None:
+        current_cycle.is_complete = False
+        current_cycle.is_final_cycle = True
+        current_cycle.completion_reason = 'in_progress'
+        cycles.append(current_cycle)
+    
+    # Assign histogram data to cycles based on timestamps
+    if cycles:
+        _assign_histogram_to_cycles(cycles, histograms)
+        
+        # Mark the final cycle
+        if cycles:
+            cycles[-1].is_final_cycle = True
+    
+    return cycles
+
+
+def _assign_histogram_to_cycles(cycles: list, histograms: dict) -> None:
+    """Assign histogram slices to cycles based on timestamp ranges."""
+    for phase, slices in histograms.items():
+        for slice_data in slices:
+            timestamp = slice_data[0]
+            
+            # Find the cycle this slice belongs to
+            for i, cycle in enumerate(cycles):
+                cycle_end = cycles[i + 1].start_ms if i + 1 < len(cycles) else float('inf')
+                
+                if cycle.start_ms <= timestamp < cycle_end:
+                    cycle.histogram_slices[phase].append(slice_data)
+                    cycle.end_ms = max(cycle.end_ms, timestamp)
+                    break
+
+
+def _detect_cycles_from_gaps(data: dict, events: list, histograms: dict, gap_threshold_ms: int) -> list:
+    """Legacy: Detect cycles from gaps in histogram data."""
+    
+    # First, detect gaps in histogram data which are the clearest cycle boundaries
+    # Combine all histogram timestamps to find the gaps
+    all_histogram_points = []
+    for phase, slices in histograms.items():
+        for slice_data in slices:
+            timestamp = slice_data[0]
+            all_histogram_points.append({
+                'timestamp': timestamp,
+                'phase': phase,
+                'slice': slice_data
+            })
+    
+    all_histogram_points.sort(key=lambda x: x['timestamp'])
+    
+    # Find gaps in histogram data
+    cycle_boundaries = [0]  # Start of first cycle
+    if all_histogram_points:
+        prev_ts = all_histogram_points[0]['timestamp']
+        for point in all_histogram_points[1:]:
+            gap = point['timestamp'] - prev_ts
+            if gap > gap_threshold_ms:
+                # Found a gap - this is a cycle boundary
+                cycle_boundaries.append(point['timestamp'])
+            prev_ts = point['timestamp']
+    
+    if not cycle_boundaries or not all_histogram_points:
+        # No clear boundaries found, treat everything as one cycle
+        if all_histogram_points:
+            cycle_boundaries = [all_histogram_points[0]['timestamp']]
+    
+    # Create cycles based on boundaries
+    cycles = []
+    for i, boundary_start in enumerate(cycle_boundaries):
+        cycle = ImagingCycle(i + 1)
+        cycle.start_ms = boundary_start
+        
+        # Find end of this cycle (start of next, or last data point)
+        if i + 1 < len(cycle_boundaries):
+            cycle_end = cycle_boundaries[i + 1]
+        else:
+            cycle_end = float('inf')
+        
+        # Assign histogram data to this cycle
+        for point in all_histogram_points:
+            ts = point['timestamp']
+            if boundary_start <= ts < cycle_end:
+                cycle.histogram_slices[point['phase']].append(point['slice'])
+                cycle.end_ms = max(cycle.end_ms, ts)
+        
+        cycles.append(cycle)
+    
+    # Now assign events to cycles based on their timestamps
+    for i, event in enumerate(events):
+        start_ms = event.get('startMs', 0)
+        event_type = event.get('type', '')
+        
+        # Find which cycle this event belongs to
+        target_cycle = None
+        for j, cycle in enumerate(cycles):
+            cycle_end = cycles[j + 1].start_ms if j + 1 < len(cycles) else float('inf')
+            
+            # Events with startMs=0 need special handling
+            if start_ms == 0:
+                continue  # Will be handled by _assign_zero_timestamp_events
+            
+            if cycle.start_ms - 15000 <= start_ms < cycle_end:
+                target_cycle = cycle
+                break
+        
+        if target_cycle is not None:
+            target_cycle.events.append(event)
+            _update_cycle_from_event(target_cycle, event)
+    
+    # Post-process: assign events without timestamps to cycles based on file position
+    # Events with startMs=0 are ordered in the file, so we can use their position
+    _assign_zero_timestamp_events(cycles, events)
+    
+    # Determine completion status of each cycle
+    _determine_cycle_completion(cycles, data)
+    
+    return cycles
+
+
+def _assign_zero_timestamp_events(cycles: list, all_events: list) -> None:
+    """
+    Assign events with startMs=0 to cycles.
+    
+    This is tricky because events may not be strictly ordered by time in the file.
+    We use a heuristic: look at the NEXT event with a real timestamp after this one
+    in the file, and use that to determine which cycle this event belongs to.
+    
+    Special handling for key events like cacheLookup which mark cycle boundaries.
+    """
+    if not cycles or len(cycles) < 2:
+        # For single cycle, assign everything to it
+        if cycles:
+            for event in all_events:
+                if event not in cycles[0].events:
+                    cycles[0].events.append(event)
+                    _update_cycle_from_event(cycles[0], event)
+        return
+    
+    # Build a map of position -> next timestamp after that position
+    next_timestamp_after = {}
+    last_ts = 0
+    # Scan backwards to find the next timestamp for each position
+    for i in range(len(all_events) - 1, -1, -1):
+        ts = all_events[i].get('startMs', 0)
+        if ts > 0:
+            last_ts = ts
+        next_timestamp_after[i] = last_ts
+    
+    # Also build a map of cycle start times for quick lookup
+    cycle_ranges = []
+    for i, cycle in enumerate(cycles):
+        start = cycle.start_ms
+        end = cycles[i + 1].start_ms if i + 1 < len(cycles) else float('inf')
+        cycle_ranges.append((start, end, cycle))
+    
+    # Process events with startMs=0
+    for i, event in enumerate(all_events):
+        if event.get('startMs', 0) > 0:
+            continue  # Has real timestamp
+        
+        if any(event in c.events for c in cycles):
+            continue  # Already assigned
+        
+        event_type = event.get('type', '')
+        
+        # Special handling for cacheLookup - it marks the START of a cycle's actual imaging
+        # Look at events AFTER this one to determine which cycle
+        next_ts = next_timestamp_after.get(i, 0)
+        
+        # Also look at the PREVIOUS event with a timestamp to bracket
+        prev_ts = 0
+        for j in range(i - 1, -1, -1):
+            ts = all_events[j].get('startMs', 0)
+            if ts > 0:
+                prev_ts = ts
+                break
+        
+        # If next_ts is very early (< 30s) but this is late in the file (position > 300),
+        # it means events are out of order and we're in a later cycle
+        is_late_in_file = i > len(all_events) * 0.5
+        next_is_early = next_ts < 30000
+        
+        if is_late_in_file and next_is_early and event_type == 'cacheLookup':
+            # This cacheLookup is followed by events from cycle 1 in the file,
+            # but it's actually for a later cycle. Assign to last cycle.
+            last_cycle = cycles[-1]
+            last_cycle.events.append(event)
+            _update_cycle_from_event(last_cycle, event)
+            continue
+        
+        # General case: use the next timestamp to find the cycle
+        target_cycle = None
+        for start, end, cycle in cycle_ranges:
+            # Be generous with boundaries - preparation events may occur before histogram starts
+            if start - 30000 <= next_ts < end + 30000:
+                target_cycle = cycle
+                break
+        
+        if target_cycle is None:
+            # Fallback: assign to the cycle whose time range best matches
+            for start, end, cycle in cycle_ranges:
+                if start - 30000 <= prev_ts < end + 30000:
+                    target_cycle = cycle
+                    break
+        
+        if target_cycle is None and cycles:
+            # Last resort: assign to first cycle
+            target_cycle = cycles[0]
+        
+        if target_cycle:
+            target_cycle.events.append(event)
+            _update_cycle_from_event(target_cycle, event)
+
+
+def _update_cycle_from_event(cycle: 'ImagingCycle', event: dict) -> None:
+    """Update cycle metadata based on event information."""
+    event_type = event.get('type', '')
+    metadata = event.get('metadata', '')
+    
+    if event_type == 'cacheLookup':
+        cycle.cache_hit = 'hit' in metadata
+    elif event_type == 'directIOAttempt':
+        cycle.direct_io = 'succeeded: yes' in metadata
+    elif event_type == 'driveOpen':
+        if 'direct_io: yes' in metadata:
+            cycle.direct_io = True
+
+
+def _determine_cycle_completion(cycles: list, data: dict) -> None:
+    """Determine whether each cycle completed, failed, or is still in progress."""
+    if not cycles:
+        return
+    
+    summary = data.get('summary', {})
+    session_success = summary.get('success', False)
+    
+    for i, cycle in enumerate(cycles):
+        cycle.is_final_cycle = (i == len(cycles) - 1)
+        
+        # Check for completion events
+        event_types = {e.get('type') for e in cycle.events}
+        has_completion = bool(event_types & ImagingCycle.COMPLETION_EVENTS)
+        has_failure = bool(event_types & ImagingCycle.FAILURE_EVENTS)
+        
+        # Check for failed events
+        failed_events = [e for e in cycle.events if not e.get('success', True)]
+        
+        if has_failure or failed_events:
+            cycle.is_complete = True
+            cycle.success = False
+            cycle.completion_reason = 'failed'
+        elif has_completion:
+            cycle.is_complete = True
+            cycle.success = True
+            cycle.completion_reason = 'completed'
+        elif cycle.is_final_cycle:
+            # Final cycle without completion events - could be in progress or exported early
+            # Check if there's recent histogram activity
+            all_slices = []
+            for phase_slices in cycle.histogram_slices.values():
+                all_slices.extend(phase_slices)
+            
+            if all_slices:
+                last_activity = max(s[0] for s in all_slices)
+                # If the session was marked as failed and this is the last cycle
+                if not session_success:
+                    cycle.is_complete = False
+                    cycle.success = False
+                    cycle.completion_reason = 'exported_early'
+                else:
+                    # Has activity but no completion event - likely exported mid-operation
+                    cycle.is_complete = False
+                    cycle.completion_reason = 'in_progress'
+            else:
+                cycle.is_complete = False
+                cycle.completion_reason = 'in_progress'
+        else:
+            # Non-final cycle without explicit completion - assume it completed
+            # (otherwise how would the next cycle have started?)
+            cycle.is_complete = True
+            cycle.success = True
+            cycle.completion_reason = 'completed'
+
+
+def _assign_contextual_events(cycles: list, all_events: list) -> None:
+    """Assign events without timestamps to cycles based on context."""
+    if not cycles:
+        return
+    
+    # Events that should be assigned to the cycle they occur within
+    contextual_events = {
+        'pipelineDecompressionTime', 'pipelineWriteWaitTime', 'pipelineRingBufferWaitTime',
+        'osListParse', 'osListFetch', 'customisation', 'cloudInitGeneration',
+        'firstRunGeneration', 'secureBootSetup', 'finalSync', 'deviceClose',
+        'cacheLookup', 'imageExtraction'
+    }
+    
+    # Build ordered list of events by their position in the file (proxy for time order)
+    event_positions = {id(e): i for i, e in enumerate(all_events)}
+    
+    # For each cycle, find the position range of its events
+    for cycle in cycles:
+        if not cycle.events:
+            continue
+        
+        cycle_positions = [event_positions.get(id(e), 0) for e in cycle.events]
+        min_pos = min(cycle_positions) if cycle_positions else 0
+        max_pos = max(cycle_positions) if cycle_positions else len(all_events)
+        
+        # Find contextual events that fall within this range
+        for i, event in enumerate(all_events):
+            event_type = event.get('type', '')
+            if event_type in contextual_events:
+                if min_pos - 10 <= i <= max_pos + 10:  # Allow some slack
+                    if event not in cycle.events:
+                        cycle.events.append(event)
+                        
+                        # Update cycle metadata based on event
+                        if event_type == 'cacheLookup':
+                            cycle.cache_hit = 'hit' in event.get('metadata', '')
+                        elif event_type == 'directIOAttempt':
+                            cycle.direct_io = 'succeeded: yes' in event.get('metadata', '')
+
+
+def print_cycles(cycles: list) -> None:
+    """Print summary of detected imaging cycles."""
+    if not cycles:
+        print("\n[No imaging cycles detected]")
+        return
+    
+    print("\n" + "=" * 70)
+    print(f"IMAGING CYCLES DETECTED: {len(cycles)}")
+    print("=" * 70)
+    
+    for cycle in cycles:
+        print(f"\n{'─' * 70}")
+        
+        # Cycle header with status indicator
+        status_indicators = {
+            'completed': '✓',
+            'failed': '✗',
+            'in_progress': '⋯',
+            'exported_early': '⚠'
+        }
+        status_labels = {
+            'completed': 'COMPLETED',
+            'failed': 'FAILED',
+            'in_progress': 'IN PROGRESS (capture exported mid-cycle)',
+            'exported_early': 'INCOMPLETE (capture exported early)'
+        }
+        indicator = status_indicators.get(cycle.completion_reason, '?')
+        status_label = status_labels.get(cycle.completion_reason, 'UNKNOWN')
+        
+        print(f"CYCLE {cycle.id}  [{indicator} {status_label}]")
+        print(f"{'─' * 70}")
+        
+        # Time range
+        start_s = cycle.start_ms / 1000
+        end_s = cycle.end_ms / 1000
+        duration = format_duration(cycle.duration_ms)
+        print(f"  Time:      {start_s:.1f}s - {end_s:.1f}s ({duration})")
+        
+        # Cache and I/O status
+        cache_status = "✓ Cache hit" if cycle.cache_hit else "✗ Cache miss (downloaded)"
+        io_status = "✓ Direct I/O" if cycle.direct_io else "✗ Buffered I/O"
+        print(f"  Cache:     {cache_status}")
+        print(f"  I/O Mode:  {io_status}")
+        
+        # Phase throughput
+        print(f"\n  Phase Throughput:")
+        for phase in ['download', 'decompress', 'write', 'verify']:
+            stats = cycle.get_phase_stats(phase)
+            if stats:
+                avg = format_throughput(stats['avgThroughputKBps'])
+                min_tp = format_throughput(stats['minThroughputKBps'])
+                max_tp = format_throughput(stats['maxThroughputKBps'])
+                dur = format_duration(stats['durationMs'])
+                samples = stats['sampleCount']
+                print(f"    {phase.upper():<12} {avg:>12} avg  ({min_tp} - {max_tp})  [{samples} samples, {dur}]")
+        
+        # Bottleneck
+        bottleneck = cycle.get_bottleneck()
+        bottleneck_labels = {
+            'network': '⚠ Network (download too slow)',
+            'disk': '⚠ Disk (writes too slow)',
+            'cpu': '⚠ CPU (decompression bound)',
+            'unknown': '? Unknown (insufficient data)'
+        }
+        print(f"\n  Bottleneck: {bottleneck_labels.get(bottleneck, bottleneck)}")
+        
+        # Key events
+        key_event_types = {
+            'driveOpen', 'driveUnmount', 'cacheLookup', 'directIOAttempt',
+            'pipelineDecompressionTime', 'pipelineWriteWaitTime', 'finalSync', 'deviceClose'
+        }
+        key_events = [e for e in cycle.events if e.get('type') in key_event_types]
+        if key_events:
+            print(f"\n  Key Events:")
+            for event in key_events:
+                dur = format_duration(event.get('durationMs', 0))
+                meta = event.get('metadata', '')[:40]
+                print(f"    • {event['type']}: {dur}" + (f" ({meta})" if meta else ""))
+
+
+def get_cycle_comparison_table(cycles: list) -> str:
+    """Generate a comparison table for multiple cycles."""
+    if len(cycles) < 2:
+        return ""
+    
+    lines = [
+        "\n" + "=" * 70,
+        "CYCLE COMPARISON",
+        "=" * 70,
+        "",
+        f"{'Metric':<25}" + "".join(f"{'Cycle ' + str(c.id):>15}" for c in cycles),
+        "-" * (25 + 15 * len(cycles))
+    ]
+    
+    # Status
+    row = f"{'Status':<25}"
+    for c in cycles:
+        status_short = {
+            'completed': 'Complete',
+            'failed': 'Failed',
+            'in_progress': 'In Progress',
+            'exported_early': 'Incomplete'
+        }
+        row += f"{status_short.get(c.completion_reason, '?'):>15}"
+    lines.append(row)
+    
+    # Duration
+    row = f"{'Duration':<25}"
+    for c in cycles:
+        dur = format_duration(c.duration_ms) if c.duration_ms > 0 else 'N/A'
+        row += f"{dur:>15}"
+    lines.append(row)
+    
+    # Cache status
+    row = f"{'Cache':<25}"
+    for c in cycles:
+        status = "Hit" if c.cache_hit else "Miss"
+        row += f"{status:>15}"
+    lines.append(row)
+    
+    # Direct I/O
+    row = f"{'Direct I/O':<25}"
+    for c in cycles:
+        status = "Yes" if c.direct_io else "No"
+        row += f"{status:>15}"
+    lines.append(row)
+    
+    # Write throughput
+    row = f"{'Write Avg Throughput':<25}"
+    for c in cycles:
+        stats = c.get_phase_stats('write')
+        if stats:
+            row += f"{format_throughput(stats['avgThroughputKBps']):>15}"
+        else:
+            row += f"{'N/A':>15}"
+    lines.append(row)
+    
+    # Write throughput range
+    row = f"{'Write Range':<25}"
+    for c in cycles:
+        stats = c.get_phase_stats('write')
+        if stats:
+            range_str = f"{stats['minThroughputKBps']//1024}-{stats['maxThroughputKBps']//1024} MB/s"
+            row += f"{range_str:>15}"
+        else:
+            row += f"{'N/A':>15}"
+    lines.append(row)
+    
+    # Bottleneck
+    row = f"{'Bottleneck':<25}"
+    for c in cycles:
+        row += f"{c.get_bottleneck().upper():>15}"
+    lines.append(row)
+    
+    return "\n".join(lines)
+
+
 def print_summary(data: dict) -> None:
     """Print a summary of the performance data."""
     summary = data.get('summary', {})
@@ -342,7 +970,7 @@ def plot_network(data: dict, output_path: Path = None) -> None:
         plt.show()
 
 
-def plot_timeline(data: dict, output_path: Path = None) -> None:
+def plot_timeline(data: dict, output_path: Path = None, cycles: list = None) -> None:
     """Plot a timeline/Gantt chart showing the sequence of all operations."""
     if not HAS_MATPLOTLIB:
         return
@@ -350,6 +978,7 @@ def plot_timeline(data: dict, output_path: Path = None) -> None:
     events = data.get('events', [])
     histograms = data.get('histograms', {})
     summary = data.get('summary', {})
+    cycles = cycles or []
     
     if not events and not histograms:
         return
@@ -469,6 +1098,16 @@ def plot_timeline(data: dict, output_path: Path = None) -> None:
     ax.grid(True, axis='x', alpha=0.3)
     ax.invert_yaxis()  # Top to bottom
     
+    # Add cycle boundary markers
+    if cycles and len(cycles) > 1:
+        for cycle in cycles:
+            if cycle.start_ms > 0:
+                ax.axvline(x=cycle.start_ms / 1000, color='#FF5722', linestyle='--', 
+                          linewidth=2, alpha=0.7, zorder=10)
+                ax.annotate(f'Cycle {cycle.id}', xy=(cycle.start_ms / 1000, 0),
+                           xytext=(5, 5), textcoords='offset points',
+                           fontsize=9, fontweight='bold', color='#FF5722')
+    
     # Add legend for categories
     from matplotlib.patches import Patch
     legend_elements = [
@@ -481,6 +1120,8 @@ def plot_timeline(data: dict, output_path: Path = None) -> None:
         Patch(facecolor='#FF5722', label='Finalisation'),
         Patch(facecolor='#F44336', label='Failed'),
     ]
+    if cycles and len(cycles) > 1:
+        legend_elements.append(Patch(facecolor='#FF5722', label='Cycle boundary', alpha=0.5))
     ax.legend(handles=legend_elements, loc='upper right', fontsize=8)
     
     plt.tight_layout()
@@ -492,7 +1133,7 @@ def plot_timeline(data: dict, output_path: Path = None) -> None:
         plt.show()
 
 
-def plot_throughput(data: dict, analysis: dict, output_path: Path = None) -> None:
+def plot_throughput(data: dict, analysis: dict, output_path: Path = None, cycles: list = None) -> None:
     """Plot throughput over time for each phase, with event markers overlaid."""
     if not HAS_MATPLOTLIB:
         print("\n[Visualisation unavailable - install matplotlib: pip install matplotlib numpy]")
@@ -500,6 +1141,7 @@ def plot_throughput(data: dict, analysis: dict, output_path: Path = None) -> Non
     
     histograms = data.get('histograms', {})
     events = data.get('events', [])
+    cycles = cycles or []
     
     if not histograms:
         print("\n[No histogram data to plot]")
@@ -599,6 +1241,17 @@ def plot_throughput(data: dict, analysis: dict, output_path: Path = None) -> Non
             stall_values = [s['throughput'] / 1024 for s in stalls]
             ax.scatter(stall_times, stall_values, color='red', marker='v', 
                       s=50, zorder=5, label='Stalls')
+        
+        # Add cycle boundary markers
+        if cycles and len(cycles) > 1:
+            for cycle in cycles:
+                if cycle.start_ms > 0:
+                    cycle_start_s = cycle.start_ms / 1000
+                    if phase_start <= cycle_start_s <= phase_end:
+                        ax.axvline(x=cycle_start_s, color='#FF5722', linestyle='--', 
+                                  linewidth=2, alpha=0.7, zorder=10)
+                        ax.annotate(f'Cycle {cycle.id}', xy=(cycle_start_s, max_tp * 0.9),
+                                   fontsize=8, fontweight='bold', color='#FF5722')
         
         ax.set_xlabel('Time (seconds)')
         ax.set_ylabel('Throughput (MB/s)')
@@ -942,11 +1595,12 @@ def create_network_figure(data: dict):
     return fig
 
 
-def generate_html_report(data: dict, analysis: dict, output_path: Path) -> None:
+def generate_html_report(data: dict, analysis: dict, output_path: Path, cycles: list = None) -> None:
     """Generate a self-contained HTML report with embedded graphs and data."""
     summary = data.get('summary', {})
     events = data.get('events', [])
     system = data.get('system', {})
+    cycles = cycles or []
     
     # Generate graphs as base64-encoded images
     graphs = {}
@@ -1243,6 +1897,68 @@ def generate_html_report(data: dict, analysis: dict, output_path: Path) -> None:
         else:
             html_parts.append('</div>')
 
+    # Imaging Cycles section
+    if cycles and len(cycles) > 0:
+        html_parts.append('''
+        <h2>Imaging Cycles</h2>
+        <div class="card">
+''')
+        if len(cycles) > 1:
+            html_parts.append(f'<p style="margin-bottom: 1rem; color: var(--text-secondary);">Multiple imaging cycles detected in this capture.</p>')
+        
+        for cycle in cycles:
+            status_colors = {
+                'completed': 'var(--success)',
+                'failed': 'var(--error)',
+                'in_progress': 'var(--warning)',
+                'exported_early': 'var(--warning)'
+            }
+            status_labels = {
+                'completed': 'Completed',
+                'failed': 'Failed',
+                'in_progress': 'In Progress',
+                'exported_early': 'Incomplete'
+            }
+            status_color = status_colors.get(cycle.completion_reason, 'var(--text-secondary)')
+            status_label = status_labels.get(cycle.completion_reason, 'Unknown')
+            
+            html_parts.append(f'''
+            <div style="border-left: 4px solid {status_color}; padding-left: 1rem; margin-bottom: 1.5rem;">
+                <h3 style="margin-top: 0;">Cycle {cycle.id} <span class="tag" style="background: {status_color}20; color: {status_color};">{status_label}</span></h3>
+                <table>
+                    <tr><td>Time Range</td><td>{cycle.start_ms/1000:.1f}s - {cycle.end_ms/1000:.1f}s ({format_duration(cycle.duration_ms)})</td></tr>
+                    <tr><td>Cache</td><td>{'Hit (used cached image)' if cycle.cache_hit else 'Miss (downloaded)'}</td></tr>
+                    <tr><td>Direct I/O</td><td>{'Enabled' if cycle.direct_io else 'Disabled'}</td></tr>
+                    <tr><td>Bottleneck</td><td>{cycle.get_bottleneck().upper()}</td></tr>
+                </table>
+''')
+            # Add phase throughput for this cycle
+            phase_stats_html = []
+            for phase in ['download', 'decompress', 'write', 'verify']:
+                stats = cycle.get_phase_stats(phase)
+                if stats:
+                    phase_stats_html.append(f'''
+                    <tr>
+                        <td>{phase.title()}</td>
+                        <td>{format_throughput(stats['avgThroughputKBps'])} avg</td>
+                        <td>{format_throughput(stats['minThroughputKBps'])} - {format_throughput(stats['maxThroughputKBps'])}</td>
+                        <td>{stats['sampleCount']} samples</td>
+                    </tr>''')
+            
+            if phase_stats_html:
+                html_parts.append('''
+                <h4 style="margin-top: 1rem;">Phase Throughput</h4>
+                <table>
+                    <thead><tr><th>Phase</th><th>Avg</th><th>Range</th><th>Samples</th></tr></thead>
+                    <tbody>
+''')
+                html_parts.extend(phase_stats_html)
+                html_parts.append('</tbody></table>')
+            
+            html_parts.append('</div>')
+        
+        html_parts.append('</div>')
+
     # Throughput section
     phases = summary.get('phases', {})
     if phases:
@@ -1361,6 +2077,7 @@ def main():
         print("\nOptions:")
         print("  --save-graphs   Save graphs as PNG files")
         print("  --html          Generate self-contained HTML report (recommended)")
+        print("  --no-cycles     Skip cycle detection (legacy mode)")
         print("\nOutput files:")
         print("  --html          <input>.html              Complete report with embedded graphs")
         print("  --save-graphs   <input>-timeline.png      Operation sequence timeline")
@@ -1371,6 +2088,7 @@ def main():
     json_path = Path(sys.argv[1])
     save_graphs = '--save-graphs' in sys.argv or '--save-graph' in sys.argv
     generate_html = '--html' in sys.argv
+    skip_cycles = '--no-cycles' in sys.argv
     
     if not json_path.exists():
         print(f"Error: File not found: {json_path}")
@@ -1385,7 +2103,21 @@ def main():
     
     # Print textual analysis
     print_summary(data)
-    print_events(data)
+    
+    # Detect and analyse imaging cycles
+    cycles = []
+    if not skip_cycles:
+        cycles = detect_cycles(data)
+        if len(cycles) > 1:
+            print_cycles(cycles)
+            print(get_cycle_comparison_table(cycles))
+        elif len(cycles) == 1:
+            print_cycles(cycles)
+    
+    # Print legacy event breakdown (less prominent if cycles detected)
+    if not cycles or skip_cycles:
+        print_events(data)
+    
     print_phase_stats(data)
     
     # Analyse histograms
@@ -1395,7 +2127,7 @@ def main():
     # Generate HTML report
     if generate_html:
         html_path = json_path.with_suffix('.html')
-        generate_html_report(data, analysis, html_path)
+        generate_html_report(data, analysis, html_path, cycles)
     
     # Generate separate graph files
     if save_graphs:
@@ -1404,11 +2136,11 @@ def main():
             
             # Timeline view
             timeline_path = Path(str(base_path) + '-timeline.png')
-            plot_timeline(data, timeline_path)
+            plot_timeline(data, timeline_path, cycles)
             
             # Throughput view
             throughput_path = Path(str(base_path) + '-throughput.png')
-            plot_throughput(data, analysis, throughput_path)
+            plot_throughput(data, analysis, throughput_path, cycles)
             
             # Network operations view
             network_path = Path(str(base_path) + '-network.png')
@@ -1418,8 +2150,8 @@ def main():
     
     # Show graphs interactively if neither option specified
     if not save_graphs and not generate_html and HAS_MATPLOTLIB:
-        plot_timeline(data, None)
-        plot_throughput(data, analysis, None)
+        plot_timeline(data, None, cycles)
+        plot_throughput(data, analysis, None, cycles)
         plot_network(data, None)
     
     print("\n" + "=" * 60)

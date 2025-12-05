@@ -94,11 +94,6 @@ RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
                 auto waitEnd = std::chrono::steady_clock::now();
                 auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
                 _producerWaitMs += waitDuration;
-                
-                if (waitDuration > 50) {  // Only log significant waits
-                    qDebug() << "RingBuffer: Producer stall - waited" << waitDuration 
-                             << "ms for free slot (timeout). Total stalls:" << _producerStalls.load();
-                }
                 return nullptr;  // Timeout
             }
         } else {
@@ -117,11 +112,6 @@ RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
             event.durationMs = static_cast<uint32_t>(waitDuration);
             event.isProducer = true;
             _stallEvents.push(event);
-        }
-        
-        if (waitDuration > 100) {  // Log waits > 100ms
-            qDebug() << "RingBuffer: Producer stall - waited" << waitDuration 
-                     << "ms for free slot. Consumer may be slow. Total stalls:" << _producerStalls.load();
         }
     }
     
@@ -193,11 +183,6 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
             event.durationMs = static_cast<uint32_t>(waitDuration);
             event.isProducer = false;
             _stallEvents.push(event);
-        }
-        
-        if (waitDuration > 500) {  // Log waits > 500ms (significant network/download delay)
-            qDebug() << "RingBuffer: Consumer stall - waited" << waitDuration 
-                     << "ms for data. Download may be slow. Total stalls:" << _consumerStalls.load();
         }
     }
     
