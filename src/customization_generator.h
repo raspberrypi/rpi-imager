@@ -79,6 +79,18 @@ private:
      * @return Hashed password
      */
     static QString pbkdf2(const QByteArray& password, const QByteArray& ssid);
+    
+    /**
+     * @brief Escape a string for use in YAML double-quoted strings
+     * 
+     * Per IEEE 802.11, SSIDs can be 0-32 octets containing ANY byte value,
+     * including null, control characters, and non-printable bytes.
+     * This function escapes all special characters for safe YAML inclusion.
+     * 
+     * @param value String to escape
+     * @return Escaped string safe for YAML double-quoted context
+     */
+    static QString yamlEscapeString(const QString& value);
 };
 
 } // namespace rpi_imager

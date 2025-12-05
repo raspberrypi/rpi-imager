@@ -601,7 +601,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH user",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: $5$fakesalt$fakehash123"));
+    // Password hash should be quoted for proper YAML parsing
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$5$fakesalt$fakehash123\""));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys", "[cloudinit][userdata]") {
@@ -767,6 +768,47 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with speci
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Test \\\"Network\\\" (5GHz)"));
     // Use password shorthand (not auth: block) for automatic WPA2/WPA3 transition mode
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password:"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init network-config escapes backslashes in SSID", "[cloudinit][network][negative]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "Network\\With\\Backslashes";
+    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(netcfg);
+    
+    // Backslashes must be escaped in YAML double-quoted strings
+    // Per IEEE 802.11, SSIDs can contain any byte including backslashes
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Network\\\\With\\\\Backslashes"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init network-config escapes control characters in SSID", "[cloudinit][network][negative]") {
+    QVariantMap settings;
+    // SSID with tab, newline, and carriage return (valid per IEEE 802.11)
+    settings["wifiSSID"] = QString("Net\twork\nWith\rControl");
+    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(netcfg);
+    
+    // Control characters must be escaped in YAML double-quoted strings
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Net\\twork\\nWith\\rControl"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init network-config escapes mixed special characters in SSID", "[cloudinit][network][negative]") {
+    QVariantMap settings;
+    // Pathological SSID: quotes, backslashes, and control chars together
+    settings["wifiSSID"] = QString("Test\\\"Net\twork\"");
+    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(netcfg);
+    
+    // All special characters must be properly escaped
+    // Input: Test\"Net<tab>work"
+    // Expected YAML escape: Test\\\"Net\twork\"
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Test\\\\\\\"Net\\twork\\\""));
 }
 
 TEST_CASE("CustomisationGenerator handles empty cloud-init settings gracefully", "[cloudinit][negative]") {

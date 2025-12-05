@@ -21,6 +21,45 @@ QString CustomisationGenerator::pbkdf2(const QByteArray& password, const QByteAr
     return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha1, password, ssid, 4096, 32).toHex();
 }
 
+QString CustomisationGenerator::yamlEscapeString(const QString& value) {
+    // Escape a string for use in YAML double-quoted strings.
+    // Per IEEE 802.11, SSIDs can be 0-32 octets containing ANY byte value,
+    // including null, control characters, and non-printable bytes.
+    // YAML double-quoted strings use backslash escapes for special characters.
+    QString result;
+    result.reserve(value.size() * 2);  // Worst case: all chars need escaping
+    
+    for (const QChar& ch : value) {
+        ushort code = ch.unicode();
+        
+        if (code == '\\') {
+            result += QStringLiteral("\\\\");
+        } else if (code == '"') {
+            result += QStringLiteral("\\\"");
+        } else if (code == '\n') {
+            result += QStringLiteral("\\n");
+        } else if (code == '\r') {
+            result += QStringLiteral("\\r");
+        } else if (code == '\t') {
+            result += QStringLiteral("\\t");
+        } else if (code == '\b') {
+            result += QStringLiteral("\\b");
+        } else if (code == '\f') {
+            result += QStringLiteral("\\f");
+        } else if (code == 0) {
+            result += QStringLiteral("\\0");
+        } else if (code < 0x20 || code == 0x7F) {
+            // Other control characters (0x01-0x07, 0x0B, 0x0E-0x1F, 0x7F) - use hex escape
+            result += QString(QStringLiteral("\\x%1")).arg(code, 2, 16, QChar('0'));
+        } else {
+            // Safe to include as-is (printable ASCII and Unicode above 0x7F)
+            result += ch;
+        }
+    }
+    
+    return result;
+}
+
 QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, const QString& piConnectToken) {
     QByteArray script;
     auto line = [](const QString& l, QByteArray& out) { out += l.toUtf8(); out += '\n'; };
@@ -331,7 +370,9 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             push(QStringLiteral("  shell: /bin/bash"), cloud);
             if (!userPass.isEmpty()) {
                 push(QStringLiteral("  lock_passwd: false"), cloud);
-                push(QStringLiteral("  passwd: ") + userPass, cloud);
+                // Quote the password hash to ensure proper YAML parsing
+                // (consistent with network-config password handling)
+                push(QStringLiteral("  passwd: \"") + userPass + QStringLiteral("\""), cloud);
             } else if (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
                 push(QStringLiteral("  lock_passwd: true"), cloud);
             }
@@ -500,11 +541,10 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         }
         
         push(QStringLiteral("      access-points:"), netcfg);
-        {
-            QString key = ssid;
-            key.replace('"', QStringLiteral("\\\""));
-            push(QStringLiteral("        \"") + key + QStringLiteral("\":"), netcfg);
-        }
+        // Escape SSID for YAML double-quoted string context
+        // Per IEEE 802.11, SSIDs can contain any byte value (0-255), including
+        // backslashes, quotes, control characters, and non-printable bytes
+        push(QStringLiteral("        \"") + yamlEscapeString(ssid) + QStringLiteral("\":"), netcfg);
         if (hidden) {
             push(QStringLiteral("          hidden: true"), netcfg);
         }
