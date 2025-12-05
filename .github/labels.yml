@@ -6,7 +6,7 @@
 - name: "Translation"
   color: "9FABF9"
   description: "Issues or pull requests related to translation"
-# Add 'Translation' label to any file changes within 'src/i18n' folder
+
 Translation:
 - changed-files:
   - any-glob-to-any-file: 'src/i18n/*'
