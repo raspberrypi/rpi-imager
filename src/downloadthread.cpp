@@ -1452,15 +1452,24 @@ bool DownloadThread::_customizeImage()
         }
 
         auto initCloud = _initFormat == "cloudinit" || _initFormat == "cloudinit-rpi";
-        if (!_cloudinit.isEmpty() && initCloud)
-        {
-            _cloudinit = "#cloud-config\n"+_cloudinit;
-            fat->writeFile("user-data", _cloudinit);
-        }
+        if (initCloud) {
+            // Write meta-data file for NoCloud datasource
+            // cloud-init requires meta-data to be present for proper datasource detection
+            // instance-id should be unique per imaging to ensure cloud-init processes user-data
+            QByteArray metadata = "instance-id: rpi-imager-" + 
+                QByteArray::number(QDateTime::currentMSecsSinceEpoch()) + "\n";
+            fat->writeFile("meta-data", metadata);
 
-        if (!_cloudinitNetwork.isEmpty() && initCloud)
-        {
-            fat->writeFile("network-config", _cloudinitNetwork);
+            if (!_cloudinit.isEmpty())
+            {
+                _cloudinit = "#cloud-config\n"+_cloudinit;
+                fat->writeFile("user-data", _cloudinit);
+            }
+
+            if (!_cloudinitNetwork.isEmpty())
+            {
+                fat->writeFile("network-config", _cloudinitNetwork);
+            }
         }
 
         if (!_cmdline.isEmpty())
