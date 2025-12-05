@@ -6,5 +6,7 @@
 - name: "Translation"
   color: "9FABF9"
   description: "Issues or pull requests related to translation"
-  - changed-files:
+
+Translation:
+- changed-files:
   - any-glob-to-any-file: 'src/i18n/*'
