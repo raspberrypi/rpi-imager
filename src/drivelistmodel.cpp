@@ -24,7 +24,7 @@ DriveListModel::DriveListModel(QObject *parent)
         {childDevicesRole, "childDevices"}
     };
 
-    // Enumerate drives in seperate thread, but process results in UI thread
+    // Enumerate drives in separate thread, but process results in UI thread
     connect(&_thread, SIGNAL(newDriveList(std::vector<Drivelist::DeviceDescriptor>)), SLOT(processDriveList(std::vector<Drivelist::DeviceDescriptor>)));
     
     // Forward performance event signal

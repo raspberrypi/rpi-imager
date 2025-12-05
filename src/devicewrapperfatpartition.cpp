@@ -161,7 +161,7 @@ void DeviceWrapperFatPartition::setFAT32(uint32_t cluster, uint32_t value)
     /* Modify all FATs (usually 2) */
     for (auto fatStart : std::as_const(_fatStartOffset))
     {
-        /* Spec (p. 16) mentions we must preserve high 4 bits of FAT32 FAT entry when modifiying */
+        /* Spec (p. 16) mentions we must preserve high 4 bits of FAT32 FAT entry when modifying */
         seek(fatStart + cluster * 4);
         read( (char *) &prev_value, 4);
         reserved_bits = prev_value & 0xF0000000;
