@@ -208,7 +208,6 @@ QString NativeFileDialog::getFileNameNative(const QString &title,
         NSString *nsInitialFilename = filename.isEmpty() ? nil : filename.toNSString();
         
         timing.pathParsingMs = timer.elapsed();
-        timing.directory = dirPath;
         timer.restart();
         
         // Parse filters once for either dialog type

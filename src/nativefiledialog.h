@@ -30,7 +30,7 @@ public:
         qint64 panelSetupMs = 0;       // Time for additional panel setup
         qint64 totalBeforeShowMs = 0;  // Total time before dialog appeared
         qint64 userInteractionMs = 0;  // Time dialog was open (user interaction)
-        QString directory;             // Directory that was opened
+        // Note: directory paths are not captured to avoid PII
         bool isSaveDialog = false;     // Whether this was a save dialog
     };
     
