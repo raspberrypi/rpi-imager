@@ -410,8 +410,9 @@ if [ -f "$OUTPUT_FILE" ]; then
     ln -s "$(basename "$OUTPUT_FILE")" "$SIMPLE_SYMLINK"
     echo "Created symlink: $SIMPLE_SYMLINK -> $(basename "$OUTPUT_FILE")"
     
-    # Show size comparison if regular AppImage exists
-    REGULAR_APPIMAGE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-${ARCH}.AppImage"
+    # Show size comparison if desktop AppImage exists
+    # Desktop AppImage uses GIT_VERSION and has -desktop- suffix
+    REGULAR_APPIMAGE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-desktop-${ARCH}.AppImage"
     if [ -f "$REGULAR_APPIMAGE" ]; then
         CLI_SIZE=$(stat -f%z "$OUTPUT_FILE" 2>/dev/null || stat -c%s "$OUTPUT_FILE" 2>/dev/null || echo "unknown")
         REGULAR_SIZE=$(stat -f%z "$REGULAR_APPIMAGE" 2>/dev/null || stat -c%s "$REGULAR_APPIMAGE" 2>/dev/null || echo "unknown")

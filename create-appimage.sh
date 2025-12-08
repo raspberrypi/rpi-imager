@@ -407,8 +407,9 @@ for appimage in *.AppImage; do
             ;;
     esac
     # Check if this matches the expected linuxdeploy output pattern
+    # shellcheck disable=SC2254  # Variable expansion needed for glob pattern matching
     case "$appimage" in
-        Raspberry_Pi_Imager-*"-${ARCH}.AppImage"|Raspberry_Pi_Imager"-${ARCH}.AppImage")
+        Raspberry_Pi_Imager-*-${ARCH}.AppImage|Raspberry_Pi_Imager-${ARCH}.AppImage)
             echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
             mv "$appimage" "$OUTPUT_FILE"
             RENAMED=true
