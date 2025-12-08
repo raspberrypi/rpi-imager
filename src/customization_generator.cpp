@@ -400,6 +400,9 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         
         if (sshPasswordAuth) {
             push(QStringLiteral("ssh_pwauth: true"), cloud);
+        } else if (!sshAuthorizedKeys.isEmpty() || !sshPublicKey.isEmpty()) {
+            // Explicitly disable password authentication when using public-key auth
+            push(QStringLiteral("ssh_pwauth: false"), cloud);
         }
     }
     

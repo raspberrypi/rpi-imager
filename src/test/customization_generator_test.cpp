@@ -654,6 +654,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key2"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    // Password authentication should be explicitly disabled when using public-key auth
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: false"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with password auth", "[cloudinit][userdata]") {
@@ -664,6 +666,22 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with password a
     QString yaml = QString::fromUtf8(userdata);
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: true"));
+}
+
+TEST_CASE("CustomisationGenerator generates cloud-init user-data with password auth AND SSH keys", "[cloudinit][userdata]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshPasswordAuth"] = true;
+    settings["sshAuthorizedKeys"] = "ssh-rsa AAAAB3...key1";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "testuser");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Both SSH keys and password auth enabled - password auth takes precedence
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: true"));
+    // Should NOT contain ssh_pwauth: false
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("ssh_pwauth: false"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with Raspberry Pi interfaces", "[cloudinit][userdata][rpi]") {
