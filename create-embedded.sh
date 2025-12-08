@@ -297,7 +297,7 @@ cp "debian/com.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/c
 # Update the desktop file for embedded use (preserve %F for file arguments)
 sed -i 's|Name=.*|Name=Raspberry Pi Imager (Embedded)|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
 sed -i 's|Comment=.*|Comment=Raspberry Pi Imager for embedded systems|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
-sed -i 's|Exec=.*|Exec=rpi-imager %F|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
+sed -i 's|Exec=.*|Exec=rpi-imager-embedded %F|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
 
 # Create the AppRun file
 cat > "$APPDIR/AppRun" << 'EOF'
@@ -310,7 +310,7 @@ export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="${HERE}/usr/plugins"
 export QML_IMPORT_PATH="${HERE}/usr/qml"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
-QT_QPA_PLATFORM=linuxfb
+export QT_QPA_PLATFORM=linuxfb
 
 # Font configuration for bundled fontconfig
 export FONTCONFIG_PATH="${HERE}/etc/fonts"
