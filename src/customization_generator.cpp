@@ -93,7 +93,9 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         const QStringList lines = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
         for (const QString& k : lines) keyList.append(k.trimmed());
     } else if (!sshPublicKey.isEmpty()) {
-        keyList.append(sshPublicKey);
+        // Split sshPublicKey by newlines to handle .pub files with multiple keys
+        const QStringList lines = sshPublicKey.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+        for (const QString& k : lines) keyList.append(k.trimmed());
     }
     QString pubkeyArgs;
     for (const QString& k : keyList) {
@@ -385,7 +387,11 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
                         push(QStringLiteral("    - ") + k.trimmed(), cloud);
                     }
                 } else {
-                    push(QStringLiteral("    - ") + sshPublicKey, cloud);
+                    // Split sshPublicKey by newlines to handle .pub files with multiple keys
+                    const QStringList keys = sshPublicKey.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+                    for (const QString& k : keys) {
+                        push(QStringLiteral("    - ") + k.trimmed(), cloud);
+                    }
                 }
                 push(QStringLiteral("  sudo: ALL=(ALL) NOPASSWD:ALL"), cloud);
             }

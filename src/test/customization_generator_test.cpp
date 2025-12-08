@@ -488,6 +488,41 @@ TEST_CASE("CustomisationGenerator cloud-init handles SSH public key only (no use
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
 }
 
+TEST_CASE("CustomisationGenerator handles multiple SSH keys in .pub file", "[customization][ssh]") {
+    // Test that .pub files with multiple keys (one per line) are properly split
+    QVariantMap settings;
+    settings["sshEnabled"] = true;
+    settings["sshPublicKey"] = "ssh-rsa AAAAB3...key1 user@host1\nssh-ed25519 AAAAC3...key2 user@host2";
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // Both keys should be written separately
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("cat > \"$FIRSTUSERHOME/.ssh/authorized_keys\" <<'EOF'"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssh-rsa AAAAB3...key1"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssh-ed25519 AAAAC3...key2"));
+    // Keys should be on separate lines (joined with \n)
+    int key1Pos = scriptStr.indexOf("ssh-rsa AAAAB3...key1");
+    int key2Pos = scriptStr.indexOf("ssh-ed25519 AAAAC3...key2");
+    REQUIRE(key1Pos != -1);
+    REQUIRE(key2Pos != -1);
+    REQUIRE(key2Pos > key1Pos);
+}
+
+TEST_CASE("CustomisationGenerator cloud-init handles multiple SSH keys in .pub file", "[cloudinit][ssh]") {
+    // Test that .pub files with multiple keys are properly split for cloud-init
+    QVariantMap settings;
+    settings["sshPublicKey"] = "ssh-rsa AAAAB3...key1 user@host1\nssh-ed25519 AAAAC3...key2 user@host2";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Both keys should be in separate YAML list items
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key1"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-ed25519 AAAAC3...key2"));
+}
+
 TEST_CASE("CustomisationGenerator handles very long hostname", "[customization][negative]") {
     QVariantMap settings;
     // Hostnames should be max 63 chars, but test we don't crash with longer
