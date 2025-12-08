@@ -190,7 +190,6 @@ Item {
             if (textField.activeFocus) {
                 Qt.callLater(syncKeyNavigation)
             }
-            root.activeFocusOnTextFieldChanged()
         }
     }
 }
