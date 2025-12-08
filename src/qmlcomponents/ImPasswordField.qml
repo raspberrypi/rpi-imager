@@ -48,6 +48,9 @@ Item {
     implicitHeight: textField.implicitHeight
     implicitWidth: 200
 
+    // Enable tab navigation to this field
+    activeFocusOnTab: true
+
     // Accessible properties
     Accessible.role: Accessible.EditableText
     Accessible.name: textField.placeholderText !== "" ? textField.placeholderText : textField.text
