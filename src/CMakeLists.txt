@@ -520,6 +520,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/components/WizardSectionContainer.qml
         wizard/components/WizardFormLabel.qml
         wizard/components/WizardDescriptionText.qml
+        wizard/components/SshKeyManager.qml
     )
 
     set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
