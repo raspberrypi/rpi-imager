@@ -326,6 +326,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     if (!hostname.isEmpty()) {
         push(QStringLiteral("hostname: ") + hostname, cloud);
         push(QStringLiteral("manage_etc_hosts: true"), cloud);
+        // Allow local hostname changes after first boot (don't let cloud-init overwrite)
+        push(QStringLiteral("preserve_hostname: true"), cloud);
         // Parity with legacy QML: install avahi-daemon and disable apt Check-Date on first boot
         push(QStringLiteral("packages:"), cloud);
         push(QStringLiteral("- avahi-daemon"), cloud);

@@ -596,6 +596,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with hostname",
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: testpi"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_etc_hosts: true"));
+    // Allow local hostname changes after first boot (don't let cloud-init overwrite)
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("preserve_hostname: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("packages:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- avahi-daemon"));
 }
