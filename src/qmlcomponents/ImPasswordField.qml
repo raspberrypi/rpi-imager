@@ -87,6 +87,16 @@ Item {
                 passwordVisible = !passwordVisible
                 event.accepted = true
             }
+            // Forward Tab/Shift+Tab navigation to parent Item's KeyNavigation
+            else if (event.key === Qt.Key_Tab) {
+                var nextItem = event.modifiers & Qt.ShiftModifier 
+                    ? root.KeyNavigation.backtab 
+                    : root.KeyNavigation.tab
+                if (nextItem) {
+                    nextItem.forceActiveFocus()
+                    event.accepted = true
+                }
+            }
         }
     }
     
@@ -157,12 +167,29 @@ Item {
         }
     }
     
-    // Forward focus-related signals
-    signal activeFocusOnTextFieldChanged()
+    // Sync KeyNavigation from parent Item to textField
+    // This ensures Tab navigation works correctly since focus is on textField but KeyNavigation is set on Item
+    function syncKeyNavigation() {
+        if (root.KeyNavigation && textField.KeyNavigation) {
+            textField.KeyNavigation.tab = root.KeyNavigation.tab
+            textField.KeyNavigation.backtab = root.KeyNavigation.backtab
+        }
+    }
     
+    Component.onCompleted: {
+        // Sync after a short delay to ensure WizardStepBase has finished setting KeyNavigation
+        Qt.callLater(function() {
+            syncKeyNavigation()
+        })
+    }
+    
+    // Also sync when textField gets focus (in case KeyNavigation was set after Component.onCompleted)
     Connections {
         target: textField
         function onActiveFocusChanged() {
+            if (textField.activeFocus) {
+                Qt.callLater(syncKeyNavigation)
+            }
             root.activeFocusOnTextFieldChanged()
         }
     }
