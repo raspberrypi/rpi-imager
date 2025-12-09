@@ -594,6 +594,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with hostname",
     QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings);
     QString yaml = QString::fromUtf8(userdata);
     
+    // Don't let cloud-init manage DNS
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_resolv_conf: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: testpi"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_etc_hosts: true"));
     // Allow local hostname changes after first boot (don't let cloud-init overwrite)
@@ -912,6 +914,7 @@ TEST_CASE("Independent step: Hostname only", "[cloudinit][independent][hostname]
     QString yaml = QString::fromUtf8(userdata);
     
     // Hostname configuration MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_resolv_conf: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: mypi"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_etc_hosts: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("preserve_hostname: true"));

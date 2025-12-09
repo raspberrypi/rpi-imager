@@ -322,6 +322,10 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         }
     };
     
+    // Don't let cloud-init manage DNS - let dhcpcd/NetworkManager handle it
+    push(QStringLiteral("manage_resolv_conf: false"), cloud);
+    push(QString(), cloud);
+    
     const QString hostname = settings.value("hostname").toString().trimmed();
     if (!hostname.isEmpty()) {
         push(QStringLiteral("hostname: ") + hostname, cloud);
