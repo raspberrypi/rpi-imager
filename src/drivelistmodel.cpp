@@ -60,8 +60,23 @@ QVariant DriveListModel::data(const QModelIndex &index, int role) const
 
 void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l)
 {
-    bool changes = false;
     QSet<QString> drivesInNewList;
+
+    // First pass: collect all valid drives from the new list
+    // We need to do this before modifications to correctly calculate row indices
+    struct NewDriveInfo {
+        QString key;
+        QString device;
+        QString description;
+        quint64 size;
+        bool isUSB;
+        bool isScsi;
+        bool isReadOnly;
+        bool isSystem;
+        QStringList mountpoints;
+        QStringList childDevices;
+    };
+    QList<NewDriveInfo> drivesToAdd;
 
     for (auto &i: l)
     {
@@ -94,19 +109,10 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
 
         if (!_drivelist.contains(deviceNamePlusSize))
         {
-            // Found new drive
-            if (!changes)
-            {
-                beginResetModel();
-                changes = true;
-            }
-
             // Mark virtual disks as system drives to trigger confirmation dialog
-            // This allows virtual disks (disk images, VHDs, etc.) to appear in the list
-            // but ensures users must confirm before writing to them
             const bool isSystemOverride = i.isSystem || i.isVirtual;
 
-            // Treat NVMe drives like SCSI for icon purposes (use storage icon instead of SD card icon)
+            // Treat NVMe drives like SCSI for icon purposes
             QString busType = QString::fromStdString(i.busType);
             QString devicePath = QString::fromStdString(i.device);
             bool isNvme = (busType.compare("NVME", Qt::CaseInsensitive) == 0) || devicePath.startsWith("/dev/nvme");
@@ -119,37 +125,68 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
                 childDevices.append(QString::fromStdString(s));
             }
 
-            _drivelist[deviceNamePlusSize] = new DriveListItem(QString::fromStdString(i.device), QString::fromStdString(i.description), i.size, i.isUSB, isScsiForIcon, i.isReadOnly, isSystemOverride, mountpoints, childDevices, this);
+            NewDriveInfo info;
+            info.key = deviceNamePlusSize;
+            info.device = QString::fromStdString(i.device);
+            info.description = QString::fromStdString(i.description);
+            info.size = i.size;
+            info.isUSB = i.isUSB;
+            info.isScsi = isScsiForIcon;
+            info.isReadOnly = i.isReadOnly;
+            info.isSystem = isSystemOverride;
+            info.mountpoints = mountpoints;
+            info.childDevices = childDevices;
+            drivesToAdd.append(info);
         }
     }
 
-    // Look for drives removed
+    // Remove drives that are no longer present (iterate in reverse to maintain valid indices)
     QStringList drivesInOldList = _drivelist.keys();
-    for (auto &device: drivesInOldList)
+    for (int i = drivesInOldList.size() - 1; i >= 0; --i)
     {
-        if (!drivesInNewList.contains(device))
+        const QString &key = drivesInOldList.at(i);
+        if (!drivesInNewList.contains(key))
         {
-            if (!changes)
+            // Find the row index for this key
+            int row = _drivelist.keys().indexOf(key);
+            if (row >= 0)
             {
-                beginResetModel();
-                changes = true;
-            }
+                QString devicePath = _drivelist.value(key)->property("device").toString();
+                qDebug() << "Drive removed:" << devicePath;
 
-            // Extract device path before deleting the item
-            QString devicePath = _drivelist.value(device)->property("device").toString();
-            
-            qDebug() << "Drive removed:" << devicePath;
-            
-            _drivelist.value(device)->deleteLater();
-            _drivelist.remove(device);
-            
-            // Emit signal for this specific device removal
-            emit deviceRemoved(devicePath);
+                beginRemoveRows(QModelIndex(), row, row);
+                _drivelist.value(key)->deleteLater();
+                _drivelist.remove(key);
+                endRemoveRows();
+
+                // Emit signal for this specific device removal
+                emit deviceRemoved(devicePath);
+            }
         }
     }
 
-    if (changes)
-        endResetModel();
+    // Add new drives
+    for (const auto &info : drivesToAdd)
+    {
+        // Calculate the row index where this key will be inserted
+        // QMap is sorted, so we need to find where this key fits
+        int row = 0;
+        for (auto it = _drivelist.constBegin(); it != _drivelist.constEnd(); ++it)
+        {
+            if (it.key() >= info.key)
+                break;
+            ++row;
+        }
+
+        beginInsertRows(QModelIndex(), row, row);
+        _drivelist[info.key] = new DriveListItem(
+            info.device, info.description, info.size,
+            info.isUSB, info.isScsi, info.isReadOnly, info.isSystem,
+            info.mountpoints, info.childDevices, this);
+        endInsertRows();
+
+        qDebug() << "Drive added:" << info.device;
+    }
 }
 
 void DriveListModel::startPolling()

@@ -297,7 +297,7 @@ cp "debian/com.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/c
 # Update the desktop file for embedded use (preserve %F for file arguments)
 sed -i 's|Name=.*|Name=Raspberry Pi Imager (Embedded)|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
 sed -i 's|Comment=.*|Comment=Raspberry Pi Imager for embedded systems|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
-sed -i 's|Exec=.*|Exec=rpi-imager %F|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
+sed -i 's|Exec=.*|Exec=rpi-imager-embedded %F|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop"
 
 # Create the AppRun file
 cat > "$APPDIR/AppRun" << 'EOF'
@@ -310,7 +310,7 @@ export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="${HERE}/usr/plugins"
 export QML_IMPORT_PATH="${HERE}/usr/qml"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
-QT_QPA_PLATFORM=linuxfb
+export QT_QPA_PLATFORM=linuxfb
 
 # Font configuration for bundled fontconfig
 export FONTCONFIG_PATH="${HERE}/etc/fonts"
@@ -527,8 +527,8 @@ cp -d "/lib/${ARCH}-linux-gnu"/libgudev-1.0.so* "$APPDIR/usr/lib/" 2>/dev/null |
 cp -d "/lib/${ARCH}-linux-gnu"/libdbus-1.so* "$APPDIR/usr/lib/" 2>/dev/null || \
     cp -d "/usr/lib/${ARCH}-linux-gnu"/libdbus-1.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
-cp -d "/lib/${ARCH}-linux-gnu"/libsystemd.so* "$APPDIR/usr/lib/" 2>/dev/null || \
-    cp -d "/usr/lib/${ARCH}-linux-gnu"/libsystemd.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+# Note: libsystemd is intentionally NOT included - it must come from the host system
+# to work correctly with DBus (see https://github.com/raspberrypi/rpi-imager/issues/1304)
 
 cp -d "/lib/${ARCH}-linux-gnu"/libcap.so* "$APPDIR/usr/lib/" 2>/dev/null || \
     cp -d "/usr/lib/${ARCH}-linux-gnu"/libcap.so* "$APPDIR/usr/lib/" 2>/dev/null || true
@@ -748,6 +748,8 @@ rm -f "$PWD/rpi-imager-embedded-$ARCH.AppImage"
 if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
     # Create AppImage using linuxdeploy
     # Explicitly specify the desktop file to ensure correct naming
+    # Exclude libsystemd - it must come from the host system to work correctly with DBus
+    # (see https://github.com/raspberrypi/rpi-imager/issues/1304)
     LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" \
         --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-embedded.desktop" \
         --output=appimage \
@@ -758,7 +760,8 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         --exclude-library="libLLVM*" \
         --exclude-library="libgallium*" \
         --exclude-library="libXrender*" \
-        --exclude-library="libicudata*"
+        --exclude-library="libicudata*" \
+        --exclude-library="libsystemd*"
     
     # Rename the output file
     # Find and rename the AppImage created by linuxdeploy to our standardized name

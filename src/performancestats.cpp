@@ -408,8 +408,6 @@ QString PerformanceStats::eventTypeName(EventType type)
         // Cycle boundaries
         case EventType::CycleStart: return "cycleStart";
         case EventType::CycleEnd: return "cycleEnd";
-        case EventType::PipelineRingBufferWaitTime: return "pipelineRingBufferWaitTime";
-        case EventType::WriteRingBufferStats: return "writeRingBufferStats";
         
         // Customisation
         case EventType::Customisation: return "customisation";

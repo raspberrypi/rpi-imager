@@ -495,7 +495,7 @@ Item {
                                     id: subItem
                                     required property int index
                                     required property var modelData
-                                    width: parent ? parent.width : 0
+                                    width: sublistContainer ? sublistContainer.width : 0
                                     height: Style.sidebarSubItemHeight
                                     radius: root.imageWriter.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
                                     color: Style.transparent

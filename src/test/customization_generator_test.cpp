@@ -488,6 +488,41 @@ TEST_CASE("CustomisationGenerator cloud-init handles SSH public key only (no use
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
 }
 
+TEST_CASE("CustomisationGenerator handles multiple SSH keys in .pub file", "[customization][ssh]") {
+    // Test that .pub files with multiple keys (one per line) are properly split
+    QVariantMap settings;
+    settings["sshEnabled"] = true;
+    settings["sshPublicKey"] = "ssh-rsa AAAAB3...key1 user@host1\nssh-ed25519 AAAAC3...key2 user@host2";
+    
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString scriptStr = QString::fromUtf8(script);
+    
+    // Both keys should be written separately
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("cat > \"$FIRSTUSERHOME/.ssh/authorized_keys\" <<'EOF'"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssh-rsa AAAAB3...key1"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssh-ed25519 AAAAC3...key2"));
+    // Keys should be on separate lines (joined with \n)
+    int key1Pos = scriptStr.indexOf("ssh-rsa AAAAB3...key1");
+    int key2Pos = scriptStr.indexOf("ssh-ed25519 AAAAC3...key2");
+    REQUIRE(key1Pos != -1);
+    REQUIRE(key2Pos != -1);
+    REQUIRE(key2Pos > key1Pos);
+}
+
+TEST_CASE("CustomisationGenerator cloud-init handles multiple SSH keys in .pub file", "[cloudinit][ssh]") {
+    // Test that .pub files with multiple keys are properly split for cloud-init
+    QVariantMap settings;
+    settings["sshPublicKey"] = "ssh-rsa AAAAB3...key1 user@host1\nssh-ed25519 AAAAC3...key2 user@host2";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Both keys should be in separate YAML list items
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key1"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-ed25519 AAAAC3...key2"));
+}
+
 TEST_CASE("CustomisationGenerator handles very long hostname", "[customization][negative]") {
     QVariantMap settings;
     // Hostnames should be max 63 chars, but test we don't crash with longer
@@ -561,6 +596,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with hostname",
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: testpi"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_etc_hosts: true"));
+    // Allow local hostname changes after first boot (don't let cloud-init overwrite)
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("preserve_hostname: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("packages:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- avahi-daemon"));
 }
@@ -601,7 +638,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH user",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: $5$fakesalt$fakehash123"));
+    // Password hash should be quoted for proper YAML parsing
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$5$fakesalt$fakehash123\""));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys", "[cloudinit][userdata]") {
@@ -618,6 +656,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key2"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    // Password authentication should be explicitly disabled when using public-key auth
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: false"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with password auth", "[cloudinit][userdata]") {
@@ -628,6 +668,22 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with password a
     QString yaml = QString::fromUtf8(userdata);
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: true"));
+}
+
+TEST_CASE("CustomisationGenerator generates cloud-init user-data with password auth AND SSH keys", "[cloudinit][userdata]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshPasswordAuth"] = true;
+    settings["sshAuthorizedKeys"] = "ssh-rsa AAAAB3...key1";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "testuser");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Both SSH keys and password auth enabled - password auth takes precedence
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: true"));
+    // Should NOT contain ssh_pwauth: false
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("ssh_pwauth: false"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with Raspberry Pi interfaces", "[cloudinit][userdata][rpi]") {
@@ -767,6 +823,47 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with speci
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Test \\\"Network\\\" (5GHz)"));
     // Use password shorthand (not auth: block) for automatic WPA2/WPA3 transition mode
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password:"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init network-config escapes backslashes in SSID", "[cloudinit][network][negative]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "Network\\With\\Backslashes";
+    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(netcfg);
+    
+    // Backslashes must be escaped in YAML double-quoted strings
+    // Per IEEE 802.11, SSIDs can contain any byte including backslashes
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Network\\\\With\\\\Backslashes"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init network-config escapes control characters in SSID", "[cloudinit][network][negative]") {
+    QVariantMap settings;
+    // SSID with tab, newline, and carriage return (valid per IEEE 802.11)
+    settings["wifiSSID"] = QString("Net\twork\nWith\rControl");
+    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(netcfg);
+    
+    // Control characters must be escaped in YAML double-quoted strings
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Net\\twork\\nWith\\rControl"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init network-config escapes mixed special characters in SSID", "[cloudinit][network][negative]") {
+    QVariantMap settings;
+    // Pathological SSID: quotes, backslashes, and control chars together
+    settings["wifiSSID"] = QString("Test\\\"Net\twork\"");
+    settings["wifiPasswordCrypt"] = "fakecryptedhash123";
+    
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(netcfg);
+    
+    // All special characters must be properly escaped
+    // Input: Test\"Net<tab>work"
+    // Expected YAML escape: Test\\\"Net\twork\"
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Test\\\\\\\"Net\\twork\\\""));
 }
 
 TEST_CASE("CustomisationGenerator handles empty cloud-init settings gracefully", "[cloudinit][negative]") {

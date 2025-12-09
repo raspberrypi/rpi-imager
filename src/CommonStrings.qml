@@ -35,7 +35,8 @@ Item {
 
     // --- SSH public key filters ---
     readonly property var sshFiltersList: withAll([
-        qsTr("Public Key files (*.pub)")
+        qsTr("Public Key files (*.pub)"),
+        qsTr("Authorized keys files (authorized_keys)")
     ])
     readonly property string sshFiltersString: toFilterString(sshFiltersList)
 

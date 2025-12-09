@@ -38,6 +38,23 @@ WizardStepBase {
                 // Don't auto-advance for system drives - let the confirmation dialog handle it
                 return
             }
+            
+            // Fallback: check model directly when itemAtIndex returns null
+            // (e.g., when using screen readers on Windows)
+            if (!currentItem) {
+                var model = root.imageWriter.getDriveList()
+                if (model && dstlist.currentIndex < model.rowCount()) {
+                    var modelIndex = model.index(dstlist.currentIndex, 0)
+                    if (modelIndex && modelIndex.valid) {
+                        var isSystemRole = 0x107
+                        var isSystem = model.data(modelIndex, isSystemRole)
+                        if (isSystem) {
+                            // Don't auto-advance for system drives
+                            return
+                        }
+                    }
+                }
+            }
         }
         // Safe to auto-advance for non-system drives
         root.nextClicked()
@@ -130,8 +147,17 @@ WizardStepBase {
             highlightFollowsCurrentItem: false
             
             onItemSelected: function(index, item) {
-                if (index >= 0 && index < count && item && typeof item.selectDrive === "function") {
-                    item.selectDrive()
+                if (index >= 0 && index < dstlist.count) {
+                    // Try to use the delegate item if available
+                    if (item && typeof item.selectDrive === "function") {
+                        item.selectDrive()
+                    } else {
+                        // Fallback: get data directly from the model
+                        // This handles cases where itemAtIndex() returns null
+                        // (e.g., when using screen readers on Windows where
+                        // delegates may not be instantiated)
+                        root.selectDriveByIndex(index)
+                    }
                 }
             }
             
@@ -416,6 +442,51 @@ WizardStepBase {
 
         // Do not auto-advance; enable Next
         root.nextButtonEnabled = true
+    }
+    
+    // Select drive by model index (used when delegate item is not available,
+    // e.g., when using screen readers where itemAtIndex() returns null)
+    function selectDriveByIndex(index) {
+        var model = root.imageWriter.getDriveList()
+        if (!model || index < 0 || index >= model.rowCount()) {
+            return
+        }
+        
+        var modelIndex = model.index(index, 0)
+        if (!modelIndex || !modelIndex.valid) {
+            return
+        }
+        
+        // Role values from DriveListModel (Qt::UserRole + 1, etc.)
+        var deviceRole = 0x101
+        var descriptionRole = 0x102
+        var sizeRole = 0x103
+        var isReadOnlyRole = 0x106
+        var isSystemRole = 0x107
+        var mountpointsRole = 0x108
+        
+        var isReadOnly = model.data(modelIndex, isReadOnlyRole)
+        if (isReadOnly) {
+            return  // Can't select read-only devices
+        }
+        
+        var isSystem = model.data(modelIndex, isSystemRole)
+        var device = model.data(modelIndex, deviceRole)
+        var description = model.data(modelIndex, descriptionRole)
+        var size = model.data(modelIndex, sizeRole)
+        var mountpoints = model.data(modelIndex, mountpointsRole) || []
+        
+        // Create a mock item object with the required properties
+        var mockItem = {
+            unselectable: isReadOnly,
+            isSystem: isSystem,
+            device: device,
+            description: description,
+            size: size,
+            mountpoints: mountpoints
+        }
+        
+        root.selectDstItem(mockItem)
     }
 
     // Check if a storage item at the given index is selectable (not read-only and not hidden)

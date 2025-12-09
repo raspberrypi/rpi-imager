@@ -83,11 +83,12 @@ namespace Drivelist
             d.raw        = true;
             d.isVirtual  = subsystems == "block";
 
-            // Hot fix for newer lsblk version on Arch based linux distributions.
-            // See issue #610
-            // Only tested with laptop's internal sd card reader.
-            if (!d.isVirtual && (subsystems.contains("mmc") || subsystems.contains("scsi:usb")) ) {
-                d.isVirtual = subsystems.contains("block"); //< lsblk will output something like "block:mmc:mmc_host:pci" for key "subsystems".
+            // Physical USB drives and MMC cards (SD cards) should never be marked as virtual.
+            // The subsystems string for these devices contains "usb" or "mmc" (e.g., 
+            // "block:scsi:usb:pci" for USB drives, "block:mmc:mmc_host:pci" for SD cards).
+            // Only truly virtual devices like loop devices have subsystems == "block" exactly.
+            if (subsystems.contains("usb") || subsystems.contains("mmc")) {
+                d.isVirtual = false;
             }
 
             if (bdev["ro"].isBool())

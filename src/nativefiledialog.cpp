@@ -22,9 +22,10 @@ NativeFileDialog::TimingInfo NativeFileDialog::lastTimingInfo()
 
 QString fileDialogTimingToString(const NativeFileDialog::TimingInfo &info)
 {
+    // Note: directory is intentionally omitted to avoid capturing PII (paths may contain usernames)
     return QString("pathParsing=%1ms, filterParsing=%2ms, panelCreation=%3ms, "
                    "setDirectory=%4ms, panelSetup=%5ms, totalBeforeShow=%6ms, "
-                   "userInteraction=%7ms, dir=%8, isSave=%9")
+                   "userInteraction=%7ms, isSave=%8")
         .arg(info.pathParsingMs)
         .arg(info.filterParsingMs)
         .arg(info.panelCreationMs)
@@ -32,7 +33,6 @@ QString fileDialogTimingToString(const NativeFileDialog::TimingInfo &info)
         .arg(info.panelSetupMs)
         .arg(info.totalBeforeShowMs)
         .arg(info.userInteractionMs)
-        .arg(info.directory)
         .arg(info.isSaveDialog ? "true" : "false");
 }
 

@@ -331,7 +331,9 @@ export QMAKE="$QT_DIR/bin/qmake"
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 # Optimize deployment: exclude translations and unnecessary libraries
 export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
-"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*" --verbosity=0
+# Exclude libsystemd - it must come from the host system to work correctly with DBus
+# Including it causes compatibility issues (see https://github.com/raspberrypi/rpi-imager/issues/1304)
+"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*" --exclude-library="libsystemd*" --verbosity=0
 
 # Hook for removing files before AppImage creation
 echo "Pre-packaging hook - opportunity to remove unwanted files"
@@ -405,8 +407,9 @@ for appimage in *.AppImage; do
             ;;
     esac
     # Check if this matches the expected linuxdeploy output pattern
+    # shellcheck disable=SC2254  # Variable expansion needed for glob pattern matching
     case "$appimage" in
-        Raspberry_Pi_Imager-*"-${ARCH}.AppImage"|Raspberry_Pi_Imager"-${ARCH}.AppImage")
+        Raspberry_Pi_Imager-*-${ARCH}.AppImage|Raspberry_Pi_Imager-${ARCH}.AppImage)
             echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
             mv "$appimage" "$OUTPUT_FILE"
             RENAMED=true
