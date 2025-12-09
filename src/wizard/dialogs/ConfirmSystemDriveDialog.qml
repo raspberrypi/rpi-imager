@@ -16,6 +16,7 @@ BaseDialog {
 
     property string driveName: ""
     property string device: ""
+    property real deviceSize: 0
     property string sizeStr: ""
     property var mountpoints: []
 

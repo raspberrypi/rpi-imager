@@ -430,13 +430,14 @@ WizardStepBase {
             // Show stern confirmation dialog requiring typing the name
             systemDriveConfirm.driveName = dstitem.description
             systemDriveConfirm.device = dstitem.device
+            systemDriveConfirm.deviceSize = dstitem.size
             systemDriveConfirm.sizeStr = imageWriter.formatSize(parseFloat(dstitem.size))
             systemDriveConfirm.mountpoints = dstitem.mountpoints
             systemDriveConfirm.open()
             return
         }
 
-        imageWriter.setDst(dstitem.device)
+        imageWriter.setDst(dstitem.device, dstitem.size)
         selectedDeviceName = dstitem.description
         root.wizardContainer.selectedStorageName = dstitem.description
 
@@ -590,7 +591,7 @@ WizardStepBase {
         imageWriter: root.imageWriter
         overlayParent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         onConfirmed: {
-            root.imageWriter.setDst(systemDriveConfirm.device)
+            root.imageWriter.setDst(systemDriveConfirm.device, systemDriveConfirm.deviceSize)
             root.selectedDeviceName = systemDriveConfirm.driveName
             root.wizardContainer.selectedStorageName = systemDriveConfirm.driveName
             // Re-enable filtering after selection via confirmation path
