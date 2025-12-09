@@ -333,6 +333,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         push(QStringLiteral("- avahi-daemon"), cloud);
         push(QString(), cloud);
         push(QStringLiteral("apt:"), cloud);
+        push(QStringLiteral("  preserve_sources_list: true"), cloud);
         push(QStringLiteral("  conf: |"), cloud);
         push(QStringLiteral("    Acquire {"), cloud);
         push(QStringLiteral("      Check-Date \"false\";"), cloud);

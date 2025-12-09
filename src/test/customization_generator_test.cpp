@@ -600,6 +600,9 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with hostname",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("preserve_hostname: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("packages:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- avahi-daemon"));
+    // Preserve user's apt sources list
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("apt:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("preserve_sources_list: true"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with timezone", "[cloudinit][userdata]") {
@@ -914,6 +917,8 @@ TEST_CASE("Independent step: Hostname only", "[cloudinit][independent][hostname]
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("preserve_hostname: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("packages:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- avahi-daemon"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("apt:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("preserve_sources_list: true"));
     
     // No other customization should be present
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("users:"));
