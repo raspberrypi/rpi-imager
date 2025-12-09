@@ -359,46 +359,55 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     const QString sshPublicKey = settings.value("sshPublicKey").toString().trimmed();
     const QString sshAuthorizedKeys = settings.value("sshAuthorizedKeys").toString().trimmed();
     
+    // User configuration is independent of SSH - generate users section when:
+    // - A username with password is configured (local user account), OR
+    // - SSH is enabled with public keys (key-only authentication needs a user)
+    const bool hasUserCredentials = !userName.isEmpty() && !userPass.isEmpty();
+    const bool hasSshKeys = sshEnabled && (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty());
+    
+    if (hasUserCredentials || hasSshKeys) {
+        push(QStringLiteral("users:"), cloud);
+        // Determine effective username:
+        // - Use provided username if available
+        // - For SSH-only with keys, fall back to current system user or "pi"
+        const QString effectiveUser = userName.isEmpty() ? (sshEnabled ? currentUser : QStringLiteral("pi")) : userName;
+        push(QStringLiteral("- name: ") + effectiveUser, cloud);
+        push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
+        push(QStringLiteral("  shell: /bin/bash"), cloud);
+        
+        if (!userPass.isEmpty()) {
+            push(QStringLiteral("  lock_passwd: false"), cloud);
+            // Quote the password hash to ensure proper YAML parsing
+            // (consistent with network-config password handling)
+            push(QStringLiteral("  passwd: \"") + userPass + QStringLiteral("\""), cloud);
+        } else if (hasSshKeys) {
+            // No password but SSH keys configured - lock password login
+            push(QStringLiteral("  lock_passwd: true"), cloud);
+        }
+        
+        // Include SSH authorized keys when SSH is enabled with keys
+        if (hasSshKeys) {
+            push(QStringLiteral("  ssh_authorized_keys:"), cloud);
+            if (!sshAuthorizedKeys.isEmpty()) {
+                const QStringList keys = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+                for (const QString& k : keys) {
+                    push(QStringLiteral("    - ") + k.trimmed(), cloud);
+                }
+            } else {
+                // Split sshPublicKey by newlines to handle .pub files with multiple keys
+                const QStringList keys = sshPublicKey.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+                for (const QString& k : keys) {
+                    push(QStringLiteral("    - ") + k.trimmed(), cloud);
+                }
+            }
+            push(QStringLiteral("  sudo: ALL=(ALL) NOPASSWD:ALL"), cloud);
+        }
+        push(QString(), cloud); // blank line
+    }
+    
+    // SSH daemon configuration - separate from user creation
     if (sshEnabled) {
         push(QStringLiteral("enable_ssh: true"), cloud);
-        
-        // Generate users section when username is set, OR when SSH public keys are configured
-        // This ensures the system is properly configured even with key-only authentication
-        if (!userName.isEmpty() || !sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
-            push(QStringLiteral("users:"), cloud);
-            // Parity: legacy QML used the typed username even when not renaming the user.
-            // Fall back to getCurrentUser() when SSH is enabled and no explicit username was saved.
-            const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
-            push(QStringLiteral("- name: ") + effectiveUser, cloud);
-            push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
-            push(QStringLiteral("  shell: /bin/bash"), cloud);
-            if (!userPass.isEmpty()) {
-                push(QStringLiteral("  lock_passwd: false"), cloud);
-                // Quote the password hash to ensure proper YAML parsing
-                // (consistent with network-config password handling)
-                push(QStringLiteral("  passwd: \"") + userPass + QStringLiteral("\""), cloud);
-            } else if (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty()) {
-                push(QStringLiteral("  lock_passwd: true"), cloud);
-            }
-            // Include all authorised keys (multi-line) if provided, else fall back to single key
-            if (!sshAuthorizedKeys.isEmpty() || !sshPublicKey.isEmpty()) {
-                push(QStringLiteral("  ssh_authorized_keys:"), cloud);
-                if (!sshAuthorizedKeys.isEmpty()) {
-                    const QStringList keys = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
-                    for (const QString& k : keys) {
-                        push(QStringLiteral("    - ") + k.trimmed(), cloud);
-                    }
-                } else {
-                    // Split sshPublicKey by newlines to handle .pub files with multiple keys
-                    const QStringList keys = sshPublicKey.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
-                    for (const QString& k : keys) {
-                        push(QStringLiteral("    - ") + k.trimmed(), cloud);
-                    }
-                }
-                push(QStringLiteral("  sudo: ALL=(ALL) NOPASSWD:ALL"), cloud);
-            }
-            push(QString(), cloud); // blank line
-        }
         
         if (sshPasswordAuth) {
             push(QStringLiteral("ssh_pwauth: true"), cloud);
@@ -473,8 +482,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         push(QStringLiteral("runcmd:"), cloud);
         
         if (needsRuncmdForPiConnect) {
-            // Use the same effective user decision as above
-            const QString effectiveUser = userName.isEmpty() && sshEnabled ? currentUser : (userName.isEmpty() ? QStringLiteral("pi") : userName);
+            // Use the same effective user logic as user configuration above
+            const QString effectiveUser = userName.isEmpty() ? (sshEnabled ? currentUser : QStringLiteral("pi")) : userName;
             const QString configDir = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/") + PI_CONNECT_CONFIG_PATH;
             const QString targetPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
             

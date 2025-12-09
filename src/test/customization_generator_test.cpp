@@ -642,6 +642,31 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH user",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$5$fakesalt$fakehash123\""));
 }
 
+TEST_CASE("CustomisationGenerator generates cloud-init user-data with user credentials but NO SSH", "[cloudinit][userdata]") {
+    // Regression test: user configuration must be independent of SSH settings
+    // A user should be able to configure a local account without enabling SSH
+    QVariantMap settings;
+    settings["sshUserName"] = "localuser";
+    settings["sshUserPassword"] = "$5$fakesalt$fakehash456";
+    // Note: sshEnabled is NOT set (defaults to false)
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // User configuration MUST be generated even without SSH
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: localuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$5$fakesalt$fakehash456\""));
+    
+    // SSH should NOT be enabled
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("ssh_pwauth:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("ssh_authorized_keys:"));
+}
+
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys", "[cloudinit][userdata]") {
     QVariantMap settings;
     settings["sshUserName"] = "testuser";
@@ -865,6 +890,518 @@ TEST_CASE("CustomisationGenerator cloud-init network-config escapes mixed specia
     // Expected YAML escape: Test\\\"Net\twork\"
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("Test\\\\\\\"Net\\twork\\\""));
 }
+
+// =============================================================================
+// INDEPENDENT STEP TESTS
+// =============================================================================
+// Each customization step must be able to generate configuration independently
+// of all other steps. These tests verify that enabling only one step produces
+// the correct output without requiring other steps to be configured.
+// =============================================================================
+
+TEST_CASE("Independent step: Hostname only", "[cloudinit][independent][hostname]") {
+    // Hostname step configured alone - no other customization
+    QVariantMap settings;
+    settings["hostname"] = "mypi";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Hostname configuration MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: mypi"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("manage_etc_hosts: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("preserve_hostname: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("packages:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- avahi-daemon"));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
+    
+    // No network config
+    REQUIRE(netcfg.isEmpty());
+}
+
+TEST_CASE("Independent step: Timezone only", "[cloudinit][independent][locale]") {
+    // Locale step with only timezone configured
+    QVariantMap settings;
+    settings["timezone"] = "America/New_York";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Timezone configuration MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: America/New_York"));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
+    
+    // No network config
+    REQUIRE(netcfg.isEmpty());
+}
+
+TEST_CASE("Independent step: Keyboard only", "[cloudinit][independent][locale]") {
+    // Locale step with only keyboard configured
+    QVariantMap settings;
+    settings["keyboard"] = "de";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Keyboard configuration MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("model: pc105"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("layout: \"de\""));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
+    
+    // No network config
+    REQUIRE(netcfg.isEmpty());
+}
+
+TEST_CASE("Independent step: Locale (timezone + keyboard)", "[cloudinit][independent][locale]") {
+    // Full locale step: timezone and keyboard together
+    QVariantMap settings;
+    settings["timezone"] = "Europe/Paris";
+    settings["keyboard"] = "fr";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Both locale settings MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: Europe/Paris"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("layout: \"fr\""));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
+}
+
+TEST_CASE("Independent step: User credentials only (no SSH)", "[cloudinit][independent][user]") {
+    // User step configured alone - username and password without SSH
+    QVariantMap settings;
+    settings["sshUserName"] = "alice";
+    settings["sshUserPassword"] = "$6$rounds=4096$salt$hashvalue";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // User configuration MUST be generated independently of SSH
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: alice"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$6$rounds=4096$salt$hashvalue\""));
+    
+    // SSH must NOT be enabled
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("ssh_pwauth:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("ssh_authorized_keys:"));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
+    
+    // No network config
+    REQUIRE(netcfg.isEmpty());
+}
+
+TEST_CASE("Independent step: WiFi only", "[cloudinit][independent][wifi]") {
+    // WiFi step configured alone - no other customization
+    QVariantMap settings;
+    settings["wifiSSID"] = "MyHomeNetwork";
+    settings["wifiPasswordCrypt"] = "hashedwifipassword123";
+    settings["recommendedWifiCountry"] = "GB";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString userdataYaml = QString::fromUtf8(userdata);
+    QString netcfgYaml = QString::fromUtf8(netcfg);
+    
+    // Network config MUST be generated
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("network:"));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("version: 2"));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("wifis:"));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("wlan0:"));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("\"MyHomeNetwork\":"));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("password: \"hashedwifipassword123\""));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("regulatory-domain: \"GB\""));
+    
+    // No other customization in userdata
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("users:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("timezone:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("rpi:"));
+}
+
+TEST_CASE("Independent step: SSH with password auth only", "[cloudinit][independent][ssh]") {
+    // Remote access step with SSH password auth enabled, no user credentials
+    QVariantMap settings;
+    settings["sshPasswordAuth"] = true;
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // SSH configuration MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("enable_ssh: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: true"));
+    
+    // No user section without credentials
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("users:"));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
+    
+    // No network config
+    REQUIRE(netcfg.isEmpty());
+}
+
+TEST_CASE("Independent step: SSH with public keys only", "[cloudinit][independent][ssh]") {
+    // Remote access step with SSH public key auth, no password
+    QVariantMap settings;
+    settings["sshAuthorizedKeys"] = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG... user@host";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "defaultuser");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // SSH configuration MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("enable_ssh: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: false"));
+    
+    // User section is created for SSH key deployment (using currentUser fallback)
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: defaultuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-ed25519"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
+}
+
+TEST_CASE("Independent step: Interfaces only (I2C)", "[cloudinit][independent][interfaces]") {
+    // Interfaces & Features step with only I2C enabled
+    QVariantMap settings;
+    settings["enableI2C"] = true;
+    settings["enableSerial"] = "Disabled";  // Explicitly disable to test I2C in isolation
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Interface configuration MUST be generated (requires hasCcRpi=true)
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("interfaces:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("i2c: true"));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
+    
+    // No network config
+    REQUIRE(netcfg.isEmpty());
+}
+
+TEST_CASE("Independent step: Interfaces only (SPI)", "[cloudinit][independent][interfaces]") {
+    QVariantMap settings;
+    settings["enableSPI"] = true;
+    settings["enableSerial"] = "Disabled";  // Explicitly disable to test SPI in isolation
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("interfaces:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("spi: true"));
+    
+    // No other interfaces enabled
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("i2c:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("onewire:"));
+}
+
+TEST_CASE("Independent step: Interfaces only (1-Wire)", "[cloudinit][independent][interfaces]") {
+    QVariantMap settings;
+    settings["enable1Wire"] = true;
+    settings["enableSerial"] = "Disabled";  // Explicitly disable to test 1-Wire in isolation
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("interfaces:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("onewire: true"));
+}
+
+TEST_CASE("Independent step: Interfaces only (Serial)", "[cloudinit][independent][interfaces]") {
+    QVariantMap settings;
+    settings["enableSerial"] = "Console";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("interfaces:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("serial:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("console: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hardware: false"));
+}
+
+TEST_CASE("Independent step: USB Gadget only", "[cloudinit][independent][features]") {
+    QVariantMap settings;
+    settings["enableUsbGadget"] = true;
+    // Explicitly disable serial to avoid default behavior
+    settings["enableSerial"] = "Disabled";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("enable_usb_gadget: true"));
+    
+    // No interfaces section when only USB gadget is enabled (and serial explicitly disabled)
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("interfaces:"));
+}
+
+TEST_CASE("Independent step: Pi Connect only (with required user)", "[cloudinit][independent][piconnect]") {
+    // Pi Connect requires a user to be configured for the token file ownership
+    // But Pi Connect step itself should work without other steps
+    QVariantMap settings;
+    settings["sshUserName"] = "connectuser";
+    settings["sshUserPassword"] = "$5$salt$hash";
+    settings["piConnectEnabled"] = true;
+    
+    QString token = "pi-connect-deploy-token-xyz";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, token, false, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // User configuration MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: connectuser"));
+    
+    // Pi Connect configuration MUST be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("pi-connect-deploy-token-xyz"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring(PI_CONNECT_CONFIG_PATH));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("install -o connectuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chown"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi-connect.service"));
+    
+    // No other customization should be present
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("keyboard:"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("rpi:"));
+    
+    // No network config
+    REQUIRE(netcfg.isEmpty());
+}
+
+// =============================================================================
+// COMBINATION TESTS: Verify steps don't interfere with each other
+// =============================================================================
+
+TEST_CASE("Combined steps: User + Hostname (no SSH)", "[cloudinit][combined]") {
+    // User and hostname configured together, but SSH disabled
+    QVariantMap settings;
+    settings["hostname"] = "workstation";
+    settings["sshUserName"] = "developer";
+    settings["sshUserPassword"] = "$6$salt$hash";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // Both must be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hostname: workstation"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: developer"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd:"));
+    
+    // SSH not enabled
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+}
+
+TEST_CASE("Combined steps: User + WiFi (no SSH)", "[cloudinit][combined]") {
+    // User credentials and WiFi configured, but SSH disabled
+    QVariantMap settings;
+    settings["sshUserName"] = "wifiuser";
+    settings["sshUserPassword"] = "$6$salt$hash";
+    settings["wifiSSID"] = "OfficeWiFi";
+    settings["wifiPasswordCrypt"] = "wifihash";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString userdataYaml = QString::fromUtf8(userdata);
+    QString netcfgYaml = QString::fromUtf8(netcfg);
+    
+    // User config must be generated
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("- name: wifiuser"));
+    
+    // WiFi config must be generated
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("\"OfficeWiFi\":"));
+    
+    // SSH not enabled
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+}
+
+TEST_CASE("Combined steps: All locale + User (no SSH)", "[cloudinit][combined]") {
+    // Full locale customization with user, but no SSH
+    QVariantMap settings;
+    settings["timezone"] = "Asia/Tokyo";
+    settings["keyboard"] = "jp";
+    settings["sshUserName"] = "jpuser";
+    settings["sshUserPassword"] = "$6$salt$hash";
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // All must be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("timezone: Asia/Tokyo"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("layout: \"jp\""));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: jpuser"));
+    
+    // SSH not enabled
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+}
+
+TEST_CASE("Combined steps: User + Interfaces (no SSH)", "[cloudinit][combined]") {
+    // User and hardware interfaces, no SSH
+    QVariantMap settings;
+    settings["sshUserName"] = "iotuser";
+    settings["sshUserPassword"] = "$6$salt$hash";
+    settings["enableI2C"] = true;
+    settings["enableSPI"] = true;
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, false, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+    
+    // User must be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: iotuser"));
+    
+    // Interfaces must be generated
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("rpi:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("i2c: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("spi: true"));
+    
+    // SSH not enabled
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+}
+
+TEST_CASE("Combined steps: Full customization without SSH", "[cloudinit][combined]") {
+    // Everything except SSH - verifies user config works independently
+    QVariantMap settings;
+    settings["hostname"] = "fullpi";
+    settings["timezone"] = "Europe/Berlin";
+    settings["keyboard"] = "de";
+    settings["sshUserName"] = "fulluser";
+    settings["sshUserPassword"] = "$6$salt$hash";
+    settings["wifiSSID"] = "FullWiFi";
+    settings["wifiPasswordCrypt"] = "wifihash";
+    settings["recommendedWifiCountry"] = "DE";
+    settings["enableI2C"] = true;
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, false, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString userdataYaml = QString::fromUtf8(userdata);
+    QString netcfgYaml = QString::fromUtf8(netcfg);
+    
+    // All user-data customizations must be present
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("hostname: fullpi"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("timezone: Europe/Berlin"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("layout: \"de\""));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("- name: fulluser"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("passwd:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("rpi:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("i2c: true"));
+    
+    // WiFi in network config
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("\"FullWiFi\":"));
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("regulatory-domain: \"DE\""));
+    
+    // SSH explicitly NOT enabled
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("enable_ssh:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), !ContainsSubstring("ssh_pwauth:"));
+}
+
+TEST_CASE("Combined steps: Full customization with SSH", "[cloudinit][combined]") {
+    // Full customization including SSH
+    QVariantMap settings;
+    settings["hostname"] = "sshpi";
+    settings["timezone"] = "UTC";
+    settings["keyboard"] = "us";
+    settings["sshUserName"] = "sshuser";
+    settings["sshUserPassword"] = "$6$salt$hash";
+    settings["sshPasswordAuth"] = true;
+    settings["wifiSSID"] = "SSHWiFi";
+    settings["wifiPasswordCrypt"] = "wifihash";
+    settings["enableSPI"] = true;
+    
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), true, true, "pi");
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString userdataYaml = QString::fromUtf8(userdata);
+    QString netcfgYaml = QString::fromUtf8(netcfg);
+    
+    // All user-data customizations must be present
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("hostname: sshpi"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("timezone: UTC"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("layout: \"us\""));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("users:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("- name: sshuser"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("passwd:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("rpi:"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("spi: true"));
+    
+    // SSH configuration must be present
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("enable_ssh: true"));
+    REQUIRE_THAT(userdataYaml.toStdString(), ContainsSubstring("ssh_pwauth: true"));
+    
+    // WiFi in network config
+    REQUIRE_THAT(netcfgYaml.toStdString(), ContainsSubstring("\"SSHWiFi\":"));
+}
+
+// =============================================================================
+// END OF INDEPENDENT STEP TESTS
+// =============================================================================
 
 TEST_CASE("CustomisationGenerator handles empty cloud-init settings gracefully", "[cloudinit][negative]") {
     QVariantMap settings;  // Empty settings
