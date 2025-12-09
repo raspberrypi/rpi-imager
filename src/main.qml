@@ -459,6 +459,7 @@ ApplicationWindow {
         id: performanceSaveDialog
         parent: overlayRoot
         anchors.centerIn: parent
+        imageWriter: window.imageWriter
         dialogTitle: qsTr("Save Performance Data")
         nameFilters: [qsTr("JSON files (*.json)"), qsTr("All files (*)")]
         
