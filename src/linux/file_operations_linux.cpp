@@ -8,6 +8,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
 #include <errno.h>
 #include <sstream>
 
@@ -106,9 +108,26 @@ FileError LinuxFileOperations::GetSize(std::uint64_t& size) {
 
   struct stat st;
   if (fstat(fd_, &st) != 0) {
+    last_error_code_ = errno;
     return FileError::kSizeError;
   }
 
+  // For block devices (like /dev/sda, /dev/mmcblk0), st_size is always 0.
+  // We need to use the BLKGETSIZE64 ioctl to get the actual device size.
+  if (S_ISBLK(st.st_mode)) {
+    std::uint64_t device_size = 0;
+    if (ioctl(fd_, BLKGETSIZE64, &device_size) == -1) {
+      last_error_code_ = errno;
+      std::ostringstream oss;
+      oss << "BLKGETSIZE64 ioctl failed for block device, errno: " << errno;
+      Log(oss.str());
+      return FileError::kSizeError;
+    }
+    size = device_size;
+    return FileError::kSuccess;
+  }
+
+  // For regular files, use st_size
   size = static_cast<std::uint64_t>(st.st_size);
   return FileError::kSuccess;
 }

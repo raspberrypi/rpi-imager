@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <sys/filio.h>
 #include <sys/ioctl.h>
+#include <sys/disk.h>
 #include <errno.h>
 #include <iostream>
 #include <sstream>
@@ -166,9 +167,37 @@ FileError MacOSFileOperations::GetSize(std::uint64_t& size) {
 
   struct stat st;
   if (fstat(fd_, &st) != 0) {
+    last_error_code_ = errno;
     return FileError::kSizeError;
   }
 
+  // For block devices (like /dev/disk2, /dev/rdisk2), st_size is always 0.
+  // We need to use DKIOCGETBLOCKCOUNT and DKIOCGETBLOCKSIZE ioctls to get the actual size.
+  if (S_ISBLK(st.st_mode) || S_ISCHR(st.st_mode)) {
+    // On macOS, both block devices (/dev/disk*) and character devices (/dev/rdisk*) 
+    // need special handling to get their size
+    std::uint64_t block_count = 0;
+    std::uint32_t block_size = 0;
+    
+    if (ioctl(fd_, DKIOCGETBLOCKCOUNT, &block_count) == -1) {
+      last_error_code_ = errno;
+      std::cout << "DKIOCGETBLOCKCOUNT ioctl failed, errno=" << errno << std::endl;
+      return FileError::kSizeError;
+    }
+    
+    if (ioctl(fd_, DKIOCGETBLOCKSIZE, &block_size) == -1) {
+      last_error_code_ = errno;
+      std::cout << "DKIOCGETBLOCKSIZE ioctl failed, errno=" << errno << std::endl;
+      return FileError::kSizeError;
+    }
+    
+    size = block_count * block_size;
+    std::cout << "Block device size: " << size << " bytes (blocks=" << block_count 
+              << ", block_size=" << block_size << ")" << std::endl;
+    return FileError::kSuccess;
+  }
+
+  // For regular files, use st_size
   size = static_cast<std::uint64_t>(st.st_size);
   return FileError::kSuccess;
 }
