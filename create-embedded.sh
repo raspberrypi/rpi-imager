@@ -763,33 +763,17 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         --exclude-library="libicudata*" \
         --exclude-library="libsystemd*"
     
-    # Rename the output file
-    # Find and rename the AppImage created by linuxdeploy to our standardized name
-    RENAMED=false
-    for appimage in *.AppImage; do
-        # Skip symlinks
-        if [ -L "$appimage" ]; then
-            continue
-        fi
-        # Skip if this is already our target file
-        if [ "$appimage" = "$(basename "$OUTPUT_FILE")" ]; then
-            RENAMED=true
-            break
-        fi
-        # Only rename if this contains "Embedded" (linuxdeploy creates Raspberry_Pi_Imager_(Embedded)-arch.AppImage)
-        case "$appimage" in
-            *"Embedded"*"${ARCH}"*)
-                echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
-                mv "$appimage" "$OUTPUT_FILE"
-                RENAMED=true
-                break
-                ;;
-        esac
-    done
-    
-    # Check if we successfully found/created the output file
-    if [ "$RENAMED" = "false" ] && [ ! -f "$OUTPUT_FILE" ]; then
-        echo "Warning: Could not find Embedded AppImage to rename. Looking for any matching AppImage..."
+    # Rename the output file from linuxdeploy's default name to our versioned name
+    # linuxdeploy creates: Raspberry_Pi_Imager_(Embedded)-${ARCH}.AppImage (based on Name= in desktop file)
+    LINUXDEPLOY_OUTPUT="Raspberry_Pi_Imager_(Embedded)-${ARCH}.AppImage"
+    if [ -f "$LINUXDEPLOY_OUTPUT" ]; then
+        echo "Renaming '$LINUXDEPLOY_OUTPUT' to '$(basename "$OUTPUT_FILE")'"
+        mv "$LINUXDEPLOY_OUTPUT" "$OUTPUT_FILE"
+    elif [ -f "$OUTPUT_FILE" ]; then
+        echo "Output file already exists: $OUTPUT_FILE"
+    else
+        echo "Warning: Expected linuxdeploy output '$LINUXDEPLOY_OUTPUT' not found"
+        echo "Looking for any matching AppImage..."
         ls -la ./*.AppImage 2>/dev/null || true
     fi
 else

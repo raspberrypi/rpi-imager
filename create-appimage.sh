@@ -379,6 +379,7 @@ echo "Creating AppImage..."
 # Remove old symlinks for this variant only
 rm -f "$PWD/rpi-imager-desktop-$ARCH.AppImage"
 rm -f "$PWD/rpi-imager-$ARCH.AppImage"  # Legacy symlink name
+
 # Ensure LD_LIBRARY_PATH is still set for this call too
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 # Explicitly specify the desktop file to ensure correct naming
@@ -387,40 +388,17 @@ export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
     --output=appimage \
     --verbosity=0
 
-# Rename the output file if needed
-# Find and rename the AppImage created by linuxdeploy to our standardized name
-RENAMED=false
-for appimage in *.AppImage; do
-    # Skip symlinks
-    if [ -L "$appimage" ]; then
-        continue
-    fi
-    # Skip if this is already our target file
-    if [ "$appimage" = "$(basename "$OUTPUT_FILE")" ]; then
-        RENAMED=true
-        break
-    fi
-    # Skip if this is a CLI or embedded variant (has those keywords in the name)
-    case "$appimage" in
-        *"CLI"*|*"Embedded"*)
-            continue
-            ;;
-    esac
-    # Check if this matches the expected linuxdeploy output pattern
-    # shellcheck disable=SC2254  # Variable expansion needed for glob pattern matching
-    case "$appimage" in
-        Raspberry_Pi_Imager-*-${ARCH}.AppImage|Raspberry_Pi_Imager-${ARCH}.AppImage)
-            echo "Renaming '$appimage' to '$(basename "$OUTPUT_FILE")'"
-            mv "$appimage" "$OUTPUT_FILE"
-            RENAMED=true
-            break
-            ;;
-    esac
-done
-
-# Check if we successfully found/created the output file
-if [ "$RENAMED" = "false" ] && [ ! -f "$OUTPUT_FILE" ]; then
-    echo "Warning: Could not find AppImage to rename. Looking for any matching AppImage..."
+# Rename the output file from linuxdeploy's default name to our versioned name
+# linuxdeploy creates: Raspberry_Pi_Imager-${ARCH}.AppImage (based on Name= in desktop file)
+LINUXDEPLOY_OUTPUT="Raspberry_Pi_Imager-${ARCH}.AppImage"
+if [ -f "$LINUXDEPLOY_OUTPUT" ]; then
+    echo "Renaming '$LINUXDEPLOY_OUTPUT' to '$(basename "$OUTPUT_FILE")'"
+    mv "$LINUXDEPLOY_OUTPUT" "$OUTPUT_FILE"
+elif [ -f "$OUTPUT_FILE" ]; then
+    echo "Output file already exists: $OUTPUT_FILE"
+else
+    echo "Warning: Expected linuxdeploy output '$LINUXDEPLOY_OUTPUT' not found"
+    echo "Looking for any matching AppImage..."
     ls -la ./*.AppImage 2>/dev/null || true
 fi
 
