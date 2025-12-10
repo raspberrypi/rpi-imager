@@ -113,6 +113,12 @@ ColumnLayout {
             font.pixelSize: Style.fontSizeFormLabel
             color: Style.formLabelColor
             Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
         }
         
         ImButton {
@@ -120,7 +126,7 @@ ColumnLayout {
             text: root.expanded ? qsTr("Hide") : qsTr("Show")
             Layout.minimumWidth: 80
             onClicked: root.expanded = !root.expanded
-            Accessible.description: root.expanded 
+            accessibleDescription: root.expanded 
                 ? qsTr("Hide the list of SSH keys")
                 : qsTr("Show the list of SSH keys")
         }
@@ -131,6 +137,8 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: root.expanded
         spacing: Style.spacingSmall
+        Accessible.role: Accessible.Grouping
+        Accessible.name: qsTr("SSH keys list")
         
         // List of keys
         Repeater {
@@ -138,8 +146,31 @@ ColumnLayout {
             model: root.keys
             
             RowLayout {
+                id: keyRow
                 Layout.fillWidth: true
                 spacing: Style.spacingSmall
+                
+                // Accessibility for the row as a list item
+                Accessible.role: Accessible.ListItem
+                Accessible.name: {
+                    // Provide full key info for screen readers
+                    var keyText = modelData
+                    var parts = keyText.split(/\s+/)
+                    if (parts.length >= 2) {
+                        var keyType = parts[0]
+                        var comment = parts.length > 2 ? parts.slice(2).join(" ") : ""
+                        if (comment) {
+                            return qsTr("SSH key %1: %2, %3").arg(index + 1).arg(keyType).arg(comment)
+                        } else {
+                            return qsTr("SSH key %1: %2").arg(index + 1).arg(keyType)
+                        }
+                    }
+                    return qsTr("SSH key %1").arg(index + 1)
+                }
+                Accessible.ignored: false
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
                 
                 // Key text (truncated for display)
                 Text {
@@ -179,6 +210,7 @@ ColumnLayout {
                     font.family: "monospace"
                     color: Style.formLabelColor
                     elide: Text.ElideRight
+                    Accessible.ignored: true  // Parent row provides accessibility
                 }
                 
                 // Remove button
@@ -186,7 +218,14 @@ ColumnLayout {
                     text: qsTr("Remove")
                     Layout.minimumWidth: 80
                     onClicked: root.removeKey(index)
-                    Accessible.description: qsTr("Remove this SSH key")
+                    accessibleDescription: {
+                        var keyText = modelData
+                        var parts = keyText.split(/\s+/)
+                        if (parts.length > 2) {
+                            return qsTr("Remove SSH key: %1").arg(parts.slice(2).join(" "))
+                        }
+                        return qsTr("Remove SSH key %1").arg(index + 1)
+                    }
                 }
             }
         }
@@ -201,6 +240,8 @@ ColumnLayout {
                 Layout.fillWidth: true
                 placeholderText: qsTr("Paste key or click BROWSE to select file")
                 font.pixelSize: Style.fontSizeInput
+                Accessible.name: qsTr("SSH public key input")
+                Accessible.description: qsTr("Paste an SSH public key here or use the browse button to select a key file")
                 onAccepted: {
                     if (text.trim().length > 0) {
                         root.addKey(text)
@@ -234,7 +275,7 @@ ColumnLayout {
                         }
                     }
                 }
-                Accessible.description: addKeyField.text.trim().length > 0 
+                accessibleDescription: addKeyField.text.trim().length > 0 
                     ? qsTr("Add the entered SSH key")
                     : qsTr("Select an SSH public key file to add")
             }
