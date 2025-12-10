@@ -485,41 +485,6 @@ EOF
 # PLATFORM-SPECIFIC HELPER FUNCTIONS
 # =============================================================================
 
-# Function to detect Raspberry Pi model and set optimization flags
-detect_rpi_optimizations() {
-    RPI_MODEL=""
-    RPI_CFLAGS=""
-    
-    if [ -f /proc/cpuinfo ] && grep -q "Raspberry Pi" /proc/cpuinfo; then
-        echo "Detected Raspberry Pi system"
-        RPI_MODEL=$(grep "Model" /proc/cpuinfo | sed 's/.*: //')
-        echo "  Model: $RPI_MODEL"
-        
-        # Set optimization flags based on model
-        case "$RPI_MODEL" in
-            *"Pi 5"*)
-                echo "  Optimizing for Raspberry Pi 5"
-                RPI_CFLAGS="-march=armv8.2-a+crypto -mtune=cortex-a76"
-                ;;
-            *"Pi 4"*)
-                echo "  Optimizing for Raspberry Pi 4"
-                RPI_CFLAGS="-march=armv8-a+crc -mtune=cortex-a72 -mfpu=neon-fp-armv8"
-                ;;
-            *"Pi 3"*)
-                echo "  Optimizing for Raspberry Pi 3"
-                RPI_CFLAGS="-march=armv8-a+crc -mtune=cortex-a53 -mfpu=neon-fp-armv8"
-                ;;
-            *"Pi 2"*)
-                echo "  Optimizing for Raspberry Pi 2"
-                RPI_CFLAGS="-march=armv7-a -mtune=cortex-a7 -mfpu=neon-vfpv4"
-                ;;
-        esac
-    fi
-    
-    # Export for use by calling script
-    export RPI_MODEL RPI_CFLAGS
-}
-
 # Function to set architecture-specific prefix suffix
 set_arch_prefix_suffix() {
     suffix="${1:-}"

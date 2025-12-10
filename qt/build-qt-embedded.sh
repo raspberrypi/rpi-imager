@@ -14,17 +14,11 @@ source "$BASE_DIR/qt-build-common.sh"
 # Initialize common variables
 init_common_variables
 
-# Embedded-specific defaults
-RPI_OPTIMIZED=0       # Raspberry Pi optimizations disabled by default
-
 # Parse command line arguments
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
     print_common_usage_options
-    echo ""
-    echo "Embedded-specific options:"
-    echo "  --rpi-optimize       Apply Raspberry Pi specific optimizations"
     echo ""
     echo "This script builds Qt optimized for embedded systems:"
     echo "  - Uses linuxfb for direct rendering (no X11/Wayland required)"
@@ -39,9 +33,6 @@ parse_common_args "$@"
 # Parse script-specific arguments
 for arg in "${COMMON_REMAINING_ARGS[@]}"; do
     case $arg in
-        --rpi-optimize)
-            RPI_OPTIMIZED=1
-            ;;
         -h|--help)
             usage
             ;;
@@ -58,20 +49,9 @@ validate_common_inputs
 # Set architecture-specific prefix with embedded suffix
 set_arch_prefix_suffix "embedded"
 
-# Detect Raspberry Pi optimizations if enabled
-if [ "$RPI_OPTIMIZED" -eq 1 ]; then
-    detect_rpi_optimizations
-fi
-
 # Print configuration
 print_common_config "Qt embedded build"
 echo "  Target: Embedded systems (linuxfb)"
-if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_CFLAGS" ]; then
-    echo "  Raspberry Pi Optimizations: enabled"
-    echo "  Raspberry Pi CFLAGS: $RPI_CFLAGS"
-else
-    echo "  Raspberry Pi Optimizations: disabled"
-fi
 
 # Install dependencies if not skipped
 if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
@@ -95,12 +75,6 @@ if [ "$SKIP_DEPENDENCIES" -eq 0 ]; then
         libdouble-conversion-dev libpcre2-dev \
         `# Graphics (DRM/KMS for some embedded systems)` \
         libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev
-
-    # Additional dependencies for Raspberry Pi
-    if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_MODEL" ]; then
-        echo "Installing Raspberry Pi specific dependencies..."
-        sudo apt-get install -y libraspberrypi-dev
-    fi
 else
     if [ "$UNPRIVILEGED" -eq 1 ]; then
         echo "Skipping dependency installation (unprivileged mode)"
@@ -115,12 +89,6 @@ create_build_directories "embedded"
 
 # Download Qt source code
 download_qt_source
-
-# Apply any needed patches for Raspberry Pi
-if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_MODEL" ]; then
-    echo "Checking for Raspberry Pi specific patches..."
-    # You can add specific patches for Pi here if needed
-fi
 
 # Clean build directory if requested
 clean_build_directory
@@ -216,14 +184,6 @@ fi
 
 # Configure and build Qt
 cd "$BUILD_DIR"
-
-# Set up environment variables for compilation
-if [ "$RPI_OPTIMIZED" -eq 1 ] && [ -n "$RPI_CFLAGS" ]; then
-    export CFLAGS="$RPI_CFLAGS"
-    export CXXFLAGS="$RPI_CFLAGS"
-    echo "Using CFLAGS: $CFLAGS"
-    echo "Using CXXFLAGS: $CXXFLAGS"
-fi
 
 # Configure Qt with embedded-specific options
 echo "Configuring Qt for embedded systems..."
