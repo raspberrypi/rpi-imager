@@ -1,5 +1,6 @@
 #include "downloadstatstelemetry.h"
 #include "config.h"
+#include "platformquirks.h"
 #include <QSettings>
 #include <QDebug>
 #include <QUrl>
@@ -71,6 +72,13 @@ void DownloadStatsTelemetry::run()
     curl_easy_setopt(_c, CURLOPT_CONNECTTIMEOUT, 10);
     curl_easy_setopt(_c, CURLOPT_LOW_SPEED_TIME, 10);
     curl_easy_setopt(_c, CURLOPT_LOW_SPEED_LIMIT, 10);
+
+#ifdef Q_OS_LINUX
+    // Set CA certificate bundle for AppImage compatibility
+    const char* caBundle = PlatformQuirks::findCACertBundle();
+    if (caBundle)
+        curl_easy_setopt(_c, CURLOPT_CAINFO, caBundle);
+#endif
 
     CURLcode ret = curl_easy_perform(_c);
     curl_easy_cleanup(_c);

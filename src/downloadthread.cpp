@@ -39,6 +39,7 @@
 
 #include "imageadvancedoptions.h"
 #include "secureboot.h"
+#include "platformquirks.h"
 #include <QTemporaryDir>
 
 #ifdef Q_OS_LINUX
@@ -549,6 +550,18 @@ void DownloadThread::run()
 
     if (!_proxy.isEmpty())
         curl_easy_setopt(_c, CURLOPT_PROXY, _proxy.constData());
+
+#ifdef Q_OS_LINUX
+    // Set CA certificate bundle path for AppImage compatibility.
+    // AppImages bundle libcurl which may have a hardcoded CA path that doesn't
+    // exist on the target system. Find and use the system's CA bundle.
+    const char* caBundle = PlatformQuirks::findCACertBundle();
+    if (caBundle)
+    {
+        curl_easy_setopt(_c, CURLOPT_CAINFO, caBundle);
+        qDebug() << "Using CA certificate bundle:" << caBundle;
+    }
+#endif
 
     emit preparationStatusUpdate(tr("Starting download..."));
     // Minimal logging during normal operation

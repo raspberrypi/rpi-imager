@@ -177,6 +177,16 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
             }
         }
 
+        // Clear AppImage-specific library paths before exec'ing external tools.
+        // AppImages set LD_LIBRARY_PATH to their bundled libraries, but external tools
+        // like kde-inhibit or systemd-inhibit may link against system libraries (e.g., KDE
+        // frameworks) that require a different Qt version than what's bundled. If we don't
+        // clear LD_LIBRARY_PATH, the external tool may fail to load due to symbol version
+        // mismatches (e.g., "version `Qt_6.10' not found").
+        // This is safe because the forked child only runs simple system tools that don't
+        // need our bundled libraries.
+        unsetenv("LD_LIBRARY_PATH");
+
         // Run the inhibitor tool, and have it wrap cat reading from the FIFO.
         // We avoid using shell to prevent any potential command injection issues.
         // Build argument vector: [fileName, ...args, "cat", _fifoName, NULL]

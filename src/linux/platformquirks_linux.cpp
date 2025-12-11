@@ -578,4 +578,37 @@ bool isScrollInverted(bool qtInvertedFlag) {
     return qtInvertedFlag;
 }
 
+const char* findCACertBundle()
+{
+    // Common CA certificate bundle paths across Linux distributions.
+    // AppImages and other portable distributions bundle libcurl with a
+    // hardcoded CA certificate path from the build system. When run on a
+    // different distribution, this path may not exist, causing SSL/TLS
+    // connections to fail.
+    //
+    // Order matters: more common/modern paths first for faster lookup.
+    static const char* caPaths[] = {
+        "/etc/ssl/certs/ca-certificates.crt",                    // Debian, Ubuntu, Arch, Gentoo
+        "/etc/pki/tls/certs/ca-bundle.crt",                      // Fedora, RHEL, CentOS
+        "/etc/ssl/ca-bundle.pem",                                // OpenSUSE
+        "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",     // CentOS/RHEL 7+
+        "/etc/ssl/cert.pem",                                     // Alpine
+        "/etc/pki/tls/cacert.pem",                               // OpenELEC
+        "/etc/ca-certificates/extracted/tls-ca-bundle.pem",      // Arch with ca-certificates-utils
+        "/usr/local/share/certs/ca-root-nss.crt",                // FreeBSD
+        "/usr/share/ssl/certs/ca-bundle.crt",                    // Older RHEL
+        nullptr
+    };
+
+    for (int i = 0; caPaths[i] != nullptr; i++)
+    {
+        if (access(caPaths[i], R_OK) == 0)
+        {
+            return caPaths[i];
+        }
+    }
+
+    return nullptr;  // Not found, curl will use its compiled-in default
+}
+
 } // namespace PlatformQuirks
