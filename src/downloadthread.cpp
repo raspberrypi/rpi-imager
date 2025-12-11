@@ -1281,6 +1281,15 @@ void DownloadThread::_initializeSyncConfiguration()
 
 void DownloadThread::_periodicSync()
 {
+    // Skip periodic sync when direct I/O is enabled (F_NOCACHE on macOS, O_DIRECT on Linux).
+    // With direct I/O, data bypasses the page cache entirely, so periodic fsync() provides
+    // no benefit - the data is already going directly to the device. This avoids the severe
+    // performance penalty of frequent fsync() calls on slow media like SD cards over USB.
+    // The final sync at the end of the write is still performed to ensure data integrity.
+    if (_file && _file->IsDirectIOEnabled()) {
+        return;
+    }
+    
     qint64 currentBytes = _bytesWritten;
     qint64 bytesSinceLastSync = currentBytes - _lastSyncBytes;
     qint64 timeSinceLastSync = _lastSyncTime.elapsed();
