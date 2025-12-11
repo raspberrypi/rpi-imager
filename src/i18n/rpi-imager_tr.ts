@@ -253,6 +253,10 @@
         <source>Localisation configured</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Authorized keys files (authorized_keys)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmSystemDriveDialog</name>
@@ -663,6 +667,10 @@
         <source>Writing customization files...</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Failed to allocate buffer for MBR zeroing</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
@@ -905,6 +913,35 @@
         <source>File: %1</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Downloads</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter filename…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Navigate to a folder using the panel on the left,
+or type a path in the address bar above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImOptionButton</name>
@@ -921,9 +958,43 @@
     </message>
 </context>
 <context>
+    <name>ImPasswordField</name>
+    <message>
+        <source>Password is visible. Press F2 to hide.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is hidden. Press F2 to show.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is currently visible. Activate to hide it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is currently hidden. Activate to show it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ImPopup</name>
     <message>
         <source>Dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImSaveFileDialog</name>
+    <message>
+        <source>Save File</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1269,10 +1340,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1324,6 +1391,10 @@
         <source>Authentication token:</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -1369,10 +1440,6 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Select SSH Public Key</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Customisation: SSH authentication</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1386,18 +1453,6 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Authentication mechanism:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Enter public key or click BROWSE</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Failed to read SSH key file</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select an SSH public key file from your computer to enable key-based authentication</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1425,15 +1480,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Enter or paste your SSH public key, or use the Browse button to select a public key file (typically id_rsa.pub or id_ed25519.pub).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Public key:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1592,6 +1639,93 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SshKeyManager</name>
+    <message>
+        <source>No SSH keys configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 SSH key configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 SSH keys configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide the list of SSH keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show the list of SSH keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH keys list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1: %2, %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove SSH key: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove SSH key %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste key or click BROWSE to select file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH public key input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste an SSH public key here or use the browse button to select a key file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select SSH Public Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add the entered SSH key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an SSH public key file to add</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2225,6 +2359,18 @@ to show system drives.</source>
     </message>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>JSON files (*.json)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

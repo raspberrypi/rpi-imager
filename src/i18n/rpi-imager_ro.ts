@@ -107,6 +107,21 @@
         <source>PEM Files (*.pem);;All Files (*)</source>
         <translation>Fișiere PEM (*.pem);;Toate Fișierele (*)</translation>
     </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AsyncCacheWriter</name>
+    <message>
+        <source>Cache write error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CommonStrings</name>
@@ -237,6 +252,10 @@
     <message>
         <source>Localisation configured</source>
         <translation>Localizare configurată</translation>
+    </message>
+    <message>
+        <source>Authorized keys files (authorized_keys)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -453,10 +472,6 @@
         <translation>Eroare de acces respins la scrierea fișierului pe disc.</translation>
     </message>
     <message>
-        <source>Error writing file to disk</source>
-        <translation>Eroare la scrierea fișierului pe disc</translation>
-    </message>
-    <message>
         <source>Error writing to storage (while flushing)</source>
         <translation>Eroare la scrierea în stocare (în timpul flush-ului)</translation>
     </message>
@@ -635,6 +650,26 @@
     <message>
         <source>Failed to write secure boot files: %1</source>
         <translation>Scrierea fișierelor secure boot a eșuat: %1</translation>
+    </message>
+    <message>
+        <source>Unmounting volumes...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning disk...</source>
+        <translation type="unfinished">Curățare disc...</translation>
+    </message>
+    <message>
+        <source>Cleaning disk (legacy method)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to allocate buffer for MBR zeroing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing customization files...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -830,6 +865,17 @@
     </message>
 </context>
 <context>
+    <name>ImComboBox</name>
+    <message>
+        <source>Type to search: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(press again to cycle)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ImFileDialog</name>
     <message>
         <source>Select File</source>
@@ -858,6 +904,98 @@
     <message>
         <source>No files in this folder</source>
         <translation>Niciun fișier în acest dosar</translation>
+    </message>
+    <message>
+        <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Downloads</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter filename…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Navigate to a folder using the panel on the left,
+or type a path in the address bar above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="unfinished">Salvează</translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionButton</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionPill</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImPasswordField</name>
+    <message>
+        <source>Password is visible. Press F2 to hide.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is hidden. Press F2 to show.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is currently visible. Activate to hide it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is currently hidden. Activate to show it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImPopup</name>
+    <message>
+        <source>Dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImSaveFileDialog</name>
+    <message>
+        <source>Save File</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -964,6 +1102,14 @@
     <message>
         <source> or </source>
         <translation> sau </translation>
+    </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>JSON files (*.json);;All files (*)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1090,6 +1236,13 @@
     </message>
 </context>
 <context>
+    <name>NativeFileDialog</name>
+    <message>
+        <source>File type:</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
@@ -1186,10 +1339,6 @@
         <translation>Token primit de la browser</translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
-        <translation>Conectează-te pentru a primi un token și a activa Raspberry Pi Connect.</translation>
-    </message>
-    <message>
         <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
         <translation>Deschide site-ul Raspberry Pi Connect în browser-ul tău pentru a te conecta și a primi un token de autentificare</translation>
     </message>
@@ -1241,6 +1390,10 @@
         <source>Authentication token:</source>
         <translation>Token de autentificare:</translation>
     </message>
+    <message>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -1268,6 +1421,12 @@ Please run with elevated privileges: sudo %1</source>
 
 Te rog rulează cu privilegii ridicate: sudo %1</translation>
     </message>
+    <message>
+        <source>You are not running as root.
+
+Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RemoteAccessStep</name>
@@ -1284,10 +1443,6 @@ Te rog rulează cu privilegii ridicate: sudo %1</translation>
         <translation>Folosește autentificare cu cheie publică</translation>
     </message>
     <message>
-        <source>Select SSH Public Key</source>
-        <translation>Selectează Cheie Publică SSH</translation>
-    </message>
-    <message>
         <source>Customisation: SSH authentication</source>
         <translation>Personalizare: Autentificare SSH</translation>
     </message>
@@ -1302,18 +1457,6 @@ Te rog rulează cu privilegii ridicate: sudo %1</translation>
     <message>
         <source>Authentication mechanism:</source>
         <translation>Mecanism de autentificare:</translation>
-    </message>
-    <message>
-        <source>Enter public key or click BROWSE</source>
-        <translation>Introdu cheia publică sau apasă RĂSFOIEȘTE</translation>
-    </message>
-    <message>
-        <source>Failed to read SSH key file</source>
-        <translation>Citirea fișierului cheii SSH a eșuat</translation>
-    </message>
-    <message>
-        <source>Select an SSH public key file from your computer to enable key-based authentication</source>
-        <translation>Selectează un fișier de cheie publică SSH de pe computerul tău pentru a activa autentificarea bazată pe cheie</translation>
     </message>
     <message>
         <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
@@ -1340,16 +1483,8 @@ Te rog rulează cu privilegii ridicate: sudo %1</translation>
         <translation>Permite autentificarea SSH folosind o pereche de chei criptografice în loc de o parolă. Mai sigură decât autentificarea cu parolă.</translation>
     </message>
     <message>
-        <source>Enter or paste your SSH public key, or use the Browse button to select a public key file (typically id_rsa.pub or id_ed25519.pub).</source>
-        <translation>Introdu sau lipește cheia ta publică SSH, sau folosește butonul Răsfoiește pentru a selecta un fișier de cheie publică (de obicei id_rsa.pub sau id_ed25519.pub).</translation>
-    </message>
-    <message>
         <source>Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.</source>
         <translation>Alege cum te vei autentifica când te conectezi la Raspberry Pi-ul tău prin SSH. Autentificarea cu parolă folosește credențialele contului pe care le-ai configurat. Autentificarea cu cheie publică folosește o pereche de chei criptografice și este mai sigură.</translation>
-    </message>
-    <message>
-        <source>Public key:</source>
-        <translation>Cheie publică:</translation>
     </message>
 </context>
 <context>
@@ -1450,20 +1585,8 @@ Te rog rulează cu privilegii ridicate: sudo %1</translation>
         <translation>Află mai multe despre Secure Boot</translation>
     </message>
     <message>
-        <source>Your boot partition will be signed using the RSA private key configured in App Options.</source>
-        <translation>Partiția ta de boot va fi semnată folosind cheia privată RSA configurată în Opțiuni Aplicație.</translation>
-    </message>
-    <message>
         <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
         <translation>Aceasta va crea fișierele boot.img și boot.sig necesare pentru Raspberry Pi Secure Boot.</translation>
-    </message>
-    <message>
-        <source>Private Key: %1</source>
-        <translation>Cheie Privată: %1</translation>
-    </message>
-    <message>
-        <source>(not configured)</source>
-        <translation>(neconfigurată)</translation>
     </message>
     <message>
         <source>Public Key Fingerprint: %1</source>
@@ -1476,6 +1599,137 @@ Te rog rulează cu privilegii ridicate: sudo %1</translation>
     <message>
         <source>(unable to compute)</source>
         <translation>(nu se poate calcula)</translation>
+    </message>
+    <message>
+        <source>RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished">Schimbă</translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="unfinished">Selectează</translation>
+    </message>
+    <message>
+        <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
+        <translation type="unfinished">Selectează o cheie privată RSA de 2048 biți pentru semnarea imaginilor de boot în modul secure boot</translation>
+    </message>
+    <message>
+        <source>Select RSA Private Key</source>
+        <translation type="unfinished">Selectează Cheie Privată RSA</translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem);;All Files (*)</source>
+        <translation type="unfinished">Fișiere PEM (*.pem);;Toate Fișierele (*)</translation>
+    </message>
+    <message>
+        <source>Selected: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Your boot partition will be signed using the selected RSA private key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please select an RSA private key above to enable secure boot signing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SshKeyManager</name>
+    <message>
+        <source>No SSH keys configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 SSH key configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 SSH keys configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide the list of SSH keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show the list of SSH keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH keys list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1: %2, %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove SSH key: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove SSH key %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste key or click BROWSE to select file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH public key input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste an SSH public key here or use the browse button to select a key file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select SSH Public Key</source>
+        <translation type="unfinished">Selectează Cheie Publică SSH</translation>
+    </message>
+    <message>
+        <source>Add the entered SSH key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an SSH public key file to add</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1859,14 +2113,6 @@ pentru a afișa drive-uri de sistem.</translation>
 </translation>
     </message>
     <message>
-        <source>Warning: Only replace the token if you initiated this action. </source>
-        <translation>Avertisment: Înlocuiește token-ul doar dacă tu ai inițiat această acțiune. </translation>
-    </message>
-    <message>
-        <source>If you didn&apos;t, someone could be trying to push a bad token to RPi Imager.</source>
-        <translation>Dacă nu ai făcut-o tu, cineva ar putea încerca să împingă un token rău către RPi Imager.</translation>
-    </message>
-    <message>
         <source>Replace token</source>
         <translation>Înlocuiește token</translation>
     </message>
@@ -1889,6 +2135,10 @@ pentru a afișa drive-uri de sistem.</translation>
     <message>
         <source>Secure Boot</source>
         <translation>Secure Boot</translation>
+    </message>
+    <message>
+        <source>Warning: Only overwrite the token if you initiated this action.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2032,6 +2282,10 @@ pentru a afișa drive-uri de sistem.</translation>
         <source>Writing in progress — do not disconnect the storage device</source>
         <translation>Scriere în curs — nu deconecta dispozitivul de stocare</translation>
     </message>
+    <message>
+        <source>Please wait... %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -2110,6 +2364,26 @@ pentru a afișa drive-uri de sistem.</translation>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
         <translation>Ieși din Raspberry Pi Imager - trebuie să repornești cu privilegii ridicate pentru a scrie imagini</translation>
+    </message>
+    <message>
+        <source>Install Authorization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>JSON files (*.json)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
+        <translation type="unfinished">Toate fișierele (*)</translation>
     </message>
 </context>
 </TS>

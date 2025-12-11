@@ -253,6 +253,10 @@
         <source>Localisation configured</source>
         <translation>Localisation configurée</translation>
     </message>
+    <message>
+        <source>Authorized keys files (authorized_keys)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmSystemDriveDialog</name>
@@ -653,7 +657,7 @@
     </message>
     <message>
         <source>Cleaning disk...</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Nettoyage du disque...</translation>
     </message>
     <message>
         <source>Cleaning disk (legacy method)...</source>
@@ -661,6 +665,10 @@
     </message>
     <message>
         <source>Writing customization files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to allocate buffer for MBR zeroing</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -905,6 +913,35 @@
         <source>File: %1</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Downloads</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter filename…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Navigate to a folder using the panel on the left,
+or type a path in the address bar above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="unfinished">Enregistrer</translation>
+    </message>
 </context>
 <context>
     <name>ImOptionButton</name>
@@ -921,9 +958,43 @@
     </message>
 </context>
 <context>
+    <name>ImPasswordField</name>
+    <message>
+        <source>Password is visible. Press F2 to hide.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is hidden. Press F2 to show.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is currently visible. Activate to hide it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is currently hidden. Activate to show it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ImPopup</name>
     <message>
         <source>Dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImSaveFileDialog</name>
+    <message>
+        <source>Save File</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1230,7 +1301,7 @@
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Utiliser les flèches pour naviguer, Entrée ou Espace pour sélectionner</translation>
     </message>
     <message>
         <source>Operating system category</source>
@@ -1265,10 +1336,6 @@
     </message>
     <message>
         <source>Token received from browser</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Sign in to receive a token and enable Raspberry Pi Connect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1323,6 +1390,10 @@
         <source>Authentication token:</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>QObject</name>
@@ -1368,10 +1439,6 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Select SSH Public Key</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Customisation: SSH authentication</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1385,18 +1452,6 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Authentication mechanism:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Enter public key or click BROWSE</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Failed to read SSH key file</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select an SSH public key file from your computer to enable key-based authentication</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1424,15 +1479,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Enter or paste your SSH public key, or use the Browse button to select a public key file (typically id_rsa.pub or id_ed25519.pub).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Public key:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1440,7 +1487,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     <name>RepositoryDialog</name>
     <message>
         <source>Content Repository</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Dépôt de contenu</translation>
     </message>
     <message>
         <source>Repository source:</source>
@@ -1555,23 +1602,23 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Change</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Changer</translation>
     </message>
     <message>
         <source>Select</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Sélectionner</translation>
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Sélectionner une clé privée RSA 2048 bits pour signer les images de démarrage en mode de démarrage sécurisé</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Sélectionner une clé privée RSA</translation>
     </message>
     <message>
         <source>PEM Files (*.pem);;All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Fichiers PEM Files (*.pem);;Tous types de fichiers (*)</translation>
     </message>
     <message>
         <source>Selected: %1</source>
@@ -1591,6 +1638,93 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SshKeyManager</name>
+    <message>
+        <source>No SSH keys configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 SSH key configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 SSH keys configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide the list of SSH keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show the list of SSH keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH keys list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1: %2, %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove SSH key: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove SSH key %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste key or click BROWSE to select file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH public key input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste an SSH public key here or use the browse button to select a key file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select SSH Public Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add the entered SSH key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an SSH public key file to add</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1622,19 +1756,19 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>No devices</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Aucun appareil</translation>
     </message>
     <message>
         <source>1 device</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">1 appareil</translation>
     </message>
     <message>
         <source>%1 devices</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">%1 appareils</translation>
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Utiliser les flèches pour naviguer, Entrée ou Espace pour sélectionner</translation>
     </message>
     <message>
         <source>All visible devices are read-only.
@@ -1927,7 +2061,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>App Options</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Options app</translation>
     </message>
     <message>
         <source>Interfaces &amp; Features</source>
@@ -2073,7 +2207,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Operating system:</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Système d&apos;exploitation&#xa0;:</translation>
     </message>
     <message>
         <source>Cancel and return to the write summary without erasing the storage device</source>
@@ -2125,11 +2259,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>customization</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">personnalisation</translation>
     </message>
     <message>
         <source>customizations</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">personnalisations</translation>
     </message>
     <message>
         <source>Writing in progress — do not disconnect the storage device</source>
@@ -2225,6 +2359,18 @@ to show system drives.</source>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>JSON files (*.json)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
+        <translation type="unfinished">Tous types de fichiers (*)</translation>
     </message>
 </context>
 </TS>
