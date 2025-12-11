@@ -150,6 +150,58 @@ bool LinuxFileOperations::IsOpen() const {
   return fd_ >= 0;
 }
 
+FileError LinuxFileOperations::SetDirectIOEnabled(bool enabled) {
+  if (!IsOpen() || current_path_.empty()) {
+    return FileError::kOpenError;
+  }
+  
+  // If already in the desired state, no action needed
+  if (using_direct_io_ == enabled) {
+    return FileError::kSuccess;
+  }
+  
+  // On Linux, O_DIRECT is an open-time flag. To change it, we need to reopen the file.
+  // First, save the current position
+  off_t currentPos = lseek(fd_, 0, SEEK_CUR);
+  std::string savedPath = current_path_;
+  
+  // Close the current file descriptor
+  close(fd_);
+  fd_ = -1;
+  
+  // Reopen with or without O_DIRECT
+  int flags = O_RDWR;
+  if (enabled && IsBlockDevicePath(savedPath)) {
+    flags |= O_DIRECT;
+  }
+  
+  FileError result = OpenInternal(savedPath.c_str(), flags);
+  if (result != FileError::kSuccess) {
+    // Try to recover by opening without O_DIRECT
+    if (enabled) {
+      result = OpenInternal(savedPath.c_str(), O_RDWR);
+      using_direct_io_ = false;
+      FileOperationsLog("Failed to enable O_DIRECT, reopened without it");
+    }
+    if (result != FileError::kSuccess) {
+      return result;
+    }
+  } else {
+    using_direct_io_ = enabled;
+  }
+  
+  // Restore the file position
+  if (currentPos > 0) {
+    lseek(fd_, currentPos, SEEK_SET);
+  }
+  
+  std::ostringstream oss;
+  oss << "O_DIRECT " << (using_direct_io_ ? "enabled" : "disabled") << " (reopened file)";
+  FileOperationsLog(oss.str());
+  
+  return FileError::kSuccess;
+}
+
 FileError LinuxFileOperations::OpenInternal(const char* path, int flags, mode_t mode) {
   // Close any existing file
   Close();

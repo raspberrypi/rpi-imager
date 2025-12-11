@@ -59,6 +59,10 @@ class WindowsFileOperations : public FileOperations {
   // Check if direct I/O is enabled
   bool IsDirectIOEnabled() const override { return using_direct_io_; }
   
+  // Enable or disable direct I/O
+  // On Windows, FILE_FLAG_NO_BUFFERING is set at open time, so this reopens the file
+  FileError SetDirectIOEnabled(bool enabled) override;
+  
   // Get direct I/O attempt details
   DirectIOInfo GetDirectIOInfo() const override { 
       DirectIOInfo info = direct_io_info_;

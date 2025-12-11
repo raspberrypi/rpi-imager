@@ -85,6 +85,11 @@ class FileOperations {
   // Check if direct I/O (bypassing page cache) is enabled
   virtual bool IsDirectIOEnabled() const = 0;
   
+  // Enable or disable direct I/O (bypassing page cache)
+  // Must be called after OpenDevice(). Some platforms may not support disabling after open.
+  // Returns kSuccess if the change was applied, or an error if not supported/failed.
+  virtual FileError SetDirectIOEnabled(bool enabled) = 0;
+  
   // Get direct I/O attempt details (for performance logging)
   // Returns: attempted (bool), succeeded (bool), error_code (int), error_message (string)
   struct DirectIOInfo {

@@ -75,6 +75,16 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     _lastSyncBytes = 0;
     _lastSyncTime.start();
     _initializeSyncConfiguration();
+    
+    // Initialize write timing tracking
+    _writeTimingStats.reset();
+    _lastWriteTimer.start();
+    _lastWriteBytes = 0;
+    
+    // Initialize debug options with defaults
+    _debugDirectIO = true;      // Match current behavior
+    _debugPeriodicSync = true;  // Match current behavior
+    _debugVerboseLogging = false;
 }
 
 DownloadThread::~DownloadThread()
@@ -336,6 +346,17 @@ bool DownloadThread::_openAndPrepareDevice()
         return false;
     }
 #endif
+    
+    // Apply debug option for direct I/O after opening
+    // By default, OpenDevice enables direct I/O for block devices
+    // This allows toggling it off via the secret debug menu
+    if (!_debugDirectIO && _file->IsDirectIOEnabled()) {
+        qDebug() << "Debug: Disabling direct I/O as per debug options";
+        _file->SetDirectIOEnabled(false);
+    } else if (_debugDirectIO && !_file->IsDirectIOEnabled()) {
+        qDebug() << "Debug: Enabling direct I/O as per debug options";
+        _file->SetDirectIOEnabled(true);
+    }
 
 #ifdef Q_OS_LINUX
     /* Optional optimizations for Linux */
@@ -798,20 +819,36 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
         return (_file->Seek(len) == rpi_imager::FileError::kSuccess) ? len : 0;
     }
 
+    QElapsedTimer opTimer;
+    quint64 preHashWaitMs = 0;
+    quint64 syscallMs = 0;
+    quint64 postHashWaitMs = 0;
+    
+    // Track write size statistics
+    quint32 lenU32 = static_cast<quint32>(len);
+    _writeTimingStats.writeCount.fetch_add(1);
+    _writeTimingStats.totalBytesWritten.fetch_add(len);
+    
+    // Update min/max write size (lock-free compare-and-swap)
+    quint32 currentMin = _writeTimingStats.minWriteSizeBytes.load();
+    while (lenU32 < currentMin && !_writeTimingStats.minWriteSizeBytes.compare_exchange_weak(currentMin, lenU32)) {}
+    quint32 currentMax = _writeTimingStats.maxWriteSizeBytes.load();
+    while (lenU32 > currentMax && !_writeTimingStats.maxWriteSizeBytes.compare_exchange_weak(currentMax, lenU32)) {}
+
     // Pipelined hash computation: wait for PREVIOUS hash before starting current one
     // This allows hash(N) to run in parallel with write(N+1)
     // The caller's double-buffering ensures buffer N stays valid until hash(N) completes
     if (_hasPendingHash) {
         if (!_pendingHashFuture.isFinished()) {
             // Hash is still running - this is expected during normal pipelining
-            // Log only if we have to wait significantly (> 1ms indicates hash is slower than write)
-            QElapsedTimer waitTimer;
-            waitTimer.start();
+            opTimer.start();
             _pendingHashFuture.waitForFinished();
-            qint64 waitMs = waitTimer.elapsed();
-            if (waitMs > 10) {
+            preHashWaitMs = static_cast<quint64>(opTimer.elapsed());
+            _writeTimingStats.totalPreHashWaitMs.fetch_add(preHashWaitMs);
+            
+            if (preHashWaitMs > 10) {
                 // Only log significant waits to avoid log spam
-                qDebug() << "Hash pipeline stall: waited" << waitMs << "ms for previous hash";
+                qDebug() << "Hash pipeline stall: waited" << preHashWaitMs << "ms for previous hash";
             }
         }
         // Future is now finished, safe to reuse
@@ -825,9 +862,12 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
 #endif
     _hasPendingHash = true;
 
-    // Use unified FileOperations for writing
+    // Use unified FileOperations for writing - time the actual syscall
+    opTimer.start();
     size_t bytes_written = 0;
     rpi_imager::FileError write_result = _file->WriteSequential(reinterpret_cast<const std::uint8_t*>(buf), len);
+    syscallMs = static_cast<quint64>(opTimer.elapsed());
+    _writeTimingStats.totalSyscallMs.fetch_add(syscallMs);
     
     if (write_result == rpi_imager::FileError::kSuccess) {
         bytes_written = len;
@@ -842,8 +882,33 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len)
     // This ensures the buffer can be safely reused by the caller
     // (The caller may be using a ring buffer that releases slots after _writeFile returns)
     if (_hasPendingHash && !_pendingHashFuture.isFinished()) {
+        opTimer.start();
         _pendingHashFuture.waitForFinished();
+        postHashWaitMs = static_cast<quint64>(opTimer.elapsed());
+        _writeTimingStats.totalPostHashWaitMs.fetch_add(postHashWaitMs);
     }
+
+    // Calculate instantaneous throughput for sync impact analysis
+    // Measure time since last write completed to get write throughput
+    qint64 timeSinceLastWriteMs = _lastWriteTimer.elapsed();
+    if (timeSinceLastWriteMs > 0 && bytes_written > 0) {
+        quint32 throughputKBps = static_cast<quint32>((bytes_written * 1000) / (timeSinceLastWriteMs * 1024));
+        
+        // Track if this is a "just after sync" write or normal write
+        quint32 writesUntilSync = _writeTimingStats.writesUntilNextSync.load();
+        if (writesUntilSync > 0) {
+            // We're in the "after sync" window (tracking first 5 writes after each sync)
+            _writeTimingStats.throughputSamplesAfterSync.fetch_add(throughputKBps);
+            _writeTimingStats.throughputCountAfterSync.fetch_add(1);
+            _writeTimingStats.writesUntilNextSync.fetch_sub(1);
+        } else {
+            // Normal write (not immediately after a sync)
+            _writeTimingStats.throughputSamplesBeforeSync.fetch_add(throughputKBps);
+            _writeTimingStats.throughputCountBeforeSync.fetch_add(1);
+        }
+    }
+    _lastWriteTimer.start();  // Reset timer for next measurement
+    _lastWriteBytes = _bytesWritten.load();
 
     // Cross-platform periodic sync to prevent page cache buildup
     _periodicSync();
@@ -1044,6 +1109,9 @@ void DownloadThread::_closeFiles()
 
 void DownloadThread::_writeComplete()
 {
+    // Emit write timing statistics before any cleanup
+    _emitWriteTimingStats();
+    
     // Don't report errors if the operation was cancelled
     if (_cancelled)
     {
@@ -1281,6 +1349,11 @@ void DownloadThread::_initializeSyncConfiguration()
 
 void DownloadThread::_periodicSync()
 {
+    // Skip periodic sync if disabled via debug options
+    if (!_debugPeriodicSync) {
+        return;
+    }
+    
     // Skip periodic sync when direct I/O is enabled (F_NOCACHE on macOS, O_DIRECT on Linux).
     // With direct I/O, data bypasses the page cache entirely, so periodic fsync() provides
     // no benefit - the data is already going directly to the device. This avoids the severe
@@ -1311,26 +1384,91 @@ void DownloadThread::_periodicSync()
         
         // Use unified FileOperations for flushing and syncing
         if (_file->Flush() != rpi_imager::FileError::kSuccess) {
-            emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), false, currentBytes);
+            quint64 syncMs = static_cast<quint64>(syncTimer.elapsed());
+            _writeTimingStats.totalSyncMs.fetch_add(syncMs);
+            _writeTimingStats.syncCount.fetch_add(1);
+            emit eventPeriodicSync(static_cast<quint32>(syncMs), false, currentBytes);
             qDebug() << "Warning: Flush() failed during periodic sync";
             return;
         }
         
         // Force filesystem sync using unified FileOperations
         if (_file->ForceSync() != rpi_imager::FileError::kSuccess) {
-            emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), false, currentBytes);
+            quint64 syncMs = static_cast<quint64>(syncTimer.elapsed());
+            _writeTimingStats.totalSyncMs.fetch_add(syncMs);
+            _writeTimingStats.syncCount.fetch_add(1);
+            emit eventPeriodicSync(static_cast<quint32>(syncMs), false, currentBytes);
             qDebug() << "Warning: ForceSync() failed during periodic sync";
             return;
         }
         
-        emit eventPeriodicSync(static_cast<quint32>(syncTimer.elapsed()), true, currentBytes);
+        quint64 syncMs = static_cast<quint64>(syncTimer.elapsed());
+        _writeTimingStats.totalSyncMs.fetch_add(syncMs);
+        _writeTimingStats.syncCount.fetch_add(1);
+        
+        // Track the next 5 writes after this sync to measure post-sync throughput impact
+        _writeTimingStats.writesUntilNextSync.store(5);
+        
+        emit eventPeriodicSync(static_cast<quint32>(syncMs), true, currentBytes);
         
         // Update tracking variables
         _lastSyncBytes = currentBytes;
         _lastSyncTime.restart();
         
-        qDebug() << "Periodic sync completed successfully in" << syncTimer.elapsed() << "ms";
+        qDebug() << "Periodic sync completed successfully in" << syncMs << "ms";
     }
+}
+
+void DownloadThread::_emitWriteTimingStats()
+{
+    quint32 writeCount = _writeTimingStats.writeCount.load();
+    if (writeCount == 0) {
+        return;  // No writes performed, nothing to report
+    }
+    
+    // Emit write timing breakdown
+    emit eventWriteTimingBreakdown(
+        writeCount,
+        _writeTimingStats.totalSyscallMs.load(),
+        _writeTimingStats.totalPreHashWaitMs.load(),
+        _writeTimingStats.totalPostHashWaitMs.load(),
+        _writeTimingStats.totalSyncMs.load(),
+        _writeTimingStats.syncCount.load()
+    );
+    
+    // Emit write size distribution
+    quint64 totalBytes = _writeTimingStats.totalBytesWritten.load();
+    quint32 minSize = _writeTimingStats.minWriteSizeBytes.load();
+    quint32 maxSize = _writeTimingStats.maxWriteSizeBytes.load();
+    quint32 avgSize = writeCount > 0 ? static_cast<quint32>(totalBytes / writeCount) : 0;
+    
+    emit eventWriteSizeDistribution(
+        minSize / 1024,  // Convert to KB
+        maxSize / 1024,
+        avgSize / 1024,
+        totalBytes,
+        writeCount
+    );
+    
+    // Emit sync impact analysis (if we have data from both before and after syncs)
+    quint32 countBefore = _writeTimingStats.throughputCountBeforeSync.load();
+    quint32 countAfter = _writeTimingStats.throughputCountAfterSync.load();
+    
+    if (countBefore > 0 && countAfter > 0) {
+        quint32 avgBefore = static_cast<quint32>(_writeTimingStats.throughputSamplesBeforeSync.load() / countBefore);
+        quint32 avgAfter = static_cast<quint32>(_writeTimingStats.throughputSamplesAfterSync.load() / countAfter);
+        
+        emit eventWriteAfterSyncImpact(avgBefore, avgAfter, countBefore + countAfter);
+    }
+    
+    qDebug() << "Write timing stats:"
+             << "writes=" << writeCount
+             << "syscall=" << _writeTimingStats.totalSyscallMs.load() << "ms"
+             << "preHashWait=" << _writeTimingStats.totalPreHashWaitMs.load() << "ms"
+             << "postHashWait=" << _writeTimingStats.totalPostHashWaitMs.load() << "ms"
+             << "sync=" << _writeTimingStats.totalSyncMs.load() << "ms"
+             << "syncCount=" << _writeTimingStats.syncCount.load()
+             << "avgSize=" << avgSize / 1024 << "KB";
 }
 
 void DownloadThread::setVerifyEnabled(bool verify)
@@ -1394,6 +1532,24 @@ void DownloadThread::setChildDevices(const QStringList &devices)
 void DownloadThread::setChildDevicesProvided(bool provided)
 {
     _childDevicesProvided = provided;
+}
+
+void DownloadThread::setDebugDirectIO(bool enabled)
+{
+    _debugDirectIO = enabled;
+    qDebug() << "DownloadThread: Direct I/O" << (enabled ? "enabled" : "disabled");
+}
+
+void DownloadThread::setDebugPeriodicSync(bool enabled)
+{
+    _debugPeriodicSync = enabled;
+    qDebug() << "DownloadThread: Periodic sync" << (enabled ? "enabled" : "disabled");
+}
+
+void DownloadThread::setDebugVerboseLogging(bool enabled)
+{
+    _debugVerboseLogging = enabled;
+    qDebug() << "DownloadThread: Verbose logging" << (enabled ? "enabled" : "disabled");
 }
 
 bool DownloadThread::_customizeImage()

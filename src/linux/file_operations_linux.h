@@ -56,6 +56,10 @@ class LinuxFileOperations : public FileOperations {
   // Check if direct I/O is enabled
   bool IsDirectIOEnabled() const override { return using_direct_io_; }
   
+  // Enable or disable direct I/O
+  // On Linux, O_DIRECT is set at open time, so this reopens the file
+  FileError SetDirectIOEnabled(bool enabled) override;
+  
   // Get direct I/O attempt details (Linux: not yet implemented)
   DirectIOInfo GetDirectIOInfo() const override { 
       DirectIOInfo info;

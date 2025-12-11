@@ -252,6 +252,14 @@ public:
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
     Q_INVOKABLE QString getRsaKeyFingerprint(const QString &keyPath);
     
+    // Debug options (secret menu: Cmd+Option+S on macOS, Ctrl+Alt+S on others)
+    Q_INVOKABLE bool getDebugDirectIO() const;
+    Q_INVOKABLE void setDebugDirectIO(bool enabled);
+    Q_INVOKABLE bool getDebugPeriodicSync() const;
+    Q_INVOKABLE void setDebugPeriodicSync(bool enabled);
+    Q_INVOKABLE bool getDebugVerboseLogging() const;
+    Q_INVOKABLE void setDebugVerboseLogging(bool enabled);
+    
     // Customisation API
     Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
     Q_INVOKABLE void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts = {});  // Advanced: bypass generator with pre-made scripts
@@ -425,6 +433,11 @@ protected:
 
     // Performance statistics capture
     PerformanceStats *_performanceStats;
+    
+    // Debug options (secret menu)
+    bool _debugDirectIO;
+    bool _debugPeriodicSync;
+    bool _debugVerboseLogging;
 
     void _parseCompressedFile();
     void _parseXZFile();

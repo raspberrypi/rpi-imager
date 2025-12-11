@@ -326,6 +326,65 @@ bool WindowsFileOperations::IsOpen() const {
   return handle_ != INVALID_HANDLE_VALUE;
 }
 
+FileError WindowsFileOperations::SetDirectIOEnabled(bool enabled) {
+  if (!IsOpen() || current_path_.empty()) {
+    return FileError::kOpenError;
+  }
+  
+  // If already in the desired state, no action needed
+  if (using_direct_io_ == enabled) {
+    return FileError::kSuccess;
+  }
+  
+  // On Windows, FILE_FLAG_NO_BUFFERING is an open-time flag
+  // To change it, we need to reopen the file
+  
+  // First, save the current position
+  LARGE_INTEGER liPos = {0};
+  LARGE_INTEGER liCurrent;
+  if (!SetFilePointerEx(handle_, liPos, &liCurrent, FILE_CURRENT)) {
+    return FileError::kSeekError;
+  }
+  
+  std::string savedPath = current_path_;
+  bool isPhysicalDrive = IsPhysicalDrivePath(savedPath);
+  
+  // Close the current handle
+  CloseHandle(handle_);
+  handle_ = INVALID_HANDLE_VALUE;
+  
+  // Determine flags based on desired state
+  DWORD flags = FILE_ATTRIBUTE_NORMAL;
+  if (enabled && isPhysicalDrive) {
+    flags = FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN;
+  } else if (isPhysicalDrive) {
+    // Even without direct I/O, use write-through for physical drives
+    flags = FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN;
+  }
+  
+  FileError result = OpenInternal(savedPath, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING, flags);
+  if (result != FileError::kSuccess) {
+    // Try to recover by opening with default flags
+    result = OpenInternal(savedPath, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    using_direct_io_ = false;
+    if (result != FileError::kSuccess) {
+      return result;
+    }
+    Log("Failed to change direct I/O state, reopened with default flags");
+  } else {
+    using_direct_io_ = enabled;
+  }
+  
+  // Restore the file position
+  if (liCurrent.QuadPart > 0) {
+    SetFilePointerEx(handle_, liCurrent, nullptr, FILE_BEGIN);
+  }
+  
+  Log("FILE_FLAG_NO_BUFFERING " + std::string(using_direct_io_ ? "enabled" : "disabled") + " (reopened file)");
+  
+  return FileError::kSuccess;
+}
+
 FileError WindowsFileOperations::LockVolume() {
   if (!IsOpen()) {
     return FileError::kOpenError;

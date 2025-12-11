@@ -441,6 +441,9 @@ void DownloadExtractThread::extractImageRun()
              << "(ring_wait=" << _totalRingBufferWaitMs.load() << "ms)"
              << "write_wait=" << _totalWriteWaitMs.load() << "ms";
     
+    // Emit detailed write timing breakdown for hypothesis testing
+    _emitWriteTimingStats();
+    
     // Log and emit write ring buffer statistics
     if (_writeRingBuffer) {
         uint64_t producerStalls, consumerStalls, producerWaitMs, consumerWaitMs;

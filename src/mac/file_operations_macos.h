@@ -56,6 +56,9 @@ class MacOSFileOperations : public FileOperations {
   // Check if direct I/O is enabled
   bool IsDirectIOEnabled() const override { return using_direct_io_; }
   
+  // Enable or disable direct I/O
+  FileError SetDirectIOEnabled(bool enabled) override;
+  
   // Get direct I/O attempt details (macOS: F_NOCACHE always attempted)
   DirectIOInfo GetDirectIOInfo() const override { 
     DirectIOInfo info;

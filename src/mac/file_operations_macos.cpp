@@ -39,12 +39,39 @@ bool MacOSFileOperations::EnableDirectIO() {
   // This provides direct I/O to bypass the unified buffer cache
   if (fcntl(fd_, F_NOCACHE, 1) == 0) {
     using_direct_io_ = true;
-    std::cout << "Enabled F_NOCACHE for direct I/O" << std::endl;
+    FileOperationsLog("Enabled F_NOCACHE for direct I/O");
     return true;
   }
   
-  std::cout << "Warning: Failed to enable F_NOCACHE, errno=" << errno << std::endl;
+  std::ostringstream oss;
+  oss << "Warning: Failed to enable F_NOCACHE, errno=" << errno;
+  FileOperationsLog(oss.str());
   return false;
+}
+
+FileError MacOSFileOperations::SetDirectIOEnabled(bool enabled) {
+  if (fd_ < 0) {
+    return FileError::kOpenError;
+  }
+  
+  // macOS uses F_NOCACHE to control caching
+  // F_NOCACHE with value 1 enables direct I/O (no caching)
+  // F_NOCACHE with value 0 disables direct I/O (normal caching)
+  int value = enabled ? 1 : 0;
+  
+  if (fcntl(fd_, F_NOCACHE, value) == 0) {
+    using_direct_io_ = enabled;
+    std::ostringstream oss;
+    oss << "F_NOCACHE " << (enabled ? "enabled" : "disabled");
+    FileOperationsLog(oss.str());
+    return FileError::kSuccess;
+  }
+  
+  last_error_code_ = errno;
+  std::ostringstream oss;
+  oss << "Failed to " << (enabled ? "enable" : "disable") << " F_NOCACHE, errno=" << errno;
+  FileOperationsLog(oss.str());
+  return FileError::kOpenError;
 }
 
 MacOSFileOperations::~MacOSFileOperations() {

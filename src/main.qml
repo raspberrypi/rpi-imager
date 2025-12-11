@@ -10,6 +10,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Material
 import "qmlcomponents"
 import "wizard"
+import "wizard/dialogs"
 
 import RpiImager
 
@@ -66,6 +67,17 @@ ApplicationWindow {
             } else {
                 console.log("No performance data available to export")
             }
+        }
+    }
+    
+    // Secret keyboard shortcut to open debug options (Cmd+Option+S on macOS, Ctrl+Alt+S on others)
+    Shortcut {
+        sequence: Qt.platform.os === "osx" ? "Meta+Alt+S" : "Ctrl+Alt+S"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            console.log("Opening debug options dialog...")
+            debugOptionsDialog.initialize()
+            debugOptionsDialog.open()
         }
     }
 
@@ -447,6 +459,13 @@ ApplicationWindow {
 
     AppOptionsDialog {
         id: appOptionsDialog
+        parent: overlayRoot
+        imageWriter: window.imageWriter
+        wizardContainer: wizardContainer
+    }
+
+    DebugOptionsDialog {
+        id: debugOptionsDialog
         parent: overlayRoot
         imageWriter: window.imageWriter
         wizardContainer: wizardContainer

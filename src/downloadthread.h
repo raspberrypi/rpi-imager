@@ -127,6 +127,13 @@ public:
      * This allows skipping the scan when we know there are no child devices
      */
     void setChildDevicesProvided(bool provided);
+    
+    /*
+     * Debug options (set before starting the thread)
+     */
+    void setDebugDirectIO(bool enabled);
+    void setDebugPeriodicSync(bool enabled);
+    void setDebugVerboseLogging(bool enabled);
 
     /*
      * Thread safe download progress query functions
@@ -166,6 +173,12 @@ signals:
     void eventDeviceClose(quint32 durationMs, bool success);          // Device handle close
     void eventNetworkRetry(quint32 sleepMs, QString metadata);        // Network retry with reason
     void eventNetworkConnectionStats(QString metadata);               // CURL connection timing stats
+    
+    // Write timing breakdown signals (for hypothesis testing)
+    void eventWriteTimingBreakdown(quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
+                                   quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount);
+    void eventWriteSizeDistribution(quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount);
+    void eventWriteAfterSyncImpact(quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount);
 
 protected:
     virtual void run();
@@ -239,7 +252,54 @@ protected:
     QElapsedTimer _lastSyncTime;
     SystemMemoryManager::SyncConfiguration _syncConfig;
     
+    // Debug options
+    bool _debugDirectIO;
+    bool _debugPeriodicSync;
+    bool _debugVerboseLogging;
+    
     void _initializeSyncConfiguration();
+    
+    // Write timing breakdown tracking (for performance hypothesis testing)
+    struct WriteTimingStats {
+        std::atomic<quint64> totalSyscallMs{0};      // Time in actual write() syscalls
+        std::atomic<quint64> totalPreHashWaitMs{0};  // Time waiting for previous hash before write
+        std::atomic<quint64> totalPostHashWaitMs{0}; // Time waiting for current hash after write
+        std::atomic<quint64> totalSyncMs{0};         // Time in fsync() calls
+        std::atomic<quint32> syncCount{0};           // Number of sync operations performed
+        std::atomic<quint32> writeCount{0};          // Total write operations
+        std::atomic<quint64> totalBytesWritten{0};   // Total bytes written
+        std::atomic<quint32> minWriteSizeBytes{UINT32_MAX}; // Minimum write size
+        std::atomic<quint32> maxWriteSizeBytes{0};   // Maximum write size
+        
+        // For measuring write throughput impact after sync
+        std::atomic<quint64> throughputSamplesBeforeSync{0};  // Sum of KB/s measurements before sync
+        std::atomic<quint32> throughputCountBeforeSync{0};    // Count of measurements before sync
+        std::atomic<quint64> throughputSamplesAfterSync{0};   // Sum of KB/s measurements after sync (first 5 writes after sync)
+        std::atomic<quint32> throughputCountAfterSync{0};     // Count of measurements after sync
+        std::atomic<quint32> writesUntilNextSync{0};          // Counter to track "after sync" writes
+        
+        void reset() {
+            totalSyscallMs.store(0);
+            totalPreHashWaitMs.store(0);
+            totalPostHashWaitMs.store(0);
+            totalSyncMs.store(0);
+            syncCount.store(0);
+            writeCount.store(0);
+            totalBytesWritten.store(0);
+            minWriteSizeBytes.store(UINT32_MAX);
+            maxWriteSizeBytes.store(0);
+            throughputSamplesBeforeSync.store(0);
+            throughputCountBeforeSync.store(0);
+            throughputSamplesAfterSync.store(0);
+            throughputCountAfterSync.store(0);
+            writesUntilNextSync.store(0);
+        }
+    };
+    WriteTimingStats _writeTimingStats;
+    QElapsedTimer _lastWriteTimer;  // For measuring inter-write throughput
+    quint64 _lastWriteBytes{0};     // Bytes written at last measurement
+    
+    void _emitWriteTimingStats();   // Called at end of write phase
 };
 
 #endif // DOWNLOADTHREAD_H
