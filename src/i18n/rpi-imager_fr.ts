@@ -85,7 +85,7 @@
     </message>
     <message>
         <source>Secure Boot RSA Key</source>
-        <translation>Clé RSA démarrage sécurisé</translation>
+        <translation>Clé RSA Secure Boot</translation>
     </message>
     <message>
         <source>Change</source>
@@ -97,7 +97,7 @@
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation>Sélectionner une clé privée RSA 2048 bits pour signer les images de démarrage en mode de démarrage sécurisé</translation>
+        <translation>Sélectionner une clé privée RSA 2048 bits pour signer les images de démarrage en mode Secure Boot</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
@@ -105,7 +105,7 @@
     </message>
     <message>
         <source>PEM Files (*.pem);;All Files (*)</source>
-        <translation>Fichiers PEM Files (*.pem);;Tous types de fichiers (*)</translation>
+        <translation>Fichiers PEM Files (*.pem);;Tous les fichiers (*)</translation>
     </message>
     <message>
         <source>PEM Files (*.pem)</source>
@@ -139,7 +139,7 @@
     </message>
     <message>
         <source>All files (*)</source>
-        <translation>Tous types de fichiers (*)</translation>
+        <translation>Tous les fichiers (*)</translation>
     </message>
     <message>
         <source>Image files (%1)</source>
@@ -585,11 +585,11 @@
     </message>
     <message>
         <source>Failed to create secure boot files</source>
-        <translation>Échec de création des fichiers de démarrage sécurisé</translation>
+        <translation>Échec de création des fichiers Secure Boot</translation>
     </message>
     <message>
         <source>No RSA key configured for secure boot. Please select a key in App Options.</source>
-        <translation>Aucune clé RSA n&apos;est configurée pour le démarrage sécurisé. Sélectionnez une clé dans les options de l&apos;app.</translation>
+        <translation>Aucune clé RSA n&apos;est configurée pour Secure Boot. Sélectionner une clé dans les options de l&apos;app.</translation>
     </message>
     <message>
         <source>RSA key file not found: %1</source>
@@ -649,7 +649,7 @@
     </message>
     <message>
         <source>Failed to write secure boot files: %1</source>
-        <translation>Échec d&apos;écriture des fichiers de démarrage sécurisés&#xa0;: %1</translation>
+        <translation>Échec d&apos;écriture des fichiers Secure Boot&#xa0;: %1</translation>
     </message>
     <message>
         <source>Unmounting volumes...</source>
@@ -789,7 +789,7 @@
     </message>
     <message>
         <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
-        <translation>Veuillez consulter la &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; avant de continuer.</translation>
+        <translation>Consulter la &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; avant de continuer.</translation>
     </message>
     <message>
         <source>Only continue if you are sure you know what you are doing.</source>
@@ -849,7 +849,7 @@
     </message>
     <message>
         <source>Please review the documentation before proceeding.</source>
-        <translation>Veuillez consulter la documentation avant de continuer.</translation>
+        <translation>Consulter la documentation avant de continuer.</translation>
     </message>
     <message>
         <source>Cancel and return to the interfaces and features settings without enabling USB Gadget Mode</source>
@@ -1377,7 +1377,7 @@ ou saisir un chemin dans la barre d&apos;adresse ci-dessus.</translation>
     </message>
     <message>
         <source>The token you entered is not valid. Please check the token and try again, or use the &apos;Open Raspberry Pi Connect&apos; button to get a valid token.</source>
-        <translation>Le jeton saisi n&apos;est pas valide. Veuillez le vérifier et ré-essayer, ou utiliser le bouton &apos;Open Raspberry Pi Connect&apos; pour obtenir un jeton valide.</translation>
+        <translation>Le jeton saisi n&apos;est pas valide. Vérifier le jeton et ré-essayer, ou utiliser le bouton &apos;Open Raspberry Pi Connect&apos; pour obtenir un jeton valide.</translation>
     </message>
     <message>
         <source>OK</source>
@@ -1389,7 +1389,7 @@ ou saisir un chemin dans la barre d&apos;adresse ci-dessus.</translation>
     </message>
     <message>
         <source>Authentication token:</source>
-        <translation>Jeton d&apos;authentification :</translation>
+        <translation>Jeton d&apos;authentification&#xa0;:</translation>
     </message>
     <message>
         <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
@@ -1418,13 +1418,17 @@ Veuillez vous connecter en tant qu&apos;administrateur.</translation>
         <source>You are not running as root.
 
 Please run with elevated privileges: sudo %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Vous n&apos;êtes pas connecté en tant que root.
+
+Lancer l&apos;application avec des privilèges élevés&#xa0;: sudo %1</translation>
     </message>
     <message>
         <source>You are not running as root.
 
 Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Vous n&apos;êtes pas connecté en tant que root.
+
+Cliquer &quot;Autorisation d&apos;installation&quot; pour permettre l&apos;élévation automatique de privilèges ou lancer manuellement avec&#xa0;: sudo %1</translation>
     </message>
 </context>
 <context>
@@ -1439,31 +1443,31 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Use public key authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Utiliser l&apos;authentification par clé publique</translation>
     </message>
     <message>
         <source>Customisation: SSH authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation&#xa0;: authentification SSH</translation>
     </message>
     <message>
         <source>Learn about SSH</source>
-        <translation type="unfinished"></translation>
+        <translation>En savoir plus sur SSH</translation>
     </message>
     <message>
         <source>Configure SSH access</source>
-        <translation type="unfinished"></translation>
+        <translation>Configurer l&apos;accès SSH</translation>
     </message>
     <message>
         <source>Authentication mechanism:</source>
-        <translation type="unfinished"></translation>
+        <translation>Mécanisme d&apos;authentification</translation>
     </message>
     <message>
         <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer l&apos;accès Secure Shell pour contrôler à distance en ligne de commande votre Rasbperry Pi</translation>
     </message>
     <message>
         <source>Save SSH settings and continue to next customisation step</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer les réglages SSH et continuer vers l&apos;étape de personnalisation suivante</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1475,15 +1479,15 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Allow SSH login using the username and password you configured in the previous step.</source>
-        <translation type="unfinished"></translation>
+        <translation>Permettre la connexion SSH au moyen du nom d&apos;utilisateur et le mot de passe configurés à l&apos;étape précédente.</translation>
     </message>
     <message>
         <source>Allow SSH login using a cryptographic key pair instead of a password. More secure than password authentication.</source>
-        <translation type="unfinished"></translation>
+        <translation>Permettre la connexion SSH au moyen d&apos;une paire de clés cryptographiques au lieu d&apos;un mot de passe. Cette méthode est plus sûre que l&apos;authentification par mot de passe.</translation>
     </message>
     <message>
         <source>Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.</source>
-        <translation type="unfinished"></translation>
+        <translation>Choisir la méthode d&apos;authentification lors de la connexion à votre Raspberry Pi via SSH. L&apos;authentification par mot de passe utilise les données d&apos;accès que vous avez configurées. L&apos;authentification par clé publique utilise une paire de clés cryptographiques et est plus sûre.</translation>
     </message>
 </context>
 <context>
@@ -1494,74 +1498,74 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Repository source:</source>
-        <translation type="unfinished"></translation>
+        <translation>Source du dépôt&#xa0;:</translation>
     </message>
     <message>
         <source>Use custom file</source>
-        <translation type="unfinished"></translation>
+        <translation>Utiliser un fichier personnalisé</translation>
     </message>
     <message>
         <source>Please select a custom repository json file</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner un fichier JSON de dépôt personnalisé</translation>
     </message>
     <message>
         <source>Select Repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner un dépôt</translation>
     </message>
     <message>
         <source>Apply &amp; Restart</source>
-        <translation type="unfinished"></translation>
+        <translation>Appliquer &amp; relancer</translation>
     </message>
     <message>
         <source>Select custom repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner un dépôt personnalisé</translation>
     </message>
     <message>
         <source>Use custom URL</source>
-        <translation type="unfinished"></translation>
+        <translation>Utiliser une URL personnalisée</translation>
     </message>
     <message>
         <source>Select a custom repository JSON file from your computer</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner un fichier JSON personnalisé sur votre ordinateur</translation>
     </message>
     <message>
         <source>Close the repository dialog without changing the content source</source>
-        <translation type="unfinished"></translation>
+        <translation>Fermer le dialogue de dépôt sans changer la source de contenu</translation>
     </message>
     <message>
         <source>Apply the new content repository and restart the wizard from the beginning</source>
-        <translation type="unfinished"></translation>
+        <translation>Utiliser le nouveau dépôt de contenu et relancer l&apos;assistant depuis le début</translation>
     </message>
     <message>
         <source>Choose the source for operating system images</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner la source des images pour le système d&apos;exploitation</translation>
     </message>
     <message>
         <source>Use the official Raspberry Pi operating system repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Utiliser la dépôt officiel des systèmes d&apos;exploitation de Raspberry Pi</translation>
     </message>
     <message>
         <source>Load operating system list from a JSON file on your computer</source>
-        <translation type="unfinished"></translation>
+        <translation>Charger une liste de systèmes d&apos;exploitation à partir d&apos;un fichier JSON sur votre ordinateur</translation>
     </message>
     <message>
         <source>Download operating system list from a custom web address</source>
-        <translation type="unfinished"></translation>
+        <translation>Télécharger une liste de systèmes d&apos;exploitation à partir d&apos;une URL personnalisée</translation>
     </message>
 </context>
 <context>
     <name>SecureBootCustomizationStep</name>
     <message>
         <source>Customisation: Secure Boot</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation&#xa0;: Secure Boot</translation>
     </message>
     <message>
         <source>Configure secure boot image signing</source>
-        <translation type="unfinished"></translation>
+        <translation>Configurer la signature de l&apos;image pour Secure Boot</translation>
     </message>
     <message>
         <source>Save secure boot settings and continue to next customisation step</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer les réglages Secure Boot et continuer vers l&apos;étape de personnalisation suivante</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1573,35 +1577,35 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Enable Secure Boot Signing</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer la signature Secure Boot</translation>
     </message>
     <message>
         <source>Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Signer la partition de démarrage avec votre clé RSA pour activer la vérification Secure Boot sur Raspberry Pi</translation>
     </message>
     <message>
         <source>Learn about Secure Boot</source>
-        <translation type="unfinished"></translation>
+        <translation>En savoir plus sur Secure Boot</translation>
     </message>
     <message>
         <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ceci créera les fichiers boot.img et boot.sig requis pour Secure Boot sur Raspberry Pi.</translation>
     </message>
     <message>
         <source>Public Key Fingerprint: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Empreinte clé publique&#xa0;: %1</translation>
     </message>
     <message>
         <source>(unavailable)</source>
-        <translation type="unfinished"></translation>
+        <translation>(indisponible)</translation>
     </message>
     <message>
         <source>(unable to compute)</source>
-        <translation type="unfinished"></translation>
+        <translation>(calcul impossible)</translation>
     </message>
     <message>
         <source>RSA Private Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Clé privée RSA</translation>
     </message>
     <message>
         <source>Change</source>
@@ -1613,7 +1617,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation>Sélectionner une clé privée RSA 2048 bits pour signer les images de démarrage en mode de démarrage sécurisé</translation>
+        <translation>Sélectionner une clé privée RSA 2048 bits pour signer les images de démarrage en mode Secure Boot</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
@@ -1625,23 +1629,23 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Selected: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionné&#xa0;: %1</translation>
     </message>
     <message>
         <source>Your boot partition will be signed using the selected RSA private key.</source>
-        <translation type="unfinished"></translation>
+        <translation>Votre partition de démarrage sera signée avec la clé privée sélectionnée.</translation>
     </message>
     <message>
         <source>Please select an RSA private key above to enable secure boot signing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner une clé privée RSA ci-dessus pour activer la signature Secure Boot.</translation>
     </message>
     <message>
         <source>PEM Files (*.pem)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichiers PEM (*.pem)</translation>
     </message>
     <message>
         <source>All Files (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>Tous les fichiers (*)</translation>
     </message>
 </context>
 <context>
@@ -1854,7 +1858,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Customisation: Choose username</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation&#xa0;: choisir un nom d&apos;utilisateur</translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
@@ -1925,7 +1929,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Customisation: Choose Wi‑Fi</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation&#xa0;: choisir le Wi-Fi</translation>
     </message>
     <message>
         <source>No password (open network)</source>
@@ -2357,7 +2361,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Install Authorization</source>
-        <translation type="unfinished"></translation>
+        <translation>Autorisation d&apos;installation</translation>
     </message>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
