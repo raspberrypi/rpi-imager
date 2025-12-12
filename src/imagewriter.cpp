@@ -2089,6 +2089,38 @@ bool ImageWriter::isEmbeddedMode() const
     return ::isEmbeddedMode();
 }
 
+bool ImageWriter::hasWindowDecorations() const
+{
+#ifndef CLI_ONLY_BUILD
+    // Embedded mode never has decorations
+    if (isEmbeddedMode())
+        return false;
+
+    // Check platform - some don't support decorations at all
+    QString platform = QGuiApplication::platformName().toLower();
+    if (platform == "linuxfb" || platform == "eglfs" ||
+        platform == "minimal" || platform == "offscreen")
+        return false;
+
+    // Check if main window exists and has been shown
+    if (_mainWindow) {
+        // Check for explicit frameless hint
+        if (_mainWindow->flags() & Qt::FramelessWindowHint)
+            return false;
+
+        // Check frame margins - if top margin is 0, WM isn't providing decorations
+        // (tiling WMs like i3/sway, WM rules to hide title bars, etc.)
+        QMargins margins = _mainWindow->frameMargins();
+        if (margins.top() == 0)
+            return false;
+    }
+
+    return true;
+#else
+    return false;
+#endif
+}
+
 /* Mount any USB sticks that can contain source images under /media */
 bool ImageWriter::mountUsbSourceMedia()
 {

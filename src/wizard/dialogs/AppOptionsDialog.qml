@@ -212,6 +212,19 @@ BaseDialog {
         Layout.fillHeight: true
     }
 
+    // Version display - only shown when window has no decorations (no title bar)
+    Text {
+        id: versionText
+        text: qsTr("Version: %1").arg(imageWriter.constantVersion())
+        font.pixelSize: Style.fontSizeCaption
+        font.family: Style.fontFamily
+        color: Style.textDescriptionColor
+        Layout.fillWidth: true
+        horizontalAlignment: Text.AlignHCenter
+        visible: !imageWriter.hasWindowDecorations()
+        Layout.bottomMargin: Style.spacingSmall
+    }
+
     // Buttons section with background
     Rectangle {
         Layout.fillWidth: true

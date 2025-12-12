@@ -225,6 +225,9 @@ public:
     /* Returns true if run on embedded Linux platform */
     Q_INVOKABLE bool isEmbeddedMode() const;
 
+    /* Returns true if window has decorations (title bar visible) */
+    Q_INVOKABLE bool hasWindowDecorations() const;
+
     /* Mount any USB sticks that can contain source images under /media
        Returns true if at least one device was mounted */
     Q_INVOKABLE bool mountUsbSourceMedia();
