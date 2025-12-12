@@ -64,6 +64,49 @@ class FileOperations {
   virtual FileError WriteSequential(const std::uint8_t* data, std::size_t size) = 0;
   virtual FileError ReadSequential(std::uint8_t* data, std::size_t size, std::size_t& bytes_read) = 0;
   
+  // ============= Async I/O API =============
+  // Async writes allow overlapping I/O latency with data preparation/hashing.
+  // This can significantly improve performance on slow media (SD cards over USB).
+  //
+  // Usage pattern:
+  //   1. Call SetAsyncQueueDepth() to enable async mode (default is 1 = sync)
+  //   2. Call AsyncWriteSequential() to queue writes without blocking
+  //   3. The implementation will block when queue is full
+  //   4. Call WaitForPendingWrites() before verification or close
+  //
+  // Note: Caller must ensure buffers remain valid until write completes!
+  
+  // Completion callback for async writes
+  using AsyncWriteCallback = std::function<void(FileError result, std::size_t bytes_written)>;
+  
+  // Configure async I/O queue depth (1 = synchronous, >1 = async with that many in-flight)
+  // Must be called before writes. Returns false if async I/O is not supported.
+  virtual bool SetAsyncQueueDepth(int depth) { (void)depth; return false; }
+  
+  // Get current queue depth setting
+  virtual int GetAsyncQueueDepth() const { return 1; }
+  
+  // Check if async I/O is supported on this platform
+  virtual bool IsAsyncIOSupported() const { return false; }
+  
+  // Queue an async write. May block if queue is full.
+  // The buffer must remain valid until the write completes (callback is called or WaitForPendingWrites returns).
+  // If callback is null, completion is silent (just check for errors in WaitForPendingWrites).
+  // Returns immediately with kSuccess if queued, or error if queueing failed.
+  virtual FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
+                                          AsyncWriteCallback callback = nullptr) {
+    // Default implementation: fall back to sync write
+    FileError result = WriteSequential(data, size);
+    if (callback) callback(result, result == FileError::kSuccess ? size : 0);
+    return result;
+  }
+  
+  // Get number of writes currently in flight
+  virtual int GetPendingWriteCount() const { return 0; }
+  
+  // Wait for all pending async writes to complete. Returns first error encountered, or kSuccess.
+  virtual FileError WaitForPendingWrites() { return FileError::kSuccess; }
+  
   // File positioning for streaming operations
   virtual FileError Seek(std::uint64_t position) = 0;
   virtual std::uint64_t Tell() const = 0;

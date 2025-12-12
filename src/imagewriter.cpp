@@ -139,6 +139,10 @@ ImageWriter::ImageWriter(QObject *parent)
     _debugDirectIO = true;
     _debugPeriodicSync = true;
     _debugVerboseLogging = false;
+    _debugAsyncIO = true;       // Async I/O enabled by default for performance
+    
+    // Calculate optimal async queue depth based on system memory
+    _debugAsyncQueueDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth();
     
     // Set up file operations logging to use Qt's debug output
     rpi_imager::SetFileOperationsLogCallback([](const std::string& msg) {
@@ -477,6 +481,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
     _osReleaseDate = releaseDate;
+    qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
 
     if (!_downloadLen && url.isLocalFile())
     {
@@ -659,9 +664,14 @@ void ImageWriter::startWrite()
     }
 
     // Start performance stats session early so cache lookup is captured
+    // On macOS, we use rdisk (raw device) for direct I/O - reflect that in the log
+    QString sessionDevicePath = _dst;
+#ifdef Q_OS_DARWIN
+    sessionDevicePath.replace("/dev/disk", "/dev/rdisk");
+#endif
     _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
                                     _extrLen > 0 ? _extrLen : _downloadLen, 
-                                    _dst);
+                                    sessionDevicePath);
 
     // Populate system info for performance analysis
     {
@@ -673,7 +683,12 @@ void ImageWriter::startWrite()
         sysInfo.availableMemoryBytes = static_cast<quint64>(memMgr.getAvailableMemoryMB()) * 1024 * 1024;
         
         // Device info
-        sysInfo.devicePath = _dst;
+        // On macOS, we use rdisk (raw device) for direct I/O - reflect that in the log
+        QString actualDevicePath = _dst;
+#ifdef Q_OS_DARWIN
+        actualDevicePath.replace("/dev/disk", "/dev/rdisk");
+#endif
+        sysInfo.devicePath = actualDevicePath;
         sysInfo.deviceSizeBytes = _devLen;
         sysInfo.deviceDescription = "";  // Would need DriveListItem lookup
         sysInfo.deviceIsUsb = true;      // Assume USB for now
@@ -717,7 +732,10 @@ void ImageWriter::startWrite()
         sysInfo.writeBufferSize = memMgr.getOptimalWriteBufferSize();
         sysInfo.inputBufferSize = memMgr.getOptimalInputBufferSize();
         sysInfo.inputRingBufferSlots = memMgr.getOptimalRingBufferSlots(sysInfo.inputBufferSize);
-        sysInfo.writeRingBufferSlots = 4;  // Fixed in downloadextractthread.cpp
+        // Write ring buffer is dynamically sized based on optimal queue depth
+        // Report the max configurable depth (512) + headroom for logging purposes
+        // Actual allocation may be smaller based on available memory
+        sysInfo.writeRingBufferSlots = 512 + 4;
         
         _performanceStats->setSystemInfo(sysInfo);
     }
@@ -1003,12 +1021,15 @@ void ImageWriter::startWrite()
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
+    qDebug() << "startWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
     
     // Pass debug options to the thread
     _thread->setDebugDirectIO(_debugDirectIO);
     _thread->setDebugPeriodicSync(_debugPeriodicSync);
     _thread->setDebugVerboseLogging(_debugVerboseLogging);
+    _thread->setDebugAsyncIO(_debugAsyncIO);
+    _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
     
 #ifdef Q_OS_DARWIN
     // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
@@ -2501,6 +2522,34 @@ void ImageWriter::setDebugVerboseLogging(bool enabled)
     }
 }
 
+bool ImageWriter::getDebugAsyncIO() const
+{
+    return _debugAsyncIO;
+}
+
+void ImageWriter::setDebugAsyncIO(bool enabled)
+{
+    if (_debugAsyncIO != enabled) {
+        _debugAsyncIO = enabled;
+        qDebug() << "Debug: Async I/O" << (enabled ? "enabled" : "disabled");
+    }
+}
+
+int ImageWriter::getDebugAsyncQueueDepth() const
+{
+    return _debugAsyncQueueDepth;
+}
+
+void ImageWriter::setDebugAsyncQueueDepth(int depth)
+{
+    // Cap to max ring buffer depth (512) to prevent exceeding allocated slots
+    depth = qBound(1, depth, 512);
+    if (_debugAsyncQueueDepth != depth) {
+        _debugAsyncQueueDepth = depth;
+        qDebug() << "Debug: Async queue depth set to" << depth;
+    }
+}
+
 // Platform-specific implementation (defined in platform-specific source files)
 extern QString getRsaKeyFingerprint(const QString &keyPath);
 
@@ -2527,7 +2576,7 @@ bool ImageWriter::isSecureBootForcedByCliFlag() const
     return _forceSecureBootEnabled;
 }
 
-void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts)
+void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts, const QByteArray &initFormat)
 {
     _config = config;
     _cmdline = cmdline;
@@ -2535,12 +2584,19 @@ void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArr
     _cloudinit = cloudinit;
     _cloudinitNetwork = cloudinitNetwork;
     _advancedOptions = opts;
+    
+    // If initFormat is provided, use it; otherwise keep current value
+    // This allows CLI to explicitly set the format along with content
+    if (!initFormat.isEmpty()) {
+        _initFormat = initFormat;
+    }
 
     qDebug() << "Custom config.txt entries:" << config;
     qDebug() << "Custom cmdline.txt entries:" << cmdline;
     qDebug() << "Custom firstrun.sh:" << firstrun;
     qDebug() << "Cloudinit:" << cloudinit;
     qDebug() << "Advanced options:" << opts;
+    qDebug() << "initFormat parameter:" << initFormat << "-> _initFormat:" << _initFormat;
 }
 
 void ImageWriter::applyCustomisationFromSettings(const QVariantMap &settings)
@@ -3239,6 +3295,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
+    qDebug() << "_continueStartWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 #ifdef Q_OS_DARWIN
     // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)

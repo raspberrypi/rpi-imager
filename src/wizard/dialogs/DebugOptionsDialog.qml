@@ -13,8 +13,8 @@ import RpiImager
 BaseDialog {
     id: popup
     
-    // Override default height for this dialog
-    height: Math.max(350, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 350)
+    // Fixed height - content scrolls within
+    height: 500
     
     // imageWriter is inherited from BaseDialog
     property var wizardContainer: null
@@ -36,7 +36,7 @@ BaseDialog {
             return []
         }, 0)
         registerFocusGroup("options", function(){ 
-            return [chkDirectIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem]
+            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem]
         }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, applyButton]
@@ -77,15 +77,20 @@ BaseDialog {
         activeFocusOnTab: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
     }
 
-    // Options section
-    Item {
+    // Scrollable options section
+    ScrollView {
+        id: scrollView
         Layout.fillWidth: true
-        Layout.preferredHeight: optionsLayout.implicitHeight + Style.cardPadding
+        Layout.fillHeight: true
+        clip: true
+        contentWidth: availableWidth  // Ensure content uses full width
+        
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
         ColumnLayout {
             id: optionsLayout
-            anchors.fill: parent
-            anchors.margins: Style.cardPadding
+            width: scrollView.availableWidth  // Use ScrollView's available width directly
             spacing: Style.spacingMedium
 
             // Section header for I/O options
@@ -96,6 +101,7 @@ BaseDialog {
                 font.bold: true
                 color: Style.textDescriptionColor
                 Layout.fillWidth: true
+                Layout.topMargin: Style.spacingSmall
             }
 
             ImOptionPill {
@@ -106,6 +112,81 @@ BaseDialog {
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
                 }
+            }
+
+            ImOptionPill {
+                id: chkAsyncIO
+                text: qsTr("Enable Async I/O")
+                accessibleDescription: qsTr("Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+            }
+            
+            // Async queue depth slider (only visible when async is enabled)
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: Style.spacingLarge
+                visible: chkAsyncIO.checked
+                spacing: Style.spacingSmall
+                
+                Text {
+                    text: qsTr("Queue Depth:")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.formLabelColor
+                }
+                
+                Slider {
+                    id: asyncQueueDepthSlider
+                    Layout.fillWidth: true
+                    from: 1
+                    to: 512  // Max supported by ring buffer - high values mainly benefit NVMe/USB4
+                    stepSize: 1
+                    value: 16
+                    
+                    // Snap to power-of-2 and convenient values for nice display
+                    property var snapPoints: [1, 2, 4, 8, 16, 32, 64, 128, 256, 384, 512]
+                    
+                    onMoved: {
+                        // Snap to nearest good value
+                        var closest = snapPoints[0];
+                        var minDist = Math.abs(value - closest);
+                        for (var i = 1; i < snapPoints.length; i++) {
+                            var dist = Math.abs(value - snapPoints[i]);
+                            if (dist < minDist) {
+                                minDist = dist;
+                                closest = snapPoints[i];
+                            }
+                        }
+                        value = closest;
+                    }
+                    
+                    Accessible.role: Accessible.Slider
+                    Accessible.name: qsTr("Async queue depth: %1").arg(Math.round(value))
+                }
+                
+                Text {
+                    text: Math.round(asyncQueueDepthSlider.value)
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamilyBold
+                    font.bold: true
+                    color: Style.formLabelColor
+                    Layout.minimumWidth: 40
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+            
+            // Memory usage estimate
+            Text {
+                Layout.fillWidth: true
+                Layout.leftMargin: Style.spacingLarge
+                visible: chkAsyncIO.checked
+                text: qsTr("Buffer memory: ~%1-%2 MB (varies by system RAM)").arg(Math.round(asyncQueueDepthSlider.value * 1)).arg(Math.round(asyncQueueDepthSlider.value * 8))
+                font.pixelSize: Style.fontSizeSmall
+                font.family: Style.fontFamily
+                color: Style.textDescriptionColor
             }
 
             ImOptionPill {
@@ -147,6 +228,7 @@ BaseDialog {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: statusColumn.implicitHeight + Style.spacingMedium * 2
+                Layout.bottomMargin: Style.spacingSmall
                 color: Style.titleBackgroundColor
                 radius: Style.sectionBorderRadius
 
@@ -168,8 +250,15 @@ BaseDialog {
                         id: statusText
                         text: {
                             var lines = [];
+                            var depth = Math.round(asyncQueueDepthSlider.value);
                             lines.push("Direct I/O: " + (chkDirectIO.checked ? "Enabled" : "Disabled"));
+                            lines.push("Async I/O: " + (chkAsyncIO.checked ? "Enabled (depth " + depth + ", ~" + depth + "-" + (depth * 8) + " MB)" : "Disabled"));
                             lines.push("Periodic Sync: " + (chkPeriodicSync.checked ? "Enabled" : "Disabled"));
+                            if (chkDirectIO.checked && chkAsyncIO.checked) {
+                                lines.push("✓ Optimal: Direct I/O + Async I/O for best performance");
+                            } else if (chkDirectIO.checked) {
+                                lines.push("⚠ Consider enabling Async I/O to improve Direct I/O performance");
+                            }
                             if (chkDirectIO.checked && chkPeriodicSync.checked) {
                                 lines.push("Note: Periodic sync is skipped when Direct I/O is active");
                             }
@@ -184,11 +273,6 @@ BaseDialog {
                 }
             }
         }
-    }
-
-    // Spacer
-    Item {
-        Layout.fillHeight: true
     }
 
     // Buttons section with background
@@ -238,25 +322,27 @@ BaseDialog {
             
             // Load current settings from ImageWriter
             chkDirectIO.checked = imageWriter.getDebugDirectIO();
+            chkAsyncIO.checked = imageWriter.getDebugAsyncIO();
+            asyncQueueDepthSlider.value = imageWriter.getDebugAsyncQueueDepth();
             chkPeriodicSync.checked = imageWriter.getDebugPeriodicSync();
             chkVerboseLogging.checked = imageWriter.getDebugVerboseLogging();
 
             initialized = true;
             isInitializing = false;
-            
-            // Pre-compute final height before opening
-            var desired = contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 350;
-            popup.height = Math.max(350, desired);
         }
     }
 
     function applySettings() {
         // Apply settings to ImageWriter
         imageWriter.setDebugDirectIO(chkDirectIO.checked);
+        imageWriter.setDebugAsyncIO(chkAsyncIO.checked);
+        imageWriter.setDebugAsyncQueueDepth(Math.round(asyncQueueDepthSlider.value));
         imageWriter.setDebugPeriodicSync(chkPeriodicSync.checked);
         imageWriter.setDebugVerboseLogging(chkVerboseLogging.checked);
         
         console.log("Debug options applied: DirectIO=" + chkDirectIO.checked + 
+                    ", AsyncIO=" + chkAsyncIO.checked +
+                    ", AsyncQueueDepth=" + Math.round(asyncQueueDepthSlider.value) +
                     ", PeriodicSync=" + chkPeriodicSync.checked +
                     ", VerboseLogging=" + chkVerboseLogging.checked);
     }

@@ -16,7 +16,11 @@ static void Log(const std::string& msg) {
     FileOperationsLog(msg);
 }
 
-WindowsFileOperations::WindowsFileOperations() : handle_(INVALID_HANDLE_VALUE), last_error_code_(0), using_direct_io_(false) {}
+WindowsFileOperations::WindowsFileOperations() 
+    : handle_(INVALID_HANDLE_VALUE), last_error_code_(0), using_direct_io_(false),
+      async_queue_depth_(1), pending_writes_(0), first_async_error_(FileError::kSuccess),
+      async_write_offset_(0), iocp_(INVALID_HANDLE_VALUE) {
+}
 
 bool WindowsFileOperations::IsPhysicalDrivePath(const std::string& path) {
   // Check for physical drive paths like \\.\PHYSICALDRIVE0 (case-insensitive)
@@ -32,7 +36,126 @@ bool WindowsFileOperations::IsPhysicalDrivePath(const std::string& path) {
 }
 
 WindowsFileOperations::~WindowsFileOperations() {
+  WaitForPendingWrites();
+  CleanupIOCP();
   Close();
+}
+
+bool WindowsFileOperations::InitIOCP() {
+  if (iocp_ != INVALID_HANDLE_VALUE) {
+    return true;  // Already initialized
+  }
+  
+  if (handle_ == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+  
+  // Create I/O Completion Port associated with our file handle
+  iocp_ = CreateIoCompletionPort(handle_, NULL, 0, 0);
+  if (iocp_ == NULL) {
+    DWORD error = GetLastError();
+    std::ostringstream oss;
+    oss << "CreateIoCompletionPort failed, error: " << error;
+    Log(oss.str());
+    iocp_ = INVALID_HANDLE_VALUE;
+    return false;
+  }
+  
+  Log("IOCP initialized for async I/O");
+  return true;
+}
+
+void WindowsFileOperations::CleanupIOCP() {
+  // Clean up any pending contexts
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    for (auto& pair : pending_contexts_) {
+      delete pair.second;
+    }
+    pending_contexts_.clear();
+  }
+  
+  if (iocp_ != INVALID_HANDLE_VALUE) {
+    CloseHandle(iocp_);
+    iocp_ = INVALID_HANDLE_VALUE;
+  }
+}
+
+void WindowsFileOperations::ProcessCompletions(bool wait) {
+  if (iocp_ == INVALID_HANDLE_VALUE || pending_writes_.load() == 0) {
+    return;
+  }
+  
+  DWORD timeout = wait ? INFINITE : 0;
+  
+  while (pending_writes_.load() > 0) {
+    DWORD bytes_transferred = 0;
+    ULONG_PTR completion_key = 0;
+    LPOVERLAPPED overlapped = nullptr;
+    
+    BOOL success = GetQueuedCompletionStatus(
+        iocp_,
+        &bytes_transferred,
+        &completion_key,
+        &overlapped,
+        timeout);
+    
+    if (overlapped == nullptr) {
+      // Timeout or error with no overlapped - exit if not waiting
+      if (!wait) break;
+      continue;
+    }
+    
+    // Find the context for this completion
+    AsyncWriteContext* ctx = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(pending_mutex_);
+      auto it = pending_contexts_.find(overlapped);
+      if (it != pending_contexts_.end()) {
+        ctx = it->second;
+        pending_contexts_.erase(it);
+      }
+    }
+    
+    if (ctx == nullptr) {
+      Log("Warning: Unknown OVERLAPPED in completion");
+      continue;
+    }
+    
+    FileError error = FileError::kSuccess;
+    
+    if (!success) {
+      DWORD err = GetLastError();
+      error = FileError::kWriteError;
+      if (first_async_error_ == FileError::kSuccess) {
+        first_async_error_ = error;
+      }
+      std::ostringstream oss;
+      oss << "Async write failed, error: " << err;
+      Log(oss.str());
+    } else if (bytes_transferred != ctx->size) {
+      error = FileError::kWriteError;
+      if (first_async_error_ == FileError::kSuccess) {
+        first_async_error_ = error;
+      }
+      std::ostringstream oss;
+      oss << "Async short write: expected " << ctx->size << ", got " << bytes_transferred;
+      Log(oss.str());
+    }
+    
+    // Invoke callback if provided
+    if (ctx->callback) {
+      ctx->callback(error, error == FileError::kSuccess ? ctx->size : 0);
+    }
+    
+    pending_writes_.fetch_sub(1);
+    delete ctx;
+    
+    // If not waiting, only process available completions
+    if (!wait) {
+      timeout = 0;
+    }
+  }
 }
 
 FileError WindowsFileOperations::OpenDevice(const std::string& path) {
@@ -57,12 +180,14 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   // 2. More accurate verification (reads from actual device, not cache)
   // 3. Reduced memory pressure on the system
   // Note: Requires sector-aligned buffers (already done via qMallocAligned with 4096 alignment)
-  DWORD flags = FILE_ATTRIBUTE_NORMAL;
+  //
+  // FILE_FLAG_OVERLAPPED is always included to enable async I/O via IOCP
+  DWORD flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
   bool attemptingDirectIO = false;
   if (isPhysicalDrive) {
-    flags = FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN;
+    flags = FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED;
     attemptingDirectIO = true;
-    Log("Using direct I/O (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH) for physical drive");
+    Log("Using direct I/O (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_OVERLAPPED) for physical drive");
   }
   
   FileError result = OpenInternal(path, 
@@ -106,7 +231,7 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
       result = OpenInternal(path, 
                            GENERIC_READ | GENERIC_WRITE,
                            OPEN_EXISTING,
-                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN);
+                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED);
     }
     
     if (result != FileError::kSuccess) {
@@ -139,17 +264,22 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
     Log("Skipping volume lock for physical drive");
   }
   
+  // Reset async state for new file
+  async_write_offset_ = 0;
+  first_async_error_ = FileError::kSuccess;
+  
   Log("Successfully opened device: " + path + (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)"));
   return FileError::kSuccess;
 }
 
 FileError WindowsFileOperations::CreateTestFile(const std::string& path, std::uint64_t size) {
   // For test files, create a regular file (not using direct I/O)
+  // Still use FILE_FLAG_OVERLAPPED for async I/O support
   using_direct_io_ = false;
   FileError result = OpenInternal(path,
                                   GENERIC_READ | GENERIC_WRITE,
                                   CREATE_ALWAYS,
-                                  FILE_ATTRIBUTE_NORMAL);
+                                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
   if (result != FileError::kSuccess) {
     return result;
   }
@@ -301,24 +431,32 @@ FileError WindowsFileOperations::GetSize(std::uint64_t& size) {
 }
 
 FileError WindowsFileOperations::Close() {
+  // Wait for pending async writes
+  WaitForPendingWrites();
+  
   if (handle_ != INVALID_HANDLE_VALUE) {
     // Only unlock volume if this is not a physical drive
     bool isPhysicalDrive = IsPhysicalDrivePath(current_path_);
     if (!isPhysicalDrive) {
-      UnlockVolume(); // Unlock if it was locked
+      UnlockVolume();
     }
     
     if (!CloseHandle(handle_)) {
       handle_ = INVALID_HANDLE_VALUE;
       using_direct_io_ = false;
-      direct_io_info_ = DirectIOInfo();  // Reset to keep in sync
+      direct_io_info_ = DirectIOInfo();
       return FileError::kCloseError;
     }
     handle_ = INVALID_HANDLE_VALUE;
   }
   current_path_.clear();
   using_direct_io_ = false;
-  direct_io_info_ = DirectIOInfo();  // Reset to keep in sync
+  direct_io_info_ = DirectIOInfo();
+  async_write_offset_ = 0;
+  
+  // Clean up IOCP - it's tied to the file handle
+  CleanupIOCP();
+  
   return FileError::kSuccess;
 }
 
@@ -354,18 +492,17 @@ FileError WindowsFileOperations::SetDirectIOEnabled(bool enabled) {
   handle_ = INVALID_HANDLE_VALUE;
   
   // Determine flags based on desired state
-  DWORD flags = FILE_ATTRIBUTE_NORMAL;
+  // Always include FILE_FLAG_OVERLAPPED for async I/O support
+  DWORD flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
   if (enabled && isPhysicalDrive) {
-    flags = FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN;
+    flags = FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED;
   } else if (isPhysicalDrive) {
-    // Even without direct I/O, use write-through for physical drives
-    flags = FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN;
+    flags = FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED;
   }
   
   FileError result = OpenInternal(savedPath, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING, flags);
   if (result != FileError::kSuccess) {
-    // Try to recover by opening with default flags
-    result = OpenInternal(savedPath, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL);
+    result = OpenInternal(savedPath, GENERIC_READ | GENERIC_WRITE, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED);
     using_direct_io_ = false;
     if (result != FileError::kSuccess) {
       return result;
@@ -488,6 +625,9 @@ FileError WindowsFileOperations::Seek(std::uint64_t position) {
     return FileError::kOpenError;
   }
 
+  // Wait for pending async writes before seeking
+  WaitForPendingWrites();
+
   LARGE_INTEGER pos;
   pos.QuadPart = static_cast<LONGLONG>(position);
   
@@ -496,12 +636,21 @@ FileError WindowsFileOperations::Seek(std::uint64_t position) {
     return FileError::kSeekError;
   }
 
+  // Also update async write offset
+  async_write_offset_ = position;
+  
   return FileError::kSuccess;
 }
 
 std::uint64_t WindowsFileOperations::Tell() const {
   if (!IsOpen()) {
     return 0;
+  }
+
+  // If async I/O has been used, return the async write offset
+  // (overlapped I/O uses explicit offsets, not the file pointer)
+  if (async_write_offset_ > 0) {
+    return async_write_offset_;
   }
 
   LARGE_INTEGER zero = {};
@@ -519,7 +668,10 @@ FileError WindowsFileOperations::ForceSync() {
     return FileError::kOpenError;
   }
 
-  // Force filesystem sync using FlushFileBuffers - same logic as WinFile::forceSync()
+  // Wait for pending async writes first
+  WaitForPendingWrites();
+
+  // Force filesystem sync using FlushFileBuffers
   if (!FlushFileBuffers(handle_)) {
     return FileError::kSyncError;
   }
@@ -531,6 +683,9 @@ FileError WindowsFileOperations::Flush() {
   if (!IsOpen()) {
     return FileError::kOpenError;
   }
+
+  // Wait for pending async writes first
+  WaitForPendingWrites();
 
   // On Windows, FlushFileBuffers handles both buffer flush and disk sync
   if (!FlushFileBuffers(handle_)) {
@@ -578,6 +733,126 @@ int WindowsFileOperations::GetHandle() const {
 
 int WindowsFileOperations::GetLastErrorCode() const {
   return last_error_code_;
+}
+
+// ============= Async I/O Implementation (using IOCP) =============
+
+bool WindowsFileOperations::SetAsyncQueueDepth(int depth) {
+  if (depth < 1) depth = 1;
+  
+  async_queue_depth_ = depth;
+  
+  if (depth > 1 && handle_ != INVALID_HANDLE_VALUE) {
+    if (!InitIOCP()) {
+      Log("Warning: Failed to initialize IOCP for async I/O");
+      return false;
+    }
+  }
+  
+  std::ostringstream oss;
+  oss << "Async queue depth set to " << depth;
+  Log(oss.str());
+  
+  return true;
+}
+
+FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
+                                                       AsyncWriteCallback callback) {
+  if (handle_ == INVALID_HANDLE_VALUE) {
+    if (callback) callback(FileError::kOpenError, 0);
+    return FileError::kOpenError;
+  }
+  
+  // If async not enabled or IOCP not initialized, fall back to sync
+  if (async_queue_depth_ <= 1 || iocp_ == INVALID_HANDLE_VALUE) {
+    FileError result = WriteSequential(data, size);
+    if (result == FileError::kSuccess) {
+      async_write_offset_ += size;
+    }
+    if (callback) callback(result, result == FileError::kSuccess ? size : 0);
+    return result;
+  }
+  
+  // Check for previous errors
+  if (first_async_error_ != FileError::kSuccess) {
+    if (callback) callback(first_async_error_, 0);
+    return first_async_error_;
+  }
+  
+  // Process any completed writes first (non-blocking)
+  ProcessCompletions(false);
+  
+  // If queue is full, wait for completions
+  while (pending_writes_.load() >= async_queue_depth_) {
+    ProcessCompletions(true);
+  }
+  
+  // Allocate context for this write
+  AsyncWriteContext* ctx = new AsyncWriteContext();
+  ZeroMemory(&ctx->overlapped, sizeof(OVERLAPPED));
+  ctx->callback = callback;
+  ctx->size = size;
+  ctx->self = this;
+  
+  // Set up the offset for this write
+  LARGE_INTEGER offset;
+  offset.QuadPart = static_cast<LONGLONG>(async_write_offset_);
+  ctx->overlapped.Offset = offset.LowPart;
+  ctx->overlapped.OffsetHigh = offset.HighPart;
+  
+  async_write_offset_ += size;
+  
+  // Track the pending context
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    pending_contexts_[&ctx->overlapped] = ctx;
+  }
+  
+  pending_writes_.fetch_add(1);
+  
+  // Issue the async write
+  BOOL success = WriteFile(
+      handle_,
+      data,
+      static_cast<DWORD>(size),
+      nullptr,  // Bytes written returned via completion
+      &ctx->overlapped);
+  
+  if (!success) {
+    DWORD error = GetLastError();
+    if (error != ERROR_IO_PENDING) {
+      // Real error
+      pending_writes_.fetch_sub(1);
+      {
+        std::lock_guard<std::mutex> lock(pending_mutex_);
+        pending_contexts_.erase(&ctx->overlapped);
+      }
+      delete ctx;
+      
+      std::ostringstream oss;
+      oss << "Async WriteFile failed, error: " << error;
+      Log(oss.str());
+      
+      if (callback) callback(FileError::kWriteError, 0);
+      return FileError::kWriteError;
+    }
+    // ERROR_IO_PENDING is expected - the operation is in progress
+  }
+  
+  return FileError::kSuccess;
+}
+
+FileError WindowsFileOperations::WaitForPendingWrites() {
+  if (iocp_ == INVALID_HANDLE_VALUE) {
+    return FileError::kSuccess;
+  }
+  
+  // Process completions until all pending writes are done
+  while (pending_writes_.load() > 0) {
+    ProcessCompletions(true);
+  }
+  
+  return first_async_error_;
 }
 
 // Platform-specific factory function implementation

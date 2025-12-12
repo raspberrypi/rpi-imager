@@ -458,6 +458,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/dialogs/UpdateAvailableDialog.qml
         wizard/dialogs/RepositoryDialog.qml
         wizard/dialogs/AppOptionsDialog.qml
+        wizard/dialogs/DebugOptionsDialog.qml
         wizard/LanguageSelectionStep.qml
         qmlcomponents/BaseDialog.qml
         qmlcomponents/ImButton.qml

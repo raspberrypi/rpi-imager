@@ -134,6 +134,8 @@ public:
     void setDebugDirectIO(bool enabled);
     void setDebugPeriodicSync(bool enabled);
     void setDebugVerboseLogging(bool enabled);
+    void setDebugAsyncIO(bool enabled);
+    void setDebugAsyncQueueDepth(int depth);
 
     /*
      * Thread safe download progress query functions
@@ -145,7 +147,17 @@ public:
     uint64_t bytesWritten();
 
     virtual bool isImage();
-    size_t _writeFile(const char *buf, size_t len);
+    
+    // Write completion callback - called when write (including async) is truly complete
+    // Used for zero-copy async I/O where the buffer must stay valid until write finishes
+    using WriteCompleteCallback = std::function<void()>;
+    
+    // Write data to output file/device
+    // If onComplete is provided and async I/O is enabled, it's called when the write
+    // actually finishes (not when it's queued). The caller should NOT free/reuse the
+    // buffer until onComplete is called.
+    // If onComplete is null or async is disabled, the buffer can be reused after return.
+    size_t _writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete = nullptr);
 
 signals:
     void success();
@@ -179,6 +191,7 @@ signals:
                                    quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount);
     void eventWriteSizeDistribution(quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount);
     void eventWriteAfterSyncImpact(quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount);
+    void eventAsyncIOConfig(bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd);
 
 protected:
     virtual void run();
@@ -256,6 +269,8 @@ protected:
     bool _debugDirectIO;
     bool _debugPeriodicSync;
     bool _debugVerboseLogging;
+    bool _debugAsyncIO;
+    int _debugAsyncQueueDepth;
     
     void _initializeSyncConfiguration();
     

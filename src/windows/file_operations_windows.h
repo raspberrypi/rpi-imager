@@ -10,20 +10,23 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <atomic>
+#include <mutex>
+#include <unordered_map>
 
 namespace rpi_imager {
 
-// Windows implementation using Win32 API
+// Windows implementation using Win32 API with IOCP-based async I/O
 class WindowsFileOperations : public FileOperations {
  public:
   WindowsFileOperations();
   ~WindowsFileOperations() override;
 
-  // Non-copyable, movable
+  // Non-copyable, non-movable (due to IOCP resources)
   WindowsFileOperations(const WindowsFileOperations&) = delete;
   WindowsFileOperations& operator=(const WindowsFileOperations&) = delete;
-  WindowsFileOperations(WindowsFileOperations&&) = default;
-  WindowsFileOperations& operator=(WindowsFileOperations&&) = default;
+  WindowsFileOperations(WindowsFileOperations&&) = delete;
+  WindowsFileOperations& operator=(WindowsFileOperations&&) = delete;
 
   FileError OpenDevice(const std::string& path) override;
   FileError CreateTestFile(const std::string& path, std::uint64_t size) override;
@@ -60,30 +63,59 @@ class WindowsFileOperations : public FileOperations {
   bool IsDirectIOEnabled() const override { return using_direct_io_; }
   
   // Enable or disable direct I/O
-  // On Windows, FILE_FLAG_NO_BUFFERING is set at open time, so this reopens the file
   FileError SetDirectIOEnabled(bool enabled) override;
   
   // Get direct I/O attempt details
   DirectIOInfo GetDirectIOInfo() const override { 
       DirectIOInfo info = direct_io_info_;
-      info.currently_enabled = using_direct_io_;  // Capture current state
+      info.currently_enabled = using_direct_io_;
       return info;
   }
+  
+  // ============= Async I/O API (Windows: using IOCP) =============
+  bool SetAsyncQueueDepth(int depth) override;
+  int GetAsyncQueueDepth() const override { return async_queue_depth_; }
+  bool IsAsyncIOSupported() const override { return true; }
+  FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
+                                  AsyncWriteCallback callback = nullptr) override;
+  int GetPendingWriteCount() const override { return pending_writes_.load(); }
+  FileError WaitForPendingWrites() override;
 
  private:
   HANDLE handle_;
   std::string current_path_;
   int last_error_code_;
-  bool using_direct_io_;  // Track if we opened with direct I/O flags
-  DirectIOInfo direct_io_info_;  // Details of direct I/O attempt
+  bool using_direct_io_;
+  DirectIOInfo direct_io_info_;
   
-   FileError LockVolume();
-   FileError UnlockVolume();
-   FileError OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags = FILE_ATTRIBUTE_NORMAL);
-   
-   // Helper to determine if path is a physical drive
-   static bool IsPhysicalDrivePath(const std::string& path);
- };
+  // IOCP async I/O state
+  int async_queue_depth_;
+  std::atomic<int> pending_writes_;
+  FileError first_async_error_;
+  std::uint64_t async_write_offset_;
+  HANDLE iocp_;  // I/O Completion Port handle
+  
+  // Extended OVERLAPPED structure to track per-write context
+  struct AsyncWriteContext {
+    OVERLAPPED overlapped;
+    AsyncWriteCallback callback;
+    std::size_t size;
+    WindowsFileOperations* self;
+  };
+  
+  std::mutex pending_mutex_;
+  std::unordered_map<OVERLAPPED*, AsyncWriteContext*> pending_contexts_;
+  
+  FileError LockVolume();
+  FileError UnlockVolume();
+  FileError OpenInternal(const std::string& path, DWORD access, DWORD creation, DWORD flags = FILE_ATTRIBUTE_NORMAL);
+  
+  static bool IsPhysicalDrivePath(const std::string& path);
+  
+  bool InitIOCP();
+  void CleanupIOCP();
+  void ProcessCompletions(bool wait);
+};
 
 } // namespace rpi_imager
 
