@@ -64,6 +64,7 @@ public:
 
     // Cache file queries
     Q_INVOKABLE bool isCached(const QByteArray& expectedHash) const;
+    Q_INVOKABLE bool hasPotentialCache(const QByteArray& expectedHash) const;  // Check without requiring verification
     Q_INVOKABLE QString getCacheFilePath(const QByteArray& expectedHash) const;
     
     // Cache file management

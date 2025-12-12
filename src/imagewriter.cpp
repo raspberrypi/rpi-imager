@@ -723,17 +723,22 @@ void ImageWriter::startWrite()
     }
 
     // Time cache lookup for performance tracking
+    // Use hasPotentialCache() which doesn't require verification to be complete
+    // This allows us to start verification for cached files that haven't been verified yet
     QElapsedTimer cacheLookupTimer;
     cacheLookupTimer.start();
-    bool cacheHit = !_expectedHash.isEmpty() && _cacheManager->isCached(_expectedHash);
+    bool potentialCacheHit = !_expectedHash.isEmpty() && _cacheManager->hasPotentialCache(_expectedHash);
     _performanceStats->recordEvent(PerformanceStats::EventType::CacheLookup,
         static_cast<quint32>(cacheLookupTimer.elapsed()), true,
-        cacheHit ? "hit" : (_expectedHash.isEmpty() ? "no_hash" : "miss"));
+        potentialCacheHit ? "potential_hit" : (_expectedHash.isEmpty() ? "no_hash" : "miss"));
     
-    if (cacheHit)
+    if (potentialCacheHit)
     {
         // Use background cache manager to check cache file integrity
         CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
+        qDebug() << "Cache status: verificationComplete=" << cacheStatus.verificationComplete
+                 << "isValid=" << cacheStatus.isValid
+                 << "file=" << cacheStatus.cacheFileName;
 
         if (cacheStatus.verificationComplete && cacheStatus.isValid)
         {
