@@ -48,7 +48,7 @@ public:
     /*
      * Cancel download
      *
-     * Async function. Returns immedeately, but can take a second before download actually stops
+     * Async function. Returns immediately, but can take a second before download actually stops
      */
     virtual void cancelDownload();
 
