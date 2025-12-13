@@ -57,7 +57,7 @@
     </message>
     <message>
         <source>Keep warnings enabled and return to the options dialog</source>
-        <translation>Garder les avertissements activés et retourner à la fenêtre des options</translation>
+        <translation>Garder les avertissements activés et revenir à la fenêtre des options</translation>
     </message>
     <message>
         <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
@@ -290,7 +290,7 @@
     </message>
     <message>
         <source>Cancel operation and return to storage selection to choose a different device</source>
-        <translation>Annuler l&apos;opération et retourner à la sélection pour choisir un autre disque</translation>
+        <translation>Annuler l&apos;opération et revenir à la sélection pour choisir un autre disque</translation>
     </message>
     <message>
         <source>Proceed to write the image to this system drive after confirming the drive name</source>
@@ -407,7 +407,7 @@
     </message>
     <message>
         <source>Return to storage selection to write the same image to another storage device</source>
-        <translation>Retourner à la sélection pour écrire la même image sur un autre périphérique de stockage</translation>
+        <translation>Revenir à la sélection pour écrire la même image sur un autre périphérique de stockage</translation>
     </message>
     <message>
         <source>customization</source>
@@ -853,7 +853,7 @@
     </message>
     <message>
         <source>Cancel and return to the interfaces and features settings without enabling USB Gadget Mode</source>
-        <translation>Annuler et retourner aux réglages des interfaces et fonctionnalités sans activer le mode USB Gadget</translation>
+        <translation>Annuler et revenir aux réglages des interfaces et fonctionnalités sans activer le mode USB Gadget</translation>
     </message>
     <message>
         <source>Confirm that you understand the risks and continue with USB Gadget Mode enabled</source>
@@ -989,7 +989,7 @@ ou saisir un chemin dans la barre d&apos;adresse ci-dessus.</translation>
     <name>ImPopup</name>
     <message>
         <source>Dialog</source>
-        <translation>Dialogue</translation>
+        <translation>Fenêtre</translation>
     </message>
 </context>
 <context>
@@ -1385,7 +1385,7 @@ ou saisir un chemin dans la barre d&apos;adresse ci-dessus.</translation>
     </message>
     <message>
         <source>Close this dialog and return to the token field</source>
-        <translation>Fermer ce dialogue et revenir au champ du jeton</translation>
+        <translation>Fermer cette fenêtre et revenir au champ du jeton</translation>
     </message>
     <message>
         <source>Authentication token:</source>
@@ -1530,7 +1530,7 @@ Cliquer &quot;Autorisation d&apos;installation&quot; pour permettre l&apos;élé
     </message>
     <message>
         <source>Close the repository dialog without changing the content source</source>
-        <translation>Fermer le dialogue de dépôt sans changer la source de contenu</translation>
+        <translation>Fermer la fenêtre de dépôt sans changer la source de contenu</translation>
     </message>
     <message>
         <source>Apply the new content repository and restart the wizard from the beginning</source>
@@ -1899,7 +1899,7 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Enter a new password for this account, or leave blank to keep the previously saved password.</source>
-        <translation>Saisir un nouveau mot de passe pour ce compte, ou laisser vide pour conserver le mot de passé enregistré antérieurement.</translation>
+        <translation>Saisir un nouveau mot de passe pour ce compte, ou laisser vide pour conserver le mot de passe enregistré antérieurement.</translation>
     </message>
     <message>
         <source>Enter a password for this account. You will need to re-enter it in the next field to confirm.</source>
@@ -1907,11 +1907,11 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Re-enter the new password to confirm, or leave blank to keep the previously saved password.</source>
-        <translation>Re-saisir le nouveau mot de passe pour le confirmer, ou laisser vide  pour conserver le mot de passé enregistré antérieurement.</translation>
+        <translation>Re-saisir le nouveau mot de passe pour le confirmer, ou laisser vide pour conserver le mot de passe enregistré antérieurement.</translation>
     </message>
     <message>
         <source>Re-enter the password to confirm it matches.</source>
-        <translation>Re-saisir le nouveau mot de passe pour confirmer qu&apos;il correspond.</translation>
+        <translation>Re-saisir le mot de passe pour confirmer qu&apos;il correspond.</translation>
     </message>
 </context>
 <context>
@@ -1922,11 +1922,11 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Network name</source>
-        <translation type="unfinished"></translation>
+        <translation>Nom du réseau</translation>
     </message>
     <message>
         <source>Network password</source>
-        <translation type="unfinished"></translation>
+        <translation>Mot de passe du réseau</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
@@ -1938,55 +1938,55 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>No password (open network)</source>
-        <translation type="unfinished"></translation>
+        <translation>Pas de mot de passe (réseau ouvert)</translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistré (caché) — laisser vide pour conserver</translation>
     </message>
     <message>
         <source>Secure network</source>
-        <translation type="unfinished"></translation>
+        <translation>Réseau sécurisé</translation>
     </message>
     <message>
         <source>Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption</source>
-        <translation type="unfinished"></translation>
+        <translation>Configurer le Wi-Fi pour un réseau protégé par mot de passe avec chiffrement WPA2/WPA3</translation>
     </message>
     <message>
         <source>Open network</source>
-        <translation type="unfinished"></translation>
+        <translation>Réseau ouvert</translation>
     </message>
     <message>
         <source>Configure Wi-Fi for an unencrypted network without password protection</source>
-        <translation type="unfinished"></translation>
+        <translation>Configurer le Wi-Fi pour un réseau non chiffré sans protection par mot de passe</translation>
     </message>
     <message>
         <source>Enter a password</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir un mot de passe</translation>
     </message>
     <message>
         <source>Password is too short (min 8 characters)</source>
-        <translation type="unfinished"></translation>
+        <translation>Le mot de passe est trop court (min 8 caractères)</translation>
     </message>
     <message>
         <source>Password is too long (max 63 characters)</source>
-        <translation type="unfinished"></translation>
+        <translation>Le mot de passe est trop long (min 63 caractères)</translation>
     </message>
     <message>
         <source>Password contains unsupported characters</source>
-        <translation type="unfinished"></translation>
+        <translation>Le mot de passe comporte des caractères non pris en charge</translation>
     </message>
     <message>
         <source>Confirm password:</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirmer le mot de passe&#xa0;:</translation>
     </message>
     <message>
         <source>Re-enter password</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-saisir le mot de passe</translation>
     </message>
     <message>
         <source>Save Wi-Fi settings and continue to next customisation step</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer les réglages Wi-Fi et continuer vers l&apos;étape de personnalisation suivante</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1998,46 +1998,46 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir le nom de réseau (SSID) de votre réseau Wi-Fi. Il s&apos;agit du nom qui affiché lorsqu&apos;on cherche des réseaux disponibles.</translation>
     </message>
     <message>
         <source>Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir un nouveau mot de passe Wi-Fi, ou laisser vide pour conserver le mot de passe enregistré antérieurement. Doit avoir une longueur de 8 à 63 caractères ou être une clé de 64 caractères hexadécimaux.</translation>
     </message>
     <message>
         <source>Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir votre nouveau mot de passe Wi-Fi. Doit avoir une longueur de 8 à 63 caractères ou être une clé de 64 caractères hexadécimaux. Vous devrez le re-saisir dans le champ suivant pour confirmation.</translation>
     </message>
     <message>
         <source>Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-saisir le nouveau mot de passe Wi-Fi pour le confirmer, ou laisser vide pour conserver le mot de passe enregistré antérieurement.</translation>
     </message>
     <message>
         <source>Re-enter the Wi-Fi password to confirm it matches.</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-saisir le mot de passe Wi-Fi pour confirmer qu&apos;il correspond.</translation>
     </message>
     <message>
         <source>Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.</source>
-        <translation type="unfinished"></translation>
+        <translation>Cochez cette case si votre réseau Wi-Fi ne diffuse pas son nom et nécessite de saisir manuellement le SSID pour se connecter.</translation>
     </message>
     <message>
         <source>Passwords don&apos;t match</source>
-        <translation type="unfinished"></translation>
+        <translation>Les mots de passe ne correspondent pas</translation>
     </message>
     <message>
         <source>Re-enter to change password</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-saisir pour changer le mot de passe</translation>
     </message>
 </context>
 <context>
     <name>WizardContainer</name>
     <message>
         <source>Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Appareil</translation>
     </message>
     <message>
         <source>OS</source>
-        <translation type="unfinished"></translation>
+        <translation>OS</translation>
     </message>
     <message>
         <source>Storage</source>
@@ -2045,31 +2045,31 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Writing</source>
-        <translation></translation>
+        <translation>Écriture</translation>
     </message>
     <message>
         <source>Done</source>
-        <translation type="unfinished"></translation>
+        <translation>Terminé</translation>
     </message>
     <message>
         <source>Customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation</translation>
     </message>
     <message>
         <source>Hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Nom d&apos;hôte</translation>
     </message>
     <message>
         <source>User</source>
-        <translation type="unfinished"></translation>
+        <translation>Utilisateur</translation>
     </message>
     <message>
         <source>Wi‑Fi</source>
-        <translation type="unfinished"></translation>
+        <translation>Wi-Fi</translation>
     </message>
     <message>
         <source>Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Connect</translation>
     </message>
     <message>
         <source>App Options</source>
@@ -2077,67 +2077,71 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Interfaces &amp; fonctionnalités</translation>
     </message>
     <message>
         <source>Setup steps</source>
-        <translation type="unfinished"></translation>
+        <translation>Étapes de configuration</translation>
     </message>
     <message>
         <source>Localisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Localisation</translation>
     </message>
     <message>
         <source>Remote access</source>
-        <translation type="unfinished"></translation>
+        <translation>Accès à distance</translation>
     </message>
     <message>
         <source>Open application settings to configure sound alerts, auto-eject, telemetry, and content repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Ouvrir les réglages de l&apos;application pour configurer les alertes sonores, l&apos;éjection automatique, la télémétrie et les dépôt de contenu</translation>
     </message>
     <message>
         <source>Replace existing Raspberry Pi Connect token?</source>
-        <translation type="unfinished"></translation>
+        <translation>Remplacer le jeton Raspberry Pi Connect actuel&#xa0;?</translation>
     </message>
     <message>
         <source>A new Raspberry Pi Connect token was received that differs from your current one.
 
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Un nouveau jeton Raspberry Pi Connect a été reçu, qui diffère de votre jeton actuel.
+
+</translation>
     </message>
     <message>
         <source>Do you want to overwrite the existing token?
 
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Voulez-vous écraser le jeton existant&#xa0;?
+
+</translation>
     </message>
     <message>
         <source>Replace token</source>
-        <translation type="unfinished"></translation>
+        <translation>Remplacer le jeton</translation>
     </message>
     <message>
         <source>Please wait…</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez patienter…</translation>
     </message>
     <message>
         <source>Replace the current token with the newly received one</source>
-        <translation type="unfinished"></translation>
+        <translation>Remplacer le jeton actuel avec le nouveau jeton reçu</translation>
     </message>
     <message>
         <source>Keep existing</source>
-        <translation type="unfinished"></translation>
+        <translation>Conserver l&apos;existant</translation>
     </message>
     <message>
         <source>Keep your current Raspberry Pi Connect token</source>
-        <translation type="unfinished"></translation>
+        <translation>Conserver votre jeton Raspberry Pi Connect actuel</translation>
     </message>
     <message>
         <source>Secure Boot</source>
-        <translation type="unfinished"></translation>
+        <translation>Secure Boot</translation>
     </message>
     <message>
         <source>Warning: Only overwrite the token if you initiated this action.</source>
-        <translation type="unfinished"></translation>
+        <translation>Attention&#xa0;! N&apos;écraser le jeton que si vous avez initié cette action.</translation>
     </message>
 </context>
 <context>
@@ -2148,46 +2152,46 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Skip customisation</source>
-        <translation type="unfinished"></translation>
+        <translation>Sauter la personnalisation</translation>
     </message>
 </context>
 <context>
     <name>WritingStep</name>
     <message>
         <source>Review your choices and write the image to the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Vérifier vos choix et enregistrer l&apos;image sur le périphérique de stockage.</translation>
     </message>
     <message>
         <source>Write</source>
-        <translation type="unfinished"></translation>
+        <translation>Écrire</translation>
     </message>
     <message>
         <source>Summary</source>
-        <translation type="unfinished"></translation>
+        <translation>Résumé</translation>
     </message>
     <message>
         <source>Starting write process...</source>
-        <translation type="unfinished"></translation>
+        <translation>Début de l&apos;opération d&apos;écriture</translation>
     </message>
     <message>
         <source>You are about to ERASE all data on: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Vous êtes sur le point d&apos;EFFACER toutes les données sur&#xa0;: %1</translation>
     </message>
     <message>
         <source>the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>le périphérique de stockage</translation>
     </message>
     <message>
         <source>This action is PERMANENT and CANNOT be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Cette action est PERMANENTE et NE PEUX PAS être annulée.</translation>
     </message>
     <message>
         <source>I understand, erase and write</source>
-        <translation type="unfinished"></translation>
+        <translation>Je comprends, effacer et écrire</translation>
     </message>
     <message>
         <source>Please wait...</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez patienter...</translation>
     </message>
     <message>
         <source>Writing... %1%</source>
@@ -2199,23 +2203,23 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Write completed successfully!</source>
-        <translation type="unfinished"></translation>
+        <translation>Écriture terminée avec succès&#xa0;!</translation>
     </message>
     <message>
         <source>Write failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Écriture échouée&#xa0;: %1</translation>
     </message>
     <message>
         <source>Customisations to apply:</source>
-        <translation type="unfinished"></translation>
+        <translation>Personnalisation à appliquer&#xa0;:</translation>
     </message>
     <message>
         <source>Finalising...</source>
-        <translation type="unfinished"></translation>
+        <translation>Finalisation...</translation>
     </message>
     <message>
         <source>Write image</source>
-        <translation type="unfinished"></translation>
+        <translation>Écrire l&apos;image</translation>
     </message>
     <message>
         <source>Operating system:</source>
@@ -2223,51 +2227,51 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Cancel and return to the write summary without erasing the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Annuler et revenir au résumé d&apos;écriture sans effacer le périphérique de stockage</translation>
     </message>
     <message>
         <source>Confirm erasure and begin writing the image to the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirmer l&apos;effacement et commencer l&apos;écriture de l&apos;image sur le périphérique de stockage</translation>
     </message>
     <message>
         <source>Skip verification</source>
-        <translation type="unfinished"></translation>
+        <translation>Passer la vérification</translation>
     </message>
     <message>
         <source>Cancel write</source>
-        <translation type="unfinished"></translation>
+        <translation>Annuler l&apos;écriture</translation>
     </message>
     <message>
         <source>Skip verification and finish the write process</source>
-        <translation type="unfinished"></translation>
+        <translation>Passer la vérification et terminer l&apos;opération d&apos;écriture</translation>
     </message>
     <message>
         <source>Cancel the write operation and return to the summary</source>
-        <translation type="unfinished"></translation>
+        <translation>Annuler l&apos;opération d&apos;écriture et revenir au résumé</translation>
     </message>
     <message>
         <source>Continue to the completion screen</source>
-        <translation type="unfinished"></translation>
+        <translation>continuer vers l&apos;écran final</translation>
     </message>
     <message>
         <source>Begin writing the image to the storage device. All existing data will be erased.</source>
-        <translation type="unfinished"></translation>
+        <translation>Début de l&apos;écriture de l&apos;image sur le périphérique de stockage. Toutes les données existantes seront effacées.</translation>
     </message>
     <message>
         <source>Return to previous customization step</source>
-        <translation type="unfinished"></translation>
+        <translation>Retour à l&apos;étape de personnalisation précédente</translation>
     </message>
     <message>
         <source>Write progress</source>
-        <translation type="unfinished"></translation>
+        <translation>Progression de l&apos;écriture</translation>
     </message>
     <message>
         <source>Finalising…</source>
-        <translation type="unfinished"></translation>
+        <translation>Finalisation…</translation>
     </message>
     <message>
         <source>Write complete</source>
-        <translation type="unfinished"></translation>
+        <translation>Écriture terminée</translation>
     </message>
     <message>
         <source>customization</source>
@@ -2279,11 +2283,11 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Writing in progress — do not disconnect the storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Écriture en cours – ne pas débrancher le périphérique de stockage</translation>
     </message>
     <message>
         <source>Please wait... %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Veuillez patienter... %1</translation>
     </message>
 </context>
 <context>
@@ -2314,55 +2318,55 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imager est en cours d&apos;opération. Voulez-vous vraiment quitter&#xa0;?</translation>
     </message>
     <message>
         <source>Storage device removed</source>
-        <translation type="unfinished"></translation>
+        <translation>Périphérique de stockage débranché</translation>
     </message>
     <message>
         <source>The storage device was removed while writing, so the operation was cancelled. Please reinsert the device or select a different one to continue.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le périphérique de stockage a été débranché durant l&apos;écriture, ce qui a annulé l&apos;opération. Re-brancher le périphérique ou en sélectionner un autre pour continuer.</translation>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished"></translation>
+        <translation>OK</translation>
     </message>
     <message>
         <source>Close the error dialog and continue</source>
-        <translation type="unfinished"></translation>
+        <translation>Fermer la fenêtre d&apos;erreur et continuer</translation>
     </message>
     <message>
         <source>Close the storage removed notification and return to storage selection</source>
-        <translation type="unfinished"></translation>
+        <translation>Fermer la notification de périphérique débranché et revenir à la sélection du périphérique de stockage</translation>
     </message>
     <message>
         <source>Return to Raspberry Pi Imager and continue the current operation</source>
-        <translation type="unfinished"></translation>
+        <translation>Revenir à Raspberry Pi Imager et continuer l&apos;opération en cours</translation>
     </message>
     <message>
         <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
-        <translation type="unfinished"></translation>
+        <translation>Forcer Raspberry Pi Imager à quitter et annuler l&apos;opération d&apos;écriture en cours</translation>
     </message>
     <message>
         <source>Raspberry Pi Imager %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Raspberry Pi Imager %1</translation>
     </message>
     <message>
         <source>Insufficient Permissions</source>
-        <translation type="unfinished"></translation>
+        <translation>Permissions insuffisantes</translation>
     </message>
     <message>
         <source>Error message explaining why elevated privileges are required</source>
-        <translation type="unfinished"></translation>
+        <translation>Message d&apos;erreur expliquant pourquoi des privilèges élevés sont nécessaires</translation>
     </message>
     <message>
         <source>Exit</source>
-        <translation type="unfinished"></translation>
+        <translation>Quitter</translation>
     </message>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
-        <translation type="unfinished"></translation>
+        <translation>Quitter Raspberry Pi Imager – vous devez le relancer avec des privilèges élevés pour écrire des images</translation>
     </message>
     <message>
         <source>Install Authorization</source>
@@ -2370,15 +2374,15 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
-        <translation type="unfinished"></translation>
+        <translation>Installer les autorisations système pour permettre à Raspberry Pi Imager de fonctionner avec des privilèges élevés</translation>
     </message>
     <message>
         <source>Save Performance Data</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer les données de performance</translation>
     </message>
     <message>
         <source>JSON files (*.json)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichiers JSON (*.json)</translation>
     </message>
     <message>
         <source>All files (*)</source>
