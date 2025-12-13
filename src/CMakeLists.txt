@@ -330,18 +330,8 @@ if(GENERATE_TIMEZONES_FROM_IANA)
     set(TZDATA_VERSION "2025b") # Update this to get newer timezone data
     set(TZDATA_URL "https://data.iana.org/time-zones/releases/tzdata${TZDATA_VERSION}.tar.gz")
 
-    # Reuse the helper to produce a generated qrc aliasing timezones.txt
-    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
-    set(GENERATED_TIMEZONES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/timezones_generated.txt")
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt")
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt"
-            "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}"
-            COPYONLY
-        )
-    else()
-        file(WRITE "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}" "# placeholder\n")
-    endif()
+    # The generator script handles fallback internally - it downloads from API
+    # and falls back to the source file if the download fails (offline builds)
     add_generated_resource_with_fallback(GENERATED_TZ_QRC GENERATE_TIMEZONES_TGT timezones
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateTimezones.cmake
         timezones_generated.txt timezones.txt
@@ -357,17 +347,9 @@ option(GENERATE_COUNTRIES_FROM_REGDB "Generate countries list from latest wirele
 
 if(GENERATE_COUNTRIES_FROM_REGDB)
     set(REGDB_URL "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain/db.txt")
-    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
-    set(GENERATED_COUNTRIES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/countries_generated.txt")
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/countries.txt")
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/countries.txt"
-            "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}"
-            COPYONLY
-        )
-    else()
-        file(WRITE "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}" "# placeholder\n")
-    endif()
+
+    # The generator script handles fallback internally - it downloads from API
+    # and falls back to the source file if the download fails (offline builds)
     add_generated_resource_with_fallback(GENERATED_COUNTRIES_QRC GENERATE_COUNTRIES_TGT countries
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateRegdbCountries.cmake
         countries_generated.txt countries.txt
@@ -381,17 +363,9 @@ option(GENERATE_CAPITAL_CITIES "Generate capital cities list from REST Countries
 
 if(GENERATE_CAPITAL_CITIES)
     set(REST_COUNTRIES_URL "https://restcountries.com/v3.1/all?fields=name,capital,cca2,timezones")
-    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
-    set(GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/capital-cities_generated.txt")
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/capital-cities.txt")
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/capital-cities.txt"
-            "${GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER}"
-            COPYONLY
-        )
-    else()
-        file(WRITE "${GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER}" "# placeholder\n")
-    endif()
+
+    # The generator script handles fallback internally - it downloads from API
+    # and falls back to the source file if the download fails (offline builds)
     add_generated_resource_with_fallback(GENERATED_CAPITAL_CITIES_QRC GENERATE_CAPITAL_CITIES_TGT capital-cities
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateCapitalCities.cmake
         capital-cities_generated.txt capital-cities.txt
@@ -484,6 +458,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/dialogs/UpdateAvailableDialog.qml
         wizard/dialogs/RepositoryDialog.qml
         wizard/dialogs/AppOptionsDialog.qml
+        wizard/dialogs/DebugOptionsDialog.qml
         wizard/LanguageSelectionStep.qml
         qmlcomponents/BaseDialog.qml
         qmlcomponents/ImButton.qml

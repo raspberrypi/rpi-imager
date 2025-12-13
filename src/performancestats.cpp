@@ -391,7 +391,7 @@ QString PerformanceStats::eventTypeName(EventType type)
         // Memory management
         case EventType::MemoryAllocation: return "memoryAllocation";
         case EventType::BufferResize: return "bufferResize";
-        case EventType::PageCacheFlush: return "pageCacheFlush";
+        case EventType::PeriodicSync: return "periodicSync";
         case EventType::RingBufferStarvation: return "ringBufferStarvation";
         
         // Image processing
@@ -404,6 +404,11 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::PipelineWriteWaitTime: return "pipelineWriteWaitTime";
         case EventType::PipelineRingBufferWaitTime: return "pipelineRingBufferWaitTime";
         case EventType::WriteRingBufferStats: return "writeRingBufferStats";
+        
+        // Write timing breakdown (detailed instrumentation)
+        case EventType::WriteTimingBreakdown: return "writeTimingBreakdown";
+        case EventType::WriteSizeDistribution: return "writeSizeDistribution";
+        case EventType::WriteAfterSyncImpact: return "writeAfterSyncImpact";
         
         // Cycle boundaries
         case EventType::CycleStart: return "cycleStart";
@@ -688,6 +693,30 @@ QJsonDocument PerformanceStats::exportToJson() const
         if (!_systemInfo.qtBuildVersion.isEmpty())
             imager["qtBuild"] = _systemInfo.qtBuildVersion;
         sysInfo["imager"] = imager;
+        
+        // Write configuration (helps diagnose performance issues like sync overhead)
+        QJsonObject writeConfig;
+        writeConfig["directIOEnabled"] = _systemInfo.directIOEnabled;
+        writeConfig["periodicSyncEnabled"] = _systemInfo.periodicSyncEnabled;
+        if (_systemInfo.periodicSyncEnabled) {
+            writeConfig["syncIntervalBytes"] = _systemInfo.syncIntervalBytes;
+            writeConfig["syncIntervalMB"] = _systemInfo.syncIntervalBytes / (1024 * 1024);
+            writeConfig["syncIntervalMs"] = _systemInfo.syncIntervalMs;
+        }
+        if (!_systemInfo.memoryTier.isEmpty())
+            writeConfig["memoryTier"] = _systemInfo.memoryTier;
+        
+        // Buffer configuration
+        QJsonObject buffers;
+        buffers["writeBufferBytes"] = _systemInfo.writeBufferSize;
+        buffers["writeBufferKB"] = _systemInfo.writeBufferSize / 1024;
+        buffers["inputBufferBytes"] = _systemInfo.inputBufferSize;
+        buffers["inputBufferKB"] = _systemInfo.inputBufferSize / 1024;
+        buffers["inputRingBufferSlots"] = _systemInfo.inputRingBufferSlots;
+        buffers["writeRingBufferSlots"] = _systemInfo.writeRingBufferSlots;
+        writeConfig["buffers"] = buffers;
+        
+        sysInfo["writeConfig"] = writeConfig;
         
         root["system"] = sysInfo;
     }

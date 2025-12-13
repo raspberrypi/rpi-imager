@@ -130,12 +130,28 @@ DiskpartResult unmountVolumes(const QByteArray &device, TimingCallback timingCal
                     qDebug() << "Failed to dismount volume" << driveLetter << "- continuing anyway";
                 }
                 
-                // Unlock and close
+                // Unlock and close the volume handle BEFORE removing mount point
                 DeviceIoControl(hVolume, FSCTL_UNLOCK_VOLUME, nullptr, 0, nullptr, 0, &bytesReturned, nullptr);
                 CloseHandle(hVolume);
                 
+                // Remove the drive letter assignment using DeleteVolumeMountPoint
+                // This is the KEY step that prevents "Insert a disk" dialogs!
+                // Unlike FSCTL_DISMOUNT_VOLUME which just unmounts the filesystem,
+                // DeleteVolumeMountPoint removes the drive letter entirely so
+                // Windows Explorer won't try to access it after we clean the disk.
+                QString mountPoint = driveLetter + "\\";  // Must end with backslash
+                if (DeleteVolumeMountPointW(reinterpret_cast<LPCWSTR>(mountPoint.utf16())))
+                {
+                    qDebug() << "Removed drive letter" << driveLetter;
+                }
+                else
+                {
+                    DWORD error = GetLastError();
+                    qDebug() << "Failed to remove drive letter" << driveLetter << "error:" << error << "- continuing anyway";
+                }
+                
                 // Notify Explorer that the drive has been removed
-                // This prevents Explorer from showing "Insert a disk" dialogs
+                // This is a secondary notification to help Explorer update its view
                 notifyShellDriveRemoved(driveLetter);
                 
                 volumesProcessed++;
