@@ -833,6 +833,322 @@ def analyse_histograms(data: dict) -> dict:
     return analysis
 
 
+def analyse_write_timing_breakdown(data: dict) -> dict:
+    """Analyse detailed write timing breakdown for hypothesis testing."""
+    events = data.get('events', [])
+    
+    breakdown = {
+        'writeOps': 0,
+        'syscallMs': 0,
+        'preHashWaitMs': 0,
+        'postHashWaitMs': 0,
+        'syncMs': 0,
+        'syncCount': 0,
+        'minWriteSizeKB': 0,
+        'maxWriteSizeKB': 0,
+        'avgWriteSizeKB': 0,
+        'totalBytes': 0,
+        'writeCount': 0,
+        'beforeSyncKBps': 0,
+        'afterSyncKBps': 0,
+        'syncImpactPercent': 0,
+        'hashWaitPercent': 0,
+        'syscallPercent': 0,
+    }
+    
+    for event in events:
+        event_type = event.get('type', '')
+        metadata = event.get('metadata', '')
+        
+        if event_type == 'writeTimingBreakdown':
+            # Parse: "writeOps: 1234; syscallMs: 5678; preHashWaitMs: 123; postHashWaitMs: 456; syncMs: 789; syncCount: 12"
+            parts = {p.split(':')[0].strip(): p.split(':')[1].strip() 
+                    for p in metadata.split(';') if ':' in p}
+            breakdown['writeOps'] = int(parts.get('writeOps', 0))
+            breakdown['syscallMs'] = int(parts.get('syscallMs', 0))
+            breakdown['preHashWaitMs'] = int(parts.get('preHashWaitMs', 0))
+            breakdown['postHashWaitMs'] = int(parts.get('postHashWaitMs', 0))
+            breakdown['syncMs'] = int(parts.get('syncMs', 0))
+            breakdown['syncCount'] = int(parts.get('syncCount', 0))
+            
+        elif event_type == 'writeSizeDistribution':
+            # Parse: "minKB: 128; maxKB: 1024; avgKB: 512; totalBytes: 1234567890; count: 1000"
+            parts = {p.split(':')[0].strip(): p.split(':')[1].strip() 
+                    for p in metadata.split(';') if ':' in p}
+            breakdown['minWriteSizeKB'] = int(parts.get('minKB', 0))
+            breakdown['maxWriteSizeKB'] = int(parts.get('maxKB', 0))
+            breakdown['avgWriteSizeKB'] = int(parts.get('avgKB', 0))
+            breakdown['totalBytes'] = int(parts.get('totalBytes', 0))
+            breakdown['writeCount'] = int(parts.get('count', 0))
+            
+        elif event_type == 'writeAfterSyncImpact':
+            # Parse: "beforeSyncKBps: 12345; afterSyncKBps: 6789; samples: 100; impactPercent: 45"
+            parts = {p.split(':')[0].strip(): p.split(':')[1].strip() 
+                    for p in metadata.split(';') if ':' in p}
+            breakdown['beforeSyncKBps'] = int(parts.get('beforeSyncKBps', 0))
+            breakdown['afterSyncKBps'] = int(parts.get('afterSyncKBps', 0))
+            breakdown['syncImpactPercent'] = int(parts.get('impactPercent', 0))
+    
+    # Calculate percentages
+    total_time = (breakdown['syscallMs'] + breakdown['preHashWaitMs'] + 
+                  breakdown['postHashWaitMs'] + breakdown['syncMs'])
+    if total_time > 0:
+        breakdown['syscallPercent'] = int(100 * breakdown['syscallMs'] / total_time)
+        breakdown['hashWaitPercent'] = int(100 * (breakdown['preHashWaitMs'] + 
+                                                   breakdown['postHashWaitMs']) / total_time)
+    
+    return breakdown
+
+
+def print_write_timing_breakdown(breakdown: dict) -> None:
+    """Print detailed write timing breakdown analysis."""
+    if breakdown['writeOps'] == 0:
+        return  # No write timing data available
+    
+    print("\n" + "-" * 60)
+    print("WRITE TIMING BREAKDOWN (Hypothesis Testing)")
+    print("-" * 60)
+    
+    total_time = (breakdown['syscallMs'] + breakdown['preHashWaitMs'] + 
+                  breakdown['postHashWaitMs'] + breakdown['syncMs'])
+    
+    print(f"\n  Write Operations: {breakdown['writeOps']:,}")
+    print(f"  Total Time:       {format_duration(total_time)}")
+    
+    # Timing breakdown
+    print(f"\n  Time Breakdown:")
+    print(f"    Syscall (write()):     {format_duration(breakdown['syscallMs']):>12} ({breakdown['syscallPercent']}%)")
+    print(f"    Pre-hash wait:         {format_duration(breakdown['preHashWaitMs']):>12}")
+    print(f"    Post-hash wait:        {format_duration(breakdown['postHashWaitMs']):>12}")
+    total_hash = breakdown['preHashWaitMs'] + breakdown['postHashWaitMs']
+    print(f"    Total hash wait:       {format_duration(total_hash):>12} ({breakdown['hashWaitPercent']}%)")
+    print(f"    Sync (fsync):          {format_duration(breakdown['syncMs']):>12} ({breakdown['syncCount']} calls)")
+    
+    # Hypothesis evaluation
+    print(f"\n  Hypothesis Evaluation:")
+    
+    # Hypothesis 1: Periodic sync overhead
+    if breakdown['syncCount'] > 0:
+        avg_sync = breakdown['syncMs'] // max(1, breakdown['syncCount'])
+        if breakdown['syncMs'] > total_time * 0.1:
+            print(f"    H1 (Periodic Sync): ⚠️  Sync took {breakdown['syncMs']/total_time*100:.1f}% of write time ({breakdown['syncCount']} calls, avg {avg_sync}ms)")
+        else:
+            print(f"    H1 (Periodic Sync): ✓ Sync overhead low ({breakdown['syncMs']/total_time*100:.1f}% of write time)")
+    else:
+        print(f"    H1 (Periodic Sync): ✓ No syncs performed (likely direct I/O or skipped)")
+    
+    # Hypothesis 2: Write chunk size
+    if breakdown['writeCount'] > 0:
+        if breakdown['avgWriteSizeKB'] < 128:
+            print(f"    H2 (Chunk Size): ⚠️  Small chunks ({breakdown['avgWriteSizeKB']} KB avg) - may cause syscall overhead")
+        else:
+            print(f"    H2 (Chunk Size): ✓ Good chunk size ({breakdown['avgWriteSizeKB']} KB avg)")
+    
+    # Hypothesis 5: Hash computation blocking
+    if total_hash > total_time * 0.2:
+        print(f"    H5 (Hash Blocking): ⚠️  Hash wait is {breakdown['hashWaitPercent']}% of write time - may be bottleneck")
+    else:
+        print(f"    H5 (Hash Blocking): ✓ Hash computation not a bottleneck ({breakdown['hashWaitPercent']}%)")
+    
+    # Hypothesis 7: F_NOCACHE + fsync interaction
+    if breakdown['beforeSyncKBps'] > 0 and breakdown['afterSyncKBps'] > 0:
+        if breakdown['syncImpactPercent'] > 20:
+            print(f"    H7 (Sync Impact): ⚠️  Throughput drops {breakdown['syncImpactPercent']}% after fsync")
+            print(f"        Before sync: {format_throughput(breakdown['beforeSyncKBps'])}")
+            print(f"        After sync:  {format_throughput(breakdown['afterSyncKBps'])}")
+        else:
+            print(f"    H7 (Sync Impact): ✓ No significant throughput drop after fsync ({breakdown['syncImpactPercent']}%)")
+    
+    # Write size distribution
+    if breakdown['writeCount'] > 0:
+        print(f"\n  Write Size Distribution:")
+        print(f"    Min:   {breakdown['minWriteSizeKB']:>8} KB")
+        print(f"    Max:   {breakdown['maxWriteSizeKB']:>8} KB")
+        print(f"    Avg:   {breakdown['avgWriteSizeKB']:>8} KB")
+        print(f"    Total: {format_bytes(breakdown['totalBytes'])} across {breakdown['writeCount']:,} writes")
+
+
+def analyse_pipeline_timing(data: dict) -> dict:
+    """Analyse pipeline timing events to identify bottlenecks and sync overhead."""
+    events = data.get('events', [])
+    phases = data.get('summary', {}).get('phases', {})
+    
+    pipeline_analysis = {
+        'decompressionTimeMs': 0,
+        'writeWaitTimeMs': 0,
+        'ringBufferWaitTimeMs': 0,
+        'actualDecompressionMs': 0,
+        'bottleneck': 'unknown',
+        'bottleneckConfidence': 'low',
+        'syncOverheadMs': 0,
+        'syncOverheadPercent': 0,
+        'periodicSyncCount': 0,
+        'periodicSyncTotalMs': 0,
+        'periodicSyncAvgMs': 0,
+        'writeThrottled': False,
+        'directIOEnabled': False,
+    }
+    
+    # Extract pipeline timing events
+    for event in events:
+        event_type = event.get('type', '')
+        duration = event.get('durationMs', 0)
+        metadata = event.get('metadata', '')
+        
+        if event_type == 'pipelineDecompressionTime':
+            pipeline_analysis['decompressionTimeMs'] = duration
+        elif event_type == 'pipelineWriteWaitTime':
+            pipeline_analysis['writeWaitTimeMs'] = duration
+        elif event_type == 'pipelineRingBufferWaitTime':
+            pipeline_analysis['ringBufferWaitTimeMs'] = duration
+        elif event_type in ('pageCacheFlush', 'periodicSync'):
+            pipeline_analysis['periodicSyncCount'] += 1
+            pipeline_analysis['periodicSyncTotalMs'] += duration
+        elif event_type == 'directIOAttempt':
+            if 'succeeded: yes' in metadata:
+                pipeline_analysis['directIOEnabled'] = True
+        elif event_type == 'driveOpen':
+            if 'direct_io: yes' in metadata:
+                pipeline_analysis['directIOEnabled'] = True
+    
+    # Calculate actual decompression time (excluding ring buffer waits)
+    pipeline_analysis['actualDecompressionMs'] = (
+        pipeline_analysis['decompressionTimeMs'] - 
+        pipeline_analysis['ringBufferWaitTimeMs']
+    )
+    
+    # Calculate average sync time
+    if pipeline_analysis['periodicSyncCount'] > 0:
+        pipeline_analysis['periodicSyncAvgMs'] = (
+            pipeline_analysis['periodicSyncTotalMs'] // 
+            pipeline_analysis['periodicSyncCount']
+        )
+    
+    # Determine bottleneck from pipeline timing
+    decomp = pipeline_analysis['actualDecompressionMs']
+    write_wait = pipeline_analysis['writeWaitTimeMs']
+    ring_wait = pipeline_analysis['ringBufferWaitTimeMs']
+    
+    if decomp > 0 or write_wait > 0 or ring_wait > 0:
+        if ring_wait > write_wait and ring_wait > decomp:
+            pipeline_analysis['bottleneck'] = 'network'
+            pipeline_analysis['bottleneckConfidence'] = 'high'
+        elif write_wait > ring_wait and write_wait > decomp:
+            pipeline_analysis['bottleneck'] = 'disk'
+            pipeline_analysis['bottleneckConfidence'] = 'high'
+        elif decomp > ring_wait and decomp > write_wait:
+            pipeline_analysis['bottleneck'] = 'cpu'
+            pipeline_analysis['bottleneckConfidence'] = 'high'
+    
+    # Calculate sync overhead by comparing write vs verify throughput
+    write_phase = phases.get('write', {})
+    verify_phase = phases.get('verify', {})
+    
+    write_throughput = write_phase.get('avgThroughputKBps', 0)
+    verify_throughput = verify_phase.get('avgThroughputKBps', 0)
+    write_duration = write_phase.get('durationMs', 0)
+    
+    # If verify is significantly faster than write (>1.5x), there may be sync overhead
+    if verify_throughput > 0 and write_throughput > 0:
+        throughput_ratio = verify_throughput / write_throughput
+        if throughput_ratio > 1.5:
+            pipeline_analysis['writeThrottled'] = True
+            # Estimate sync overhead: how much faster could write have been?
+            expected_write_duration = write_duration / throughput_ratio
+            pipeline_analysis['syncOverheadMs'] = int(write_duration - expected_write_duration)
+            pipeline_analysis['syncOverheadPercent'] = int(
+                (1 - 1/throughput_ratio) * 100
+            )
+    
+    return pipeline_analysis
+
+
+def print_system_write_config(data: dict) -> None:
+    """Print system write configuration from performance data."""
+    system = data.get('system', {})
+    write_config = system.get('writeConfig', {})
+    buffers = write_config.get('buffers', {})
+    
+    if not write_config:
+        return
+    
+    print("\n" + "-" * 60)
+    print("WRITE CONFIGURATION")
+    print("-" * 60)
+    
+    # Direct I/O and sync settings
+    dio = write_config.get('directIOEnabled', False)
+    sync_enabled = write_config.get('periodicSyncEnabled', True)
+    
+    print(f"\n  Direct I/O:      {'✓ Enabled' if dio else '✗ Disabled'}")
+    print(f"  Periodic Sync:   {'✓ Enabled' if sync_enabled else '✗ Disabled (skipped with direct I/O)'}")
+    
+    if sync_enabled:
+        sync_bytes = write_config.get('syncIntervalBytes', 0)
+        sync_ms = write_config.get('syncIntervalMs', 0)
+        print(f"    Sync interval: {format_bytes(sync_bytes)} or {format_duration(sync_ms)}")
+    
+    # Memory tier
+    tier = write_config.get('memoryTier', '')
+    if tier:
+        print(f"  Memory Tier:     {tier}")
+    
+    # Buffer sizes
+    if buffers:
+        print(f"\n  Buffer Configuration:")
+        print(f"    Write buffer:  {buffers.get('writeBufferKB', 0):,} KB")
+        print(f"    Input buffer:  {buffers.get('inputBufferKB', 0):,} KB")
+        print(f"    Input ring:    {buffers.get('inputRingBufferSlots', 0)} slots")
+        print(f"    Write ring:    {buffers.get('writeRingBufferSlots', 0)} slots")
+
+
+def print_pipeline_analysis(pipeline: dict) -> None:
+    """Print pipeline bottleneck analysis."""
+    print("\n" + "-" * 60)
+    print("PIPELINE BOTTLENECK ANALYSIS")
+    print("-" * 60)
+    
+    # Direct I/O status
+    dio_status = "✓ Enabled (F_NOCACHE/O_DIRECT)" if pipeline['directIOEnabled'] else "✗ Disabled (buffered I/O)"
+    print(f"\n  Direct I/O: {dio_status}")
+    
+    # Pipeline timing breakdown
+    if pipeline['decompressionTimeMs'] > 0:
+        print(f"\n  Pipeline Timing:")
+        print(f"    Total decompression loop:    {format_duration(pipeline['decompressionTimeMs'])}")
+        print(f"      - Waiting for network:     {format_duration(pipeline['ringBufferWaitTimeMs'])} ({100*pipeline['ringBufferWaitTimeMs']//max(1,pipeline['decompressionTimeMs'])}%)")
+        print(f"      - CPU decompression work:  {format_duration(pipeline['actualDecompressionMs'])} ({100*pipeline['actualDecompressionMs']//max(1,pipeline['decompressionTimeMs'])}%)")
+        print(f"    Waiting for disk writes:     {format_duration(pipeline['writeWaitTimeMs'])}")
+    
+    # Bottleneck determination
+    bottleneck_labels = {
+        'network': '🌐 Network (download too slow)',
+        'disk': '💾 Disk (writes too slow)', 
+        'cpu': '🔥 CPU (decompression bound)',
+        'unknown': '❓ Unknown (insufficient data)'
+    }
+    print(f"\n  Bottleneck: {bottleneck_labels.get(pipeline['bottleneck'], pipeline['bottleneck'])}")
+    
+    # Periodic sync analysis
+    if pipeline['periodicSyncCount'] > 0:
+        print(f"\n  Periodic Sync Events:")
+        print(f"    Count:       {pipeline['periodicSyncCount']} syncs during write")
+        print(f"    Total time:  {format_duration(pipeline['periodicSyncTotalMs'])}")
+        print(f"    Average:     {pipeline['periodicSyncAvgMs']} ms per sync")
+        
+        if pipeline['directIOEnabled'] and pipeline['periodicSyncCount'] > 10:
+            print(f"    ⚠️  Many syncs with direct I/O enabled - syncs may be unnecessary")
+    
+    # Write throttling / sync overhead detection
+    if pipeline['writeThrottled']:
+        print(f"\n  ⚠️  WRITE THROTTLING DETECTED:")
+        print(f"    Verify throughput is significantly faster than write throughput.")
+        print(f"    Estimated sync overhead: {format_duration(pipeline['syncOverheadMs'])} ({pipeline['syncOverheadPercent']}% of write time)")
+        print(f"    This suggests the disk is capable of faster writes but is being held back.")
+        if not pipeline['directIOEnabled']:
+            print(f"    Consider enabling direct I/O to bypass page cache.")
+
+
 def print_analysis(analysis: dict) -> None:
     """Print histogram analysis results."""
     print("\n" + "-" * 60)
@@ -2120,9 +2436,20 @@ def main():
     
     print_phase_stats(data)
     
+    # Print write configuration from system info
+    print_system_write_config(data)
+    
     # Analyse histograms
     analysis = analyse_histograms(data)
     print_analysis(analysis)
+    
+    # Pipeline bottleneck and sync overhead analysis
+    pipeline = analyse_pipeline_timing(data)
+    print_pipeline_analysis(pipeline)
+    
+    # Detailed write timing breakdown (for hypothesis testing)
+    write_breakdown = analyse_write_timing_breakdown(data)
+    print_write_timing_breakdown(write_breakdown)
     
     # Generate HTML report
     if generate_html:

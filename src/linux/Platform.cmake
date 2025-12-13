@@ -2,6 +2,18 @@
 
 find_package(GnuTLS REQUIRED)
 
+# Find liburing for async I/O (Linux 5.1+)
+# Uses pkg-config since liburing doesn't have a CMake config
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBURING liburing)
+
+if(LIBURING_FOUND)
+    message(STATUS "Found liburing: ${LIBURING_VERSION}")
+    add_definitions(-DHAVE_LIBURING)
+else()
+    message(WARNING "liburing not found - async I/O will be disabled. Install with: sudo apt install liburing-dev")
+endif()
+
 set(PLATFORM_SOURCES
     dependencies/mountutils/src/linux/functions.cpp
     linux/linuxdrivelist.cpp
@@ -33,6 +45,13 @@ else()
 endif()
 
 set(EXTRALIBS ${EXTRALIBS} GnuTLS::GnuTLS idn2 nettle)
+
+# Add liburing if available
+if(LIBURING_FOUND)
+    set(EXTRALIBS ${EXTRALIBS} ${LIBURING_LIBRARIES})
+    include_directories(${LIBURING_INCLUDE_DIRS})
+endif()
+
 set(DEPENDENCIES "")
 add_definitions(-DHAVE_GNUTLS)
 

@@ -87,18 +87,27 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     _ringBuffer = std::make_unique<RingBuffer>(numSlots, inputBufferSize, pageSize);
     
     // Create ring buffer for decompress -> write path (decompressed data)
-    // Uses 4 slots to provide enough pipeline slack:
-    // - Slot N: being decompressed into
-    // - Slot N-1: write in progress, hash computation running
-    // - Slot N-2: hash being finalized
-    // - Slot N-3: available for reuse
-    // This eliminates the race condition where a buffer was reused before its hash completed
-    static const size_t WRITE_RING_BUFFER_SLOTS = 4;
-    _writeRingBuffer = std::make_unique<RingBuffer>(WRITE_RING_BUFFER_SLOTS, _writeBufferSize, pageSize);
+    // With zero-copy async I/O, ring buffer slots serve as async I/O buffers.
+    // Size based on optimal queue depth (calculated from available memory) plus headroom.
+    // This avoids over-allocation while still allowing decompression to stay ahead.
+    int optimalDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth(_writeBufferSize);
+    
+    // Add headroom: 2x optimal depth or optimal + 64, whichever is larger
+    // This allows decompression to buffer ahead while async writes drain
+    int writeRingBufferDepth = qMax(optimalDepth * 2, optimalDepth + 64);
+    
+    // Cap to a reasonable maximum to prevent excessive memory usage
+    // 512 slots @ 8MB = 4GB, which is reasonable for high-memory systems
+    static const int MAX_RING_BUFFER_DEPTH = 512;
+    writeRingBufferDepth = qMin(writeRingBufferDepth, MAX_RING_BUFFER_DEPTH);
+    
+    size_t writeRingBufferSlots = static_cast<size_t>(writeRingBufferDepth + 4);
+    _writeRingBuffer = std::make_unique<RingBuffer>(writeRingBufferSlots, _writeBufferSize, pageSize);
     
     qDebug() << "Using buffer size:" << _writeBufferSize << "bytes with page size:" << pageSize << "bytes";
     qDebug() << "Ring buffer:" << RING_BUFFER_SLOTS << "slots of" << inputBufferSize << "bytes";
-    qDebug() << "Write ring buffer:" << WRITE_RING_BUFFER_SLOTS << "slots of" << _writeBufferSize << "bytes";
+    qDebug() << "Write ring buffer:" << writeRingBufferSlots << "slots of" << _writeBufferSize << "bytes"
+             << "(optimal depth:" << optimalDepth << ", max configurable:" << writeRingBufferDepth << ")";
 }
 
 DownloadExtractThread::~DownloadExtractThread()
@@ -109,6 +118,13 @@ DownloadExtractThread::~DownloadExtractThread()
     if (!_extractThread->wait(10000))
     {
         _extractThread->terminate();
+    }
+    
+    // Wait for any pending async writes before destroying ring buffers
+    // The async completion callbacks reference the ring buffer, so we must
+    // ensure they've all completed before destruction
+    if (_file && _file->IsAsyncIOSupported()) {
+        _file->WaitForPendingWrites();
     }
     
     // Ring buffer destructors handle memory cleanup
@@ -311,13 +327,10 @@ void DownloadExtractThread::extractImageRun()
         QElapsedTimer decompressTimer;
         QElapsedTimer writeWaitTimer;
         
-        // Track the previous write slot so we can release it after the write completes
-        RingBuffer::Slot* previousWriteSlot = nullptr;
-        
         while (true)
         {
             // Acquire a slot from the write ring buffer
-            // This blocks if all slots are in use (back-pressure from slow writes)
+            // This blocks if all slots are in use (back-pressure from slow writes or async I/O)
             RingBuffer::Slot* slot = _writeRingBuffer->acquireWriteSlot(100);
             while (!slot && !_cancelled && !_writeRingBuffer->isCancelled()) {
                 slot = _writeRingBuffer->acquireWriteSlot(100);
@@ -367,19 +380,18 @@ void DownloadExtractThread::extractImageRun()
 
             if (_writeThreadStarted)
             {
-                // Time waiting for previous write to complete
+                // Time waiting for previous write to complete (for non-async path)
                 writeWaitTimer.start();
                 bool writeResult = _writeFuture.result();
                 _totalWriteWaitMs.fetch_add(static_cast<quint64>(writeWaitTimer.elapsed()));
                 
-                // Previous write is complete (including hash), release its slot
-                if (previousWriteSlot) {
-                    _writeRingBuffer->releaseReadSlot(previousWriteSlot);
-                    previousWriteSlot = nullptr;
-                }
-                
                 if (!writeResult)
                 {
+                    // Wait for pending async writes before cleanup
+                    if (_file && _file->IsAsyncIOSupported()) {
+                        _file->WaitForPendingWrites();
+                    }
+                    
                     // Release current slot before returning
                     _writeRingBuffer->releaseReadSlot(slot);
                     if (!_cancelled)
@@ -391,29 +403,43 @@ void DownloadExtractThread::extractImageRun()
                 }
             }
 
-            // Remember this slot so we can release it after the write completes
-            previousWriteSlot = slot;
+            // Create a completion callback that releases the ring buffer slot
+            // This enables ZERO-COPY async I/O: the slot stays valid until the
+            // async write truly completes, then is returned to the pool.
+            // Capture slot and buffer pointers by value for the callback.
+            RingBuffer* ringBuf = _writeRingBuffer.get();
+            RingBuffer::Slot* slotToRelease = slot;
+            DownloadThread::WriteCompleteCallback releaseCallback = [ringBuf, slotToRelease]() {
+                ringBuf->releaseReadSlot(slotToRelease);
+            };
             
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread*>(this), slot->data, static_cast<size_t>(size));
+            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread*>(this), 
+                                             slot->data, static_cast<size_t>(size), releaseCallback);
 #else
-            _writeFuture = QtConcurrent::run(static_cast<DownloadThread*>(this), &DownloadThread::_writeFile, slot->data, static_cast<size_t>(size));
+            _writeFuture = QtConcurrent::run(static_cast<DownloadThread*>(this), &DownloadThread::_writeFile, 
+                                             slot->data, static_cast<size_t>(size), releaseCallback);
 #endif
             _writeThreadStarted = true;
         }
 
         if (_writeThreadStarted) {
             _writeFuture.waitForFinished();
-            // Release the final slot
-            if (previousWriteSlot) {
-                _writeRingBuffer->releaseReadSlot(previousWriteSlot);
-                previousWriteSlot = nullptr;
-            }
+            // Slots are released by the completion callback, no need to track here
         }
         _writeComplete();
     }
     catch (exception &e)
     {
+        // Wait for pending async writes before cleanup
+        // Their callbacks reference the ring buffer, so we must wait
+        if (_writeThreadStarted) {
+            _writeFuture.waitForFinished();
+        }
+        if (_file && _file->IsAsyncIOSupported()) {
+            _file->WaitForPendingWrites();
+        }
+        
         if (!_cancelled)
         {
             // Fatal error
@@ -440,6 +466,9 @@ void DownloadExtractThread::extractImageRun()
              << "decompress=" << _totalDecompressionMs.load() << "ms"
              << "(ring_wait=" << _totalRingBufferWaitMs.load() << "ms)"
              << "write_wait=" << _totalWriteWaitMs.load() << "ms";
+    
+    // Emit detailed write timing breakdown for hypothesis testing
+    _emitWriteTimingStats();
     
     // Log and emit write ring buffer statistics
     if (_writeRingBuffer) {

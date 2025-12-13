@@ -38,6 +38,7 @@ function(add_generated_resource_with_fallback OUT_QRC_VAR OUT_TARGET_VAR NAME SC
     set(gen_qrc    "${CMAKE_CURRENT_BINARY_DIR}/${NAME}_generated.qrc")
 
     # Invoke the provided script with OUTPUT_FILE and SOURCE_DIR plus any extra args
+    # DEPENDS on the script and fallback ensures regeneration when either changes
     add_custom_command(
         OUTPUT ${output_file}
         COMMAND ${CMAKE_COMMAND}
@@ -45,7 +46,8 @@ function(add_generated_resource_with_fallback OUT_QRC_VAR OUT_TARGET_VAR NAME SC
             -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             ${AGR_EXTRA_CMAKE_ARGS}
             -P ${SCRIPT}
-        COMMENT "Generating ${NAME} data with fallback to source tree"
+        DEPENDS ${SCRIPT} ${FALLBACK_SOURCE}
+        COMMENT "Generating ${NAME} data (downloads from API, falls back to source if offline)"
         VERBATIM
     )
 

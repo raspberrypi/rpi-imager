@@ -62,7 +62,7 @@ public:
         // Memory management
         MemoryAllocation,      // Time for large memory allocations
         BufferResize,          // Time to resize buffers
-        PageCacheFlush,        // Time to flush system page cache
+        PeriodicSync,          // Periodic fsync during write (skipped when direct I/O enabled)
         RingBufferStarvation,  // Ring buffer starvation stats (producer/consumer waits)
         
         // Image processing
@@ -75,6 +75,11 @@ public:
         PipelineWriteWaitTime,     // Total time blocked waiting for disk writes
         PipelineRingBufferWaitTime,// Total time waiting for ring buffer data (input buffer)
         WriteRingBufferStats,      // Write ring buffer stall statistics (decompress->write)
+        
+        // Write timing breakdown (detailed instrumentation for hypothesis testing)
+        WriteTimingBreakdown,      // Detailed breakdown: syscall time, hash wait, sync time
+        WriteSizeDistribution,     // Distribution of write chunk sizes
+        WriteAfterSyncImpact,      // Throughput comparison before/after sync calls
         
         // Cycle boundaries (for multi-write sessions)
         CycleStart,            // Start of a new imaging cycle (metadata: image name, device)
@@ -160,6 +165,19 @@ public:
         QString imagerBinarySha256;     // SHA256 of the executable binary
         QString qtVersion;              // Qt runtime version
         QString qtBuildVersion;         // Qt version used at compile time
+        
+        // Write configuration (helps diagnose performance issues)
+        bool directIOEnabled;           // True if direct I/O (F_NOCACHE/O_DIRECT) is enabled
+        bool periodicSyncEnabled;       // True if periodic sync is enabled (false if direct I/O)
+        qint64 syncIntervalBytes;       // Sync interval in bytes (0 if periodic sync disabled)
+        qint64 syncIntervalMs;          // Sync interval in milliseconds
+        QString memoryTier;             // Memory tier description (e.g., "High memory (16384MB)")
+        
+        // Buffer configuration (helps diagnose buffer-related issues)
+        qint64 writeBufferSize;         // Size of each write buffer in bytes
+        qint64 inputBufferSize;         // Size of input (download) buffer in bytes
+        int inputRingBufferSlots;       // Number of slots in input ring buffer
+        int writeRingBufferSlots;       // Number of slots in write ring buffer
     };
 
     explicit PerformanceStats(QObject *parent = nullptr);

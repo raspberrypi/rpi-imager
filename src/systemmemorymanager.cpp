@@ -470,6 +470,7 @@ void SystemMemoryManager::logConfigurationSummary()
     SyncConfiguration syncConfig = calculateSyncConfiguration();
     size_t inputBuf = getOptimalInputBufferSize();
     size_t writeBuf = getOptimalWriteBufferSize();
+    int asyncDepth = getOptimalAsyncQueueDepth(writeBuf);
     
     qDebug() << "=== Memory-Adaptive Configuration Summary ===";
     qDebug() << "Platform:" << getPlatformName();
@@ -477,8 +478,78 @@ void SystemMemoryManager::logConfigurationSummary()
     qDebug() << "Memory Tier:" << syncConfig.memoryTier;
     qDebug() << "Input Buffer:" << (inputBuf / 1024) << "KB";
     qDebug() << "Write Buffer:" << (writeBuf / 1024) << "KB";
+    qDebug() << "Async Queue Depth:" << asyncDepth;
     qDebug() << "Sync Interval:" << (syncConfig.syncIntervalBytes / (1024 * 1024)) << "MB /" 
              << syncConfig.syncIntervalMs << "ms";
     qDebug() << "=============================================";
+}
+
+int SystemMemoryManager::getOptimalAsyncQueueDepth(size_t writeBlockSize)
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    qint64 availableMemMB = getAvailableMemoryMB();
+    
+    // Async I/O queue depth strategy:
+    //
+    // With zero-copy async I/O, the ring buffer slots serve as async buffers.
+    // No extra memory copies are made - we just need enough slots.
+    //
+    // We want to balance:
+    // 1. Latency hiding: More in-flight writes = better latency coverage
+    // 2. Memory usage: Ring buffer = (depth + 4) * writeBlockSize
+    // 3. Device characteristics: SD cards benefit up to ~32-64, NVMe can use more
+    //
+    // SD cards over USB have ~5-15ms per-write latency with direct I/O.
+    // At 8MB blocks and 10ms latency:
+    //   - Queue depth 1:  ~800 MB/s theoretical max (but blocked by latency)
+    //   - Queue depth 32: ~800 MB/s actual (latency fully hidden)
+    //   - Queue depth 64+: Useful for NVMe or very slow SD cards
+    
+    // Target: Use up to 30% of available memory for async buffers
+    // Generous budget since zero-copy means the ring buffer IS the async buffer
+    // and this memory is actively being used for I/O, not wasted
+    size_t asyncBufferBudget = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 3 / 10;
+    
+    // Calculate depth from budget
+    int depthFromMemory = static_cast<int>(asyncBufferBudget / writeBlockSize);
+    
+    // Memory-tier based baseline - based on 30% of RAM / 8MB blocks
+    // With zero-copy async I/O, the ring buffer IS the async buffer
+    // Capped at 512 to keep ring buffer memory reasonable (512 * 8MB = 4GB max)
+    //
+    // Calculation: (RAM * 30%) / 8MB = queue depth
+    //   1GB → 32,  2GB → 64,  4GB → 128,  8GB → 256,  16GB+ → 512 (capped)
+    int baselineDepth;
+    if (totalMemMB < 1536) {
+        // Very low memory (< 1.5GB): Conservative
+        baselineDepth = 32;
+    } else if (totalMemMB < 3072) {
+        // Low memory (1.5-3GB): Moderate  
+        baselineDepth = 64;
+    } else if (totalMemMB < 6144) {
+        // Medium memory (3-6GB): Good headroom
+        baselineDepth = 128;
+    } else if (totalMemMB < 12288) {
+        // High memory (6-12GB)
+        baselineDepth = 256;
+    } else {
+        // Very high memory (12GB+): Maximum (capped to limit ring buffer size)
+        baselineDepth = 512;
+    }
+    
+    // Use the minimum of memory-based and baseline
+    int optimalDepth = qMin(depthFromMemory, baselineDepth);
+    
+    // Apply hard bounds
+    const int minDepth = 8;    // Below this, async overhead may exceed benefit
+    const int maxDepth = 512;  // Maximum supported by ring buffer (caps memory usage)
+    optimalDepth = qBound(minDepth, optimalDepth, maxDepth);
+    
+    qDebug() << "Optimal async queue depth:" << optimalDepth
+             << "(memory budget:" << (asyncBufferBudget / (1024 * 1024)) << "MB,"
+             << "block size:" << (writeBlockSize / 1024) << "KB,"
+             << "baseline:" << baselineDepth << ")";
+    
+    return optimalDepth;
 }
 

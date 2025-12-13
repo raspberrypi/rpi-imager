@@ -119,6 +119,26 @@ bool CacheManager::isCached(const QByteArray& expectedHash) const
     return result;
 }
 
+bool CacheManager::hasPotentialCache(const QByteArray& expectedHash) const
+{
+    QMutexLocker locker(&mutex_);
+    // Check if we have a potential cache match (hash matches, file exists)
+    // Does NOT require verification to be complete - used to decide whether to start verification
+    bool result = !expectedHash.isEmpty() && 
+                  status_.cachedHash == expectedHash && 
+                  !status_.cacheFileName.isEmpty() &&
+                  QFile::exists(status_.cacheFileName);
+    
+    if (result) {
+        qDebug() << "Potential cache found for hash:" << expectedHash 
+                 << "file:" << status_.cacheFileName
+                 << "verified:" << status_.verificationComplete
+                 << "valid:" << status_.isValid;
+    }
+    
+    return result;
+}
+
 QString CacheManager::getCacheFilePath(const QByteArray& expectedHash) const
 {
     QMutexLocker locker(&mutex_);

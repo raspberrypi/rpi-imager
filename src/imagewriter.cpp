@@ -15,6 +15,7 @@
 #include "dependencies/yescrypt/yescrypt_wrapper.h"
 #include "driveformatthread.h"
 #include "localfileextractthread.h"
+#include "systemmemorymanager.h"
 #include "downloadstatstelemetry.h"
 #include "wlancredentials.h"
 #include "device_info.h"
@@ -131,6 +132,17 @@ ImageWriter::ImageWriter(QObject *parent)
     
     // Initialise PerformanceStats
     _performanceStats = new PerformanceStats(this);
+    
+    // Initialize debug options with defaults
+    // Direct I/O is enabled by default (matches current behavior)
+    // Periodic sync is enabled by default but skipped when direct I/O is active
+    _debugDirectIO = true;
+    _debugPeriodicSync = true;
+    _debugVerboseLogging = false;
+    _debugAsyncIO = true;       // Async I/O enabled by default for performance
+    
+    // Calculate optimal async queue depth based on system memory
+    _debugAsyncQueueDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth();
     
     // Set up file operations logging to use Qt's debug output
     rpi_imager::SetFileOperationsLogCallback([](const std::string& msg) {
@@ -469,6 +481,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
     _osReleaseDate = releaseDate;
+    qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
 
     if (!_downloadLen && url.isLocalFile())
     {
@@ -651,22 +664,99 @@ void ImageWriter::startWrite()
     }
 
     // Start performance stats session early so cache lookup is captured
+    // On macOS, we use rdisk (raw device) for direct I/O - reflect that in the log
+    QString sessionDevicePath = _dst;
+#ifdef Q_OS_DARWIN
+    sessionDevicePath.replace("/dev/disk", "/dev/rdisk");
+#endif
     _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
                                     _extrLen > 0 ? _extrLen : _downloadLen, 
-                                    _dst);
+                                    sessionDevicePath);
+
+    // Populate system info for performance analysis
+    {
+        PerformanceStats::SystemInfo sysInfo;
+        auto &memMgr = SystemMemoryManager::instance();
+        
+        // Memory info
+        sysInfo.totalMemoryBytes = static_cast<quint64>(memMgr.getTotalMemoryMB()) * 1024 * 1024;
+        sysInfo.availableMemoryBytes = static_cast<quint64>(memMgr.getAvailableMemoryMB()) * 1024 * 1024;
+        
+        // Device info
+        // On macOS, we use rdisk (raw device) for direct I/O - reflect that in the log
+        QString actualDevicePath = _dst;
+#ifdef Q_OS_DARWIN
+        actualDevicePath.replace("/dev/disk", "/dev/rdisk");
+#endif
+        sysInfo.devicePath = actualDevicePath;
+        sysInfo.deviceSizeBytes = _devLen;
+        sysInfo.deviceDescription = "";  // Would need DriveListItem lookup
+        sysInfo.deviceIsUsb = true;      // Assume USB for now
+        sysInfo.deviceIsRemovable = true;
+        
+        // Platform info
+#ifdef Q_OS_MACOS
+        sysInfo.osName = "macOS";
+#elif defined(Q_OS_LINUX)
+        sysInfo.osName = "Linux";
+#elif defined(Q_OS_WIN)
+        sysInfo.osName = "Windows";
+#else
+        sysInfo.osName = "Unknown";
+#endif
+        sysInfo.osVersion = QSysInfo::productVersion();
+        sysInfo.cpuArchitecture = QSysInfo::currentCpuArchitecture();
+        sysInfo.cpuCoreCount = QThread::idealThreadCount();
+        
+        // Imager version
+        sysInfo.imagerVersion = IMAGER_VERSION_STR;
+#ifdef QT_DEBUG
+        sysInfo.imagerBuildType = "Debug";
+#else
+        sysInfo.imagerBuildType = "Release";
+#endif
+        sysInfo.qtVersion = qVersion();
+        sysInfo.qtBuildVersion = QT_VERSION_STR;
+        
+        // Write configuration - not known yet, will be set later when file is opened
+        // These will be set via the DirectIOAttempt event metadata
+        sysInfo.directIOEnabled = false;  // Default, actual value set when file opens
+        sysInfo.periodicSyncEnabled = true;  // Default
+        
+        auto syncConfig = memMgr.calculateSyncConfiguration();
+        sysInfo.syncIntervalBytes = syncConfig.syncIntervalBytes;
+        sysInfo.syncIntervalMs = syncConfig.syncIntervalMs;
+        sysInfo.memoryTier = syncConfig.memoryTier;
+        
+        // Buffer configuration
+        sysInfo.writeBufferSize = memMgr.getOptimalWriteBufferSize();
+        sysInfo.inputBufferSize = memMgr.getOptimalInputBufferSize();
+        sysInfo.inputRingBufferSlots = memMgr.getOptimalRingBufferSlots(sysInfo.inputBufferSize);
+        // Write ring buffer is dynamically sized based on optimal queue depth
+        // Report the max configurable depth (512) + headroom for logging purposes
+        // Actual allocation may be smaller based on available memory
+        sysInfo.writeRingBufferSlots = 512 + 4;
+        
+        _performanceStats->setSystemInfo(sysInfo);
+    }
 
     // Time cache lookup for performance tracking
+    // Use hasPotentialCache() which doesn't require verification to be complete
+    // This allows us to start verification for cached files that haven't been verified yet
     QElapsedTimer cacheLookupTimer;
     cacheLookupTimer.start();
-    bool cacheHit = !_expectedHash.isEmpty() && _cacheManager->isCached(_expectedHash);
+    bool potentialCacheHit = !_expectedHash.isEmpty() && _cacheManager->hasPotentialCache(_expectedHash);
     _performanceStats->recordEvent(PerformanceStats::EventType::CacheLookup,
         static_cast<quint32>(cacheLookupTimer.elapsed()), true,
-        cacheHit ? "hit" : (_expectedHash.isEmpty() ? "no_hash" : "miss"));
+        potentialCacheHit ? "potential_hit" : (_expectedHash.isEmpty() ? "no_hash" : "miss"));
     
-    if (cacheHit)
+    if (potentialCacheHit)
     {
         // Use background cache manager to check cache file integrity
         CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
+        qDebug() << "Cache status: verificationComplete=" << cacheStatus.verificationComplete
+                 << "isValid=" << cacheStatus.isValid
+                 << "file=" << cacheStatus.cacheFileName;
 
         if (cacheStatus.verificationComplete && cacheStatus.isValid)
         {
@@ -872,7 +962,7 @@ void ImageWriter::startWrite()
     connect(_thread, &DownloadThread::eventPeriodicSync,
             this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
                 QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
-                _performanceStats->recordEvent(PerformanceStats::EventType::PageCacheFlush, durationMs, success, metadata);
+                _performanceStats->recordEvent(PerformanceStats::EventType::PeriodicSync, durationMs, success, metadata);
             });
     connect(_thread, &DownloadThread::eventImageExtraction,
             this, [this](quint32 durationMs, bool success){
@@ -898,10 +988,49 @@ void ImageWriter::startWrite()
             this, [this](QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, metadata);
             });
+    
+    // Write timing breakdown signals (for detailed hypothesis testing)
+    connect(_thread, &DownloadThread::eventWriteTimingBreakdown,
+            this, [this](quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
+                         quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount){
+                QString metadata = QString("writeOps: %1; syscallMs: %2; preHashWaitMs: %3; postHashWaitMs: %4; syncMs: %5; syncCount: %6")
+                    .arg(totalWriteOps).arg(totalSyscallMs).arg(totalPreHashWaitMs)
+                    .arg(totalPostHashWaitMs).arg(totalSyncMs).arg(syncCount);
+                // Use total time (syscall + hash waits) as duration
+                quint32 totalMs = static_cast<quint32>(totalSyscallMs + totalPreHashWaitMs + totalPostHashWaitMs);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteTimingBreakdown, totalMs, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventWriteSizeDistribution,
+            this, [this](quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount){
+                QString metadata = QString("minKB: %1; maxKB: %2; avgKB: %3; totalBytes: %4; count: %5")
+                    .arg(minSizeKB).arg(maxSizeKB).arg(avgSizeKB).arg(totalBytes).arg(writeCount);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteSizeDistribution, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventWriteAfterSyncImpact,
+            this, [this](quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount){
+                QString metadata = QString("beforeSyncKBps: %1; afterSyncKBps: %2; samples: %3")
+                    .arg(avgThroughputBeforeSyncKBps).arg(avgThroughputAfterSyncKBps).arg(sampleCount);
+                // Calculate the impact percentage (positive = degradation after sync)
+                int impactPercent = 0;
+                if (avgThroughputBeforeSyncKBps > 0) {
+                    impactPercent = static_cast<int>(100 * (static_cast<int>(avgThroughputBeforeSyncKBps) - static_cast<int>(avgThroughputAfterSyncKBps)) / static_cast<int>(avgThroughputBeforeSyncKBps));
+                }
+                metadata += QString("; impactPercent: %1").arg(impactPercent);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
+            });
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
+    qDebug() << "startWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+    
+    // Pass debug options to the thread
+    _thread->setDebugDirectIO(_debugDirectIO);
+    _thread->setDebugPeriodicSync(_debugPeriodicSync);
+    _thread->setDebugVerboseLogging(_debugVerboseLogging);
+    _thread->setDebugAsyncIO(_debugAsyncIO);
+    _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
+    
 #ifdef Q_OS_DARWIN
     // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
     // Always call setChildDevices (even with empty list) so we skip the expensive scan
@@ -1960,6 +2089,38 @@ bool ImageWriter::isEmbeddedMode() const
     return ::isEmbeddedMode();
 }
 
+bool ImageWriter::hasWindowDecorations() const
+{
+#ifndef CLI_ONLY_BUILD
+    // Embedded mode never has decorations
+    if (isEmbeddedMode())
+        return false;
+
+    // Check platform - some don't support decorations at all
+    QString platform = QGuiApplication::platformName().toLower();
+    if (platform == "linuxfb" || platform == "eglfs" ||
+        platform == "minimal" || platform == "offscreen")
+        return false;
+
+    // Check if main window exists and has been shown
+    if (_mainWindow) {
+        // Check for explicit frameless hint
+        if (_mainWindow->flags() & Qt::FramelessWindowHint)
+            return false;
+
+        // Check frame margins - if top margin is 0, WM isn't providing decorations
+        // (tiling WMs like i3/sway, WM rules to hide title bars, etc.)
+        QMargins margins = _mainWindow->frameMargins();
+        if (margins.top() == 0)
+            return false;
+    }
+
+    return true;
+#else
+    return false;
+#endif
+}
+
 /* Mount any USB sticks that can contain source images under /media */
 bool ImageWriter::mountUsbSourceMedia()
 {
@@ -2353,6 +2514,74 @@ QString ImageWriter::getStringSetting(const QString &key)
     return _settings.value(key).toString();
 }
 
+// Debug options implementation (secret menu: Cmd+Option+S on macOS, Ctrl+Alt+S on others)
+bool ImageWriter::getDebugDirectIO() const
+{
+    return _debugDirectIO;
+}
+
+void ImageWriter::setDebugDirectIO(bool enabled)
+{
+    if (_debugDirectIO != enabled) {
+        _debugDirectIO = enabled;
+        qDebug() << "Debug: Direct I/O" << (enabled ? "enabled" : "disabled");
+    }
+}
+
+bool ImageWriter::getDebugPeriodicSync() const
+{
+    return _debugPeriodicSync;
+}
+
+void ImageWriter::setDebugPeriodicSync(bool enabled)
+{
+    if (_debugPeriodicSync != enabled) {
+        _debugPeriodicSync = enabled;
+        qDebug() << "Debug: Periodic sync" << (enabled ? "enabled" : "disabled");
+    }
+}
+
+bool ImageWriter::getDebugVerboseLogging() const
+{
+    return _debugVerboseLogging;
+}
+
+void ImageWriter::setDebugVerboseLogging(bool enabled)
+{
+    if (_debugVerboseLogging != enabled) {
+        _debugVerboseLogging = enabled;
+        qDebug() << "Debug: Verbose logging" << (enabled ? "enabled" : "disabled");
+    }
+}
+
+bool ImageWriter::getDebugAsyncIO() const
+{
+    return _debugAsyncIO;
+}
+
+void ImageWriter::setDebugAsyncIO(bool enabled)
+{
+    if (_debugAsyncIO != enabled) {
+        _debugAsyncIO = enabled;
+        qDebug() << "Debug: Async I/O" << (enabled ? "enabled" : "disabled");
+    }
+}
+
+int ImageWriter::getDebugAsyncQueueDepth() const
+{
+    return _debugAsyncQueueDepth;
+}
+
+void ImageWriter::setDebugAsyncQueueDepth(int depth)
+{
+    // Cap to max ring buffer depth (512) to prevent exceeding allocated slots
+    depth = qBound(1, depth, 512);
+    if (_debugAsyncQueueDepth != depth) {
+        _debugAsyncQueueDepth = depth;
+        qDebug() << "Debug: Async queue depth set to" << depth;
+    }
+}
+
 // Platform-specific implementation (defined in platform-specific source files)
 extern QString getRsaKeyFingerprint(const QString &keyPath);
 
@@ -2379,7 +2608,7 @@ bool ImageWriter::isSecureBootForcedByCliFlag() const
     return _forceSecureBootEnabled;
 }
 
-void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts)
+void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts, const QByteArray &initFormat)
 {
     _config = config;
     _cmdline = cmdline;
@@ -2387,12 +2616,19 @@ void ImageWriter::setImageCustomisation(const QByteArray &config, const QByteArr
     _cloudinit = cloudinit;
     _cloudinitNetwork = cloudinitNetwork;
     _advancedOptions = opts;
+    
+    // If initFormat is provided, use it; otherwise keep current value
+    // This allows CLI to explicitly set the format along with content
+    if (!initFormat.isEmpty()) {
+        _initFormat = initFormat;
+    }
 
     qDebug() << "Custom config.txt entries:" << config;
     qDebug() << "Custom cmdline.txt entries:" << cmdline;
     qDebug() << "Custom firstrun.sh:" << firstrun;
     qDebug() << "Cloudinit:" << cloudinit;
     qDebug() << "Advanced options:" << opts;
+    qDebug() << "initFormat parameter:" << initFormat << "-> _initFormat:" << _initFormat;
 }
 
 void ImageWriter::applyCustomisationFromSettings(const QVariantMap &settings)
@@ -3032,7 +3268,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     connect(_thread, &DownloadThread::eventPeriodicSync,
             this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
                 QString metadata = QString("at %1 MB").arg(bytesWritten / (1024 * 1024));
-                _performanceStats->recordEvent(PerformanceStats::EventType::PageCacheFlush, durationMs, success, metadata);
+                _performanceStats->recordEvent(PerformanceStats::EventType::PeriodicSync, durationMs, success, metadata);
             });
     connect(_thread, &DownloadThread::eventImageExtraction,
             this, [this](quint32 durationMs, bool success){
@@ -3058,9 +3294,40 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
             this, [this](QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, metadata);
             });
+    
+    // Write timing breakdown signals (for detailed hypothesis testing)
+    connect(_thread, &DownloadThread::eventWriteTimingBreakdown,
+            this, [this](quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
+                         quint64 totalPostHashWaitMs, quint64 totalSyncMs, quint32 syncCount){
+                QString metadata = QString("writeOps: %1; syscallMs: %2; preHashWaitMs: %3; postHashWaitMs: %4; syncMs: %5; syncCount: %6")
+                    .arg(totalWriteOps).arg(totalSyscallMs).arg(totalPreHashWaitMs)
+                    .arg(totalPostHashWaitMs).arg(totalSyncMs).arg(syncCount);
+                // Use total time (syscall + hash waits) as duration
+                quint32 totalMs = static_cast<quint32>(totalSyscallMs + totalPreHashWaitMs + totalPostHashWaitMs);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteTimingBreakdown, totalMs, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventWriteSizeDistribution,
+            this, [this](quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount){
+                QString metadata = QString("minKB: %1; maxKB: %2; avgKB: %3; totalBytes: %4; count: %5")
+                    .arg(minSizeKB).arg(maxSizeKB).arg(avgSizeKB).arg(totalBytes).arg(writeCount);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteSizeDistribution, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventWriteAfterSyncImpact,
+            this, [this](quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount){
+                QString metadata = QString("beforeSyncKBps: %1; afterSyncKBps: %2; samples: %3")
+                    .arg(avgThroughputBeforeSyncKBps).arg(avgThroughputAfterSyncKBps).arg(sampleCount);
+                // Calculate the impact percentage (positive = degradation after sync)
+                int impactPercent = 0;
+                if (avgThroughputBeforeSyncKBps > 0) {
+                    impactPercent = static_cast<int>(100 * (static_cast<int>(avgThroughputBeforeSyncKBps) - static_cast<int>(avgThroughputAfterSyncKBps)) / static_cast<int>(avgThroughputBeforeSyncKBps));
+                }
+                metadata += QString("; impactPercent: %1").arg(impactPercent);
+                _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
+            });
 
     _thread->setVerifyEnabled(_verifyEnabled);
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
+    qDebug() << "_continueStartWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 #ifdef Q_OS_DARWIN
     // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
