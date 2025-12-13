@@ -1828,15 +1828,15 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Une nouvelle version de Raspberry Pi Imager est disponible. Voulez-vous visiter le site web pour la télécharger&#xa0;?</translation>
     </message>
     <message>
         <source>Continue using the current version of Raspberry Pi Imager</source>
-        <translation type="unfinished"></translation>
+        <translation>Continuer à utiliser la version actuelle de Raspberry Pi Imager</translation>
     </message>
     <message>
         <source>Open the Raspberry Pi website in your browser to download the latest version</source>
-        <translation type="unfinished"></translation>
+        <translation>Ouvrir le site web Raspberry Pi dans votre navigateur pour télécharger la dernière version</translation>
     </message>
 </context>
 <context>
@@ -1847,19 +1847,19 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Enter password</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir le mot de passe</translation>
     </message>
     <message>
         <source>Confirm password:</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirmer le mot de passe&#xa0;:</translation>
     </message>
     <message>
         <source>Re-enter password</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-saisir le mot de passe</translation>
     </message>
     <message>
         <source>The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le nom d&apos;utilisateur doit être en lettres minuscules et ne contenir que des lettres, chiffres, caractères de soulignement et tirets.</translation>
     </message>
     <message>
         <source>Customisation: Choose username</source>
@@ -1867,23 +1867,23 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistré (caché) — laisser vide pour conserver</translation>
     </message>
     <message>
         <source>Re-enter to change password</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-saisir pour changer le mot de passe</translation>
     </message>
     <message>
         <source>Create a user account for your Raspberry Pi</source>
-        <translation type="unfinished"></translation>
+        <translation>Créer un compte utilisateur pour votre Raspberry Pi</translation>
     </message>
     <message>
         <source>Enter your username</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir le nom d&apos;utilisateur</translation>
     </message>
     <message>
         <source>Save user account settings and continue to next customisation step</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer les réglages du compte utilisateur et continuer vers l&apos;étape de personnalisation suivante</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1895,23 +1895,23 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir un nom d&apos;utilisateur pour le compte sur votre Raspberry Pi. Le nom d&apos;utilisateur doit être en lettres minuscules et ne contenir que des lettres, chiffres, caractères de soulignement et tirets.</translation>
     </message>
     <message>
         <source>Enter a new password for this account, or leave blank to keep the previously saved password.</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir un nouveau mot de passe pour ce compte, ou laisser vide pour conserver le mot de passé enregistré antérieurement.</translation>
     </message>
     <message>
         <source>Enter a password for this account. You will need to re-enter it in the next field to confirm.</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir un mot de passe pour ce compte. Vous devrez le re-saisir dans le champ suivant pour confirmation.</translation>
     </message>
     <message>
         <source>Re-enter the new password to confirm, or leave blank to keep the previously saved password.</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-saisir le nouveau mot de passe pour le confirmer, ou laisser vide  pour conserver le mot de passé enregistré antérieurement.</translation>
     </message>
     <message>
         <source>Re-enter the password to confirm it matches.</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-saisir le nouveau mot de passe pour confirmer qu&apos;il correspond.</translation>
     </message>
 </context>
 <context>
