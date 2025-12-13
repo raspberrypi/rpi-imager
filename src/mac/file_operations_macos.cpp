@@ -118,9 +118,18 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
   if (isBlockDevice) {
     std::cout << "Device path detected, using macOS authorization..." << std::endl;
     
+    // Convert /dev/diskX to /dev/rdiskX for raw device access (like dd uses)
+    // Raw devices (/dev/rdisk) have better buffering behavior than block devices (/dev/disk)
+    std::string rawPath = path;
+    size_t diskPos = rawPath.find("/dev/disk");
+    if (diskPos != std::string::npos) {
+      rawPath.replace(diskPos + 5, 4, "rdisk");  // Replace "disk" with "rdisk"
+      std::cout << "Using raw device path: " << rawPath << " (instead of " << path << ")" << std::endl;
+    }
+    
     // Create a MacFile instance to handle authorization
     MacFile macfile;
-    QByteArray devicePath = QByteArray::fromStdString(path);
+    QByteArray devicePath = QByteArray::fromStdString(rawPath);
     
     auto authResult = macfile.authOpen(devicePath);
     if (authResult == MacFile::authOpenCancelled) {
@@ -152,17 +161,14 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
     fd_ = duplicated_fd;
     current_path_ = path;
     
-    // Enable direct I/O via F_NOCACHE for block devices
-    // This bypasses the unified buffer cache for:
-    // 1. Better performance by avoiding double-buffering
-    // 2. More accurate verification (reads from actual device, not cache)
-    // 3. Reduced memory pressure on the system
-    if (!EnableDirectIO()) {
-      std::cout << "Warning: Could not enable direct I/O, continuing with buffered I/O" << std::endl;
-    }
+    // Use buffered I/O for writes (like v1.9.6) - much faster!
+    // Direct I/O (F_NOCACHE) will be enabled only for verification reads
+    // in PrepareForSequentialRead() to ensure accurate verification.
+    // This gives us: fast writes + accurate verification
+    using_direct_io_ = false;
     
     std::cout << "Successfully opened device with authorization, fd=" << fd_ 
-              << (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)") << std::endl;
+              << " (buffered I/O for writes, direct I/O for verification)" << std::endl;
     return FileError::kSuccess;
   }
   
@@ -304,6 +310,9 @@ FileError MacOSFileOperations::WriteSequential(const std::uint8_t* data, std::si
     return FileError::kOpenError;
   }
 
+  // With buffered I/O (no F_NOCACHE), let the kernel handle buffering.
+  // Write the full size at once - kernel will buffer and write asynchronously.
+  // This matches v1.9.6 behavior which was much faster.
   std::size_t bytes_written = 0;
   while (bytes_written < size) {
     ssize_t result = write(fd_, data + bytes_written, size - bytes_written);
