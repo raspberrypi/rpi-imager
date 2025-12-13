@@ -529,11 +529,11 @@
     </message>
     <message>
         <source>Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device.</source>
-        <translation>Paramètre de disque non valide. Le périphérique de stockage ne peut pas être reconnu correctement. Essayez de reconnecter le disque.</translation>
+        <translation>Paramètre de disque non valide. Le périphérique de stockage ne peut pas être reconnu correctement. Essayez de re-brancher le disque.</translation>
     </message>
     <message>
         <source>I/O device error. The storage device may have been disconnected or is malfunctioning.</source>
-        <translation>Erreur d&apos;entrée-sortie. Le périphérique de stockage est peut-être déconnecté et il dysfontionne.</translation>
+        <translation>Erreur d&apos;entrée-sortie. Le périphérique de stockage est peut-être débranché et il dysfontionne.</translation>
     </message>
     <message>
         <source>Error opening disk device &apos;%1&apos;</source>
@@ -813,7 +813,7 @@
     </message>
     <message>
         <source>Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals</source>
-        <translation>Active l&apos;interface I2C (Inter-Integrated Circuit) pour la connexion de capteur et autres périphériques à basse vitesse</translation>
+        <translation>Active l&apos;interface I2C (Inter-Integrated Circuit) pour le branchement de capteurs et autres périphériques à basse vitesse</translation>
     </message>
     <message>
         <source>Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors</source>
@@ -821,7 +821,7 @@
     </message>
     <message>
         <source>Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices</source>
-        <translation>Active l&apos;interface 1-Wire pour la connexion de capteurs de températures et autres appareils Dallas/Maxim</translation>
+        <translation>Active l&apos;interface 1-Wire pour le branchement de capteurs de températures et autres appareils Dallas/Maxim</translation>
     </message>
     <message>
         <source>Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage</source>
@@ -1652,87 +1652,87 @@ Cliquer &quot;Autorisation d&apos;installation&quot; pour permettre l&apos;élé
     <name>SshKeyManager</name>
     <message>
         <source>No SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucune clé SSH configurée</translation>
     </message>
     <message>
         <source>1 SSH key configured</source>
-        <translation type="unfinished"></translation>
+        <translation>1 clé SSH configurée</translation>
     </message>
     <message>
         <source>%1 SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 clés SSH configurées</translation>
     </message>
     <message>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>Cacher</translation>
     </message>
     <message>
         <source>Show</source>
-        <translation type="unfinished"></translation>
+        <translation>Afficher</translation>
     </message>
     <message>
         <source>Hide the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Cacher la liste des clés SSH</translation>
     </message>
     <message>
         <source>Show the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Afficher la liste des clés SSH</translation>
     </message>
     <message>
         <source>SSH keys list</source>
-        <translation type="unfinished"></translation>
+        <translation>Liste des clés SSH</translation>
     </message>
     <message>
         <source>SSH key %1: %2, %3</source>
-        <translation type="unfinished"></translation>
+        <translation>Clé SSH %1&#xa0;: %2, %3</translation>
     </message>
     <message>
         <source>SSH key %1: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Clé SSH %1&#xa0;: %2</translation>
     </message>
     <message>
         <source>SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Clé SSH %1</translation>
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer</translation>
     </message>
     <message>
         <source>Remove SSH key: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer la clé SSH&#xa0;: %1</translation>
     </message>
     <message>
         <source>Remove SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer la clé SSH %1</translation>
     </message>
     <message>
         <source>Paste key or click BROWSE to select file</source>
-        <translation type="unfinished"></translation>
+        <translation>Coller une clé ou cliquer Parcourir pour sélectionner un fichier</translation>
     </message>
     <message>
         <source>SSH public key input</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisie clé publique SSH</translation>
     </message>
     <message>
         <source>Paste an SSH public key here or use the browse button to select a key file</source>
-        <translation type="unfinished"></translation>
+        <translation>Coller une clé publique SSH ou cliquer Parcourir pour sélectionner un fichier</translation>
     </message>
     <message>
         <source>Add</source>
-        <translation type="unfinished"></translation>
+        <translation>Ajouter</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner une clé publique SSH</translation>
     </message>
     <message>
         <source>Add the entered SSH key</source>
-        <translation type="unfinished"></translation>
+        <translation>Ajouter la clé publique SSH saisie</translation>
     </message>
     <message>
         <source>Select an SSH public key file to add</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner un fichier de clé publique SSH à ajouter</translation>
     </message>
 </context>
 <context>
@@ -1747,31 +1747,31 @@ Cliquer &quot;Autorisation d&apos;installation&quot; pour permettre l&apos;élé
     </message>
     <message>
         <source>Read-only</source>
-        <translation type="unfinished"></translation>
+        <translation>Lecture seule</translation>
     </message>
     <message>
         <source>Select your storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner votre périphérique de stockage</translation>
     </message>
     <message>
         <source>Exclude system drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Exclure les disques système</translation>
     </message>
     <message>
         <source>Storage device list</source>
-        <translation type="unfinished"></translation>
+        <translation>Liste des périphériques de stockage</translation>
     </message>
     <message>
         <source>No devices</source>
-        <translation>Aucun appareil</translation>
+        <translation>Aucun périphérique</translation>
     </message>
     <message>
         <source>1 device</source>
-        <translation>1 appareil</translation>
+        <translation>1 périphérique</translation>
     </message>
     <message>
         <source>%1 devices</source>
-        <translation>%1 appareils</translation>
+        <translation>%1 périphériques</translation>
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
@@ -1781,38 +1781,43 @@ Cliquer &quot;Autorisation d&apos;installation&quot; pour permettre l&apos;élé
         <source>All visible devices are read-only.
 Try connecting a new device, or uncheck
 &apos;Exclude system drives&apos; below.</source>
-        <translation type="unfinished"></translation>
+        <translation>Tous les périphériques visibles sont en lecture seule.
+Branchez un autre périphérique ou décochez
+&apos;Exclure les disques système&apos; ci-dessous </translation>
     </message>
     <message>
         <source>All devices are read-only.
 Please connect a writable storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Tous les périphériques visibles sont en lecture seule.
+Branchez un périphérique accessible en écriture.</translation>
     </message>
     <message>
         <source>All devices are hidden by the filter.
 Uncheck &apos;Exclude system drives&apos; below
 to show system drives.</source>
-        <translation type="unfinished"></translation>
+        <translation>Tous les périphériques sont cachés par le filtre.
+Décochez &apos;Exclure les disques système&apos; ci-dessous
+pour afficher les disques système.</translation>
     </message>
     <message>
         <source>When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.</source>
-        <translation type="unfinished"></translation>
+        <translation>Si coché, les disques système sont cachés de cette liste. Décochez pour afficher tous les périphériques, y compris les disques système.</translation>
     </message>
     <message>
         <source>No storage devices found. Please connect a storage device to continue.</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun périphérique de stockage trouvé. Branchez un périphérique de stockage pour continuer.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos; to show hidden system drives.</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun périphérique de stockage valide n&apos;est actuellement disponible. Tous les périphériques visibles sont en lecture seule. Branchez un autre périphérique de stockage ou décochez &apos;Exclure les disques système&apos; pour afficher les disques systèmes cachés.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun périphérique de stockage valide n&apos;est actuellement disponible. Tous les périphériques sont en lecture seule. Branchez un périphérique accessible en écriture pour continuer.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun périphérique de stockage valide n&apos;est actuellement disponible. Décochez &apos;Exclure les disques système&apos; pour afficher les disques système cachés, ou branchez un autre périphérique de stockage.</translation>
     </message>
 </context>
 <context>
