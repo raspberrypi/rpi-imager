@@ -255,7 +255,7 @@
     </message>
     <message>
         <source>Authorized keys files (authorized_keys)</source>
-        <translation type="unfinished"></translation>
+        <translation>Файлы авторизационных ключей (authorized_keys)</translation>
     </message>
 </context>
 <context>
@@ -669,7 +669,7 @@
     </message>
     <message>
         <source>Failed to allocate buffer for MBR zeroing</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось выделить буфер для обнуления MBR</translation>
     </message>
 </context>
 <context>
@@ -915,32 +915,33 @@
     </message>
     <message>
         <source>Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>Документы</translation>
     </message>
     <message>
         <source>Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Загрузки</translation>
     </message>
     <message>
         <source>Home</source>
-        <translation type="unfinished"></translation>
+        <translation>Домашний каталог</translation>
     </message>
     <message>
         <source>File name:</source>
-        <translation type="unfinished"></translation>
+        <translation>Имя файла:</translation>
     </message>
     <message>
         <source>Enter filename…</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите имя файла…</translation>
     </message>
     <message>
         <source>Navigate to a folder using the panel on the left,
 or type a path in the address bar above.</source>
-        <translation type="unfinished"></translation>
+        <translation>Перейдите в папку, используя панель слева,
+или введите путь в адресную строку выше.</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Сохранить</translation>
+        <translation>Сохранить</translation>
     </message>
 </context>
 <context>
@@ -961,27 +962,27 @@ or type a path in the address bar above.</source>
     <name>ImPasswordField</name>
     <message>
         <source>Password is visible. Press F2 to hide.</source>
-        <translation type="unfinished"></translation>
+        <translation>Пароль отображается. Нажмите F2, чтобы скрыть его.</translation>
     </message>
     <message>
         <source>Password is hidden. Press F2 to show.</source>
-        <translation type="unfinished"></translation>
+        <translation>Пароль скрыт. Нажмите F2, чтобы отобразить.</translation>
     </message>
     <message>
         <source>Hide password</source>
-        <translation type="unfinished"></translation>
+        <translation>Скрыть пароль</translation>
     </message>
     <message>
         <source>Show password</source>
-        <translation type="unfinished"></translation>
+        <translation>Показать пароль</translation>
     </message>
     <message>
         <source>Password is currently visible. Activate to hide it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Пароль в данный момент виден. Активируйте эту функцию, чтобы скрыть его.</translation>
     </message>
     <message>
         <source>Password is currently hidden. Activate to show it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Пароль в данный момент скрыт. Активируйте его, чтобы отобразить.</translation>
     </message>
 </context>
 <context>
@@ -995,7 +996,7 @@ or type a path in the address bar above.</source>
     <name>ImSaveFileDialog</name>
     <message>
         <source>Save File</source>
-        <translation type="unfinished"></translation>
+        <translation>Сохранить файл</translation>
     </message>
 </context>
 <context>
@@ -1392,7 +1393,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Войдите в систему, чтобы получить токен и активировать Raspberry Pi Connect</translation>
     </message>
 </context>
 <context>
@@ -1651,35 +1652,35 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     <name>SshKeyManager</name>
     <message>
         <source>No SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH-ключи не настроены</translation>
     </message>
     <message>
         <source>1 SSH key configured</source>
-        <translation type="unfinished"></translation>
+        <translation>1 настроенный SSH-ключ</translation>
     </message>
     <message>
         <source>%1 SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 Настроены SSH-ключи</translation>
     </message>
     <message>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>Скрыть</translation>
     </message>
     <message>
         <source>Show</source>
-        <translation type="unfinished"></translation>
+        <translation>Показать</translation>
     </message>
     <message>
         <source>Hide the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Скрыть список SSH-ключей</translation>
     </message>
     <message>
         <source>Show the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Показать список SSH-ключей</translation>
     </message>
     <message>
         <source>SSH keys list</source>
-        <translation type="unfinished"></translation>
+        <translation>Список ключей SSH</translation>
     </message>
     <message>
         <source>SSH key %1: %2, %3</source>
@@ -1695,31 +1696,31 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished"></translation>
+        <translation>Удалить</translation>
     </message>
     <message>
         <source>Remove SSH key: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Удалить SSH-ключ: %1</translation>
     </message>
     <message>
         <source>Remove SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Удалить SSH-ключ %1</translation>
     </message>
     <message>
         <source>Paste key or click BROWSE to select file</source>
-        <translation type="unfinished"></translation>
+        <translation>Вставьте ключ или нажмите кнопку «Обзор», чтобы выбрать файл</translation>
     </message>
     <message>
         <source>SSH public key input</source>
-        <translation type="unfinished"></translation>
+        <translation>Ввод открытого ключа SSH</translation>
     </message>
     <message>
         <source>Paste an SSH public key here or use the browse button to select a key file</source>
-        <translation type="unfinished"></translation>
+        <translation>Вставьте сюда открытый ключ SSH или воспользуйтесь кнопкой «Обзор», чтобы выбрать файл ключа</translation>
     </message>
     <message>
         <source>Add</source>
-        <translation type="unfinished"></translation>
+        <translation>Добавить</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
@@ -1727,11 +1728,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Add the entered SSH key</source>
-        <translation type="unfinished"></translation>
+        <translation>Добавьте введенный SSH-ключ</translation>
     </message>
     <message>
         <source>Select an SSH public key file to add</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите файл открытого ключа SSH для добавления</translation>
     </message>
 </context>
 <context>
