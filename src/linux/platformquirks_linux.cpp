@@ -578,6 +578,17 @@ bool isScrollInverted(bool qtInvertedFlag) {
     return qtInvertedFlag;
 }
 
+QString getWriteDevicePath(const QString& devicePath) {
+    // Linux uses the same device path for both buffered and direct I/O.
+    // Direct I/O is controlled via O_DIRECT flag, not device path.
+    return devicePath;
+}
+
+QString getEjectDevicePath(const QString& devicePath) {
+    // No path transformation needed on Linux.
+    return devicePath;
+}
+
 const char* findCACertBundle()
 {
     // Common CA certificate bundle paths across Linux distributions.

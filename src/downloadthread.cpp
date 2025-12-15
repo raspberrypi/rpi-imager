@@ -319,37 +319,24 @@ bool DownloadThread::_openAndPrepareDevice()
 
 #endif
 
-#ifdef Q_OS_DARWIN
-    // Use raw disk device for direct I/O - bypasses macOS buffer cache
-    _filename.replace("/dev/disk", "/dev/rdisk");
-    filename_str = _filename.toStdString();  // Update after rdisk conversion
-
-    // Note: authOpen functionality needs to be handled differently with FileOperations
-    // For now, we'll try direct opening and provide better error messages
+    // Device path is already platform-optimized by caller (e.g., rdisk on macOS)
     rpi_imager::FileError result = _file->OpenDevice(filename_str);
-    
-    if (result != rpi_imager::FileError::kSuccess) {
-        // On macOS, this might be due to permission issues that authOpen would have handled
+    if (result != rpi_imager::FileError::kSuccess)
+    {
+#ifdef Q_OS_DARWIN
+        // On macOS, this might be due to permission issues
         QString msg = tr("Error opening disk device '%1'").arg(QString(_filename));
         msg += "<br>"+tr("Please verify if 'Raspberry Pi Imager' is allowed access to 'removable volumes' in privacy settings (under 'files and folders' or alternatively give it 'full disk access').");
         QStringList args("x-apple.systempreferences:com.apple.preference.security?Privacy_RemovableVolume");
         QProcess::execute("open", args);
         emit error(msg);
-        return false;
-    }
-#else
-    // Use unified FileOperations to open device for non-macOS platforms
-    rpi_imager::FileError result = _file->OpenDevice(filename_str);
-    if (result != rpi_imager::FileError::kSuccess)
-    {
-#ifdef Q_OS_LINUX
+#elif defined(Q_OS_LINUX)
         emit error(tr("Cannot open storage device '%1'. Please run with elevated privileges (sudo).").arg(QString(_filename)));
 #else
         emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
 #endif
         return false;
     }
-#endif
     
     // Apply debug option for direct I/O after opening
     // By default, OpenDevice enables direct I/O for block devices
@@ -1382,15 +1369,17 @@ void DownloadThread::_writeComplete()
     _closeFiles();
 
 #ifdef Q_OS_DARWIN
+    // Give macOS a moment to settle after closing the device
     QThread::sleep(1);
-    _filename.replace("/dev/rdisk", "/dev/disk");
 #endif
 
     emit success();
 
     if (_ejectEnabled)
     {
-        eject_disk(_filename.constData());
+        // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
+        QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
+        eject_disk(ejectPath.toLocal8Bit().constData());
     }
 }
 

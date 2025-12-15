@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "config.h"
+#include "platformquirks.h"
 #include "systemmemorymanager.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/mountutils/src/mountutils.hpp"
@@ -726,7 +727,9 @@ void DownloadExtractThread::extractMultiFileRun()
 
     if (_ejectEnabled)
     {
-        eject_disk(_filename.constData());
+        // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
+        QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
+        eject_disk(ejectPath.toLocal8Bit().constData());
     }
 }
 

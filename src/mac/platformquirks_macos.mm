@@ -116,4 +116,22 @@ bool isScrollInverted(bool qtInvertedFlag) {
     return qtInvertedFlag;
 }
 
+QString getWriteDevicePath(const QString& devicePath) {
+    // On macOS, use raw disk device (/dev/rdisk) for direct I/O.
+    // This bypasses the macOS buffer cache and provides significantly
+    // faster write performance for large sequential writes.
+    QString result = devicePath;
+    result.replace("/dev/disk", "/dev/rdisk");
+    return result;
+}
+
+QString getEjectDevicePath(const QString& devicePath) {
+    // Convert back to block device path for eject operations.
+    // While DADiskCreateFromBSDName technically accepts both forms,
+    // using /dev/disk is the canonical form for disk operations.
+    QString result = devicePath;
+    result.replace("/dev/rdisk", "/dev/disk");
+    return result;
+}
+
 } // namespace PlatformQuirks

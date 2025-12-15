@@ -61,6 +61,20 @@ namespace PlatformQuirks {
     /** Determine if scroll direction should be inverted for natural scrolling. */
     bool isScrollInverted(bool qtInvertedFlag);
 
+    /**
+     * Get the optimal device path for write I/O operations.
+     * On macOS, converts /dev/diskN to /dev/rdiskN for direct I/O (bypasses buffer cache).
+     * On other platforms, returns the path unchanged.
+     */
+    QString getWriteDevicePath(const QString& devicePath);
+
+    /**
+     * Get the device path suitable for eject/unmount operations.
+     * On macOS, converts /dev/rdiskN back to /dev/diskN.
+     * On other platforms, returns the path unchanged.
+     */
+    QString getEjectDevicePath(const QString& devicePath);
+
 #ifdef Q_OS_LINUX
     /**
      * Find the system's CA certificate bundle for libcurl.

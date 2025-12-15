@@ -389,4 +389,15 @@ bool isScrollInverted(bool qtInvertedFlag) {
     return scrollDirection == 0;
 }
 
+QString getWriteDevicePath(const QString& devicePath) {
+    // Windows uses PhysicalDrive paths which don't have a raw device equivalent.
+    // Direct I/O is controlled via FILE_FLAG_NO_BUFFERING, not device path.
+    return devicePath;
+}
+
+QString getEjectDevicePath(const QString& devicePath) {
+    // No path transformation needed on Windows.
+    return devicePath;
+}
+
 } // namespace PlatformQuirks

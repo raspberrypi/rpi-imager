@@ -664,14 +664,11 @@ void ImageWriter::startWrite()
     }
 
     // Start performance stats session early so cache lookup is captured
-    // On macOS, we use rdisk (raw device) for direct I/O - reflect that in the log
-    QString sessionDevicePath = _dst;
-#ifdef Q_OS_DARWIN
-    sessionDevicePath.replace("/dev/disk", "/dev/rdisk");
-#endif
+    // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
+    QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
     _performanceStats->startSession(_osName.isEmpty() ? _src.fileName() : _osName, 
                                     _extrLen > 0 ? _extrLen : _downloadLen, 
-                                    sessionDevicePath);
+                                    writeDevicePath);
 
     // Populate system info for performance analysis
     {
@@ -682,13 +679,8 @@ void ImageWriter::startWrite()
         sysInfo.totalMemoryBytes = static_cast<quint64>(memMgr.getTotalMemoryMB()) * 1024 * 1024;
         sysInfo.availableMemoryBytes = static_cast<quint64>(memMgr.getAvailableMemoryMB()) * 1024 * 1024;
         
-        // Device info
-        // On macOS, we use rdisk (raw device) for direct I/O - reflect that in the log
-        QString actualDevicePath = _dst;
-#ifdef Q_OS_DARWIN
-        actualDevicePath.replace("/dev/disk", "/dev/rdisk");
-#endif
-        sysInfo.devicePath = actualDevicePath;
+        // Device info - use platform-specific write device path
+        sysInfo.devicePath = writeDevicePath;
         sysInfo.deviceSizeBytes = _devLen;
         sysInfo.deviceDescription = "";  // Would need DriveListItem lookup
         sysInfo.deviceIsUsb = true;      // Assume USB for now
@@ -807,11 +799,11 @@ void ImageWriter::startWrite()
 
     if (QUrl(urlstr).isLocalFile())
     {
-        _thread = new LocalFileExtractThread(urlstr, _dst.toLatin1(), _expectedHash, this);
+        _thread = new LocalFileExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
     }
     else
     {
-        _thread = new DownloadExtractThread(urlstr, _dst.toLatin1(), _expectedHash, this);
+        _thread = new DownloadExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
         if (_repo.toString() == OSLIST_URL)
         {
             DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
@@ -3113,11 +3105,15 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         }
 
         // Continue with the write operation (this is the code that was after cache verification)
-        _thread = new LocalFileExtractThread(urlstr.toLatin1(), _dst.toLatin1(), _expectedHash, this);
+        // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
+        QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
+        _thread = new LocalFileExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
     }
     else
     {
-        _thread = new DownloadExtractThread(urlstr.toLatin1(), _dst.toLatin1(), _expectedHash, this);
+        // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
+        QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
+        _thread = new DownloadExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
         if (_repo.toString() == OSLIST_URL)
         {
             DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr.toLatin1(), _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
