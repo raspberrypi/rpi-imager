@@ -1234,6 +1234,13 @@ Item {
         }
     }
     
+    function onWriteProgress(now, total) {
+        // Forward to the WritingStep if currently active
+        if (currentStep === stepWriting && wizardStack.currentItem) {
+            wizardStack.currentItem.onWriteProgress(now, total)
+        }
+    }
+    
     function onVerifyProgress(now, total) {
         // Forward to the WritingStep if currently active
         if (currentStep === stepWriting && wizardStack.currentItem) {

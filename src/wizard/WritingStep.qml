@@ -560,6 +560,11 @@ WizardStepBase {
     }
 
     function onDownloadProgress(now, total) {
+        // Download progress is tracked for performance stats but not shown in UI
+        // (the write progress is more accurate as it reflects actual data written to disk)
+    }
+
+    function onWriteProgress(now, total) {
         if (root.isWriting) {
             var progress = total > 0 ? (now / total) * 100 : 0
             progressBar.value = progress

@@ -663,6 +663,7 @@ int main(int argc, char *argv[])
 
     QObject *qmlwindow = engine.rootObjects().value(0);
     qmlwindow->connect(&imageWriter, SIGNAL(downloadProgress(QVariant,QVariant)), qmlwindow, SLOT(onDownloadProgress(QVariant,QVariant)));
+    qmlwindow->connect(&imageWriter, SIGNAL(writeProgress(QVariant,QVariant)), qmlwindow, SLOT(onWriteProgress(QVariant,QVariant)));
     qmlwindow->connect(&imageWriter, SIGNAL(verifyProgress(QVariant,QVariant)), qmlwindow, SLOT(onVerifyProgress(QVariant,QVariant)));
     qmlwindow->connect(&imageWriter, SIGNAL(preparationStatusUpdate(QVariant)), qmlwindow, SLOT(onPreparationStatusUpdate(QVariant)));
     qmlwindow->connect(&imageWriter, SIGNAL(error(QVariant)), qmlwindow, SLOT(onError(QVariant)));

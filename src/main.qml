@@ -514,6 +514,11 @@ ApplicationWindow {
         wizardContainer.onDownloadProgress(now, total);
     }
 
+    function onWriteProgress(now, total) {
+        // Forward to wizard container
+        wizardContainer.onWriteProgress(now, total);
+    }
+
     function onVerifyProgress(now, total) {
         // Forward to wizard container
         wizardContainer.onVerifyProgress(now, total);

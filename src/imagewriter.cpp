@@ -830,6 +830,8 @@ void ImageWriter::startWrite()
     if (downloadThread) {
         connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
                 this, &ImageWriter::downloadProgress);
+        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
+                this, &ImageWriter::writeProgress);
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, &ImageWriter::verifyProgress);
         
@@ -3140,6 +3142,8 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     if (downloadThread) {
         connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
                 this, &ImageWriter::downloadProgress);
+        connect(downloadThread, &DownloadExtractThread::writeProgressChanged,
+                this, &ImageWriter::writeProgress);
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, &ImageWriter::verifyProgress);
         
