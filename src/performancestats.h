@@ -46,6 +46,8 @@ public:
         // Drive operations
         DriveListPoll,         // Time for drive enumeration
         DriveOpen,             // Time to open/prepare drive for writing (overall)
+        DriveAuthorization,    // Time for privilege escalation (macOS authopen, Linux sudo)
+        DriveMbrZeroing,       // Time to zero first/last MB of drive (includes sync)
         DirectIOAttempt,       // Direct I/O attempt result (success/failure with error code)
         DriveUnmount,          // Time to unmount drive partitions (Linux/macOS)
         DriveUnmountVolumes,   // Time to unmount/lock volumes (Windows)

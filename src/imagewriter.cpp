@@ -812,6 +812,9 @@ void ImageWriter::startWrite()
         }
     }
 
+    // Set the extract size for accurate write progress (compressed images have larger extracted size)
+    _thread->setExtractTotal(_extrLen > 0 ? _extrLen : _downloadLen);
+
     connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
@@ -931,6 +934,14 @@ void ImageWriter::startWrite()
             this, [this](quint32 durationMs, bool success, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success, metadata);
             });
+    connect(_thread, &DownloadThread::eventDriveAuthorization,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveAuthorization, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveMbrZeroing,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveMbrZeroing, durationMs, success, metadata);
+            });
     connect(_thread, &DownloadThread::eventDirectIOAttempt,
             this, [this](bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage){
                 QString metadata = QString("attempted: %1; succeeded: %2; currently_enabled: %3; error_code: %4; error: %5")
@@ -1027,8 +1038,11 @@ void ImageWriter::startWrite()
     
 #ifdef Q_OS_DARWIN
     // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
-    // Always call setChildDevices (even with empty list) so we skip the expensive scan
-    _thread->setChildDevices(_dstChildDevices);
+    // Only set if we have cached devices; if empty (e.g., cleared after previous write),
+    // let the download thread do a fresh scan to catch any new partitions.
+    if (!_dstChildDevices.isEmpty()) {
+        _thread->setChildDevices(_dstChildDevices);
+    }
 #endif
 
     // Only set up cache operations for remote downloads, not when using cached files as source
@@ -1147,10 +1161,13 @@ void ImageWriter::skipCacheVerification()
 void ImageWriter::onCancelled()
 {
     setWriteState(WriteState::Cancelled);
-    sender()->deleteLater();
-    if (sender() == _thread)
-    {
-        _thread = nullptr;
+    QObject *senderObj = sender();
+    if (senderObj) {
+        senderObj->deleteLater();
+        if (senderObj == _thread)
+        {
+            _thread = nullptr;
+        }
     }
 
     // End performance stats session
@@ -1844,6 +1861,13 @@ void ImageWriter::onSuccess()
     
     // Clear Pi Connect token on successful write completion
     clearConnectToken();
+    
+#ifdef Q_OS_DARWIN
+    // Clear cached child devices after successful write.
+    // After eject, macOS may auto-remount with different partitions,
+    // so subsequent writes need a fresh scan.
+    _dstChildDevices.clear();
+#endif
     
     emit success();
 
@@ -3124,6 +3148,9 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         }
     }
 
+    // Set the extract size for accurate write progress (compressed images have larger extracted size)
+    _thread->setExtractTotal(_extrLen > 0 ? _extrLen : _downloadLen);
+
     connect(_thread, SIGNAL(success()), SLOT(onSuccess()));
     connect(_thread, SIGNAL(error(QString)), SLOT(onError(QString)));
     connect(_thread, SIGNAL(finalizing()), SLOT(onFinalizing()));
@@ -3243,6 +3270,14 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
             this, [this](quint32 durationMs, bool success, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DriveOpen, durationMs, success, metadata);
             });
+    connect(_thread, &DownloadThread::eventDriveAuthorization,
+            this, [this](quint32 durationMs, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveAuthorization, durationMs, success);
+            });
+    connect(_thread, &DownloadThread::eventDriveMbrZeroing,
+            this, [this](quint32 durationMs, bool success, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DriveMbrZeroing, durationMs, success, metadata);
+            });
     connect(_thread, &DownloadThread::eventDirectIOAttempt,
             this, [this](bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage){
                 QString metadata = QString("attempted: %1; succeeded: %2; currently_enabled: %3; error_code: %4; error: %5")
@@ -3331,8 +3366,11 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
 #ifdef Q_OS_DARWIN
     // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
-    // Always call setChildDevices (even with empty list) so we skip the expensive scan
-    _thread->setChildDevices(_dstChildDevices);
+    // Only set if we have cached devices; if empty (e.g., cleared after previous write),
+    // let the download thread do a fresh scan to catch any new partitions.
+    if (!_dstChildDevices.isEmpty()) {
+        _thread->setChildDevices(_dstChildDevices);
+    }
 #endif
 
     // Handle caching setup for downloads using CacheManager

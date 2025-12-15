@@ -142,6 +142,8 @@ public:
      */
     uint64_t dlNow();
     uint64_t dlTotal();
+    uint64_t extractTotal();
+    void setExtractTotal(uint64_t total);
     uint64_t verifyNow();
     uint64_t verifyTotal();
     uint64_t bytesWritten();
@@ -173,6 +175,8 @@ signals:
     void eventDriveDiskClean(quint32 durationMs, bool success);       // Windows disk cleaning
     void eventDriveRescan(quint32 durationMs, bool success);          // Windows disk rescan
     void eventDriveOpen(quint32 durationMs, bool success, QString metadata);
+    void eventDriveAuthorization(quint32 durationMs, bool success);   // Privilege escalation timing
+    void eventDriveMbrZeroing(quint32 durationMs, bool success, QString metadata);  // MBR zeroing timing
     void eventDirectIOAttempt(bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage);
     void eventCustomisation(quint32 durationMs, bool success, QString metadata);
     void eventFinalSync(quint32 durationMs, bool success);
@@ -225,7 +229,7 @@ protected:
 
     CURL *_c;
     curl_off_t _startOffset;
-    std::atomic<std::uint64_t> _lastDlTotal, _lastDlNow, _verifyTotal, _lastVerifyNow, _bytesWritten;
+    std::atomic<std::uint64_t> _lastDlTotal, _lastDlNow, _extractTotal, _verifyTotal, _lastVerifyNow, _bytesWritten;
     std::uint64_t _lastFailureOffset;
     qint64 _sectorsStart;
     QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash, _config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;

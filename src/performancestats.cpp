@@ -375,6 +375,8 @@ QString PerformanceStats::eventTypeName(EventType type)
         // Drive operations
         case EventType::DriveListPoll: return "driveListPoll";
         case EventType::DriveOpen: return "driveOpen";
+        case EventType::DriveAuthorization: return "driveAuthorization";
+        case EventType::DriveMbrZeroing: return "driveMbrZeroing";
         case EventType::DirectIOAttempt: return "directIOAttempt";
         case EventType::DriveUnmount: return "driveUnmount";
         case EventType::DriveUnmountVolumes: return "driveUnmountVolumes";

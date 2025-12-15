@@ -5,6 +5,7 @@
 
 #include "diskpart_util.h"
 #include "../dependencies/drivelist/src/drivelist.hpp"
+#include "../platformquirks.h"
 #include "winfile.h"
 #include <QDebug>
 #include <QProcess>
@@ -70,12 +71,12 @@ DiskpartResult unmountVolumes(const QByteArray &device, TimingCallback timingCal
     
     // Get list of storage devices to find volumes on this disk
     auto deviceList = Drivelist::ListStorageDevices();
-    QByteArray devlower = device.toLower();
+    QByteArray canonicalDevice = PlatformQuirks::getEjectDevicePath(device).toLower().toUtf8();
     int volumesProcessed = 0;
     
     for (const auto &dev : deviceList)
     {
-        if (QByteArray::fromStdString(dev.device).toLower() == devlower)
+        if (QByteArray::fromStdString(dev.device).toLower() == canonicalDevice)
         {
             for (const auto &mountpoint : dev.mountpoints)
             {
@@ -313,11 +314,11 @@ DiskpartResult cleanDisk(const QByteArray &device, std::chrono::milliseconds tim
     if (volumeHandling == VolumeHandling::UnmountFirst)
     {
         auto l = Drivelist::ListStorageDevices();
-        QByteArray devlower = device.toLower();
+        QByteArray canonicalDevice = PlatformQuirks::getEjectDevicePath(device).toLower().toUtf8();
         
         for (auto i : l)
         {
-            if (QByteArray::fromStdString(i.device).toLower() == devlower)
+            if (QByteArray::fromStdString(i.device).toLower() == canonicalDevice)
             {
                 for (const auto& mountpoint : i.mountpoints)
                 {

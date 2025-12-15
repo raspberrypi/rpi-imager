@@ -53,7 +53,7 @@ QByteArray DownloadThread::_proxy;
 int DownloadThread::_curlCount = 0;
 
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
-    QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
+    QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _extractTotal(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
     _firstBlock(nullptr), _cancelled(false), _successful(false), _verifyEnabled(false), _cacheEnabled(false), _lastModified(0), _serverTime(0),  _lastFailureTime(0),
     _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM),
     _hasPendingHash(false)
@@ -185,41 +185,49 @@ bool DownloadThread::_openAndPrepareDevice()
         emit preparationStatusUpdate(tr("Unmounting drive..."));
         unmountTimer.start();
 #ifdef Q_OS_DARWIN
-        /* Also unmount any APFS volumes using this physical disk */
-        if (_childDevicesProvided)
+        /* Unmount any APFS/HFS+ volumes using this physical disk */
+        if (_childDevicesProvided && !_childDevices.isEmpty())
         {
-            // Use cached child device info (skips expensive ListStorageDevices() call, saving ~1 second)
+            // Use cached child device info (saves ~1 second scan)
+            qDebug() << "Unmounting" << _childDevices.size() << "cached child devices";
             for (const QString &childDevice : _childDevices)
             {
-                qDebug() << "Unmounting APFS volume (cached):" << childDevice;
+                qDebug() << "Unmounting child device (cached):" << childDevice;
                 unmount_disk(childDevice.toUtf8().constData());
             }
         }
-        else
+        else if (!_childDevicesProvided)
         {
-            // Fallback: scan for child devices if not cached (e.g., CLI usage)
-            qDebug() << "No cached child device info, scanning for APFS volumes...";
+            // No cache provided - scan for child devices (CLI usage or after previous eject)
+            // Convert rdisk to disk for comparison since drivelist returns canonical paths
+            QString canonicalPath = PlatformQuirks::getEjectDevicePath(_filename);
             auto l = Drivelist::ListStorageDevices();
             for (const auto &i : l)
             {
-                if (QByteArray::fromStdString(i.device) == _filename)
+                if (QByteArray::fromStdString(i.device) == canonicalPath.toUtf8())
                 {
                     for (const auto &j : i.childDevices)
                     {
-                        qDebug() << "Unmounting APFS volume:" << j.c_str();
+                        qDebug() << "Unmounting child device:" << j.c_str();
                         unmount_disk(j.c_str());
                     }
                     break;
                 }
             }
         }
+        // else: cache provided but empty - device has no child partitions
 #endif
-        qDebug() << "Unmounting:" << _filename;
-        unmount_disk(_filename.constData());
+        // Use canonical device path for unmount
+        QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
+        
+        qDebug() << "Unmounting:" << unmountPath;
+        unmount_disk(unmountPath.toUtf8().constData());
         emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), true);
     }
     emit preparationStatusUpdate(tr("Opening drive..."));
     openTimer.start();
+    QElapsedTimer authTimer;  // For timing authorization separately
+    authTimer.start();
 
     // Convert QByteArray filename to std::string for FileOperations
     std::string filename_str = _filename.toStdString();
@@ -277,11 +285,11 @@ bool DownloadThread::_openAndPrepareDevice()
 
     // Re-scan for drive letters after diskpart
     auto l = Drivelist::ListStorageDevices();
-    QByteArray devlower = _filename.toLower();
+    QByteArray canonicalDevice = PlatformQuirks::getEjectDevicePath(_filename).toLower().toUtf8();
     QByteArray driveLetter;
     for (auto i : l)
     {
-        if (QByteArray::fromStdString(i.device).toLower() == devlower)
+        if (QByteArray::fromStdString(i.device).toLower() == canonicalDevice)
         {
             if (i.mountpoints.size() == 1)
             {
@@ -321,6 +329,9 @@ bool DownloadThread::_openAndPrepareDevice()
 
     // Device path is already platform-optimized by caller (e.g., rdisk on macOS)
     rpi_imager::FileError result = _file->OpenDevice(filename_str);
+    qint64 authOpenMs = authTimer.elapsed();
+    qDebug() << "Device authorization and open took" << authOpenMs << "ms";
+    
     if (result != rpi_imager::FileError::kSuccess)
     {
 #ifdef Q_OS_DARWIN
@@ -335,8 +346,12 @@ bool DownloadThread::_openAndPrepareDevice()
 #else
         emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
 #endif
+        emit eventDriveAuthorization(static_cast<quint32>(authOpenMs), false);
         return false;
     }
+    
+    // Emit authorization timing event (success case)
+    emit eventDriveAuthorization(static_cast<quint32>(authOpenMs), true);
     
     // Apply debug option for direct I/O after opening
     // By default, OpenDevice enables direct I/O for block devices
@@ -410,6 +425,9 @@ bool DownloadThread::_openAndPrepareDevice()
 
 #ifndef Q_OS_WIN
     // Zero out MBR using unified FileOperations
+    QElapsedTimer mbrTimer;
+    mbrTimer.start();
+    
     std::uint64_t knownsize = 0;
     if (_file->GetSize(knownsize) != rpi_imager::FileError::kSuccess) {
         emit error(tr("Error getting device size"));
@@ -435,10 +453,13 @@ bool DownloadThread::_openAndPrepareDevice()
         emit error(tr("Write error while zero'ing out MBR"));
         return false;
     }
+    qint64 firstMBMs = _timer.elapsed();
+    qDebug() << "  First MB + flush took" << firstMBMs << "ms";
 
     // Zero out last part of card (may have GPT backup table)
     if (knownsize > emptyMBSize)
     {
+        _timer.restart();
         if (_file->Seek(knownsize - emptyMBSize) != rpi_imager::FileError::kSuccess ||
             _file->WriteSequential(emptyMB.data(), emptyMBSize) != rpi_imager::FileError::kSuccess ||
             _file->Flush() != rpi_imager::FileError::kSuccess ||
@@ -448,9 +469,18 @@ bool DownloadThread::_openAndPrepareDevice()
                           "Card could be advertising wrong capacity (possible counterfeit)."));
             return false;
         }
+        qDebug() << "  Last MB + flush + sync took" << _timer.elapsed() << "ms";
     }
     _file->Seek(0);
-    qDebug() << "Done zero'ing out start and end of drive. Took" << _timer.elapsed() / 1000 << "seconds";
+    qint64 mbrTotalMs = mbrTimer.elapsed();
+    qDebug() << "Done zero'ing out start and end of drive. Total MBR prep:" << mbrTotalMs << "ms";
+    
+    // Emit MBR zeroing performance event with detailed breakdown
+    QString mbrMetadata = QString("first_mb_ms: %1; last_mb_ms: %2; device_size_mb: %3")
+        .arg(firstMBMs)
+        .arg(_timer.elapsed())  // Last MB timing (from last _timer.restart)
+        .arg(knownsize / (1024 * 1024));
+    emit eventDriveMbrZeroing(static_cast<quint32>(mbrTotalMs), true, mbrMetadata);
 #endif
 
 #ifdef Q_OS_LINUX
@@ -1076,6 +1106,16 @@ uint64_t DownloadThread::dlNow()
 uint64_t DownloadThread::dlTotal()
 {
     return _lastDlTotal;
+}
+
+uint64_t DownloadThread::extractTotal()
+{
+    return _extractTotal;
+}
+
+void DownloadThread::setExtractTotal(uint64_t total)
+{
+    _extractTotal = total;
 }
 
 uint64_t DownloadThread::verifyNow()

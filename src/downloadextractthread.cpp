@@ -184,14 +184,14 @@ void DownloadExtractThread::_emitProgressUpdate()
     
     quint64 currentDlNow = this->dlNow();
     quint64 currentDlTotal = this->dlTotal();
+    quint64 currentExtractTotal = this->extractTotal();
     quint64 currentVerifyNow = this->verifyNow();
     quint64 currentVerifyTotal = this->verifyTotal();
     quint64 currentDecompressNow = _bytesDecompressed.load();
     quint64 currentWriteNow = this->bytesWritten();
     
-    // For decompressed images, the total is the extract size (uncompressed)
-    // We use the same total for both decompress and write since they're the same data
-    quint64 decompressTotal = currentDlTotal > 0 ? currentDlTotal : 0;  // Will be updated by caller
+    // For write progress, use extract size (uncompressed) if set, otherwise fall back to download size
+    quint64 writeTotal = currentExtractTotal > 0 ? currentExtractTotal : currentDlTotal;
     
     // Only emit signals if values have changed
     if (currentDlNow != _lastEmittedDlNow || (currentDlTotal > 0 && _lastEmittedDlNow == 0)) {
@@ -201,12 +201,12 @@ void DownloadExtractThread::_emitProgressUpdate()
     
     if (currentDecompressNow != _lastEmittedDecompressNow) {
         _lastEmittedDecompressNow = currentDecompressNow;
-        emit decompressProgressChanged(currentDecompressNow, decompressTotal);
+        emit decompressProgressChanged(currentDecompressNow, writeTotal);
     }
     
     if (currentWriteNow != _lastEmittedWriteNow) {
         _lastEmittedWriteNow = currentWriteNow;
-        emit writeProgressChanged(currentWriteNow, decompressTotal);
+        emit writeProgressChanged(currentWriteNow, writeTotal);
     }
     
     if (currentVerifyNow != _lastLocalVerifyNow || (currentVerifyTotal > 0 && _lastLocalVerifyNow == 0)) {
@@ -508,7 +508,8 @@ void DownloadExtractThread::extractMultiFileRun()
 {
     QString folder;
     QStringList filesExtracted, dirExtracted;
-    QByteArray devlower = _filename.toLower();
+    // Use canonical path for comparison since drivelist returns /dev/disk, not /dev/rdisk
+    QByteArray canonicalDevice = PlatformQuirks::getEjectDevicePath(_filename).toLower().toUtf8();
 
     /* See if OS auto-mounted the device */
     for (int tries = 0; tries < 3; tries++)
@@ -517,7 +518,7 @@ void DownloadExtractThread::extractMultiFileRun()
         auto l = Drivelist::ListStorageDevices();
         for (const auto& i : l)
         {
-            if (QByteArray::fromStdString(i.device).toLower() == devlower && i.mountpoints.size() == 1)
+            if (QByteArray::fromStdString(i.device).toLower() == canonicalDevice && i.mountpoints.size() == 1)
             {
                 folder = QByteArray::fromStdString(i.mountpoints.front());
                 break;
