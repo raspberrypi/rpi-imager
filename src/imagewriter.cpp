@@ -1397,6 +1397,13 @@ void ImageWriter::setSWCapabilitiesList(const QString &json) {
     }
 }
 
+void ImageWriter::setSWCapabilitiesList(const QVariantList &caps) {
+    _swCapabilities = QJsonArray{};
+    for (const auto &cap : caps) {
+        _swCapabilities.append(cap.toString().trimmed().toLower());
+    }
+}
+
 QJsonArray ImageWriter::getHWFilterList() {
     return _deviceFilter;
 }

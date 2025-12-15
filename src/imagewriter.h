@@ -163,6 +163,7 @@ public:
 
     /* Set the capabilities supported by the hardware, for a filtered view of options that require the software to have certain capabilities. */
     Q_INVOKABLE void setSWCapabilitiesList(const QString &json);
+    Q_INVOKABLE void setSWCapabilitiesList(const QVariantList &caps);
 
     /* Get the HW filter list */
     Q_INVOKABLE QJsonArray getHWFilterList();

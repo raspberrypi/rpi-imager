@@ -637,6 +637,7 @@ WizardStepBase {
                 root.wizardContainer.piConnectAvailable = false
                 root.wizardContainer.secureBootAvailable = imageWriter.isSecureBootForcedByCliFlag()
                 root.wizardContainer.ccRpiAvailable = false
+                root.wizardContainer.ifAndFeaturesAvailable = false
                 root.nextButtonEnabled = true
                 if (fromMouse) {
                     Qt.callLater(function() { _highlightMatchingEntryInCurrentView(model) })
@@ -661,6 +662,18 @@ WizardStepBase {
                 root.wizardContainer.piConnectAvailable = imageWriter.checkSWCapability("rpi_connect")
                 root.wizardContainer.secureBootAvailable = imageWriter.checkSWCapability("secure_boot") || imageWriter.isSecureBootForcedByCliFlag()
                 root.wizardContainer.ccRpiAvailable = imageWriter.imageSupportsCcRpi()
+                
+                // Check if any interface/feature capabilities are available (requires both HW and SW support)
+                if (root.wizardContainer.ccRpiAvailable) {
+                    var hasAnyIfFeatures = imageWriter.checkHWAndSWCapability("i2c") ||
+                                           imageWriter.checkHWAndSWCapability("spi") ||
+                                           imageWriter.checkHWAndSWCapability("onewire") ||
+                                           imageWriter.checkHWAndSWCapability("serial") ||
+                                           imageWriter.checkHWAndSWCapability("usb_otg")
+                    root.wizardContainer.ifAndFeaturesAvailable = hasAnyIfFeatures
+                } else {
+                    root.wizardContainer.ifAndFeaturesAvailable = false
+                }
                 
                 // Clean up incompatible settings from customizationSettings based on OS capabilities
                 if (!root.wizardContainer.piConnectAvailable) {
