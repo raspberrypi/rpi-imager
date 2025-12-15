@@ -1410,13 +1410,16 @@ bool ImageWriter::checkHWAndSWCapability(const QString &cap, const QString &diff
 }
 
 bool ImageWriter::checkHWCapability(const QString &cap) {
-    return _hwCapabilities.contains(cap.trimmed().toLower());
+    const auto needle = cap.trimmed().toLower();
+    for (const auto &v : _hwCapabilities)
+        if (v.toString().toLower() == needle) return true;
+    return false;
 }
 
 bool ImageWriter::checkSWCapability(const QString &cap) {
     const auto needle = cap.trimmed().toLower();
     for (const auto &v : _swCapabilities)
-        if (v.toString() == needle) return true;
+        if (v.toString().toLower() == needle) return true;
     return false;
 }
 
