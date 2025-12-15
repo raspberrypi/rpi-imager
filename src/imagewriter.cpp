@@ -1670,7 +1670,7 @@ void ImageWriter::beginOSListFetch() {
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setMaximumRedirectsAllowed(3);
-    // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
+    // This will set up a chain of requests that culminate in the eventual fetch and assembly of
     // a complete cached OS list.
     QNetworkReply *reply = _networkManager.get(request);
     _networkRequestStartTimes[reply] = QDateTime::currentMSecsSinceEpoch();
