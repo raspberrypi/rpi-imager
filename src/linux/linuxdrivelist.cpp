@@ -75,7 +75,14 @@ namespace Drivelist
             QJsonObject bdev = i.toObject();
             QString name = bdev["kname"].toString();
             QString subsystems = bdev["subsystems"].toString();
-            if (name.startsWith("/dev/loop") || name.startsWith("/dev/sr") || name.startsWith("/dev/ram") || name.startsWith("/dev/zram") || name.isEmpty())
+            /* Skip CD/DVD drives, RAM devices, compressed RAM, and eMMC boot partitions.
+               Loop devices (mounted disk images) should be included like on macOS/Windows,
+               marked as virtual, and properly identified as system drives when appropriate.
+               eMMC boot partitions (mmcblk*boot*) are special hardware boot areas that
+               should not be exposed as writable targets. */
+            if (name.startsWith("/dev/sr") || name.startsWith("/dev/ram") || name.startsWith("/dev/zram") || name.isEmpty())
+                continue;
+            if (name.contains("boot") && name.contains("mmcblk"))
                 continue;
 
             d.busType    = bdev["busType"].toString().toStdString();
@@ -95,12 +102,14 @@ namespace Drivelist
             {
                 /* With some lsblk versions it is a bool in others a "0" or "1" string */
                 d.isReadOnly = bdev["ro"].toBool();
-                d.isRemovable= bdev["rm"].toBool() || bdev["hotplug"].toBool() || d.isVirtual;
+                /* Note: Unlike the old code, we don't force isRemovable for virtual devices.
+                   This matches macOS/Windows behavior where virtual devices can be system drives. */
+                d.isRemovable= bdev["rm"].toBool() || bdev["hotplug"].toBool();
             }
             else
             {
                 d.isReadOnly = bdev["ro"].toString() == "1";
-                d.isRemovable= bdev["rm"].toString() == "1" || bdev["hotplug"].toString() == "1" || d.isVirtual;
+                d.isRemovable= bdev["rm"].toString() == "1" || bdev["hotplug"].toString() == "1";
             }
             if (bdev["size"].isString())
             {
@@ -125,6 +134,10 @@ namespace Drivelist
             if (d.isCard || d.isUSB) {
                 d.isRemovable = true;
             }
+            
+            /* For physical drives: system if not removable and not virtual.
+               For virtual drives (loop devices): need to check mountpoints after
+               they're collected to determine if backing a system path. */
             d.isSystem   = !d.isRemovable && !d.isVirtual;
             d.blockSize  = bdev["phy-sec"].toInt();
             d.logicalBlockSize = bdev["log-sec"].toInt();
@@ -156,6 +169,28 @@ namespace Drivelist
             }
             dp.removeAll("");
             d.description = dp.join(" ").toStdString();
+
+            /* For virtual devices (loop devices), check if they're backing system paths.
+               This matches macOS/Windows behavior where virtual devices are included
+               but properly marked as system drives when appropriate. */
+            if (d.isVirtual && !d.isSystem)
+            {
+                for (const std::string& mp : d.mountpoints)
+                {
+                    QString mountpoint = QString::fromStdString(mp);
+                    /* Mark as system if mounted at root or other critical system paths */
+                    if (mountpoint == "/" || 
+                        mountpoint == "/usr" || 
+                        mountpoint == "/var" ||
+                        mountpoint == "/home" ||
+                        mountpoint == "/boot" ||
+                        mountpoint.startsWith("/snap/"))
+                    {
+                        d.isSystem = true;
+                        break;
+                    }
+                }
+            }
 
             /* Mark NVMe drives as system drives by default to avoid showing
                internal NVMe drives in the drive list. In embedded mode (typically
