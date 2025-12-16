@@ -327,7 +327,7 @@ set(SOURCES ${SOURCES} "${CMAKE_CURRENT_BINARY_DIR}/translations.qrc" ${QM_FILES
 option(GENERATE_TIMEZONES_FROM_IANA "Generate timezone list from latest IANA data" ON)
 
 if(GENERATE_TIMEZONES_FROM_IANA)
-    set(TZDATA_VERSION "2025b") # Update this to get newer timezone data
+    set(TZDATA_VERSION "2025c") # Update this to get newer timezone data
     set(TZDATA_URL "https://data.iana.org/time-zones/releases/tzdata${TZDATA_VERSION}.tar.gz")
 
     # The generator script handles fallback internally - it downloads from API
