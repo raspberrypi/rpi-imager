@@ -24,6 +24,17 @@ Item {
     property alias focusItem: optionButton
     // Expose the help link for tab navigation (when visible)
     property alias helpLinkItem: helpText
+    
+    // Single source of truth for label font (used by both label and TextMetrics)
+    readonly property font labelFont: Qt.font({
+        family: Style.fontFamilyBold,
+        pixelSize: Style.fontSizeFormLabel,
+        bold: true
+    })
+    
+    // Export the natural/desired width for dialog sizing calculations
+    // This is independent of Layout.fillWidth constraints
+    readonly property real naturalWidth: labelMetrics.width + optionButton.implicitWidth + Style.spacingMedium * 2 + Style.cardPadding
 
     // Access imageWriter from parent context
     property var imageWriter: {
@@ -35,6 +46,13 @@ Item {
             item = item.parent;
         }
         return null;
+    }
+    
+    // Measure label text independently for naturalWidth
+    TextMetrics {
+        id: labelMetrics
+        font: control.labelFont
+        text: control.text
     }
 
     implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
@@ -55,9 +73,7 @@ Item {
             Text {
                 id: label
                 Layout.alignment: Qt.AlignVCenter
-                font.family: Style.fontFamilyBold
-                font.pixelSize: Style.fontSizeFormLabel
-                font.bold: true
+                font: control.labelFont
                 color: optionButton.enabled ? Style.formLabelColor : Style.textDescriptionColor
                 elide: Text.ElideRight
                 

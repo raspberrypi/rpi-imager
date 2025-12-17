@@ -93,7 +93,7 @@ FocusScope {
             spacing: Style.spacingSmall
             visible: (root.title && root.title.length > 0) || (root.subtitle && root.subtitle.length > 0)
             
-            Text {
+            MarqueeText {
                 id: titleText
                 text: root.title
                 font.pixelSize: Style.fontSizeTitle
@@ -110,7 +110,7 @@ FocusScope {
                 activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
             
-            Text {
+            MarqueeText {
                 id: subtitleText
                 text: root.subtitle
                 font.pixelSize: Style.fontSizeSubtitle
@@ -169,6 +169,7 @@ FocusScope {
                 enabled: root.skipButtonEnabled
                 accessibleDescription: root.skipButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthSkip
+                Layout.maximumWidth: Style.buttonWidthSkip * 1.5  // Allow some growth but cap it
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.skipClicked()
                 // Tab order among action buttons: next -> back -> skip -> wrap to first field
@@ -188,6 +189,7 @@ FocusScope {
                 enabled: root.backButtonEnabled
                 accessibleDescription: root.backButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthMinimum
+                Layout.maximumWidth: Style.buttonWidthMinimum * 1.5  // Allow some growth but cap it
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.backClicked()
                 // After back, Tab goes to skip; Shift+Tab goes to next
@@ -202,6 +204,7 @@ FocusScope {
                 enabled: root.nextButtonEnabled
                 accessibleDescription: root.nextButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthMinimum
+                Layout.maximumWidth: Style.buttonWidthMinimum * 1.5  // Allow some growth but cap it
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.nextClicked()
                 // After next, Tab goes to back; Shift+Tab goes to skip

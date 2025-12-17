@@ -461,7 +461,7 @@ Item {
                                 anchors.fill: parent
                                 anchors.margins: Style.spacingSmall
                                 spacing: Style.spacingTiny
-                                Text {
+                                MarqueeText {
                                     Layout.fillWidth: true
                                     Layout.alignment: Qt.AlignVCenter
                                     text: stepItem.modelData
@@ -472,7 +472,6 @@ Item {
                                                : (stepItem.index === root.getSidebarIndex(root.currentStep)
                                                    ? Style.sidebarTextOnActiveColor
                                                    : Style.sidebarTextOnInactiveColor)
-                                    elide: Text.ElideRight
                                 }
                             }
                         }
@@ -573,7 +572,7 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.margins: Style.spacingSmall
                                         anchors.leftMargin: Style.spacingMedium
-                                        Text {
+                                        MarqueeText {
                                             id: subLabel
                                             Layout.fillWidth: true
                                             Layout.alignment: Qt.AlignVCenter
@@ -585,7 +584,6 @@ Item {
                                             color: (!root.customizationSupported || !subItem.isClickable)
                                                        ? Style.formLabelDisabledColor
                                                        : Style.sidebarTextOnInactiveColor
-                                            elide: Text.ElideRight
                                         }
                                     }
                                 }

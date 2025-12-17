@@ -475,6 +475,7 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImTextField.qml
         qmlcomponents/ImPasswordField.qml
         qmlcomponents/ImToggleTab.qml
+        qmlcomponents/MarqueeText.qml
         qmlcomponents/SelectionListView.qml
         qmlcomponents/OSSelectionListView.qml
         wizard/WizardStepBase.qml

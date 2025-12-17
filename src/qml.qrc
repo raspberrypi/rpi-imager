@@ -42,5 +42,6 @@
         <file>qmlcomponents/ImOptionPill.qml</file>
         <file>qmlcomponents/ImTextField.qml</file>
         <file>qmlcomponents/ImPasswordField.qml</file>
+        <file>qmlcomponents/MarqueeText.qml</file>
     </qresource>
 </RCC>

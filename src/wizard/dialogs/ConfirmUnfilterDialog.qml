@@ -63,6 +63,8 @@ BaseDialog {
 
     RowLayout {
         Layout.fillWidth: true
+        // Ensure minimum width accommodates buttons
+        Layout.minimumWidth: keepFilterButton.implicitWidth + showSystemButton.implicitWidth + Style.spacingMedium * 2
         spacing: Style.spacingMedium
         Item { Layout.fillWidth: true }
 
@@ -71,6 +73,8 @@ BaseDialog {
             text: qsTr("KEEP FILTER ON")
             accessibleDescription: qsTr("Keep system drives hidden to prevent accidental damage to your operating system")
             activeFocusOnTab: true
+            // Allow button to grow to fit text for this important warning dialog
+            implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
             onClicked: {
                 root.close()
                 root.cancelled()
@@ -82,6 +86,8 @@ BaseDialog {
             text: qsTr("SHOW SYSTEM DRIVES")
             accessibleDescription: qsTr("Remove the safety filter and display system drives in the storage device list")
             activeFocusOnTab: true
+            // Allow button to grow to fit text for this important warning dialog
+            implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
             onClicked: {
                 root.close()
                 root.confirmed()

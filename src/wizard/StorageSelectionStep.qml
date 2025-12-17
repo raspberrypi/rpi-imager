@@ -375,7 +375,7 @@ WizardStepBase {
                         Layout.fillWidth: true
                         spacing: Style.spacingXXSmall
                         
-                        Text {
+                        MarqueeText {
                             text: dstitem.description
                             font.pixelSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
@@ -394,7 +394,7 @@ WizardStepBase {
                             Accessible.ignored: true
                         }
                         
-                        Text {
+                        MarqueeText {
                             text: dstitem.mountpoints.length > 0 ? 
                                   qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", ")) : ""
                             font.pixelSize: Style.fontSizeSmall

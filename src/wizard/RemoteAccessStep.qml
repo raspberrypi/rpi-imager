@@ -83,6 +83,7 @@ WizardStepBase {
                                 text: qsTr("Use password authentication")
                                 checked: true
                                 ButtonGroup.group: authGroup
+                                Layout.fillWidth: true  // Enable text wrapping for long translations
                                 Accessible.description: qsTr("Allow SSH login using the username and password you configured in the previous step.")
                             }
                             
@@ -91,6 +92,7 @@ WizardStepBase {
                                 text: qsTr("Use public key authentication")
                                 checked: false
                                 ButtonGroup.group: authGroup
+                                Layout.fillWidth: true  // Enable text wrapping for long translations
                                 Accessible.description: qsTr("Allow SSH login using a cryptographic key pair instead of a password. More secure than password authentication.")
                             }
                         }

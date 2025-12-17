@@ -6,12 +6,23 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
+import QtQuick.Layouts
 import RpiImager
 
 CheckBox {
     id: control
     Material.accent: Style.formControlActiveColor
     activeFocusOnTab: true
+    
+    // Export the natural/desired width for dialog sizing calculations
+    readonly property real naturalWidth: textMetrics.width + (indicator ? indicator.width : 20) + spacing + leftPadding + rightPadding
+    
+    // Measure text for naturalWidth (control.font is inherited from CheckBox)
+    TextMetrics {
+        id: textMetrics
+        font: control.font
+        text: control.text
+    }
     
     // Access imageWriter from parent context
     property var imageWriter: {
@@ -23,6 +34,17 @@ CheckBox {
             item = item.parent;
         }
         return null;
+    }
+    
+    // Custom contentItem with text wrapping for long translations
+    contentItem: Text {
+        text: control.text
+        font: control.font
+        color: control.enabled ? Style.formLabelColor : Style.formLabelDisabledColor
+        verticalAlignment: Text.AlignVCenter
+        leftPadding: control.indicator ? (control.indicator.width + control.spacing) : 0
+        wrapMode: Text.WordWrap
+        width: control.availableWidth  // Constrain width so text wraps
     }
     
     // Custom square indicator for embedded mode to avoid rendering artifacts

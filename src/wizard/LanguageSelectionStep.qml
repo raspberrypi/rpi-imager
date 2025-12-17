@@ -73,6 +73,13 @@ WizardStepBase {
                         selectTextByMouse: true
                         font.pixelSize: Style.fontSizeInput
                         Accessible.description: qsTr("Select the language for the Raspberry Pi Imager interface")
+                        onActivated: function(index) {
+                            if (index >= 0 && index < _internalLanguages.length) {
+                                var internalName = _internalLanguages[index]
+                                if (internalName && internalName.length > 0)
+                                    imageWriter.changeLanguage(internalName)
+                            }
+                        }
                     }
                 }
             }

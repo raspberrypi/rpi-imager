@@ -30,8 +30,18 @@ BaseDialog {
         popup.close()
     }
 
+    // Dynamic width that updates when language/text changes
+    implicitWidth: Math.max(
+        chkBeep.naturalWidth,
+        chkEject.naturalWidth,
+        chkTelemetry.naturalWidth,
+        chkDisableWarnings.naturalWidth,
+        editRepoButton.naturalWidth
+    ) + Style.cardPadding * 4  // Double padding: contentLayout + optionsLayout margins
+    
     // Register focus groups when component is ready
     Component.onCompleted: {
+        // Register focus groups
         registerFocusGroup("header", function(){ 
             // Only include header text when screen reader is active (otherwise it's not focusable)
             if (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) {
@@ -228,6 +238,8 @@ BaseDialog {
     // Buttons section with background
     Rectangle {
         Layout.fillWidth: true
+        // Ensure minimum width accommodates buttons
+        Layout.minimumWidth: cancelButton.implicitWidth + saveButton.implicitWidth + Style.spacingMedium * 2 + Style.cardPadding
         Layout.preferredHeight: buttonRow.implicitHeight + Style.cardPadding
         color: Style.titleBackgroundColor
 

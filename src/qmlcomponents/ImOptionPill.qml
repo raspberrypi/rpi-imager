@@ -25,6 +25,17 @@ Item {
     property alias focusItem: sw
     // Expose the help link for tab navigation (when visible)
     property alias helpLinkItem: helpText
+    
+    // Single source of truth for label font (used by both label and TextMetrics)
+    readonly property font labelFont: Qt.font({
+        family: Style.fontFamilyBold,
+        pixelSize: Style.fontSizeFormLabel,
+        bold: true
+    })
+    
+    // Export the natural/desired width for dialog sizing calculations
+    // This is independent of Layout.fillWidth constraints
+    readonly property real naturalWidth: labelMetrics.width + sw.implicitWidth + Style.spacingMedium * 2 + Style.cardPadding
 
     // Access imageWriter from parent context
     property var imageWriter: {
@@ -36,6 +47,13 @@ Item {
             item = item.parent;
         }
         return null;
+    }
+    
+    // Measure label text independently for naturalWidth
+    TextMetrics {
+        id: labelMetrics
+        font: pill.labelFont
+        text: pill.text
     }
 
     implicitHeight: Math.max(Style.buttonHeightStandard - 8, 28)
@@ -51,17 +69,17 @@ Item {
         // Text block (label + optional help) on the left
         ColumnLayout {
             id: textColumn
-            Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
+            // Constrain width so text elides properly, leaving room for switch
+            Layout.maximumWidth: pill.width - sw.implicitWidth - Style.spacingMedium * 2
             spacing: Style.spacingXXSmall
 
             // Main label
             Text {
                 id: label
+                Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
-                font.family: Style.fontFamilyBold
-                font.pixelSize: Style.fontSizeFormLabel
-                font.bold: true
+                font: pill.labelFont
                 color: Style.formLabelColor
                 elide: Text.ElideRight
                 TapHandler { onTapped: sw.toggle() }
@@ -73,6 +91,7 @@ Item {
             // Optional help link under the label
             Text {
                 id: helpText
+                Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
                 visible: pill.helpLabel !== "" && pill.helpUrl !== ""
                 text: pill.helpLabel

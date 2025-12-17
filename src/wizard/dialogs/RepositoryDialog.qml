@@ -14,6 +14,13 @@ import RpiImager
 
 BaseDialog {
     id: popup
+    
+    // Dynamic width based on widest radio button or button row
+    // Updates automatically when language/text changes
+    implicitWidth: Math.max(
+        Math.max(radioOfficial.naturalWidth, radioCustomFile.naturalWidth, radioCustomUri.naturalWidth),
+        cancelButton.implicitWidth + saveButton.implicitWidth + Style.spacingMedium * 2
+    ) + Style.cardPadding * 4  // Double padding: contentLayout + optionsLayout margins
 
     // imageWriter is inherited from BaseDialog
     property var wizardContainer: null
@@ -93,6 +100,7 @@ BaseDialog {
                 accessibleDescription: qsTr("Use the official Raspberry Pi operating system repository")
                 checked: true
                 ButtonGroup.group: repoGroup
+                Layout.fillWidth: true  // Enable text wrapping for long translations
             }
 
             ImRadioButton {
@@ -101,6 +109,7 @@ BaseDialog {
                 accessibleDescription: qsTr("Load operating system list from a JSON file on your computer")
                 checked: false
                 ButtonGroup.group: repoGroup
+                Layout.fillWidth: true  // Enable text wrapping for long translations
                 onCheckedChanged: {
                     if (checked) {
                         Qt.callLater(function() {
@@ -116,6 +125,7 @@ BaseDialog {
                 accessibleDescription: qsTr("Download operating system list from a custom web address")
                 checked: false
                 ButtonGroup.group: repoGroup
+                Layout.fillWidth: true  // Enable text wrapping for long translations
                 onCheckedChanged: {
                     if (checked) {
                         Qt.callLater(function() {
@@ -189,6 +199,8 @@ BaseDialog {
     // Buttons section with background
     Rectangle {
         Layout.fillWidth: true
+        // Ensure minimum width accommodates buttons
+        Layout.minimumWidth: cancelButton.implicitWidth + saveButton.implicitWidth + Style.spacingMedium * 2 + Style.cardPadding
         Layout.preferredHeight: buttonRow.implicitHeight + Style.cardPadding
         color: Style.titleBackgroundColor
 
@@ -228,6 +240,8 @@ BaseDialog {
                 text: qsTr("Apply & Restart")
                 accessibleDescription: qsTr("Apply the new content repository and restart the wizard from the beginning")
                 Layout.minimumWidth: Style.buttonWidthMinimum
+                // Allow button to grow to fit text
+                implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
                 activeFocusOnTab: true
                 onClicked: {
                     popup.applySettings();
