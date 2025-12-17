@@ -235,7 +235,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ieee80211w=1"));
 }
 
-TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customization]") {
+TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK (open network)", "[customization]") {
     QVariantMap settings;
     settings["wifiSSID"] = "OpenNetwork";
     settings["wifiPasswordCrypt"] = "";  // Empty PSK for open network
@@ -244,13 +244,15 @@ TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK", "[customiz
     QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
     QString scriptStr = QString::fromUtf8(script);
     
-    // Should still include psk= line even when empty (matching old Imager behavior)
+    // Open network should use key_mgmt=NONE without psk= line
+    // See: https://github.com/raspberrypi/rpi-imager/issues/1396
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("wpa_supplicant.conf"));
     REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ssid=\"OpenNetwork\""));
-    // WPA2/WPA3 transition mode
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("key_mgmt=WPA-PSK SAE"));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("\tpsk="));
-    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("ieee80211w=1"));
+    REQUIRE_THAT(scriptStr.toStdString(), ContainsSubstring("key_mgmt=NONE"));
+    // Should NOT have WPA-PSK, psk, or ieee80211w for open networks
+    REQUIRE_THAT(scriptStr.toStdString(), !ContainsSubstring("WPA-PSK"));
+    REQUIRE_THAT(scriptStr.toStdString(), !ContainsSubstring("\tpsk="));
+    REQUIRE_THAT(scriptStr.toStdString(), !ContainsSubstring("ieee80211w=1"));
 }
 
 TEST_CASE("CustomisationGenerator WiFi country only (no SSID)", "[customization]") {
@@ -832,6 +834,33 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidde
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("hidden: true"));
     // Use password shorthand (not auth: block) for automatic WPA2/WPA3 transition mode
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("password:"));
+}
+
+TEST_CASE("CustomisationGenerator generates cloud-init network-config for open WiFi (no password)", "[cloudinit][network]") {
+    QVariantMap settings;
+    settings["wifiSSID"] = "OpenNetwork";
+    settings["wifiPasswordCrypt"] = "";  // Empty = open network
+    settings["recommendedWifiCountry"] = "US";
+    
+    QByteArray netcfg = CustomisationGenerator::generateCloudInitNetworkConfig(settings, false);
+    QString yaml = QString::fromUtf8(netcfg);
+    
+    // eth0 with DHCP v4 and v6 always present
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ethernets:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("eth0:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("dhcp4: true"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("dhcp6: true"));
+    
+    // Open network configuration - must use auth: key-management: none
+    // See: https://github.com/raspberrypi/rpi-imager/issues/1396
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("wifis:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("wlan0:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("\"OpenNetwork\":"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("regulatory-domain: \"US\""));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("auth:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("key-management: none"));
+    // Should NOT have password field for open networks
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("password:"));
 }
 
 TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[cloudinit][network]") {
