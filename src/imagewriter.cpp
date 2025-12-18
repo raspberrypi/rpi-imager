@@ -2060,6 +2060,23 @@ bool ImageWriter::isOnline()
         return false;
     }
     
+    // For non-embedded (desktop) mode: if network becomes available after being
+    // unavailable, and we never successfully fetched the OS list, trigger a retry.
+    // This handles the case where the initial fetch failed due to a firewall blocking
+    // access, and the user later grants permission (fixes GitHub issue #1212).
+    if (hasBasicConnectivity && !_online && _completeOsList.isEmpty()) {
+        qDebug() << "Network now available and OS list empty - retrying fetch";
+        _online = true;
+        beginOSListFetch();
+        emit networkOnline();
+    } else if (hasBasicConnectivity && !_online) {
+        // Network came online but we already have OS list data
+        _online = true;
+    } else if (!hasBasicConnectivity && _online) {
+        // Network went offline
+        _online = false;
+    }
+    
     return hasBasicConnectivity;
 }
 
