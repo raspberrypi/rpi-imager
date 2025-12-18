@@ -1,6 +1,6 @@
 # Bundled libcurl
 
-set(CURL_VERSION "8.15.0")
+set(CURL_VERSION "8.17.0")
 string(REPLACE "." "_" CURL_TAG ${CURL_VERSION})
 FetchContent_Declare(curl
     GIT_REPOSITORY https://github.com/curl/curl.git
