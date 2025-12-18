@@ -1297,10 +1297,6 @@ void DownloadThread::_writeComplete()
             // Get cache file hash from async writer
             QByteArray cacheFileHash = _asyncCacheWriter->hash();
             
-            qDebug() << "Cache file created (async):";
-            qDebug() << "  Image hash (uncompressed):" << computedHash;
-            qDebug() << "  Cache file hash (compressed):" << cacheFileHash;
-            
             // Emit both hashes for proper cache verification
             emit cacheFileHashUpdated(cacheFileHash, computedHash);
             // Keep old signal for backward compatibility

@@ -247,7 +247,10 @@ void CacheManager::startVerification(const QByteArray& expectedHash)
             cacheFileName = status.cacheFileName;
             hashToVerify = expectedHash; // For custom cache files, verify against expected hash
         } else {
-            cacheFileName = getDefaultCacheFilePath();
+            // Use the stored cache file path if available (loaded from settings),
+            // otherwise use the default path. This ensures we verify the actual
+            // cache file that exists, not a path that might differ due to app name changes.
+            cacheFileName = status.cacheFileName.isEmpty() ? getDefaultCacheFilePath() : status.cacheFileName;
             // For regular cache files, verify against the stored compressed hash (cache file contains compressed data)
             hashToVerify = status.cacheFileHash.isEmpty() ? expectedHash : status.cacheFileHash;
         }

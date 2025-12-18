@@ -92,6 +92,9 @@ bool AsyncCacheWriter::open(const QString &filename, qint64 preallocateSize)
     _bytesWritten = 0;
     _isActive = true;
     
+    // Reset hash for fresh computation
+    _hash.reset();
+    
     // Clear any stale queue data
     {
         QMutexLocker lock(&_mutex);

@@ -49,7 +49,12 @@ void AcceleratedCryptographicHash::addData(const QByteArray &data) {
     p_Impl->addData(data);
 }
 QByteArray AcceleratedCryptographicHash::result() const {
-    return p_Impl->result();
+    // CC_SHA256_Final is destructive - cache the result so subsequent calls work
+    if (!_resultCached) {
+        _cachedResult = p_Impl->result();
+        _resultCached = true;
+    }
+    return _cachedResult;
 }
 
 void AcceleratedCryptographicHash::reset() {
