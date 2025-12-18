@@ -500,15 +500,6 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     // Reset write completion state when device selection changes
     if (device.isEmpty()) {
         setWriteState(WriteState::Idle);
-        _dstChildDevices.clear();
-    } else {
-#ifdef Q_OS_DARWIN
-        // Cache child devices (APFS volumes on macOS) to avoid re-scanning during unmount
-        _dstChildDevices = _drivelist.getChildDevices(device);
-        if (!_dstChildDevices.isEmpty()) {
-            qDebug() << "Cached" << _dstChildDevices.count() << "child devices for" << device;
-        }
-#endif
     }
 
     qDebug() << "Device selection changed to:" << device;
@@ -1035,15 +1026,6 @@ void ImageWriter::startWrite()
     _thread->setDebugVerboseLogging(_debugVerboseLogging);
     _thread->setDebugAsyncIO(_debugAsyncIO);
     _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
-    
-#ifdef Q_OS_DARWIN
-    // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
-    // Only set if we have cached devices; if empty (e.g., cleared after previous write),
-    // let the download thread do a fresh scan to catch any new partitions.
-    if (!_dstChildDevices.isEmpty()) {
-        _thread->setChildDevices(_dstChildDevices);
-    }
-#endif
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -1872,13 +1854,6 @@ void ImageWriter::onSuccess()
     
     // Clear Pi Connect token on successful write completion
     clearConnectToken();
-    
-#ifdef Q_OS_DARWIN
-    // Clear cached child devices after successful write.
-    // After eject, macOS may auto-remount with different partitions,
-    // so subsequent writes need a fresh scan.
-    _dstChildDevices.clear();
-#endif
     
     emit success();
 
@@ -3404,14 +3379,6 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
     qDebug() << "_continueStartWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
-#ifdef Q_OS_DARWIN
-    // Pass cached child devices to avoid re-scanning during unmount (saves ~1 second on macOS)
-    // Only set if we have cached devices; if empty (e.g., cleared after previous write),
-    // let the download thread do a fresh scan to catch any new partitions.
-    if (!_dstChildDevices.isEmpty()) {
-        _thread->setChildDevices(_dstChildDevices);
-    }
-#endif
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)

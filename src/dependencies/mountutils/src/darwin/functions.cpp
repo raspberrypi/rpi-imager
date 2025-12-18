@@ -71,7 +71,7 @@ run_cb(const char* device, DADiskUnmountCallback callback, size_t times) {
     CFRunLoopGetCurrent(),
     kCFRunLoopDefaultMode);
 
-  // Start the run loop: Run with a timeout of 500ms (0.5s),
+  // Start the run loop: Run with a timeout of 50ms,
   // and don't terminate after only handling one resource.
   // NOTE: As the unmount callback gets called *before* the runloop can
   // be started here when there's no device to be unmounted or
@@ -89,7 +89,8 @@ run_cb(const char* device, DADiskUnmountCallback callback, size_t times) {
   while (!done) {
     loop_count++;
     // See https://developer.apple.com/reference/corefoundation/1541988-cfrunloopruninmode
-    SInt32 status = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.5, false);
+    // Use 50ms timeout for responsive unmount detection (was 500ms)
+    SInt32 status = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
     // Stop starting the runloop once it's been manually stopped
     if ((status == kCFRunLoopRunStopped) || (status == kCFRunLoopRunFinished)) {
       done = true;
@@ -101,7 +102,8 @@ run_cb(const char* device, DADiskUnmountCallback callback, size_t times) {
       done = true;
     }
     // Bail out if the runloop is timing out, but not getting anywhere
-    if (loop_count > 10) {
+    // 100 iterations × 50ms = 5 seconds timeout (same total as before)
+    if (loop_count > 100) {
       MountUtilsLog("Runloop stall");
       context.code = MOUNTUTILS_ERROR_AGAIN;
       done = true;

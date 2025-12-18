@@ -184,40 +184,10 @@ bool DownloadThread::_openAndPrepareDevice()
     {
         emit preparationStatusUpdate(tr("Unmounting drive..."));
         unmountTimer.start();
-#ifdef Q_OS_DARWIN
-        /* Unmount any APFS/HFS+ volumes using this physical disk */
-        if (_childDevicesProvided && !_childDevices.isEmpty())
-        {
-            // Use cached child device info (saves ~1 second scan)
-            qDebug() << "Unmounting" << _childDevices.size() << "cached child devices";
-            for (const QString &childDevice : _childDevices)
-            {
-                qDebug() << "Unmounting child device (cached):" << childDevice;
-                unmount_disk(childDevice.toUtf8().constData());
-            }
-        }
-        else if (!_childDevicesProvided)
-        {
-            // No cache provided - scan for child devices (CLI usage or after previous eject)
-            // Convert rdisk to disk for comparison since drivelist returns canonical paths
-            QString canonicalPath = PlatformQuirks::getEjectDevicePath(_filename);
-            auto l = Drivelist::ListStorageDevices();
-            for (const auto &i : l)
-            {
-                if (QByteArray::fromStdString(i.device) == canonicalPath.toUtf8())
-                {
-                    for (const auto &j : i.childDevices)
-                    {
-                        qDebug() << "Unmounting child device:" << j.c_str();
-                        unmount_disk(j.c_str());
-                    }
-                    break;
-                }
-            }
-        }
-        // else: cache provided but empty - device has no child partitions
-#endif
         // Use canonical device path for unmount
+        // Note: On macOS, DADiskUnmount with kDADiskUnmountOptionWhole automatically
+        // unmounts all child volumes (APFS containers, partitions, etc.), so we don't
+        // need to unmount them individually. This saves ~8 seconds on typical SD cards.
         QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
         
         qDebug() << "Unmounting:" << unmountPath;
@@ -1668,17 +1638,6 @@ void DownloadThread::setImageCustomisation(const QByteArray &config, const QByte
     _initFormat = initFormat;
     _advancedOptions = opts;
     qDebug() << "DownloadThread::setImageCustomisation - initFormat:" << initFormat << "cloudinit empty:" << cloudinit.isEmpty() << "cloudinitNetwork empty:" << cloudInitNetwork.isEmpty();
-}
-
-void DownloadThread::setChildDevices(const QStringList &devices)
-{
-    _childDevices = devices;
-    _childDevicesProvided = true;
-}
-
-void DownloadThread::setChildDevicesProvided(bool provided)
-{
-    _childDevicesProvided = provided;
 }
 
 void DownloadThread::setDebugDirectIO(bool enabled)

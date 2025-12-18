@@ -116,19 +116,6 @@ public:
     void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const QByteArray &initFormat, const ImageOptions::AdvancedOptions opts);
 
     /*
-     * Set child devices to unmount (macOS APFS volumes)
-     * This avoids re-scanning the drive list during unmount, saving ~1 second
-     * Call with empty list if device has no child devices (still skips the scan)
-     */
-    void setChildDevices(const QStringList &devices);
-    
-    /*
-     * Mark that child device info was provided (even if empty)
-     * This allows skipping the scan when we know there are no child devices
-     */
-    void setChildDevicesProvided(bool provided);
-    
-    /*
      * Debug options (set before starting the thread)
      */
     void setDebugDirectIO(bool enabled);
@@ -233,8 +220,6 @@ protected:
     std::uint64_t _lastFailureOffset;
     qint64 _sectorsStart;
     QByteArray _url, _useragent, _buf, _filename, _lastError, _expectedHash, _config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat;
-    QStringList _childDevices;  // macOS APFS child volumes to unmount
-    bool _childDevicesProvided = false;  // true if child device info was provided (even if empty list)
     ImageOptions::AdvancedOptions _advancedOptions;
     char *_firstBlock;
     size_t _firstBlockSize;
