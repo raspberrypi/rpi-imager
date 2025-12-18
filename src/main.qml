@@ -32,7 +32,12 @@ ApplicationWindow {
     minimumWidth: imageWriter.isEmbeddedMode() ? -1 : 680
     minimumHeight: imageWriter.isEmbeddedMode() ? -1 : 420
 
-    title: qsTr("Raspberry Pi Imager %1").arg(imageWriter.constantVersion())
+    // Track custom repo host for title display
+    property string customRepoHost: imageWriter.customRepoHost()
+    
+    title: customRepoHost.length > 0 
+        ? qsTr("Raspberry Pi Imager %1 — Using data from %2").arg(imageWriter.constantVersion()).arg(customRepoHost)
+        : qsTr("Raspberry Pi Imager %1").arg(imageWriter.constantVersion())
 
     Component.onCompleted: {
         // Set the main window for modal file dialogs
@@ -505,6 +510,11 @@ ApplicationWindow {
             performanceSaveDialog.currentFolder = folderUrl
             performanceSaveDialog.folder = folderUrl
             performanceSaveDialog.open()
+        }
+        
+        // Update title when custom repository changes
+        function onCustomRepoChanged() {
+            window.customRepoHost = imageWriter.customRepoHost()
         }
     }
 

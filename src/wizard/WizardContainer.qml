@@ -1197,6 +1197,164 @@ Item {
             piConnectEnabled = false
             delete customizationSettings.piConnectEnabled
         }
+        
+        // Handle repository URL received from deep link (rpi-imager://open?repo=...)
+        function onRepositoryUrlReceived(url) {
+            repositoryUrlDialog.openWithUrl(url)
+        }
+    }
+
+    // Repository URL confirmation dialog — shown when a deep link contains a custom repo URL
+    BaseDialog {
+        id: repositoryUrlDialog
+        imageWriter: root.imageWriter
+        parent: root
+        anchors.centerIn: parent
+
+        // carry the repository URL we just received
+        property string repoUrl: ""
+        property bool allowAccept: false
+
+        // small safety delay before enabling "Switch"
+        Timer {
+            id: repoAcceptEnableDelay
+            interval: 1500
+            running: false
+            repeat: false
+            onTriggered: {
+                repositoryUrlDialog.allowAccept = true
+                // Rebuild focus order now that switch button is enabled
+                repositoryUrlDialog.rebuildFocusOrder()
+            }
+        }
+
+        function openWithUrl(url) {
+            repoUrl = url
+            allowAccept = false
+            repoAcceptEnableDelay.start()
+            repositoryUrlDialog.open()
+        }
+
+        // ESC closes
+        function escapePressed() { repositoryUrlDialog.close() }
+
+        Component.onCompleted: {
+            // match your focus group style
+            registerFocusGroup("repo_url_content", function() {
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.isScreenReaderActive()) {
+                    return [repoTitleText, repoBodyText, repoUrlText]
+                }
+                return []
+            }, 0)
+            registerFocusGroup("repo_url_buttons", function() {
+                return [repoCancelBtn, repoSwitchBtn]
+            }, 1)
+        }
+
+        onClosed: {
+            repoAcceptEnableDelay.stop()
+            allowAccept = false
+            repoUrl = ""
+        }
+
+        // ----- CONTENT -----
+        Text {
+            id: repoTitleText
+            text: qsTr("Switch to a custom repository?")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+        }
+
+        // Body / security note
+        Text {
+            id: repoBodyText
+            text: qsTr("A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.\n\n") +
+                  qsTr("Only accept if you trust this source and intentionally clicked a link to open this repository.")
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamily
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+        }
+        
+        // Show the URL being requested
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            Layout.preferredHeight: repoUrlText.implicitHeight + Style.spacingSmall * 2
+            color: Style.titleBackgroundColor
+            border.color: Style.popupBorderColor
+            border.width: 1
+            radius: Style.listItemBorderRadius
+            
+            Text {
+                id: repoUrlText
+                anchors.fill: parent
+                anchors.margins: Style.spacingSmall
+                text: repositoryUrlDialog.repoUrl
+                font.pixelSize: Style.fontSizeCaption
+                font.family: "monospace"
+                color: Style.formLabelColor
+                wrapMode: Text.WrapAnywhere
+                elide: Text.ElideMiddle
+                maximumLineCount: 3
+                Accessible.role: Accessible.StaticText
+                Accessible.name: qsTr("Repository URL: %1").arg(repositoryUrlDialog.repoUrl)
+                Accessible.ignored: false
+                Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+            }
+        }
+
+        // Buttons row
+        RowLayout {
+            id: repoBtnRow
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            spacing: Style.spacingMedium
+
+            Item { Layout.fillWidth: true }
+
+            ImButton {
+                id: repoSwitchBtn
+                text: repositoryUrlDialog.allowAccept ? qsTr("Switch repository") : qsTr("Please wait…")
+                accessibleDescription: qsTr("Switch to the custom repository from the link")
+                enabled: repositoryUrlDialog.allowAccept
+                activeFocusOnTab: true
+                onClicked: {
+                    repositoryUrlDialog.close()
+                    // Switch to the new repository and reset wizard
+                    root.imageWriter.refreshOsListFrom(new URL(repositoryUrlDialog.repoUrl))
+                    root.resetWizard()
+                }
+            }
+
+            ImButtonRed {
+                id: repoCancelBtn
+                text: qsTr("Cancel")
+                accessibleDescription: qsTr("Keep your current repository settings")
+                activeFocusOnTab: true
+                onClicked: repositoryUrlDialog.close()
+            }
+        }
     }
 
     

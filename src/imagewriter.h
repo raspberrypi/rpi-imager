@@ -290,6 +290,7 @@ public:
     Q_INVOKABLE void changeLanguage(const QString &newLanguageName);
     Q_INVOKABLE void changeKeyboard(const QString &newKeymapLayout);
     Q_INVOKABLE bool customRepo();
+    Q_INVOKABLE QString customRepoHost();
     
     // Secure Boot CLI override
     static void setForceSecureBootEnabled(bool enabled);
@@ -361,6 +362,8 @@ signals:
     void connectTokenReceived(const QString &token);
     void connectTokenConflictDetected(const QString &token);
     void connectTokenCleared();
+    void repositoryUrlReceived(const QString &url);
+    void customRepoChanged();
     void cacheStatusChanged();
     void osListFetchFailed();
     void permissionWarning(QVariant msg);

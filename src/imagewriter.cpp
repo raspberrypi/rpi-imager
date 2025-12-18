@@ -1681,6 +1681,7 @@ void ImageWriter::refreshOsListFrom(const QUrl &url) {
     _completeOsList = QJsonDocument();
     _osListRefreshTimer.stop();
     beginOSListFetch();
+    emit customRepoChanged();
 }
 
 void ImageWriter::refreshOsListFromDefaultUrl() {
@@ -3026,6 +3027,14 @@ bool ImageWriter::customRepo()
     return _repo.toString() != OSLIST_URL;
 }
 
+QString ImageWriter::customRepoHost()
+{
+    if (!customRepo()) {
+        return QString();
+    }
+    return _repo.host();
+}
+
 // Cache-related methods removed - now handled by CacheManager
 
 void ImageWriter::onCacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes)
@@ -3651,6 +3660,22 @@ void ImageWriter::handleIncomingUrl(const QUrl &url)
 {
     qDebug() << "Incoming URL:" << url;
 
+    // Check for repository URL parameter (repo=https://example.com/repo.json)
+    QUrlQuery query(url);
+    const QString repoVal = query.queryItemValue(QStringLiteral("repo"), QUrl::FullyDecoded);
+    if (!repoVal.isEmpty()) {
+        // Validate: must be http/https URL ending with .json
+        static const QRegularExpression repoUrlRe(QStringLiteral("^https?://[^ \\t\\r\\n]+\\.json$"), 
+                                                   QRegularExpression::CaseInsensitiveOption);
+        if (repoUrlRe.match(repoVal).hasMatch()) {
+            qDebug() << "Valid repository URL received:" << repoVal;
+            emit repositoryUrlReceived(repoVal);
+        } else {
+            qWarning() << "Ignoring invalid repository URL format:" << repoVal;
+        }
+    }
+
+    // Check for auth_key token (existing behavior)
     auto token = parseTokenFromUrl(url);
     if (!token.isEmpty()) {
         if (!_piConnectToken.isEmpty()) {
