@@ -255,7 +255,7 @@
     </message>
     <message>
         <source>Authorized keys files (authorized_keys)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ficheiros de chaves autorizadas (authorized_keys)</translation>
     </message>
 </context>
 <context>
@@ -669,7 +669,7 @@
     </message>
     <message>
         <source>Failed to allocate buffer for MBR zeroing</source>
-        <translation type="unfinished"></translation>
+        <translation>Falha ao alocar buffer para zerar o MBR</translation>
     </message>
 </context>
 <context>
@@ -915,32 +915,33 @@
     </message>
     <message>
         <source>Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>Documentos</translation>
     </message>
     <message>
         <source>Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Transferências</translation>
     </message>
     <message>
         <source>Home</source>
-        <translation type="unfinished"></translation>
+        <translation>Pasta pessoal</translation>
     </message>
     <message>
         <source>File name:</source>
-        <translation type="unfinished"></translation>
+        <translation>Nome do ficheiro:</translation>
     </message>
     <message>
         <source>Enter filename…</source>
-        <translation type="unfinished"></translation>
+        <translation>Introduzir nome do ficheiro...</translation>
     </message>
     <message>
         <source>Navigate to a folder using the panel on the left,
 or type a path in the address bar above.</source>
-        <translation type="unfinished"></translation>
+        <translation>Navegue até uma pasta utilizando o painel à esquerda
+ou digite um caminho na barra de endereço acima.</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Guardar</translation>
+        <translation>Guardar</translation>
     </message>
 </context>
 <context>
@@ -961,27 +962,27 @@ or type a path in the address bar above.</source>
     <name>ImPasswordField</name>
     <message>
         <source>Password is visible. Press F2 to hide.</source>
-        <translation type="unfinished"></translation>
+        <translation>A palavra-passe está visível. Prima F2 para ocultar.</translation>
     </message>
     <message>
         <source>Password is hidden. Press F2 to show.</source>
-        <translation type="unfinished"></translation>
+        <translation>A palavra-passe está oculta. Prima F2 para mostrar.</translation>
     </message>
     <message>
         <source>Hide password</source>
-        <translation type="unfinished"></translation>
+        <translation>Ocultar palavra-passe</translation>
     </message>
     <message>
         <source>Show password</source>
-        <translation type="unfinished"></translation>
+        <translation>Mostrar palavra-passe</translation>
     </message>
     <message>
         <source>Password is currently visible. Activate to hide it.</source>
-        <translation type="unfinished"></translation>
+        <translation>A palavra-passe está visível no momento. Ative para ocultá-la.</translation>
     </message>
     <message>
         <source>Password is currently hidden. Activate to show it.</source>
-        <translation type="unfinished"></translation>
+        <translation>A palavra-passe está oculta no momento. Ative para a mostrar.</translation>
     </message>
 </context>
 <context>
@@ -995,7 +996,7 @@ or type a path in the address bar above.</source>
     <name>ImSaveFileDialog</name>
     <message>
         <source>Save File</source>
-        <translation type="unfinished"></translation>
+        <translation>Guardar ficheiro</translation>
     </message>
 </context>
 <context>
@@ -1392,7 +1393,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Inicie sessão para receber um token e ativar o Raspberry Pi Connect</translation>
     </message>
 </context>
 <context>
@@ -1636,102 +1637,102 @@ Clique em &quot;Instalar autorização&quot; para configurar a elevação autom�
     </message>
     <message>
         <source>RSA Private Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Chave privada RSA</translation>
     </message>
     <message>
         <source>Change</source>
-        <translation type="unfinished">Alterar</translation>
+        <translation>Alterar</translation>
     </message>
     <message>
         <source>(unable to compute)</source>
-        <translation type="unfinished"></translation>
+        <translation>(não foi possível calcular)</translation>
     </message>
 </context>
 <context>
     <name>SshKeyManager</name>
     <message>
         <source>No SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Nenhuma chave SSH configurada</translation>
     </message>
     <message>
         <source>1 SSH key configured</source>
-        <translation type="unfinished"></translation>
+        <translation>1 chave SSH configurada</translation>
     </message>
     <message>
         <source>%1 SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 chaves SSH configuradas</translation>
     </message>
     <message>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>Ocultar</translation>
     </message>
     <message>
         <source>Show</source>
-        <translation type="unfinished"></translation>
+        <translation>Mostrar</translation>
     </message>
     <message>
         <source>Hide the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Ocultar a lista de chaves SSH</translation>
     </message>
     <message>
         <source>Show the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Mostrar a lista de chaves SSH</translation>
     </message>
     <message>
         <source>SSH keys list</source>
-        <translation type="unfinished"></translation>
+        <translation>Lista de chaves SSH</translation>
     </message>
     <message>
         <source>SSH key %1: %2, %3</source>
-        <translation type="unfinished"></translation>
+        <translation>Chave SSH %1: %2, %3</translation>
     </message>
     <message>
         <source>SSH key %1: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Chave SSH %1: %2</translation>
     </message>
     <message>
         <source>SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Chave SSH %1</translation>
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished"></translation>
+        <translation>Remover</translation>
     </message>
     <message>
         <source>Remove SSH key: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Remover chave SSH: %1</translation>
     </message>
     <message>
         <source>Remove SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Remover chave SSH %1</translation>
     </message>
     <message>
         <source>Paste key or click BROWSE to select file</source>
-        <translation type="unfinished"></translation>
+        <translation>Cole a chave ou clique em NAVEGAR para selecionar o ficheiro</translation>
     </message>
     <message>
         <source>SSH public key input</source>
-        <translation type="unfinished"></translation>
+        <translation>Entrada da chave pública SSH</translation>
     </message>
     <message>
         <source>Paste an SSH public key here or use the browse button to select a key file</source>
-        <translation type="unfinished"></translation>
+        <translation>Cole uma chave pública SSH aqui ou use o botão navegar para selecionar um ficheiro de chave</translation>
     </message>
     <message>
         <source>Add</source>
-        <translation type="unfinished"></translation>
+        <translation>Adicionar</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
-        <translation type="unfinished">Selecionar chave pública SSH</translation>
+        <translation>Selecionar chave pública SSH</translation>
     </message>
     <message>
         <source>Add the entered SSH key</source>
-        <translation type="unfinished"></translation>
+        <translation>Adicionar a chave SSH introduzida</translation>
     </message>
     <message>
         <source>Select an SSH public key file to add</source>
-        <translation type="unfinished"></translation>
+        <translation>Selecione um ficheiro de chave pública SSH para adicionar</translation>
     </message>
 </context>
 <context>
@@ -2377,15 +2378,15 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Save Performance Data</source>
-        <translation type="unfinished">Guardar dados de desempenho</translation>
+        <translation>Guardar dados de desempenho</translation>
     </message>
     <message>
         <source>JSON files (*.json)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ficheiros JSON (*.json)</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished">Todos os ficheiros (*)</translation>
+        <translation>Todos os ficheiros (*)</translation>
     </message>
 </context>
 </TS>
