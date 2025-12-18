@@ -656,13 +656,27 @@ int main(int argc, char *argv[])
     // Determine if we should show the language selection landing step
     // Consider language undetermined if QLocale::system() is AnyLanguage or C
     // In embedded mode, always show language selection since we can't trust the host OS language
+    // Also show if user has previously made a language selection (sticky preference)
     bool couldDetermineLanguage = true;
     {
         QLocale::Language sysLang = QLocale::system().language();
         if (sysLang == QLocale::AnyLanguage || sysLang == QLocale::C)
             couldDetermineLanguage = false;
     }
-    const bool showLanguageSelection = enableLanguageSelection || !couldDetermineLanguage || imageWriter.isEmbeddedMode();
+    
+    // Check if user has previously made a language selection - if so, always show the selector
+    // and load their saved preference
+    const QString savedLanguage = settings.value("savedLanguage").toString();
+    const bool hasSavedLanguagePreference = !savedLanguage.isEmpty();
+    
+    if (hasSavedLanguagePreference)
+    {
+        // Load the user's saved language preference
+        qDebug() << "Loading saved language preference:" << savedLanguage;
+        imageWriter.changeLanguage(savedLanguage);
+    }
+    
+    const bool showLanguageSelection = enableLanguageSelection || !couldDetermineLanguage || imageWriter.isEmbeddedMode() || hasSavedLanguagePreference;
 
     engine.setInitialProperties(QVariantMap{
         {"imageWriter", QVariant::fromValue(&imageWriter)},

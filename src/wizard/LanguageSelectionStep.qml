@@ -35,12 +35,18 @@ WizardStepBase {
         }
         comboLanguage.model = display
 
-        // Default to English (British) if present, else current language
-        var idx = display.indexOf("English (British)")
+        // Pre-select based on current language (which may have been loaded from saved preference in main.cpp)
+        // Fall back to English (British) if current language is not set
+        var current = imageWriter.getCurrentLanguage()
+        var idx = -1
+        
+        if (current && current.length > 0) {
+            var currentDisplay = (current === "English") ? "English (British)" : current
+            idx = display.indexOf(currentDisplay)
+        }
+        
         if (idx === -1) {
-            var current = imageWriter.getCurrentLanguage()
-            var wantedDisplay = (current === "English") ? "English (British)" : current
-            idx = display.indexOf(wantedDisplay)
+            idx = display.indexOf("English (British)")
         }
         comboLanguage.currentIndex = idx !== -1 ? idx : 0
 
@@ -90,8 +96,12 @@ WizardStepBase {
         var idx = comboLanguage.currentIndex
         if (idx >= 0 && idx < _internalLanguages.length) {
             var internalName = _internalLanguages[idx]
-            if (internalName && internalName.length > 0)
+            if (internalName && internalName.length > 0) {
                 imageWriter.changeLanguage(internalName)
+                // Persist the language selection so it's remembered for future sessions
+                // This also ensures the language selector is always shown on next launch
+                imageWriter.setSetting("savedLanguage", internalName)
+            }
         }
     }
 }
