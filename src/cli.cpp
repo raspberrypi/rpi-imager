@@ -307,7 +307,7 @@ void Cli::_clearLine()
 {
     /* Properly clearing line requires platform specific code.
        Just write some spaces for now, and return to beginning of line. */
-    std::cerr << "                                          \r";
+    std::cerr << "                                                            \r";
 }
 
 void Cli::onError(QVariant msg)
