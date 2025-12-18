@@ -10,7 +10,6 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QNetworkAccessManager>
 #include <QObject>
 #include <QTimer>
 #include <QUrl>
@@ -20,7 +19,6 @@
 #ifndef CLI_ONLY_BUILD
 #include <QQmlEngine>
 #endif
-#include <QNetworkReply>
 #include "config.h"
 #include "suspend_inhibitor.h"
 #include "drivelistmodel.h"
@@ -38,7 +36,6 @@
 class QQmlApplicationEngine;
 class DownloadThread;
 class DownloadExtractThread;
-class QNetworkReply;
 class QTranslator;
 #ifndef CLI_ONLY_BUILD
 class NativeFileDialog;
@@ -267,6 +264,8 @@ public:
     Q_INVOKABLE void setDebugAsyncIO(bool enabled);
     Q_INVOKABLE int getDebugAsyncQueueDepth() const;
     Q_INVOKABLE void setDebugAsyncQueueDepth(int depth);
+    Q_INVOKABLE bool getDebugIPv4Only() const;
+    Q_INVOKABLE void setDebugIPv4Only(bool enabled);
     
     // Customisation API
     Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
@@ -383,7 +382,9 @@ protected slots:
     void onCancelled();
     void onFinalizing();
     void onPreparationStatusUpdate(QString msg);
-    void handleNetworkRequestFinished(QNetworkReply *data);
+    void onOsListFetchComplete(const QByteArray &data, const QUrl &url);
+    void onOsListFetchError(const QString &errorMessage, const QUrl &url);
+    void onNetworkConnectionStats(const QString &statsMetadata, const QUrl &url);
     void onSTPdetected();
     void onCacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes);
     void onCacheVerificationComplete(bool isValid);
@@ -405,8 +406,8 @@ private:
     // Recursively walk all the entries with subitems and, for any which
     // refer to an external JSON list, fetch the list and put it in place.
     void fillSubLists(QJsonArray &topLevel);
-    QNetworkAccessManager _networkManager;
-    QHash<QNetworkReply*, qint64> _networkRequestStartTimes;  // Track request start times for performance
+    void queueSublistFetches(const QJsonArray &list, int depth);
+    QHash<QUrl, qint64> _pendingFetchStartTimes;  // Track request start times for performance
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter, _hwCapabilities, _swCapabilities;
     bool _deviceFilterIsInclusive;
@@ -454,6 +455,7 @@ protected:
     bool _debugVerboseLogging;
     bool _debugAsyncIO;
     int _debugAsyncQueueDepth;
+    bool _debugIPv4Only;
 
     void _parseCompressedFile();
     void _parseXZFile();

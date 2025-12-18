@@ -40,6 +40,7 @@
 #include "imageadvancedoptions.h"
 #include "secureboot.h"
 #include "platformquirks.h"
+#include "curlnetworkconfig.h"
 #include <QTemporaryDir>
 
 #ifdef Q_OS_LINUX
@@ -50,7 +51,6 @@
 using namespace std;
 
 QByteArray DownloadThread::_proxy;
-int DownloadThread::_curlCount = 0;
 
 DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfilename, const QByteArray &expectedHash, QObject *parent) :
     QThread(parent), _startOffset(0), _lastDlTotal(0), _lastDlNow(0), _extractTotal(0), _verifyTotal(0), _lastVerifyNow(0), _bytesWritten(0), _lastFailureOffset(0), _sectorsStart(-1), _url(url), _filename(localfilename), _expectedHash(expectedHash),
@@ -58,9 +58,8 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     _inputBufferSize(SystemMemoryManager::instance().getOptimalInputBufferSize()), _writehash(OSLIST_HASH_ALGORITHM), _verifyhash(OSLIST_HASH_ALGORITHM),
     _hasPendingHash(false)
 {
-    if (!_curlCount)
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-    _curlCount++;
+    // Ensure libcurl is initialized (handled centrally by CurlNetworkConfig)
+    CurlNetworkConfig::ensureInitialized();
 
     QSettings settings;
     _ejectEnabled = settings.value("eject", true).toBool();
@@ -87,6 +86,7 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     _debugVerboseLogging = false;
     _debugAsyncIO = true;       // Enable async I/O by default for performance
     _debugAsyncQueueDepth = 16; // Default queue depth
+    _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
 }
 
 DownloadThread::~DownloadThread()
@@ -121,9 +121,9 @@ DownloadThread::~DownloadThread()
 
     if (_firstBlock)
         qFreeAligned(_firstBlock);
-
-    if (!--_curlCount)
-        curl_global_cleanup();
+    
+    // Note: curl_global_cleanup() is not called here - it happens at process exit.
+    // This is safe and avoids issues with multiple DownloadThread instances.
 }
 
 void DownloadThread::setProxy(const QByteArray &proxy)
@@ -528,6 +528,14 @@ void DownloadThread::run()
     curl_easy_setopt(_c, CURLOPT_TCP_KEEPALIVE, 1L);
     curl_easy_setopt(_c, CURLOPT_TCP_KEEPIDLE, 30L);   // Start keepalive after 30s idle
     curl_easy_setopt(_c, CURLOPT_TCP_KEEPINTVL, 15L);  // Send keepalive every 15s
+    
+    // IPv4-only mode for users with broken IPv6 routing
+    // Check both local setting and shared config (shared config is updated via debug menu)
+    if (_debugIPv4Only)
+    {
+        curl_easy_setopt(_c, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+        qDebug() << "Using IPv4-only mode for download";
+    }
     
     // Track HTTP/2 failures for graceful fallback
     int http2FailureCount = 0;
@@ -1668,6 +1676,12 @@ void DownloadThread::setDebugAsyncQueueDepth(int depth)
 {
     _debugAsyncQueueDepth = (depth < 1) ? 1 : ((depth > 256) ? 256 : depth);
     qDebug() << "DownloadThread: Async queue depth set to" << _debugAsyncQueueDepth;
+}
+
+void DownloadThread::setDebugIPv4Only(bool enabled)
+{
+    _debugIPv4Only = enabled;
+    qDebug() << "DownloadThread: IPv4-only mode" << (enabled ? "enabled" : "disabled");
 }
 
 bool DownloadThread::_customizeImage()

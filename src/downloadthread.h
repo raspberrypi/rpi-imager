@@ -123,6 +123,7 @@ public:
     void setDebugVerboseLogging(bool enabled);
     void setDebugAsyncIO(bool enabled);
     void setDebugAsyncQueueDepth(int depth);
+    void setDebugIPv4Only(bool enabled);
 
     /*
      * Thread safe download progress query functions
@@ -224,7 +225,6 @@ protected:
     char *_firstBlock;
     size_t _firstBlockSize;
     static QByteArray _proxy;
-    static int _curlCount;
     bool _cancelled, _successful, _verifyEnabled, _cacheEnabled, _ejectEnabled;
     time_t _lastModified, _serverTime, _lastFailureTime;
     QElapsedTimer _timer;
@@ -260,6 +260,7 @@ protected:
     bool _debugVerboseLogging;
     bool _debugAsyncIO;
     int _debugAsyncQueueDepth;
+    bool _debugIPv4Only;
     
     void _initializeSyncConfiguration();
     

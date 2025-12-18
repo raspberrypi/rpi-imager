@@ -250,14 +250,14 @@ set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "driveformatthread.cpp" "localfileextractthread.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
     "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
-    "performancestats.cpp")
+    "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
     # CLI builds need imagewriter but not the GUI components
     set(SOURCES ${SOURCES_BASE} "imagewriter.cpp" "hwlistmodel.cpp" "oslistmodel.cpp")
 else()
-    set(SOURCES ${SOURCES_BASE} "networkaccessmanagerfactory.cpp" "qml.qrc" "nativefiledialog.cpp" "iconimageprovider.cpp")
+    set(SOURCES ${SOURCES_BASE} "networkaccessmanagerfactory.cpp" "qml.qrc" "nativefiledialog.cpp" "iconimageprovider.cpp" "iconmultifetcher.cpp")
 endif()
 
 if(BUILD_EMBEDDED)

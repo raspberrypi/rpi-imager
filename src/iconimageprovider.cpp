@@ -1,59 +1,68 @@
-#include "iconimageprovider.h"
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (C) 2020-2025 Raspberry Pi Ltd
+ */
 
-#include <QNetworkRequest>
-#include <QNetworkReply>
+#include "iconimageprovider.h"
+#include "iconmultifetcher.h"
+
 #include <QQuickTextureFactory>
-#include <QUrl>
+#include <QDebug>
+
+// ----------------------------------------------------------------------------
+// IconImageResponse
+// ----------------------------------------------------------------------------
 
 IconImageResponse::IconImageResponse(const QUrl &url)
-    : _nam(new QNetworkAccessManager(this))
+    : _urlKey(url.toString())  // Pre-compute cache key
 {
-    QNetworkRequest req(url);
-    // Avoid HTTP/2 issues for small icon fetches; use HTTP/1.1
-    req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    req.setMaximumRedirectsAllowed(3);
-
-    _reply = _nam->get(req);
-    QObject::connect(_reply, &QNetworkReply::finished, this, &IconImageResponse::onFinished);
+    // Queue fetch with the multi-fetcher (efficient for many concurrent icons)
+    IconMultiFetcher::instance().queueFetch(this, url);
 }
 
-void IconImageResponse::onFinished()
+void IconImageResponse::cancel()
 {
-    if (!_reply) {
-        _errorString = QStringLiteral("Network reply missing");
-        emit finished();
-        return;
-    }
-    if (_reply->error() != QNetworkReply::NoError) {
-        _errorString = _reply->errorString();
-        _reply->deleteLater();
-        emit finished();
-        return;
-    }
+    _cancelled.store(true, std::memory_order_relaxed);
+    IconMultiFetcher::instance().cancelFetch(this);
+}
 
-    const QByteArray data = _reply->readAll();
-    _reply->deleteLater();
-
-    QImage img;
-    img.loadFromData(data);
-    if (!img.isNull()) {
-        _image = img;
+void IconImageResponse::onFetchComplete(const QString &cacheKey, const QString &error)
+{
+    if (!error.isEmpty()) {
+        _errorString = error;
+    } else if (cacheKey.isEmpty()) {
+        _errorString = QStringLiteral("Empty response");
     } else {
-        _errorString = QStringLiteral("Failed to decode image");
+        // Look up data directly from cache - no copy through signal system
+        QByteArray data = IconMultiFetcher::instance().getCachedData(cacheKey);
+        if (data.isEmpty()) {
+            _errorString = QStringLiteral("Cache miss");
+        } else {
+            if (!_image.loadFromData(data)) {
+                _errorString = QStringLiteral("Failed to decode image");
+            }
+        }
     }
+    
     emit finished();
 }
 
 QQuickTextureFactory *IconImageResponse::textureFactory() const
 {
-    if (_image.isNull()) return nullptr;
+    if (_image.isNull()) {
+        return nullptr;
+    }
     return QQuickTextureFactory::textureFactoryForImage(_image);
 }
 
+// ----------------------------------------------------------------------------
+// IconImageProvider
+// ----------------------------------------------------------------------------
+
 IconImageProvider::IconImageProvider()
     : QQuickAsyncImageProvider()
-{}
+{
+}
 
 IconImageProvider::~IconImageProvider() = default;
 
@@ -62,5 +71,3 @@ QQuickImageResponse *IconImageProvider::requestImageResponse(const QString &id, 
     QUrl url(id);
     return new IconImageResponse(url);
 }
-
-

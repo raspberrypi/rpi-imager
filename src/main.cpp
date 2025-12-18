@@ -16,8 +16,10 @@
 #include <unistd.h>
 #endif
 #include "cli.h"
+#include "curlnetworkconfig.h"
 
 #ifndef CLI_ONLY_BUILD
+#include "iconmultifetcher.h"
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -171,6 +173,7 @@ int main(int argc, char *argv[])
 
 #ifdef CLI_ONLY_BUILD
     /* Force CLI mode for CLI-only builds */
+    CurlNetworkConfig::ensureInitialized();
     Cli cli(argc, argv);
     return cli.run();
 #else
@@ -296,6 +299,9 @@ int main(int argc, char *argv[])
         "ImageOptions",    // QML type name
         "Namespace only"
     );
+    
+    // Initialize libcurl globally - must happen before any curl operations
+    CurlNetworkConfig::ensureInitialized();
     
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;
@@ -757,9 +763,10 @@ int main(int argc, char *argv[])
 
     // Defer OS list fetch to after event loop starts to avoid blocking first draw
     // The network connectivity check can be slow (DNS lookups, interface enumeration)
+    // Note: isOnline() internally triggers beginOSListFetch() when network is available
+    // and OS list is empty, so we don't need to call it separately here.
     QTimer::singleShot(0, &imageWriter, [&imageWriter]() {
-        if (imageWriter.isOnline())
-            imageWriter.beginOSListFetch();
+        imageWriter.isOnline();
     });
 
     // Emit permission warning signal after UI is loaded so dialog can be shown
@@ -781,6 +788,9 @@ int main(int argc, char *argv[])
         settings.sync();
     }
 
+    // Shutdown curl_multi icon fetcher before exiting
+    IconMultiFetcher::instance().shutdown();
+    
     return rc;
 #endif /* !CLI_ONLY_BUILD */
 }

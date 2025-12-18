@@ -1,6 +1,11 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (C) 2020-2025 Raspberry Pi Ltd
+ */
+
 #include "downloadstatstelemetry.h"
+#include "curlnetworkconfig.h"
 #include "config.h"
-#include "platformquirks.h"
 #include <QSettings>
 #include <QDebug>
 #include <QUrl>
@@ -8,11 +13,6 @@
 #include <QLocale>
 #include <QFile>
 #include <QRegularExpression>
-
-/*
- * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2020 Raspberry Pi Ltd
- */
 
 DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByteArray &parentcategory, const QByteArray &osname, bool embedded, const QString &imagerLang, QObject *parent)
     : QThread(parent), _url(TELEMETRY_URL)
@@ -51,8 +51,6 @@ DownloadStatsTelemetry::DownloadStatsTelemetry(const QByteArray &url, const QByt
         }
     }
 #endif
-
-    _useragent = "Mozilla/5.0 rpi-imager/" IMAGER_VERSION_STR;
 }
 
 void DownloadStatsTelemetry::run()
@@ -62,28 +60,33 @@ void DownloadStatsTelemetry::run()
         return;
 
     _c = curl_easy_init();
-    curl_easy_setopt(_c, CURLOPT_NOSIGNAL, 1);
+    if (!_c) {
+        qDebug() << "Telemetry: failed to init curl";
+        return;
+    }
+    
+    // Apply shared network configuration with FireAndForget profile
+    // This gives us: IPv4-only support, proper timeouts, CA bundle, etc.
+    CurlNetworkConfig::instance().applyCurlSettings(
+        _c, 
+        CurlNetworkConfig::FetchProfile::FireAndForget
+    );
+    
+    // Telemetry-specific settings
     curl_easy_setopt(_c, CURLOPT_WRITEFUNCTION, &DownloadStatsTelemetry::_curl_write_callback);
     curl_easy_setopt(_c, CURLOPT_HEADERFUNCTION, &DownloadStatsTelemetry::_curl_header_callback);
     curl_easy_setopt(_c, CURLOPT_URL, _url.constData());
     curl_easy_setopt(_c, CURLOPT_POSTFIELDSIZE, _postfields.length());
     curl_easy_setopt(_c, CURLOPT_POSTFIELDS, _postfields.constData());
-    curl_easy_setopt(_c, CURLOPT_USERAGENT, _useragent.constData());
-    curl_easy_setopt(_c, CURLOPT_CONNECTTIMEOUT, 10);
-    curl_easy_setopt(_c, CURLOPT_LOW_SPEED_TIME, 10);
-    curl_easy_setopt(_c, CURLOPT_LOW_SPEED_LIMIT, 10);
-
-#ifdef Q_OS_LINUX
-    // Set CA certificate bundle for AppImage compatibility
-    const char* caBundle = PlatformQuirks::findCACertBundle();
-    if (caBundle)
-        curl_easy_setopt(_c, CURLOPT_CAINFO, caBundle);
-#endif
 
     CURLcode ret = curl_easy_perform(_c);
     curl_easy_cleanup(_c);
 
-    qDebug() << "Telemetry done. cURL status code =" << ret << "info sent =" << _postfields;
+    if (ret == CURLE_OK) {
+        qDebug() << "Telemetry sent successfully";
+    } else {
+        qDebug() << "Telemetry failed:" << curl_easy_strerror(ret);
+    }
 }
 
 /* /dev/null write handler */
@@ -95,7 +98,5 @@ size_t DownloadStatsTelemetry::_curl_write_callback(char *, size_t size, size_t 
 size_t DownloadStatsTelemetry::_curl_header_callback( void *ptr, size_t size, size_t nmemb, void *)
 {
     int len = size*nmemb;
-    //QByteArray headerstr((char *) ptr, len);
-    //qDebug() << "Received telemetry header:" << headerstr;
     return len;
 }

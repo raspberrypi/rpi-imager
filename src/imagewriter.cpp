@@ -22,6 +22,7 @@
 #include "platformquirks.h"
 #ifndef CLI_ONLY_BUILD
 #include "iconimageprovider.h"
+#include "iconmultifetcher.h"
 #include "nativefiledialog.h"
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
@@ -53,9 +54,9 @@
 #include <QString>
 #include <QStringList>
 #include <QHostAddress>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
 #include <QDateTime>
+#include "curlfetcher.h"
+#include "curlnetworkconfig.h"
 #include <QDebug>
 #include <QJsonObject>
 #include <QTranslator>
@@ -97,7 +98,6 @@ ImageWriter::ImageWriter(QObject *parent)
     : QObject(parent),
       _cacheManager(nullptr),
       _waitingForCacheVerification(false),
-      _networkManager(this),
       _src(), _repo(QUrl(QString(OSLIST_URL))),
       _dst(), _parentCategory(), _osName(), _osReleaseDate(), _currentLang(), _currentLangcode(), _currentKeyboard(),
       _expectedHash(), _cmdline(), _config(), _firstrun(), _cloudinit(), _cloudinitNetwork(), _initFormat(),
@@ -140,6 +140,7 @@ ImageWriter::ImageWriter(QObject *parent)
     _debugPeriodicSync = true;
     _debugVerboseLogging = false;
     _debugAsyncIO = true;       // Async I/O enabled by default for performance
+    _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
     
     // Calculate optimal async queue depth based on system memory
     _debugAsyncQueueDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth();
@@ -281,9 +282,6 @@ ImageWriter::ImageWriter(QObject *parent)
             _currentLangcode = currentlangcode;
         }
     }
-
-    // Centralised network manager, for fetching OS lists
-    connect(&_networkManager, SIGNAL(finished(QNetworkReply *)), this, SLOT(handleNetworkRequestFinished(QNetworkReply *)));
 
     // Connect to CacheManager signals
     connect(_cacheManager, &CacheManager::cacheFileUpdated,
@@ -1026,6 +1024,7 @@ void ImageWriter::startWrite()
     _thread->setDebugVerboseLogging(_debugVerboseLogging);
     _thread->setDebugAsyncIO(_debugAsyncIO);
     _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
+    _thread->setDebugIPv4Only(_debugIPv4Only);
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -1315,39 +1314,40 @@ namespace {
         return true;
     }
 
-    // Custom attribute to store request start time for performance tracking
-    static const QNetworkRequest::Attribute RequestStartTimeAttribute = 
-        static_cast<QNetworkRequest::Attribute>(QNetworkRequest::User + 1);
-    
-    void findAndQueueUnresolvedSubitemsJson(QJsonArray incoming, QNetworkAccessManager &manager, uint8_t count) {
-        if (count > MAX_SUBITEMS_DEPTH) {
-            qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of " << MAX_SUBITEMS_DEPTH << " levels.";
-            return;
-        }
+} // namespace anonymous
 
-        for (auto entry : incoming) {
-            auto entryObject = entry.toObject();
-            if (entryObject.contains("subitems")) {
-                // No need to handle a return - this isn't processing a list, it's searching and queuing downloads.
-                findAndQueueUnresolvedSubitemsJson(entryObject["subitems"].toArray(), manager, count + 1);
-            } else if (entryObject.contains("subitems_url")) {
-                const QString subUrlStr = entryObject["subitems_url"].toString();
-                const QUrl subUrl(subUrlStr);
-                if (!preflightValidateUrl(subUrl, QStringLiteral("subitems_url:"))) {
-                    continue;
-                }
+// Recursively find subitems_url entries in a JSON array and queue fetches
+void ImageWriter::queueSublistFetches(const QJsonArray &list, int depth)
+{
+    if (depth > MAX_SUBITEMS_DEPTH) {
+        qDebug() << "Aborting fetch of subitems JSON, exceeded maximum configured limit of" << MAX_SUBITEMS_DEPTH << "levels.";
+        return;
+    }
 
-                QNetworkRequest request(subUrl);
-                request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                        QNetworkRequest::NoLessSafeRedirectPolicy);
-                request.setMaximumRedirectsAllowed(3);
-                // Store start time in request attribute for performance tracking
-                request.setAttribute(RequestStartTimeAttribute, QDateTime::currentMSecsSinceEpoch());
-                manager.get(request);
+    for (const auto &entry : list) {
+        auto entryObject = entry.toObject();
+        if (entryObject.contains("subitems")) {
+            // Recurse into existing subitems
+            queueSublistFetches(entryObject["subitems"].toArray(), depth + 1);
+        } else if (entryObject.contains("subitems_url")) {
+            const QString subUrlStr = entryObject["subitems_url"].toString();
+            const QUrl subUrl(subUrlStr);
+            if (!preflightValidateUrl(subUrl, QStringLiteral("subitems_url:"))) {
+                continue;
             }
+
+            // Create a CurlFetcher for this sublist
+            auto *fetcher = new CurlFetcher(this);
+            connect(fetcher, &CurlFetcher::finished, this, &ImageWriter::onOsListFetchComplete);
+            connect(fetcher, &CurlFetcher::error, this, &ImageWriter::onOsListFetchError);
+            connect(fetcher, &CurlFetcher::connectionStats, this, &ImageWriter::onNetworkConnectionStats);
+            
+            // Track start time for performance
+            _pendingFetchStartTimes[subUrl] = QDateTime::currentMSecsSinceEpoch();
+            fetcher->fetch(subUrl);
         }
     }
-} // namespace anonymous
+}
 
 
 void ImageWriter::setHWFilterList(const QJsonArray &tags, const bool &inclusive) {
@@ -1412,138 +1412,100 @@ bool ImageWriter::checkSWCapability(const QString &cap) {
     return false;
 }
 
-void ImageWriter::handleNetworkRequestFinished(QNetworkReply *data) {
-    // Defer deletion
-    data->deleteLater();
-    
+void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url)
+{
     // Calculate request duration for performance tracking
     quint32 durationMs = 0;
-    qint64 bytesReceived = data->bytesAvailable();
+    qint64 bytesReceived = data.size();
     
-    // Check for start time in hash map (top-level requests)
-    if (_networkRequestStartTimes.contains(data)) {
-        qint64 startTime = _networkRequestStartTimes.take(data);
+    if (_pendingFetchStartTimes.contains(url)) {
+        qint64 startTime = _pendingFetchStartTimes.take(url);
         durationMs = static_cast<quint32>(QDateTime::currentMSecsSinceEpoch() - startTime);
-    } 
-    // Check for start time in request attribute (sublist requests)
-    else {
-        QVariant startTimeAttr = data->request().attribute(
-            static_cast<QNetworkRequest::Attribute>(QNetworkRequest::User + 1));
-        if (startTimeAttr.isValid()) {
-            qint64 startTime = startTimeAttr.toLongLong();
-            durationMs = static_cast<quint32>(QDateTime::currentMSecsSinceEpoch() - startTime);
-        }
     }
     
     // Track if this is the top-level OS list request
-    bool isTopLevelRequest = (data->request().url() == osListUrl());
+    bool isTopLevelRequest = (url == osListUrl());
 
-    if (data->error() == QNetworkReply::NoError) {
-        auto httpStatusCode = data->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    auto response_object = QJsonDocument::fromJson(data).object();
 
-        if (httpStatusCode >= 200 && httpStatusCode < 300 || httpStatusCode == 0) {
-            auto response_object = QJsonDocument::fromJson(data->readAll()).object();
-
-            if (response_object.contains("os_list")) {
-                // Step 1: Insert the items into the canonical JSON document.
-                //         It doesn't matter that these may still contain subitems_url items
-                //         As these will be fixed up as the subitems_url instances are blinked in
-                if (_completeOsList.isEmpty()) {
-                    _completeOsList = QJsonDocument(response_object);
-                } else {
-                    // Preserve latest top-level imager metadata if present in the top-level fetch
-                    auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), data->request().url(), 1);
-                    QJsonObject imager_meta = _completeOsList["imager"].toObject();
-                    if (response_object.contains("imager") && isTopLevelRequest) {
-                        // Update imager metadata when this reply is for the top-level OS list
-                        imager_meta = response_object["imager"].toObject();
-                    }
-                    _completeOsList = QJsonDocument(QJsonObject({
-                        {"imager", imager_meta},
-                        {"os_list", new_list}
-                    }));
-                }
-
-                findAndQueueUnresolvedSubitemsJson(response_object["os_list"].toArray(), _networkManager, 1);
-                emit osListPrepared();
-                
-                // Record performance event for OS list fetch
-                if (durationMs > 0) {
-                    PerformanceStats::EventType eventType = isTopLevelRequest 
-                        ? PerformanceStats::EventType::OsListFetch 
-                        : PerformanceStats::EventType::SublistFetch;
-                    QString metadata = data->request().url().toString();
-                    _performanceStats->recordTransferEvent(eventType, durationMs, bytesReceived, true, metadata);
-                }
-
-                // After processing a top-level list fetch, (re)schedule the next refresh
-                if (isTopLevelRequest) {
-                    scheduleOsListRefresh();
-                }
-            } else {
-                qDebug() << "Incorrectly formatted OS list at: " << data->url();
-                // If this was the top-level fetch and it failed, treat as network failure
-                if (isTopLevelRequest && _completeOsList.isEmpty()) {
-                    qWarning() << "Top-level OS list fetch failed - malformed response. Operating in offline mode.";
-                    emit osListFetchFailed();
-                }
-            }
-        } else if (httpStatusCode >= 300 && httpStatusCode < 400) {
-            // We should _never_ enter this branch. All requests are set to follow redirections
-            // at their call sites - so the only way you got here was a logic defect.
-            const QUrl redirUrl = data->url();
-            if (!preflightValidateUrl(redirUrl, QStringLiteral("redirect:"))) {
-                return;
-            }
-
-            auto request = QNetworkRequest(redirUrl);
-            request.setAttribute(QNetworkRequest::RedirectionTargetAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-            request.setMaximumRedirectsAllowed(3);
-            data->manager()->get(request);
-
-            // maintain manager
-            return;
-        } else if (httpStatusCode >= 400 && httpStatusCode < 600) {
-            // HTTP Error
-            qDebug() << "Failed to fetch URL [" << data->url() << "], got: " << httpStatusCode;
-            // If this was the top-level fetch and it failed, treat as network failure
-            if (isTopLevelRequest && _completeOsList.isEmpty()) {
-                qWarning() << "Top-level OS list fetch failed with HTTP error" << httpStatusCode << ". Operating in offline mode.";
-                emit osListFetchFailed();
-            }
+    if (response_object.contains("os_list")) {
+        // Step 1: Insert the items into the canonical JSON document.
+        //         It doesn't matter that these may still contain subitems_url items
+        //         As these will be fixed up as the subitems_url instances are blinked in
+        if (_completeOsList.isEmpty()) {
+            _completeOsList = QJsonDocument(response_object);
         } else {
-            // Completely unknown error, worth logging separately
-            qDebug() << "Failed to fetch URL [" << data->url() << "], got unknown response code: " << httpStatusCode;
-            // If this was the top-level fetch and it failed, treat as network failure
-            if (isTopLevelRequest && _completeOsList.isEmpty()) {
-                qWarning() << "Top-level OS list fetch failed with unknown error. Operating in offline mode.";
-                emit osListFetchFailed();
+            // Preserve latest top-level imager metadata if present in the top-level fetch
+            auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), url, 1);
+            QJsonObject imager_meta = _completeOsList["imager"].toObject();
+            if (response_object.contains("imager") && isTopLevelRequest) {
+                // Update imager metadata when this reply is for the top-level OS list
+                imager_meta = response_object["imager"].toObject();
             }
+            _completeOsList = QJsonDocument(QJsonObject({
+                {"imager", imager_meta},
+                {"os_list", new_list}
+            }));
+        }
+
+        // Queue fetches for any subitems_url entries
+        queueSublistFetches(response_object["os_list"].toArray(), 1);
+        emit osListPrepared();
+        
+        // Record performance event for OS list fetch
+        if (durationMs > 0) {
+            PerformanceStats::EventType eventType = isTopLevelRequest 
+                ? PerformanceStats::EventType::OsListFetch 
+                : PerformanceStats::EventType::SublistFetch;
+            QString metadata = url.toString();
+            _performanceStats->recordTransferEvent(eventType, durationMs, bytesReceived, true, metadata);
+        }
+
+        // After processing a top-level list fetch, (re)schedule the next refresh
+        if (isTopLevelRequest) {
+            scheduleOsListRefresh();
         }
     } else {
-        // QT Error - provide more actionable context when common misconfigurations are detected
-        const QNetworkReply::NetworkError err = data->error();
-        const QString errStr = data->errorString();
-
-        // Detect scheme-less URL usage which commonly happens with local repo files
-        const QUrl failedUrl = data->request().url();
-        if ((err == QNetworkReply::ProtocolFailure || err == QNetworkReply::UnknownNetworkError || err == QNetworkReply::ProtocolUnknownError)
-            && (failedUrl.scheme().isEmpty() || !failedUrl.isValid()))
-        {
-            qWarning() << "Failed to fetch subitems URL '" << failedUrl.toString()
-                       << "' - the URL appears to be relative or missing a scheme."
-                       << "When using a local --repo file, ensure all subitems_url entries are absolute"
-                       << "(e.g., file:///path/to/sublist.json or https://...).";
-        }
-
-        qDebug() << "Unrecognised QT error: " << err << ", explainer: " << errStr;
-        
+        qDebug() << "Incorrectly formatted OS list at:" << url;
         // If this was the top-level fetch and it failed, treat as network failure
         if (isTopLevelRequest && _completeOsList.isEmpty()) {
-            qWarning() << "Top-level OS list fetch failed with network error:" << errStr << ". Operating in offline mode.";
+            qWarning() << "Top-level OS list fetch failed - malformed response. Operating in offline mode.";
             emit osListFetchFailed();
         }
     }
+}
+
+void ImageWriter::onOsListFetchError(const QString &errorMessage, const QUrl &url)
+{
+    // Clean up start time tracking
+    _pendingFetchStartTimes.remove(url);
+    
+    // Track if this is the top-level OS list request
+    bool isTopLevelRequest = (url == osListUrl());
+
+    // Detect scheme-less URL usage which commonly happens with local repo files
+    if (url.scheme().isEmpty() || !url.isValid()) {
+        qWarning() << "Failed to fetch URL '" << url.toString()
+                   << "' - the URL appears to be relative or missing a scheme."
+                   << "When using a local --repo file, ensure all subitems_url entries are absolute"
+                   << "(e.g., file:///path/to/sublist.json or https://...).";
+    }
+
+    qDebug() << "Failed to fetch URL [" << url << "]:" << errorMessage;
+    
+    // If this was the top-level fetch and it failed, treat as network failure
+    if (isTopLevelRequest && _completeOsList.isEmpty()) {
+        qWarning() << "Top-level OS list fetch failed:" << errorMessage << ". Operating in offline mode.";
+        emit osListFetchFailed();
+    }
+}
+
+void ImageWriter::onNetworkConnectionStats(const QString &statsMetadata, const QUrl &url)
+{
+    // Record CURL connection timing metrics for performance analysis
+    // Format: "dns_ms: X; connect_ms: X; tls_ms: X; ttfb_ms: X; total_ms: X; speed_kbps: X; size_bytes: X; http: X"
+    QString fullMetadata = QString("url: %1; %2").arg(url.host(), statsMetadata);
+    _performanceStats->recordEvent(PerformanceStats::EventType::NetworkConnectionStats, 0, true, fullMetadata);
 }
 
 namespace {
@@ -1648,20 +1610,28 @@ void ImageWriter::beginOSListFetch() {
         return;
     }
 
-    QNetworkRequest request = QNetworkRequest(topUrl);
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                         QNetworkRequest::NoLessSafeRedirectPolicy);
-    request.setMaximumRedirectsAllowed(3);
-    // This will set up a chain of requests that culiminate in the eventual fetch and assembly of
+    // Create a CurlFetcher to fetch the OS list
+    auto *fetcher = new CurlFetcher(this);
+    connect(fetcher, &CurlFetcher::finished, this, &ImageWriter::onOsListFetchComplete);
+    connect(fetcher, &CurlFetcher::error, this, &ImageWriter::onOsListFetchError);
+    connect(fetcher, &CurlFetcher::connectionStats, this, &ImageWriter::onNetworkConnectionStats);
+    
+    // Track start time for performance
+    _pendingFetchStartTimes[topUrl] = QDateTime::currentMSecsSinceEpoch();
+    
+    // This will set up a chain of requests that culminate in the eventual fetch and assembly of
     // a complete cached OS list.
-    QNetworkReply *reply = _networkManager.get(request);
-    _networkRequestStartTimes[reply] = QDateTime::currentMSecsSinceEpoch();
+    fetcher->fetch(topUrl);
 }
 
 void ImageWriter::refreshOsListFrom(const QUrl &url) {
     setCustomRepo(url);
     _completeOsList = QJsonDocument();
     _osListRefreshTimer.stop();
+#ifndef CLI_ONLY_BUILD
+    // Clear icon cache when switching repositories - new repo will have different icons
+    IconMultiFetcher::instance().clearCache();
+#endif
     beginOSListFetch();
     emit customRepoChanged();
 }
@@ -2600,6 +2570,21 @@ void ImageWriter::setDebugAsyncQueueDepth(int depth)
     if (_debugAsyncQueueDepth != depth) {
         _debugAsyncQueueDepth = depth;
         qDebug() << "Debug: Async queue depth set to" << depth;
+    }
+}
+
+bool ImageWriter::getDebugIPv4Only() const
+{
+    return _debugIPv4Only;
+}
+
+void ImageWriter::setDebugIPv4Only(bool enabled)
+{
+    if (_debugIPv4Only != enabled) {
+        _debugIPv4Only = enabled;
+        // Update the shared network config so all libcurl operations use IPv4-only
+        CurlNetworkConfig::instance().setIPv4Only(enabled);
+        qDebug() << "Debug: IPv4-only mode" << (enabled ? "enabled" : "disabled");
     }
 }
 

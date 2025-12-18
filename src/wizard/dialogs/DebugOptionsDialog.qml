@@ -36,7 +36,7 @@ BaseDialog {
             return []
         }, 0)
         registerFocusGroup("options", function(){ 
-            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem]
+            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem]
         }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, applyButton]
@@ -224,6 +224,31 @@ BaseDialog {
                 }
             }
 
+            // Spacer
+            Item {
+                Layout.preferredHeight: Style.spacingMedium
+            }
+
+            // Section header for network options
+            Text {
+                text: qsTr("Network Options")
+                font.pixelSize: Style.fontSizeFormLabel
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.textDescriptionColor
+                Layout.fillWidth: true
+            }
+
+            ImOptionPill {
+                id: chkIPv4Only
+                text: qsTr("Force IPv4-only Downloads")
+                accessibleDescription: qsTr("Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+            }
+
             // Status display
             Rectangle {
                 Layout.fillWidth: true
@@ -254,6 +279,7 @@ BaseDialog {
                             lines.push("Direct I/O: " + (chkDirectIO.checked ? "Enabled" : "Disabled"));
                             lines.push("Async I/O: " + (chkAsyncIO.checked ? "Enabled (depth " + depth + ", ~" + depth + "-" + (depth * 8) + " MB)" : "Disabled"));
                             lines.push("Periodic Sync: " + (chkPeriodicSync.checked ? "Enabled" : "Disabled"));
+                            lines.push("IPv4-only: " + (chkIPv4Only.checked ? "Enabled" : "Disabled"));
                             if (chkDirectIO.checked && chkAsyncIO.checked) {
                                 lines.push("✓ Optimal: Direct I/O + Async I/O for best performance");
                             } else if (chkDirectIO.checked) {
@@ -261,6 +287,9 @@ BaseDialog {
                             }
                             if (chkDirectIO.checked && chkPeriodicSync.checked) {
                                 lines.push("Note: Periodic sync is skipped when Direct I/O is active");
+                            }
+                            if (chkIPv4Only.checked) {
+                                lines.push("Note: Image downloads will use IPv4 only (OS list fetching unaffected)");
                             }
                             return lines.join("\n");
                         }
@@ -326,6 +355,7 @@ BaseDialog {
             asyncQueueDepthSlider.value = imageWriter.getDebugAsyncQueueDepth();
             chkPeriodicSync.checked = imageWriter.getDebugPeriodicSync();
             chkVerboseLogging.checked = imageWriter.getDebugVerboseLogging();
+            chkIPv4Only.checked = imageWriter.getDebugIPv4Only();
 
             initialized = true;
             isInitializing = false;
@@ -339,12 +369,14 @@ BaseDialog {
         imageWriter.setDebugAsyncQueueDepth(Math.round(asyncQueueDepthSlider.value));
         imageWriter.setDebugPeriodicSync(chkPeriodicSync.checked);
         imageWriter.setDebugVerboseLogging(chkVerboseLogging.checked);
+        imageWriter.setDebugIPv4Only(chkIPv4Only.checked);
         
         console.log("Debug options applied: DirectIO=" + chkDirectIO.checked + 
                     ", AsyncIO=" + chkAsyncIO.checked +
                     ", AsyncQueueDepth=" + Math.round(asyncQueueDepthSlider.value) +
                     ", PeriodicSync=" + chkPeriodicSync.checked +
-                    ", VerboseLogging=" + chkVerboseLogging.checked);
+                    ", VerboseLogging=" + chkVerboseLogging.checked +
+                    ", IPv4Only=" + chkIPv4Only.checked);
     }
 
     onOpened: {
