@@ -9,4 +9,4 @@ Icon=rpi-imager
 Exec=pkexec --disable-internal-agent /usr/bin/rpi-imager %u
 Categories=Utility;
 StartupNotify=false
-MimeType=x-scheme-handler/rpi-imager;
+MimeType=x-scheme-handler/rpi-imager;application/vnd.raspberrypi.imager-manifest+json;

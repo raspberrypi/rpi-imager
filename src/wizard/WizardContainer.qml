@@ -1214,8 +1214,9 @@ Item {
         // carry the repository URL we just received
         property string repoUrl: ""
         property bool allowAccept: false
+        property bool isLocalFile: repoUrl.startsWith("file://")
 
-        // small safety delay before enabling "Switch"
+        // small safety delay before enabling "Switch" (only for remote URLs)
         Timer {
             id: repoAcceptEnableDelay
             interval: 1500
@@ -1229,9 +1230,21 @@ Item {
         }
 
         function openWithUrl(url) {
+            // If dialog is already open with a different URL, ignore the new one
+            // User must dismiss current dialog first (prevents race condition attacks)
+            if (repositoryUrlDialog.opened && repoUrl !== url) {
+                console.warn("Repository dialog already open, ignoring new URL:", url)
+                return
+            }
+            
             repoUrl = url
-            allowAccept = false
-            repoAcceptEnableDelay.start()
+            // Local files are trusted, allow immediate acceptance
+            if (url.startsWith("file://")) {
+                allowAccept = true
+            } else {
+                allowAccept = false
+                repoAcceptEnableDelay.start()
+            }
             repositoryUrlDialog.open()
         }
 
@@ -1261,7 +1274,9 @@ Item {
         // ----- CONTENT -----
         Text {
             id: repoTitleText
-            text: qsTr("Switch to a custom repository?")
+            text: repositoryUrlDialog.isLocalFile 
+                ? qsTr("Open local repository file?")
+                : qsTr("Switch to a custom repository?")
             font.pixelSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
@@ -1279,7 +1294,9 @@ Item {
         // Body / security note
         Text {
             id: repoBodyText
-            text: qsTr("A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.\n\n") +
+            text: repositoryUrlDialog.isLocalFile
+                ? qsTr("You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.")
+                : qsTr("A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.\n\n") +
                   qsTr("Only accept if you trust this source and intentionally clicked a link to open this repository.")
             font.pixelSize: Style.fontSizeFormLabel
             font.family: Style.fontFamily
@@ -1335,14 +1352,20 @@ Item {
 
             ImButton {
                 id: repoSwitchBtn
-                text: repositoryUrlDialog.allowAccept ? qsTr("Switch repository") : qsTr("Please wait…")
-                accessibleDescription: qsTr("Switch to the custom repository from the link")
+                text: {
+                    if (!repositoryUrlDialog.allowAccept) return qsTr("Please wait…")
+                    return repositoryUrlDialog.isLocalFile ? qsTr("Open") : qsTr("Switch repository")
+                }
+                accessibleDescription: repositoryUrlDialog.isLocalFile
+                    ? qsTr("Open the local manifest file and use it as the OS repository")
+                    : qsTr("Switch to the custom repository from the link")
                 enabled: repositoryUrlDialog.allowAccept
                 activeFocusOnTab: true
                 onClicked: {
                     repositoryUrlDialog.close()
                     // Switch to the new repository and reset wizard
-                    root.imageWriter.refreshOsListFrom(new URL(repositoryUrlDialog.repoUrl))
+                    // QML auto-converts string to QUrl for C++ method
+                    root.imageWriter.refreshOsListFrom(repositoryUrlDialog.repoUrl)
                     root.resetWizard()
                 }
             }

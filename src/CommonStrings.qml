@@ -28,8 +28,10 @@ Item {
     ])
     readonly property string imageFiltersString: toFilterString(imageFiltersList)
 
+    // Repository file extensions - must match MANIFEST_EXTENSION in src/config.h
+    readonly property string manifestExtension: "rpi-imager-manifest"
     readonly property var repoFiltersList: withAll([
-        qsTr("Imager Repository Files (*.json)")
+        qsTr("Imager Repository Files (*.json *.%1)").arg(manifestExtension)
     ])
     readonly property string repoFiltersString: toFilterString(repoFiltersList)
 

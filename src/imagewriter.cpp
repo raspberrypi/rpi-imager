@@ -3032,7 +3032,28 @@ QString ImageWriter::customRepoHost()
     if (!customRepo()) {
         return QString();
     }
-    return _repo.host();
+    
+    if (_repo.isLocalFile()) {
+        // For local files, show the filename instead of host
+        return _repo.fileName();
+    }
+    
+    // For remote URLs, return the host in ASCII (punycode) to prevent IDN homograph attacks
+    // Also truncate very long hostnames to prevent UI issues
+    QString host = _repo.host(QUrl::FullyEncoded);
+    if (host.length() > 50) {
+        host = host.left(47) + QStringLiteral("...");
+    }
+    return host;
+}
+
+bool ImageWriter::isValidRepoUrl(const QString &url) const
+{
+    // Validate: must be http/https URL ending with .json or manifest extension
+    static const QRegularExpression repoUrlRe(
+        QStringLiteral("^https?://[^ \\t\\r\\n]+\\.(json|" MANIFEST_EXTENSION ")$"), 
+        QRegularExpression::CaseInsensitiveOption);
+    return repoUrlRe.match(url).hasMatch();
 }
 
 // Cache-related methods removed - now handled by CacheManager
@@ -3660,14 +3681,28 @@ void ImageWriter::handleIncomingUrl(const QUrl &url)
 {
     qDebug() << "Incoming URL:" << url;
 
+    // Check if this is a local file URL for a manifest file (double-click on manifest or .json file)
+    if (url.isLocalFile()) {
+        const QString localPath = url.toLocalFile();
+        if (localPath.endsWith(QLatin1String("." MANIFEST_EXTENSION), Qt::CaseInsensitive) ||
+            localPath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+            QFileInfo fi(localPath);
+            if (fi.isFile() && fi.isReadable()) {
+                qDebug() << "Local manifest file opened:" << localPath;
+                emit repositoryUrlReceived(url.toString());
+                return;
+            } else {
+                qWarning() << "Cannot read manifest file:" << localPath;
+            }
+        }
+        return;
+    }
+
     // Check for repository URL parameter (repo=https://example.com/repo.json)
     QUrlQuery query(url);
     const QString repoVal = query.queryItemValue(QStringLiteral("repo"), QUrl::FullyDecoded);
     if (!repoVal.isEmpty()) {
-        // Validate: must be http/https URL ending with .json
-        static const QRegularExpression repoUrlRe(QStringLiteral("^https?://[^ \\t\\r\\n]+\\.json$"), 
-                                                   QRegularExpression::CaseInsensitiveOption);
-        if (repoUrlRe.match(repoVal).hasMatch()) {
+        if (isValidRepoUrl(repoVal)) {
             qDebug() << "Valid repository URL received:" << repoVal;
             emit repositoryUrlReceived(repoVal);
         } else {

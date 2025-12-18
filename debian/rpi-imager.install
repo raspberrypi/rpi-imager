@@ -11,4 +11,5 @@ src/linux/icon/rpi-imager.svg /usr/share/icons/hicolor/scalable/apps/
 
 debian/com.raspberrypi.rpi-imager.desktop /usr/share/applications/
 debian/com.raspberrypi.rpi-imager.metainfo.xml /usr/share/metainfo/
+debian/com.raspberrypi.rpi-imager-manifest.xml /usr/share/mime/packages/
 

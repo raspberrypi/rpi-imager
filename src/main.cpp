@@ -56,6 +56,7 @@
 #endif
 #include "imageadvancedoptions.h"
 #include "embedded_config.h"
+#include "config.h"
 
 static QTextStream cerr(stderr);
 
@@ -463,7 +464,7 @@ int main(int argc, char *argv[])
         ImageWriter::setForceSecureBootEnabled(true);
     }
 
-    // Only accept rpi-imager:// callback URLs as positional argument
+    // Accept rpi-imager:// callback URLs or manifest files (.rpi-imager-manifest, .json) as positional argument
     // Image files/URLs should be passed via --cli mode, not the desktop GUI
     const QStringList posArgs = parser.positionalArguments();
     if (!posArgs.isEmpty())
@@ -472,6 +473,17 @@ int main(int argc, char *argv[])
         if (firstPos.startsWith("rpi-imager:", Qt::CaseInsensitive))
         {
             callbackUrl = QUrl(firstPos);
+        }
+        else if (firstPos.endsWith("." MANIFEST_EXTENSION, Qt::CaseInsensitive) ||
+                 firstPos.endsWith(".json", Qt::CaseInsensitive))
+        {
+            // Manifest file opened via double-click or command line - verify it exists
+            QFileInfo fi(firstPos);
+            if (fi.isFile()) {
+                callbackUrl = QUrl::fromLocalFile(fi.absoluteFilePath());
+            } else {
+                cerr << "Manifest file not found: " << firstPos << endl;
+            }
         }
         else
         {

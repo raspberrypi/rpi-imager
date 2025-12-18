@@ -62,6 +62,15 @@ Root: HKLM; Subkey: "Software\Classes\.zstd\OpenWithProgIds"; ValueType: string;
 Root: HKLM; Subkey: "Software\Classes\RPI_IMAGINGUTILITY\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey
 Root: HKLM; Subkey: "Software\Classes\RPI_IMAGINGUTILITY\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey
 
+; Register .rpi-imager-manifest file type (repository manifest files)
+; Extension defined in src/config.h (MANIFEST_EXTENSION)
+Root: HKLM; Subkey: "Software\Classes\.rpi-imager-manifest"; ValueType: string; ValueName: ""; ValueData: "RPI_IMAGER_MANIFEST"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\.rpi-imager-manifest"; ValueType: string; ValueName: "Content Type"; ValueData: "application/vnd.raspberrypi.imager-manifest+json"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\RPI_IMAGER_MANIFEST"; ValueType: string; ValueName: ""; ValueData: "Raspberry Pi Imager Manifest"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\RPI_IMAGER_MANIFEST\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\RPI_IMAGER_MANIFEST\shell\open"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\RPI_IMAGER_MANIFEST\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey
+
 ; Register rpi-imager:// URL protocol handler
 Root: HKCR; Subkey: "rpi-imager"; ValueType: string; ValueName: ""; ValueData: "URL:Raspberry Pi Imager"; Flags: uninsdeletekey
 Root: HKCR; Subkey: "rpi-imager"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletekey
