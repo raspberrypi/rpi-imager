@@ -471,7 +471,9 @@ std::string GetBusType(STORAGE_ADAPTER_DESCRIPTOR *adapterDescriptor) {
     case STORAGE_BUS_TYPE::BusTypeSpaces: return "SPACES";  // Storage Spaces (virtual pooled storage)
     case STORAGE_BUS_TYPE::BusTypeSCM: return "SCM";  // Storage Class Memory (Intel Optane PMem)
     case STORAGE_BUS_TYPE::BusTypeUfs: return "UFS";  // Universal Flash Storage
+#ifdef BusTypeNvmeof
     case STORAGE_BUS_TYPE::BusTypeNvmeof: return "NVMEOF";  // NVMe over Fabrics (network-attached)
+#endif
     default: return "INVALID";
   }
 }
