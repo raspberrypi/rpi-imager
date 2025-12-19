@@ -80,7 +80,9 @@ class MacOSFileOperations : public FileOperations {
   FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
                                   AsyncWriteCallback callback = nullptr) override;
   int GetPendingWriteCount() const override { return pending_writes_.load(); }
+  void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
+  void CancelAsyncIO() override;
 
  private:
   int fd_;
@@ -91,6 +93,7 @@ class MacOSFileOperations : public FileOperations {
   // Async I/O state
   int async_queue_depth_;
   std::atomic<int> pending_writes_;
+  std::atomic<bool> cancelled_;
   std::atomic<FileError> first_async_error_;
   dispatch_queue_t async_queue_;
   dispatch_semaphore_t queue_semaphore_;  // Limits in-flight writes

@@ -27,8 +27,8 @@ static void Log(const std::string& msg) {
 }
 
 LinuxFileOperations::LinuxFileOperations() 
-    : fd_(-1), last_error_code_(0), using_direct_io_(false),
-      async_queue_depth_(1), pending_writes_(0), first_async_error_(FileError::kSuccess),
+    : fd_(-1), last_error_code_(0), using_direct_io_(false), direct_io_attempted_(false),
+      async_queue_depth_(1), pending_writes_(0), cancelled_(false), first_async_error_(FileError::kSuccess),
       async_write_offset_(0), io_uring_available_(false), ring_(nullptr), next_write_id_(0) {
     
 #ifdef HAVE_LIBURING
@@ -103,9 +103,16 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
     
     struct io_uring_cqe* cqe;
     int ret;
+    bool processed_at_least_one = false;
     
-    if (wait) {
-        ret = io_uring_wait_cqe(ring_, &cqe);
+    if (wait && !cancelled_.load()) {
+        // Use timeout-based wait so we can check for cancellation
+        struct __kernel_timespec ts = {.tv_sec = 0, .tv_nsec = 100000000};  // 100ms
+        ret = io_uring_wait_cqe_timeout(ring_, &cqe, &ts);
+        // If timeout (-ETIME) and not cancelled, try again
+        while (ret == -ETIME && !cancelled_.load() && pending_writes_.load() > 0) {
+            ret = io_uring_wait_cqe_timeout(ring_, &cqe, &ts);
+        }
     } else {
         ret = io_uring_peek_cqe(ring_, &cqe);
     }
@@ -113,6 +120,13 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
     while (ret == 0) {
         std::uint64_t write_id = cqe->user_data;
         int result = cqe->res;
+        
+        // Skip cancel operation completions (user_data == 0)
+        if (write_id == 0) {
+            io_uring_cqe_seen(ring_, cqe);
+            ret = io_uring_peek_cqe(ring_, &cqe);
+            continue;
+        }
         
         AsyncWriteCallback callback = nullptr;
         std::size_t expected_size = 0;
@@ -128,13 +142,17 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
         
         FileError error = FileError::kSuccess;
         if (result < 0) {
-            error = FileError::kWriteError;
-            if (first_async_error_ == FileError::kSuccess) {
-                first_async_error_ = error;
+            if (result == -ECANCELED) {
+                error = FileError::kCancelled;
+            } else {
+                error = FileError::kWriteError;
+                if (first_async_error_ == FileError::kSuccess) {
+                    first_async_error_ = error;
+                }
+                std::ostringstream oss;
+                oss << "io_uring write failed: " << strerror(-result);
+                Log(oss.str());
             }
-            std::ostringstream oss;
-            oss << "io_uring write failed: " << strerror(-result);
-            Log(oss.str());
         } else if (static_cast<std::size_t>(result) != expected_size) {
             error = FileError::kWriteError;
             if (first_async_error_ == FileError::kSuccess) {
@@ -151,9 +169,14 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
         
         pending_writes_.fetch_sub(1);
         io_uring_cqe_seen(ring_, cqe);
+        processed_at_least_one = true;
         
+        // After processing at least one, only peek for more (non-blocking)
         ret = io_uring_peek_cqe(ring_, &cqe);
     }
+    
+    // If waiting and we processed at least one, return to let caller queue more
+    // (This matches the Windows behavior we just fixed)
 }
 #else
 // Stubs when liburing is not available
@@ -163,6 +186,9 @@ void LinuxFileOperations::ProcessCompletions(bool) {}
 #endif
 
 FileError LinuxFileOperations::OpenDevice(const std::string& path) {
+  // Reset direct I/O tracking for new device
+  direct_io_attempted_ = false;
+  
   // Use O_DIRECT for block devices to bypass the page cache
   int flags = O_RDWR;
   bool isBlockDevice = IsBlockDevicePath(path);
@@ -170,6 +196,7 @@ FileError LinuxFileOperations::OpenDevice(const std::string& path) {
   if (isBlockDevice) {
     flags |= O_DIRECT;
     using_direct_io_ = true;
+    direct_io_attempted_ = true;
   }
   
   FileError result = OpenInternal(path.c_str(), flags);
@@ -183,6 +210,7 @@ FileError LinuxFileOperations::OpenDevice(const std::string& path) {
   // Reset async state for new file
   async_write_offset_ = 0;
   first_async_error_ = FileError::kSuccess;
+  cancelled_.store(false);
   
   return result;
 }
@@ -569,6 +597,42 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   FileError result = WriteSequential(data, size);
   if (callback) callback(result, result == FileError::kSuccess ? size : 0);
   return result;
+#endif
+}
+
+void LinuxFileOperations::PollAsyncCompletions() {
+#ifdef HAVE_LIBURING
+  if (io_uring_available_ && ring_ != nullptr && pending_writes_.load() > 0) {
+    ProcessCompletions(false);  // Non-blocking poll
+  }
+#endif
+}
+
+void LinuxFileOperations::CancelAsyncIO() {
+#ifdef HAVE_LIBURING
+  // Set cancellation flag first
+  cancelled_.store(true);
+  
+  if (!io_uring_available_ || ring_ == nullptr) {
+    return;
+  }
+  
+  // Cancel all pending I/O operations
+  // We submit a cancel request for each pending write
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    for (const auto& [write_id, pending] : pending_callbacks_) {
+      struct io_uring_sqe* sqe = io_uring_get_sqe(ring_);
+      if (sqe != nullptr) {
+        io_uring_prep_cancel64(sqe, write_id, 0);
+        io_uring_sqe_set_data64(sqe, 0);  // No callback for cancel operations
+      }
+    }
+  }
+  io_uring_submit(ring_);
+  
+  // Process completions (cancelled ops will return -ECANCELED)
+  ProcessCompletions(false);
 #endif
 }
 

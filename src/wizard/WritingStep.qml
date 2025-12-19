@@ -65,6 +65,8 @@ WizardStepBase {
     property bool isFinalising: false
     property bool isComplete: false
     property bool confirmOpen: false
+    property string bottleneckStatus: ""
+    property int writeThroughputKBps: 0
     readonly property bool anyCustomizationsApplied: (
         wizardContainer.customizationSupported && (
             wizardContainer.hostnameConfigured ||
@@ -326,6 +328,26 @@ WizardStepBase {
                 Accessible.name: qsTr("Write progress")
                 Accessible.description: progressText.text
             }
+            
+            // Bottleneck status indicator - shows what's limiting progress
+            Text {
+                id: bottleneckText
+                text: {
+                    if (root.bottleneckStatus !== "") {
+                        if (root.writeThroughputKBps > 0) {
+                            return root.bottleneckStatus + " (" + Math.round(root.writeThroughputKBps / 1024) + " MB/s)"
+                        }
+                        return root.bottleneckStatus
+                    }
+                    return ""
+                }
+                font.pixelSize: Style.fontSizeSmall
+                font.family: Style.fontFamily
+                color: Style.formLabelDisabledColor
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                visible: root.isWriting && root.bottleneckStatus !== ""
+            }
         }
 
         // Bottom spacer to vertically center progress section when writing/complete
@@ -520,6 +542,8 @@ WizardStepBase {
             root.forceActiveFocus()
             root.isWriting = true
             wizardContainer.isWriting = true
+            root.bottleneckStatus = ""
+            root.writeThroughputKBps = 0
             progressText.text = qsTr("Starting write process...")
             progressBar.value = 0
             Qt.callLater(function(){ imageWriter.startWrite() })
@@ -542,6 +566,7 @@ WizardStepBase {
     function onVerifyProgress(now, total) {
         if (root.isWriting) {
             root.isVerifying = true
+            root.bottleneckStatus = ""  // Clear write bottleneck during verification
             var progress = total > 0 ? (now / total) * 100 : 0
             progressBar.value = progress
             progressText.text = qsTr("Verifying... %1%").arg(Math.round(progress))
@@ -583,6 +608,11 @@ WizardStepBase {
                 progressText.text = qsTr("Finalising…")
                 progressBar.value = 100
             }
+        }
+        
+        function onBottleneckStatusChanged(status, throughputKBps) {
+            root.bottleneckStatus = status
+            root.writeThroughputKBps = throughputKBps
         }
     }
     

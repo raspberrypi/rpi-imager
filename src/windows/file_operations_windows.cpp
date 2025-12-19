@@ -18,8 +18,8 @@ static void Log(const std::string& msg) {
 
 WindowsFileOperations::WindowsFileOperations() 
     : handle_(INVALID_HANDLE_VALUE), last_error_code_(0), using_direct_io_(false),
-      async_queue_depth_(1), pending_writes_(0), first_async_error_(FileError::kSuccess),
-      async_write_offset_(0), iocp_(INVALID_HANDLE_VALUE) {
+      async_queue_depth_(1), pending_writes_(0), cancelled_(false), first_async_error_(FileError::kSuccess),
+      async_write_offset_(0), current_file_position_(0), iocp_(INVALID_HANDLE_VALUE) {
 }
 
 bool WindowsFileOperations::IsPhysicalDrivePath(const std::string& path) {
@@ -86,9 +86,16 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
     return;
   }
   
-  DWORD timeout = wait ? INFINITE : 0;
+  // Use a short timeout when waiting, so we can check for cancellation
+  DWORD timeout = wait ? 100 : 0;  // 100ms when waiting, 0 when polling
+  bool processed_at_least_one = false;
   
   while (pending_writes_.load() > 0) {
+    // Check for cancellation
+    if (cancelled_.load()) {
+      break;
+    }
+    
     DWORD bytes_transferred = 0;
     ULONG_PTR completion_key = 0;
     LPOVERLAPPED overlapped = nullptr;
@@ -101,9 +108,12 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
         timeout);
     
     if (overlapped == nullptr) {
-      // Timeout or error with no overlapped - exit if not waiting
-      if (!wait) break;
-      continue;
+      // Timeout or error with no overlapped
+      if (!wait || cancelled_.load()) break;
+      // If we already processed at least one, don't keep blocking - return
+      // so caller can queue more work. Only block if we haven't processed any.
+      if (processed_at_least_one) break;
+      continue;  // Keep waiting for the first completion
     }
     
     // Find the context for this completion
@@ -126,13 +136,18 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
     
     if (!success) {
       DWORD err = GetLastError();
-      error = FileError::kWriteError;
-      if (first_async_error_ == FileError::kSuccess) {
-        first_async_error_ = error;
+      // ERROR_OPERATION_ABORTED means the I/O was cancelled
+      if (err == ERROR_OPERATION_ABORTED) {
+        error = FileError::kCancelled;
+      } else {
+        error = FileError::kWriteError;
+        if (first_async_error_ == FileError::kSuccess) {
+          first_async_error_ = error;
+        }
+        std::ostringstream oss;
+        oss << "Async write failed, error: " << err;
+        Log(oss.str());
       }
-      std::ostringstream oss;
-      oss << "Async write failed, error: " << err;
-      Log(oss.str());
     } else if (bytes_transferred != ctx->size) {
       error = FileError::kWriteError;
       if (first_async_error_ == FileError::kSuccess) {
@@ -150,10 +165,47 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
     
     pending_writes_.fetch_sub(1);
     delete ctx;
+    processed_at_least_one = true;
     
-    // If not waiting, only process available completions
-    if (!wait) {
-      timeout = 0;
+    // After processing at least one, switch to non-blocking to grab any
+    // other ready completions, but don't wait for more
+    timeout = 0;
+  }
+}
+
+bool WindowsFileOperations::WaitForOverlappedWithCancel(OVERLAPPED* overlapped, DWORD* bytes_transferred) {
+  const DWORD kWaitTimeout = 100;  // Check for cancel every 100ms
+  
+  while (true) {
+    // Check for cancellation first
+    if (cancelled_.load()) {
+      // CancelIoEx cancels I/O regardless of which thread initiated it
+      // (unlike CancelIo which only cancels I/O from the calling thread)
+      CancelIoEx(handle_, overlapped);
+      // Get the result anyway to clean up the overlapped structure
+      // This will return FALSE with ERROR_OPERATION_ABORTED
+      GetOverlappedResult(handle_, overlapped, bytes_transferred, TRUE);
+      last_error_code_ = ERROR_OPERATION_ABORTED;
+      return false;
+    }
+    
+    DWORD wait_result = WaitForSingleObject(overlapped->hEvent, kWaitTimeout);
+    
+    if (wait_result == WAIT_OBJECT_0) {
+      // I/O completed - get the result
+      if (!GetOverlappedResult(handle_, overlapped, bytes_transferred, FALSE)) {
+        last_error_code_ = GetLastError();
+        return false;
+      }
+      return true;
+    } else if (wait_result == WAIT_TIMEOUT) {
+      // Continue waiting, loop will check for cancellation
+      continue;
+    } else {
+      // WAIT_FAILED or other error
+      last_error_code_ = GetLastError();
+      CancelIoEx(handle_, overlapped);
+      return false;
     }
   }
 }
@@ -266,7 +318,9 @@ FileError WindowsFileOperations::OpenDevice(const std::string& path) {
   
   // Reset async state for new file
   async_write_offset_ = 0;
+  current_file_position_ = 0;
   first_async_error_ = FileError::kSuccess;
+  cancelled_.store(false);
   
   Log("Successfully opened device: " + path + (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)"));
   return FileError::kSuccess;
@@ -311,73 +365,119 @@ FileError WindowsFileOperations::WriteAtOffset(
     return FileError::kOpenError;
   }
 
-  // Set file pointer to the desired offset
-  LARGE_INTEGER offset_large;
-  offset_large.QuadPart = static_cast<LONGLONG>(offset);
-  
-  if (!SetFilePointerEx(handle_, offset_large, nullptr, FILE_BEGIN)) {
-    DWORD error = GetLastError();
-    std::ostringstream oss;
-    oss << "WriteAtOffset: SetFilePointerEx failed, offset=" << offset << ", error=" << error;
-    Log(oss.str());
-    return FileError::kSeekError;
+  // Check for cancellation before starting
+  if (cancelled_.load()) {
+    return FileError::kCancelled;
   }
 
+  // With FILE_FLAG_OVERLAPPED, we MUST use an OVERLAPPED structure
+  // and specify the offset there, not via SetFilePointerEx
+  
   // Write data in chunks with retry logic
   std::size_t bytes_written = 0;
   int retry_count = 0;
   const int max_retries = 3;
   
   while (bytes_written < size) {
+    // Check for cancellation in the loop
+    if (cancelled_.load()) {
+      return FileError::kCancelled;
+    }
+    
+    OVERLAPPED overlapped = {};
+    
+    // Create a manual-reset event for this write operation
+    overlapped.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+    if (overlapped.hEvent == nullptr) {
+      last_error_code_ = GetLastError();
+      Log("WriteAtOffset: Failed to create event");
+      return FileError::kWriteError;
+    }
+    
+    // Set the file offset in the OVERLAPPED structure
+    LARGE_INTEGER write_offset;
+    write_offset.QuadPart = static_cast<LONGLONG>(offset + bytes_written);
+    overlapped.Offset = write_offset.LowPart;
+    overlapped.OffsetHigh = write_offset.HighPart;
+    
     DWORD chunk_size = static_cast<DWORD>(std::min(size - bytes_written, 
                                                    static_cast<std::size_t>(MAXDWORD)));
     DWORD written = 0;
     
-    if (!WriteFile(handle_, data + bytes_written, chunk_size, &written, nullptr)) {
+    BOOL result = WriteFile(handle_, data + bytes_written, chunk_size, &written, &overlapped);
+    
+    if (!result) {
       DWORD error = GetLastError();
-      {
+      
+      if (error == ERROR_IO_PENDING) {
+        // I/O is pending - wait for completion with cancellation support
+        if (!WaitForOverlappedWithCancel(&overlapped, &written)) {
+          error = GetLastError();
+          CloseHandle(overlapped.hEvent);
+          
+          // Check if cancelled
+          if (cancelled_.load() || error == ERROR_OPERATION_ABORTED) {
+            return FileError::kCancelled;
+          }
+          
+          std::ostringstream oss;
+          oss << "WriteAtOffset: GetOverlappedResult failed, offset=" << (offset + bytes_written)
+              << ", chunk_size=" << chunk_size << ", error=" << error;
+          Log(oss.str());
+          
+          // Handle specific Windows errors
+          if (error == ERROR_ACCESS_DENIED || error == ERROR_DISK_FULL ||
+              error == ERROR_WRITE_PROTECT || error == ERROR_SECTOR_NOT_FOUND || 
+              error == ERROR_CRC) {
+            return FileError::kWriteError;
+          }
+          
+          // For other errors, try to retry
+          if (retry_count < max_retries) {
+            retry_count++;
+            Sleep(100 * retry_count);
+            continue;
+          }
+          return FileError::kWriteError;
+        }
+      } else {
+        // Real error (not pending)
         std::ostringstream oss;
         oss << "WriteAtOffset: WriteFile failed, offset=" << (offset + bytes_written)
             << ", chunk_size=" << chunk_size << ", error=" << error;
         Log(oss.str());
-      }
-      
-      // Handle specific Windows errors
-      if (error == ERROR_ACCESS_DENIED) {
-        Log("WriteAtOffset: Access denied - volume may be locked or protected");
-        return FileError::kWriteError;
-      } else if (error == ERROR_DISK_FULL) {
-        Log("WriteAtOffset: Disk full");
-        return FileError::kWriteError;
-      } else if (error == ERROR_WRITE_PROTECT) {
-        Log("WriteAtOffset: Write protected");
-        return FileError::kWriteError;
-      } else if (error == ERROR_SECTOR_NOT_FOUND || error == ERROR_CRC) {
-        Log("WriteAtOffset: Media error detected");
-        return FileError::kWriteError;
-      }
-      
-      // For other errors, try to retry
-      if (retry_count < max_retries) {
-        retry_count++;
-        std::ostringstream oss;
-        oss << "WriteAtOffset: Retrying write operation, attempt " << retry_count;
-        Log(oss.str());
+        CloseHandle(overlapped.hEvent);
         
-        // Wait a bit before retry
-        Sleep(100 * retry_count);
-        
-        // Reset file pointer
-        if (!SetFilePointerEx(handle_, offset_large, nullptr, FILE_BEGIN)) {
-          Log("WriteAtOffset: Failed to reset file pointer for retry");
-          return FileError::kSeekError;
+        // Handle specific Windows errors
+        if (error == ERROR_ACCESS_DENIED) {
+          Log("WriteAtOffset: Access denied - volume may be locked or protected");
+          return FileError::kWriteError;
+        } else if (error == ERROR_DISK_FULL) {
+          Log("WriteAtOffset: Disk full");
+          return FileError::kWriteError;
+        } else if (error == ERROR_WRITE_PROTECT) {
+          Log("WriteAtOffset: Write protected");
+          return FileError::kWriteError;
+        } else if (error == ERROR_SECTOR_NOT_FOUND || error == ERROR_CRC) {
+          Log("WriteAtOffset: Media error detected");
+          return FileError::kWriteError;
         }
         
-        continue;
+        // For other errors, try to retry
+        if (retry_count < max_retries) {
+          retry_count++;
+          std::ostringstream oss2;
+          oss2 << "WriteAtOffset: Retrying write operation, attempt " << retry_count;
+          Log(oss2.str());
+          Sleep(100 * retry_count);
+          continue;
+        }
+        
+        return FileError::kWriteError;
       }
-      
-      return FileError::kWriteError;
     }
+    
+    CloseHandle(overlapped.hEvent);
     
     if (written == 0) {
       Log("WriteAtOffset: WriteFile returned 0 bytes written");
@@ -444,15 +544,18 @@ FileError WindowsFileOperations::Close() {
     if (!CloseHandle(handle_)) {
       handle_ = INVALID_HANDLE_VALUE;
       using_direct_io_ = false;
-      direct_io_info_ = DirectIOInfo();
+      // Don't reset direct_io_info_ here - it should persist for diagnostics
+      // and only be reset at the start of OpenDevice()
       return FileError::kCloseError;
     }
     handle_ = INVALID_HANDLE_VALUE;
   }
   current_path_.clear();
   using_direct_io_ = false;
-  direct_io_info_ = DirectIOInfo();
+  // Don't reset direct_io_info_ here - it's needed for post-operation diagnostics
+  // and is properly reset at the start of OpenDevice() when opening a new device
   async_write_offset_ = 0;
+  current_file_position_ = 0;
   
   // Clean up IOCP - it's tied to the file handle
   CleanupIOCP();
@@ -581,23 +684,70 @@ FileError WindowsFileOperations::WriteSequential(const std::uint8_t* data, std::
     return FileError::kOpenError;
   }
 
-  DWORD bytes_written = 0;
+  // Check for cancellation before starting
+  if (cancelled_.load()) {
+    return FileError::kCancelled;
+  }
+
+  // With FILE_FLAG_OVERLAPPED, we MUST use an OVERLAPPED structure
+  // even for synchronous-style writes. We use a manual-reset event
+  // and wait on it to achieve synchronous behavior.
+  
   DWORD total_written = 0;
   
   while (total_written < size) {
+    // Check for cancellation
+    if (cancelled_.load()) {
+      return FileError::kCancelled;
+    }
+    
+    OVERLAPPED overlapped = {};
+    
+    // Create a manual-reset event for this write operation
+    overlapped.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+    if (overlapped.hEvent == nullptr) {
+      last_error_code_ = GetLastError();
+      return FileError::kWriteError;
+    }
+    
+    // Set the file offset in the OVERLAPPED structure
+    LARGE_INTEGER offset;
+    offset.QuadPart = static_cast<LONGLONG>(current_file_position_ + total_written);
+    overlapped.Offset = offset.LowPart;
+    overlapped.OffsetHigh = offset.HighPart;
+    
+    DWORD bytes_written = 0;
     BOOL result = WriteFile(handle_, 
                            data + total_written, 
                            static_cast<DWORD>(size - total_written), 
                            &bytes_written, 
-                           nullptr);
+                           &overlapped);
     
     if (!result) {
-      last_error_code_ = static_cast<int>(GetLastError());
-      return FileError::kWriteError;
+      DWORD error = GetLastError();
+      if (error == ERROR_IO_PENDING) {
+        // I/O is pending - wait for completion with cancellation support
+        if (!WaitForOverlappedWithCancel(&overlapped, &bytes_written)) {
+          CloseHandle(overlapped.hEvent);
+          if (cancelled_.load()) {
+            return FileError::kCancelled;
+          }
+          return FileError::kWriteError;
+        }
+      } else {
+        // Real error
+        last_error_code_ = error;
+        CloseHandle(overlapped.hEvent);
+        return FileError::kWriteError;
+      }
     }
     
+    CloseHandle(overlapped.hEvent);
     total_written += bytes_written;
   }
+
+  // Update our tracked file position
+  current_file_position_ += total_written;
 
   last_error_code_ = 0;
   return FileError::kSuccess;
@@ -608,14 +758,61 @@ FileError WindowsFileOperations::ReadSequential(std::uint8_t* data, std::size_t 
     return FileError::kOpenError;
   }
 
-  DWORD win_bytes_read = 0;
-  BOOL result = ReadFile(handle_, data, static_cast<DWORD>(size), &win_bytes_read, nullptr);
+  // Check for cancellation before starting
+  if (cancelled_.load()) {
+    bytes_read = 0;
+    return FileError::kCancelled;
+  }
+
+  // With FILE_FLAG_OVERLAPPED, we MUST use an OVERLAPPED structure
+  // even for synchronous-style reads. We use a manual-reset event
+  // and wait on it to achieve synchronous behavior.
   
-  if (!result) {
+  OVERLAPPED overlapped = {};
+  
+  // Create a manual-reset event for this read operation
+  overlapped.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+  if (overlapped.hEvent == nullptr) {
+    last_error_code_ = GetLastError();
     bytes_read = 0;
     return FileError::kReadError;
   }
-
+  
+  // Set the file offset in the OVERLAPPED structure
+  LARGE_INTEGER offset;
+  offset.QuadPart = static_cast<LONGLONG>(current_file_position_);
+  overlapped.Offset = offset.LowPart;
+  overlapped.OffsetHigh = offset.HighPart;
+  
+  DWORD win_bytes_read = 0;
+  BOOL result = ReadFile(handle_, data, static_cast<DWORD>(size), &win_bytes_read, &overlapped);
+  
+  if (!result) {
+    DWORD error = GetLastError();
+    if (error == ERROR_IO_PENDING) {
+      // I/O is pending - wait for completion with cancellation support
+      if (!WaitForOverlappedWithCancel(&overlapped, &win_bytes_read)) {
+        CloseHandle(overlapped.hEvent);
+        bytes_read = 0;
+        if (cancelled_.load()) {
+          return FileError::kCancelled;
+        }
+        return FileError::kReadError;
+      }
+    } else {
+      // Real error
+      last_error_code_ = error;
+      CloseHandle(overlapped.hEvent);
+      bytes_read = 0;
+      return FileError::kReadError;
+    }
+  }
+  
+  CloseHandle(overlapped.hEvent);
+  
+  // Update our tracked file position
+  current_file_position_ += win_bytes_read;
+  
   bytes_read = static_cast<std::size_t>(win_bytes_read);
   return FileError::kSuccess;
 }
@@ -628,16 +825,14 @@ FileError WindowsFileOperations::Seek(std::uint64_t position) {
   // Wait for pending async writes before seeking
   WaitForPendingWrites();
 
-  LARGE_INTEGER pos;
-  pos.QuadPart = static_cast<LONGLONG>(position);
+  // With FILE_FLAG_OVERLAPPED, file position is specified in OVERLAPPED struct,
+  // not via SetFilePointerEx. We just track the position ourselves.
+  // SetFilePointerEx still works for getting current position but may not be
+  // reliable for subsequent synchronous operations on overlapped handles.
   
-  LARGE_INTEGER new_pos;
-  if (!SetFilePointerEx(handle_, pos, &new_pos, FILE_BEGIN)) {
-    return FileError::kSeekError;
-  }
-
-  // Also update async write offset
+  // Update our tracked positions for both async writes and sync reads
   async_write_offset_ = position;
+  current_file_position_ = position;
   
   return FileError::kSuccess;
 }
@@ -668,11 +863,33 @@ FileError WindowsFileOperations::ForceSync() {
     return FileError::kOpenError;
   }
 
-  // Wait for pending async writes first
-  WaitForPendingWrites();
+  // Check for cancellation - skip sync entirely if cancelled
+  // FlushFileBuffers is a blocking syscall that cannot be interrupted
+  if (cancelled_.load()) {
+    return FileError::kCancelled;
+  }
 
-  // Force filesystem sync using FlushFileBuffers
+  // Wait for pending async writes first
+  FileError wait_result = WaitForPendingWrites();
+  if (wait_result != FileError::kSuccess) {
+    return wait_result;
+  }
+
+  // Check for cancellation again after waiting - skip the blocking sync
+  if (cancelled_.load()) {
+    return FileError::kCancelled;
+  }
+
+  // WARNING: FlushFileBuffers is a blocking call that CANNOT be cancelled.
+  // With direct I/O (FILE_FLAG_NO_BUFFERING), this mainly flushes the device's
+  // internal cache and should be fast. For buffered I/O, this can take a long
+  // time on slow devices.
   if (!FlushFileBuffers(handle_)) {
+    DWORD error = GetLastError();
+    // ERROR_INVALID_FUNCTION is returned by some devices that don't support flush
+    if (error == ERROR_INVALID_FUNCTION) {
+      return FileError::kSuccess;
+    }
     return FileError::kSyncError;
   }
 
@@ -684,11 +901,33 @@ FileError WindowsFileOperations::Flush() {
     return FileError::kOpenError;
   }
 
-  // Wait for pending async writes first
-  WaitForPendingWrites();
+  // Check for cancellation - skip flush entirely if cancelled
+  // FlushFileBuffers is a blocking syscall that cannot be interrupted
+  if (cancelled_.load()) {
+    return FileError::kCancelled;
+  }
 
-  // On Windows, FlushFileBuffers handles both buffer flush and disk sync
+  // Wait for pending async writes first
+  FileError wait_result = WaitForPendingWrites();
+  if (wait_result != FileError::kSuccess) {
+    return wait_result;
+  }
+
+  // Check for cancellation again after waiting - skip the blocking flush
+  if (cancelled_.load()) {
+    return FileError::kCancelled;
+  }
+
+  // On Windows, FlushFileBuffers handles both buffer flush and disk sync.
+  // WARNING: This is a blocking call that CANNOT be cancelled. On slow/stuck
+  // devices, this may block for an extended period. With direct I/O 
+  // (FILE_FLAG_NO_BUFFERING), there's typically nothing to flush.
   if (!FlushFileBuffers(handle_)) {
+    DWORD error = GetLastError();
+    // ERROR_INVALID_FUNCTION is returned by some devices that don't support flush
+    if (error == ERROR_INVALID_FUNCTION) {
+      return FileError::kSuccess;
+    }
     return FileError::kFlushError;
   }
 
@@ -763,6 +1002,12 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
     return FileError::kOpenError;
   }
   
+  // Check for cancellation
+  if (cancelled_.load()) {
+    if (callback) callback(FileError::kCancelled, 0);
+    return FileError::kCancelled;
+  }
+  
   // If async not enabled or IOCP not initialized, fall back to sync
   if (async_queue_depth_ <= 1 || iocp_ == INVALID_HANDLE_VALUE) {
     FileError result = WriteSequential(data, size);
@@ -782,8 +1027,12 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
   // Process any completed writes first (non-blocking)
   ProcessCompletions(false);
   
-  // If queue is full, wait for completions
+  // If queue is full, wait for completions (checking for cancellation)
   while (pending_writes_.load() >= async_queue_depth_) {
+    if (cancelled_.load()) {
+      if (callback) callback(FileError::kCancelled, 0);
+      return FileError::kCancelled;
+    }
     ProcessCompletions(true);
   }
   
@@ -842,14 +1091,103 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
   return FileError::kSuccess;
 }
 
+void WindowsFileOperations::PollAsyncCompletions() {
+  if (iocp_ != INVALID_HANDLE_VALUE && pending_writes_.load() > 0) {
+    ProcessCompletions(false);  // Non-blocking poll
+  }
+}
+
+void WindowsFileOperations::CancelAsyncIO() {
+  // Set the cancellation flag
+  cancelled_.store(true);
+  
+  // Cancel all pending I/O on the handle
+  // CancelIoEx with NULL overlapped cancels ALL pending I/O regardless of thread
+  if (handle_ != INVALID_HANDLE_VALUE) {
+    CancelIoEx(handle_, nullptr);
+  }
+  
+  // Note: We don't wait for completions here - the thread doing I/O will
+  // receive ERROR_OPERATION_ABORTED and clean up. Trying to process 
+  // completions here could race with the I/O thread.
+}
+
 FileError WindowsFileOperations::WaitForPendingWrites() {
   if (iocp_ == INVALID_HANDLE_VALUE) {
     return FileError::kSuccess;
   }
   
-  // Process completions until all pending writes are done
+  // Process completions until all pending writes are done or cancelled
+  // Unlike the normal ProcessCompletions flow, we must drain everything here.
   while (pending_writes_.load() > 0) {
-    ProcessCompletions(true);
+    if (cancelled_.load()) {
+      // Cancel all pending I/O - this will cause them to complete with ERROR_OPERATION_ABORTED
+      CancelIoEx(handle_, nullptr);
+      // We still need to drain all completions to avoid leaking AsyncWriteContext objects
+      // Continue the loop to process the ERROR_OPERATION_ABORTED completions
+    }
+    
+    // Block waiting for completions, processing one at a time until empty
+    DWORD bytes_transferred = 0;
+    ULONG_PTR completion_key = 0;
+    LPOVERLAPPED overlapped = nullptr;
+    
+    BOOL success = GetQueuedCompletionStatus(
+        iocp_,
+        &bytes_transferred,
+        &completion_key,
+        &overlapped,
+        cancelled_.load() ? 100 : INFINITE);  // Short timeout if cancelled
+    
+    if (overlapped == nullptr) {
+      // Timeout - only happens if cancelled, keep trying
+      continue;
+    }
+    
+    // Find and process the context
+    AsyncWriteContext* ctx = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(pending_mutex_);
+      auto it = pending_contexts_.find(overlapped);
+      if (it != pending_contexts_.end()) {
+        ctx = it->second;
+        pending_contexts_.erase(it);
+      }
+    }
+    
+    if (ctx == nullptr) {
+      Log("Warning: Unknown OVERLAPPED in WaitForPendingWrites");
+      continue;
+    }
+    
+    FileError error = FileError::kSuccess;
+    if (!success) {
+      DWORD err = GetLastError();
+      if (err == ERROR_OPERATION_ABORTED) {
+        error = FileError::kCancelled;
+      } else {
+        error = FileError::kWriteError;
+        if (first_async_error_ == FileError::kSuccess) {
+          first_async_error_ = error;
+        }
+      }
+    } else if (bytes_transferred != ctx->size) {
+      error = FileError::kWriteError;
+      if (first_async_error_ == FileError::kSuccess) {
+        first_async_error_ = error;
+      }
+    }
+    
+    if (ctx->callback) {
+      ctx->callback(error, error == FileError::kSuccess ? ctx->size : 0);
+    }
+    
+    pending_writes_.fetch_sub(1);
+    delete ctx;
+  }
+  
+  if (cancelled_.load()) {
+    return FileError::kCancelled;
   }
   
   return first_async_error_;

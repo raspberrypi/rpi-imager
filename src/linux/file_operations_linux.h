@@ -69,9 +69,11 @@ class LinuxFileOperations : public FileOperations {
   // Enable or disable direct I/O
   FileError SetDirectIOEnabled(bool enabled) override;
   
-  // Get direct I/O attempt details
+  // Get direct I/O attempt details (Linux: O_DIRECT attempted for block devices)
   DirectIOInfo GetDirectIOInfo() const override { 
       DirectIOInfo info;
+      info.attempted = direct_io_attempted_;
+      info.succeeded = using_direct_io_;
       info.currently_enabled = using_direct_io_;
       return info;
   }
@@ -83,17 +85,21 @@ class LinuxFileOperations : public FileOperations {
   FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
                                   AsyncWriteCallback callback = nullptr) override;
   int GetPendingWriteCount() const override { return pending_writes_.load(); }
+  void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
+  void CancelAsyncIO() override;
 
  private:
   int fd_;
   std::string current_path_;
   int last_error_code_;
   bool using_direct_io_;
+  bool direct_io_attempted_;  // True if O_DIRECT was attempted for this device
   
   // io_uring state
   int async_queue_depth_;
   std::atomic<int> pending_writes_;
+  std::atomic<bool> cancelled_;
   FileError first_async_error_;
   std::uint64_t async_write_offset_;
   bool io_uring_available_;

@@ -136,6 +136,13 @@ void PerformanceStats::setSystemInfo(const SystemInfo &info)
              << "Device:" << info.deviceDescription;
 }
 
+void PerformanceStats::updateDirectIOEnabled(bool enabled)
+{
+    QMutexLocker locker(&_mutex);
+    _systemInfo.directIOEnabled = enabled;
+    qDebug() << "PerformanceStats: Direct I/O state updated to" << (enabled ? "enabled" : "disabled");
+}
+
 void PerformanceStats::endSession(bool success, const QString &errorMessage)
 {
     QMutexLocker locker(&_mutex);

@@ -29,6 +29,16 @@ class DownloadThread : public QThread
 {
     Q_OBJECT
 public:
+    // Bottleneck states for progress feedback
+    enum class BottleneckState {
+        None,           // Pipeline flowing smoothly
+        Network,        // Waiting for network download
+        Decompression,  // CPU-bound decompression
+        Storage,        // Waiting for storage device
+        Verifying       // Reading back for verification
+    };
+    Q_ENUM(BottleneckState)
+
     /*
      * Constructor
      *
@@ -185,6 +195,13 @@ signals:
     void eventWriteSizeDistribution(quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount);
     void eventWriteAfterSyncImpact(quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount);
     void eventAsyncIOConfig(bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd);
+    
+    // Bottleneck state signal for UI feedback
+    void bottleneckStateChanged(DownloadThread::BottleneckState state, quint32 throughputKBps);
+    
+    // Async write progress signal - emitted from completion callbacks (thread-safe)
+    // Connected to UI with Qt::QueuedConnection for cross-thread safety
+    void asyncWriteProgress(quint64 bytesWritten, quint64 totalBytes);
 
 protected:
     virtual void run();
@@ -265,6 +282,12 @@ protected:
     bool _debugSkipEndOfDevice;
     
     void _initializeSyncConfiguration();
+    void _updateBottleneckState();
+    
+    // Bottleneck detection state
+    BottleneckState _currentBottleneck;
+    QElapsedTimer _bottleneckTimer;
+    static constexpr int BOTTLENECK_HYSTERESIS_MS = 500;  // Minimum time before changing state
     
     // Write timing breakdown tracking (for performance hypothesis testing)
     struct WriteTimingStats {

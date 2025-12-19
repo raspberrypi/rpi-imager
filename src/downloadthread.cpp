@@ -127,6 +127,10 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     _debugAsyncQueueDepth = 16; // Default queue depth
     _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
     _debugSkipEndOfDevice = false; // For counterfeit cards with fake capacity
+    
+    // Initialize bottleneck detection
+    _currentBottleneck = BottleneckState::None;
+    _bottleneckTimer.start();
 }
 
 DownloadThread::~DownloadThread()
@@ -972,13 +976,29 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
         size_t writeLen = len;
         QFuture<void> hashFuture = _pendingHashFuture;
         
+        // Capture pointer to _bytesWritten for callback to update on completion
+        // This ensures progress reflects COMPLETED writes, not just queued writes
+        std::atomic<std::uint64_t>* bytesWrittenPtr = &_bytesWritten;
+        
+        // Capture 'this' and total for event-driven progress notification
+        // The signal emission is thread-safe via Qt::QueuedConnection
+        DownloadThread* self = this;
+        quint64 totalBytes = _extractTotal.load();
+        
         write_result = _file->AsyncWriteSequential(
             reinterpret_cast<const std::uint8_t*>(buf), len,
-            [onComplete, writeLen, hashFuture](rpi_imager::FileError result, std::size_t written) mutable {
+            [onComplete, writeLen, hashFuture, bytesWrittenPtr, self, totalBytes](rpi_imager::FileError result, std::size_t written) mutable {
                 // Wait for hash computation to complete before releasing buffer
                 // This ensures the buffer isn't reused while still being hashed
                 if (!hashFuture.isFinished()) {
                     hashFuture.waitForFinished();
+                }
+                
+                // Update progress when write actually completes (not when queued)
+                if (result == rpi_imager::FileError::kSuccess) {
+                    quint64 newTotal = bytesWrittenPtr->fetch_add(written) + written;
+                    // Emit progress signal - thread-safe via queued connection to main thread
+                    emit self->asyncWriteProgress(newTotal, totalBytes);
                 }
                 
                 // Now safe to release the buffer
@@ -991,7 +1011,7 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
         
         if (write_result == rpi_imager::FileError::kSuccess) {
             bytes_written = len;
-            _bytesWritten += bytes_written;
+            // Don't increment _bytesWritten here - callback will do it on completion
         } else {
             qDebug() << "Async write queue failed, falling back to sync";
             // Fallback to sync - wait for hash before releasing
@@ -1014,8 +1034,21 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
             ::memcpy(asyncBuf, buf, len);
             
             size_t writeLen = len;
+            // Capture pointer to _bytesWritten for callback to update on completion
+            std::atomic<std::uint64_t>* bytesWrittenPtr = &_bytesWritten;
+            
+            // Capture 'this' and total for event-driven progress notification
+            DownloadThread* self = this;
+            quint64 totalBytes = _extractTotal.load();
+            
             write_result = _file->AsyncWriteSequential(asyncBuf, len, 
-                [asyncBuf, writeLen](rpi_imager::FileError result, std::size_t written) {
+                [asyncBuf, writeLen, bytesWrittenPtr, self, totalBytes](rpi_imager::FileError result, std::size_t written) {
+                    // Update progress when write actually completes (not when queued)
+                    if (result == rpi_imager::FileError::kSuccess) {
+                        quint64 newTotal = bytesWrittenPtr->fetch_add(written) + written;
+                        // Emit progress signal - thread-safe via queued connection to main thread
+                        emit self->asyncWriteProgress(newTotal, totalBytes);
+                    }
                     qFreeAligned(asyncBuf);
                     if (result != rpi_imager::FileError::kSuccess) {
                         qDebug() << "Async write callback: error" << static_cast<int>(result) 
@@ -1025,7 +1058,7 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
             
             if (write_result == rpi_imager::FileError::kSuccess) {
                 bytes_written = len;
-                _bytesWritten += bytes_written;
+                // Don't increment _bytesWritten here - callback will do it on completion
             } else {
                 qFreeAligned(asyncBuf);
                 qDebug() << "Async write queue failed with error" << static_cast<int>(write_result);
@@ -1086,6 +1119,9 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
 
     // Cross-platform periodic sync
     _periodicSync();
+    
+    // Update bottleneck state for UI feedback
+    _updateBottleneckState();
 
     return (written < 0) ? 0 : written;
 }
@@ -1115,6 +1151,12 @@ void DownloadThread::_header(const string &header)
 void DownloadThread::cancelDownload()
 {
     _cancelled = true;
+    
+    // Cancel any pending async I/O to unblock waiting operations
+    if (_file) {
+        _file->CancelAsyncIO();
+    }
+    
     //deleteDownloadedFile();
 }
 
@@ -1546,6 +1588,73 @@ bool DownloadThread::_verify()
     }
 
     return false;
+}
+
+void DownloadThread::_updateBottleneckState()
+{
+    // Poll for async completions to ensure callbacks fire promptly
+    // This prevents progress from jumping when completions batch up
+    if (_file) {
+        _file->PollAsyncCompletions();
+    }
+    
+    // Detect current bottleneck based on pipeline state
+    BottleneckState newState = BottleneckState::None;
+    quint32 throughputKBps = 0;
+    
+    if (_file && _file->IsAsyncIOSupported() && _file->GetAsyncQueueDepth() > 1) {
+        int pendingWrites = _file->GetPendingWriteCount();
+        int queueDepth = _file->GetAsyncQueueDepth();
+        
+        // If async queue is more than 75% full, storage is the bottleneck
+        if (pendingWrites > (queueDepth * 3 / 4)) {
+            newState = BottleneckState::Storage;
+        }
+    }
+    
+    // Calculate current write throughput for display
+    qint64 currentBytes = _bytesWritten.load();
+    static qint64 lastThroughputBytes = 0;
+    static QElapsedTimer throughputTimer;
+    static bool throughputTimerStarted = false;
+    
+    if (!throughputTimerStarted) {
+        throughputTimer.start();
+        throughputTimerStarted = true;
+        lastThroughputBytes = currentBytes;
+    } else {
+        qint64 elapsed = throughputTimer.elapsed();
+        if (elapsed >= 500) {  // Update throughput every 500ms
+            qint64 bytesDelta = currentBytes - lastThroughputBytes;
+            if (bytesDelta > 0 && elapsed > 0) {
+                throughputKBps = static_cast<quint32>((bytesDelta * 1000) / (elapsed * 1024));
+            }
+            lastThroughputBytes = currentBytes;
+            throughputTimer.restart();
+        }
+    }
+    
+    // Apply hysteresis - only change state if it's been stable for a while
+    if (newState != _currentBottleneck) {
+        if (_bottleneckTimer.elapsed() >= BOTTLENECK_HYSTERESIS_MS) {
+            _currentBottleneck = newState;
+            _bottleneckTimer.restart();
+            emit bottleneckStateChanged(_currentBottleneck, throughputKBps);
+        }
+    } else {
+        // Same state, reset timer and emit periodic throughput updates
+        _bottleneckTimer.restart();
+        // Emit throughput updates even when state hasn't changed (every 500ms)
+        static QElapsedTimer updateTimer;
+        static bool updateTimerStarted = false;
+        if (!updateTimerStarted) {
+            updateTimer.start();
+            updateTimerStarted = true;
+        } else if (updateTimer.elapsed() >= 500) {
+            emit bottleneckStateChanged(_currentBottleneck, throughputKBps);
+            updateTimer.restart();
+        }
+    }
 }
 
 void DownloadThread::_initializeSyncConfiguration()

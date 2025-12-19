@@ -833,6 +833,11 @@ void ImageWriter::startWrite()
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, &ImageWriter::verifyProgress);
         
+        // Connect async write progress signal for event-driven UI updates during WaitForPendingWrites
+        // This signal is emitted from IOCP completion callbacks, providing real-time progress
+        connect(downloadThread, &DownloadThread::asyncWriteProgress,
+                this, &ImageWriter::writeProgress, Qt::QueuedConnection);
+        
         // Capture progress for performance stats (lightweight - just stores raw samples)
         connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
                 this, [this](quint64 now, quint64 total){
@@ -846,6 +851,10 @@ void ImageWriter::startWrite()
                 this, [this](quint64 now, quint64 total){
                     _performanceStats->recordWriteProgress(now, total);
                 });
+        connect(downloadThread, &DownloadThread::asyncWriteProgress,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordWriteProgress(now, total);
+                }, Qt::QueuedConnection);
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, [this](quint64 now, quint64 total){
                     _performanceStats->recordVerifyProgress(now, total);
@@ -946,6 +955,8 @@ void ImageWriter::startWrite()
                     .arg(errorCode)
                     .arg(errorMessage.isEmpty() ? "none" : errorMessage);
                 _performanceStats->recordEvent(PerformanceStats::EventType::DirectIOAttempt, 0, currentlyEnabled, metadata);
+                // Update systemInfo with actual direct I/O state now that we know it
+                _performanceStats->updateDirectIOEnabled(currentlyEnabled);
             });
     connect(_thread, &DownloadThread::eventCustomisation,
             this, [this](quint32 durationMs, bool success, QString metadata){
@@ -1017,6 +1028,30 @@ void ImageWriter::startWrite()
                 }
                 metadata += QString("; impactPercent: %1").arg(impactPercent);
                 _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
+            });
+    
+    // Forward bottleneck state to QML for UI feedback
+    connect(_thread, &DownloadThread::bottleneckStateChanged,
+            this, [this](DownloadThread::BottleneckState state, quint32 throughputKBps){
+                QString statusText;
+                switch (state) {
+                    case DownloadThread::BottleneckState::None:
+                        statusText = "";
+                        break;
+                    case DownloadThread::BottleneckState::Network:
+                        statusText = tr("Limited by download speed");
+                        break;
+                    case DownloadThread::BottleneckState::Decompression:
+                        statusText = tr("Limited by decompression speed");
+                        break;
+                    case DownloadThread::BottleneckState::Storage:
+                        statusText = tr("Limited by storage device speed");
+                        break;
+                    case DownloadThread::BottleneckState::Verifying:
+                        statusText = tr("Verifying written data");
+                        break;
+                }
+                emit bottleneckStatusChanged(statusText, throughputKBps);
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);
@@ -3262,6 +3297,11 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, &ImageWriter::verifyProgress);
         
+        // Connect async write progress signal for event-driven UI updates during WaitForPendingWrites
+        // This signal is emitted from IOCP completion callbacks, providing real-time progress
+        connect(downloadThread, &DownloadThread::asyncWriteProgress,
+                this, &ImageWriter::writeProgress, Qt::QueuedConnection);
+        
         // Capture progress for performance stats (lightweight - just stores raw samples)
         connect(downloadThread, &DownloadExtractThread::downloadProgressChanged,
                 this, [this](quint64 now, quint64 total){
@@ -3275,6 +3315,10 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 this, [this](quint64 now, quint64 total){
                     _performanceStats->recordWriteProgress(now, total);
                 });
+        connect(downloadThread, &DownloadThread::asyncWriteProgress,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordWriteProgress(now, total);
+                }, Qt::QueuedConnection);
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, [this](quint64 now, quint64 total){
                     _performanceStats->recordVerifyProgress(now, total);
@@ -3375,6 +3419,8 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                     .arg(errorCode)
                     .arg(errorMessage.isEmpty() ? "none" : errorMessage);
                 _performanceStats->recordEvent(PerformanceStats::EventType::DirectIOAttempt, 0, currentlyEnabled, metadata);
+                // Update systemInfo with actual direct I/O state now that we know it
+                _performanceStats->updateDirectIOEnabled(currentlyEnabled);
             });
     connect(_thread, &DownloadThread::eventCustomisation,
             this, [this](quint32 durationMs, bool success, QString metadata){
@@ -3446,6 +3492,30 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 }
                 metadata += QString("; impactPercent: %1").arg(impactPercent);
                 _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
+            });
+    
+    // Forward bottleneck state to QML for UI feedback
+    connect(_thread, &DownloadThread::bottleneckStateChanged,
+            this, [this](DownloadThread::BottleneckState state, quint32 throughputKBps){
+                QString statusText;
+                switch (state) {
+                    case DownloadThread::BottleneckState::None:
+                        statusText = "";
+                        break;
+                    case DownloadThread::BottleneckState::Network:
+                        statusText = tr("Limited by download speed");
+                        break;
+                    case DownloadThread::BottleneckState::Decompression:
+                        statusText = tr("Limited by decompression speed");
+                        break;
+                    case DownloadThread::BottleneckState::Storage:
+                        statusText = tr("Limited by storage device speed");
+                        break;
+                    case DownloadThread::BottleneckState::Verifying:
+                        statusText = tr("Verifying written data");
+                        break;
+                }
+                emit bottleneckStatusChanged(statusText, throughputKBps);
             });
 
     _thread->setVerifyEnabled(_verifyEnabled);

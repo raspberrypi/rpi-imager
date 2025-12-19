@@ -31,7 +31,8 @@ enum class FileError {
   kCloseError,
   kLockError,
   kSyncError,
-  kFlushError
+  kFlushError,
+  kCancelled
 };
 
 // Abstract interface for platform-specific file operations
@@ -104,8 +105,16 @@ class FileOperations {
   // Get number of writes currently in flight
   virtual int GetPendingWriteCount() const { return 0; }
   
+  // Poll for async write completions without blocking. 
+  // This should be called periodically to ensure callbacks fire promptly.
+  virtual void PollAsyncCompletions() {}
+  
   // Wait for all pending async writes to complete. Returns first error encountered, or kSuccess.
   virtual FileError WaitForPendingWrites() { return FileError::kSuccess; }
+  
+  // Cancel pending async I/O and wake up any blocking waits.
+  // After calling this, WaitForPendingWrites and AsyncWriteSequential will return quickly.
+  virtual void CancelAsyncIO() {}
   
   // File positioning for streaming operations
   virtual FileError Seek(std::uint64_t position) = 0;

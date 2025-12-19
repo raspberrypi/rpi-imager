@@ -25,7 +25,7 @@ static void Log(const std::string& msg) {
 
 MacOSFileOperations::MacOSFileOperations() 
     : fd_(-1), last_error_code_(0), using_direct_io_(false),
-      async_queue_depth_(1), pending_writes_(0), first_async_error_(FileError::kSuccess),
+      async_queue_depth_(1), pending_writes_(0), cancelled_(false), first_async_error_(FileError::kSuccess),
       async_queue_(nullptr), queue_semaphore_(nullptr), async_write_offset_(0) {
 }
 
@@ -89,6 +89,7 @@ void MacOSFileOperations::InitAsyncIO() {
     queue_semaphore_ = dispatch_semaphore_create(async_queue_depth_);
     async_write_offset_ = 0;
     pending_writes_.store(0);
+    cancelled_.store(false);
     first_async_error_.store(FileError::kSuccess);
     Log("Initialized async I/O with queue depth " + std::to_string(async_queue_depth_));
   }
@@ -469,6 +470,12 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
     return FileError::kOpenError;
   }
   
+  // Check for cancellation
+  if (cancelled_.load()) {
+    if (callback) callback(FileError::kCancelled, 0);
+    return FileError::kCancelled;
+  }
+  
   // If async not enabled (queue_depth == 1), fall back to sync
   if (async_queue_depth_ <= 1 || async_queue_ == nullptr) {
     FileError result = WriteSequential(data, size);
@@ -476,8 +483,24 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
     return result;
   }
   
-  // Wait for a slot in the queue (blocks if queue is full)
-  dispatch_semaphore_wait(queue_semaphore_, DISPATCH_TIME_FOREVER);
+  // Wait for a slot in the queue with timeout so we can check for cancellation
+  // 100ms timeout allows responsive cancellation
+  dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC);
+  while (dispatch_semaphore_wait(queue_semaphore_, timeout) != 0) {
+    // Timeout - check for cancellation
+    if (cancelled_.load()) {
+      if (callback) callback(FileError::kCancelled, 0);
+      return FileError::kCancelled;
+    }
+    timeout = dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC);
+  }
+  
+  // Check for cancellation after acquiring slot
+  if (cancelled_.load()) {
+    dispatch_semaphore_signal(queue_semaphore_);
+    if (callback) callback(FileError::kCancelled, 0);
+    return FileError::kCancelled;
+  }
   
   // Check for previous errors
   if (first_async_error_.load() != FileError::kSuccess) {
@@ -528,16 +551,42 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   return FileError::kSuccess;
 }
 
+void MacOSFileOperations::PollAsyncCompletions() {
+  // On macOS, dispatch queues handle completions automatically on background threads.
+  // Callbacks are invoked asynchronously, so no explicit polling is needed.
+  // This is a no-op on macOS.
+}
+
+void MacOSFileOperations::CancelAsyncIO() {
+  // Set cancellation flag - this will cause AsyncWriteSequential to return
+  // immediately with kCancelled, and will unblock any semaphore waits
+  cancelled_.store(true);
+  
+  // Wake up WaitForPendingWrites if blocked
+  {
+    std::lock_guard<std::mutex> lock(completion_mutex_);
+    completion_cv_.notify_all();
+  }
+  
+  // Note: We can't cancel already-dispatched GCD blocks, but they will
+  // complete relatively quickly. The key is unblocking the semaphore wait
+  // in AsyncWriteSequential so the caller can respond to cancellation.
+}
+
 FileError MacOSFileOperations::WaitForPendingWrites() {
   if (async_queue_depth_ <= 1 || async_queue_ == nullptr) {
     return FileError::kSuccess;
   }
   
-  // Wait for all pending writes to complete
+  // Wait for all pending writes to complete, or until cancelled
   std::unique_lock<std::mutex> lock(completion_mutex_);
   completion_cv_.wait(lock, [this]() {
-    return pending_writes_.load() == 0;
+    return pending_writes_.load() == 0 || cancelled_.load();
   });
+  
+  if (cancelled_.load() && pending_writes_.load() > 0) {
+    return FileError::kCancelled;
+  }
   
   // Return any error that occurred
   return first_async_error_.load();

@@ -358,6 +358,7 @@ signals:
     void networkOnline();
     void preparationStatusUpdate(QVariant msg);
     void osListPrepared();
+    void bottleneckStatusChanged(QVariant status, QVariant throughputKBps);
     void hwFilterChanged();
     void networkInfo(QVariant msg);
     void cacheVerificationStarted();

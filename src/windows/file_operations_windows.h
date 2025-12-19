@@ -79,7 +79,9 @@ class WindowsFileOperations : public FileOperations {
   FileError AsyncWriteSequential(const std::uint8_t* data, std::size_t size, 
                                   AsyncWriteCallback callback = nullptr) override;
   int GetPendingWriteCount() const override { return pending_writes_.load(); }
+  void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
+  void CancelAsyncIO() override;
 
  private:
   HANDLE handle_;
@@ -91,8 +93,10 @@ class WindowsFileOperations : public FileOperations {
   // IOCP async I/O state
   int async_queue_depth_;
   std::atomic<int> pending_writes_;
+  std::atomic<bool> cancelled_;  // Flag to cancel pending async I/O
   FileError first_async_error_;
   std::uint64_t async_write_offset_;
+  std::uint64_t current_file_position_;  // Track position for overlapped sync reads
   HANDLE iocp_;  // I/O Completion Port handle
   
   // Extended OVERLAPPED structure to track per-write context
@@ -115,6 +119,10 @@ class WindowsFileOperations : public FileOperations {
   bool InitIOCP();
   void CleanupIOCP();
   void ProcessCompletions(bool wait);
+  
+  // Wait for overlapped I/O with cancellation support
+  // Returns true if completed successfully, false if cancelled or error
+  bool WaitForOverlappedWithCancel(OVERLAPPED* overlapped, DWORD* bytes_transferred);
 };
 
 } // namespace rpi_imager

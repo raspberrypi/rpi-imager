@@ -201,6 +201,12 @@ public:
     void setSystemInfo(const SystemInfo &info);
     
     /**
+     * @brief Update the direct I/O enabled state after device is opened
+     * This is called when the actual direct I/O state is known (after file open)
+     */
+    void updateDirectIOEnabled(bool enabled);
+    
+    /**
      * @brief End the current imaging cycle
      * Emits a CycleEnd event with success/failure status.
      */
