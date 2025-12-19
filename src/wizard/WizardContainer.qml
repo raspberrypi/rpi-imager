@@ -23,8 +23,9 @@ Item {
     // Expose network info text for embedded mode status updates
     property string networkInfoText: ""
     
-    // Check network connectivity at startup
-    readonly property bool hasNetworkConnectivity: PlatformHelper.hasNetworkConnectivity()
+    // Track whether we have network connectivity (derived from OS list availability)
+    // This updates reactively when OS list becomes available after a retry
+    readonly property bool hasNetworkConnectivity: !imageWriter.isOsListUnavailable
     
     // Start at device selection if online, otherwise skip to OS selection
     property int currentStep: hasNetworkConnectivity ? 0 : 1
@@ -160,6 +161,19 @@ Item {
             // Check if secure boot RSA key is configured
             var rsaKeyPath = imageWriter.getStringSetting("secureboot_rsa_key")
             secureBootKeyConfigured = (rsaKeyPath && rsaKeyPath.length > 0)
+        }
+    }
+    
+    // Handle OS list availability changes
+    Connections {
+        target: imageWriter
+        function onOsListUnavailableChanged() {
+            // When OS list becomes available and we're on OS selection (skipped device selection),
+            // navigate back to device selection so user can choose their device
+            if (root.hasNetworkConnectivity && root.currentStep === root.stepOSSelection) {
+                console.log("OS list now available - navigating to device selection")
+                root.jumpToStep(root.stepDeviceSelection)
+            }
         }
     }
 

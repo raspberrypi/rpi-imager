@@ -22,7 +22,7 @@ WizardStepBase {
     title: qsTr("Select your Raspberry Pi device")
     showNextButton: true
     // Enable Next when device selected OR when offline (so users can proceed with custom image)
-    nextButtonEnabled: hasDeviceSelected || (fetchFailed && hwlist.count === 0)
+    nextButtonEnabled: hasDeviceSelected || (osListUnavailable && hwlist.count === 0)
     
     property alias hwlist: hwlist
     property bool modelLoaded: false
@@ -49,7 +49,18 @@ WizardStepBase {
     Connections {
         target: imageWriter
         function onOsListPrepared() {
+            // If model was loaded but has no items (we were offline), force reload
+            if (root.modelLoaded && root.hwModel && root.hwModel.rowCount() === 0) {
+                root.modelLoaded = false
+            }
             onOsListPreparedHandler()
+        }
+        function onOsListUnavailableChanged() {
+            // When transitioning from unavailable to available, force a full reload
+            if (!root.osListUnavailable && root.hwModel) {
+                root.modelLoaded = false
+                onOsListPreparedHandler()
+            }
         }
     }
     
@@ -71,8 +82,8 @@ WizardStepBase {
         }
     }
     
-    // Track whether OS list fetch failed
-    readonly property bool fetchFailed: imageWriter.isOsListFetchFailed
+    // Track whether OS list is unavailable (no data loaded)
+    readonly property bool osListUnavailable: imageWriter.isOsListUnavailable
     
     // Content
     content: [
@@ -85,7 +96,7 @@ WizardStepBase {
             id: offlinePlaceholder
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: hwlist.count === 0 && root.fetchFailed
+            visible: hwlist.count === 0 && root.osListUnavailable
             
             ColumnLayout {
                 anchors.centerIn: parent

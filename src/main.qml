@@ -35,8 +35,8 @@ ApplicationWindow {
     // Track custom repo host for title display
     property string customRepoHost: imageWriter.customRepoHost()
     
-    // Track offline state for title display
-    property bool isOffline: imageWriter.isOsListFetchFailed
+    // Track offline state for title display (derived from whether OS list data is available)
+    property bool isOffline: imageWriter.isOsListUnavailable
     
     title: {
         var baseTitle = qsTr("Raspberry Pi Imager %1").arg(imageWriter.constantVersion())
@@ -614,13 +614,6 @@ ApplicationWindow {
         }
     }
     
-    function onOsListFetchFailed() {
-        // Network fetch failed - skip device selection and go straight to OS selection
-        if (wizardContainer && wizardContainer.currentStep === wizardContainer.stepDeviceSelection) {
-            console.log("OS list fetch failed - switching to offline mode, skipping device selection");
-            wizardContainer.jumpToStep(wizardContainer.stepOSSelection);
-        }
-    }
     
     function onPermissionWarning(message) {
         permissionWarningDialog.showWarning(message);

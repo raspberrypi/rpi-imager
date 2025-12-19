@@ -1434,8 +1434,11 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url)
         // Step 1: Insert the items into the canonical JSON document.
         //         It doesn't matter that these may still contain subitems_url items
         //         As these will be fixed up as the subitems_url instances are blinked in
-        if (_completeOsList.isEmpty()) {
+        bool wasEmpty = _completeOsList.isEmpty();
+        if (wasEmpty) {
             _completeOsList = QJsonDocument(response_object);
+            // Notify UI that OS list is now available (was unavailable, now has data)
+            emit osListUnavailableChanged();
         } else {
             // Preserve latest top-level imager metadata if present in the top-level fetch
             auto new_list = findAndInsertJsonResult(_completeOsList["os_list"].toArray(), response_object["os_list"].toArray(), url, 1);
@@ -1469,12 +1472,10 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url)
         }
     } else {
         qDebug() << "Incorrectly formatted OS list at:" << url;
-        // If this was the top-level fetch and it failed, treat as network failure
+        // If this was the top-level fetch and it failed, notify UI
         if (isTopLevelRequest && _completeOsList.isEmpty()) {
             qWarning() << "Top-level OS list fetch failed - malformed response. Operating in offline mode.";
-            _osListFetchFailed = true;
-            emit osListFetchFailedChanged();
-            emit osListFetchFailed();
+            emit osListUnavailableChanged();
         }
     }
 }
@@ -1497,12 +1498,10 @@ void ImageWriter::onOsListFetchError(const QString &errorMessage, const QUrl &ur
 
     qDebug() << "Failed to fetch URL [" << url << "]:" << errorMessage;
     
-    // If this was the top-level fetch and it failed, treat as network failure
+    // If this was the top-level fetch and it failed, notify UI
     if (isTopLevelRequest && _completeOsList.isEmpty()) {
         qWarning() << "Top-level OS list fetch failed:" << errorMessage << ". Operating in offline mode.";
-        _osListFetchFailed = true;
-        emit osListFetchFailedChanged();
-        emit osListFetchFailed();
+        emit osListUnavailableChanged();
     }
 }
 
@@ -1616,12 +1615,6 @@ void ImageWriter::beginOSListFetch() {
         return;
     }
 
-    // Reset fetch failure state when starting a new fetch
-    if (_osListFetchFailed) {
-        _osListFetchFailed = false;
-        emit osListFetchFailedChanged();
-    }
-
     // Create a CurlFetcher to fetch the OS list
     auto *fetcher = new CurlFetcher(this);
     connect(fetcher, &CurlFetcher::finished, this, &ImageWriter::onOsListFetchComplete);
@@ -1638,7 +1631,12 @@ void ImageWriter::beginOSListFetch() {
 
 void ImageWriter::refreshOsListFrom(const QUrl &url) {
     setCustomRepo(url);
+    bool wasAvailable = !_completeOsList.isEmpty();
     _completeOsList = QJsonDocument();
+    if (wasAvailable) {
+        // Notify UI that OS list is now unavailable (cleared for refetch)
+        emit osListUnavailableChanged();
+    }
     _osListRefreshTimer.stop();
 #ifndef CLI_ONLY_BUILD
     // Clear icon cache when switching repositories - new repo will have different icons
@@ -2057,6 +2055,10 @@ bool ImageWriter::isOnline()
     } else if (!hasBasicConnectivity && _online) {
         // Network went offline
         _online = false;
+    } else if (!hasBasicConnectivity && _completeOsList.isEmpty()) {
+        // No network and no OS list - notify UI so it can show offline state
+        // This handles startup without network (fixes GitHub issue #809)
+        emit osListUnavailableChanged();
     }
     
     return hasBasicConnectivity;

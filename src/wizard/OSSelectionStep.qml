@@ -127,10 +127,29 @@ WizardStepBase {
     Connections {
         target: imageWriter
         function onOsListPrepared() {
-            // Prefer surgical refresh to avoid stealing focus during clicks
-            if (root.modelLoaded && root.osmodel && typeof root.osmodel.softRefresh === "function") {
+            // If we were showing offline state and now have data, force full reload
+            // (softRefresh only updates existing rows, doesn't add new ones)
+            if (root.osListUnavailable) {
+                // Still unavailable - no point refreshing
+                return
+            }
+            
+            // If model was loaded with just Erase/Use custom (2 items) but now we have more,
+            // we need a full reload, not just softRefresh
+            var needsFullReload = !root.modelLoaded || (root.osmodel && root.osmodel.rowCount() <= 2)
+            
+            if (needsFullReload) {
+                root.modelLoaded = false  // Reset so handler does full reload
+                onOsListPreparedHandler()
+            } else if (root.osmodel && typeof root.osmodel.softRefresh === "function") {
+                // Just updating existing data (e.g., sublist loaded)
                 root.osmodel.softRefresh()
-            } else {
+            }
+        }
+        function onOsListUnavailableChanged() {
+            // When transitioning from unavailable to available, force a full reload
+            if (!root.osListUnavailable && root.osmodel) {
+                root.modelLoaded = false
                 onOsListPreparedHandler()
             }
         }
@@ -214,8 +233,8 @@ WizardStepBase {
         }
     }
     
-    // Track whether OS list fetch failed
-    readonly property bool fetchFailed: imageWriter.isOsListFetchFailed
+    // Track whether OS list is unavailable (no data loaded)
+    readonly property bool osListUnavailable: imageWriter.isOsListUnavailable
     
     // Content
     content: [
@@ -228,8 +247,8 @@ WizardStepBase {
             id: offlineBanner
             Layout.fillWidth: true
             Layout.preferredHeight: visible ? bannerContent.implicitHeight + Style.spacingMedium * 2 : 0
-            visible: root.fetchFailed
-            color: Style.buttonSecondaryBackgroundColor
+            visible: root.osListUnavailable
+            color: Style.titleBackgroundColor
             
             RowLayout {
                 id: bannerContent

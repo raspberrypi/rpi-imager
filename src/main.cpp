@@ -706,7 +706,6 @@ int main(int argc, char *argv[])
     qmlwindow->connect(&imageWriter, SIGNAL(selectedDeviceRemoved()), qmlwindow, SLOT(onSelectedDeviceRemoved()));
     qmlwindow->connect(&imageWriter, SIGNAL(writeCancelledDueToDeviceRemoval()), qmlwindow, SLOT(onWriteCancelledDueToDeviceRemoval()));
     qmlwindow->connect(&imageWriter, SIGNAL(keychainPermissionRequested()), qmlwindow, SLOT(onKeychainPermissionRequested()));
-    qmlwindow->connect(&imageWriter, SIGNAL(osListFetchFailed()), qmlwindow, SLOT(onOsListFetchFailed()));
     qmlwindow->connect(&imageWriter, SIGNAL(permissionWarning(QVariant)), qmlwindow, SLOT(onPermissionWarning(QVariant)));
 #ifdef Q_OS_DARWIN
     // Handle custom URL scheme on macOS via FileOpen events
