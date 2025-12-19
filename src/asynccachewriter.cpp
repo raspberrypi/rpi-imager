@@ -212,14 +212,29 @@ void AsyncCacheWriter::cancel()
     _queueNotEmpty.wakeAll();
     _queueNotFull.wakeAll();
     
-    // Wait for thread to finish
-    if (!wait(5000)) {
-        qDebug() << "AsyncCacheWriter: Thread didn't stop in time, terminating";
-        terminate();
-        wait();
+    // Wait for thread to finish - give it reasonable time but don't use terminate()
+    // as QThread::terminate() is dangerous and can cause undefined behavior,
+    // especially on Linux where it may leave resources in inconsistent state.
+    // If the thread is stuck in a slow write, it will eventually complete.
+    bool threadStopped = wait(2000);
+    if (!threadStopped) {
+        qDebug() << "AsyncCacheWriter: Thread still running after 2s, waiting longer...";
+        // Give it more time - the thread should exit once its current I/O completes
+        threadStopped = wait(8000);
+        if (!threadStopped) {
+            qDebug() << "AsyncCacheWriter: Thread didn't stop after 10s total - may be stuck in I/O";
+        }
     }
     
-    cleanup();
+    // Only do cleanup from here if the thread has stopped.
+    // If thread is still running, it will do its own cleanup when it exits.
+    // Calling cleanup() while thread is still writing could cause undefined behavior.
+    if (threadStopped) {
+        cleanup();
+    } else {
+        qDebug() << "AsyncCacheWriter: Leaving cleanup to thread (still running)";
+    }
+    
     _isActive = false;
 }
 
@@ -283,13 +298,13 @@ void AsyncCacheWriter::run()
 
 void AsyncCacheWriter::cleanup()
 {
-    // Clear the queue
-    {
-        QMutexLocker lock(&_mutex);
-        _queue.clear();
-    }
+    // Use mutex to prevent double-cleanup from both cancel() and run()
+    QMutexLocker lock(&_mutex);
     
-    // Close and remove the cache file
+    // Clear the queue
+    _queue.clear();
+    
+    // Close and remove the cache file (only once)
     if (_file.isOpen()) {
         _file.close();
     }
@@ -297,6 +312,7 @@ void AsyncCacheWriter::cleanup()
     if (!_filename.isEmpty() && QFileInfo::exists(_filename)) {
         QFile::remove(_filename);
         qDebug() << "AsyncCacheWriter: Removed cache file" << _filename;
+        _filename.clear(); // Prevent double-removal
     }
 }
 

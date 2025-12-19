@@ -859,7 +859,9 @@ void DownloadThread::_writeCache(const char *buf, size_t len)
     if (_asyncCacheWriter->hasError()) {
         qDebug() << "Async cache writer has error state. Disabling caching.";
         _cacheEnabled = false;
-        _asyncCacheWriter->cancel();
+        // Don't call cancel() here - it can block for 5+ seconds waiting for the
+        // writer thread to stop, which would stall the curl download callback.
+        // Cleanup will happen in _closeFiles() or destructor.
         return;
     }
 
@@ -873,7 +875,10 @@ void DownloadThread::_writeCache(const char *buf, size_t len)
                 qDebug() << "Async cache writer failed. Disabling caching.";
             }
             _cacheEnabled = false;
-            _asyncCacheWriter->cancel();
+            // Don't call cancel() here - it can block for 5+ seconds waiting for the
+            // writer thread to stop, which would stall the curl download callback.
+            // The cache writer will detect _hasError and clean up on its own, or
+            // cleanup will happen in _closeFiles() when the download completes.
         }
     }
 }
@@ -1332,8 +1337,10 @@ void DownloadThread::_closeFiles()
         _volumeFile->Close();
     }
 #endif
-    // Cancel async cache writer if still active (don't wait for completion on error/cancel)
-    if (_asyncCacheWriter && _asyncCacheWriter->isActive()) {
+    // Cancel async cache writer if still running (regardless of error state)
+    // isActive() returns false when hasError() is true, but the thread may still
+    // be running and needs proper cleanup. cancel() checks isRunning() internally.
+    if (_asyncCacheWriter) {
         _asyncCacheWriter->cancel();
     }
     
