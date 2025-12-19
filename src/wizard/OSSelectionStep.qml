@@ -214,11 +214,60 @@ WizardStepBase {
         }
     }
     
+    // Track whether OS list fetch failed
+    readonly property bool fetchFailed: imageWriter.isOsListFetchFailed
+    
     // Content
     content: [
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        
+        // Offline banner (shown when OS list fetch failed)
+        Rectangle {
+            id: offlineBanner
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? bannerContent.implicitHeight + Style.spacingMedium * 2 : 0
+            visible: root.fetchFailed
+            color: Style.buttonSecondaryBackgroundColor
+            
+            RowLayout {
+                id: bannerContent
+                anchors.fill: parent
+                anchors.leftMargin: Style.spacingMedium
+                anchors.rightMargin: Style.spacingMedium
+                anchors.topMargin: Style.spacingSmall
+                anchors.bottomMargin: Style.spacingSmall
+                spacing: Style.spacingMedium
+                
+                Text {
+                    text: "⚠"
+                    font.pixelSize: Style.fontSizeFormLabel
+                    color: Style.formLabelColor
+                    Accessible.ignored: true
+                }
+                
+                Text {
+                    text: qsTr("Unable to download OS list. You can still use a local image file.")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.formLabelColor
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
+                }
+                
+                ImButton {
+                    id: retryButton
+                    text: qsTr("Retry")
+                    accessibleDescription: qsTr("Retry downloading the OS list")
+                    onClicked: {
+                        imageWriter.beginOSListFetch()
+                    }
+                }
+            }
+        }
         
         // OS selection area - fill available space without extra chrome/padding
         Item {

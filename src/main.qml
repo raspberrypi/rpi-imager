@@ -35,9 +35,21 @@ ApplicationWindow {
     // Track custom repo host for title display
     property string customRepoHost: imageWriter.customRepoHost()
     
-    title: customRepoHost.length > 0 
-        ? qsTr("Raspberry Pi Imager %1 — Using data from %2").arg(imageWriter.constantVersion()).arg(customRepoHost)
-        : qsTr("Raspberry Pi Imager %1").arg(imageWriter.constantVersion())
+    // Track offline state for title display
+    property bool isOffline: imageWriter.isOsListFetchFailed
+    
+    title: {
+        var baseTitle = qsTr("Raspberry Pi Imager %1").arg(imageWriter.constantVersion())
+        if (isOffline) {
+            baseTitle += " — " + qsTr("Offline")
+        }
+
+        if (customRepoHost.length > 0) {
+            baseTitle += qsTr(" — Using data from %2").arg(imageWriter.constantVersion()).arg(customRepoHost)
+        }
+
+        return baseTitle
+    }
 
     Component.onCompleted: {
         // Set the main window for modal file dialogs
