@@ -27,8 +27,10 @@ Item {
     // This updates reactively when OS list becomes available after a retry
     readonly property bool hasNetworkConnectivity: !imageWriter.isOsListUnavailable
     
-    // Start at device selection if online, otherwise skip to OS selection
-    property int currentStep: hasNetworkConnectivity ? 0 : 1
+    // Current wizard step - initialized in Component.onCompleted based on network state.
+    // NOT a binding, so it won't auto-change when hasNetworkConnectivity changes.
+    // The onOsListUnavailableChanged handler manages the offline→online transition.
+    property int currentStep: 0
     readonly property int totalSteps: 13
     
     // Track which steps have been made permissible/unlocked for navigation
@@ -148,6 +150,10 @@ Item {
     }
 
     Component.onCompleted: {
+        // Set initial step based on network connectivity at startup.
+        // If offline, skip device selection (no device list available) and start at OS selection.
+        currentStep = hasNetworkConnectivity ? stepDeviceSelection : stepOSSelection
+        
         // Default to disabling warnings in embedded mode (per-run, non-persistent)
         if (imageWriter && imageWriter.isEmbeddedMode()) {
             disableWarnings = true
@@ -168,9 +174,10 @@ Item {
     Connections {
         target: imageWriter
         function onOsListUnavailableChanged() {
-            // When OS list becomes available and we're on OS selection (skipped device selection),
-            // navigate back to device selection so user can choose their device
-            if (root.hasNetworkConnectivity && root.currentStep === root.stepOSSelection) {
+            // When OS list becomes available after starting offline, navigate to device
+            // selection so the user can choose their target device (now that the list is available).
+            // Guard: don't interrupt an active write operation.
+            if (root.hasNetworkConnectivity && root.currentStep === root.stepOSSelection && !root.isWriting) {
                 console.log("OS list now available - navigating to device selection")
                 root.jumpToStep(root.stepDeviceSelection)
             }
