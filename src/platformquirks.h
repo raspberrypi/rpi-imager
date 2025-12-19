@@ -8,8 +8,12 @@
 
 #include <QString>
 #include <QStringList>
+#include <functional>
 
 namespace PlatformQuirks {
+    
+    /** Callback type for network status changes. Parameter is true if network is available. */
+    using NetworkStatusCallback = std::function<void(bool)>;
     /**
      * Apply platform-specific quirks and workarounds.
      * This function should be called early in main() before Qt initialization.
@@ -24,6 +28,16 @@ namespace PlatformQuirks {
     
     /** Check if system is ready for network operations (including time sync on embedded). */
     bool isNetworkReady();
+    
+    /** 
+     * Start monitoring network status changes.
+     * Callback will be invoked when network status changes (true = available, false = unavailable).
+     * Only one callback can be registered at a time.
+     */
+    void startNetworkMonitoring(NetworkStatusCallback callback);
+    
+    /** Stop monitoring network status changes. */
+    void stopNetworkMonitoring();
 
     /** Bring the application window to the foreground (Windows-specific). */
     void bringWindowToForeground(void* windowHandle);

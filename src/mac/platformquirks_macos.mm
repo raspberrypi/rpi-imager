@@ -5,9 +5,30 @@
 
 #include "../platformquirks.h"
 #include <cstdlib>
+#include <cstdio>
 #include <QProcess>
 #import <AppKit/AppKit.h>
 #import <SystemConfiguration/SystemConfiguration.h>
+
+namespace {
+    // Network monitoring state
+    SCNetworkReachabilityRef g_reachabilityRef = nullptr;
+    PlatformQuirks::NetworkStatusCallback g_networkCallback = nullptr;
+    
+    void reachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void* info) {
+        (void)target;
+        (void)info;
+        
+        if (!g_networkCallback) return;
+        
+        bool isReachable = (flags & kSCNetworkReachabilityFlagsReachable) != 0;
+        bool needsConnection = (flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0;
+        bool isAvailable = isReachable && !needsConnection;
+        
+        fprintf(stderr, "Network status changed: reachable=%d needsConnection=%d\n", isReachable, needsConnection);
+        g_networkCallback(isAvailable);
+    }
+}
 
 namespace PlatformQuirks {
 
@@ -50,6 +71,50 @@ bool hasNetworkConnectivity() {
 bool isNetworkReady() {
     // On macOS, no special time sync check needed - system time is reliable
     return hasNetworkConnectivity();
+}
+
+void startNetworkMonitoring(NetworkStatusCallback callback) {
+    // Stop any existing monitoring
+    stopNetworkMonitoring();
+    
+    g_networkCallback = callback;
+    
+    // Create reachability reference for a known host
+    g_reachabilityRef = SCNetworkReachabilityCreateWithName(NULL, "www.raspberrypi.com");
+    if (!g_reachabilityRef) {
+        fprintf(stderr, "Failed to create network reachability reference\n");
+        return;
+    }
+    
+    // Set up callback context
+    SCNetworkReachabilityContext context = {0, nullptr, nullptr, nullptr, nullptr};
+    
+    if (!SCNetworkReachabilitySetCallback(g_reachabilityRef, reachabilityCallback, &context)) {
+        fprintf(stderr, "Failed to set network reachability callback\n");
+        CFRelease(g_reachabilityRef);
+        g_reachabilityRef = nullptr;
+        return;
+    }
+    
+    // Schedule on main run loop
+    if (!SCNetworkReachabilityScheduleWithRunLoop(g_reachabilityRef, CFRunLoopGetMain(), kCFRunLoopDefaultMode)) {
+        fprintf(stderr, "Failed to schedule network reachability on run loop\n");
+        CFRelease(g_reachabilityRef);
+        g_reachabilityRef = nullptr;
+        return;
+    }
+    
+    fprintf(stderr, "Network monitoring started\n");
+}
+
+void stopNetworkMonitoring() {
+    if (g_reachabilityRef) {
+        SCNetworkReachabilityUnscheduleFromRunLoop(g_reachabilityRef, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+        CFRelease(g_reachabilityRef);
+        g_reachabilityRef = nullptr;
+        fprintf(stderr, "Network monitoring stopped\n");
+    }
+    g_networkCallback = nullptr;
 }
 
 void bringWindowToForeground(void* windowHandle) {

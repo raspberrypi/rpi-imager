@@ -10,10 +10,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
+#include <net/if.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
 #include <fcntl.h>
+#include <pthread.h>
+#include <atomic>
+#include <net/if_arp.h>
 #include <QDebug>
 #include <QProcess>
 #include <QFile>
@@ -21,6 +28,94 @@
 #include <QFileInfo>
 #include <QCryptographicHash>
 #include <vector>
+
+namespace {
+    // Network monitoring state
+    int g_netlinkSocket = -1;
+    pthread_t g_monitorThread;
+    std::atomic<bool> g_monitorRunning{false};
+    int g_stopPipe[2] = {-1, -1};  // Pipe to signal thread to stop
+    PlatformQuirks::NetworkStatusCallback g_networkCallback = nullptr;
+    pthread_mutex_t g_callbackMutex = PTHREAD_MUTEX_INITIALIZER;
+    
+    void* netlinkMonitorThread(void* arg) {
+        (void)arg;
+        
+        char buf[4096];
+        struct iovec iov = { buf, sizeof(buf) };
+        struct sockaddr_nl sa;
+        struct msghdr msg = { &sa, sizeof(sa), &iov, 1, nullptr, 0, 0 };
+        
+        fd_set readfds;
+        int maxfd = (g_netlinkSocket > g_stopPipe[0]) ? g_netlinkSocket : g_stopPipe[0];
+        
+        while (g_monitorRunning.load()) {
+            FD_ZERO(&readfds);
+            FD_SET(g_netlinkSocket, &readfds);
+            FD_SET(g_stopPipe[0], &readfds);
+            
+            // Wait for events with 1 second timeout
+            struct timeval tv = { 1, 0 };
+            int ret = select(maxfd + 1, &readfds, nullptr, nullptr, &tv);
+            
+            if (ret < 0) {
+                if (errno == EINTR) continue;
+                break;
+            }
+            
+            // Check if we should stop
+            if (FD_ISSET(g_stopPipe[0], &readfds)) {
+                break;
+            }
+            
+            if (ret == 0) continue;  // Timeout
+            
+            if (FD_ISSET(g_netlinkSocket, &readfds)) {
+                ssize_t len = recvmsg(g_netlinkSocket, &msg, 0);
+                if (len < 0) {
+                    if (errno == EINTR) continue;
+                    break;
+                }
+                
+                // Parse netlink messages
+                for (struct nlmsghdr* nh = (struct nlmsghdr*)buf;
+                     NLMSG_OK(nh, len);
+                     nh = NLMSG_NEXT(nh, len)) {
+                    
+                    if (nh->nlmsg_type == NLMSG_DONE) break;
+                    if (nh->nlmsg_type == NLMSG_ERROR) continue;
+                    
+                    // We're interested in link up/down events
+                    if (nh->nlmsg_type == RTM_NEWLINK || nh->nlmsg_type == RTM_DELLINK) {
+                        // Validate payload size before accessing ifinfomsg
+                        if (NLMSG_PAYLOAD(nh, 0) < sizeof(struct ifinfomsg)) {
+                            continue;  // Malformed message, skip
+                        }
+                        
+                        struct ifinfomsg* ifi = (struct ifinfomsg*)NLMSG_DATA(nh);
+                        
+                        // Skip loopback interface
+                        if (ifi->ifi_type == ARPHRD_LOOPBACK) continue;
+                        
+                        bool linkUp = (ifi->ifi_flags & IFF_UP) && (ifi->ifi_flags & IFF_RUNNING);
+                        fprintf(stderr, "Network link change detected: interface %d, up=%d\n", 
+                                ifi->ifi_index, linkUp);
+                        
+                        // Check overall connectivity and invoke callback under mutex
+                        pthread_mutex_lock(&g_callbackMutex);
+                        if (g_networkCallback) {
+                            bool isAvailable = PlatformQuirks::hasNetworkConnectivity();
+                            g_networkCallback(isAvailable);
+                        }
+                        pthread_mutex_unlock(&g_callbackMutex);
+                    }
+                }
+            }
+        }
+        
+        return nullptr;
+    }
+}
 
 namespace PlatformQuirks {
 
@@ -245,6 +340,96 @@ bool isNetworkReady() {
     }
     
     return timeIsSynced;
+}
+
+void startNetworkMonitoring(NetworkStatusCallback callback) {
+    // Stop any existing monitoring
+    stopNetworkMonitoring();
+    
+    // Set callback under mutex
+    pthread_mutex_lock(&g_callbackMutex);
+    g_networkCallback = callback;
+    pthread_mutex_unlock(&g_callbackMutex);
+    
+    // Create netlink socket for routing/link messages
+    g_netlinkSocket = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    if (g_netlinkSocket < 0) {
+        fprintf(stderr, "Failed to create netlink socket: %s\n", strerror(errno));
+        return;
+    }
+    
+    // Bind to multicast group for link changes
+    struct sockaddr_nl addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.nl_family = AF_NETLINK;
+    addr.nl_groups = RTMGRP_LINK;  // Subscribe to link up/down events
+    
+    if (bind(g_netlinkSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        fprintf(stderr, "Failed to bind netlink socket: %s\n", strerror(errno));
+        close(g_netlinkSocket);
+        g_netlinkSocket = -1;
+        return;
+    }
+    
+    // Create pipe to signal thread to stop
+    if (pipe(g_stopPipe) < 0) {
+        fprintf(stderr, "Failed to create stop pipe: %s\n", strerror(errno));
+        close(g_netlinkSocket);
+        g_netlinkSocket = -1;
+        return;
+    }
+    
+    // Start monitoring thread
+    g_monitorRunning.store(true);
+    if (pthread_create(&g_monitorThread, nullptr, netlinkMonitorThread, nullptr) != 0) {
+        fprintf(stderr, "Failed to create monitor thread: %s\n", strerror(errno));
+        close(g_netlinkSocket);
+        g_netlinkSocket = -1;
+        close(g_stopPipe[0]);
+        close(g_stopPipe[1]);
+        g_stopPipe[0] = g_stopPipe[1] = -1;
+        g_monitorRunning.store(false);
+        return;
+    }
+    
+    fprintf(stderr, "Network monitoring started (netlink)\n");
+}
+
+void stopNetworkMonitoring() {
+    if (g_monitorRunning.load()) {
+        g_monitorRunning.store(false);
+        
+        // Signal thread to stop
+        if (g_stopPipe[1] >= 0) {
+            char c = 'x';
+            ssize_t unused = write(g_stopPipe[1], &c, 1);
+            (void)unused;
+        }
+        
+        // Wait for thread to finish
+        pthread_join(g_monitorThread, nullptr);
+        
+        // Clean up
+        if (g_netlinkSocket >= 0) {
+            close(g_netlinkSocket);
+            g_netlinkSocket = -1;
+        }
+        if (g_stopPipe[0] >= 0) {
+            close(g_stopPipe[0]);
+            g_stopPipe[0] = -1;
+        }
+        if (g_stopPipe[1] >= 0) {
+            close(g_stopPipe[1]);
+            g_stopPipe[1] = -1;
+        }
+        
+        fprintf(stderr, "Network monitoring stopped\n");
+    }
+    
+    // Clear callback under mutex to prevent race with monitor thread
+    pthread_mutex_lock(&g_callbackMutex);
+    g_networkCallback = nullptr;
+    pthread_mutex_unlock(&g_callbackMutex);
 }
 
 void bringWindowToForeground(void* windowHandle) {

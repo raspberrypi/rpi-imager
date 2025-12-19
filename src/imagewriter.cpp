@@ -415,6 +415,11 @@ QString ImageWriter::readFileContents(const QString &filePath)
 
 ImageWriter::~ImageWriter()
 {
+    // Stop network monitoring first - the callback captures 'this' pointer
+    // Must be done before any other cleanup to prevent use-after-free
+    qDebug() << "Stopping network monitoring";
+    PlatformQuirks::stopNetworkMonitoring();
+    
     // Stop background drive list polling
     qDebug() << "Stopping background drive list polling";
     _drivelist.stopPolling();
@@ -1435,6 +1440,11 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url)
         //         It doesn't matter that these may still contain subitems_url items
         //         As these will be fixed up as the subitems_url instances are blinked in
         bool wasEmpty = _completeOsList.isEmpty();
+        
+        // Stop network monitoring on any successful fetch (initial or refresh)
+        // This handles both the startup case and the "refresh failed, now succeeded" case
+        PlatformQuirks::stopNetworkMonitoring();
+        
         if (wasEmpty) {
             _completeOsList = QJsonDocument(response_object);
             // Notify UI that OS list is now available (was unavailable, now has data)
@@ -1498,10 +1508,28 @@ void ImageWriter::onOsListFetchError(const QString &errorMessage, const QUrl &ur
 
     qDebug() << "Failed to fetch URL [" << url << "]:" << errorMessage;
     
-    // If this was the top-level fetch and it failed, notify UI
-    if (isTopLevelRequest && _completeOsList.isEmpty()) {
-        qWarning() << "Top-level OS list fetch failed:" << errorMessage << ". Operating in offline mode.";
-        emit osListUnavailableChanged();
+    if (isTopLevelRequest) {
+        if (_completeOsList.isEmpty()) {
+            // No data at all - notify UI of offline state
+            qWarning() << "Top-level OS list fetch failed:" << errorMessage << ". Operating in offline mode.";
+            emit osListUnavailableChanged();
+        } else {
+            // We have stale data - reschedule refresh to retry later
+            // Use a shorter retry interval (5 minutes) rather than full refresh interval
+            qWarning() << "OS list refresh failed:" << errorMessage << ". Will retry in 5 minutes.";
+            _osListRefreshTimer.start(5 * 60 * 1000);  // 5 minute retry
+            
+            // Also start network monitoring to catch when connectivity returns
+            if (!PlatformQuirks::hasNetworkConnectivity()) {
+                PlatformQuirks::startNetworkMonitoring([this](bool available) {
+                    if (available) {
+                        qDebug() << "Network restored - retrying OS list refresh";
+                        _osListRefreshTimer.stop();  // Cancel pending retry timer
+                        QMetaObject::invokeMethod(this, "beginOSListFetch", Qt::QueuedConnection);
+                    }
+                });
+            }
+        }
     }
 }
 
@@ -2059,6 +2087,15 @@ bool ImageWriter::isOnline()
         // No network and no OS list - notify UI so it can show offline state
         // This handles startup without network (fixes GitHub issue #809)
         emit osListUnavailableChanged();
+        
+        // Start monitoring for network availability so we can auto-retry
+        PlatformQuirks::startNetworkMonitoring([this](bool available) {
+            if (available && _completeOsList.isEmpty()) {
+                qDebug() << "Network became available - auto-retrying OS list fetch";
+                // Use QMetaObject::invokeMethod to ensure we're on the Qt thread
+                QMetaObject::invokeMethod(this, "beginOSListFetch", Qt::QueuedConnection);
+            }
+        });
     }
     
     return hasBasicConnectivity;
