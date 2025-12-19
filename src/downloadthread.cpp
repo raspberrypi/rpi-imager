@@ -228,14 +228,24 @@ bool DownloadThread::_openAndPrepareDevice()
     {
         emit preparationStatusUpdate(tr("Unmounting drive..."));
         unmountTimer.start();
-        // Use raw device path for unmount (e.g., /dev/rdisk on macOS)
-        // Using the raw device avoids waiting for macOS buffer cache sync on data
-        // we're about to overwrite anyway. DADiskUnmount with kDADiskUnmountOptionWhole
-        // automatically unmounts all child volumes (APFS containers, partitions, etc.)
-        QString unmountPath = PlatformQuirks::getWriteDevicePath(_filename);
+        // Use block device path for unmount (e.g., /dev/disk on macOS, not /dev/rdisk)
+        // DADiskUnmount with kDADiskUnmountOptionWhole automatically unmounts 
+        // all child volumes (APFS containers, partitions, etc.)
+        QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
         qDebug() << "Unmounting:" << unmountPath;
-        unmount_disk(unmountPath.toUtf8().constData());
-        emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), true);
+        MOUNTUTILS_RESULT unmountResult = unmount_disk(unmountPath.toUtf8().constData());
+        bool unmountSuccess = (unmountResult == MOUNTUTILS_SUCCESS);
+        emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), unmountSuccess);
+        
+        if (!unmountSuccess) {
+            qDebug() << "Unmount failed with result:" << unmountResult;
+#ifdef Q_OS_DARWIN
+            emit error(tr("Failed to unmount disk '%1'. Please close any applications using the disk and try again.").arg(unmountPath));
+#else
+            emit error(tr("Failed to unmount disk '%1'.").arg(unmountPath));
+#endif
+            return false;
+        }
     }
     emit preparationStatusUpdate(tr("Opening drive..."));
     openTimer.start();

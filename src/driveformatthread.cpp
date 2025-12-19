@@ -7,6 +7,7 @@
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "dependencies/mountutils/src/mountutils.hpp"
 #include "disk_formatter.h"
+#include "platformquirks.h"
 #include <QDebug>
 #include <QProcess>
 #include <QTemporaryFile>
@@ -87,7 +88,19 @@ void DriveFormatThread::run()
 
     // Unmount the device before formatting (needed for macOS and Linux)
 #if defined(Q_OS_DARWIN) || defined(Q_OS_LINUX)
-    unmount_disk(_device.constData());
+    // Use block device path for unmount (e.g., /dev/disk on macOS, not /dev/rdisk)
+    QString unmountPath = PlatformQuirks::getEjectDevicePath(QString::fromLatin1(_device));
+    qDebug() << "Unmounting:" << unmountPath;
+    MOUNTUTILS_RESULT unmountResult = unmount_disk(unmountPath.toUtf8().constData());
+    if (unmountResult != MOUNTUTILS_SUCCESS) {
+        qDebug() << "Unmount failed with result:" << unmountResult;
+#ifdef Q_OS_DARWIN
+        emit error(tr("Failed to unmount disk '%1'. Please close any applications using the disk and try again.").arg(unmountPath));
+#else
+        emit error(tr("Failed to unmount disk '%1'.").arg(unmountPath));
+#endif
+        return;
+    }
 #endif
 
 #ifdef Q_OS_LINUX
