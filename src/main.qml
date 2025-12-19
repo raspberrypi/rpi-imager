@@ -77,7 +77,7 @@ ApplicationWindow {
     
     // Secret keyboard shortcut to open debug options (Cmd+Option+S on macOS, Ctrl+Alt+S on others)
     Shortcut {
-        sequence: Qt.platform.os === "osx" ? "Meta+Alt+S" : "Ctrl+Alt+S"
+        sequence: "Ctrl+Alt+S"
         context: Qt.ApplicationShortcut
         onActivated: {
             console.log("Opening debug options dialog...")

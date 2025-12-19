@@ -21,7 +21,8 @@ WizardStepBase {
     
     title: qsTr("Select your Raspberry Pi device")
     showNextButton: true
-    nextButtonEnabled: false  // Disabled until device is selected or auto-selected
+    // Enable Next when device selected OR when offline (so users can proceed with custom image)
+    nextButtonEnabled: hasDeviceSelected || (fetchFailed && hwlist.count === 0)
     
     property alias hwlist: hwlist
     property bool modelLoaded: false
@@ -70,17 +71,82 @@ WizardStepBase {
         }
     }
     
+    // Track whether OS list fetch failed
+    readonly property bool fetchFailed: imageWriter.isOsListFetchFailed
+    
     // Content
     content: [
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // Device list (fills available space)
+        // Offline/fetch failed placeholder (shown when list is empty due to network failure)
+        Item {
+            id: offlinePlaceholder
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: hwlist.count === 0 && root.fetchFailed
+            
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: parent.width * 0.8
+                spacing: Style.spacingLarge
+                
+                // Icon or visual indicator
+                Text {
+                    text: "⚠"
+                    font.pixelSize: 48
+                    color: Style.textDescriptionColor
+                    Layout.alignment: Qt.AlignHCenter
+                    Accessible.ignored: true
+                }
+                
+                Text {
+                    text: qsTr("Unable to load device list")
+                    font.pixelSize: Style.fontSizeHeading
+                    font.family: Style.fontFamilyBold
+                    font.bold: true
+                    color: Style.formLabelColor
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
+                    Accessible.ignored: false
+                }
+                
+                Text {
+                    text: qsTr("The device list could not be downloaded. Please check your internet connection and try again.\n\nYou can still write a local image file by pressing Next and selecting 'Use custom' on the following screen.")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.textDescriptionColor
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.3
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
+                    Accessible.ignored: false
+                }
+                
+                ImButton {
+                    id: retryButton
+                    text: qsTr("Retry")
+                    Layout.alignment: Qt.AlignHCenter
+                    accessibleDescription: qsTr("Retry downloading the device list")
+                    onClicked: {
+                        imageWriter.beginOSListFetch()
+                    }
+                }
+            }
+        }
+
+        // Device list (fills available space, hidden when showing offline placeholder)
         SelectionListView {
             id: hwlist
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: !offlinePlaceholder.visible
             model: root.hwModel
             delegate: hwdelegate
             keyboardAutoAdvance: true
@@ -106,14 +172,12 @@ WizardStepBase {
                 if (root.hwModel && root.hwModel.currentIndex !== undefined && root.hwModel.currentIndex >= 0) {
                     currentIndex = root.hwModel.currentIndex
                     root.hasDeviceSelected = true
-                    root.nextButtonEnabled = true
                 }
                 // Do not auto-select first item to avoid unwanted highlighting on load
             }
             
             onCurrentIndexChanged: {
                 root.hasDeviceSelected = currentIndex !== -1
-                root.nextButtonEnabled = root.hasDeviceSelected
             }
             
             onItemSelected: function(index, item) {
@@ -131,7 +195,6 @@ WizardStepBase {
                     // Use the model's currentName property
                     root.wizardContainer.selectedDeviceName = root.hwModel.currentName
                     root.hasDeviceSelected = true
-                    root.nextButtonEnabled = true
                     
                     // Restore scroll position after all changes (clamped to valid range)
                     if (shouldPreserveScroll) {
@@ -151,7 +214,6 @@ WizardStepBase {
                     root.hwModel.currentIndex = index
                     root.wizardContainer.selectedDeviceName = root.hwModel.currentName
                     root.hasDeviceSelected = true
-                    root.nextButtonEnabled = true
                     
                     // Then advance to next step (same as pressing Return)
                     Qt.callLater(function() {

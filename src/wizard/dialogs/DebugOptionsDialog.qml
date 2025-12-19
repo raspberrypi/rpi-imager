@@ -36,7 +36,7 @@ BaseDialog {
             return []
         }, 0)
         registerFocusGroup("options", function(){ 
-            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem]
+            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem, chkSkipEndOfDevice.focusItem]
         }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, applyButton]
@@ -249,6 +249,43 @@ BaseDialog {
                 }
             }
 
+            // Spacer
+            Item {
+                Layout.preferredHeight: Style.spacingMedium
+            }
+
+            // Section header for workarounds
+            Text {
+                text: qsTr("Workarounds")
+                font.pixelSize: Style.fontSizeFormLabel
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.textDescriptionColor
+                Layout.fillWidth: true
+            }
+
+            ImOptionPill {
+                id: chkSkipEndOfDevice
+                text: qsTr("Counterfeit Card Mode (skip end-of-device checks)")
+                accessibleDescription: qsTr("Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card's real capacity.")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+            }
+
+            // Warning for counterfeit mode
+            Text {
+                Layout.fillWidth: true
+                Layout.leftMargin: Style.spacingLarge
+                visible: chkSkipEndOfDevice.checked
+                text: qsTr("⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card's real capacity!")
+                font.pixelSize: Style.fontSizeSmall
+                font.family: Style.fontFamily
+                color: Style.formLabelErrorColor
+                wrapMode: Text.WordWrap
+            }
+
             // Status display
             Rectangle {
                 Layout.fillWidth: true
@@ -280,6 +317,7 @@ BaseDialog {
                             lines.push("Async I/O: " + (chkAsyncIO.checked ? "Enabled (depth " + depth + ", ~" + depth + "-" + (depth * 8) + " MB)" : "Disabled"));
                             lines.push("Periodic Sync: " + (chkPeriodicSync.checked ? "Enabled" : "Disabled"));
                             lines.push("IPv4-only: " + (chkIPv4Only.checked ? "Enabled" : "Disabled"));
+                            lines.push("Counterfeit Card Mode: " + (chkSkipEndOfDevice.checked ? "Enabled" : "Disabled"));
                             if (chkDirectIO.checked && chkAsyncIO.checked) {
                                 lines.push("✓ Optimal: Direct I/O + Async I/O for best performance");
                             } else if (chkDirectIO.checked) {
@@ -290,6 +328,9 @@ BaseDialog {
                             }
                             if (chkIPv4Only.checked) {
                                 lines.push("Note: Image downloads will use IPv4 only (OS list fetching unaffected)");
+                            }
+                            if (chkSkipEndOfDevice.checked) {
+                                lines.push("⚠ Counterfeit mode: Skipping end-of-device checks");
                             }
                             return lines.join("\n");
                         }
@@ -356,6 +397,7 @@ BaseDialog {
             chkPeriodicSync.checked = imageWriter.getDebugPeriodicSync();
             chkVerboseLogging.checked = imageWriter.getDebugVerboseLogging();
             chkIPv4Only.checked = imageWriter.getDebugIPv4Only();
+            chkSkipEndOfDevice.checked = imageWriter.getDebugSkipEndOfDevice();
 
             initialized = true;
             isInitializing = false;
@@ -370,13 +412,15 @@ BaseDialog {
         imageWriter.setDebugPeriodicSync(chkPeriodicSync.checked);
         imageWriter.setDebugVerboseLogging(chkVerboseLogging.checked);
         imageWriter.setDebugIPv4Only(chkIPv4Only.checked);
+        imageWriter.setDebugSkipEndOfDevice(chkSkipEndOfDevice.checked);
         
         console.log("Debug options applied: DirectIO=" + chkDirectIO.checked + 
                     ", AsyncIO=" + chkAsyncIO.checked +
                     ", AsyncQueueDepth=" + Math.round(asyncQueueDepthSlider.value) +
                     ", PeriodicSync=" + chkPeriodicSync.checked +
                     ", VerboseLogging=" + chkVerboseLogging.checked +
-                    ", IPv4Only=" + chkIPv4Only.checked);
+                    ", IPv4Only=" + chkIPv4Only.checked +
+                    ", SkipEndOfDevice=" + chkSkipEndOfDevice.checked);
     }
 
     onOpened: {

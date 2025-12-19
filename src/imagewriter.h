@@ -66,6 +66,7 @@ public:
     void setEngine(QQmlApplicationEngine *engine);
 
     Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
+    Q_PROPERTY(bool isOsListFetchFailed READ isOsListFetchFailed NOTIFY osListFetchFailedChanged)
 
     /* Set URL to download from, and if known download length and uncompressed length */
     Q_INVOKABLE void setSrc(const QUrl &url, quint64 downloadLen = 0, quint64 extrLen = 0, QByteArray expectedHash = "", bool multifilesinzip = false, QString parentcategory = "", QString osname = "", QByteArray initFormat = "", QString releaseDate = "");
@@ -266,6 +267,8 @@ public:
     Q_INVOKABLE void setDebugAsyncQueueDepth(int depth);
     Q_INVOKABLE bool getDebugIPv4Only() const;
     Q_INVOKABLE void setDebugIPv4Only(bool enabled);
+    Q_INVOKABLE bool getDebugSkipEndOfDevice() const;
+    Q_INVOKABLE void setDebugSkipEndOfDevice(bool enabled);
     
     // Customisation API
     Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
@@ -335,6 +338,9 @@ public:
     /* Check if performance data is available */
     Q_INVOKABLE bool hasPerformanceData();
 
+    /* Check if OS list fetch failed (for QML to show offline placeholder) */
+    bool isOsListFetchFailed() const { return _osListFetchFailed; }
+
     /* Get access to performance stats for instrumentation */
     PerformanceStats* performanceStats() { return _performanceStats; }
 
@@ -368,6 +374,7 @@ signals:
     void customRepoChanged();
     void cacheStatusChanged();
     void osListFetchFailed();
+    void osListFetchFailedChanged();
     void permissionWarning(QVariant msg);
     void locationPermissionGranted();
     void performanceSaveDialogNeeded(const QString &suggestedFilename, const QString &initialDir);
@@ -402,6 +409,9 @@ private:
     // Keychain permission tracking
     bool _keychainPermissionGranted;
     bool _keychainPermissionReceived;
+    
+    // OS list fetch failure tracking (for QML offline placeholder)
+    bool _osListFetchFailed = false;
 
     // Recursively walk all the entries with subitems and, for any which
     // refer to an external JSON list, fetch the list and put it in place.
@@ -456,6 +466,7 @@ protected:
     bool _debugAsyncIO;
     int _debugAsyncQueueDepth;
     bool _debugIPv4Only;
+    bool _debugSkipEndOfDevice;
 
     void _parseCompressedFile();
     void _parseXZFile();

@@ -124,6 +124,7 @@ public:
     void setDebugAsyncIO(bool enabled);
     void setDebugAsyncQueueDepth(int depth);
     void setDebugIPv4Only(bool enabled);
+    void setDebugSkipEndOfDevice(bool enabled);
 
     /*
      * Thread safe download progress query functions
@@ -261,6 +262,7 @@ protected:
     bool _debugAsyncIO;
     int _debugAsyncQueueDepth;
     bool _debugIPv4Only;
+    bool _debugSkipEndOfDevice;
     
     void _initializeSyncConfiguration();
     

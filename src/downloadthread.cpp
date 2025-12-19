@@ -21,6 +21,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <regex>
+#include <future>
+#include <chrono>
 #include <QDebug>
 #include <QProcess>
 #include <QSettings>
@@ -49,6 +51,43 @@
 #endif
 
 using namespace std;
+
+namespace {
+    // Timeout for operations that might hang on counterfeit storage devices
+    // These devices may report fake capacities and hang when accessing non-existent sectors
+    constexpr int kCounterfeitDetectionTimeoutSeconds = 30;
+
+    // Helper to run a potentially-hanging I/O operation with a timeout.
+    // Returns true if the operation completed within the timeout, false if it timed out.
+    // The result of the operation is stored in 'result' if it completed.
+    template<typename Func>
+    bool runWithTimeout(Func&& operation, rpi_imager::FileError& result, int timeoutSeconds) {
+        std::promise<rpi_imager::FileError> promise;
+        std::future<rpi_imager::FileError> future = promise.get_future();
+        
+        std::thread worker([&promise, op = std::forward<Func>(operation)]() {
+            try {
+                promise.set_value(op());
+            } catch (...) {
+                promise.set_value(rpi_imager::FileError::kWriteError);
+            }
+        });
+        
+        auto status = future.wait_for(std::chrono::seconds(timeoutSeconds));
+        
+        if (status == std::future_status::timeout) {
+            // Operation is still running - detach the thread (it will eventually complete or not)
+            // We can't safely terminate it, but we can return and report the timeout
+            worker.detach();
+            qDebug() << "I/O operation timed out after" << timeoutSeconds << "seconds";
+            return false;
+        }
+        
+        worker.join();
+        result = future.get();
+        return true;
+    }
+} // anonymous namespace
 
 QByteArray DownloadThread::_proxy;
 
@@ -87,6 +126,7 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     _debugAsyncIO = true;       // Enable async I/O by default for performance
     _debugAsyncQueueDepth = 16; // Default queue depth
     _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
+    _debugSkipEndOfDevice = false; // For counterfeit cards with fake capacity
 }
 
 DownloadThread::~DownloadThread()
@@ -184,12 +224,11 @@ bool DownloadThread::_openAndPrepareDevice()
     {
         emit preparationStatusUpdate(tr("Unmounting drive..."));
         unmountTimer.start();
-        // Use canonical device path for unmount
-        // Note: On macOS, DADiskUnmount with kDADiskUnmountOptionWhole automatically
-        // unmounts all child volumes (APFS containers, partitions, etc.), so we don't
-        // need to unmount them individually. This saves ~8 seconds on typical SD cards.
-        QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
-        
+        // Use raw device path for unmount (e.g., /dev/rdisk on macOS)
+        // Using the raw device avoids waiting for macOS buffer cache sync on data
+        // we're about to overwrite anyway. DADiskUnmount with kDADiskUnmountOptionWhole
+        // automatically unmounts all child volumes (APFS containers, partitions, etc.)
+        QString unmountPath = PlatformQuirks::getWriteDevicePath(_filename);
         qDebug() << "Unmounting:" << unmountPath;
         unmount_disk(unmountPath.toUtf8().constData());
         emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), true);
@@ -360,7 +399,11 @@ bool DownloadThread::_openAndPrepareDevice()
 
         QByteArray discardmax = _fileGetContentsTrimmed("/sys/block/"+devname+"/queue/discard_max_bytes");
 
-        if (discardmax.isEmpty() || discardmax == "0")
+        if (_debugSkipEndOfDevice)
+        {
+            qDebug() << "Skipping BLKDISCARD (debug: skip end-of-device operations for counterfeit card support)";
+        }
+        else if (discardmax.isEmpty() || discardmax == "0")
         {
             qDebug() << "BLKDISCARD not supported";
         }
@@ -380,13 +423,26 @@ bool DownloadThread::_openAndPrepareDevice()
                 range[1] = devsize;
                 emit preparationStatusUpdate(tr("Discarding existing data on drive..."));
                 _timer.start();
-                if (::ioctl(fd, BLKDISCARD, &range) == -1)
-                {
-                    qDebug() << "BLKDISCARD failed.";
-                }
-                else
-                {
-                    qDebug() << "BLKDISCARD successful. Discarding took" << _timer.elapsed() / 1000 << "seconds";
+                
+                // BLKDISCARD can hang on counterfeit cards with fake capacity, so use a timeout
+                std::promise<int> discardPromise;
+                std::future<int> discardFuture = discardPromise.get_future();
+                std::thread discardThread([&discardPromise, fd, &range]() {
+                    discardPromise.set_value(::ioctl(fd, BLKDISCARD, &range));
+                });
+                
+                auto discardStatus = discardFuture.wait_for(std::chrono::seconds(kCounterfeitDetectionTimeoutSeconds));
+                if (discardStatus == std::future_status::timeout) {
+                    qDebug() << "BLKDISCARD timed out - possible counterfeit device with fake capacity";
+                    discardThread.detach();
+                    // Continue anyway - BLKDISCARD is optional
+                } else {
+                    discardThread.join();
+                    if (discardFuture.get() == -1) {
+                        qDebug() << "BLKDISCARD failed.";
+                    } else {
+                        qDebug() << "BLKDISCARD successful. Discarding took" << _timer.elapsed() / 1000 << "seconds";
+                    }
                 }
             }
         }
@@ -427,14 +483,44 @@ bool DownloadThread::_openAndPrepareDevice()
     qDebug() << "  First MB + flush took" << firstMBMs << "ms";
 
     // Zero out last part of card (may have GPT backup table)
-    if (knownsize > emptyMBSize)
+    // This operation can hang indefinitely on counterfeit SD cards that report
+    // a fake capacity larger than their actual storage, so we use a timeout.
+    // Can be skipped via debug option for users with counterfeit cards.
+    if (_debugSkipEndOfDevice)
+    {
+        qDebug() << "Skipping last MB zeroing (debug: skip end-of-device operations for counterfeit card support)";
+    }
+    else if (knownsize > emptyMBSize)
     {
         _timer.restart();
-        if (_file->Seek(knownsize - emptyMBSize) != rpi_imager::FileError::kSuccess ||
-            _file->WriteSequential(emptyMB.data(), emptyMBSize) != rpi_imager::FileError::kSuccess ||
-            _file->Flush() != rpi_imager::FileError::kSuccess ||
-            _file->ForceSync() != rpi_imager::FileError::kSuccess)
-        {
+        
+        // Capture needed values for the lambda
+        auto file = _file.get();
+        const uint8_t* bufferData = emptyMB.data();
+        uint64_t seekPosition = knownsize - emptyMBSize;
+        
+        rpi_imager::FileError lastMBResult;
+        bool completed = runWithTimeout([file, seekPosition, bufferData, emptyMBSize]() {
+            if (file->Seek(seekPosition) != rpi_imager::FileError::kSuccess)
+                return rpi_imager::FileError::kSeekError;
+            if (file->WriteSequential(bufferData, emptyMBSize) != rpi_imager::FileError::kSuccess)
+                return rpi_imager::FileError::kWriteError;
+            if (file->Flush() != rpi_imager::FileError::kSuccess)
+                return rpi_imager::FileError::kFlushError;
+            if (file->ForceSync() != rpi_imager::FileError::kSuccess)
+                return rpi_imager::FileError::kSyncError;
+            return rpi_imager::FileError::kSuccess;
+        }, lastMBResult, kCounterfeitDetectionTimeoutSeconds);
+        
+        if (!completed) {
+            emit error(tr("Timeout while writing to the end of the storage device.<br>"
+                          "This often indicates a counterfeit SD card that reports a larger "
+                          "capacity than it actually has (e.g., claims to be 2TB but only has 8GB).<br><br>"
+                          "Please try a different storage device."));
+            return false;
+        }
+        
+        if (lastMBResult != rpi_imager::FileError::kSuccess) {
             emit error(tr("Write error while trying to zero out last part of card.<br>"
                           "Card could be advertising wrong capacity (possible counterfeit)."));
             return false;
@@ -531,7 +617,7 @@ void DownloadThread::run()
     
     // IPv4-only mode for users with broken IPv6 routing
     // Check both local setting and shared config (shared config is updated via debug menu)
-    if (_debugIPv4Only)
+    if (_debugIPv4Only || CurlNetworkConfig::instance().ipv4Only())
     {
         curl_easy_setopt(_c, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
         qDebug() << "Using IPv4-only mode for download";
@@ -1678,6 +1764,12 @@ void DownloadThread::setDebugIPv4Only(bool enabled)
 {
     _debugIPv4Only = enabled;
     qDebug() << "DownloadThread: IPv4-only mode" << (enabled ? "enabled" : "disabled");
+}
+
+void DownloadThread::setDebugSkipEndOfDevice(bool enabled)
+{
+    _debugSkipEndOfDevice = enabled;
+    qDebug() << "DownloadThread: Skip end-of-device operations" << (enabled ? "enabled (for counterfeit cards)" : "disabled");
 }
 
 bool DownloadThread::_customizeImage()

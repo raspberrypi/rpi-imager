@@ -141,6 +141,7 @@ ImageWriter::ImageWriter(QObject *parent)
     _debugVerboseLogging = false;
     _debugAsyncIO = true;       // Async I/O enabled by default for performance
     _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
+    _debugSkipEndOfDevice = false; // Normal behavior; enable for counterfeit cards
     
     // Calculate optimal async queue depth based on system memory
     _debugAsyncQueueDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth();
@@ -1025,6 +1026,7 @@ void ImageWriter::startWrite()
     _thread->setDebugAsyncIO(_debugAsyncIO);
     _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
     _thread->setDebugIPv4Only(_debugIPv4Only);
+    _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -1470,6 +1472,8 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url)
         // If this was the top-level fetch and it failed, treat as network failure
         if (isTopLevelRequest && _completeOsList.isEmpty()) {
             qWarning() << "Top-level OS list fetch failed - malformed response. Operating in offline mode.";
+            _osListFetchFailed = true;
+            emit osListFetchFailedChanged();
             emit osListFetchFailed();
         }
     }
@@ -1496,6 +1500,8 @@ void ImageWriter::onOsListFetchError(const QString &errorMessage, const QUrl &ur
     // If this was the top-level fetch and it failed, treat as network failure
     if (isTopLevelRequest && _completeOsList.isEmpty()) {
         qWarning() << "Top-level OS list fetch failed:" << errorMessage << ". Operating in offline mode.";
+        _osListFetchFailed = true;
+        emit osListFetchFailedChanged();
         emit osListFetchFailed();
     }
 }
@@ -1608,6 +1614,12 @@ void ImageWriter::beginOSListFetch() {
     const QUrl topUrl = osListUrl();
     if (!preflightValidateUrl(topUrl, QStringLiteral("repository:"))) {
         return;
+    }
+
+    // Reset fetch failure state when starting a new fetch
+    if (_osListFetchFailed) {
+        _osListFetchFailed = false;
+        emit osListFetchFailedChanged();
     }
 
     // Create a CurlFetcher to fetch the OS list
@@ -2585,6 +2597,26 @@ void ImageWriter::setDebugIPv4Only(bool enabled)
         // Update the shared network config so all libcurl operations use IPv4-only
         CurlNetworkConfig::instance().setIPv4Only(enabled);
         qDebug() << "Debug: IPv4-only mode" << (enabled ? "enabled" : "disabled");
+        
+        // If IPv4-only was just enabled and we don't have an OS list yet,
+        // retry the fetch - the user likely enabled this because IPv6 was failing
+        if (enabled && _completeOsList.isEmpty() && isOnline()) {
+            qDebug() << "IPv4-only enabled with empty OS list - retrying fetch";
+            beginOSListFetch();
+        }
+    }
+}
+
+bool ImageWriter::getDebugSkipEndOfDevice() const
+{
+    return _debugSkipEndOfDevice;
+}
+
+void ImageWriter::setDebugSkipEndOfDevice(bool enabled)
+{
+    if (_debugSkipEndOfDevice != enabled) {
+        _debugSkipEndOfDevice = enabled;
+        qDebug() << "Debug: Skip end-of-device operations" << (enabled ? "enabled (counterfeit card mode)" : "disabled");
     }
 }
 
