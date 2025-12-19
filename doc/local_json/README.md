@@ -16,6 +16,8 @@ However when selecting a locally downloaded image file in Imager (the **Use cust
 
 When `create_local_json.py` runs, it downloads the same [manifest file](https://downloads.raspberrypi.com/os_list_imagingutility_v4.json) as Imager, and makes a note of all the (online) filenames it contains. It then searches for any local images that match these filenames, and creates an `os_list_local.json` file that contains the full path to these matching local images, as well as the metadata for these images copied from the online manifest. In Imager you can then select **App Options** > **Content Repository** > **EDIT** > **Use custom file** and select the new `os_list_local.json` file. After clicking **APPLY & RESTART**, the **OS** page in Imager shows your locally-downloaded images, and because the metadata is available, any OS customisation options are available too.
 
+If you want to _always_ use your `os_list_local.json` then you can launch Imager with `rpi-imager --repo path/to/os_list_local.json`, which will bypass the Content Repository selection steps.
+
 ## Command line options
 
 You can customise the behaviour of `create_local_json.py` with the following command line options:
