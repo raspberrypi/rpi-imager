@@ -82,6 +82,8 @@ FormatError ConvertFileError(FileError error) {
     case FileError::kSyncError:
     case FileError::kFlushError:
       return FormatError::kFileWriteError;
+    case FileError::kCancelled:
+      return FormatError::kCancelled;
   }
   return FormatError::kFileOpenError;
 }
