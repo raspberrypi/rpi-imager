@@ -255,7 +255,7 @@
     </message>
     <message>
         <source>Authorized keys files (authorized_keys)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ověřené soubory s klíči (authorized_keys)</translation>
     </message>
 </context>
 <context>
@@ -302,7 +302,7 @@
     </message>
     <message>
         <source>Drive name to type: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Název jednotky k zadání: %1</translation>
     </message>
     <message>
         <source>Drive name input. Type exactly: %1. %2</source>
@@ -336,7 +336,7 @@
     <name>DeviceSelectionStep</name>
     <message>
         <source>Select your Raspberry Pi device</source>
-        <translation>Vyberte vaše Raspberry Pi zařízení</translation>
+        <translation>Výběr Raspberry Pi zařízení</translation>
     </message>
     <message>
         <source>Device selection list</source>
@@ -433,8 +433,8 @@
         <translation>Operační systém nepřipojil oddíl FAT32</translation>
     </message>
     <message>
-        <source>Error changing to directory &apos;%1&apos;</source>
-        <translation>Chyba při vstupu do adresáře &apos;%1&apos;</translation>
+        <source>Error changing to directory '%1'</source>
+        <translation>Chyba při vstupu do adresáře '%1'</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
@@ -448,15 +448,15 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>Prosím ověřte, zda má &apos;Raspberry Pi Imager&apos; přístup k &apos;vyměnitelným svazkům&apos; v nastaveních soukromí (pod &apos;soubory a složky&apos;, případně mu udělte &apos;plný přístup k disku&apos;).</translation>
+        <source>Please verify if 'Raspberry Pi Imager' is allowed access to 'removable volumes' in privacy settings (under 'files and folders' or alternatively give it 'full disk access').</source>
+        <translation>Prosím ověřte, zda má 'Raspberry Pi Imager' přístup k 'vyměnitelným svazkům' v nastaveních soukromí (pod 'soubory a složky', případně mu udělte 'plný přístup k disku').</translation>
     </message>
     <message>
-        <source>Cannot open storage device &apos;%1&apos;.</source>
-        <translation>Nepodařilo se otevřít úložné zařízení &apos;%1&apos;.</translation>
+        <source>Cannot open storage device '%1'.</source>
+        <translation>Nepodařilo se otevřít úložné zařízení '%1'.</translation>
     </message>
     <message>
-        <source>Write error while zero&apos;ing out MBR</source>
+        <source>Write error while zero'ing out MBR</source>
         <translation>Chyba zápisu při přepisování MBR nulami</translation>
     </message>
     <message>
@@ -536,8 +536,8 @@
         <translation>Chyba I/O zařízení. Úložné zařízení mohlo být odpojeno nebo nefunguje správně.</translation>
     </message>
     <message>
-        <source>Error opening disk device &apos;%1&apos;</source>
-        <translation>Chyba při otevírání disku &apos;%1&apos;</translation>
+        <source>Error opening disk device '%1'</source>
+        <translation>Chyba při otevírání disku '%1'</translation>
     </message>
     <message>
         <source>Error getting device size</source>
@@ -560,7 +560,7 @@
         <translation>Probíhá odstranění stávajících dat na disku…</translation>
     </message>
     <message>
-        <source>Zero&apos;ing out first and last MB of drive...</source>
+        <source>Zero'ing out first and last MB of drive...</source>
         <translation>Přepisování prvního a posledního MB disku nulami...</translation>
     </message>
     <message>
@@ -576,8 +576,8 @@
         <translation>Přizpůsobování OS...</translation>
     </message>
     <message>
-        <source>Cannot open storage device &apos;%1&apos;. Please run with elevated privileges (sudo).</source>
-        <translation>Nepodařilo se otevřít úložné zařízení &apos;%1&apos;. Spusťte prosím s vyššími právy (sudo).</translation>
+        <source>Cannot open storage device '%1'. Please run with elevated privileges (sudo).</source>
+        <translation>Nepodařilo se otevřít úložné zařízení '%1'. Spusťte prosím s vyššími právy (sudo).</translation>
     </message>
     <message>
         <source>Creating signed boot image...</source>
@@ -669,7 +669,7 @@
     </message>
     <message>
         <source>Failed to allocate buffer for MBR zeroing</source>
-        <translation type="unfinished"></translation>
+        <translation>Nepodařilo se alokovat vyrovnávací paměť pro přepsání MBR nulami</translation>
     </message>
 </context>
 <context>
@@ -684,7 +684,7 @@
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Došlo k chybě při přístupu k zařízení během formátování</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
@@ -788,8 +788,8 @@
         <translation>Režim USB Gadget může změnit chování vašeho zařízení a ovlivnit připojení a interakci s hostitelem.</translation>
     </message>
     <message>
-        <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
-        <translation>Před pokračováním si prosím prostudujte &lt;a href=&apos;%1&apos;&gt;dokumentaci&lt;/a&gt;.</translation>
+        <source>Please review the &lt;a href='%1'&gt;documentation&lt;/a&gt; before proceeding.</source>
+        <translation>Před pokračováním si prosím prostudujte &lt;a href='%1'&gt;dokumentaci&lt;/a&gt;.</translation>
     </message>
     <message>
         <source>Only continue if you are sure you know what you are doing.</source>
@@ -867,12 +867,12 @@
 <context>
     <name>ImComboBox</name>
     <message>
-        <source>Type to search: &quot;%1&quot;</source>
-        <translation type="unfinished"></translation>
+        <source>Type to search: "%1"</source>
+        <translation>Zadejte pro vyhledávání: "%1"</translation>
     </message>
     <message>
         <source>(press again to cycle)</source>
-        <translation type="unfinished"></translation>
+        <translation>(stiskněte znovu pro přepnutí)</translation>
     </message>
 </context>
 <context>
@@ -915,32 +915,33 @@
     </message>
     <message>
         <source>Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>Dokumenty</translation>
     </message>
     <message>
         <source>Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Stažené</translation>
     </message>
     <message>
         <source>Home</source>
-        <translation type="unfinished"></translation>
+        <translation>Domovská složka</translation>
     </message>
     <message>
         <source>File name:</source>
-        <translation type="unfinished"></translation>
+        <translation>Název souboru:</translation>
     </message>
     <message>
         <source>Enter filename…</source>
-        <translation type="unfinished"></translation>
+        <translation>Zadejte název souboru…</translation>
     </message>
     <message>
         <source>Navigate to a folder using the panel on the left,
 or type a path in the address bar above.</source>
-        <translation type="unfinished"></translation>
+        <translation>Přejděte do složky pomocí panelu vlevo, 
+nebo zadejte cestu do adresního řádku nahoře.</translation>
     </message>
     <message>
         <source>Save</source>
-        <translation type="unfinished">Uložit</translation>
+        <translation>Uložit</translation>
     </message>
 </context>
 <context>
@@ -961,27 +962,27 @@ or type a path in the address bar above.</source>
     <name>ImPasswordField</name>
     <message>
         <source>Password is visible. Press F2 to hide.</source>
-        <translation type="unfinished"></translation>
+        <translation>Heslo je viditelné. Stisknutím F2 ho skryjete.</translation>
     </message>
     <message>
         <source>Password is hidden. Press F2 to show.</source>
-        <translation type="unfinished"></translation>
+        <translation>Heslo je skryté. Stisknutím F2 ho zobrazíte.</translation>
     </message>
     <message>
         <source>Hide password</source>
-        <translation type="unfinished"></translation>
+        <translation>Skrýt heslo</translation>
     </message>
     <message>
         <source>Show password</source>
-        <translation type="unfinished"></translation>
+        <translation>Zobrazit heslo</translation>
     </message>
     <message>
         <source>Password is currently visible. Activate to hide it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Heslo je momentálně viditelné. Aktivací ho skryjete.</translation>
     </message>
     <message>
         <source>Password is currently hidden. Activate to show it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Heslo je momentálně skryté. Aktivací ho zobrazte.</translation>
     </message>
 </context>
 <context>
@@ -995,7 +996,7 @@ or type a path in the address bar above.</source>
     <name>ImSaveFileDialog</name>
     <message>
         <source>Save File</source>
-        <translation type="unfinished"></translation>
+        <translation>Uložit soubor</translation>
     </message>
 </context>
 <context>
@@ -1097,7 +1098,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>No %1 selected.</source>
-        <translation type="unfinished"></translation>
+        <translation>Žádné %1 vybráno.</translation>
     </message>
     <message>
         <source> or </source>
@@ -1128,11 +1129,11 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Skip keychain access and manually enter the Wi-Fi password</source>
-        <translation>Přeskočit přístup do klíčenky a zadat heslo k&#x202f;Wi‑Fi ručně</translation>
+        <translation>Přeskočit přístup do klíčenky a zadat heslo k Wi‑Fi ručně</translation>
     </message>
     <message>
         <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
-        <translation>Získat heslo k&#x202f;Wi‑Fi ze systémové klíčenky pomocí ověření administrátorem</translation>
+        <translation>Získat heslo k Wi‑Fi ze systémové klíčenky pomocí ověření administrátorem</translation>
     </message>
 </context>
 <context>
@@ -1197,7 +1198,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Select your location for suggested time zone and keyboard layout</source>
-        <translation>Vyberte svou polohu pro doporučené časové pásmo a rozložení klávesnice</translation>
+        <translation>Vyberte svou polohu pro doporučení časového pásma a rozložení klávesnice</translation>
     </message>
     <message>
         <source>Capital city:</source>
@@ -1216,7 +1217,7 @@ or type a path in the address bar above.</source>
         <translation>Přeskočit všechna přizpůsobeni a pokračovat přímo k zápisu obrazu</translation>
     </message>
     <message>
-        <source>Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country&apos;s Wi-Fi regulations.</source>
+        <source>Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country's Wi-Fi regulations.</source>
         <translation>Vyberte nejbližší hlavní město. Tím se automaticky doporučí správné časové pásmo a rozložení klávesnice pro váš region a nastaví se bezdrátová regulační oblast podle platných předpisů vaší země.</translation>
     </message>
     <message>
@@ -1277,7 +1278,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Choose operating system</source>
-        <translation>Vyberte operační systém</translation>
+        <translation>Výběr operačního systému</translation>
     </message>
     <message>
         <source>Select an operating system to install on your Raspberry Pi</source>
@@ -1297,7 +1298,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>%1 operating systems</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 operační systémy</translation>
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
@@ -1336,7 +1337,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Token received from browser</source>
-        <translation>Token byl získán z&#x202f;prohlížeče</translation>
+        <translation>Token byl získán z prohlížeče</translation>
     </message>
     <message>
         <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
@@ -1359,8 +1360,8 @@ or type a path in the address bar above.</source>
         <translation>Přeskočit všechna přizpůsobeni a pokračovat přímo k zápisu obrazu</translation>
     </message>
     <message>
-        <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the &apos;Open Raspberry Pi Connect&apos; button to sign in.</source>
-        <translation>Zadejte nebo vložte autentizační token z Raspberry Pi Connect. Token se vyplní automaticky, pokud k přihlášení použijete tlačítko &apos;Spustit Raspberry Pi Connect&apos;.</translation>
+        <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the 'Open Raspberry Pi Connect' button to sign in.</source>
+        <translation>Zadejte nebo vložte autentizační token z Raspberry Pi Connect. Token se vyplní automaticky, pokud k přihlášení použijete tlačítko 'Spustit Raspberry Pi Connect'.</translation>
     </message>
     <message>
         <source>Waiting for token (%1s)</source>
@@ -1375,8 +1376,8 @@ or type a path in the address bar above.</source>
         <translation>Neplatný token</translation>
     </message>
     <message>
-        <source>The token you entered is not valid. Please check the token and try again, or use the &apos;Open Raspberry Pi Connect&apos; button to get a valid token.</source>
-        <translation>Zadaný token není platný. Zkontrolujte token a zkuste to znovu, nebo použijte tlačítko &apos;Spustit Raspberry Pi Connect&apos; pro získání platného tokenu.</translation>
+        <source>The token you entered is not valid. Please check the token and try again, or use the 'Open Raspberry Pi Connect' button to get a valid token.</source>
+        <translation>Zadaný token není platný. Zkontrolujte token a zkuste to znovu, nebo použijte tlačítko 'Spustit Raspberry Pi Connect' pro získání platného tokenu.</translation>
     </message>
     <message>
         <source>OK</source>
@@ -1392,7 +1393,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Přihlaste se, abyste získali token a povolili Raspberry Pi Connect</translation>
     </message>
 </context>
 <context>
@@ -1424,10 +1425,10 @@ Spusťte prosím s vyššími právy: sudo %1</translation>
     <message>
         <source>You are not running as root.
 
-Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
+Click "Install Authorization" to set up automatic privilege elevation, or run manually with: sudo %1</source>
         <translation>Nepracujete jako root
 
-Klikněte na &quot;Nainstalovat oprávnění&quot; pro automatické získání vyšších práv, nebo spusťte ručně pomocí: sudo %1</translation>
+Klikněte na "Nainstalovat oprávnění" pro automatické získání vyšších práv, nebo spusťte ručně pomocí: sudo %1</translation>
     </message>
 </context>
 <context>
@@ -1651,87 +1652,87 @@ Klikněte na &quot;Nainstalovat oprávnění&quot; pro automatické získání v
     <name>SshKeyManager</name>
     <message>
         <source>No SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>Nejsou nastaveny žádné SSH klíče</translation>
     </message>
     <message>
         <source>1 SSH key configured</source>
-        <translation type="unfinished"></translation>
+        <translation>1 SSH klíč nastaven</translation>
     </message>
     <message>
         <source>%1 SSH keys configured</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 SSH klíče(ů) nastaveno</translation>
     </message>
     <message>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>Skrýt</translation>
     </message>
     <message>
         <source>Show</source>
-        <translation type="unfinished"></translation>
+        <translation>Zobrazit</translation>
     </message>
     <message>
         <source>Hide the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Skrýt seznam SSH klíčů</translation>
     </message>
     <message>
         <source>Show the list of SSH keys</source>
-        <translation type="unfinished"></translation>
+        <translation>Zobrazit seznam SSH klíčů</translation>
     </message>
     <message>
         <source>SSH keys list</source>
-        <translation type="unfinished"></translation>
+        <translation>Seznam SSH klíčů</translation>
     </message>
     <message>
         <source>SSH key %1: %2, %3</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH klíč %1: %2, %3</translation>
     </message>
     <message>
         <source>SSH key %1: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH klíč %1: %2</translation>
     </message>
     <message>
         <source>SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>SSH klíč %1</translation>
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished"></translation>
+        <translation>Odebrat</translation>
     </message>
     <message>
         <source>Remove SSH key: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Odebrat SSH klíč: %1</translation>
     </message>
     <message>
         <source>Remove SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Odebrat SSH klíč %1</translation>
     </message>
     <message>
         <source>Paste key or click BROWSE to select file</source>
-        <translation type="unfinished"></translation>
+        <translation>Vložte klíč nebo klikněte na PROCHÁZET a vyberte soubor</translation>
     </message>
     <message>
         <source>SSH public key input</source>
-        <translation type="unfinished"></translation>
+        <translation>Zadání veřejného SSH klíče</translation>
     </message>
     <message>
         <source>Paste an SSH public key here or use the browse button to select a key file</source>
-        <translation type="unfinished"></translation>
+        <translation>Zde vlložte veřejný SSH klíč, nebo pomocí tlačítka Procházet vyberte soubor s klíčem</translation>
     </message>
     <message>
         <source>Add</source>
-        <translation type="unfinished"></translation>
+        <translation>Přidat</translation>
     </message>
     <message>
         <source>Select SSH Public Key</source>
-        <translation type="unfinished">Vyberte veřejný SSH klíč</translation>
+        <translation>Vyberte veřejný SSH klíč</translation>
     </message>
     <message>
         <source>Add the entered SSH key</source>
-        <translation type="unfinished"></translation>
+        <translation>Přidat zadaný SSH klíč</translation>
     </message>
     <message>
         <source>Select an SSH public key file to add</source>
-        <translation type="unfinished"></translation>
+        <translation>Vyberte soubor s veřejným SSH klíčem, který chcete přidat</translation>
     </message>
 </context>
 <context>
@@ -1750,7 +1751,7 @@ Klikněte na &quot;Nainstalovat oprávnění&quot; pro automatické získání v
     </message>
     <message>
         <source>Select your storage device</source>
-        <translation>Vyberte vaše úložné zařízení</translation>
+        <translation>Výběr úložného zařízení</translation>
     </message>
     <message>
         <source>Exclude system drives</source>
@@ -1779,10 +1780,10 @@ Klikněte na &quot;Nainstalovat oprávnění&quot; pro automatické získání v
     <message>
         <source>All visible devices are read-only.
 Try connecting a new device, or uncheck
-&apos;Exclude system drives&apos; below.</source>
+'Exclude system drives' below.</source>
         <translation>Všechna viditelná zařízení jsou pouze pro čtení.
 Zkuste připojit nové zařízení nebo zrušte zaškrtnutí
-&apos;Skrýt systémové disky&apos; níže.</translation>
+'Skrýt systémové disky' níže.</translation>
     </message>
     <message>
         <source>All devices are read-only.
@@ -1792,10 +1793,10 @@ Připojte prosím zapisovatelné úložné zařízení.</translation>
     </message>
     <message>
         <source>All devices are hidden by the filter.
-Uncheck &apos;Exclude system drives&apos; below
+Uncheck 'Exclude system drives' below
 to show system drives.</source>
         <translation>Všechna zařízení jsou skryta filtrem.
-Zrušte zaškrtnutí &apos;Skrýt systémové disky&apos;,
+Zrušte zaškrtnutí 'Skrýt systémové disky',
 abyste zobrazili systémové disky.</translation>
     </message>
     <message>
@@ -1807,16 +1808,16 @@ abyste zobrazili systémové disky.</translation>
         <translation>Nebyla nalezena žádná úložná zařízení. Pro pokračování připojte úložné zařízení.</translation>
     </message>
     <message>
-        <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos; to show hidden system drives.</source>
-        <translation>Nejsou k dispozici žádná platná úložná zařízení. Všechna dostupná zařízení jsou pouze pro čtení. Zrušte zaškrtnutí &apos;Skrýt systémové disky&apos; pro zobrazení skrytých systémových disků nebo připojte nové úložné zařízení.</translation>
+        <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck 'Exclude system drives' to show hidden system drives.</source>
+        <translation>Nejsou k dispozici žádná platná úložná zařízení. Všechna dostupná zařízení jsou pouze pro čtení. Zrušte zaškrtnutí 'Skrýt systémové disky' pro zobrazení skrytých systémových disků nebo připojte nové úložné zařízení.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.</source>
         <translation>Nejsou k dispozici žádná platná úložná zařízení. Všechna zařízení jsou pouze pro čtení. Pro pokračování prosím připojte zapisovatelné úložné zařízení.</translation>
     </message>
     <message>
-        <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
-        <translation>Nejsou k dispozici žádná platná úložná zařízení. Zrušte zaškrtnutí &apos;Skrýt systémové disky&apos; pro zobrazení skrytých systémových disků nebo připojte nové úložné zařízení.</translation>
+        <source>No valid storage devices are currently available. Uncheck 'Exclude system drives' to show hidden system drives, or connect a new storage device.</source>
+        <translation>Nejsou k dispozici žádná platná úložná zařízení. Zrušte zaškrtnutí 'Skrýt systémové disky' pro zobrazení skrytých systémových disků nebo připojte nové úložné zařízení.</translation>
     </message>
 </context>
 <context>
@@ -1842,7 +1843,7 @@ abyste zobrazili systémové disky.</translation>
     <name>UserCustomizationStep</name>
     <message>
         <source>Username:</source>
-        <translation>Jméno uživatele:</translation>
+        <translation>Uživatelské jméno:</translation>
     </message>
     <message>
         <source>Enter password</source>
@@ -1925,7 +1926,7 @@ abyste zobrazili systémové disky.</translation>
     </message>
     <message>
         <source>Network password</source>
-        <translation>Síťové heslo</translation>
+        <translation>Heslo sítě</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
@@ -2020,7 +2021,7 @@ abyste zobrazili systémové disky.</translation>
         <translation>Zaškrtněte, pokud vaše Wi‑Fi síť nevysílá svůj název a pro připojení vyžaduje ruční zadání SSID.</translation>
     </message>
     <message>
-        <source>Passwords don&apos;t match</source>
+        <source>Passwords don't match</source>
         <translation>Hesla se neshodují</translation>
     </message>
     <message>
@@ -2044,11 +2045,11 @@ abyste zobrazili systémové disky.</translation>
     </message>
     <message>
         <source>Writing</source>
-        <translation>Zapisování</translation>
+        <translation>Zápis</translation>
     </message>
     <message>
         <source>Done</source>
-        <translation>Hotovo</translation>
+        <translation>Dokončení</translation>
     </message>
     <message>
         <source>Customisation</source>
@@ -2158,7 +2159,7 @@ abyste zobrazili systémové disky.</translation>
     <name>WritingStep</name>
     <message>
         <source>Review your choices and write the image to the storage device</source>
-        <translation>Zkontrolujte své volby a zapište image na úložné zařízení</translation>
+        <translation>Zkontrolujte své volby a zapište obraz na úložné zařízení</translation>
     </message>
     <message>
         <source>Write</source>
@@ -2218,7 +2219,7 @@ abyste zobrazili systémové disky.</translation>
     </message>
     <message>
         <source>Write image</source>
-        <translation>Zapsat obraz</translation>
+        <translation>Zápis obrazu</translation>
     </message>
     <message>
         <source>Operating system:</source>
@@ -2230,7 +2231,7 @@ abyste zobrazili systémové disky.</translation>
     </message>
     <message>
         <source>Confirm erasure and begin writing the image to the storage device</source>
-        <translation>Potvrdit vymazání a zahájit zápis image na úložné zařízení</translation>
+        <translation>Potvrdit vymazání a zahájit zápis obraz na úložné zařízení</translation>
     </message>
     <message>
         <source>Skip verification</source>
@@ -2337,7 +2338,7 @@ abyste zobrazili systémové disky.</translation>
     </message>
     <message>
         <source>Close the storage removed notification and return to storage selection</source>
-        <translation type="unfinished"></translation>
+        <translation>Zavřít oznámení o odebrání úložiště a vrátit se k výběru úložiště</translation>
     </message>
     <message>
         <source>Return to Raspberry Pi Imager and continue the current operation</source>
@@ -2377,15 +2378,15 @@ abyste zobrazili systémové disky.</translation>
     </message>
     <message>
         <source>Save Performance Data</source>
-        <translation type="unfinished">Uložit data o výkonu</translation>
+        <translation>Uložit data o výkonu</translation>
     </message>
     <message>
         <source>JSON files (*.json)</source>
-        <translation type="unfinished"></translation>
+        <translation>JSON soubory (*.json)</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished">Všechny soubory (*)</translation>
+        <translation>Všechny soubory (*)</translation>
     </message>
 </context>
 </TS>
