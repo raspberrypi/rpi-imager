@@ -45,7 +45,7 @@ ApplicationWindow {
         }
 
         if (customRepoHost.length > 0) {
-            baseTitle += qsTr(" — Using data from %2").arg(imageWriter.constantVersion()).arg(customRepoHost)
+            baseTitle += " — " + qsTr("Using data from %1").arg(customRepoHost)
         }
 
         return baseTitle
