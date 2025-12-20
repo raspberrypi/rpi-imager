@@ -83,7 +83,11 @@ int Cli::run()
         
         std::cerr << "ERROR: Not running as root." << std::endl;
         std::cerr << commonMsg << std::endl;
-        std::cerr << "Please run with sudo: sudo " << execName.toStdString() << " --cli ..." << std::endl;
+        std::cerr << "Please run with sudo: sudo " << execName.toStdString()
+#ifndef CLI_ONLY_BUILD
+        << " --cli"
+#endif
+        << " ..." << std::endl;
 #elif defined(Q_OS_WIN)
         std::cerr << "ERROR: Not running as Administrator." << std::endl;
         std::cerr << commonMsg << std::endl;
