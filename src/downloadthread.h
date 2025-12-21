@@ -212,6 +212,7 @@ protected:
     void _hashData(const char *buf, size_t len);
     void _writeComplete();
     virtual bool _verify();
+    virtual void _onVerifyProgress() {}  // Called during verify loop for progress updates
     int _authopen(const QByteArray &filename);
     bool _openAndPrepareDevice();
     void _writeCache(const char *buf, size_t len);

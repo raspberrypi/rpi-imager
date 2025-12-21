@@ -383,6 +383,12 @@ FileError LinuxFileOperations::WriteSequential(const std::uint8_t* data, std::si
   }
 
   last_error_code_ = 0;
+  
+  // Update async_write_offset_ so Tell() returns correct position
+  // This is needed because Seek() sets async_write_offset_, and Tell()
+  // uses it if > 0. Without this update, Tell() would return a stale value.
+  async_write_offset_ += size;
+  
   return FileError::kSuccess;
 }
 
@@ -522,9 +528,7 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   // If async not enabled or io_uring not available, fall back to sync
   if (async_queue_depth_ <= 1 || !io_uring_available_ || ring_ == nullptr) {
     FileError result = WriteSequential(data, size);
-    if (result == FileError::kSuccess) {
-      async_write_offset_ += size;
-    }
+    // Note: WriteSequential already updates async_write_offset_
     if (callback) callback(result, result == FileError::kSuccess ? size : 0);
     return result;
   }

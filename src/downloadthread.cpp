@@ -1587,6 +1587,9 @@ bool DownloadThread::_verify()
 
         _verifyhash.addData(verifyBuf, static_cast<qint64>(lenRead));
         _lastVerifyNow += static_cast<qint64>(lenRead);
+        
+        // Allow subclasses to emit progress updates
+        _onVerifyProgress();
     }
     qFreeAligned(verifyBuf);
 

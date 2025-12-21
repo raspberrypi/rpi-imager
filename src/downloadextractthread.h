@@ -85,7 +85,7 @@ protected:
     virtual void _onDownloadSuccess();
     virtual void _onDownloadError(const QString &msg);
     void _emitProgressUpdate();
-    virtual bool _verify();
+    virtual void _onVerifyProgress() override;
 
     virtual ssize_t _on_read(struct archive *a, const void **buff);
     virtual int _on_close(struct archive *a);

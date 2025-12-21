@@ -748,6 +748,11 @@ FileError WindowsFileOperations::WriteSequential(const std::uint8_t* data, std::
 
   // Update our tracked file position
   current_file_position_ += total_written;
+  
+  // Update async_write_offset_ so Tell() returns correct position
+  // This is needed because Seek() sets async_write_offset_, and Tell()
+  // uses it if > 0. Without this update, Tell() would return a stale value.
+  async_write_offset_ += total_written;
 
   last_error_code_ = 0;
   return FileError::kSuccess;
@@ -1011,9 +1016,7 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
   // If async not enabled or IOCP not initialized, fall back to sync
   if (async_queue_depth_ <= 1 || iocp_ == INVALID_HANDLE_VALUE) {
     FileError result = WriteSequential(data, size);
-    if (result == FileError::kSuccess) {
-      async_write_offset_ += size;
-    }
+    // Note: WriteSequential already updates async_write_offset_
     if (callback) callback(result, result == FileError::kSuccess ? size : 0);
     return result;
   }

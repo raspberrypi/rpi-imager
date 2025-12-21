@@ -320,6 +320,12 @@ FileError MacOSFileOperations::WriteSequential(const std::uint8_t* data, std::si
   }
 
   last_error_code_ = 0;
+  
+  // Update async_write_offset_ so Tell() returns correct position
+  // This is needed because Seek() sets async_write_offset_, and Tell()
+  // uses it if > 0. Without this update, Tell() would return a stale value.
+  async_write_offset_ += size;
+  
   return FileError::kSuccess;
 }
 
