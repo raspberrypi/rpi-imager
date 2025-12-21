@@ -132,6 +132,9 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
       continue;
     }
     
+    // Record completion latency (thread-safe via atomic operations in base class)
+    write_latency_stats_.recordCompletion(ctx->submit_time);
+    
     FileError error = FileError::kSuccess;
     
     if (!success) {
@@ -1046,6 +1049,10 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
   ctx->size = size;
   ctx->self = this;
   
+  // Record submit time for latency tracking (uses base class's thread-safe stats)
+  ctx->submit_time = std::chrono::steady_clock::now();
+  write_latency_stats_.recordSubmit();
+  
   // Set up the offset for this write
   LARGE_INTEGER offset;
   offset.QuadPart = static_cast<LONGLONG>(async_write_offset_);
@@ -1163,6 +1170,9 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
       continue;
     }
     
+    // Record completion latency (thread-safe via atomic operations in base class)
+    write_latency_stats_.recordCompletion(ctx->submit_time);
+    
     FileError error = FileError::kSuccess;
     if (!success) {
       DWORD err = GetLastError();
@@ -1195,6 +1205,8 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
   
   return first_async_error_;
 }
+
+// GetAsyncIOStats() inherited from FileOperations base class
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {

@@ -418,6 +418,8 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::WriteTimingBreakdown: return "writeTimingBreakdown";
         case EventType::WriteSizeDistribution: return "writeSizeDistribution";
         case EventType::WriteAfterSyncImpact: return "writeAfterSyncImpact";
+        case EventType::AsyncIOConfig: return "asyncIOConfig";
+        case EventType::AsyncIOTiming: return "asyncIOTiming";
         
         // Cycle boundaries
         case EventType::CycleStart: return "cycleStart";

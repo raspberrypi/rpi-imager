@@ -195,6 +195,7 @@ signals:
     void eventWriteSizeDistribution(quint32 minSizeKB, quint32 maxSizeKB, quint32 avgSizeKB, quint64 totalBytes, quint32 writeCount);
     void eventWriteAfterSyncImpact(quint32 avgThroughputBeforeSyncKBps, quint32 avgThroughputAfterSyncKBps, quint32 sampleCount);
     void eventAsyncIOConfig(bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd);
+    void eventAsyncIOTiming(quint32 totalMs, quint64 bytesWritten, quint32 writeCount);
     
     // Bottleneck state signal for UI feedback
     void bottleneckStateChanged(DownloadThread::BottleneckState state, quint32 throughputKBps);

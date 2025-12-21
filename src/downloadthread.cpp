@@ -1368,6 +1368,16 @@ void DownloadThread::_writeComplete()
         emit eventAsyncIOConfig(_debugAsyncIO, _file->IsAsyncIOSupported(), 
                                _file->GetAsyncQueueDepth(), static_cast<quint32>(pendingBefore));
         
+        // Get and emit detailed async I/O timing stats
+        uint32_t wallClockMs, writeCount, minLatencyUs, maxLatencyUs, avgLatencyUs;
+        _file->GetAsyncIOStats(wallClockMs, writeCount, minLatencyUs, maxLatencyUs, avgLatencyUs);
+        
+        qDebug() << "Async I/O timing: wall-clock" << wallClockMs << "ms,"
+                 << writeCount << "writes, latency (us): min" << minLatencyUs 
+                 << "max" << maxLatencyUs << "avg" << avgLatencyUs;
+        
+        emit eventAsyncIOTiming(wallClockMs, _bytesWritten.load(), writeCount);
+        
         if (asyncResult != rpi_imager::FileError::kSuccess) {
             qDebug() << "Warning: Some async writes may have failed, error:" << static_cast<int>(asyncResult);
         }

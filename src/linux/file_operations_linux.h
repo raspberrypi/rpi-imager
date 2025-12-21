@@ -88,6 +88,7 @@ class LinuxFileOperations : public FileOperations {
   void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
   void CancelAsyncIO() override;
+  // GetAsyncIOStats() inherited from FileOperations base class
 
  private:
   int fd_;
@@ -109,10 +110,13 @@ class LinuxFileOperations : public FileOperations {
   struct PendingWrite {
     AsyncWriteCallback callback;
     std::size_t size;
+    std::chrono::steady_clock::time_point submit_time;
   };
   std::unordered_map<std::uint64_t, PendingWrite> pending_callbacks_;
   std::uint64_t next_write_id_;
   std::mutex pending_mutex_;
+  
+  // Note: write_latency_stats_ is inherited from FileOperations base class
   
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
   static bool IsBlockDevicePath(const std::string& path);

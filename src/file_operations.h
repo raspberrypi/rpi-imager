@@ -10,6 +10,9 @@
 #include <string>
 #include <memory>
 #include <functional>
+#include <atomic>
+#include <chrono>
+#include <mutex>
 
 namespace rpi_imager {
 
@@ -33,6 +36,86 @@ enum class FileError {
   kSyncError,
   kFlushError,
   kCancelled
+};
+
+// Thread-safe write latency statistics for async I/O
+// Tracks per-write latencies and wall-clock time from first submit to last complete.
+// All members are thread-safe and can be updated from async completion callbacks.
+class WriteLatencyStats {
+ public:
+  void recordSubmit() {
+    auto now = std::chrono::steady_clock::now();
+    auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()).count();
+    
+    // Set first_submit_time only on first submission
+    int64_t expected = 0;
+    first_submit_ns_.compare_exchange_strong(expected, now_ns);
+  }
+  
+  void recordCompletion(std::chrono::steady_clock::time_point submit_time) {
+    auto now = std::chrono::steady_clock::now();
+    auto latency_us = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(now - submit_time).count());
+    
+    // Update min (lock-free)
+    uint64_t current_min = min_us_.load();
+    while (latency_us < current_min && 
+           !min_us_.compare_exchange_weak(current_min, latency_us)) {}
+    
+    // Update max (lock-free)
+    uint64_t current_max = max_us_.load();
+    while (latency_us > current_max && 
+           !max_us_.compare_exchange_weak(current_max, latency_us)) {}
+    
+    sum_us_.fetch_add(latency_us);
+    count_.fetch_add(1);
+    
+    // Update last completion time
+    auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()).count();
+    last_complete_ns_.store(now_ns);
+  }
+  
+  void reset() {
+    min_us_ = UINT64_MAX;
+    max_us_ = 0;
+    sum_us_ = 0;
+    count_ = 0;
+    first_submit_ns_ = 0;
+    last_complete_ns_ = 0;
+  }
+  
+  void getStats(uint32_t& wallClockMs, uint32_t& writeCount,
+                uint32_t& minLatencyUs, uint32_t& maxLatencyUs, 
+                uint32_t& avgLatencyUs) const {
+    writeCount = count_.load();
+    if (writeCount == 0) {
+      wallClockMs = minLatencyUs = maxLatencyUs = avgLatencyUs = 0;
+      return;
+    }
+    
+    int64_t first_ns = first_submit_ns_.load();
+    int64_t last_ns = last_complete_ns_.load();
+    if (first_ns > 0 && last_ns > first_ns) {
+      wallClockMs = static_cast<uint32_t>((last_ns - first_ns) / 1'000'000);
+    } else {
+      wallClockMs = 0;
+    }
+    
+    uint64_t min_val = min_us_.load();
+    minLatencyUs = (min_val == UINT64_MAX) ? 0 : static_cast<uint32_t>(min_val);
+    maxLatencyUs = static_cast<uint32_t>(max_us_.load());
+    avgLatencyUs = static_cast<uint32_t>(sum_us_.load() / writeCount);
+  }
+  
+ private:
+  std::atomic<uint64_t> min_us_{UINT64_MAX};
+  std::atomic<uint64_t> max_us_{0};
+  std::atomic<uint64_t> sum_us_{0};
+  std::atomic<uint32_t> count_{0};
+  std::atomic<int64_t> first_submit_ns_{0};  // nanoseconds since epoch
+  std::atomic<int64_t> last_complete_ns_{0}; // nanoseconds since epoch
 };
 
 // Abstract interface for platform-specific file operations
@@ -115,6 +198,24 @@ class FileOperations {
   // Cancel pending async I/O and wake up any blocking waits.
   // After calling this, WaitForPendingWrites and AsyncWriteSequential will return quickly.
   virtual void CancelAsyncIO() {}
+  
+  // Get async I/O timing statistics
+  // - wallClockMs: total time from first submit to last completion
+  // - writeCount: number of async writes completed
+  // - minLatencyUs/maxLatencyUs/avgLatencyUs: per-write latency distribution in microseconds
+  virtual void GetAsyncIOStats(uint32_t& wallClockMs, uint32_t& writeCount,
+                               uint32_t& minLatencyUs, uint32_t& maxLatencyUs, 
+                               uint32_t& avgLatencyUs) const {
+    write_latency_stats_.getStats(wallClockMs, writeCount, minLatencyUs, maxLatencyUs, avgLatencyUs);
+  }
+  
+  // Reset async I/O statistics (call before starting a new operation)
+  virtual void ResetAsyncIOStats() {
+    write_latency_stats_.reset();
+  }
+  
+ protected:
+  mutable WriteLatencyStats write_latency_stats_;
   
   // File positioning for streaming operations
   virtual FileError Seek(std::uint64_t position) = 0;

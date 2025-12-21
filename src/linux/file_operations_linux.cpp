@@ -130,15 +130,20 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
         
         AsyncWriteCallback callback = nullptr;
         std::size_t expected_size = 0;
+        std::chrono::steady_clock::time_point submit_time;
         {
             std::lock_guard<std::mutex> lock(pending_mutex_);
             auto it = pending_callbacks_.find(write_id);
             if (it != pending_callbacks_.end()) {
                 callback = it->second.callback;
                 expected_size = it->second.size;
+                submit_time = it->second.submit_time;
                 pending_callbacks_.erase(it);
             }
         }
+        
+        // Record write latency (submit to completion) - uses base class's thread-safe stats
+        write_latency_stats_.recordCompletion(submit_time);
         
         FileError error = FileError::kSuccess;
         if (result < 0) {
@@ -211,6 +216,7 @@ FileError LinuxFileOperations::OpenDevice(const std::string& path) {
   async_write_offset_ = 0;
   first_async_error_ = FileError::kSuccess;
   cancelled_.store(false);
+  write_latency_stats_.reset();
   
   return result;
 }
@@ -567,11 +573,15 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   async_write_offset_ += size;
   
   std::uint64_t write_id = next_write_id_++;
+  auto submit_time = std::chrono::steady_clock::now();
+  
+  // Mark first submit for wall-clock timing (uses base class's thread-safe stats)
+  write_latency_stats_.recordSubmit();
   
   // Store callback for later
   {
     std::lock_guard<std::mutex> lock(pending_mutex_);
-    pending_callbacks_[write_id] = PendingWrite{callback, size};
+    pending_callbacks_[write_id] = PendingWrite{callback, size, submit_time};
   }
   
   pending_writes_.fetch_add(1);
@@ -656,6 +666,8 @@ FileError LinuxFileOperations::WaitForPendingWrites() {
   return FileError::kSuccess;
 #endif
 }
+
+// GetAsyncIOStats() inherited from FileOperations base class
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {

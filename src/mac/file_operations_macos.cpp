@@ -519,12 +519,21 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   std::uint64_t write_offset = async_write_offset_;
   async_write_offset_ += size;
   
+  // Record submit time for latency tracking (uses base class's thread-safe stats)
+  auto submit_time = std::chrono::steady_clock::now();
+  write_latency_stats_.recordSubmit();
+  
   pending_writes_.fetch_add(1);
   
   // Queue the async write using GCD
   // Note: We use pwrite to write at a specific offset, allowing concurrent writes
+  // Capture stats pointer for block - the base class's write_latency_stats_ is thread-safe
+  rpi_imager::WriteLatencyStats* stats = &write_latency_stats_;
   dispatch_async(async_queue_, ^{
     ssize_t written = pwrite(fd_, data, size, static_cast<off_t>(write_offset));
+    
+    // Record completion latency (thread-safe via atomic operations)
+    stats->recordCompletion(submit_time);
     
     FileError result = FileError::kSuccess;
     if (written < 0 || static_cast<size_t>(written) != size) {
@@ -597,6 +606,8 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
   // Return any error that occurred
   return first_async_error_.load();
 }
+
+// GetAsyncIOStats() inherited from FileOperations base class
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {

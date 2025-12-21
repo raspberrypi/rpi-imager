@@ -889,13 +889,6 @@ void ImageWriter::startWrite()
                         totalMs, bytesDecompressed, true,
                         QString("bytes: %1 MB").arg(bytesDecompressed / (1024*1024)));
                 });
-        connect(downloadThread, &DownloadExtractThread::eventPipelineWriteWaitTime,
-                this, [this](quint32 totalMs, quint64 bytesWritten){
-                    _performanceStats->recordTransferEvent(
-                        PerformanceStats::EventType::PipelineWriteWaitTime,
-                        totalMs, bytesWritten, true,
-                        QString("bytes: %1 MB").arg(bytesWritten / (1024*1024)));
-                });
         connect(downloadThread, &DownloadExtractThread::eventPipelineRingBufferWaitTime,
                 this, [this](quint32 totalMs, quint64 bytesRead){
                     _performanceStats->recordTransferEvent(
@@ -1028,6 +1021,20 @@ void ImageWriter::startWrite()
                 }
                 metadata += QString("; impactPercent: %1").arg(impactPercent);
                 _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventAsyncIOConfig,
+            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
+                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
+                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
+                _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventAsyncIOTiming,
+            this, [this](quint32 totalMs, quint64 bytesWritten, quint32 writeCount){
+                QString metadata = QString("wallClockMs: %1; bytesWritten: %2 MB; writeCount: %3")
+                    .arg(totalMs).arg(bytesWritten / (1024*1024)).arg(writeCount);
+                _performanceStats->recordTransferEvent(
+                    PerformanceStats::EventType::AsyncIOTiming,
+                    totalMs, bytesWritten, true, metadata);
             });
     
     // Forward bottleneck state to QML for UI feedback
@@ -3353,13 +3360,6 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                         totalMs, bytesDecompressed, true,
                         QString("bytes: %1 MB").arg(bytesDecompressed / (1024*1024)));
                 });
-        connect(downloadThread, &DownloadExtractThread::eventPipelineWriteWaitTime,
-                this, [this](quint32 totalMs, quint64 bytesWritten){
-                    _performanceStats->recordTransferEvent(
-                        PerformanceStats::EventType::PipelineWriteWaitTime,
-                        totalMs, bytesWritten, true,
-                        QString("bytes: %1 MB").arg(bytesWritten / (1024*1024)));
-                });
         connect(downloadThread, &DownloadExtractThread::eventPipelineRingBufferWaitTime,
                 this, [this](quint32 totalMs, quint64 bytesRead){
                     _performanceStats->recordTransferEvent(
@@ -3492,6 +3492,20 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 }
                 metadata += QString("; impactPercent: %1").arg(impactPercent);
                 _performanceStats->recordEvent(PerformanceStats::EventType::WriteAfterSyncImpact, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventAsyncIOConfig,
+            this, [this](bool enabled, bool supported, int queueDepth, quint32 pendingAtEnd){
+                QString metadata = QString("enabled: %1; supported: %2; queueDepth: %3; pendingAtEnd: %4")
+                    .arg(enabled).arg(supported).arg(queueDepth).arg(pendingAtEnd);
+                _performanceStats->recordEvent(PerformanceStats::EventType::AsyncIOConfig, 0, true, metadata);
+            });
+    connect(_thread, &DownloadThread::eventAsyncIOTiming,
+            this, [this](quint32 totalMs, quint64 bytesWritten, quint32 writeCount){
+                QString metadata = QString("wallClockMs: %1; bytesWritten: %2 MB; writeCount: %3")
+                    .arg(totalMs).arg(bytesWritten / (1024*1024)).arg(writeCount);
+                _performanceStats->recordTransferEvent(
+                    PerformanceStats::EventType::AsyncIOTiming,
+                    totalMs, bytesWritten, true, metadata);
             });
     
     // Forward bottleneck state to QML for UI feedback

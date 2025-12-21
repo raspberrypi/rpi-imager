@@ -82,6 +82,8 @@ public:
         WriteTimingBreakdown,      // Detailed breakdown: syscall time, hash wait, sync time
         WriteSizeDistribution,     // Distribution of write chunk sizes
         WriteAfterSyncImpact,      // Throughput comparison before/after sync calls
+        AsyncIOConfig,             // Async I/O configuration (enabled, supported, queue depth)
+        AsyncIOTiming,             // Async I/O wall-clock time and per-write latency stats
         
         // Cycle boundaries (for multi-write sessions)
         CycleStart,            // Start of a new imaging cycle (metadata: image name, device)

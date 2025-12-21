@@ -9,7 +9,6 @@
 #include "downloadthread.h"
 #include "ringbuffer.h"
 #include <condition_variable>
-#include <QFuture>
 #include <memory>
 
 class _extractThreadClass;
@@ -42,7 +41,6 @@ signals:
     
     // Pipeline timing summary events (emitted at end of extraction)
     void eventPipelineDecompressionTime(quint32 totalMs, quint64 bytesDecompressed);
-    void eventPipelineWriteWaitTime(quint32 totalMs, quint64 bytesWritten);
     void eventPipelineRingBufferWaitTime(quint32 totalMs, quint64 bytesRead);
     void eventWriteRingBufferStats(quint64 producerStalls, quint64 consumerStalls, 
                                    quint64 producerWaitMs, quint64 consumerWaitMs);
@@ -63,8 +61,6 @@ protected:
     
     bool _ethreadStarted, _isImage;
     AcceleratedCryptographicHash _inputHash;
-    bool _writeThreadStarted;
-    QFuture<size_t> _writeFuture;
     bool _progressStarted;
     qint64 _lastProgressTime;
     quint64 _lastEmittedDlNow, _lastLocalVerifyNow;
@@ -75,7 +71,6 @@ protected:
     
     // Pipeline timing accumulators (for performance analysis)
     std::atomic<quint64> _totalDecompressionMs;   // Time spent in archive_read_data()
-    std::atomic<quint64> _totalWriteWaitMs;       // Time blocked waiting for _writeFuture.result()
     std::atomic<quint64> _totalRingBufferWaitMs;  // Time in _on_read() waiting for data
     std::atomic<quint64> _bytesReadFromRingBuffer;// Bytes read from ring buffer
 

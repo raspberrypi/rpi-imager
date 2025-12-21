@@ -21,7 +21,6 @@
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QDebug>
-#include <QtConcurrent/qtconcurrentrun.h>
 #include <QElapsedTimer>
 
 #ifdef Q_OS_WIN
@@ -64,7 +63,6 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
       _ethreadStarted(false),
       _isImage(true), 
       _inputHash(OSLIST_HASH_ALGORITHM), 
-      _writeThreadStarted(false),
       _progressStarted(false),
       _lastProgressTime(0),
       _lastEmittedDlNow(0),
@@ -74,7 +72,6 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
       _bytesDecompressed(0),
       _downloadComplete(false),
       _totalDecompressionMs(0),
-      _totalWriteWaitMs(0),
       _totalRingBufferWaitMs(0),
       _bytesReadFromRingBuffer(0)
 {
@@ -324,9 +321,8 @@ void DownloadExtractThread::extractImageRun()
         // Emit image extraction setup event (archive opened and header read)
         emit eventImageExtraction(static_cast<quint32>(extractionTimer.elapsed()), true);
 
-        // Timers for pipeline instrumentation
+        // Timer for pipeline instrumentation
         QElapsedTimer decompressTimer;
-        QElapsedTimer writeWaitTimer;
         
         while (true)
         {
@@ -379,31 +375,6 @@ void DownloadExtractThread::extractImageRun()
             // Emit progress updates during extraction
             _emitProgressUpdate();
 
-            if (_writeThreadStarted)
-            {
-                // Time waiting for previous write to complete (for non-async path)
-                writeWaitTimer.start();
-                bool writeResult = _writeFuture.result();
-                _totalWriteWaitMs.fetch_add(static_cast<quint64>(writeWaitTimer.elapsed()));
-                
-                if (!writeResult)
-                {
-                    // Wait for pending async writes before cleanup
-                    if (_file && _file->IsAsyncIOSupported()) {
-                        _file->WaitForPendingWrites();
-                    }
-                    
-                    // Release current slot before returning
-                    _writeRingBuffer->releaseReadSlot(slot);
-                    if (!_cancelled)
-                    {
-                        _onWriteError();
-                    }
-                    archive_read_free(a);
-                    return;
-                }
-            }
-
             // Create a completion callback that releases the ring buffer slot
             // This enables ZERO-COPY async I/O: the slot stays valid until the
             // async write truly completes, then is returned to the pool.
@@ -414,29 +385,33 @@ void DownloadExtractThread::extractImageRun()
                 ringBuf->releaseReadSlot(slotToRelease);
             };
             
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-            _writeFuture = QtConcurrent::run(&DownloadThread::_writeFile, static_cast<DownloadThread*>(this), 
-                                             slot->data, static_cast<size_t>(size), releaseCallback);
-#else
-            _writeFuture = QtConcurrent::run(static_cast<DownloadThread*>(this), &DownloadThread::_writeFile, 
-                                             slot->data, static_cast<size_t>(size), releaseCallback);
-#endif
-            _writeThreadStarted = true;
+            // IMPORTANT: Call _writeFile directly from extraction thread instead of via
+            // QtConcurrent::run(). Using the thread pool causes deadlock when async I/O
+            // is enabled: _writeFile waits for previous hash computation, but hash runs
+            // in the same thread pool. With many queued _writeFile calls, all pool threads
+            // block waiting for hashes that can't run (no available threads).
+            //
+            // With async I/O, _writeFile returns quickly after queuing the I/O operation,
+            // so running it synchronously in the extraction thread doesn't block progress.
+            // The actual I/O happens asynchronously via io_uring/IOCP.
+            bool writeOk = _writeFile(slot->data, static_cast<size_t>(size), releaseCallback) > 0;
+            if (!writeOk && !_cancelled) {
+                // Wait for pending async writes before cleanup
+                if (_file && _file->IsAsyncIOSupported()) {
+                    _file->WaitForPendingWrites();
+                }
+                _onWriteError();
+                archive_read_free(a);
+                return;
+            }
         }
 
-        if (_writeThreadStarted) {
-            _writeFuture.waitForFinished();
-            // Slots are released by the completion callback, no need to track here
-        }
         _writeComplete();
     }
     catch (exception &e)
     {
         // Wait for pending async writes before cleanup
         // Their callbacks reference the ring buffer, so we must wait
-        if (_writeThreadStarted) {
-            _writeFuture.waitForFinished();
-        }
         if (_file && _file->IsAsyncIOSupported()) {
             _file->WaitForPendingWrites();
         }
@@ -456,17 +431,13 @@ void DownloadExtractThread::extractImageRun()
     emit eventPipelineDecompressionTime(
         static_cast<quint32>(_totalDecompressionMs.load()),
         _bytesDecompressed.load());
-    emit eventPipelineWriteWaitTime(
-        static_cast<quint32>(_totalWriteWaitMs.load()),
-        bytesWritten());
     emit eventPipelineRingBufferWaitTime(
         static_cast<quint32>(_totalRingBufferWaitMs.load()),
         _bytesReadFromRingBuffer.load());
     
     qDebug() << "Pipeline timing summary:"
              << "decompress=" << _totalDecompressionMs.load() << "ms"
-             << "(ring_wait=" << _totalRingBufferWaitMs.load() << "ms)"
-             << "write_wait=" << _totalWriteWaitMs.load() << "ms";
+             << "(ring_wait=" << _totalRingBufferWaitMs.load() << "ms)";
     
     // Emit detailed write timing breakdown for hypothesis testing
     _emitWriteTimingStats();

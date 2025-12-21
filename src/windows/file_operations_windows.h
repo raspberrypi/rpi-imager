@@ -11,6 +11,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <unordered_map>
 
@@ -82,6 +83,7 @@ class WindowsFileOperations : public FileOperations {
   void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
   void CancelAsyncIO() override;
+  // GetAsyncIOStats() inherited from FileOperations base class
 
  private:
   HANDLE handle_;
@@ -105,10 +107,13 @@ class WindowsFileOperations : public FileOperations {
     AsyncWriteCallback callback;
     std::size_t size;
     WindowsFileOperations* self;
+    std::chrono::steady_clock::time_point submit_time;  // For latency tracking
   };
   
   std::mutex pending_mutex_;
   std::unordered_map<OVERLAPPED*, AsyncWriteContext*> pending_contexts_;
+  
+  // Note: write_latency_stats_ is inherited from FileOperations base class
   
   FileError LockVolume();
   FileError UnlockVolume();

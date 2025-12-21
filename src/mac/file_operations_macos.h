@@ -9,6 +9,7 @@
 #include "../file_operations.h"
 #include <dispatch/dispatch.h>
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
@@ -83,6 +84,7 @@ class MacOSFileOperations : public FileOperations {
   void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
   void CancelAsyncIO() override;
+  // GetAsyncIOStats() inherited from FileOperations base class
 
  private:
   int fd_;
@@ -114,6 +116,8 @@ class MacOSFileOperations : public FileOperations {
   
   // Cleanup async I/O resources
   void CleanupAsyncIO();
+  
+  // Note: write_latency_stats_ is inherited from FileOperations base class
 };
 
 } // namespace rpi_imager
