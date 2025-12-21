@@ -29,7 +29,7 @@ static void Log(const std::string& msg) {
 LinuxFileOperations::LinuxFileOperations() 
     : fd_(-1), last_error_code_(0), using_direct_io_(false), direct_io_attempted_(false),
       async_queue_depth_(1), pending_writes_(0), cancelled_(false), first_async_error_(FileError::kSuccess),
-      async_write_offset_(0), io_uring_available_(false), ring_(nullptr), next_write_id_(0) {
+      async_write_offset_(0), io_uring_available_(false), ring_(nullptr), next_write_id_(1) {  // Start at 1, 0 is reserved for cancel operations
     
 #ifdef HAVE_LIBURING
     // Probe for io_uring availability
@@ -122,6 +122,8 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
         int result = cqe->res;
         
         // Skip cancel operation completions (user_data == 0)
+        // Note: Real writes use write_id starting from 1 (next_write_id_ initialized to 1)
+        // Cancel operations use user_data=0 as a sentinel value
         if (write_id == 0) {
             io_uring_cqe_seen(ring_, cqe);
             ret = io_uring_peek_cqe(ring_, &cqe);
