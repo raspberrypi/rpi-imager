@@ -914,7 +914,18 @@ void DownloadThread::setCacheFile(const QString &filename, qint64 filesize)
 
 void DownloadThread::_hashData(const char *buf, size_t len)
 {
+    static std::atomic<int> hashCount{0};
+    static std::atomic<int> hashCompleted{0};
+    int thisHash = hashCount.fetch_add(1);
+    if (thisHash % 500 == 0) {
+        qDebug() << "_hashData: START hash #" << thisHash << "for" << len << "bytes"
+                 << "(completed so far:" << hashCompleted.load() << ")";
+    }
     _writehash.addData(buf, len);
+    int completed = hashCompleted.fetch_add(1) + 1;
+    if (completed % 500 == 0 || (thisHash >= 500 && completed == thisHash + 1)) {
+        qDebug() << "_hashData: DONE hash #" << thisHash << "(total completed:" << completed << ")";
+    }
 }
 
 size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete)
@@ -1006,7 +1017,11 @@ size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCall
                 // Wait for hash computation to complete before releasing buffer
                 // This ensures the buffer isn't reused while still being hashed
                 if (!hashFuture.isFinished()) {
+                    QElapsedTimer hashWaitTimer;
+                    hashWaitTimer.start();
+                    qDebug() << "Async callback: waiting for hash...";
                     hashFuture.waitForFinished();
+                    qDebug() << "Async callback: hash wait took" << hashWaitTimer.elapsed() << "ms";
                 }
                 
                 // Update progress when write actually completes (not when queued)
@@ -1352,6 +1367,8 @@ void DownloadThread::_closeFiles()
 
 void DownloadThread::_writeComplete()
 {
+    qDebug() << "=== _writeComplete() ENTER ===";
+    
     // Wait for all async writes to complete before proceeding
     // This is critical for data integrity before verification
     if (_file && _file->IsAsyncIOSupported() && _file->GetAsyncQueueDepth() > 1) {
@@ -1359,9 +1376,11 @@ void DownloadThread::_writeComplete()
         asyncWaitTimer.start();
         int pendingBefore = _file->GetPendingWriteCount();
         
+        qDebug() << "_writeComplete: calling WaitForPendingWrites(), pending=" << pendingBefore;
         rpi_imager::FileError asyncResult = _file->WaitForPendingWrites();
         
         quint32 asyncWaitMs = static_cast<quint32>(asyncWaitTimer.elapsed());
+        qDebug() << "_writeComplete: WaitForPendingWrites() returned after" << asyncWaitMs << "ms";
         qDebug() << "Async I/O drain:" << pendingBefore << "pending writes completed in" << asyncWaitMs << "ms";
         
         // Emit async I/O stats for performance logging
@@ -1399,16 +1418,21 @@ void DownloadThread::_writeComplete()
     }
 
     // Wait for final pending hash computation to complete before getting result
+    qDebug() << "_writeComplete: checking final hash, _hasPendingHash=" << _hasPendingHash;
     if (_hasPendingHash) {
         if (!_pendingHashFuture.isFinished()) {
             QElapsedTimer waitTimer;
             waitTimer.start();
+            qDebug() << "_writeComplete: waiting for final hash...";
             _pendingHashFuture.waitForFinished();
-            qDebug() << "Final hash wait:" << waitTimer.elapsed() << "ms";
+            qDebug() << "_writeComplete: Final hash wait:" << waitTimer.elapsed() << "ms";
+        } else {
+            qDebug() << "_writeComplete: final hash already finished";
         }
         _hasPendingHash = false;
     }
 
+    qDebug() << "_writeComplete: computing final hash result...";
     QByteArray computedHash = _writehash.result().toHex();
     qDebug() << "Hash of uncompressed image:" << computedHash;
     if (!_expectedHash.isEmpty() && _expectedHash != computedHash)
@@ -1475,6 +1499,7 @@ void DownloadThread::_writeComplete()
 #endif
 
     qDebug() << "Write done in" << _timer.elapsed() / 1000 << "seconds";
+    qDebug() << "=== _writeComplete() proceeding to verification ===";
 
     /* Verify */
     if (_verifyEnabled && !_verify())

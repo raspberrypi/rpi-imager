@@ -406,6 +406,11 @@ void DownloadExtractThread::extractImageRun()
             }
         }
 
+        qDebug() << "=== extractImageRun: extraction loop complete, calling _writeComplete() ===";
+        qDebug() << "    bytesWritten=" << _bytesWritten.load() << "bytesDecompressed=" << _bytesDecompressed.load();
+        if (_file && _file->IsAsyncIOSupported()) {
+            qDebug() << "    pendingWrites=" << _file->GetPendingWriteCount();
+        }
         _writeComplete();
     }
     catch (exception &e)

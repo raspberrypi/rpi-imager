@@ -104,14 +104,25 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
     struct io_uring_cqe* cqe;
     int ret;
     bool processed_at_least_one = false;
+    int pending_at_start = pending_writes_.load();
     
     if (wait && !cancelled_.load()) {
         // Use timeout-based wait so we can check for cancellation
         struct __kernel_timespec ts = {.tv_sec = 0, .tv_nsec = 100000000};  // 100ms
+        Log("ProcessCompletions(wait=true): pending=" + std::to_string(pending_at_start));
         ret = io_uring_wait_cqe_timeout(ring_, &cqe, &ts);
+        int timeout_count = 0;
         // If timeout (-ETIME) and not cancelled, try again
         while (ret == -ETIME && !cancelled_.load() && pending_writes_.load() > 0) {
+            timeout_count++;
+            if (timeout_count % 10 == 0) {
+                Log("ProcessCompletions: still waiting after " + std::to_string(timeout_count) + 
+                    " timeouts, pending=" + std::to_string(pending_writes_.load()));
+            }
             ret = io_uring_wait_cqe_timeout(ring_, &cqe, &ts);
+        }
+        if (timeout_count > 0) {
+            Log("ProcessCompletions: got CQE after " + std::to_string(timeout_count) + " timeouts");
         }
     } else {
         ret = io_uring_peek_cqe(ring_, &cqe);
@@ -169,12 +180,24 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
         }
         
         if (callback) {
+            Log("ProcessCompletions: executing callback for write_id=" + std::to_string(write_id));
+            auto callback_start = std::chrono::steady_clock::now();
             callback(error, error == FileError::kSuccess ? expected_size : 0);
+            auto callback_end = std::chrono::steady_clock::now();
+            auto callback_ms = std::chrono::duration_cast<std::chrono::milliseconds>(callback_end - callback_start).count();
+            if (callback_ms > 100) {
+                Log("ProcessCompletions: callback took " + std::to_string(callback_ms) + "ms (SLOW!)");
+            }
         }
         
         pending_writes_.fetch_sub(1);
         io_uring_cqe_seen(ring_, cqe);
         processed_at_least_one = true;
+        
+        int remaining = pending_writes_.load();
+        if (remaining == 0 || remaining % 100 == 0) {
+            Log("ProcessCompletions: processed one, remaining=" + std::to_string(remaining));
+        }
         
         // After processing at least one, only peek for more (non-blocking)
         ret = io_uring_peek_cqe(ring_, &cqe);
@@ -656,11 +679,21 @@ FileError LinuxFileOperations::WaitForPendingWrites() {
     return FileError::kSuccess;
   }
   
+  int initial_pending = pending_writes_.load();
+  Log("WaitForPendingWrites: ENTER, pending=" + std::to_string(initial_pending));
+  
   // Process completions until all pending writes are done
+  int iterations = 0;
   while (pending_writes_.load() > 0) {
+    iterations++;
+    if (iterations % 100 == 0) {
+      Log("WaitForPendingWrites: iteration " + std::to_string(iterations) + 
+          ", pending=" + std::to_string(pending_writes_.load()));
+    }
     ProcessCompletions(true);
   }
   
+  Log("WaitForPendingWrites: EXIT after " + std::to_string(iterations) + " iterations");
   return first_async_error_;
 #else
   return FileError::kSuccess;
