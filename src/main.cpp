@@ -81,14 +81,14 @@ static void fileLogHandler(QtMsgType type, const QMessageLogContext &context, co
         case QtCriticalMsg: typeStr = "CRITICAL"; break;
         case QtFatalMsg: typeStr = "FATAL"; break;
     }
-    
+
     QByteArray localMsg = msg.toLocal8Bit();
-    
+
     if (g_logFile) {
         fprintf(g_logFile, "[%s] %s\n", typeStr, localMsg.constData());
         fflush(g_logFile);
     }
-    
+
     // Also print to stderr
     fprintf(stderr, "[%s] %s\n", typeStr, localMsg.constData());
 }
@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--log-file") == 0 && i + 1 < argc) {
             const char* logPath = argv[i + 1];
-            
+
 #ifdef Q_OS_LINUX
             // On Linux, use separate log files for unprivileged vs elevated instances
             static char logPathBuffer[512];
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
                 const char* dot = strrchr(logPath, '.');
                 if (dot && dot > strrchr(logPath, '/')) {
                     size_t prefixLen = dot - logPath;
-                    snprintf(logPathBuffer, sizeof(logPathBuffer), "%.*s-elevated%s", 
+                    snprintf(logPathBuffer, sizeof(logPathBuffer), "%.*s-elevated%s",
                              (int)prefixLen, logPath, dot);
                 } else {
                     snprintf(logPathBuffer, sizeof(logPathBuffer), "%s-elevated", logPath);
@@ -131,11 +131,11 @@ int main(int argc, char *argv[])
                 logPath = logPathBuffer;
             }
 #endif
-            
+
             g_logFile = fopen(logPath, "a");
             if (g_logFile) {
 #ifdef Q_OS_UNIX
-                fprintf(g_logFile, "\n=== Raspberry Pi Imager started (PID %d, EUID %d) ===\n", 
+                fprintf(g_logFile, "\n=== Raspberry Pi Imager started (PID %d, EUID %d) ===\n",
                         getpid(), geteuid());
 #else
                 fprintf(g_logFile, "\n=== Raspberry Pi Imager started ===\n");
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
             return success ? 0 : 1;
         }
     }
-    
+
     // Attempt automatic elevation if running from an elevatable bundle without privileges
     // This happens BEFORE Qt initialization to avoid overhead
     // If elevation succeeds, this process is replaced; if it fails, we continue
@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
      * of users.
      */
     qputenv("QML_DISABLE_DISK_CACHE", "true");
-    
+
     // Disable virtual keyboard input method to prevent QtVirtualKeyboard dependency
     qputenv("QT_IM_MODULE", "");
 
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
     // by reading DRM EDID data and setting QT_SCALE_FACTOR before launching
 
     QGuiApplication app(argc, argv);
-    
+
     app.setOrganizationName("Raspberry Pi");
     app.setOrganizationDomain("raspberrypi.com");
     app.setApplicationName("Raspberry Pi Imager");
@@ -246,51 +246,15 @@ int main(int argc, char *argv[])
         }
     }
 
-        // Early check for elevated privileges on platforms that require them (Linux/Windows)
-        bool hasPermissionIssue = false;
-        QString permissionMessage;
-        
-    #if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
-        if (!PlatformQuirks::hasElevatedPrivileges())
-        {
-            hasPermissionIssue = true;
-            
-            // Common message parts to reduce translation effort
-            QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
-            QString footer = QObject::tr("Without this, you will encounter permission errors when writing images.");
-            
-    #ifdef Q_OS_LINUX
-            // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
-            // Check if running from AppImage first
-            QString execName;
-            QString statusAndAction;
-            QByteArray appImagePath = qgetenv("APPIMAGE");
-            if (!appImagePath.isEmpty()) {
-                execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
-                // AppImage-specific message with Install Authorization option
-                statusAndAction = QObject::tr(
-                    "You are not running as root.\n\n"
-                    "Click \"Install Authorization\" to set up automatic privilege elevation, "
-                    "or run manually with: sudo %1"
-                ).arg(execName);
-            } else {
-                execName = QFileInfo(QString::fromUtf8(argv[0])).fileName();
-                statusAndAction = QObject::tr(
-                    "You are not running as root.\n\n"
-                    "Please run with elevated privileges: sudo %1"
-                ).arg(execName);
-            }
-    #elif defined(Q_OS_WIN)
-            QString statusAndAction = QObject::tr(
-                "You are not running as Administrator.\n\n"
-                "Please run as Administrator."
-            );
-    #endif
-            
-            permissionMessage = QString("%1\n\n%2\n\n%3").arg(header, statusAndAction, footer);
-            qWarning() << "Not running with elevated privileges - device access may fail";
-        }
-    #endif
+    // Early check for elevated privileges on platforms that require them (Linux/Windows)
+    bool hasPermissionIssue = false;
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    if (!PlatformQuirks::hasElevatedPrivileges())
+    {
+        hasPermissionIssue = true;
+        qWarning() << "Not running with elevated privileges - device access may fail";
+    }
+#endif
 
     qmlRegisterUncreatableMetaObject(
         ImageOptions::staticMetaObject, // from Q_NAMESPACE
@@ -299,10 +263,10 @@ int main(int argc, char *argv[])
         "ImageOptions",    // QML type name
         "Namespace only"
     );
-    
+
     // Initialize libcurl globally - must happen before any curl operations
     CurlNetworkConfig::ensureInitialized();
-    
+
     // Create ImageWriter early to check embedded mode
     ImageWriter imageWriter;
 
@@ -323,13 +287,13 @@ int main(int argc, char *argv[])
     if (imageWriter.isEmbeddedMode()) {
         // Font and locale setup only needed for embedded Linux systems
         // Desktop systems have proper font fallbacks already configured
-        
+
         /* Set default font - load embedded Roboto font */
         QStringList fontList = QFontDatabase::applicationFontFamilies(QFontDatabase::addApplicationFont(":/fonts/Roboto-Regular.ttf"));
         if (!fontList.isEmpty()) {
             QGuiApplication::setFont(QFont(fontList.first(), 10));
         }
-        
+
         /* Add system fallback font if available (common on Linux systems) */
         if (QFile::exists("/usr/share/fonts/truetype/droid/DroidSansFallback.ttf")) {
             QFontDatabase::addApplicationFont("/usr/share/fonts/truetype/droid/DroidSansFallback.ttf");
@@ -340,7 +304,7 @@ int main(int argc, char *argv[])
         if (l == QLocale::AnyLanguage || l == QLocale::C) {
             QLocale::setDefault(QLocale("en"));
         }
-        
+
         qDebug() << "Embedded mode detected. System locale:" << QLocale::system().name();
     }
 #endif
@@ -513,7 +477,7 @@ int main(int argc, char *argv[])
             if (reply.isValid() && reply.value().contains("com.raspberrypi.rpi-imager"))
             {
                 // Another instance is running - send callback URL to it via D-Bus
-                QDBusInterface iface("com.raspberrypi.rpi-imager", "/com/raspberrypi/rpi-imager", 
+                QDBusInterface iface("com.raspberrypi.rpi-imager", "/com/raspberrypi/rpi-imager",
                                    "com.raspberrypi.rpi-imager", bus);
                 QDBusMessage msg = QDBusMessage::createMethodCall(
                     "com.raspberrypi.rpi-imager",
@@ -614,7 +578,7 @@ int main(int argc, char *argv[])
         if (langId != 0)
         {
             WCHAR langName[LOCALE_NAME_MAX_LENGTH] = {0};
-            if (LCIDToLocaleName(MAKELCID(langId, SORT_DEFAULT), langName, 
+            if (LCIDToLocaleName(MAKELCID(langId, SORT_DEFAULT), langName,
                                 LOCALE_NAME_MAX_LENGTH, 0) != 0)
             {
                 langcode = QString::fromWCharArray(langName);
@@ -669,19 +633,19 @@ int main(int argc, char *argv[])
         if (sysLang == QLocale::AnyLanguage || sysLang == QLocale::C)
             couldDetermineLanguage = false;
     }
-    
+
     // Check if user has previously made a language selection - if so, always show the selector
     // and load their saved preference
     const QString savedLanguage = settings.value("savedLanguage").toString();
     const bool hasSavedLanguagePreference = !savedLanguage.isEmpty();
-    
+
     if (hasSavedLanguagePreference)
     {
         // Load the user's saved language preference
         qDebug() << "Loading saved language preference:" << savedLanguage;
         imageWriter.changeLanguage(savedLanguage);
     }
-    
+
     const bool showLanguageSelection = enableLanguageSelection || !couldDetermineLanguage || imageWriter.isEmbeddedMode() || hasSavedLanguagePreference;
 
     engine.setInitialProperties(QVariantMap{
@@ -771,6 +735,40 @@ int main(int argc, char *argv[])
     // Emit permission warning signal after UI is loaded so dialog can be shown
     if (hasPermissionIssue)
     {
+        // Common message parts to reduce translation effort
+        QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
+        QString footer = QObject::tr("Without this, you will encounter permission errors when writing images.");
+
+#ifdef Q_OS_LINUX
+        // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
+        // Check if running from AppImage first
+        QString execName;
+        QString statusAndAction;
+        QByteArray appImagePath = qgetenv("APPIMAGE");
+        if (!appImagePath.isEmpty()) {
+            execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
+            // AppImage-specific message with Install Authorization option
+            statusAndAction = QObject::tr(
+                "You are not running as root.\n\n"
+                "Click \"Install Authorization\" to set up automatic privilege elevation, "
+                "or run manually with: sudo %1"
+            ).arg(execName);
+        } else {
+            execName = QFileInfo(QString::fromUtf8(argv[0])).fileName();
+            statusAndAction = QObject::tr(
+                "You are not running as root.\n\n"
+                "Please run with elevated privileges: sudo %1"
+            ).arg(execName);
+        }
+#elif defined(Q_OS_WIN)
+        QString statusAndAction = QObject::tr(
+            "You are not running as Administrator.\n\n"
+            "Please run as Administrator."
+        );
+#endif
+
+        QString permissionMessage = QString("%1\n\n%2\n\n%3").arg(header, statusAndAction, footer);
+
         QMetaObject::invokeMethod(&imageWriter, [&imageWriter, permissionMessage]() {
             emit imageWriter.permissionWarning(permissionMessage);
         }, Qt::QueuedConnection);
@@ -789,7 +787,7 @@ int main(int argc, char *argv[])
 
     // Shutdown curl_multi icon fetcher before exiting
     IconMultiFetcher::instance().shutdown();
-    
+
     return rc;
 #endif /* !CLI_ONLY_BUILD */
 }
