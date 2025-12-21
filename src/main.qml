@@ -456,6 +456,10 @@ ApplicationWindow {
                 accessibleDescription: qsTr("Install system authorization to allow Raspberry Pi Imager to run with elevated privileges")
                 activeFocusOnTab: true
                 visible: permissionWarningDialog.imageWriter && permissionWarningDialog.imageWriter.isElevatableBundle()
+                // Make button wide enough to fit the text, with sensible bounds
+                Layout.minimumWidth: Style.buttonWidthMinimum
+                Layout.maximumWidth: Style.buttonWidthMinimum * 2  // Cap at 2x to handle long translations
+                implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
                 onClicked: {
                     if (permissionWarningDialog.imageWriter.installElevationPolicy()) {
                         // Policy installed successfully - restart with elevated privileges
