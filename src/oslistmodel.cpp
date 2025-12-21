@@ -460,13 +460,21 @@ void OSListModel::markFirstAsRecommended() {
     }
 
     // Second pass: Add the localized "(Recommended)" to the first item if appropriate
-    if (!_osList.isEmpty()) {
-        OS &candidate = _osList[0];
+    // Skip internal items (Erase, Use custom) - these are fallbacks when OS list download fails
+    for (int i = 0; i < _osList.size(); i++) {
+        OS &candidate = _osList[i];
 
+        // Skip internal items (e.g., "internal://format", "internal://custom")
+        if (candidate.url.startsWith(QLatin1String("internal://"))) {
+            continue;
+        }
+
+        // Found a real OS entry - mark it as recommended if appropriate
         if (!candidate.description.isEmpty() &&
             candidate.subitemsJson.isEmpty())
         {
             candidate.description += recommendedString;
         }
+        break;  // Only mark the first real OS
     }
 }
