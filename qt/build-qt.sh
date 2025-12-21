@@ -27,8 +27,8 @@ usage() {
 # Parse common arguments first
 parse_common_args "$@"
 
-# Parse script-specific arguments
-for arg in "${COMMON_REMAINING_ARGS[@]}"; do
+# Parse script-specific arguments (COMMON_REMAINING_ARGS is a space-separated string)
+for arg in $COMMON_REMAINING_ARGS; do
     case $arg in
         -h|--help)
             usage
