@@ -217,6 +217,7 @@ class FileOperations {
  protected:
   mutable WriteLatencyStats write_latency_stats_;
   
+ public:
   // File positioning for streaming operations
   virtual FileError Seek(std::uint64_t position) = 0;
   virtual std::uint64_t Tell() const = 0;
