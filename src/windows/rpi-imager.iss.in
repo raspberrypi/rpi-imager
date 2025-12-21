@@ -114,6 +114,11 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runascurrentuser
 
+[UninstallDelete]
+; Clean up user cache files (current user only)
+; Cache location: QStandardPaths::CacheLocation = {localappdata}\Raspberry Pi Imager\cache
+Type: filesandordirs; Name: "{localappdata}\Raspberry Pi Imager"
+
 [InstallDelete]
 ; 64-bit Windows – old NSIS path lives in Program Files (x86)
 Type: filesandordirs; Name: "{commonpf32}\Raspberry Pi Imager\qml"; Check: IsWin64
@@ -354,39 +359,119 @@ begin
   end;
 end;
 
+// Forcibly remove old installation directories
+// Known locations from previous installers:
+//   - NSIS (32-bit): {commonpf32}\Raspberry Pi Imager
+//   - NSIS (64-bit): {commonpf}\Raspberry Pi Imager  
+//   - Old Inno:      {autopf}\Raspberry Pi Ltd\Imager
+procedure CleanupOldInstallDirs();
+var
+  OldDirs: array[0..2] of string;
+  i: Integer;
+begin
+  OldDirs[0] := ExpandConstant('{commonpf32}\Raspberry Pi Imager');
+  OldDirs[1] := ExpandConstant('{commonpf}\Raspberry Pi Imager');
+  OldDirs[2] := ExpandConstant('{autopf}\Raspberry Pi Ltd\Imager');
+
+  for i := 0 to 2 do begin
+    if DirExists(OldDirs[i]) then begin
+      Log('Removing old installation directory: ' + OldDirs[i]);
+      DelTree(OldDirs[i], True, True, True);
+    end;
+  end;
+  
+  // Also clean up the parent directory if empty
+  if DirExists(ExpandConstant('{autopf}\Raspberry Pi Ltd')) then begin
+    RemoveDir(ExpandConstant('{autopf}\Raspberry Pi Ltd')); // only removes if empty
+  end;
+end;
+
+// Remove old registry entries left behind by previous installers
+procedure CleanupOldRegistryEntries();
+var
+  Roots: array[0..5] of Integer;
+  Keys: TArrayOfString;
+  i, r: Integer;
+  KeyName, SubKey: string;
+begin
+  Roots[0] := HKLM;   Roots[1] := HKLM32; Roots[2] := HKLM64;
+  Roots[3] := HKCU;   Roots[4] := HKCU32; Roots[5] := HKCU64;
+
+  for r := 0 to 5 do begin
+    // Remove NSIS registry key
+    if RegKeyExists(Roots[r], NsisKey) then begin
+      Log('Removing old NSIS registry key');
+      RegDeleteKeyIncludingSubkeys(Roots[r], NsisKey);
+    end;
+
+    // Remove old Inno registry keys (by old AppId)
+    if RegGetSubkeyNames(Roots[r], 'Software\Microsoft\Windows\CurrentVersion\Uninstall', Keys) then begin
+      for i := 0 to GetArrayLength(Keys)-1 do begin
+        KeyName := Keys[i];
+        if (Pos(OldInnoAppIdPart, KeyName) = 1) and (Pos('_is1', KeyName) > 0) then begin
+          SubKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' + KeyName;
+          Log('Removing old Inno registry key: ' + SubKey);
+          RegDeleteKeyIncludingSubkeys(Roots[r], SubKey);
+        end;
+      end;
+    end;
+  end;
+end;
+
 function RemovePreviousIfAny(): Boolean;
 var
   Cmd, Args: string;
   RC: Integer;
+  UninstallAttempted: Boolean;
 begin
   Result := True;
+  UninstallAttempted := False;
 
   // Old Inno (by old AppId)
   if TryGetOldInnoUninstall(Cmd, Args) then begin
-    if MsgBox('A previous Raspberry Pi Imager installation will be removed before continuing. Proceed?',
+    if MsgBox('A previous Raspberry Pi Imager installation was detected. It will be removed before continuing. Proceed?',
               mbConfirmation, MB_YESNO) <> IDYES then
     begin Result := False; Exit; end;
 
-    if not Exec(Cmd, Args, '', SW_HIDE, ewWaitUntilTerminated, RC) or (RC <> 0) then begin
-      MsgBox('Uninstall of the previous version failed. Please uninstall it manually and run this setup again.',
-             mbError, MB_OK);
-      Result := False; Exit;
-    end;
+    UninstallAttempted := True;
+    Exec(Cmd, Args, '', SW_HIDE, ewWaitUntilTerminated, RC);
+    // Ignore return code - we'll clean up manually regardless
+    Log('Old Inno uninstaller returned: ' + IntToStr(RC));
+  end
+  // Old NSIS (name-based)
+  else if TryGetOldNsisUninstall(Cmd, Args) then begin
+    if MsgBox('A previous Raspberry Pi Imager installation was detected. It will be removed before continuing. Proceed?',
+              mbConfirmation, MB_YESNO) <> IDYES then
+    begin Result := False; Exit; end;
 
-    Exit; // success; skip NSIS path
+    UninstallAttempted := True;
+    Exec(Cmd, Args, '', SW_HIDE, ewWaitUntilTerminated, RC);
+    // Ignore return code - we'll clean up manually regardless  
+    Log('Old NSIS uninstaller returned: ' + IntToStr(RC));
   end;
 
-  // Old NSIS (name-based)
-  if TryGetOldNsisUninstall(Cmd, Args) then begin
-    if MsgBox('A previous Raspberry Pi Imager installation will be removed before continuing. Proceed?',
-              mbConfirmation, MB_YESNO) <> IDYES then
-    begin Result := False; Exit; end;
+  // Clean up any leftovers regardless of whether uninstall succeeded
+  if UninstallAttempted then begin
+    Log('Cleaning up old installation directories and registry entries...');
+    CleanupOldInstallDirs();
+    CleanupOldRegistryEntries();
+  end;
+end;
 
-    if not Exec(Cmd, Args, '', SW_HIDE, ewWaitUntilTerminated, RC) or (RC <> 0) then begin
-      MsgBox('Uninstall of the previous version failed. Please uninstall it manually and run this setup again.',
-             mbError, MB_OK);
-      Result := False; Exit;
+// Clean up user settings from registry during uninstall
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then begin
+    // Remove QSettings registry key for current user
+    // QSettings path: HKCU\Software\<Organization>\<AppName>
+    // Organization: "Raspberry Pi", AppName: "Raspberry Pi Imager"
+    if RegKeyExists(HKCU, 'Software\Raspberry Pi\Raspberry Pi Imager') then begin
+      Log('Removing user settings from registry');
+      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Raspberry Pi\Raspberry Pi Imager');
     end;
+    
+    // Clean up parent key if empty
+    RegDeleteKeyIfEmpty(HKCU, 'Software\Raspberry Pi');
   end;
 end;
 
@@ -402,8 +487,12 @@ begin
     if MsgBox('Raspberry Pi Imager is running and needs to be closed before continuing. Close it now?',
               mbConfirmation, MB_YESNO) <> IDYES then
     begin Result := False; Exit; end;
+    
     ShellExec('', 'taskkill.exe', '/IM rpi-imager.exe /F', '', SW_HIDE, ewWaitUntilTerminated, rc);
-    if rc <> 0 then begin
+    // taskkill may fail if process exited between detection and kill attempt (race condition)
+    // Re-check if process is actually still running
+    Sleep(500); // Give process time to fully terminate
+    if FindProcess('rpi-imager.exe', pid) then begin
       MsgBox('Failed to close Raspberry Pi Imager. Please close it manually and try again.', mbError, MB_OK);
       Result := False; Exit;
     end;
