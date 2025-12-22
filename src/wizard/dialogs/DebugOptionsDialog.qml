@@ -13,8 +13,8 @@ import RpiImager
 BaseDialog {
     id: popup
     
-    // Fixed height - content scrolls within
-    height: 500
+    // Height based on window size minus padding - content scrolls within
+    height: parent ? Math.min(500, parent.height - Style.cardPadding * 2) : 500
     
     // imageWriter is inherited from BaseDialog
     property var wizardContainer: null
