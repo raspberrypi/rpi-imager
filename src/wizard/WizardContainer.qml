@@ -108,6 +108,8 @@ Item {
     })
     
     // Wizard steps enum
+    // Language selection is -1 (special pre-step, only shown when showLanguageSelection is true)
+    readonly property int stepLanguageSelection: -1
     readonly property int stepDeviceSelection: 0
     readonly property int stepOSSelection: 1
     readonly property int stepStorageSelection: 2
@@ -150,9 +152,15 @@ Item {
     }
 
     Component.onCompleted: {
-        // Set initial step based on network connectivity at startup.
-        // If offline, skip device selection (no device list available) and start at OS selection.
-        currentStep = hasNetworkConnectivity ? stepDeviceSelection : stepOSSelection
+        // Set initial step based on language selection preference and network connectivity at startup.
+        // Language selection step is shown first if requested, then device selection (if online) or OS selection (if offline).
+        if (showLanguageSelection) {
+            currentStep = stepLanguageSelection
+        } else if (hasNetworkConnectivity) {
+            currentStep = stepDeviceSelection
+        } else {
+            currentStep = stepOSSelection
+        }
         
         // Default to disabling warnings in embedded mode (per-run, non-persistent)
         if (imageWriter && imageWriter.isEmbeddedMode()) {
@@ -856,6 +864,7 @@ Item {
     
     function getStepComponent(stepIndex) {
         switch(stepIndex) {
+            case stepLanguageSelection: return languageSelectionStep
             case stepDeviceSelection: return deviceSelectionStep
             case stepOSSelection: return osSelectionStep
             case stepStorageSelection: return storageSelectionStep
