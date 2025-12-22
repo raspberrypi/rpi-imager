@@ -1,3 +1,43 @@
+rpi-imager (2.0.3) unstable; urgency=medium
+
+  * Networking:
+    - Implement comprehensive network monitoring to detect connectivity changes
+    - Automatic retry of OS list fetching when network is restored
+    - Add CA certificate bundle detection for AppImage compatibility on Linux
+  * Custom Repositories:
+    - Support rpi-imager:// URI scheme for deep-linking to custom repositories
+    - Register .rpi-imager-manifest file type on all platforms
+    - Show custom repository host in window title with security hardening
+  * Counterfeit Card Detection:
+    - Detect and handle counterfeit storage devices that hang during I/O
+    - Add timeout mechanism for critical disk operations
+    - Add debug option to skip end-of-device operations
+  * Performance:
+    - Implement bottleneck detection showing network/decompression/write status
+    - Add detailed write timing breakdown for analysis
+    - Skip periodic sync when direct I/O is enabled
+  * UI:
+    - Add sticky language preference across sessions
+    - Enhance title display with offline status indication
+    - Improve text wrapping and marquee scrolling throughout
+  * Drive Handling:
+    - Add support for NVMe over Fabrics bus type on Windows
+    - Enhance storage bus type recognition and device classification
+  * Customization:
+    - Enhance WiFi configuration for open networks
+    - Add initFormat parameter to CLI setImageCustomisation call
+  * Windows:
+    - Enhance uninstallation to clean up old installation directories
+  * Bug Fixes:
+    - Fix language selection persistence
+    - Fix async write ID overlap with cancellation markers
+    - Fix async cache hash reset on open
+    - Fix unmounting logic and error handling
+    - Fix hardware/software capability case sensitivity
+  * i18n: Updated Spanish, Czech, French, Russian, Portuguese translations
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Mon, 22 Dec 2025 18:00:00 +0000
+
 rpi-imager (2.0.2) unstable; urgency=medium
 
   * OS customisation:
