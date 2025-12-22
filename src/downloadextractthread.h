@@ -26,10 +26,10 @@ public:
     explicit DownloadExtractThread(const QByteArray &url, const QByteArray &localfilename = "", const QByteArray &expectedHash = "", QObject *parent = nullptr);
 
     virtual ~DownloadExtractThread();
-    virtual void cancelDownload();
+    virtual void cancelDownload() override;
     virtual void extractImageRun();
     virtual void extractMultiFileRun();
-    virtual bool isImage();
+    virtual bool isImage() override;
     virtual void enableMultipleFileExtraction();
 
 signals:
@@ -76,9 +76,9 @@ protected:
 
     void _pushQueue(const char *data, size_t len);
     void _cancelExtract();
-    virtual size_t _writeData(const char *buf, size_t len);
-    virtual void _onDownloadSuccess();
-    virtual void _onDownloadError(const QString &msg);
+    virtual size_t _writeData(const char *buf, size_t len) override;
+    virtual void _onDownloadSuccess() override;
+    virtual void _onDownloadError(const QString &msg) override;
     void _emitProgressUpdate();
     virtual void _onVerifyProgress() override;
 

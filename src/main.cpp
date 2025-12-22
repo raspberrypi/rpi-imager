@@ -738,12 +738,12 @@ int main(int argc, char *argv[])
         // Common message parts to reduce translation effort
         QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
         QString footer = QObject::tr("Without this, you will encounter permission errors when writing images.");
+        QString statusAndAction = {};
 
 #ifdef Q_OS_LINUX
         // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
         // Check if running from AppImage first
         QString execName;
-        QString statusAndAction;
         QByteArray appImagePath = qgetenv("APPIMAGE");
         if (!appImagePath.isEmpty()) {
             execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
