@@ -761,7 +761,7 @@ int main(int argc, char *argv[])
             ).arg(execName);
         }
 #elif defined(Q_OS_WIN)
-        QString statusAndAction = QObject::tr(
+        statusAndAction = QObject::tr(
             "You are not running as Administrator.\n\n"
             "Please run as Administrator."
         );
