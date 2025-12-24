@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import os.path
+import pathlib
 import shutil
 import sys
 import urllib.request
@@ -131,7 +132,7 @@ if __name__ == "__main__":
                     if args.dry_run:
                         print(f"Found {display_filename} ({os_entry['name']})")
                     # point at our local file instead of the online URL
-                    os_entry["url"] = f"file://{abs_local_image_filename}"
+                    os_entry["url"] = pathlib.Path(abs_local_image_filename).as_uri()
                     local_os_entries[name] = os_entry
                     if "devices" in os_entry:
                         for tag in os_entry["devices"]:
@@ -139,7 +140,7 @@ if __name__ == "__main__":
                     if args.download_icons and "icon" in os_entry:
                         local_icon_filename = download_icon(os_entry["icon"])
                         if local_icon_filename:
-                            os_entry["icon"] = f"file://{os.path.abspath(local_icon_filename)}"
+                            os_entry["icon"] = pathlib.Path(os.path.abspath(local_icon_filename)).as_uri()
     num_images = len(local_os_entries)
     if num_images < 1:
         if args.dry_run:
@@ -157,7 +158,7 @@ if __name__ == "__main__":
                 if args.download_icons and "icon" in device:
                     local_icon_filename = download_icon(device["icon"])
                     if local_icon_filename:
-                        device["icon"] = f"file://{os.path.abspath(local_icon_filename)}"
+                        device["icon"] = pathlib.Path(os.path.abspath(local_icon_filename)).as_uri()
     # Sort the output OSes into the same order as the input OSes
     os_order = list(online_os_entries.keys())
     local_data["os_list"] =  sorted(local_os_entries.values(), key=lambda x: os_order.index(os.path.basename(x["url"])))
