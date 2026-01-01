@@ -47,7 +47,8 @@ body:
       label: Version
       description: What version of our software did you last run?
       options:
-        - 2.0.0 (Default)
+        - 2.0.3 (Default)
+        - 2.0.0
         - 1.9.6
         - 1.9.5
         - 1.9.4
