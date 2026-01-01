@@ -5,9 +5,9 @@
 
 pragma ComponentBehavior: Bound
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../../qmlcomponents"
 import RpiImager
 
@@ -29,9 +29,16 @@ BaseDialog {
 
     // Register focus groups when component is ready
     Component.onCompleted: {
+        registerFocusGroup("content", function(){ 
+            // Only include text elements when screen reader is active (otherwise they're not focusable)
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                return [titleText, descriptionText, subText]
+            }
+            return []
+        }, 0)
         registerFocusGroup("buttons", function(){ 
             return [yesButton, noButton] 
-        }, 0)
+        }, 1)
     }
 
     // Dialog content goes directly into the BaseDialog's contentLayout
@@ -43,6 +50,11 @@ BaseDialog {
         font.bold: true
         color: Style.formLabelColor
         Layout.fillWidth: true
+        Accessible.role: Accessible.Heading
+        Accessible.name: text
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     Text {
@@ -52,6 +64,11 @@ BaseDialog {
         color: Style.textDescriptionColor
         font.pixelSize: Style.fontSizeDescription
         Layout.fillWidth: true
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     Text {
@@ -61,6 +78,11 @@ BaseDialog {
         color: Style.textMetadataColor
         font.pixelSize: Style.fontSizeSmall
         Layout.fillWidth: true
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     RowLayout {
@@ -71,7 +93,8 @@ BaseDialog {
 
         ImButton {
             id: noButton
-            text: qsTr("No")
+            text: CommonStrings.no
+            accessibleDescription: qsTr("Skip keychain access and manually enter the Wi-Fi password")
             Layout.preferredWidth: 80
             activeFocusOnTab: true
             onClicked: {
@@ -82,7 +105,8 @@ BaseDialog {
 
         ImButtonRed {
             id: yesButton
-            text: qsTr("Yes")
+            text: CommonStrings.yes
+            accessibleDescription: qsTr("Retrieve the Wi-Fi password from the system keychain using administrator authentication")
             Layout.preferredWidth: 80
             activeFocusOnTab: true
             onClicked: {

@@ -4,9 +4,9 @@
  */
 pragma ComponentBehavior: Bound
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../qmlcomponents"
 
 import RpiImager
@@ -21,10 +21,17 @@ Item {
     // Reference to the full-window overlay root for dialog parenting
     property var overlayRootRef: null
     // Expose network info text for embedded mode status updates
-    property alias networkInfoText: networkInfo.text
+    property string networkInfoText: ""
     
+    // Track whether we have network connectivity (derived from OS list availability)
+    // This updates reactively when OS list becomes available after a retry
+    readonly property bool hasNetworkConnectivity: !imageWriter.isOsListUnavailable
+    
+    // Current wizard step - initialized in Component.onCompleted based on network state.
+    // NOT a binding, so it won't auto-change when hasNetworkConnectivity changes.
+    // The onOsListUnavailableChanged handler manages the offline→online transition.
     property int currentStep: 0
-    readonly property int totalSteps: 12
+    readonly property int totalSteps: 13
     
     // Track which steps have been made permissible/unlocked for navigation
     // Each bit represents a step: bit 0 = Device, bit 1 = OS, etc.
@@ -32,6 +39,9 @@ Item {
     
     // Track writing state
     property bool isWriting: false
+    
+    // Track if we're in "write another" flow (skip to writing step after storage selection)
+    property bool writeAnotherMode: false
     
     // Track selections for display in summary
     property string selectedDeviceName: ""
@@ -51,14 +61,21 @@ Item {
     property bool userConfigured: false
     property bool wifiConfigured: false
     property bool sshEnabled: false
+    property bool secureBootEnabled: false
     property bool piConnectEnabled: false
     // Whether selected OS supports Raspberry Raspberry Pi Connect customization
     property bool piConnectAvailable: false
+    // Whether selected OS supports Secure Boot signing
+    property bool secureBootAvailable: false
+    // Whether secure boot key is configured in App Options
+    property bool secureBootKeyConfigured: false
 
     // Interfaces & Features
-    property bool rpiosCloudInitAvailable: false
+    property bool ccRpiAvailable: false
+    property bool ifAndFeaturesAvailable: false  // Whether any interface/feature capabilities are available
     property bool ifI2cEnabled: false
     property bool ifSpiEnabled: false
+    property bool if1WireEnabled: false
     // "Disabled" | "Default" | "Console & Hardware" | "Console" | "Hardware" | ""
     property string ifSerial: ""
     property bool featUsbGadgetEnabled: false
@@ -68,7 +85,31 @@ Item {
     // Whether the selected OS supports customisation (init_format present)
     property bool customizationSupported: true
     
+    // Conserved customization settings object - runtime state passed to generator
+    // This is the single source of truth for what customizations will be applied
+    // Individual steps read from and write to this object
+    property var customizationSettings: ({})
+    
+    // Snapshot of customization flags captured when write completes, for display on completion screen
+    // This readonly snapshot preserves the state even after token/flags are cleared
+    property var completionSnapshot: ({
+        customizationSupported: false,
+        hostnameConfigured: false,
+        localeConfigured: false,
+        userConfigured: false,
+        wifiConfigured: false,
+        sshEnabled: false,
+        piConnectEnabled: false,
+        ifI2cEnabled: false,
+        ifSpiEnabled: false,
+        if1WireEnabled: false,
+        ifSerial: "",
+        featUsbGadgetEnabled: false
+    })
+    
     // Wizard steps enum
+    // Language selection is -1 (special pre-step, only shown when showLanguageSelection is true)
+    readonly property int stepLanguageSelection: -1
     readonly property int stepDeviceSelection: 0
     readonly property int stepOSSelection: 1
     readonly property int stepStorageSelection: 2
@@ -77,10 +118,11 @@ Item {
     readonly property int stepUserCustomization: 5
     readonly property int stepWifiCustomization: 6
     readonly property int stepRemoteAccess: 7
-    readonly property int stepPiConnectCustomization: 8
-    readonly property int stepIfAndFeatures: 9
-    readonly property int stepWriting: 10
-    readonly property int stepDone: 11
+    readonly property int stepSecureBootCustomization: 8
+    readonly property int stepPiConnectCustomization: 9
+    readonly property int stepIfAndFeatures: 10
+    readonly property int stepWriting: 11
+    readonly property int stepDone: 12
     
     signal wizardCompleted()
     
@@ -110,15 +152,56 @@ Item {
     }
 
     Component.onCompleted: {
+        // Set initial step based on language selection preference and network connectivity at startup.
+        // Language selection step is shown first if requested, then device selection (if online) or OS selection (if offline).
+        if (showLanguageSelection) {
+            currentStep = stepLanguageSelection
+        } else if (hasNetworkConnectivity) {
+            currentStep = stepDeviceSelection
+        } else {
+            currentStep = stepOSSelection
+        }
+        
         // Default to disabling warnings in embedded mode (per-run, non-persistent)
         if (imageWriter && imageWriter.isEmbeddedMode()) {
             disableWarnings = true
         }
+        
+        // Initialize customizationSettings from persistent storage
+        // Each step can then read from this and update it as needed
+        if (imageWriter) {
+            customizationSettings = imageWriter.getSavedCustomisationSettings()
+            
+            // Check if secure boot RSA key is configured
+            var rsaKeyPath = imageWriter.getStringSetting("secureboot_rsa_key")
+            secureBootKeyConfigured = (rsaKeyPath && rsaKeyPath.length > 0)
+        }
+    }
+    
+    // Handle OS list availability changes
+    Connections {
+        target: imageWriter
+        function onOsListUnavailableChanged() {
+            // When OS list becomes available after starting offline, navigate to device
+            // selection so the user can choose their target device (now that the list is available).
+            // Guard: don't interrupt an active write operation.
+            if (root.hasNetworkConnectivity && root.currentStep === root.stepOSSelection && !root.isWriting) {
+                console.log("OS list now available - navigating to device selection")
+                root.jumpToStep(root.stepDeviceSelection)
+            }
+        }
     }
 
     // Wizard step names for sidebar (grouped for cleaner display)
-    readonly property var stepNames: [
+    // When offline, skip Device selection
+    readonly property var stepNames: hasNetworkConnectivity ? [
         qsTr("Device"),
+        qsTr("OS"), 
+        qsTr("Storage"),
+        qsTr("Customisation"),
+        qsTr("Writing"),
+        qsTr("Done")
+    ] : [
         qsTr("OS"), 
         qsTr("Storage"),
         qsTr("Customisation"),
@@ -130,24 +213,34 @@ Item {
 
     // Helper function to map wizard step to sidebar index
     function getSidebarIndex(wizardStep) {
-        if (wizardStep <= stepStorageSelection) {
-            return wizardStep
+        // When offline, device selection is skipped, so adjust indices
+        var offset = hasNetworkConnectivity ? 0 : -1
+        
+        if (wizardStep === stepDeviceSelection) {
+            // Device is at index 0 when online, not shown when offline
+            return hasNetworkConnectivity ? 0 : -1
+        } else if (wizardStep === stepOSSelection) {
+            return hasNetworkConnectivity ? 1 : 0
+        } else if (wizardStep === stepStorageSelection) {
+            return hasNetworkConnectivity ? 2 : 1
         } else if (wizardStep >= firstCustomizationStep && wizardStep <= getLastCustomizationStep()) {
-            return 3 // Customization group
+            return hasNetworkConnectivity ? 3 : 2 // Customization group
         } else if (wizardStep === stepWriting) {
-            return 4 // Writing
+            return hasNetworkConnectivity ? 4 : 3 // Writing
         } else if (wizardStep === stepDone) {
-            return 5 // Done
+            return hasNetworkConnectivity ? 5 : 4 // Done
         }
         return 0
     }
 
     function getLastCustomizationStep() {
-        return rpiosCloudInitAvailable
+        return (ccRpiAvailable && ifAndFeaturesAvailable)
             ? stepIfAndFeatures
             : piConnectAvailable
                 ? stepPiConnectCustomization
-                : stepRemoteAccess
+                : secureBootAvailable
+                    ? stepSecureBootCustomization
+                    : stepRemoteAccess
     }
 
     function getCustomizationSubstepLabels() {
@@ -156,11 +249,14 @@ Item {
             return []
         }
         
-        var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote Access")]
+        var labels = [qsTr("Hostname"), qsTr("Localisation"), qsTr("User"), qsTr("Wi‑Fi"), qsTr("Remote access")]
+        if (secureBootAvailable) {
+            labels.push(qsTr("Secure Boot"))
+        }
         if (piConnectAvailable) {
             labels.push(qsTr("Raspberry Pi Connect"))
         }
-        if (rpiosCloudInitAvailable) {
+        if (ccRpiAvailable && ifAndFeaturesAvailable) {
             labels.push(qsTr("Interfaces & Features"))
         }
 
@@ -177,9 +273,10 @@ Item {
         if (stepLabel === qsTr("Localisation")) return localeConfigured
         if (stepLabel === qsTr("User")) return userConfigured
         if (stepLabel === qsTr("Wi‑Fi")) return wifiConfigured
-        if (stepLabel === qsTr("Remote Access")) return sshEnabled
+        if (stepLabel === qsTr("Remote access")) return sshEnabled
+        if (stepLabel === qsTr("Secure Boot")) return secureBootEnabled
         if (stepLabel === qsTr("Raspberry Pi Connect")) return piConnectEnabled
-        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || ifSerial !== "" || featUsbGadgetEnabled)
+        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || if1WireEnabled || ifSerial !== "" || featUsbGadgetEnabled)
         
         return false
     }
@@ -216,11 +313,14 @@ Item {
         userConfigured = false
         wifiConfigured = false
         sshEnabled = false
+        secureBootEnabled = false
         piConnectEnabled = false
         piConnectAvailable = false
-        rpiosCloudInitAvailable = false
+        secureBootAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
     }
@@ -244,9 +344,11 @@ Item {
         
         // Reset OS capability flags - these will be set correctly by OS selection
         piConnectAvailable = false
-        rpiosCloudInitAvailable = false
+        secureBootAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
     }
@@ -254,14 +356,27 @@ Item {
 
     // Map sidebar index back to the first wizard step in that group
     function getWizardStepFromSidebarIndex(sidebarIndex) {
-        switch (sidebarIndex) {
-            case 0: return stepDeviceSelection
-            case 1: return stepOSSelection
-            case 2: return stepStorageSelection
-            case 3: return firstCustomizationStep
-            case 4: return stepWriting
-            case 5: return stepDone
-            default: return stepDeviceSelection
+        // When offline, device selection is not shown, so indices shift
+        if (hasNetworkConnectivity) {
+            switch (sidebarIndex) {
+                case 0: return stepDeviceSelection
+                case 1: return stepOSSelection
+                case 2: return stepStorageSelection
+                case 3: return firstCustomizationStep
+                case 4: return stepWriting
+                case 5: return stepDone
+                default: return stepDeviceSelection
+            }
+        } else {
+            // Offline: no device selection in sidebar
+            switch (sidebarIndex) {
+                case 0: return stepOSSelection
+                case 1: return stepStorageSelection
+                case 2: return firstCustomizationStep
+                case 3: return stepWriting
+                case 4: return stepDone
+                default: return stepOSSelection
+            }
         }
     }
     
@@ -307,6 +422,8 @@ Item {
                     color: Style.sidebarTextOnInactiveColor
                     Layout.fillWidth: true
                     Layout.bottomMargin: Style.spacingSmall
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
                 }
                 
                 // Step list
@@ -348,7 +465,9 @@ Item {
                             color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                             border.color: stepItem.index === root.getSidebarIndex(root.currentStep) ? Style.sidebarActiveBackgroundColor : Style.transparent
                             border.width: 1
-                            radius: Style.sidebarItemBorderRadius
+                            radius: root.imageWriter.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
+                            antialiasing: true  // Smooth edges at non-integer scale factors
+                            clip: true  // Prevent content overflow at non-integer scale factors
 
                             MouseArea {
                                 anchors.fill: parent
@@ -371,7 +490,7 @@ Item {
                                 anchors.fill: parent
                                 anchors.margins: Style.spacingSmall
                                 spacing: Style.spacingTiny
-                                Text {
+                                MarqueeText {
                                     Layout.fillWidth: true
                                     Layout.alignment: Qt.AlignVCenter
                                     text: stepItem.modelData
@@ -382,7 +501,6 @@ Item {
                                                : (stepItem.index === root.getSidebarIndex(root.currentStep)
                                                    ? Style.sidebarTextOnActiveColor
                                                    : Style.sidebarTextOnInactiveColor)
-                                    elide: Text.ElideRight
                                 }
                             }
                         }
@@ -405,12 +523,13 @@ Item {
                                     id: subItem
                                     required property int index
                                     required property var modelData
-                                    width: parent.width
+                                    width: sublistContainer ? sublistContainer.width : 0
                                     height: Style.sidebarSubItemHeight
-                                    radius: Style.sidebarItemBorderRadius
+                                    radius: root.imageWriter.isEmbeddedMode() ? Style.sidebarItemBorderRadiusEmbedded : Style.sidebarItemBorderRadius
                                     color: Style.transparent
                                     border.color: Style.transparent
                                     border.width: 0
+                                    antialiasing: true  // Smooth edges at non-integer scale factors
 
                                     property bool isCurrentStep: {
                                         if (root.currentStep < root.firstCustomizationStep || root.currentStep > root.getLastCustomizationStep()) {
@@ -426,7 +545,7 @@ Item {
                                         else if (root.currentStep === root.stepLocaleCustomization) currentStepLabel = qsTr("Localisation")
                                         else if (root.currentStep === root.stepUserCustomization) currentStepLabel = qsTr("User")
                                         else if (root.currentStep === root.stepWifiCustomization) currentStepLabel = qsTr("Wi‑Fi")
-                                        else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote Access")
+                                        else if (root.currentStep === root.stepRemoteAccess) currentStepLabel = qsTr("Remote access")
                                         else if (root.currentStep === root.stepPiConnectCustomization) currentStepLabel = qsTr("Raspberry Pi Connect")
                                         else if (root.currentStep === root.stepIfAndFeatures) currentStepLabel = qsTr("Interfaces & Features")
                                         
@@ -466,7 +585,7 @@ Item {
                                             else if (stepLabel === qsTr("Localisation")) target = root.stepLocaleCustomization
                                             else if (stepLabel === qsTr("User")) target = root.stepUserCustomization
                                             else if (stepLabel === qsTr("Wi‑Fi")) target = root.stepWifiCustomization
-                                            else if (stepLabel === qsTr("Remote Access")) target = root.stepRemoteAccess
+                                            else if (stepLabel === qsTr("Remote access")) target = root.stepRemoteAccess
                                             else if (stepLabel === qsTr("Raspberry Pi Connect")) target = root.stepPiConnectCustomization
                                             else if (stepLabel === qsTr("Interfaces & Features")) target = root.stepIfAndFeatures
                                             
@@ -482,7 +601,7 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.margins: Style.spacingSmall
                                         anchors.leftMargin: Style.spacingMedium
-                                        Text {
+                                        MarqueeText {
                                             id: subLabel
                                             Layout.fillWidth: true
                                             Layout.alignment: Qt.AlignVCenter
@@ -494,7 +613,6 @@ Item {
                                             color: (!root.customizationSupported || !subItem.isClickable)
                                                        ? Style.formLabelDisabledColor
                                                        : Style.sidebarTextOnInactiveColor
-                                            elide: Text.ElideRight
                                         }
                                     }
                                 }
@@ -506,57 +624,6 @@ Item {
                 // Spacer
                 Item {
                     Layout.fillHeight: true
-                }
-                // Embedded mode network info (hidden by default) with marquee scrolling
-                Item {
-                    id: networkInfoContainer
-                    Layout.fillWidth: true
-                    visible: root.imageWriter.isEmbeddedMode() && networkInfo.text.length > 0
-                    Layout.preferredHeight: networkInfo.implicitHeight
-                    clip: true
-
-                    // Scrolling row that contains two copies of the text for seamless loop
-                    RowLayout {
-                        id: marqueeRow
-                        anchors.fill: parent
-                        anchors.margins: 0
-                        spacing: Style.spacingMedium
-                        // Use x animation below; disable layout's x management
-                        Layout.fillWidth: false
-
-                        Text {
-                            id: networkInfo
-                            Layout.alignment: Qt.AlignVCenter
-                            font.pixelSize: Style.fontSizeCaption
-                            font.family: Style.fontFamily
-                            color: Style.textDescriptionColor
-                            text: ""
-                        }
-                        Text {
-                            id: networkInfoCopy
-                            Layout.alignment: Qt.AlignVCenter
-                            font.pixelSize: Style.fontSizeCaption
-                            font.family: Style.fontFamily
-                            color: Style.textDescriptionColor
-                            text: networkInfo.text
-                        }
-                    }
-
-                    PropertyAnimation {
-                        id: marqueeAnim
-                        target: marqueeRow
-                        property: "x"
-                        from: 0
-                        to: -(((networkInfo ? networkInfo.width : 0) + marqueeRow.spacing))
-                        duration: Math.max(4000, Math.round((((networkInfo ? networkInfo.width : 0) + marqueeRow.spacing + (networkInfoContainer ? networkInfoContainer.width : 0)) / 40) * 1000))
-                        loops: Animation.Infinite
-                        running: networkInfoContainer.visible && networkInfo && networkInfo.text && networkInfo.text.length > 0
-                    }
-
-                    onVisibleChanged: {
-                        if (visible) marqueeAnim.restart(); else marqueeAnim.stop()
-                    }
-                    Component.onCompleted: marqueeAnim.start()
                 }
                 
                 // [moved] Advanced options lives outside the scroll area
@@ -585,6 +652,7 @@ Item {
                     anchors.bottom: parent.bottom
                     height: Style.buttonHeightStandard
                     text: qsTr("App Options")
+                    accessibleDescription: qsTr("Open application settings to configure sound alerts, auto-eject, telemetry, and content repository")
                     activeFocusOnTab: true
                     onClicked: {
                         if (root.optionsPopup) {
@@ -619,7 +687,10 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             
-            initialItem: root.showLanguageSelection ? languageSelectionStep : deviceSelectionStep
+            // Skip device selection if offline (no network = no device list available)
+            // Start with language selection if requested, otherwise device selection if online, or OS selection if offline
+            initialItem: root.showLanguageSelection ? languageSelectionStep : 
+                        (root.hasNetworkConnectivity ? deviceSelectionStep : osSelectionStep)
             
             // Smooth transitions between steps
             pushEnter: Transition {
@@ -657,6 +728,22 @@ Item {
                     duration: 250
                 }
             }
+            
+            // Set focus when a new step is activated
+            onCurrentItemChanged: {
+                if (currentItem) {
+                    Qt.callLater(function() {
+                        if (currentItem && currentItem.initialFocusItem) {
+                            currentItem.initialFocusItem.forceActiveFocus()
+                        } else if (currentItem) {
+                            // Fallback: try to find first focusable field
+                            if (currentItem._focusableItems && currentItem._focusableItems.length > 0) {
+                                currentItem._focusableItems[0].forceActiveFocus()
+                            }
+                        }
+                    })
+                }
+            }
         }
     }
     
@@ -664,25 +751,54 @@ Item {
     function nextStep() {
         if (root.currentStep < root.totalSteps - 1) {
             var nextIndex = root.currentStep + 1
-            // If customization is not supported, skip customization steps entirely
-            if (!customizationSupported && nextIndex === firstCustomizationStep) {
+            
+            // Special handling for "write another" mode: skip directly to writing step after storage selection
+            if (writeAnotherMode && root.currentStep === stepStorageSelection) {
                 nextIndex = stepWriting
+                writeAnotherMode = false  // Reset the flag
+            }
+            // If customization is not supported, skip customization steps entirely
+            else if (!customizationSupported && nextIndex === firstCustomizationStep) {
+                nextIndex = stepWriting
+            }
+            // Skip optional Secure Boot step when OS does not support it
+            if (!secureBootAvailable && nextIndex === stepSecureBootCustomization) {
+                nextIndex++
             }
             // Skip optional Raspberry Pi Connect step when OS does not support it
             if (!piConnectAvailable && nextIndex === stepPiConnectCustomization) {
                 nextIndex++
             }
-            // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-            if (!rpiosCloudInitAvailable && nextIndex == stepIfAndFeatures) {
+            // Skip interfaces and features if OS doesn't support it or no capabilities are available
+            if ((!ccRpiAvailable || !ifAndFeaturesAvailable) && nextIndex == stepIfAndFeatures) {
                 nextIndex++
             }
-            // Before entering the writing step, persist and apply customization (when supported)
-            if (nextIndex === stepWriting && customizationSupported && imageWriter) {
-                // Persist whatever is currently staged in per-step UIs
-                var settings = imageWriter.getSavedCustomizationSettings()
-                imageWriter.setSavedCustomizationSettings(settings)
-                // Build and stage customization directly in C++
-                imageWriter.applyCustomizationFromSavedSettings()
+            // Before entering the writing step, apply customization (when supported)
+            if (nextIndex === stepWriting) {
+                if (customizationSupported && imageWriter) {
+                    // Pass the complete customizationSettings object directly to the generator
+                    // This includes both persistent settings (hostname, wifi, etc.) and
+                    // ephemeral settings (piConnectEnabled) from the current wizard session
+                    imageWriter.applyCustomisationFromSettings(customizationSettings)
+                }
+                
+                // Capture snapshot of customization flags at write summary stage
+                // This preserves the state for the completion screen, before any write operations
+                // or token clearing happens. This is the most reliable place to capture it.
+                completionSnapshot = {
+                    customizationSupported: customizationSupported,
+                    hostnameConfigured: hostnameConfigured,
+                    localeConfigured: localeConfigured,
+                    userConfigured: userConfigured,
+                    wifiConfigured: wifiConfigured,
+                    sshEnabled: sshEnabled,
+                    piConnectEnabled: piConnectEnabled,
+                    ifI2cEnabled: ifI2cEnabled,
+                    ifSpiEnabled: ifSpiEnabled,
+                    if1WireEnabled: if1WireEnabled,
+                    ifSerial: ifSerial,
+                    featUsbGadgetEnabled: featUsbGadgetEnabled
+                }
             }
             root.currentStep = nextIndex
             var nextComponent = getStepComponent(root.currentStep)
@@ -703,12 +819,20 @@ Item {
             if (root.currentStep === stepWriting && !customizationSupported) {
                 prevIndex = stepStorageSelection
             } else {
-                // skip interfaces and features for Operating Systems that don't have the cap rpios_cloudinit
-                if (prevIndex == stepIfAndFeatures && !rpiosCloudInitAvailable) {
+                // Skip interfaces and features if OS doesn't support it or no capabilities are available
+                if (prevIndex == stepIfAndFeatures && (!ccRpiAvailable || !ifAndFeaturesAvailable)) {
                     prevIndex--
                 }
                 if (prevIndex === stepPiConnectCustomization && !piConnectAvailable) {
                     prevIndex--
+                }
+                if (prevIndex === stepSecureBootCustomization && !secureBootAvailable) {
+                    prevIndex--
+                }
+                // Skip device selection if offline (it would be empty/useless)
+                if (prevIndex === stepDeviceSelection && !hasNetworkConnectivity) {
+                    // Can't go back further, stay at current step
+                    return
                 }
             }
             root.currentStep = prevIndex
@@ -723,6 +847,11 @@ Item {
     
     function jumpToStep(stepIndex) {
         if (stepIndex >= 0 && stepIndex < root.totalSteps) {
+            // Prevent jumping to device selection when offline
+            if (stepIndex === stepDeviceSelection && !hasNetworkConnectivity) {
+                console.log("Cannot jump to device selection when offline")
+                return
+            }
             root.currentStep = stepIndex
             var stepComponent = getStepComponent(stepIndex)
             if (stepComponent) {
@@ -735,6 +864,7 @@ Item {
     
     function getStepComponent(stepIndex) {
         switch(stepIndex) {
+            case stepLanguageSelection: return languageSelectionStep
             case stepDeviceSelection: return deviceSelectionStep
             case stepOSSelection: return osSelectionStep
             case stepStorageSelection: return storageSelectionStep
@@ -743,6 +873,7 @@ Item {
             case stepUserCustomization: return userCustomizationStep
             case stepWifiCustomization: return wifiCustomizationStep
             case stepRemoteAccess: return remoteAccessStep
+            case stepSecureBootCustomization: return secureBootCustomizationStep
             case stepPiConnectCustomization: return piConnectCustomizationStep
             case stepIfAndFeatures: return ifAndFeaturesStep
             case stepWriting: return writingStep
@@ -760,7 +891,12 @@ Item {
             appOptionsButton: optionsButton
             onNextClicked: {
                 // After choosing language, jump to first real wizard step
-                root.jumpToStep(root.stepDeviceSelection)
+                // Skip device selection if offline
+                if (root.hasNetworkConnectivity) {
+                    root.jumpToStep(root.stepDeviceSelection)
+                } else {
+                    root.jumpToStep(root.stepOSSelection)
+                }
             }
         }
     }
@@ -780,6 +916,8 @@ Item {
         OSSelectionStep {
             imageWriter: root.imageWriter
             wizardContainer: root
+            // Hide back button when offline (device selection was skipped)
+            showBackButton: root.hasNetworkConnectivity
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
@@ -866,6 +1004,20 @@ Item {
             }
         }
     }
+    
+    Component {
+        id: secureBootCustomizationStep
+        SecureBootCustomizationStep {
+            imageWriter: root.imageWriter
+            wizardContainer: root
+            appOptionsButton: optionsButton
+            onNextClicked: root.nextStep()
+            onBackClicked: root.previousStep()
+            onSkipClicked: {
+                // Skip functionality is handled in the step itself
+            }
+        }
+    }
 
     Component {
         id: piConnectCustomizationStep
@@ -873,7 +1025,13 @@ Item {
             imageWriter: root.imageWriter
             wizardContainer: root
             appOptionsButton: optionsButton
-            onNextClicked: root.nextStep()
+            onNextClicked: {
+                // Only advance if the step indicates it's ready
+                if (isValid) {
+                    root.nextStep()
+                }
+                // Otherwise, let the step handle the action internally (showing dialog, etc.)
+            }
             onBackClicked: root.previousStep()
             onSkipClicked: {
                 // Skip functionality is handled in the step itself
@@ -926,11 +1084,332 @@ Item {
             imageWriter: root.imageWriter
             wizardContainer: root
             showBackButton: false
-            nextButtonText: qsTr("Finish")
+            nextButtonText: CommonStrings.finish
             appOptionsButton: optionsButton
             onNextClicked: root.wizardCompleted()
         }
     }
+
+    // Token conflict dialog — based on your BaseDialog pattern
+    BaseDialog {
+        id: tokenConflictDialog
+        imageWriter: root.imageWriter
+        parent: root
+        anchors.centerIn: parent
+
+        // carry the new token we just received
+        property string newToken: ""
+        property bool allowAccept: false
+
+        // small safety delay before enabling "Replace"
+        Timer {
+            id: acceptEnableDelay
+            interval: 1500
+            running: false
+            repeat: false
+            onTriggered: {
+                tokenConflictDialog.allowAccept = true
+                // Rebuild focus order now that replace button is enabled
+                tokenConflictDialog.rebuildFocusOrder()
+            }
+        }
+
+        function openWithToken(tok) {
+            newToken = tok
+            allowAccept = false
+            acceptEnableDelay.start()
+            tokenConflictDialog.open()
+        }
+
+        // ESC closes
+        function escapePressed() { tokenConflictDialog.close() }
+
+        Component.onCompleted: {
+            // match your focus group style
+            registerFocusGroup("token_conflict_content", function() {
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.isScreenReaderActive()) {
+                    return [titleText, bodyText]
+                }
+                return []
+            }, 0)
+            registerFocusGroup("token_conflict_buttons", function() {
+                return [keepBtn, replaceBtn]
+            }, 1)
+        }
+
+        onClosed: {
+            acceptEnableDelay.stop()
+            allowAccept = false
+            newToken = ""
+        }
+
+        // ----- CONTENT -----
+        Text {
+            id: titleText
+            text: qsTr("Replace existing Raspberry Pi Connect token?")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
+        }
+
+        // Body / security note
+        Text {
+            id: bodyText
+            text: qsTr("A new Raspberry Pi Connect token was received that differs from your current one.\n\n") +
+                  qsTr("Do you want to overwrite the existing token?\n\n") +
+                  qsTr("Warning: Only overwrite the token if you initiated this action.")
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamily
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (tokenConflictDialog.imageWriter && tokenConflictDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: tokenConflictDialog.imageWriter ? tokenConflictDialog.imageWriter.isScreenReaderActive() : false
+        }
+
+        // Buttons row
+        RowLayout {
+            id: btnRow
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            spacing: Style.spacingMedium
+
+            Item { Layout.fillWidth: true }
+
+            ImButton {
+                id: replaceBtn
+                text: tokenConflictDialog.allowAccept ? qsTr("Replace token") : qsTr("Please wait…")
+                accessibleDescription: qsTr("Replace the current token with the newly received one")
+                enabled: tokenConflictDialog.allowAccept
+                activeFocusOnTab: true
+                onClicked: {
+                    tokenConflictDialog.close()
+                    // Overwrite in C++ and re-emit to existing listeners
+                    root.imageWriter.overwriteConnectToken(tokenConflictDialog.newToken)
+                }
+            }
+
+            ImButtonRed {
+                id: keepBtn
+                text: qsTr("Keep existing")
+                accessibleDescription: qsTr("Keep your current Raspberry Pi Connect token")
+                activeFocusOnTab: true
+                onClicked: tokenConflictDialog.close()
+            }
+        }
+    }
+
+    Connections {
+        target: root.imageWriter
+        function onConnectTokenConflictDetected(newToken) {
+            tokenConflictDialog.openWithToken(newToken)
+        }
+        
+        // Handle token cleared signal at container level to ensure it's always processed
+        // even when PiConnectCustomizationStep component is not loaded
+        function onConnectTokenCleared() {
+            // Reset Pi Connect state when token is cleared (e.g., after write completes)
+            // Note: Snapshot is already captured when entering writing step, so no need to capture here
+            piConnectEnabled = false
+            delete customizationSettings.piConnectEnabled
+        }
+        
+        // Handle repository URL received from deep link (rpi-imager://open?repo=...)
+        function onRepositoryUrlReceived(url) {
+            repositoryUrlDialog.openWithUrl(url)
+        }
+    }
+
+    // Repository URL confirmation dialog — shown when a deep link contains a custom repo URL
+    BaseDialog {
+        id: repositoryUrlDialog
+        imageWriter: root.imageWriter
+        parent: root
+        anchors.centerIn: parent
+
+        // carry the repository URL we just received
+        property string repoUrl: ""
+        property bool allowAccept: false
+        property bool isLocalFile: repoUrl.startsWith("file://")
+
+        // small safety delay before enabling "Switch" (only for remote URLs)
+        Timer {
+            id: repoAcceptEnableDelay
+            interval: 1500
+            running: false
+            repeat: false
+            onTriggered: {
+                repositoryUrlDialog.allowAccept = true
+                // Rebuild focus order now that switch button is enabled
+                repositoryUrlDialog.rebuildFocusOrder()
+            }
+        }
+
+        function openWithUrl(url) {
+            // If dialog is already open with a different URL, ignore the new one
+            // User must dismiss current dialog first (prevents race condition attacks)
+            if (repositoryUrlDialog.opened && repoUrl !== url) {
+                console.warn("Repository dialog already open, ignoring new URL:", url)
+                return
+            }
+            
+            repoUrl = url
+            // Local files are trusted, allow immediate acceptance
+            if (url.startsWith("file://")) {
+                allowAccept = true
+            } else {
+                allowAccept = false
+                repoAcceptEnableDelay.start()
+            }
+            repositoryUrlDialog.open()
+        }
+
+        // ESC closes
+        function escapePressed() { repositoryUrlDialog.close() }
+
+        Component.onCompleted: {
+            // match your focus group style
+            registerFocusGroup("repo_url_content", function() {
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.isScreenReaderActive()) {
+                    return [repoTitleText, repoBodyText, repoUrlText]
+                }
+                return []
+            }, 0)
+            registerFocusGroup("repo_url_buttons", function() {
+                return [repoCancelBtn, repoSwitchBtn]
+            }, 1)
+        }
+
+        onClosed: {
+            repoAcceptEnableDelay.stop()
+            allowAccept = false
+            repoUrl = ""
+        }
+
+        // ----- CONTENT -----
+        Text {
+            id: repoTitleText
+            text: repositoryUrlDialog.isLocalFile 
+                ? qsTr("Open local repository file?")
+                : qsTr("Switch to a custom repository?")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+        }
+
+        // Body / security note
+        Text {
+            id: repoBodyText
+            text: repositoryUrlDialog.isLocalFile
+                ? qsTr("You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.")
+                : qsTr("A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.\n\n") +
+                  qsTr("Only accept if you trust this source and intentionally clicked a link to open this repository.")
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamily
+            color: Style.formLabelColor
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
+            Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+        }
+        
+        // Show the URL being requested
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            Layout.preferredHeight: repoUrlText.implicitHeight + Style.spacingSmall * 2
+            color: Style.titleBackgroundColor
+            border.color: Style.popupBorderColor
+            border.width: 1
+            radius: Style.listItemBorderRadius
+            
+            Text {
+                id: repoUrlText
+                anchors.fill: parent
+                anchors.margins: Style.spacingSmall
+                text: repositoryUrlDialog.repoUrl
+                font.pixelSize: Style.fontSizeCaption
+                font.family: "monospace"
+                color: Style.formLabelColor
+                wrapMode: Text.WrapAnywhere
+                elide: Text.ElideMiddle
+                maximumLineCount: 3
+                Accessible.role: Accessible.StaticText
+                Accessible.name: qsTr("Repository URL: %1").arg(repositoryUrlDialog.repoUrl)
+                Accessible.ignored: false
+                Accessible.focusable: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (repositoryUrlDialog.imageWriter && repositoryUrlDialog.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: repositoryUrlDialog.imageWriter ? repositoryUrlDialog.imageWriter.isScreenReaderActive() : false
+            }
+        }
+
+        // Buttons row
+        RowLayout {
+            id: repoBtnRow
+            Layout.fillWidth: true
+            Layout.topMargin: Style.spacingSmall
+            spacing: Style.spacingMedium
+
+            Item { Layout.fillWidth: true }
+
+            ImButton {
+                id: repoSwitchBtn
+                text: {
+                    if (!repositoryUrlDialog.allowAccept) return qsTr("Please wait…")
+                    return repositoryUrlDialog.isLocalFile ? qsTr("Open") : qsTr("Switch repository")
+                }
+                accessibleDescription: repositoryUrlDialog.isLocalFile
+                    ? qsTr("Open the local manifest file and use it as the OS repository")
+                    : qsTr("Switch to the custom repository from the link")
+                enabled: repositoryUrlDialog.allowAccept
+                activeFocusOnTab: true
+                onClicked: {
+                    repositoryUrlDialog.close()
+                    // Switch to the new repository and reset wizard
+                    // QML auto-converts string to QUrl for C++ method
+                    root.imageWriter.refreshOsListFrom(repositoryUrlDialog.repoUrl)
+                    root.resetWizard()
+                }
+            }
+
+            ImButtonRed {
+                id: repoCancelBtn
+                text: qsTr("Cancel")
+                accessibleDescription: qsTr("Keep your current repository settings")
+                activeFocusOnTab: true
+                onClicked: repositoryUrlDialog.close()
+            }
+        }
+    }
+
     
     function onFinalizing() {
         // Forward to the WritingStep if currently active
@@ -939,10 +1418,35 @@ Item {
         }
     }
     
+    function onWriteCancelled() {
+        // Reset write state
+        isWriting = false
+        
+        // Navigate back to writing step (which will show the summary since isWriting is false)
+        if (currentStep !== stepWriting) {
+            jumpToStep(stepWriting)
+        }
+        
+        // Reset the writing step's state if it exists
+        if (wizardStack.currentItem && wizardStack.currentItem.objectName === "writingStep") {
+            wizardStack.currentItem.isWriting = false
+            wizardStack.currentItem.cancelPending = false
+            wizardStack.currentItem.isFinalising = false
+            wizardStack.currentItem.isComplete = false
+        }
+    }
+    
     function onDownloadProgress(now, total) {
         // Forward to the WritingStep if currently active
         if (currentStep === stepWriting && wizardStack.currentItem) {
             wizardStack.currentItem.onDownloadProgress(now, total)
+        }
+    }
+    
+    function onWriteProgress(now, total) {
+        // Forward to the WritingStep if currently active
+        if (currentStep === stepWriting && wizardStack.currentItem) {
+            wizardStack.currentItem.onWriteProgress(now, total)
         }
     }
     
@@ -962,9 +1466,11 @@ Item {
     
     function resetWizard() {
         // Reset all wizard state to initial values
-        currentStep = 0
+        // Start at OS selection if offline, device selection if online
+        currentStep = hasNetworkConnectivity ? 0 : 1
         permissibleStepsBitmap = 1  // Reset to only Device step permissible
         isWriting = false
+        writeAnotherMode = false
         selectedDeviceName = ""
         selectedOsName = ""
         selectedStorageName = ""
@@ -978,18 +1484,52 @@ Item {
         piConnectEnabled = false
         piConnectAvailable = false
 
-        rpiosCloudInitAvailable = false
+        ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false
+        if1WireEnabled = false
         ifSerial = ""
         featUsbGadgetEnabled = false
 
         supportsSerialConsoleOnly = false
         supportsUsbGadget = false
         
-        // Navigate back to the first step
+        // Reset hardware model selection to prevent stale state
+        if (imageWriter) {
+            var hwModel = imageWriter.getHWList()
+            if (hwModel) {
+                hwModel.currentIndex = -1
+            }
+            // Also clear ImageWriter's internal source and destination state
+            imageWriter.setSrc("")
+            imageWriter.setDst("", 0)
+        }
+        
+        // Navigate back to the first step (device selection if online, OS selection if offline)
         wizardStack.clear()
-        wizardStack.push(deviceSelectionStep)
+        wizardStack.push(hasNetworkConnectivity ? deviceSelectionStep : osSelectionStep)
+    }
+    
+    function resetToWriteStep() {
+        // Reset only the storage selection to allow choosing a new storage device
+        // while preserving device, OS, and customization settings
+        selectedStorageName = ""
+        
+        // Reset ephemeral Pi Connect state (session-only, not preserved)
+        // The token is already cleared when write completes, but ensure the enabled flag is reset
+        piConnectEnabled = false
+        delete customizationSettings.piConnectEnabled
+        
+        // Keep all steps permissible - they've already been completed
+        // This allows backward navigation if needed
+        
+        // Enable write another mode to skip directly to writing step after storage selection
+        writeAnotherMode = true
+        
+        // Navigate to storage selection step so user can select a new SD card
+        currentStep = stepStorageSelection
+        wizardStack.clear()
+        wizardStack.push(storageSelectionStep)
     }
 
     // Detect device selection changes and invalidate dependent steps

@@ -17,8 +17,63 @@
 #include <QRegularExpression>
 #include <QUrl>
 #include <QFileInfo>
+#include <QElapsedTimer>
 
 namespace {
+
+    // Valid init_format values according to schema
+    static const QStringList VALID_INIT_FORMATS = {
+        QStringLiteral(""),
+        QStringLiteral("systemd"),
+        QStringLiteral("cloudinit"),
+        QStringLiteral("cloudinit-rpi"),
+        QStringLiteral("none")
+    };
+
+    // Validate init_format value and return true if valid
+    bool isValidInitFormat(const QString &initFormat) {
+        return VALID_INIT_FORMATS.contains(initFormat);
+    }
+
+    // Recursively filter OS entries with invalid init_format values
+    QJsonArray filterInvalidInitFormats(const QJsonArray &list) {
+        QJsonArray filtered;
+        
+        for (const auto &value : list) {
+            QJsonObject entry = value.toObject();
+            QString initFormat = entry["init_format"].toString();
+            
+            // Validate init_format if present (empty string is valid, means no customization)
+            if (!isValidInitFormat(initFormat)) {
+                QString name = entry["name"].toString();
+                qWarning() << "OSListModel: Pruning OS entry with invalid init_format '" 
+                           << initFormat << "':" << name
+                           << "(valid values: '', 'systemd', 'cloudinit', 'cloudinit-rpi', 'none')";
+                continue;
+            }
+            
+            // Check if this entry has subitems and process them recursively
+            if (entry.contains(QLatin1String("subitems"))) {
+                QJsonArray subitems = entry["subitems"].toArray();
+                QJsonArray filteredSubitems = filterInvalidInitFormats(subitems);
+                
+                // Only include parent entry if it has valid subitems
+                if (!filteredSubitems.isEmpty()) {
+                    entry["subitems"] = filteredSubitems;
+                    filtered.append(entry);
+                } else {
+                    // Parent has no valid subitems, skip it
+                    QString name = entry["name"].toString();
+                    qWarning() << "OSListModel: Pruning OS entry with no valid subitems:" << name;
+                }
+            } else {
+                // Leaf entry with valid init_format
+                filtered.append(entry);
+            }
+        }
+        
+        return filtered;
+    }
 
     QJsonArray getListForLocale(QJsonObject root) {
         // "os_list_<locale>" has priority
@@ -51,6 +106,9 @@ namespace {
             qWarning() << Q_FUNC_INFO << "Expected to find os_list key" << root.keys();
             return {};
         }
+
+        // Filter out entries with invalid init_format values
+        list = filterInvalidInitFormats(list);
 
         // Apply random shuffling to arrays containing 'random' flag
         std::function<void(QJsonArray&)> shuffleIfRandom = [&](QJsonArray &lst) {
@@ -193,14 +251,12 @@ namespace {
                     return QString();
                 }
             } else if (scheme == QLatin1String("file")) {
+                // Allow local file URLs without filesystem validation - exists()/isFile()
+                // calls can be slow on iCloud-synced directories or network volumes,
+                // and this function is called for every icon during model population.
+                // QML's Image component handles missing files gracefully.
                 if (url.isLocalFile()) {
-                    QFileInfo fi(url.toLocalFile());
-                    if (fi.exists() && fi.isFile()) {
-                        return raw;
-                    } else {
-                        qWarning() << "OSListModel: dropping icon pointing to missing local file:" << raw;
-                        return QString();
-                    }
+                    return raw;
                 }
                 // Non-local file URL; drop
                 qWarning() << "OSListModel: dropping non-local file URL icon:" << raw;
@@ -222,11 +278,15 @@ OSListModel::OSListModel(ImageWriter &imageWriter)
 
 bool OSListModel::reload()
 {
+    QElapsedTimer parseTimer;
+    parseTimer.start();
+    
     QJsonDocument doc = _imageWriter.getFilteredOSlistDocument();
     QJsonObject root = doc.object();
 
     QJsonArray list = parseOSJson(root);
     if (list.isEmpty()) {
+        emit eventOsListParse(static_cast<quint32>(parseTimer.elapsed()), false);
         return false;
     }
 
@@ -294,6 +354,8 @@ bool OSListModel::reload()
     markFirstAsRecommended();
 
     endResetModel();
+    
+    emit eventOsListParse(static_cast<quint32>(parseTimer.elapsed()), true);
 
     return true;
 }
@@ -398,13 +460,21 @@ void OSListModel::markFirstAsRecommended() {
     }
 
     // Second pass: Add the localized "(Recommended)" to the first item if appropriate
-    if (!_osList.isEmpty()) {
-        OS &candidate = _osList[0];
+    // Skip internal items (Erase, Use custom) - these are fallbacks when OS list download fails
+    for (int i = 0; i < _osList.size(); i++) {
+        OS &candidate = _osList[i];
 
+        // Skip internal items (e.g., "internal://format", "internal://custom")
+        if (candidate.url.startsWith(QLatin1String("internal://"))) {
+            continue;
+        }
+
+        // Found a real OS entry - mark it as recommended if appropriate
         if (!candidate.description.isEmpty() &&
             candidate.subitemsJson.isEmpty())
         {
             candidate.description += recommendedString;
         }
+        break;  // Only mark the first real OS
     }
 }

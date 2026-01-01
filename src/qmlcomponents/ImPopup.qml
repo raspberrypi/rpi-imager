@@ -3,10 +3,10 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-import QtQuick 2.9
-import QtQuick.Controls 2.2
-import QtQuick.Layouts 1.0
-import QtQuick.Controls.Material 2.2
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Controls.Material
 
 import RpiImager
 
@@ -23,6 +23,22 @@ Popup {
 
     property alias title: msgpopupheader.text
     property alias closeButton: closeButton
+    
+    // Accessibility properties
+    Accessible.role: Accessible.Dialog
+    Accessible.name: msgpopupheader.text || qsTr("Dialog")
+    
+    // Access imageWriter from parent context
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
 
     // Functions to be implemented by derived components
     property var getNextFocusableElement: function(startElement) { return startElement }
@@ -34,7 +50,9 @@ Popup {
 
     background: Rectangle {
         color: Style.listViewRowBackgroundColor
-        radius: Style.listItemBorderRadius
+        radius: (msgpopup.imageWriter && msgpopup.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+        antialiasing: true  // Smooth edges at non-integer scale factors
+        clip: true  // Prevent content overflow at non-integer scale factors
     }
 
     contentItem: Item {
@@ -73,6 +91,9 @@ Popup {
             anchors.topMargin: Style.spacingSmall
             font.family: Style.fontFamily
             font.bold: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.ignored: false
         }
 
         ImCloseButton {

@@ -28,10 +28,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Save</source>
         <translation type="unfinished"></translation>
     </message>
@@ -44,19 +40,86 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Select custom Repository</source>
+        <source>Content Repository</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Browse</source>
+        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Select Repository</source>
+        <source>Close the options dialog without saving any changes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Select custom repository</source>
+        <source>Save the selected options and apply them to Raspberry Pi Imager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep warnings enabled and return to the options dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play an audio notification when the image write process completes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatically eject the storage device when the write process completes successfully</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send anonymous usage statistics to help improve Raspberry Pi Imager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip confirmation dialogs before writing images (advanced users only)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change the source of operating system images between official Raspberry Pi repository and custom sources</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Secure Boot RSA Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem);;All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AsyncCacheWriter</name>
+    <message>
+        <source>Cache write error: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -90,6 +153,110 @@
         <source>Public Key files (*.pub)</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation type="unfinished">Ar ais</translation>
+    </message>
+    <message>
+        <source>Finish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select image</source>
+        <translation type="unfinished">Roghnaigh íomhá</translation>
+    </message>
+    <message>
+        <source>Password:</source>
+        <translation type="unfinished">Pasfhocal:</translation>
+    </message>
+    <message>
+        <source>Device:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No device selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No image selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No storage selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hostname configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>User account configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wi‑Fi configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Connect enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I2C enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SPI enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB Gadget mode enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1-Wire enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Localisation configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Authorized keys files (authorized_keys)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmSystemDriveDialog</name>
@@ -121,13 +288,29 @@
         <source>CONTINUE</source>
         <translation type="unfinished">LEAN AR AGHAIDH</translation>
     </message>
+    <message>
+        <source>Cancel operation and return to storage selection to choose a different device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Proceed to write the image to this system drive after confirming the drive name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drive information</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drive name to type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drive name input. Type exactly: %1. %2</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmUnfilterDialog</name>
-    <message>
-        <source>Remove system drive filter?</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
         <translation type="unfinished"></translation>
@@ -140,6 +323,14 @@
         <source>SHOW SYSTEM DRIVES</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Keep system drives hidden to prevent accidental damage to your operating system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove the safety filter and display system drives in the storage device list</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DeviceSelectionStep</name>
@@ -147,55 +338,31 @@
         <source>Select your Raspberry Pi device</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Device selection list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use arrow keys to navigate, Enter or Space to select</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DoneStep</name>
     <message>
         <source>Your choices:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No device selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Operating System:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No image selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Storage Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No storage device selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Hostname configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ User account configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ SSH enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Raspberry Pi Connect enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>✓ Locale configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -211,10 +378,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Write complete!</source>
         <translation type="unfinished"></translation>
     </message>
@@ -223,11 +386,35 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>✓ Wi‑Fi configured</source>
+        <source>Reboot</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Reboot</source>
+        <source>Operating system:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reboot the system to apply changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close Raspberry Pi Imager and exit the application</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to storage selection to write the same image to another storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>customization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>customizations</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -261,28 +448,12 @@
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>unmounting drive</source>
-        <translation>tiomántán a dhíshuiteáil</translation>
-    </message>
-    <message>
-        <source>opening drive</source>
-        <translation>tiomáint oscailte</translation>
-    </message>
-    <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
         <translation>Deimhnigh le do thoil an bhfuil cead ag &apos;Raspberry Pi Imager&apos; rochtain a fháil ar &apos;imleabhair inbhainte&apos; i socruithe príobháideachta (faoi &apos;comhaid agus fillteáin&apos; nó tabhair &apos;rochtain iomlán ar dhiosca&apos; dó.</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos;.</source>
         <translation>Ní féidir gléas stórála &apos;%1&apos; a oscailt.</translation>
-    </message>
-    <message>
-        <source>discarding existing data on drive</source>
-        <translation>sonraí atá ann cheana féin ar thiomántán a scriosadh</translation>
-    </message>
-    <message>
-        <source>zeroing out first and last MB of drive</source>
-        <translation>ag nialadh an chéad MB agus an MB deireanach den tiomántán</translation>
     </message>
     <message>
         <source>Write error while zero&apos;ing out MBR</source>
@@ -293,20 +464,12 @@
         <translation>Earráid scríbhneoireachta agus iarracht á déanamh an chuid dheireanach den chárta a bhaint amach.&lt;br&gt;D’fhéadfadh an cárta a bheith ag fógairt acmhainn mhícheart (góchumtha b’fhéidir).</translation>
     </message>
     <message>
-        <source>starting download</source>
-        <translation>ag tosú íoslódáil</translation>
-    </message>
-    <message>
         <source>Error downloading: %1</source>
         <translation>Earráid ag íoslódáil: %1</translation>
     </message>
     <message>
         <source>Access denied error while writing file to disk.</source>
         <translation>Earráid rochtana diúltaithe agus comhad á scríobh chuig diosca.</translation>
-    </message>
-    <message>
-        <source>Error writing file to disk</source>
-        <translation>Earráid ag scríobh comhaid chuig diosca</translation>
     </message>
     <message>
         <source>Error writing to storage (while flushing)</source>
@@ -327,10 +490,6 @@
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
         <translation>Theip ar fhíorú an scríbhneoireachta. Tá ábhar an chárta SD difriúil ón méid a scríobhadh air.</translation>
-    </message>
-    <message>
-        <source>Customizing image</source>
-        <translation>Íomhá á saincheapadh</translation>
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
@@ -377,19 +536,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>writing image</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Error opening disk device &apos;%1&apos;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cannot open storage device &apos;%1&apos; after authorization.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cannot open storage device &apos;%1&apos; with udisks2 authorization.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -400,13 +547,133 @@
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Unmounting drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opening drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Discarding existing data on drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Customising OS...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot open storage device &apos;%1&apos;. Please run with elevated privileges (sudo).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Creating signed boot image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create secure boot files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No RSA key configured for secure boot. Please select a key in App Options.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>RSA key file not found: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Extracting boot partition files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to extract boot partition files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No boot files found to package</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create temporary directory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Creating boot.img...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create boot.img</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Signing boot image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to generate boot.sig</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read boot.img</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read boot.sig</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning up boot partition...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Syncing deletions to disk...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing signed boot files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write secure boot files: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unmounting volumes...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning disk...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleaning disk (legacy method)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing customization files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to allocate buffer for MBR zeroing</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
-    <message>
-        <source>Error formatting (through udisks2)</source>
-        <translation>Earráid ag formáidiú (trí udisks2)</translation>
-    </message>
     <message>
         <source>Error opening device for formatting</source>
         <translation>Earráid ag oscailt an ghléis le haghaidh formáidithe</translation>
@@ -432,10 +699,6 @@
         <translation>Earráid formáidithe anaithnid</translation>
     </message>
     <message>
-        <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation>Ní féidir an gléas a fhormáidiú: ceadanna neamhleor agus níl udisks2 ar fáil</translation>
-    </message>
-    <message>
         <source>Preparing disk for formatting...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -445,6 +708,10 @@
     </message>
     <message>
         <source>Writing filesystem...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -458,10 +725,6 @@
 <context>
     <name>HostnameCustomizationStep</name>
     <message>
-        <source>raspberrypi</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -469,23 +732,31 @@
         <source>Customisation: Choose hostname</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Enter your hostname</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save hostname and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>IfAndFeaturesCustomizationStep</name>
-    <message>
-        <source>Customization: Interfaces &amp; Features</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Enable hardware interfaces and connectivity options.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Interfaces</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Enable I²C</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -525,11 +796,82 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
+        <source>I understand, continue</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>I understand, continue</source>
+        <source>Customisation: Interfaces &amp; Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable I2C</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable 1-Wire</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable the SPI (Serial Peripheral Interface) for high-speed communication with displays and sensors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable the 1-Wire interface for connecting temperature sensors and other Dallas/Maxim devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save interface and feature settings and continue to writing step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure the serial interface: Disabled, Default (system decides), Console &amp; Hardware (both console and UART), Hardware (UART only), or Console (console only on supported devices).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB Gadget Mode Warning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please review the documentation before proceeding.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel and return to the interfaces and features settings without enabling USB Gadget Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm that you understand the risks and continue with USB Gadget Mode enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This button will be enabled after 2 seconds</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImComboBox</name>
+    <message>
+        <source>Type to search: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(press again to cycle)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -548,10 +890,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Open</source>
         <translation type="unfinished"></translation>
     </message>
@@ -567,16 +905,123 @@
         <source>No files in this folder</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Folder: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Downloads</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter filename…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Navigate to a folder using the panel on the left,
+or type a path in the address bar above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionButton</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImOptionPill</name>
+    <message>
+        <source>Opens in browser</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImPasswordField</name>
+    <message>
+        <source>Password is visible. Press F2 to hide.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is hidden. Press F2 to show.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is currently visible. Activate to hide it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is currently hidden. Activate to show it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImPopup</name>
+    <message>
+        <source>Dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImSaveFileDialog</name>
+    <message>
+        <source>Save File</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImTextField</name>
+    <message>
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImageWriter</name>
     <message>
         <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
         <translation>Ní íomhá diosca bailí é an comhad ionchuir.&lt;br&gt;Ní iolraí de 512 beart é méid an chomhaid %1 beart.</translation>
-    </message>
-    <message>
-        <source>Downloading and writing image</source>
-        <translation>Íomhá á íoslódáil agus á scríobh</translation>
     </message>
     <message>
         <source>Select image</source>
@@ -658,6 +1103,14 @@
         <source> or </source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>JSON files (*.json);;All files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>KeychainPermissionDialog</name>
@@ -674,11 +1127,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No</source>
+        <source>Skip keychain access and manually enter the Wi-Fi password</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Yes</source>
+        <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -696,20 +1149,16 @@
         <source>Choose your language for Raspberry Pi Imager</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Select the language for the Raspberry Pi Imager interface</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>LocalFileExtractThread</name>
     <message>
-        <source>opening image file</source>
-        <translation>comhad íomhá á oscailt</translation>
-    </message>
-    <message>
         <source>Error opening image file</source>
         <translation>Earráid ag oscailt comhad íomhá</translation>
-    </message>
-    <message>
-        <source>starting extraction</source>
-        <translation>ag tosú eastóscadh</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
@@ -722,6 +1171,14 @@
     <message>
         <source>Failed to read complete image file</source>
         <translation>Theip ar an gcomhad íomhá iomlán a léamh</translation>
+    </message>
+    <message>
+        <source>Opening image file...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Starting extraction...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -744,6 +1201,44 @@
     </message>
     <message>
         <source>Capital city:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save localisation settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country&apos;s Wi-Fi regulations.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MacFile</name>
+    <message>
+        <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>NativeFileDialog</name>
+    <message>
+        <source>File type:</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -773,10 +1268,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Back</source>
-        <translation type="unfinished">Ar ais</translation>
-    </message>
-    <message>
         <source>Go back to main menu</source>
         <translation type="unfinished">Téigh ar ais go dtí an príomh-roghchlár</translation>
     </message>
@@ -790,6 +1281,38 @@
     </message>
     <message>
         <source>Select an operating system to install on your Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating system list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No operating systems</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 operating system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 operating systems</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use arrow keys to navigate, Enter or Space to select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Operating system category</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use arrow keys to navigate, Enter or Space to select, Left arrow to go back</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Released: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -812,19 +1335,92 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Status:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Token received from browser</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Waiting for token</source>
+        <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sign in to receive a token and enable Raspberry PiConnect.</source>
+        <source>Enable secure remote access to your Raspberry Pi through the Raspberry Pi Connect cloud service</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Raspberry Pi Connect settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the &apos;Open Raspberry Pi Connect&apos; button to sign in.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for token (%1s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste token here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid Token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The token you entered is not valid. Please check the token and try again, or use the &apos;Open Raspberry Pi Connect&apos; button to get a valid token.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close this dialog and return to the token field</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Authentication token:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Raspberry Pi Imager requires elevated privileges to write to storage devices.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Without this, you will encounter permission errors when writing images.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as Administrator.
+
+Please run as Administrator.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as root.
+
+Please run with elevated privileges: sudo %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are not running as root.
+
+Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -840,14 +1436,6 @@
     </message>
     <message>
         <source>Use public key authentication</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Browse</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select SSH Public Key</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -867,11 +1455,276 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Enter public key or click BROWSE</source>
+        <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Failed to read SSH key file</source>
+        <source>Save SSH settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allow SSH login using the username and password you configured in the previous step.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allow SSH login using a cryptographic key pair instead of a password. More secure than password authentication.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RepositoryDialog</name>
+    <message>
+        <source>Content Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Repository source:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use custom file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please select a custom repository json file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply &amp; Restart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select custom repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use custom URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select a custom repository JSON file from your computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the repository dialog without changing the content source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply the new content repository and restart the wizard from the beginning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose the source for operating system images</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use the official Raspberry Pi operating system repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Load operating system list from a JSON file on your computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download operating system list from a custom web address</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SecureBootCustomizationStep</name>
+    <message>
+        <source>Customisation: Secure Boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure secure boot image signing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save secure boot settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Secure Boot Signing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Learn about Secure Boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Public Key Fingerprint: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unavailable)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(unable to compute)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select RSA Private Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem);;All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Selected: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Your boot partition will be signed using the selected RSA private key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please select an RSA private key above to enable secure boot signing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PEM Files (*.pem)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All Files (*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SshKeyManager</name>
+    <message>
+        <source>No SSH keys configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 SSH key configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 SSH keys configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Hide the list of SSH keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Show the list of SSH keys</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH keys list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1: %2, %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH key %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove SSH key: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove SSH key %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste key or click BROWSE to select file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>SSH public key input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paste an SSH public key here or use the browse button to select a key file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select SSH Public Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add the entered SSH key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select an SSH public key file to add</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -897,6 +1750,63 @@
         <source>Exclude system drives</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Storage device list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use arrow keys to navigate, Enter or Space to select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All visible devices are read-only.
+Try connecting a new device, or uncheck
+&apos;Exclude system drives&apos; below.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All devices are read-only.
+Please connect a writable storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All devices are hidden by the filter.
+Uncheck &apos;Exclude system drives&apos; below
+to show system drives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No storage devices found. Please connect a storage device to continue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos; to show hidden system drives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>UpdateAvailableDialog</name>
@@ -909,11 +1819,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No</source>
+        <source>Continue using the current version of Raspberry Pi Imager</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Yes</source>
+        <source>Open the Raspberry Pi website in your browser to download the latest version</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -922,10 +1832,6 @@
     <message>
         <source>Username:</source>
         <translation type="unfinished">Ainm úsáideora:</translation>
-    </message>
-    <message>
-        <source>Password:</source>
-        <translation type="unfinished">Pasfhocal:</translation>
     </message>
     <message>
         <source>Enter password</source>
@@ -963,6 +1869,38 @@
         <source>Enter your username</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Save user account settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a username for your Raspberry Pi account. The username must be lowercase and contain only letters, numbers, underscores, and hyphens.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a new password for this account, or leave blank to keep the previously saved password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a password for this account. You will need to re-enter it in the next field to confirm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter the new password to confirm, or leave blank to keep the previously saved password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter the password to confirm it matches.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WifiCustomizationStep</name>
@@ -975,16 +1913,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Password:</source>
-        <translation type="unfinished">Pasfhocal:</translation>
-    </message>
-    <message>
         <source>Network password</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Wireless LAN country:</source>
-        <translation type="unfinished">Tír LAN gan sreang:</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
@@ -995,15 +1925,95 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Configure wireless LAN settings</source>
+        <source>No password (open network)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Saved (hidden) — leave blank to clear</source>
+        <source>Saved (hidden) — leave blank to keep</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>✓ Recommended based on your capital city selection</source>
+        <source>Secure network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure Wi-Fi for an unencrypted network without password protection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is too short (min 8 characters)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password is too long (max 63 characters)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Password contains unsupported characters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm password:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Wi-Fi settings and continue to next customisation step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip all customisation and proceed directly to writing the image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter the network name (SSID) of your Wi-Fi network. This is the name that appears when you search for available networks.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter a new Wi-Fi password, or leave blank to keep the previously saved password. Must be 8-63 characters or a 64-character hexadecimal key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter your Wi-Fi network password. Must be 8-63 characters or a 64-character hexadecimal key. You will need to re-enter it in the next field to confirm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter the new Wi-Fi password to confirm, or leave blank to keep the previously saved password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter the Wi-Fi password to confirm it matches.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Check this if your Wi-Fi network does not broadcast its name and requires manual SSID entry to connect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwords don&apos;t match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Re-enter to change password</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1030,10 +2040,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Customisation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1047,10 +2053,6 @@
     </message>
     <message>
         <source>Wi‑Fi</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remote Access</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1073,16 +2075,64 @@
         <source>Localisation</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Remote access</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open application settings to configure sound alerts, auto-eject, telemetry, and content repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace existing Raspberry Pi Connect token?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A new Raspberry Pi Connect token was received that differs from your current one.
+
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Do you want to overwrite the existing token?
+
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please wait…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace the current token with the newly received one</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep existing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep your current Raspberry Pi Connect token</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Secure Boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Warning: Only overwrite the token if you initiated this action.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardStepBase</name>
     <message>
         <source>Next</source>
         <translation type="unfinished">Ar Aghaidh</translation>
-    </message>
-    <message>
-        <source>Back</source>
-        <translation type="unfinished">Ar ais</translation>
     </message>
     <message>
         <source>Skip customisation</source>
@@ -1096,14 +2146,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Continue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Write</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1112,47 +2154,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Device:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No device selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No image selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Storage:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No storage selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• Hostname configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• User account configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• SSH enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>• Locale configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Starting write process...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Write cancelled</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1196,10 +2198,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>• Wi‑Fi configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Finalising...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1212,36 +2210,72 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Ready to write your customised image to your storage device. All existing data will be erased.</source>
+        <source>Cancel and return to the write summary without erasing the storage device</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Ready to write the image to your storage device. All existing data will be erased.</source>
+        <source>Confirm erasure and begin writing the image to the storage device</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>• USB Gadget enabled</source>
+        <source>Skip verification</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>• I2C enabled</source>
+        <source>Cancel write</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>• SPI enabled</source>
+        <source>Skip verification and finish the write process</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>• Raspberry Pi Connect enabled</source>
+        <source>Cancel the write operation and return to the summary</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Continue to the completion screen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Begin writing the image to the storage device. All existing data will be erased.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to previous customization step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finalising…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>customization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>customizations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Writing in progress — do not disconnect the storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please wait... %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>main</name>
-    <message>
-        <source>Raspberry Pi Imager v%1</source>
-        <translation>Íomháitheoir Raspberry Pi leagan v%1</translation>
-    </message>
     <message>
         <source>Are you sure you want to quit?</source>
         <translation>An bhfuil tú cinnte gur mian leat éirí as?</translation>
@@ -1271,19 +2305,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Storage device removed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Continue</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1292,6 +2314,62 @@
     </message>
     <message>
         <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the error dialog and continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the storage removed notification and return to storage selection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Return to Raspberry Pi Imager and continue the current operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Raspberry Pi Imager %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Insufficient Permissions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error message explaining why elevated privileges are required</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install Authorization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Performance Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>JSON files (*.json)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

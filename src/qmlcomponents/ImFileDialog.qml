@@ -4,10 +4,10 @@
  */
 
 import QtCore
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import Qt.labs.folderlistmodel 2.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Qt.labs.folderlistmodel
 import RpiImager
 
 BaseDialog {
@@ -20,19 +20,33 @@ BaseDialog {
     property url folder: currentFolder
     property var nameFilters: [] // ["Images (*.png *.jpg)", "All files (*)"]
     property url selectedFile: ""
+    
+    // Save dialog mode - when true, shows filename input and hides file list
+    property bool isSaveDialog: false
+    property string suggestedFilename: ""
 
     // Use Dialog's built-in accepted/rejected signals; do not redeclare to avoid overrides
 
-    property bool _firstOpenDone: false
+    property string _currentFilename: suggestedFilename
+    
     function open() {
-        if (!dialog._firstOpenDone) {
-            dialog.currentFolder = "file:///"
-            dialog.folder = dialog.currentFolder
-            dialog._firstOpenDone = true
+        // For save dialogs, initialize filename from suggestion
+        if (isSaveDialog) {
+            _currentFilename = suggestedFilename
         }
         dialog.visible = true
     }
     function close() { dialog.visible = false }
+    
+    // Build the full file path from current folder and filename (for save mode)
+    function _buildFilePath() {
+        var folder = _toDisplayPath(currentFolder)
+        var filename = String(_currentFilename).trim()
+        if (!filename) return ""
+        // Ensure folder ends with /
+        if (!folder.endsWith("/")) folder += "/"
+        return folder + filename
+    }
 
     // Override BaseDialog defaults for file dialog specific sizing
     width: Math.min(720, Math.max(520, parent ? parent.width - 80 : 720))
@@ -181,43 +195,80 @@ BaseDialog {
             contentLayout.spacing = 4
         }
         
-        // Add removable drives shortcut based on platform
-        var removableDrivesPath = ""
-        if (Qt.platform.os === "linux") {
-            removableDrivesPath = "file:///mnt"
-        } else if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
-            removableDrivesPath = "file:///Volumes"
-        } else if (Qt.platform.os === "windows") {
-            // On Windows, show root which lists all drives
-            removableDrivesPath = "file:///"
+        // Add places based on dialog mode
+        if (dialog.isSaveDialog) {
+            // Save dialogs get common save locations
+            var docsPath = String(StandardPaths.writableLocation(StandardPaths.DocumentsLocation))
+            if (docsPath && docsPath.length > 0) {
+                placesModel.append({ label: qsTr("Documents"), url: "file://" + docsPath })
+            }
+            
+            var downloadPath = String(StandardPaths.writableLocation(StandardPaths.DownloadLocation))
+            if (downloadPath && downloadPath.length > 0) {
+                placesModel.append({ label: qsTr("Downloads"), url: "file://" + downloadPath })
+            }
+            
+            var homePath = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
+            if (homePath && homePath.length > 0) {
+                placesModel.append({ label: qsTr("Home"), url: "file://" + homePath })
+            }
         } else {
-            // Fallback to root for other platforms
-            removableDrivesPath = "file:///"
+            // Open dialogs get removable drives shortcut based on platform
+            var removableDrivesPath = ""
+            if (Qt.platform.os === "linux") {
+                removableDrivesPath = "file:///mnt"
+            } else if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
+                removableDrivesPath = "file:///Volumes"
+            } else if (Qt.platform.os === "windows") {
+                // On Windows, show root which lists all drives
+                removableDrivesPath = "file:///"
+            } else {
+                // Fallback to root for other platforms
+                removableDrivesPath = "file:///"
+            }
+            placesModel.append({ label: qsTr("Removable drives"), url: removableDrivesPath })
         }
-        placesModel.append({ label: qsTr("Removable drives"), url: removableDrivesPath })
         
         // Initialize path field text
         pathField.text = dialog._toDisplayPath(dialog.currentFolder)
         
-        // Register focus groups
-        registerFocusGroup("address", function(){ 
-            return [pathField] 
-        }, 0)
-        registerFocusGroup("places", function(){ 
-            return [placesList] 
-        }, 1)
-        registerFocusGroup("folders", function(){ 
-            return [subfoldersList] 
-        }, 2)
-        registerFocusGroup("navigation", function(){ 
-            return [upEntry] 
-        }, 3)
-        registerFocusGroup("files", function(){ 
-            return [filesList] 
-        }, 4)
-        registerFocusGroup("buttons", function(){ 
-            return [cancelButton, openButton] 
-        }, 5)
+        // Register focus groups - different order for save vs open dialogs
+        if (dialog.isSaveDialog) {
+            registerFocusGroup("filename", function(){ 
+                return [filenameField] 
+            }, 0)
+            registerFocusGroup("address", function(){ 
+                return [pathField] 
+            }, 1)
+            registerFocusGroup("places", function(){ 
+                return [placesList] 
+            }, 2)
+            registerFocusGroup("folders", function(){ 
+                return [subfoldersList] 
+            }, 3)
+            registerFocusGroup("buttons", function(){ 
+                return [cancelButton, openButton] 
+            }, 4)
+        } else {
+            registerFocusGroup("address", function(){ 
+                return [pathField] 
+            }, 0)
+            registerFocusGroup("places", function(){ 
+                return [placesList] 
+            }, 1)
+            registerFocusGroup("folders", function(){ 
+                return [subfoldersList] 
+            }, 2)
+            registerFocusGroup("navigation", function(){ 
+                return [upEntry] 
+            }, 3)
+            registerFocusGroup("files", function(){ 
+                return [filesList] 
+            }, 4)
+            registerFocusGroup("buttons", function(){ 
+                return [cancelButton, openButton] 
+            }, 5)
+        }
     }
 
     // Title and address bar on same row
@@ -249,6 +300,39 @@ BaseDialog {
             }
         }
     }
+    
+    // Filename input row (only for save dialogs)
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.bottomMargin: 6
+        spacing: 12
+        visible: dialog.isSaveDialog
+        
+        Text {
+            text: qsTr("File name:")
+            font.pixelSize: Style.fontSizeFormLabel
+            font.family: Style.fontFamily
+            color: Style.formLabelColor
+        }
+        
+        TextField {
+            id: filenameField
+            Layout.fillWidth: true
+            text: dialog._currentFilename
+            placeholderText: qsTr("Enter filename…")
+            activeFocusOnTab: dialog.isSaveDialog
+            onTextChanged: {
+                dialog._currentFilename = text
+            }
+            onAccepted: {
+                if (text.trim().length > 0) {
+                    dialog.selectedFile = dialog._toFileUrl(dialog._buildFilePath())
+                    dialog.close()
+                    dialog.accepted()
+                }
+            }
+        }
+    }
 
     // Main content with left navigation and file list
     RowLayout {
@@ -264,7 +348,14 @@ BaseDialog {
             Layout.fillHeight: true
             clip: true
             padding: 8
-            background: Rectangle { color: Style.mainBackgroundColor; radius: Style.sectionBorderRadius; border.color: Style.popupBorderColor; border.width: Style.sectionBorderWidth }
+            background: Rectangle {
+                color: Style.mainBackgroundColor
+                radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+                border.color: Style.popupBorderColor
+                border.width: Style.sectionBorderWidth
+                antialiasing: true
+                clip: true
+            }
 
             ColumnLayout {
                 anchors.fill: parent
@@ -281,7 +372,8 @@ BaseDialog {
                     highlightFollowsCurrentItem: true
                     highlight: Rectangle {
                         color: placesList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
-                        radius: Style.listItemBorderRadius
+                        radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                        antialiasing: true
                         visible: placesList.currentIndex >= 0
                     }
                     
@@ -298,6 +390,8 @@ BaseDialog {
                         width: (ListView.view ? ListView.view.width : 0)
                         text: model.label
                         highlighted: ListView.isCurrentItem
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: text
                         background: Rectangle {
                             color: {
                                 if (ListView.isCurrentItem && placesList.activeFocus)
@@ -307,7 +401,8 @@ BaseDialog {
                                 else
                                     return "transparent"
                             }
-                            radius: Style.listItemBorderRadius
+                            radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                            antialiasing: true
                         }
                         onClicked: {
                             placesList.currentIndex = index
@@ -357,7 +452,8 @@ BaseDialog {
                     highlightFollowsCurrentItem: true
                     highlight: Rectangle {
                         color: subfoldersList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
-                        radius: Style.listItemBorderRadius
+                        radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                        antialiasing: true
                         visible: subfoldersList.currentIndex >= 0
                     }
                     
@@ -383,6 +479,8 @@ BaseDialog {
                         width: (ListView.view ? ListView.view.width : 0)
                         text: "📁 " + fileName
                         highlighted: ListView.isCurrentItem
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: qsTr("Folder: %1").arg(fileName)
                         background: Rectangle {
                             color: {
                                 if (ListView.isCurrentItem && subfoldersList.activeFocus)
@@ -392,7 +490,8 @@ BaseDialog {
                                 else
                                     return "transparent"
                             }
-                            radius: Style.listItemBorderRadius
+                            radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                            antialiasing: true
                         }
                         onClicked: {
                             subfoldersList.currentIndex = index
@@ -429,7 +528,14 @@ BaseDialog {
             Layout.fillWidth: true
             Layout.fillHeight: true
             padding: 8
-            background: Rectangle { color: Style.mainBackgroundColor; radius: Style.sectionBorderRadius; border.color: Style.popupBorderColor; border.width: Style.sectionBorderWidth }
+            background: Rectangle {
+                color: Style.mainBackgroundColor
+                radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
+                border.color: Style.popupBorderColor
+                border.width: Style.sectionBorderWidth
+                antialiasing: true
+                clip: true
+            }
 
             // Unified scroll area: Up entry, then directories, then files
             ScrollView {
@@ -498,9 +604,10 @@ BaseDialog {
                         // Custom styling to make it look like a navigation item
                         background: Rectangle {
                             color: upEntry.hovered ? Qt.rgba(0, 0, 0, 0.1) : Qt.rgba(0, 0, 0, 0.03)
-                            radius: Style.listItemBorderRadius
+                            radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
                             border.width: upEntry.activeFocus ? 2 : 1
                             border.color: upEntry.activeFocus ? Style.focusOutlineColor : Qt.rgba(0, 0, 0, 0.1)
+                            antialiasing: true
                         }
                         
                         contentItem: Text {
@@ -515,20 +622,22 @@ BaseDialog {
                         }
                     }
 
-                    // Files list with focus support
+                    // Files list with focus support (hidden in save mode)
                     ListView {
                         id: filesList
                         width: fileColumn.width
-                        height: Math.max(contentHeight, filesOnlyModel.count === 0 ? 60 : 0)
+                        height: dialog.isSaveDialog ? 0 : Math.max(contentHeight, filesOnlyModel.count === 0 ? 60 : 0)
+                        visible: !dialog.isSaveDialog
                         model: filesOnlyModel
-                        activeFocusOnTab: filesOnlyModel.count > 0
+                        activeFocusOnTab: !dialog.isSaveDialog && filesOnlyModel.count > 0
                         currentIndex: -1
                         highlightFollowsCurrentItem: true
                         interactive: false
                         
                         highlight: Rectangle {
                             color: filesList.activeFocus ? Style.listViewHighlightColor : Qt.rgba(0, 0, 0, 0.05)
-                            radius: Style.listItemBorderRadius
+                            radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                            antialiasing: true
                             visible: filesList.currentIndex >= 0
                         }
                         
@@ -565,6 +674,8 @@ BaseDialog {
                             width: fileColumn.width
                             text: "📄 " + fileName
                             highlighted: ListView.isCurrentItem
+                            Accessible.role: Accessible.ListItem
+                            Accessible.name: qsTr("File: %1").arg(fileName)
                             background: Rectangle {
                                 color: {
                                     if (dialog.selectedFile === fileURL)
@@ -576,7 +687,8 @@ BaseDialog {
                                     else
                                         return "transparent"
                                 }
-                                radius: Style.listItemBorderRadius
+                                radius: (dialog.imageWriter && dialog.imageWriter.isEmbeddedMode()) ? Style.listItemBorderRadiusEmbedded : Style.listItemBorderRadius
+                                antialiasing: true
                             }
                             onClicked: {
                                 filesList.currentIndex = index
@@ -597,16 +709,30 @@ BaseDialog {
                             }
                         }
                         
-                        // Show message when no files are available
+                        // Show message when no files are available (only in open mode)
                         Text {
                             anchors.centerIn: parent
-                            visible: filesOnlyModel.count === 0
+                            visible: !dialog.isSaveDialog && filesOnlyModel.count === 0
                             text: qsTr("No files in this folder")
                             font.pixelSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             font.italic: true
                             color: Style.textDescriptionColor
                         }
+                    }
+                    
+                    // Message for save dialogs - shown instead of file list
+                    Text {
+                        width: fileColumn.width
+                        visible: dialog.isSaveDialog
+                        text: qsTr("Navigate to a folder using the panel on the left,\nor type a path in the address bar above.")
+                        font.pixelSize: Style.fontSizeDescription
+                        font.family: Style.fontFamily
+                        font.italic: true
+                        color: Style.textDescriptionColor
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        topPadding: 40
                     }
                 }
             }
@@ -621,16 +747,24 @@ BaseDialog {
         Item { Layout.fillWidth: true }
         ImButton {
             id: cancelButton
-            text: qsTr("Cancel")
+            text: CommonStrings.cancel
             activeFocusOnTab: true
             onClicked: { dialog.close(); dialog.rejected() }
         }
         ImButton {
             id: openButton
-            text: qsTr("Open")
-            enabled: String(dialog.selectedFile).length > 0
+            text: dialog.isSaveDialog ? qsTr("Save") : qsTr("Open")
+            enabled: dialog.isSaveDialog 
+                ? String(dialog._currentFilename).trim().length > 0 
+                : String(dialog.selectedFile).length > 0
             activeFocusOnTab: true
-            onClicked: { dialog.close(); dialog.accepted() }
+            onClicked: {
+                if (dialog.isSaveDialog) {
+                    dialog.selectedFile = dialog._toFileUrl(dialog._buildFilePath())
+                }
+                dialog.close()
+                dialog.accepted()
+            }
         }
     }
 }

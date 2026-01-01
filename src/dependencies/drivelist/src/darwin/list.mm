@@ -135,10 +135,13 @@ namespace Drivelist {
     device.logicalBlockSize = [blockSize unsignedIntValue];
     device.size = [DictionaryGetNumber(diskDescription, kDADiskDescriptionMediaSizeKey) unsignedLongValue];
     device.isReadOnly = ![DictionaryGetNumber(diskDescription, kDADiskDescriptionMediaWritableKey) boolValue];
-    device.isSystem = isInternal && !isRemovable;
     device.isVirtual = ((deviceProtocol != nil) && [deviceProtocol isEqualToString:@"Virtual Interface"]);
     device.isRemovable = isRemovable || isEjectable;
     device.isCard = IsCard(diskDescription);
+    /* SD cards should never be marked as system drives, even in internal readers.
+       Internal readers report isInternal=true but the media is removable.
+       Also check isRemovable and isEjectable to handle all SD card scenarios. */
+    device.isSystem = isInternal && !isRemovable && !device.isCard;
     // NOTE(robin): Not convinced that these bus types should result
     // in device.isSCSI = true, it is rather "not usb or sd drive" bool
     // But the old implementation was like this so kept it this way

@@ -27,17 +27,57 @@ endif()
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectures to build for")
 
 project(rpi-imager LANGUAGES CXX C)
-set(IMAGER_VERSION_MAJOR 2)
-set(IMAGER_VERSION_MINOR 0)
-set(IMAGER_VERSION_PATCH 0)
-set(IMAGER_VERSION_STR "${IMAGER_VERSION_MAJOR}.${IMAGER_VERSION_MINOR}.${IMAGER_VERSION_PATCH}")
-set(IMAGER_VERSION_CSV "${IMAGER_VERSION_MAJOR},${IMAGER_VERSION_MINOR},${IMAGER_VERSION_PATCH},0")
+
+# Get version from git tag
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_DESCRIBE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif()
+
+# Use git-derived version as the canonical version string
+if(GIT_DESCRIBE)
+    set(IMAGER_VERSION_STR "${GIT_DESCRIBE}")
+    message(STATUS "Version from git: ${IMAGER_VERSION_STR}")
+    
+    # Extract numeric version components from git tag for Windows metadata
+    # Expected format: v2.0.0 or v2.0.0-rc4-60-geac7c2f0
+    string(REGEX MATCH "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)" VERSION_MATCH "${GIT_DESCRIBE}")
+    if(VERSION_MATCH)
+        set(IMAGER_VERSION_MAJOR ${CMAKE_MATCH_1})
+        set(IMAGER_VERSION_MINOR ${CMAKE_MATCH_2})
+        set(IMAGER_VERSION_PATCH ${CMAKE_MATCH_3})
+    else()
+        # Fallback if tag doesn't match expected format
+        set(IMAGER_VERSION_MAJOR 0)
+        set(IMAGER_VERSION_MINOR 0)
+        set(IMAGER_VERSION_PATCH 0)
+        message(WARNING "Could not parse version from git tag: ${GIT_DESCRIBE}")
+    endif()
+else()
+    # Fallback when git is not available or no tags exist
+    set(IMAGER_VERSION_MAJOR 0)
+    set(IMAGER_VERSION_MINOR 0)
+    set(IMAGER_VERSION_PATCH 0)
+    set(IMAGER_VERSION_STR "0.0.0-unknown")
+    message(WARNING "Git not found or no tags available, using fallback version: ${IMAGER_VERSION_STR}")
+endif()
+
+# Version variables for template substitution (Windows .rc, .manifest, etc.)
+# Note: IMAGER_VERSION_STR is used in C++ code, so it needs to be a compile definition
 add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
-add_definitions(-DIMAGER_VERSION_CSV=${IMAGER_VERSION_CSV})
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# One place to define the Windows callback IPC port
+set(IMAGER_CALLBACK_PORT "49629" CACHE STRING "TCP port for rpi-imager callback relay on Windows")
 
 # Apply optimization flags globally to all targets (including bundled dependencies)
 if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
@@ -159,6 +199,9 @@ if(APPLE)
     find_package(CURL REQUIRED)
     # Normalize variable naming used later in include_directories
     set(CURL_INCLUDE_DIR ${CURL_INCLUDE_DIRS})
+    
+    # Note: No need to find OpenSSL on macOS - we use native Security.framework
+    # for RSA operations and CommonCrypto for hashing
 else()
     include(dependencies/curl.cmake)
 endif()
@@ -204,16 +247,17 @@ endif( IS_BIG_ENDIAN )
 set(SOURCES_BASE ${PLATFORM_SOURCES} "main.cpp"
     "drivelistitem.cpp" "drivelistmodel.cpp" "drivelistmodelpollthread.cpp" "downloadthread.cpp" "downloadextractthread.cpp"
     "devicewrapper.cpp" "devicewrapperblockcacheentry.cpp" "devicewrapperpartition.cpp" "devicewrapperfatpartition.cpp"
-    "driveformatthread.cpp" "localfileextractthread.cpp" "powersaveblocker.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
+    "driveformatthread.cpp" "localfileextractthread.cpp" "downloadstatstelemetry.cpp" "dependencies/sha256crypt/sha256crypt.c" "cli.cpp"
     "disk_formatter.cpp" "file_operations.cpp" "cachemanager.cpp" "systemmemorymanager.cpp" "imageadvancedoptions.cpp"
-    "customization_generator.cpp")
+    "customization_generator.cpp" "platformhelper.cpp" "suspend_inhibitor.cpp" "secureboot.cpp" "asynccachewriter.cpp" "ringbuffer.cpp"
+    "performancestats.cpp" "curlnetworkconfig.cpp" "curlfetcher.cpp")
 
 # Add GUI-specific sources only for non-CLI builds
 if(BUILD_CLI_ONLY)
     # CLI builds need imagewriter but not the GUI components
     set(SOURCES ${SOURCES_BASE} "imagewriter.cpp" "hwlistmodel.cpp" "oslistmodel.cpp")
 else()
-    set(SOURCES ${SOURCES_BASE} "networkaccessmanagerfactory.cpp" "qml.qrc" "nativefiledialog.cpp" "iconimageprovider.cpp")
+    set(SOURCES ${SOURCES_BASE} "networkaccessmanagerfactory.cpp" "qml.qrc" "nativefiledialog.cpp" "iconimageprovider.cpp" "iconmultifetcher.cpp")
 endif()
 
 if(BUILD_EMBEDDED)
@@ -225,33 +269,24 @@ endif()
 
 # Find Qt components - different requirements for CLI-only vs GUI builds
 if(BUILD_CLI_ONLY)
-    # CLI-only build: need Core and Network for downloading, optionally DBus
-    if(UNIX AND NOT APPLE)
-        find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools DBus)
-    else()
-        find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
-    endif()
+    # CLI-only build: need ONLY Core and Network for downloading
+    find_package(Qt6 6.9 COMPONENTS Core Network OPTIONAL_COMPONENTS LinguistTools)
 else()
-    # Regular GUI build: need Core, Quick, Svg, Network - DBus only needed on Linux
+    # Regular GUI build: need Core, Quick, Svg, Network, Gui
+    # DBus is required on Linux for suspend inhibitor and native file dialogs (portals)
     if(UNIX AND NOT APPLE)
-        find_package(Qt6 6.9 COMPONENTS Core Quick Svg Network OPTIONAL_COMPONENTS LinguistTools DBus)
+        find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network DBus OPTIONAL_COMPONENTS LinguistTools)
     else()
-        find_package(Qt6 6.9 COMPONENTS Core Quick Svg Network OPTIONAL_COMPONENTS LinguistTools)
+        find_package(Qt6 6.9 COMPONENTS Core Gui Quick Svg Network OPTIONAL_COMPONENTS LinguistTools)
     endif()
 endif()
 if (Qt6_FOUND)
     set(QT Qt6)
     if (APPLE)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "11" CACHE STRING "" FORCE)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "12" CACHE STRING "" FORCE)
     endif()
 else()
     message(FATAL_ERROR "Missing suitable Qt library (must be at least version 6.9)" )
-endif()
-
-if(${QT}DBus_FOUND AND UNIX AND NOT APPLE)
-    set(DEPENDENCIES ${DEPENDENCIES} linux/udisks2api.cpp linux/udisks2api.h)
-    set(EXTRALIBS ${EXTRALIBS} ${QT}::DBus)
-    message("udisks2 support enabled")
 endif()
 if(${QT}WinExtras_FOUND)
     set(EXTRALIBS ${EXTRALIBS} ${QT}::WinExtras)
@@ -292,21 +327,11 @@ set(SOURCES ${SOURCES} "${CMAKE_CURRENT_BINARY_DIR}/translations.qrc" ${QM_FILES
 option(GENERATE_TIMEZONES_FROM_IANA "Generate timezone list from latest IANA data" ON)
 
 if(GENERATE_TIMEZONES_FROM_IANA)
-    set(TZDATA_VERSION "2025b") # Update this to get newer timezone data
+    set(TZDATA_VERSION "2025c") # Update this to get newer timezone data
     set(TZDATA_URL "https://data.iana.org/time-zones/releases/tzdata${TZDATA_VERSION}.tar.gz")
 
-    # Reuse the helper to produce a generated qrc aliasing timezones.txt
-    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
-    set(GENERATED_TIMEZONES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/timezones_generated.txt")
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt")
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/timezones.txt"
-            "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}"
-            COPYONLY
-        )
-    else()
-        file(WRITE "${GENERATED_TIMEZONES_FILE_PLACEHOLDER}" "# placeholder\n")
-    endif()
+    # The generator script handles fallback internally - it downloads from API
+    # and falls back to the source file if the download fails (offline builds)
     add_generated_resource_with_fallback(GENERATED_TZ_QRC GENERATE_TIMEZONES_TGT timezones
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateTimezones.cmake
         timezones_generated.txt timezones.txt
@@ -322,17 +347,9 @@ option(GENERATE_COUNTRIES_FROM_REGDB "Generate countries list from latest wirele
 
 if(GENERATE_COUNTRIES_FROM_REGDB)
     set(REGDB_URL "https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain/db.txt")
-    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
-    set(GENERATED_COUNTRIES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/countries_generated.txt")
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/countries.txt")
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/countries.txt"
-            "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}"
-            COPYONLY
-        )
-    else()
-        file(WRITE "${GENERATED_COUNTRIES_FILE_PLACEHOLDER}" "# placeholder\n")
-    endif()
+
+    # The generator script handles fallback internally - it downloads from API
+    # and falls back to the source file if the download fails (offline builds)
     add_generated_resource_with_fallback(GENERATED_COUNTRIES_QRC GENERATE_COUNTRIES_TGT countries
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateRegdbCountries.cmake
         countries_generated.txt countries.txt
@@ -346,17 +363,9 @@ option(GENERATE_CAPITAL_CITIES "Generate capital cities list from REST Countries
 
 if(GENERATE_CAPITAL_CITIES)
     set(REST_COUNTRIES_URL "https://restcountries.com/v3.1/all?fields=name,capital,cca2,timezones")
-    # Always create/update a placeholder for clean builds so rcc can parse generated qrc
-    set(GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER "${CMAKE_CURRENT_BINARY_DIR}/capital-cities_generated.txt")
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/capital-cities.txt")
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/capital-cities.txt"
-            "${GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER}"
-            COPYONLY
-        )
-    else()
-        file(WRITE "${GENERATED_CAPITAL_CITIES_FILE_PLACEHOLDER}" "# placeholder\n")
-    endif()
+
+    # The generator script handles fallback internally - it downloads from API
+    # and falls back to the source file if the download fails (offline builds)
     add_generated_resource_with_fallback(GENERATED_CAPITAL_CITIES_QRC GENERATE_CAPITAL_CITIES_TGT capital-cities
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateCapitalCities.cmake
         capital-cities_generated.txt capital-cities.txt
@@ -371,6 +380,13 @@ endif()
 if (WIN32)
     # Adding WIN32 prevents a console window being opened on Windows
     add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${DEPENDENCIES})
+
+    # Inject the callback port macro for Windows builds
+    target_compile_definitions(${PROJECT_NAME}
+            PRIVATE RPI_IMAGER_CALLBACK_PORT=${IMAGER_CALLBACK_PORT})
+
+    # Ensure the relay builds with the app
+    add_dependencies(${PROJECT_NAME} rpi-imager-callback-relay)
 else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${DEPENDENCIES})
 endif()
@@ -399,6 +415,11 @@ if(GENERATE_COUNTRIES_FROM_REGDB AND DEFINED GENERATE_COUNTRIES_TGT)
     add_dependencies(${PROJECT_NAME} ${GENERATE_COUNTRIES_TGT})
     # Make sure autogen (rcc) also waits on countries generation
     set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_COUNTRIES_TGT})
+endif()
+
+# Add Icon Composer dependency for macOS dark mode icons
+if(APPLE AND DEFINED ICON_COMPOSER_TARGET AND NOT "${ICON_COMPOSER_TARGET}" STREQUAL "")
+    add_dependencies(${PROJECT_NAME} ${ICON_COMPOSER_TARGET})
 endif()
 
 if(ENABLE_TELEMETRY)
@@ -437,6 +458,7 @@ if(NOT BUILD_CLI_ONLY)
         wizard/dialogs/UpdateAvailableDialog.qml
         wizard/dialogs/RepositoryDialog.qml
         wizard/dialogs/AppOptionsDialog.qml
+        wizard/dialogs/DebugOptionsDialog.qml
         wizard/LanguageSelectionStep.qml
         qmlcomponents/BaseDialog.qml
         qmlcomponents/ImButton.qml
@@ -445,11 +467,15 @@ if(NOT BUILD_CLI_ONLY)
         qmlcomponents/ImCloseButton.qml
         qmlcomponents/ImComboBox.qml
         qmlcomponents/ImFileDialog.qml
+        qmlcomponents/ImSaveFileDialog.qml
         qmlcomponents/ImPopup.qml
         qmlcomponents/ImRadioButton.qml
         qmlcomponents/ImOptionPill.qml
         qmlcomponents/ImOptionButton.qml
         qmlcomponents/ImTextField.qml
+        qmlcomponents/ImPasswordField.qml
+        qmlcomponents/ImToggleTab.qml
+        qmlcomponents/MarqueeText.qml
         qmlcomponents/SelectionListView.qml
         qmlcomponents/OSSelectionListView.qml
         wizard/WizardStepBase.qml
@@ -463,12 +489,14 @@ if(NOT BUILD_CLI_ONLY)
         wizard/UserCustomizationStep.qml
         wizard/WifiCustomizationStep.qml
         wizard/RemoteAccessStep.qml
+        wizard/SecureBootCustomizationStep.qml
         wizard/PiConnectCustomizationStep.qml
         wizard/WritingStep.qml
         wizard/DoneStep.qml
         wizard/components/WizardSectionContainer.qml
         wizard/components/WizardFormLabel.qml
         wizard/components/WizardDescriptionText.qml
+        wizard/components/SshKeyManager.qml
     )
 
     set_source_files_properties(Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -480,6 +508,8 @@ if(NOT BUILD_CLI_ONLY)
         hwlistmodel.cpp
         oslistmodel.cpp
         urlfmt.cpp
+        clipboardhelper.cpp
+        platformhelper.cpp
     )
 endif()
 
@@ -516,7 +546,12 @@ if(BUILD_CLI_ONLY)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
 else()
     # Regular GUI build: link all GUI components
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    # Add DBus on Linux for suspend inhibitor and native file dialogs (portals)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${QT}::DBus ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    else()
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${QT}::Core ${QT}::Gui ${QT}::Quick ${QT}::Svg ${QT}::Network ${CURL_LIBRARIES} ${LibArchive_LIBRARIES} ${ZSTD_LIBRARIES} ${LIBLZMA_LIBRARIES} ${ZLIB_LIBRARIES} ${YESCRYPT_LIBRARIES} ${LIBDRM_LIBRARIES} ${ATOMIC_LIBRARY} ${EXTRALIBS})
+    endif()
 endif()
 
 # Testing

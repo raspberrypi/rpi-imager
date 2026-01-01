@@ -4,6 +4,7 @@
  */
 
 #include "../dependencies/drivelist/src/drivelist.hpp"
+#include "../embedded_config.h"
 #include <QProcess>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -74,7 +75,14 @@ namespace Drivelist
             QJsonObject bdev = i.toObject();
             QString name = bdev["kname"].toString();
             QString subsystems = bdev["subsystems"].toString();
-            if (name.startsWith("/dev/loop") || name.startsWith("/dev/sr") || name.startsWith("/dev/ram") || name.startsWith("/dev/zram") || name.isEmpty())
+            /* Skip CD/DVD drives, RAM devices, compressed RAM, and eMMC boot partitions.
+               Loop devices (mounted disk images) should be included like on macOS/Windows,
+               marked as virtual, and properly identified as system drives when appropriate.
+               eMMC boot partitions (mmcblk*boot*) are special hardware boot areas that
+               should not be exposed as writable targets. */
+            if (name.startsWith("/dev/sr") || name.startsWith("/dev/ram") || name.startsWith("/dev/zram") || name.isEmpty())
+                continue;
+            if (name.contains("boot") && name.contains("mmcblk"))
                 continue;
 
             d.busType    = bdev["busType"].toString().toStdString();
@@ -82,23 +90,26 @@ namespace Drivelist
             d.raw        = true;
             d.isVirtual  = subsystems == "block";
 
-            // Hot fix for newer lsblk version on Arch based linux distributions.
-            // See issue #610
-            // Only tested with laptop's internal sd card reader.
-            if (!d.isVirtual && (subsystems.contains("mmc") || subsystems.contains("scsi:usb")) ) {
-                d.isVirtual = subsystems.contains("block"); //< lsblk will output something like "block:mmc:mmc_host:pci" for key "subsystems".
+            // Physical USB drives and MMC cards (SD cards) should never be marked as virtual.
+            // The subsystems string for these devices contains "usb" or "mmc" (e.g., 
+            // "block:scsi:usb:pci" for USB drives, "block:mmc:mmc_host:pci" for SD cards).
+            // Only truly virtual devices like loop devices have subsystems == "block" exactly.
+            if (subsystems.contains("usb") || subsystems.contains("mmc")) {
+                d.isVirtual = false;
             }
 
             if (bdev["ro"].isBool())
             {
                 /* With some lsblk versions it is a bool in others a "0" or "1" string */
                 d.isReadOnly = bdev["ro"].toBool();
-                d.isRemovable= bdev["rm"].toBool() || bdev["hotplug"].toBool() || d.isVirtual;
+                /* Note: Unlike the old code, we don't force isRemovable for virtual devices.
+                   This matches macOS/Windows behavior where virtual devices can be system drives. */
+                d.isRemovable= bdev["rm"].toBool() || bdev["hotplug"].toBool();
             }
             else
             {
                 d.isReadOnly = bdev["ro"].toString() == "1";
-                d.isRemovable= bdev["rm"].toString() == "1" || bdev["hotplug"].toString() == "1" || d.isVirtual;
+                d.isRemovable= bdev["rm"].toString() == "1" || bdev["hotplug"].toString() == "1";
             }
             if (bdev["size"].isString())
             {
@@ -108,9 +119,26 @@ namespace Drivelist
             {
                 d.size       = bdev["size"].toDouble();
             }
-            d.isSystem   = !d.isRemovable && !d.isVirtual;
+            
+            /* Detect SD/MMC cards - internal card readers use the mmc subsystem */
+            d.isCard     = subsystems.contains("mmc");
             d.isUSB      = subsystems.contains("usb");
             d.isSCSI     = subsystems.contains("scsi") && !d.isUSB;
+            
+            /* Fix for internal SD card readers and USB-attached SD cards being
+               incorrectly marked as system drives:
+               - Internal SD card readers (MMC subsystem) have rm=0 because the
+                 reader slot is fixed, even though the SD card is removable media
+               - USB devices should always be considered removable/non-system
+               - SD/MMC cards should never be considered system drives */
+            if (d.isCard || d.isUSB) {
+                d.isRemovable = true;
+            }
+            
+            /* For physical drives: system if not removable and not virtual.
+               For virtual drives (loop devices): need to check mountpoints after
+               they're collected to determine if backing a system path. */
+            d.isSystem   = !d.isRemovable && !d.isVirtual;
             d.blockSize  = bdev["phy-sec"].toInt();
             d.logicalBlockSize = bdev["log-sec"].toInt();
 
@@ -142,22 +170,53 @@ namespace Drivelist
             dp.removeAll("");
             d.description = dp.join(" ").toStdString();
 
-            /* Mark internal NVMe drives as non-system if not mounted
-               anywhere else than under /media */
-            if (d.isSystem && subsystems.contains("nvme"))
+            /* For virtual devices (loop devices), check if they're backing system paths.
+               This matches macOS/Windows behavior where virtual devices are included
+               but properly marked as system drives when appropriate. */
+            if (d.isVirtual && !d.isSystem)
             {
-                bool isMounted = false;
                 for (const std::string& mp : d.mountpoints)
                 {
-                    if (!QByteArray::fromStdString(mp).startsWith("/media/")) {
-                        isMounted = true;
+                    QString mountpoint = QString::fromStdString(mp);
+                    /* Mark as system if mounted at root or other critical system paths */
+                    if (mountpoint == "/" || 
+                        mountpoint == "/usr" || 
+                        mountpoint == "/var" ||
+                        mountpoint == "/home" ||
+                        mountpoint == "/boot" ||
+                        mountpoint.startsWith("/snap/"))
+                    {
+                        d.isSystem = true;
                         break;
                     }
                 }
-                if (!isMounted)
+            }
+
+            /* Mark NVMe drives as system drives by default to avoid showing
+               internal NVMe drives in the drive list. In embedded mode (typically
+               Raspberry Pi devices), allow NVMe drives that are not mounted
+               (or only mounted under /media/) to appear as they might be
+               external storage devices. */
+            if (d.isSystem && subsystems.contains("nvme"))
+            {
+                // Only allow NVMe drives to appear in embedded mode
+                if (::isEmbeddedMode())
                 {
-                    d.isSystem = false;
+                    bool isMounted = false;
+                    for (const std::string& mp : d.mountpoints)
+                    {
+                        if (!QByteArray::fromStdString(mp).startsWith("/media/")) {
+                            isMounted = true;
+                            break;
+                        }
+                    }
+                    if (!isMounted)
+                    {
+                        d.isSystem = false;
+                    }
                 }
+                // In non-embedded mode, keep NVMe drives marked as system
+                // so they are filtered out from the drive list
             }
 
             deviceList.push_back(d);

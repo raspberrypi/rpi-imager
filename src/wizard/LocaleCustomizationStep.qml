@@ -3,9 +3,9 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../qmlcomponents"
 import "components"
 
@@ -20,9 +20,11 @@ WizardStepBase {
     title: qsTr("Customisation: Localisation")
     subtitle: qsTr("Select your location for suggested time zone and keyboard layout")
     showSkipButton: true
+    nextButtonAccessibleDescription: qsTr("Save localisation settings and continue to next customisation step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
 
-    // Set initial focus on capital city selector when entering step
-    initialFocusItem: comboCapitalCity
+    // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
     
     // Track if user manually changed fields (to avoid overwriting their choices)
     property bool userChangedTimezone: false
@@ -35,12 +37,12 @@ WizardStepBase {
         comboTimezone.model = imageWriter.getTimezoneList()
         comboKeyboard.model = imageWriter.getKeymapLayoutList()
         
-        // Prefill from saved settings; fallback to platform defaults
-        var saved = imageWriter.getSavedCustomizationSettings()
+        // Prefill from conserved customization settings; fallback to platform defaults
+        var settings = wizardContainer.customizationSettings
         
         // Restore saved capital city if available
-        if (saved.capitalCity) {
-            var cityIndex = comboCapitalCity.find(saved.capitalCity)
+        if (settings.capitalCity) {
+            var cityIndex = comboCapitalCity.find(settings.capitalCity)
             if (cityIndex !== -1) {
                 comboCapitalCity.currentIndex = cityIndex
                 // Ensure WiFi country recommendation is always up to date
@@ -49,20 +51,21 @@ WizardStepBase {
             }
         }
         
-        var tzToSet = saved.timezone || imageWriter.getTimezone()
+        var tzToSet = settings.timezone || imageWriter.getTimezone()
         var tzIndex = comboTimezone.find(tzToSet)
         if (tzIndex !== -1) comboTimezone.currentIndex = tzIndex
         else comboTimezone.editText = tzToSet
 
         var defaultKeyboard = (tzToSet === "Europe/London") ? "gb" : "us"
-        var kbToSet = saved.keyboard || defaultKeyboard
+        var kbToSet = settings.keyboard || defaultKeyboard
         var kbIndex = comboKeyboard.find(kbToSet)
         if (kbIndex !== -1) comboKeyboard.currentIndex = kbIndex
         else comboKeyboard.editText = kbToSet
 
         // Register focus group for locale controls in proper tab order
+        // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
         root.registerFocusGroup("locale_controls", function(){ 
-            return [comboCapitalCity, comboTimezone, comboKeyboard] 
+            return [labelCapitalCity, comboCapitalCity, labelTimezone, comboTimezone, labelKeyboard, comboKeyboard] 
         }, 0)
     }
     
@@ -92,9 +95,8 @@ WizardStepBase {
         
         // Save the recommended WiFi country for later
         if (localeData.countryCode) {
-            var saved = imageWriter.getSavedCustomizationSettings()
-            saved.recommendedWifiCountry = localeData.countryCode
-            imageWriter.setSavedCustomizationSettings(saved)
+            wizardContainer.customizationSettings.recommendedWifiCountry = localeData.countryCode
+            imageWriter.setPersistedCustomisationSetting("recommendedWifiCountry", localeData.countryCode)
             console.log("LocaleCustomizationStep: Saved recommendedWifiCountry:", localeData.countryCode)
         }
     }
@@ -113,7 +115,11 @@ WizardStepBase {
                 Layout.fillWidth: true
                 spacing: Style.spacingMedium
                 
-                WizardFormLabel { text: qsTr("Capital city:") }
+                WizardFormLabel { 
+                    id: labelCapitalCity
+                    text: qsTr("Capital city:") 
+                    accessibleDescription: qsTr("Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country's Wi-Fi regulations.")
+                }
                 ImComboBox {
                     id: comboCapitalCity
                     Layout.fillWidth: true
@@ -132,7 +138,9 @@ WizardStepBase {
                 spacing: Style.spacingMedium
                 
                 WizardFormLabel { 
+                    id: labelTimezone
                     text: qsTr("Time zone:") 
+                    accessibleDescription: qsTr("Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.")
                 }
                 ImComboBox {
                     id: comboTimezone
@@ -151,7 +159,9 @@ WizardStepBase {
                 spacing: Style.spacingMedium
                 
                 WizardFormLabel { 
+                    id: labelKeyboard
                     text: qsTr("Keyboard layout:") 
+                    accessibleDescription: qsTr("Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.")
                 }
                 ImComboBox {
                     id: comboKeyboard
@@ -171,16 +181,36 @@ WizardStepBase {
     
     // Save settings when moving to next step
     onNextClicked: {
-        // Merge-and-save strategy
-        var saved = imageWriter.getSavedCustomizationSettings()
         var city = comboCapitalCity.editText ? comboCapitalCity.editText.trim() : ""
         var tz = comboTimezone.editText ? comboTimezone.editText.trim() : ""
         var kb = comboKeyboard.editText ? comboKeyboard.editText.trim() : ""
-        if (city.length > 0) saved.capitalCity = city; else delete saved.capitalCity
-        if (tz.length > 0) saved.timezone = tz; else delete saved.timezone
-        if (kb.length > 0) saved.keyboard = kb; else delete saved.keyboard
+        
+        // Update conserved customization settings (runtime state)
+        if (city.length > 0) {
+            wizardContainer.customizationSettings.capitalCity = city
+            imageWriter.setPersistedCustomisationSetting("capitalCity", city)
+        } else {
+            delete wizardContainer.customizationSettings.capitalCity
+            imageWriter.removePersistedCustomisationSetting("capitalCity")
+        }
+        
+        if (tz.length > 0) {
+            wizardContainer.customizationSettings.timezone = tz
+            imageWriter.setPersistedCustomisationSetting("timezone", tz)
+        } else {
+            delete wizardContainer.customizationSettings.timezone
+            imageWriter.removePersistedCustomisationSetting("timezone")
+        }
+        
+        if (kb.length > 0) {
+            wizardContainer.customizationSettings.keyboard = kb
+            imageWriter.setPersistedCustomisationSetting("keyboard", kb)
+        } else {
+            delete wizardContainer.customizationSettings.keyboard
+            imageWriter.removePersistedCustomisationSetting("keyboard")
+        }
+        
         wizardContainer.localeConfigured = (tz.length > 0 || kb.length > 0)
-        imageWriter.setSavedCustomizationSettings(saved)
         // Avoid logging settings to protect privacy
     }
     

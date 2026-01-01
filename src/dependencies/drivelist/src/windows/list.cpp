@@ -465,8 +465,15 @@ std::string GetBusType(STORAGE_ADAPTER_DESCRIPTOR *adapterDescriptor) {
     case STORAGE_BUS_TYPE::BusTypeSata: return "SATA";
     case STORAGE_BUS_TYPE::BusTypeSd: return "SD";  // Secure Digital (SD)
     case STORAGE_BUS_TYPE::BusTypeMmc: return "MMC";  // Multimedia card
+    case STORAGE_BUS_TYPE::BusTypeNvme: return "NVME";  // Non-Volatile Memory Express
     case STORAGE_BUS_TYPE::BusTypeVirtual: return "VIRTUAL";
     case STORAGE_BUS_TYPE::BusTypeFileBackedVirtual: return "FILEBACKEDVIRTUAL";
+    case STORAGE_BUS_TYPE::BusTypeSpaces: return "SPACES";  // Storage Spaces (virtual pooled storage)
+    case STORAGE_BUS_TYPE::BusTypeSCM: return "SCM";  // Storage Class Memory (Intel Optane PMem)
+    case STORAGE_BUS_TYPE::BusTypeUfs: return "UFS";  // Universal Flash Storage
+#ifdef BusTypeNvmeof
+    case STORAGE_BUS_TYPE::BusTypeNvmeof: return "NVMEOF";  // NVMe over Fabrics (network-attached)
+#endif
     default: return "INVALID";
   }
 }
@@ -789,12 +796,28 @@ std::vector<DeviceDescriptor> ListStorageDevices() {
     device.devicePathNull = true;
 
     if (GetDetailData(&device, hDeviceInfo, deviceInfoData)) {
-      device.isSystem = device.isSystem || IsSystemDevice(hDeviceInfo, &device);
-      device.isCard = device.busType == "SD" || device.busType == "MMC";
+      device.isCard = device.busType == "SD" || device.busType == "MMC" || device.busType == "UFS";
+      /* SD/MMC/UFS cards and USB devices should never be marked as system drives.
+         - Internal SD card readers may not report as "removable"
+         - SD cards may contain system folders from previous OS installs
+         - USB-attached storage is inherently removable/non-system
+         - UFS (Universal Flash Storage) is similar to SD/MMC */
+      if (!device.isCard && !device.isUSB) {
+        device.isSystem = device.isSystem || IsSystemDevice(hDeviceInfo, &device);
+      } else {
+        device.isSystem = false;
+      }
       device.isUAS = device.enumerator == "SCSI" && device.busType == "USB";
       device.isVirtual = device.isVirtual ||
         device.busType == "VIRTUAL" ||
-        device.busType == "FILEBACKEDVIRTUAL";
+        device.busType == "FILEBACKEDVIRTUAL" ||
+        device.busType == "SPACES";  // Storage Spaces are virtual pooled storage
+      /* Storage Class Memory and NVMe over Fabrics are always system drives
+         - SCM (Intel Optane PMem) is persistent memory, typically internal
+         - NVMeoF is network-attached storage, not suitable for imaging */
+      if (device.busType == "SCM" || device.busType == "NVMEOF") {
+        device.isSystem = true;
+      }
     } else if (device.error == "") {
       device.error = "Couldn't get detail data";
     }

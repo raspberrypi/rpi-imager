@@ -48,9 +48,20 @@ qint64 SystemMemoryManager::getTotalMemoryMB()
 
 qint64 SystemMemoryManager::getAvailableMemoryMB()
 {
-    // For sync calculation purposes, we use total memory as the baseline
-    // Available memory fluctuates too much to be reliable for this use case
-    return getTotalMemoryMB();
+    // Use cached value if available (cache for short period to avoid constant syscalls)
+    if (_cachedAvailableMemoryMB > 0) {
+        return _cachedAvailableMemoryMB;
+    }
+    
+    qint64 availableMB = getPlatformAvailableMemoryMB();
+    
+    // Fall back to total memory if platform detection failed
+    if (availableMB <= 0) {
+        availableMB = getTotalMemoryMB();
+    }
+    
+    _cachedAvailableMemoryMB = availableMB;
+    return availableMB;
 }
 
 SystemMemoryManager::SyncConfiguration SystemMemoryManager::calculateSyncConfiguration()
@@ -355,22 +366,36 @@ size_t SystemMemoryManager::getOptimalInputBufferSize()
 {
     qint64 totalMemMB = getTotalMemoryMB();
     
-    // Input buffer for downloads/streams - should be smaller than write buffers
-    // to avoid excessive memory usage during concurrent operations
+    // Input buffer (ring buffer slot size) for downloads/streams.
+    // Larger buffers reduce per-chunk overhead and improve throughput,
+    // especially for decompression which works more efficiently on larger blocks.
+    // The ring buffer will have multiple slots of this size.
+    //
+    // For high-speed scenarios (10G + NVMe), we want large slots to:
+    // - Reduce lock contention between producer/consumer
+    // - Allow decompressor to work on larger blocks efficiently
+    // - Reduce syscall overhead for network reads
     size_t inputBufferSize;
     
     if (totalMemMB < 1024) {
-        // Very low memory: 64KB
-        inputBufferSize = 64 * 1024;
-    } else if (totalMemMB < 2048) {
-        // Low memory: 128KB
+        // Very low memory: 128KB
         inputBufferSize = 128 * 1024;
-    } else if (totalMemMB < 4096) {
-        // Medium memory: 256KB
+    } else if (totalMemMB < 2048) {
+        // Low memory: 256KB
         inputBufferSize = 256 * 1024;
-    } else {
-        // High memory: 512KB
+    } else if (totalMemMB < 4096) {
+        // Medium memory: 512KB
         inputBufferSize = 512 * 1024;
+    } else if (totalMemMB < 8192) {
+        // High memory: 1MB - good for Gbps networks
+        inputBufferSize = 1024 * 1024;
+    } else if (totalMemMB < 16384) {
+        // Very high memory: 2MB - optimal for fast SSDs
+        inputBufferSize = 2 * 1024 * 1024;
+    } else {
+        // Extreme memory (16GB+): 4MB - optimal for 10G + NVMe
+        // Large slots reduce producer/consumer handoff overhead at high speeds
+        inputBufferSize = 4 * 1024 * 1024;
     }
     
     // Align to page boundaries
@@ -392,5 +417,139 @@ size_t SystemMemoryManager::getSystemPageSize()
 #else
     return 4096; // Fallback to common page size
 #endif
+}
+
+size_t SystemMemoryManager::getOptimalRingBufferSlots(size_t slotSize)
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    qint64 availableMemMB = getAvailableMemoryMB();
+    
+    // AGGRESSIVE STRATEGY: Maximize throughput on ALL systems.
+    // 
+    // Users run Imager as their primary task - they're waiting for it to complete.
+    // Use available RAM aggressively regardless of system size.
+    //
+    // Strategy:
+    // - Use 30% of AVAILABLE RAM (adapts to actual system state)
+    // - Minimum 2 MB (baseline for any system)
+    // - Maximum 16 GB (sanity cap)
+    //
+    // For 10G + NVMe with 500 MB/s burst accumulation:
+    // - 1 GB buffer = 2 seconds of absorption
+    // - 5 GB buffer = 10 seconds of absorption
+    
+    // Calculate target: 30% of available RAM
+    size_t targetFromAvailable = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 3 / 10;
+    
+    // Minimum: 2 MB (ensures basic functionality)
+    const size_t minimumBuffer = 2 * 1024 * 1024;
+    
+    // Maximum: 16 GB (sanity cap)
+    const size_t maximumBuffer = static_cast<size_t>(16) * 1024 * 1024 * 1024;
+    
+    // Apply bounds
+    size_t targetMemory = qMax(minimumBuffer, qMin(maximumBuffer, targetFromAvailable));
+    
+    // Calculate slots based on target memory and slot size
+    size_t calculatedSlots = targetMemory / slotSize;
+    
+    // Ensure reasonable slot counts (at least 8 for pipelining, at most 8192)
+    calculatedSlots = qMax(static_cast<size_t>(8), qMin(static_cast<size_t>(8192), calculatedSlots));
+    
+    size_t actualBufferMB = (calculatedSlots * slotSize) / (1024 * 1024);
+    qDebug() << "Ring buffer:" << calculatedSlots << "slots x" << (slotSize / 1024) << "KB ="
+             << actualBufferMB << "MB"
+             << "(available:" << availableMemMB << "MB, total:" << totalMemMB << "MB)";
+    
+    return calculatedSlots;
+}
+
+void SystemMemoryManager::logConfigurationSummary()
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    SyncConfiguration syncConfig = calculateSyncConfiguration();
+    size_t inputBuf = getOptimalInputBufferSize();
+    size_t writeBuf = getOptimalWriteBufferSize();
+    int asyncDepth = getOptimalAsyncQueueDepth(writeBuf);
+    
+    qDebug() << "=== Memory-Adaptive Configuration Summary ===";
+    qDebug() << "Platform:" << getPlatformName();
+    qDebug() << "System Memory:" << totalMemMB << "MB";
+    qDebug() << "Memory Tier:" << syncConfig.memoryTier;
+    qDebug() << "Input Buffer:" << (inputBuf / 1024) << "KB";
+    qDebug() << "Write Buffer:" << (writeBuf / 1024) << "KB";
+    qDebug() << "Async Queue Depth:" << asyncDepth;
+    qDebug() << "Sync Interval:" << (syncConfig.syncIntervalBytes / (1024 * 1024)) << "MB /" 
+             << syncConfig.syncIntervalMs << "ms";
+    qDebug() << "=============================================";
+}
+
+int SystemMemoryManager::getOptimalAsyncQueueDepth(size_t writeBlockSize)
+{
+    qint64 totalMemMB = getTotalMemoryMB();
+    qint64 availableMemMB = getAvailableMemoryMB();
+    
+    // Async I/O queue depth strategy:
+    //
+    // With zero-copy async I/O, the ring buffer slots serve as async buffers.
+    // No extra memory copies are made - we just need enough slots.
+    //
+    // We want to balance:
+    // 1. Latency hiding: More in-flight writes = better latency coverage
+    // 2. Memory usage: Ring buffer = (depth + 4) * writeBlockSize
+    // 3. Device characteristics: SD cards benefit up to ~32-64, NVMe can use more
+    //
+    // SD cards over USB have ~5-15ms per-write latency with direct I/O.
+    // At 8MB blocks and 10ms latency:
+    //   - Queue depth 1:  ~800 MB/s theoretical max (but blocked by latency)
+    //   - Queue depth 32: ~800 MB/s actual (latency fully hidden)
+    //   - Queue depth 64+: Useful for NVMe or very slow SD cards
+    
+    // Target: Use up to 30% of available memory for async buffers
+    // Generous budget since zero-copy means the ring buffer IS the async buffer
+    // and this memory is actively being used for I/O, not wasted
+    size_t asyncBufferBudget = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 3 / 10;
+    
+    // Calculate depth from budget
+    int depthFromMemory = static_cast<int>(asyncBufferBudget / writeBlockSize);
+    
+    // Memory-tier based baseline - based on 30% of RAM / 8MB blocks
+    // With zero-copy async I/O, the ring buffer IS the async buffer
+    // Capped at 512 to keep ring buffer memory reasonable (512 * 8MB = 4GB max)
+    //
+    // Calculation: (RAM * 30%) / 8MB = queue depth
+    //   1GB → 32,  2GB → 64,  4GB → 128,  8GB → 256,  16GB+ → 512 (capped)
+    int baselineDepth;
+    if (totalMemMB < 1536) {
+        // Very low memory (< 1.5GB): Conservative
+        baselineDepth = 32;
+    } else if (totalMemMB < 3072) {
+        // Low memory (1.5-3GB): Moderate  
+        baselineDepth = 64;
+    } else if (totalMemMB < 6144) {
+        // Medium memory (3-6GB): Good headroom
+        baselineDepth = 128;
+    } else if (totalMemMB < 12288) {
+        // High memory (6-12GB)
+        baselineDepth = 256;
+    } else {
+        // Very high memory (12GB+): Maximum (capped to limit ring buffer size)
+        baselineDepth = 512;
+    }
+    
+    // Use the minimum of memory-based and baseline
+    int optimalDepth = qMin(depthFromMemory, baselineDepth);
+    
+    // Apply hard bounds
+    const int minDepth = 8;    // Below this, async overhead may exceed benefit
+    const int maxDepth = 512;  // Maximum supported by ring buffer (caps memory usage)
+    optimalDepth = qBound(minDepth, optimalDepth, maxDepth);
+    
+    qDebug() << "Optimal async queue depth:" << optimalDepth
+             << "(memory budget:" << (asyncBufferBudget / (1024 * 1024)) << "MB,"
+             << "block size:" << (writeBlockSize / 1024) << "KB,"
+             << "baseline:" << baselineDepth << ")";
+    
+    return optimalDepth;
 }
 

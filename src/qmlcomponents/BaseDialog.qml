@@ -3,9 +3,9 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import RpiImager
 
 /**
@@ -15,9 +15,27 @@ import RpiImager
 Dialog {
     id: root
     
+    // imageWriter property - child dialogs will provide the actual value
+    // We declare it here so bindings work, but children override it
+    property var imageWriter
+    
     // Standard dialog properties
     modal: true
-    width: 520
+    
+    // Reset Dialog's built-in padding - we use our own margins in contentLayout
+    padding: 0
+    topPadding: 0
+    bottomPadding: 0
+    leftPadding: 0
+    rightPadding: 0
+    
+    // Dynamic width based on content, with min/max bounds
+    // Grows to fit content (especially for long translated strings) but stays within window
+    readonly property int minDialogWidth: 400
+    readonly property int maxDialogWidth: parent ? Math.max(minDialogWidth, parent.width - Style.cardPadding * 2) : 700
+    // Use the largest of: minDialogWidth, explicit implicitWidth, or content-based width
+    readonly property int contentBasedWidth: contentLayout ? (contentLayout.implicitWidth + Style.cardPadding * 2) : minDialogWidth
+    width: Math.min(maxDialogWidth, Math.max(minDialogWidth, implicitWidth, contentBasedWidth))
     
     // Dynamic height based on content (can be overridden)
     height: Math.max(200, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 200)
@@ -48,9 +66,11 @@ Dialog {
     // Set the dialog background directly
     background: Rectangle {
         color: Style.titleBackgroundColor
-        radius: Style.sectionBorderRadius
+        radius: (root.imageWriter && root.imageWriter.isEmbeddedMode()) ? Style.sectionBorderRadiusEmbedded : Style.sectionBorderRadius
         border.color: Style.popupBorderColor
         border.width: Style.sectionBorderWidth
+        antialiasing: true  // Smooth edges at non-integer scale factors
+        clip: true  // Prevent content overflow at non-integer scale factors
     }
     
     // Main content wrapped in FocusScope with focus management system
@@ -58,6 +78,11 @@ Dialog {
         id: dialogFocusScope
         anchors.fill: parent
         focus: true
+        
+        // Accessibility properties
+        Accessible.role: Accessible.Dialog
+        Accessible.name: root.title
+        Accessible.description: ""
         
         Keys.onEscapePressed: {
             // Allow child dialogs to handle escape differently
@@ -94,7 +119,8 @@ Dialog {
                 if (!arr || !arr.length) continue
                 for (var k = 0; k < arr.length; k++) {
                     var it = arr[k]
-                    if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function') {
+                    // Skip items that have activeFocusOnTab explicitly set to false (e.g. text labels when screen reader inactive)
+                    if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function' && it.activeFocusOnTab !== false) {
                         items.push(it)
                     }
                 }
@@ -127,6 +153,9 @@ Dialog {
             anchors.fill: parent
             anchors.margins: Style.cardPadding
             spacing: Style.spacingMedium
+            
+            // Make imageWriter available to all children via parent lookup
+            property var imageWriter: root.imageWriter
         }
     }
     

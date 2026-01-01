@@ -10,6 +10,8 @@
   <string></string>
   <key>CFBundleIconFile</key>
   <string>@MACOSX_BUNDLE_ICON_FILE@</string>
+  <key>CFBundleIconName</key>
+  <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
   <string>@MACOSX_BUNDLE_GUI_IDENTIFIER@</string>
   <key>CFBundleInfoDictionaryVersion</key>
@@ -43,6 +45,45 @@
       <array>
         <string>rpi-imager</string>
       </array>
+    </dict>
+  </array>
+  <!-- Document type for manifest files. Extension defined in src/config.h (MANIFEST_EXTENSION) -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Raspberry Pi Imager Manifest</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Owner</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.raspberrypi.rpi-imager-manifest</string>
+      </array>
+    </dict>
+  </array>
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>com.raspberrypi.rpi-imager-manifest</string>
+      <key>UTTypeDescription</key>
+      <string>Raspberry Pi Imager Manifest</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.json</string>
+        <string>public.text</string>
+      </array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>rpi-imager-manifest</string>
+        </array>
+        <key>public.mime-type</key>
+        <string>application/vnd.raspberrypi.imager-manifest+json</string>
+      </dict>
     </dict>
   </array>
 </dict>

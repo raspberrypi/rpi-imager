@@ -5,7 +5,7 @@
 
 pragma Singleton
 
-import QtQuick 2.15
+import QtQuick
 
 Item {
     // Commonly reused translatable strings
@@ -28,14 +28,48 @@ Item {
     ])
     readonly property string imageFiltersString: toFilterString(imageFiltersList)
 
+    // Repository file extensions - must match MANIFEST_EXTENSION in src/config.h
+    readonly property string manifestExtension: "rpi-imager-manifest"
     readonly property var repoFiltersList: withAll([
-        qsTr("Imager Repository Files (*.json)")
+        qsTr("Imager Repository Files (*.json *.%1)").arg(manifestExtension)
     ])
     readonly property string repoFiltersString: toFilterString(repoFiltersList)
 
     // --- SSH public key filters ---
     readonly property var sshFiltersList: withAll([
-        qsTr("Public Key files (*.pub)")
+        qsTr("Public Key files (*.pub)"),
+        qsTr("Authorized keys files (authorized_keys)")
     ])
     readonly property string sshFiltersString: toFilterString(sshFiltersList)
+
+    // --- Common UI strings ---
+    readonly property string cancel: qsTr("Cancel")
+    readonly property string yes: qsTr("Yes")
+    readonly property string no: qsTr("No")
+    readonly property string browse: qsTr("Browse")
+    readonly property string continueText: qsTr("Continue")
+    readonly property string back: qsTr("Back")
+    readonly property string finish: qsTr("Finish")
+    readonly property string selectImage: qsTr("Select image")
+    readonly property string password: qsTr("Password:")
+    readonly property string device: qsTr("Device:")
+    readonly property string storage: qsTr("Storage:")
+    
+    // --- "No X selected" patterns ---
+    readonly property string noDeviceSelected: qsTr("No device selected")
+    readonly property string noImageSelected: qsTr("No image selected")
+    readonly property string noStorageSelected: qsTr("No storage selected")
+    
+    // --- Configuration status messages (without bullets) ---
+    readonly property string hostnameConfigured: qsTr("Hostname configured")
+    readonly property string userAccountConfigured: qsTr("User account configured")
+    readonly property string sshEnabled: qsTr("SSH enabled")
+    readonly property string localeConfigured: qsTr("Localisation configured")
+    readonly property string wifiConfigured: qsTr("Wi‑Fi configured")
+    readonly property string piConnectEnabled: qsTr("Raspberry Pi Connect enabled")
+    readonly property string usbGadgetEnabled: qsTr("USB Gadget mode enabled")
+    readonly property string i2cEnabled: qsTr("I2C enabled")
+    readonly property string spiEnabled: qsTr("SPI enabled")
+    readonly property string onewireEnabled: qsTr("1-Wire enabled")
+    readonly property string serialConfigured: qsTr("Serial configured")
 }

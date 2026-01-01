@@ -3,10 +3,10 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Window 2.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Window
 import "../qmlcomponents"
 
 import RpiImager
@@ -21,11 +21,13 @@ WizardStepBase {
     
     title: qsTr("Select your Raspberry Pi device")
     showNextButton: true
-    nextButtonEnabled: false  // Disabled until device is selected or auto-selected
+    // Enable Next when device selected OR when offline (so users can proceed with custom image)
+    nextButtonEnabled: hasDeviceSelected || (osListUnavailable && hwlist.count === 0)
     
     property alias hwlist: hwlist
     property bool modelLoaded: false
     property bool hasDeviceSelected: false
+    property bool isReloadingModel: false
     
     // Forward the nextClicked signal as next() function for keyboard auto-advance
     function next() {
@@ -41,17 +43,24 @@ WizardStepBase {
             return [hwlist]
         }, 0)
         
-        // Set the initial focus item to the ListView
-        root.initialFocusItem = hwlist
-        
-        // Ensure focus starts on the device list when entering this step (same as OSSelectionStep)
-        hwlist.forceActiveFocus()
+        // Initial focus will automatically go to title, then first control (handled by WizardStepBase)
     }
 
     Connections {
         target: imageWriter
         function onOsListPrepared() {
+            // If model was loaded but has no items (we were offline), force reload
+            if (root.modelLoaded && root.hwModel && root.hwModel.rowCount() === 0) {
+                root.modelLoaded = false
+            }
             onOsListPreparedHandler()
+        }
+        function onOsListUnavailableChanged() {
+            // When transitioning from unavailable to available, force a full reload
+            if (!root.osListUnavailable && root.hwModel) {
+                root.modelLoaded = false
+                onOsListPreparedHandler()
+            }
         }
     }
     
@@ -61,17 +70,20 @@ WizardStepBase {
             return
         }
 
-        // Don't guard with modelLoaded to support reloading when repo changed
-        console.log("DeviceSelectionStep: OS list prepared, reloading hardware model")
-        var success = root.hwModel.reload()
-        if (success) {
-            modelLoaded = true
-            // Set initial focus for keyboard navigation if no device is selected
-            if (hwlist.currentIndex === -1 && root.hwModel.rowCount() > 0) {
-                hwlist.currentIndex = 0
+        // Only reload if we haven't loaded yet, to avoid resetting scroll position during device selection
+        if (!modelLoaded) {
+            isReloadingModel = true
+            var success = root.hwModel.reload()
+            if (success) {
+                modelLoaded = true
+                // Do not auto-select first item to avoid unwanted highlighting on load
             }
+            isReloadingModel = false
         }
     }
+    
+    // Track whether OS list is unavailable (no data loaded)
+    readonly property bool osListUnavailable: imageWriter.isOsListUnavailable
     
     // Content
     content: [
@@ -79,39 +91,147 @@ WizardStepBase {
         anchors.fill: parent
         spacing: 0
 
-        // Device list (fills available space)
+        // Offline/fetch failed placeholder (shown when list is empty due to network failure)
+        Item {
+            id: offlinePlaceholder
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: hwlist.count === 0 && root.osListUnavailable
+            
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: parent.width * 0.8
+                spacing: Style.spacingLarge
+                
+                // Icon or visual indicator
+                Text {
+                    text: "⚠"
+                    font.pixelSize: 48
+                    color: Style.textDescriptionColor
+                    Layout.alignment: Qt.AlignHCenter
+                    Accessible.ignored: true
+                }
+                
+                Text {
+                    text: qsTr("Unable to load device list")
+                    font.pixelSize: Style.fontSizeHeading
+                    font.family: Style.fontFamilyBold
+                    font.bold: true
+                    color: Style.formLabelColor
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
+                    Accessible.ignored: false
+                }
+                
+                Text {
+                    text: qsTr("The device list could not be downloaded. Please check your internet connection and try again.\n\nYou can still write a local image file by pressing Next and selecting 'Use custom' on the following screen.")
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.textDescriptionColor
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.3
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
+                    Accessible.ignored: false
+                }
+                
+                ImButton {
+                    id: retryButton
+                    text: qsTr("Retry")
+                    Layout.alignment: Qt.AlignHCenter
+                    accessibleDescription: qsTr("Retry downloading the device list")
+                    onClicked: {
+                        imageWriter.beginOSListFetch()
+                    }
+                }
+            }
+        }
+
+        // Device list (fills available space, hidden when showing offline placeholder)
         SelectionListView {
             id: hwlist
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: !offlinePlaceholder.visible
             model: root.hwModel
             delegate: hwdelegate
-            autoSelectFirst: true
             keyboardAutoAdvance: true
             nextFunction: root.next
+            accessibleName: {
+                var count = hwlist.count
+                var name = qsTr("Device selection list")
+                
+                if (count === 0) {
+                    name += ". " + qsTr("No devices")
+                } else if (count === 1) {
+                    name += ". " + qsTr("1 device")
+                } else {
+                    name += ". " + qsTr("%1 devices").arg(count)
+                }
+                
+                name += ". " + qsTr("Use arrow keys to navigate, Enter or Space to select")
+                return name
+            }
+            accessibleDescription: ""
             
             Component.onCompleted: {
                 if (root.hwModel && root.hwModel.currentIndex !== undefined && root.hwModel.currentIndex >= 0) {
                     currentIndex = root.hwModel.currentIndex
                     root.hasDeviceSelected = true
-                    root.nextButtonEnabled = true
                 }
-                // SelectionListView handles setting currentIndex = 0 when count > 0
+                // Do not auto-select first item to avoid unwanted highlighting on load
             }
             
             onCurrentIndexChanged: {
                 root.hasDeviceSelected = currentIndex !== -1
-                root.nextButtonEnabled = root.hasDeviceSelected
             }
             
             onItemSelected: function(index, item) {
                 if (index >= 0 && index < model.rowCount()) {
+                    // Only save/restore scroll position if we're not reloading the model
+                    // (During model reload, the list may have changed and we should start at top)
+                    var shouldPreserveScroll = !root.isReloadingModel
+                    var savedContentY = shouldPreserveScroll ? contentY : 0
+                    
+                    // Update ListView's currentIndex (for visual highlight)
+                    currentIndex = index
+                    
                     // Set the model's current index (this triggers the HWListModel logic)
                     root.hwModel.currentIndex = index
                     // Use the model's currentName property
                     root.wizardContainer.selectedDeviceName = root.hwModel.currentName
                     root.hasDeviceSelected = true
-                    root.nextButtonEnabled = true
+                    
+                    // Restore scroll position after all changes (clamped to valid range)
+                    if (shouldPreserveScroll) {
+                        Qt.callLater(function() {
+                            // Clamp to valid range: 0 to (contentHeight - height)
+                            var maxContentY = Math.max(0, contentHeight - height)
+                            contentY = Math.min(Math.max(0, savedContentY), maxContentY)
+                        })
+                    }
+                }
+            }
+            
+            onItemDoubleClicked: function(index, item) {
+                // First select the item
+                if (index >= 0 && index < model.rowCount()) {
+                    currentIndex = index
+                    root.hwModel.currentIndex = index
+                    root.wizardContainer.selectedDeviceName = root.hwModel.currentName
+                    root.hasDeviceSelected = true
+                    
+                    // Then advance to next step (same as pressing Return)
+                    Qt.callLater(function() {
+                        if (root.nextButtonEnabled) {
+                            root.next()
+                        }
+                    })
                 }
             }
         }
@@ -135,6 +255,12 @@ WizardStepBase {
             // Let content determine height for balanced vertical padding
             height: Math.max(60, row.implicitHeight + Style.spacingSmall + Style.spacingMedium)
             
+            // Accessibility properties
+            Accessible.role: Accessible.ListItem
+            Accessible.name: hwitem.name + ". " + hwitem.description
+            Accessible.focusable: true
+            Accessible.ignored: false
+            
             Rectangle {
                 id: hwbgrect
                 anchors.fill: parent
@@ -142,6 +268,7 @@ WizardStepBase {
                        (hwMouseArea.containsMouse ? Style.listViewHoverRowBackgroundColor : Style.listViewRowBackgroundColor)
                 radius: 0
                 anchors.rightMargin: (hwlist.contentHeight > hwlist.height ? Style.scrollBarWidth : 0)
+                Accessible.ignored: true
                 
                 MouseArea {
                     id: hwMouseArea
@@ -150,13 +277,14 @@ WizardStepBase {
                     cursorShape: Qt.PointingHandCursor
                     
                     onClicked: {
-                        hwlist.currentIndex = hwitem.index
-                        root.hwModel.currentIndex = hwitem.index
-                        root.wizardContainer.selectedDeviceName = hwitem.name
-
-                        // Enable Next; do not auto-advance
-                        root.hasDeviceSelected = true
-                        root.nextButtonEnabled = true
+                        // Trigger the itemSelected signal by setting ListView's currentIndex
+                        // This will handle all the selection logic in onItemSelected
+                        hwlist.itemSelected(hwitem.index, hwitem)
+                    }
+                    
+                    onDoubleClicked: {
+                        // Double-click acts like pressing Return - select and advance
+                        hwlist.itemDoubleClicked(hwitem.index, hwitem)
                     }
                 }
                 
@@ -179,7 +307,7 @@ WizardStepBase {
                         smooth: true
                         mipmap: true
                         // Rasterize vector sources at device pixel ratio to avoid aliasing/blurriness on HiDPI
-                        sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+                        sourceSize: Qt.size(Math.round(Layout.preferredWidth * Screen.devicePixelRatio), Math.round(Layout.preferredHeight * Screen.devicePixelRatio))
                         visible: source.toString().length > 0
                         
                         Rectangle {
@@ -203,6 +331,7 @@ WizardStepBase {
                             font.bold: true
                             color: Style.formLabelColor
                             Layout.fillWidth: true
+                            Accessible.ignored: true
                         }
                         
                         Text {
@@ -212,6 +341,7 @@ WizardStepBase {
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
+                            Accessible.ignored: true
                         }
                     }
                 }

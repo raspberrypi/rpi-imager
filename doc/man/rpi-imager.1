@@ -10,6 +10,7 @@ rpi\-imager \- Flash disk images to removable storage
 .OP \-\-repo url
 .OP \-\-qm translations
 .OP \-\-disable\-telemetry
+.OP \-\-enable\-secure\-boot
 .OP image-uri
 .YS
 .
@@ -19,6 +20,7 @@ rpi\-imager \- Flash disk images to removable storage
 .OP \-\-quiet
 .OP \-\-disable\-verify
 .OP \-\-sha256 expected-hash
+.OP \-\-secure\-boot\-key key-file
 image-uri
 destination-device
 .YS
@@ -87,6 +89,13 @@ Only valid when run with
 .IR \-\-cli .
 .
 .TP
+.B \-\-enable\-secure\-boot
+Force enable the secure boot customization step in the GUI, regardless of whether
+the selected operating system declares support for secure boot via its capabilities
+flag. Useful for testing or advanced usage scenarios where secure boot signing should
+be available even for operating systems that don't explicitly advertise the feature.
+.
+.TP
 .B \-\-help
 Display a synopsis of the command line syntax and exit.
 .
@@ -106,6 +115,19 @@ Instead of querying the Raspberry Pi servers for the list of available OS
 images, query this URL instead. The URL will be expected to return a JSON file
 conforming to the format described in the associated
 .IR json-schema .
+.
+.TP
+.BI \-\-secure\-boot\-key \ key-file
+Path to an RSA 2048-bit private key file in PEM format for signing the boot
+partition to enable Raspberry Pi secure boot. When specified, the utility will
+create boot.img and boot.sig files on the boot partition. The key file must exist
+and be readable. This option can be combined with other customization options
+like
+.I \-\-first\-run\-script
+or
+.IR \-\-cloudinit\-userdata .
+Only valid when run with
+.IR \-\-cli .
 .
 .TP
 .BI \-\-sha256 \ expected-hash
@@ -152,6 +174,22 @@ to
 .I /dev/mmcblk0
 without any verification of the image itself, and no check that the image
 flashed correctly. This also avoids launching the graphical interface.
+.
+.TP
+.B rpi\-imager \-\-cli \-\-secure\-boot\-key ~/secure\-boot\-key.pem raspios.img /dev/mmcblk0
+Write
+.I raspios.img
+to
+.I /dev/mmcblk0
+and sign the boot partition with the RSA private key located at
+.IR ~/secure\-boot\-key.pem .
+This enables Raspberry Pi secure boot verification.
+.
+.TP
+.B rpi\-imager \-\-enable\-secure\-boot
+Launch the graphical interface with secure boot customization step enabled for all
+operating systems, regardless of their declared capabilities. The RSA key must still
+be configured in the App Options dialog.
 .
 .
 .SH SEE ALSO

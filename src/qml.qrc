@@ -31,6 +31,8 @@
         <file>icons/ic_info_16px.png</file>
         <file>icons/ic_info_12px.png</file>
         <file>icons/ic_cog_red.svg</file>
+        <file>icons/ic_eye_visible_24px.svg</file>
+        <file>icons/ic_eye_hidden_24px.svg</file>
         <file>icons/cat_home_automation.png</file>
         <file>icons/cat_language_specific_operating_systems.png</file>
         <file>icons/cat_3d_printing.png</file>
@@ -39,5 +41,7 @@
         <file>icons/cat_digital_signage.png</file>
         <file>qmlcomponents/ImOptionPill.qml</file>
         <file>qmlcomponents/ImTextField.qml</file>
+        <file>qmlcomponents/ImPasswordField.qml</file>
+        <file>qmlcomponents/MarqueeText.qml</file>
     </qresource>
 </RCC>

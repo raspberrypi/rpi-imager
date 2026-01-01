@@ -3,14 +3,13 @@
 
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (C) 2020 Raspberry Pi Ltd
+ * Copyright (C) 2020-2025 Raspberry Pi Ltd
  */
 
 #include <memory>
 
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QNetworkAccessManager>
 #include <QObject>
 #include <QTimer>
 #include <QUrl>
@@ -20,23 +19,23 @@
 #ifndef CLI_ONLY_BUILD
 #include <QQmlEngine>
 #endif
-#include <QNetworkReply>
 #include "config.h"
-#include "powersaveblocker.h"
+#include "suspend_inhibitor.h"
 #include "drivelistmodel.h"
 #include "hwlistmodel.h"
 #include "oslistmodel.h"
 #ifndef CLI_ONLY_BUILD
 #include "nativefiledialog.h"
+#include <QWindow>
 #endif
 #include "cachemanager.h"
 #include "device_info.h"
 #include "imageadvancedoptions.h"
+#include "performancestats.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
 class DownloadExtractThread;
-class QNetworkReply;
 class QTranslator;
 #ifndef CLI_ONLY_BUILD
 class NativeFileDialog;
@@ -67,6 +66,7 @@ public:
     void setEngine(QQmlApplicationEngine *engine);
 
     Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
+    Q_PROPERTY(bool isOsListUnavailable READ isOsListUnavailable NOTIFY osListUnavailableChanged)
 
     /* Set URL to download from, and if known download length and uncompressed length */
     Q_INVOKABLE void setSrc(const QUrl &url, quint64 downloadLen = 0, quint64 extrLen = 0, QByteArray expectedHash = "", bool multifilesinzip = false, QString parentcategory = "", QString osname = "", QByteArray initFormat = "", QString releaseDate = "");
@@ -161,6 +161,7 @@ public:
 
     /* Set the capabilities supported by the hardware, for a filtered view of options that require the software to have certain capabilities. */
     Q_INVOKABLE void setSWCapabilitiesList(const QString &json);
+    Q_INVOKABLE void setSWCapabilitiesList(const QVariantList &caps);
 
     /* Get the HW filter list */
     Q_INVOKABLE QJsonArray getHWFilterList();
@@ -197,6 +198,12 @@ public:
                                              const QString &initialDir = QString(),
                                              const QString &filter = QString());
 
+    /* Set the main window for modal file dialogs */
+    Q_INVOKABLE void setMainWindow(QObject *window);
+
+    /* Bring the application window to the foreground */
+    void bringWindowToForeground();
+
     /* Read text file contents */
     Q_INVOKABLE QString readFileContents(const QString &filePath);
 
@@ -216,6 +223,9 @@ public:
 
     /* Returns true if run on embedded Linux platform */
     Q_INVOKABLE bool isEmbeddedMode() const;
+
+    /* Returns true if window has decorations (title bar visible) */
+    Q_INVOKABLE bool hasWindowDecorations() const;
 
     /* Mount any USB sticks that can contain source images under /media
        Returns true if at least one device was mounted */
@@ -237,16 +247,40 @@ public:
     Q_INVOKABLE QVariantMap getLocaleDataForCapital(const QString &capitalCity);
     Q_INVOKABLE QString getSSID();
     Q_INVOKABLE QString getPSK();
+    Q_INVOKABLE QString getPSKForSSID(const QString &ssid);
 
     Q_INVOKABLE bool getBoolSetting(const QString &key);
+    Q_INVOKABLE QString getStringSetting(const QString &key);
     Q_INVOKABLE void setSetting(const QString &key, const QVariant &value);
-    Q_INVOKABLE void setImageCustomization(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts = {});
-    Q_INVOKABLE void applyCustomizationFromSavedSettings();
-    Q_INVOKABLE void setSavedCustomizationSettings(const QVariantMap &map);
-    Q_INVOKABLE QVariantMap getSavedCustomizationSettings();
-    Q_INVOKABLE void clearSavedCustomizationSettings();
-    Q_INVOKABLE bool hasSavedCustomizationSettings();
+    Q_INVOKABLE QString getRsaKeyFingerprint(const QString &keyPath);
+    
+    // Debug options (secret menu: Cmd+Option+S on macOS, Ctrl+Alt+S on others)
+    Q_INVOKABLE bool getDebugDirectIO() const;
+    Q_INVOKABLE void setDebugDirectIO(bool enabled);
+    Q_INVOKABLE bool getDebugPeriodicSync() const;
+    Q_INVOKABLE void setDebugPeriodicSync(bool enabled);
+    Q_INVOKABLE bool getDebugVerboseLogging() const;
+    Q_INVOKABLE void setDebugVerboseLogging(bool enabled);
+    Q_INVOKABLE bool getDebugAsyncIO() const;
+    Q_INVOKABLE void setDebugAsyncIO(bool enabled);
+    Q_INVOKABLE int getDebugAsyncQueueDepth() const;
+    Q_INVOKABLE void setDebugAsyncQueueDepth(int depth);
+    Q_INVOKABLE bool getDebugIPv4Only() const;
+    Q_INVOKABLE void setDebugIPv4Only(bool enabled);
+    Q_INVOKABLE bool getDebugSkipEndOfDevice() const;
+    Q_INVOKABLE void setDebugSkipEndOfDevice(bool enabled);
+    
+    // Customisation API
+    Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
+    Q_INVOKABLE void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts = {}, const QByteArray &initFormat = {});  // Advanced: bypass generator with pre-made scripts
+    
+    // Persistence API
+    Q_INVOKABLE void setSavedCustomisationSettings(const QVariantMap &map);  // Legacy: prefer setPersistedCustomisationSetting()
+    Q_INVOKABLE QVariantMap getSavedCustomisationSettings();
+    Q_INVOKABLE void setPersistedCustomisationSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE void removePersistedCustomisationSetting(const QString &key);
     Q_INVOKABLE bool imageSupportsCustomization();
+    Q_INVOKABLE bool imageSupportsCcRpi();
 
     Q_INVOKABLE QString crypt(const QByteArray &password);
     Q_INVOKABLE QString pbkdf2(const QByteArray &psk, const QByteArray &ssid);
@@ -258,26 +292,63 @@ public:
     Q_INVOKABLE void changeLanguage(const QString &newLanguageName);
     Q_INVOKABLE void changeKeyboard(const QString &newKeymapLayout);
     Q_INVOKABLE bool customRepo();
+    Q_INVOKABLE QString customRepoHost();
+    
+    /* Validate if a string is a valid repository URL (http/https ending with .json or .rpi-imager-manifest) */
+    Q_INVOKABLE bool isValidRepoUrl(const QString &url) const;
+    
+    // Secure Boot CLI override
+    static void setForceSecureBootEnabled(bool enabled);
+    Q_INVOKABLE bool isSecureBootForcedByCliFlag() const;
 
     void replaceTranslator(QTranslator *trans);
     QString detectPiKeyboard();
     Q_INVOKABLE bool hasMouse();
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void openUrl(const QUrl &url);
+    Q_INVOKABLE bool isScreenReaderActive() const;
     Q_INVOKABLE void handleIncomingUrl(const QUrl &url);
-    // Ephemeral session-only Connect token (never persisted)
-    Q_INVOKABLE void setRuntimeConnectToken(const QString &token);
+    Q_INVOKABLE void overwriteConnectToken(const QString &token);
     Q_INVOKABLE QString getRuntimeConnectToken() const;
+    Q_INVOKABLE bool verifyAuthKey(const QString &token, bool strict = false) const;
+    Q_INVOKABLE void clearConnectToken();
     
     /* Override OS list refresh schedule (in minutes); pass negative to clear override */
     Q_INVOKABLE void setOsListRefreshOverride(int intervalMinutes, int jitterMinutes);
 
     Q_INVOKABLE void refreshOsListFrom(const QUrl &url);
+    Q_INVOKABLE void refreshOsListFromDefaultUrl();
+
+    /* Elevatable bundle (e.g., AppImage) privilege escalation support */
+    Q_INVOKABLE bool isElevatableBundle();
+    Q_INVOKABLE bool hasElevationPolicyInstalled();
+    Q_INVOKABLE bool installElevationPolicy();
+    Q_INVOKABLE void restartWithElevatedPrivileges();
+
+    /* Performance data export - opens native save dialog and writes performance data to file.
+       If native dialogs aren't available, emits performanceSaveDialogNeeded for QML fallback. */
+    Q_INVOKABLE bool exportPerformanceData();
+    
+    /* Export performance data to a specific file path (used by QML fallback) */
+    Q_INVOKABLE bool exportPerformanceDataToFile(const QString &filePath);
+    
+    /* Get suggested filename for performance data export */
+    Q_INVOKABLE QString getPerformanceDataFilename();
+    
+    /* Check if performance data is available */
+    Q_INVOKABLE bool hasPerformanceData();
+
+    /* Check if OS list is unavailable - derived from whether we have data (for QML offline UI) */
+    bool isOsListUnavailable() const { return _completeOsList.isEmpty(); }
+
+    /* Get access to performance stats for instrumentation */
+    PerformanceStats* performanceStats() { return _performanceStats; }
 
 signals:
     /* We are emiting signals with QVariant as parameters because QML likes it that way */
 
     void downloadProgress(QVariant dlnow, QVariant dltotal);
+    void writeProgress(QVariant now, QVariant total);
     void verifyProgress(QVariant now, QVariant total);
     void error(QVariant msg);
     void success();
@@ -287,6 +358,8 @@ signals:
     void networkOnline();
     void preparationStatusUpdate(QVariant msg);
     void osListPrepared();
+    void bottleneckStatusChanged(QVariant status, QVariant throughputKBps);
+    void hwFilterChanged();
     void networkInfo(QVariant msg);
     void cacheVerificationStarted();
     void cacheVerificationFinished();
@@ -295,8 +368,16 @@ signals:
     void keychainPermissionRequested();
     void keychainPermissionResponseReceived();
     void writeStateChanged();
-    void connectCallbackReceived(QVariant url);
+    void connectTokenReceived(const QString &token);
+    void connectTokenConflictDetected(const QString &token);
+    void connectTokenCleared();
+    void repositoryUrlReceived(const QString &url);
+    void customRepoChanged();
     void cacheStatusChanged();
+    void osListUnavailableChanged();
+    void permissionWarning(QVariant msg);
+    void locationPermissionGranted();
+    void performanceSaveDialogNeeded(const QString &suggestedFilename, const QString &initialDir);
 
 protected slots:
     void startProgressPolling();
@@ -308,7 +389,9 @@ protected slots:
     void onCancelled();
     void onFinalizing();
     void onPreparationStatusUpdate(QString msg);
-    void handleNetworkRequestFinished(QNetworkReply *data);
+    void onOsListFetchComplete(const QByteArray &data, const QUrl &url);
+    void onOsListFetchError(const QString &errorMessage, const QUrl &url);
+    void onNetworkConnectionStats(const QString &statsMetadata, const QUrl &url);
     void onSTPdetected();
     void onCacheVerificationProgress(qint64 bytesProcessed, qint64 totalBytes);
     void onCacheVerificationComplete(bool isValid);
@@ -321,6 +404,7 @@ private:
     // Cache management
     CacheManager* _cacheManager;
     bool _waitingForCacheVerification;
+    QElapsedTimer _cacheVerificationTimer;  // Tracks cache verification duration
     
     // Keychain permission tracking
     bool _keychainPermissionGranted;
@@ -329,11 +413,14 @@ private:
     // Recursively walk all the entries with subitems and, for any which
     // refer to an external JSON list, fetch the list and put it in place.
     void fillSubLists(QJsonArray &topLevel);
-    QNetworkAccessManager _networkManager;
+    void queueSublistFetches(const QJsonArray &list, int depth);
+    QHash<QUrl, qint64> _pendingFetchStartTimes;  // Track request start times for performance
     QJsonDocument _completeOsList;
     QJsonArray _deviceFilter, _hwCapabilities, _swCapabilities;
     bool _deviceFilterIsInclusive;
     std::shared_ptr<DeviceInfo> _device_info;
+
+    QString parseTokenFromUrl(const QUrl &url, bool strictAuthKey = false) const;
 
 protected:
     QUrl _src, _repo;
@@ -350,7 +437,7 @@ protected:
     QQmlApplicationEngine *_engine;
     QTimer _networkchecktimer;
     QTimer _osListRefreshTimer;
-    PowerSaveBlocker _powersave;
+    SuspendInhibitor *_suspendInhibitor;
     DownloadThread *_thread;
     bool _verifyEnabled, _multipleFilesInZip, _online;
     QSettings _settings;
@@ -360,6 +447,23 @@ protected:
     int _refreshJitterOverrideMinutes;
     // Session-only storage for Raspberry Pi Connect token
     QString _piConnectToken;
+    // CLI flag to force enable secure boot regardless of OS capabilities
+    static bool _forceSecureBootEnabled;
+#ifndef CLI_ONLY_BUILD
+    QWindow *_mainWindow;
+#endif
+
+    // Performance statistics capture
+    PerformanceStats *_performanceStats;
+    
+    // Debug options (secret menu)
+    bool _debugDirectIO;
+    bool _debugPeriodicSync;
+    bool _debugVerboseLogging;
+    bool _debugAsyncIO;
+    int _debugAsyncQueueDepth;
+    bool _debugIPv4Only;
+    bool _debugSkipEndOfDevice;
 
     void _parseCompressedFile();
     void _parseXZFile();
@@ -367,8 +471,8 @@ protected:
     QString _privKeyFileName();
     QString _sshKeyDir();
     QString _sshKeyGen();
-    void _applySystemdCustomizationFromSettings(const QVariantMap &s);
-    void _applyCloudInitCustomizationFromSettings(const QVariantMap &s);
+    void _applySystemdCustomisationFromSettings(const QVariantMap &s);
+    void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
     void scheduleOsListRefresh();
 };

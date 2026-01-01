@@ -1,20 +1,26 @@
 # Capital Cities Database
 # Format: CityName|CountryName|CountryCode|Timezone|Language|KeyboardLayout
-# Sorted alphabetically by capital city name for easy lookup
-Abu Dhabi|United Arab Emirates|AE|Asia/Dubai|English|us
+# Generated from REST Countries API (https://restcountries.com/)
+# Sorted alphabetically by capital city name
+Abu Dhabi|United Arab Emirates|AE|Asia/Dubai|Arabic|us
+Abuja|Nigeria|NG|Africa/Lagos|English|us
 Accra|Ghana|GH|Africa/Accra|English|us
+Adamstown|Pitcairn Islands|PN|Pacific/Pitcairn|English|us
 Addis Ababa|Ethiopia|ET|Africa/Addis_Ababa|English|us
 Algiers|Algeria|DZ|Africa/Algiers|French|fr
-Amman|Jordan|JO|Asia/Amman|English|us
+Alofi|Niue|NU|Pacific/Niue|English|us
+Amman|Jordan|JO|Asia/Amman|Arabic|us
 Amsterdam|Netherlands|NL|Europe/Amsterdam|Dutch|nl
-Andorra la Vella|Andorra|AD|Europe/Andorra|Spanish|es
+Andorra la Vella|Andorra|AD|Europe/Andorra|English|es
 Ankara|Turkey|TR|Europe/Istanbul|Turkish|tr
 Antananarivo|Madagascar|MG|Indian/Antananarivo|French|fr
 Apia|Samoa|WS|Pacific/Apia|English|us
 Ashgabat|Turkmenistan|TM|Asia/Ashgabat|English|us
 Asmara|Eritrea|ER|Africa/Asmara|English|us
 Astana|Kazakhstan|KZ|Asia/Almaty|English|us
+Asunción|Paraguay|PY|America/Asuncion|Spanish|us
 Athens|Greece|GR|Europe/Athens|Greek|gr
+Avarua|Cook Islands|CK|Pacific/Rarotonga|English|us
 Baghdad|Iraq|IQ|Asia/Baghdad|Arabic|ara
 Baku|Azerbaijan|AZ|Asia/Baku|English|az
 Bamako|Mali|ML|Africa/Bamako|French|fr
@@ -22,6 +28,7 @@ Bandar Seri Begawan|Brunei|BN|Asia/Brunei|English|us
 Bangkok|Thailand|TH|Asia/Bangkok|Thai|th
 Bangui|Central African Republic|CF|Africa/Bangui|French|fr
 Banjul|Gambia|GM|Africa/Banjul|English|gb
+Basse-Terre|Guadeloupe|GP|America/Guadeloupe|English|us
 Basseterre|Saint Kitts and Nevis|KN|America/St_Kitts|English|us
 Beijing|China|CN|Asia/Shanghai|Chinese|cn
 Beirut|Lebanon|LB|Asia/Beirut|Arabic|ara
@@ -31,7 +38,7 @@ Berlin|Germany|DE|Europe/Berlin|German|de
 Bern|Switzerland|CH|Europe/Zurich|German|ch
 Bishkek|Kyrgyzstan|KG|Asia/Bishkek|English|us
 Bissau|Guinea-Bissau|GW|Africa/Bissau|Portuguese|pt
-Bogotá|Colombia|CO|America/Bogota|Spanish|es
+Bogotá|Colombia|CO|America/Bogota|Spanish|us
 Brasília|Brazil|BR|America/Sao_Paulo|Portuguese|br
 Bratislava|Slovakia|SK|Europe/Bratislava|Slovak|sk
 Brazzaville|Republic of the Congo|CG|Africa/Brazzaville|French|fr
@@ -39,57 +46,77 @@ Bridgetown|Barbados|BB|America/Barbados|English|us
 Brussels|Belgium|BE|Europe/Brussels|French|be
 Bucharest|Romania|RO|Europe/Bucharest|Romanian|ro
 Budapest|Hungary|HU|Europe/Budapest|Hungarian|hu
-Buenos Aires|Argentina|AR|America/Argentina/Buenos_Aires|Spanish|es
-Bujumbura|Burundi|BI|Africa/Bujumbura|French|fr
+Buenos Aires|Argentina|AR|America/Argentina/Buenos_Aires|Spanish|ar
 Cairo|Egypt|EG|Africa/Cairo|Arabic|ara
 Canberra|Australia|AU|Australia/Sydney|English|au
-Caracas|Venezuela|VE|America/Caracas|Spanish|es
+Caracas|Venezuela|VE|America/Caracas|Spanish|us
 Castries|Saint Lucia|LC|America/St_Lucia|English|us
-Chisinau|Moldova|MD|Europe/Chisinau|Romanian|ro
-Colombo|Sri Lanka|LK|Asia/Colombo|English|us
+Cayenne|French Guiana|GF|America/Cayenne|English|us
+Charlotte Amalie|United States Virgin Islands|VI|America/Virgin|English|us
+Chișinău|Moldova|MD|Europe/Chisinau|Romanian|us
+City of San Marino|San Marino|SM|Europe/San_Marino|Italian|it
+City of Victoria|Hong Kong|HK|Asia/Hong_Kong|English|us
+Cockburn Town|Turks and Caicos Islands|TC|America/Grand_Turk|English|us
 Conakry|Guinea|GN|Africa/Conakry|French|fr
 Copenhagen|Denmark|DK|Europe/Copenhagen|Danish|dk
 Dakar|Senegal|SN|Africa/Dakar|French|fr
 Damascus|Syria|SY|Asia/Damascus|Arabic|ara
 Dhaka|Bangladesh|BD|Asia/Dhaka|Bengali|bd
-Dili|Timor-Leste|TL|Asia/Dili|Portuguese|pt
+Diego Garcia|British Indian Ocean Territory|IO|Indian/Chagos|English|us
+Dili|Timor-Leste|TL|UTC|Portuguese|us
 Djibouti|Djibouti|DJ|Africa/Djibouti|French|fr
 Dodoma|Tanzania|TZ|Africa/Dar_es_Salaam|English|us
 Doha|Qatar|QA|Asia/Qatar|Arabic|ara
+Douglas|Isle of Man|IM|Europe/Isle_of_Man|English|gb
 Dublin|Ireland|IE|Europe/Dublin|English|ie
 Dushanbe|Tajikistan|TJ|Asia/Dushanbe|English|us
+El Aaiún|Western Sahara|EH|Africa/El_Aaiun|English|us
+Fakaofo|Tokelau|TK|Pacific/Fakaofo|English|us
+Flying Fish Cove|Christmas Island|CX|Indian/Christmas|English|us
+Fort-de-France|Martinique|MQ|America/Martinique|English|us
 Freetown|Sierra Leone|SL|Africa/Freetown|English|gb
 Funafuti|Tuvalu|TV|Pacific/Funafuti|English|us
 Gaborone|Botswana|BW|Africa/Gaborone|English|gb
+George Town|Cayman Islands|KY|America/Cayman|English|us
 Georgetown|Guyana|GY|America/Guyana|English|us
-Guatemala City|Guatemala|GT|America/Guatemala|Spanish|es
+Gibraltar|Gibraltar|GI|Europe/Gibraltar|English|gb
+Gitega|Burundi|BI|Africa/Bujumbura|French|fr
+Guatemala City|Guatemala|GT|America/Guatemala|Spanish|us
+Gustavia|Saint Barthélemy|BL|America/St_Barthelemy|English|us
+Hagåtña|Guam|GU|Pacific/Guam|English|us
+Hamilton|Bermuda|BM|Atlantic/Bermuda|English|us
 Hanoi|Vietnam|VN|Asia/Ho_Chi_Minh|Vietnamese|vn
 Harare|Zimbabwe|ZW|Africa/Harare|English|gb
-Havana|Cuba|CU|America/Havana|Spanish|es
+Havana|Cuba|CU|America/Havana|Spanish|us
 Helsinki|Finland|FI|Europe/Helsinki|Finnish|fi
 Honiara|Solomon Islands|SB|Pacific/Guadalcanal|English|us
 Islamabad|Pakistan|PK|Asia/Karachi|English|pk
 Jakarta|Indonesia|ID|Asia/Jakarta|Indonesian|id
+Jamestown|Saint Helena, Ascension and Tristan da Cunha|SH|Atlantic/St_Helena|English|us
 Jerusalem|Israel|IL|Asia/Jerusalem|Hebrew|il
+Juba|South Sudan|SS|Africa/Juba|English|us
 Kabul|Afghanistan|AF|Asia/Kabul|English|af
 Kampala|Uganda|UG|Africa/Kampala|English|gb
 Kathmandu|Nepal|NP|Asia/Kathmandu|English|np
 Khartoum|Sudan|SD|Africa/Khartoum|Arabic|ara
 Kigali|Rwanda|RW|Africa/Kigali|French|fr
+King Edward Point|South Georgia|GS|Atlantic/South_Georgia|English|us
 Kingston|Jamaica|JM|America/Jamaica|English|us
+Kingston|Norfolk Island|NF|Pacific/Norfolk|English|us
 Kingstown|Saint Vincent and the Grenadines|VC|America/St_Vincent|English|us
-Kinshasa|Democratic Republic of the Congo|CD|Africa/Kinshasa|French|cd
+Kinshasa|DR Congo|CD|Africa/Kinshasa|French|cd
+Kralendijk|Caribbean Netherlands|BQ|America/Kralendijk|English|us
 Kuala Lumpur|Malaysia|MY|Asia/Kuala_Lumpur|English|my
 Kuwait City|Kuwait|KW|Asia/Kuwait|Arabic|ara
-Kyiv|Ukraine|UA|Europe/Kiev|Ukrainian|uk
-La Paz|Bolivia|BO|America/La_Paz|Spanish|es
+Kyiv|Ukraine|UA|Europe/Kiev|Ukrainian|ua
 Libreville|Gabon|GA|Africa/Libreville|French|fr
 Lilongwe|Malawi|MW|Africa/Blantyre|English|gb
-Lima|Peru|PE|America/Lima|Spanish|es
+Lima|Peru|PE|America/Lima|Spanish|us
 Lisbon|Portugal|PT|Europe/Lisbon|Portuguese|pt
 Ljubljana|Slovenia|SI|Europe/Ljubljana|Slovenian|si
 Lomé|Togo|TG|Africa/Lome|French|fr
 London|United Kingdom|GB|Europe/London|English|gb
+Longyearbyen|Svalbard and Jan Mayen|SJ|Arctic/Longyearbyen|English|no
 Luanda|Angola|AO|Africa/Luanda|Portuguese|pt
 Lusaka|Zambia|ZM|Africa/Lusaka|English|gb
 Luxembourg|Luxembourg|LU|Europe/Luxembourg|French|lu
@@ -97,96 +124,124 @@ Madrid|Spain|ES|Europe/Madrid|Spanish|es
 Majuro|Marshall Islands|MH|Pacific/Majuro|English|us
 Malabo|Equatorial Guinea|GQ|Africa/Malabo|Spanish|es
 Malé|Maldives|MV|Indian/Maldives|English|mv
-Managua|Nicaragua|NI|America/Managua|Spanish|es
+Mamoudzou|Mayotte|YT|Indian/Mayotte|English|us
+Managua|Nicaragua|NI|America/Managua|Spanish|us
 Manama|Bahrain|BH|Asia/Bahrain|Arabic|ara
 Manila|Philippines|PH|Asia/Manila|English|ph
 Maputo|Mozambique|MZ|Africa/Maputo|Portuguese|pt
+Mariehamn|Åland Islands|AX|Europe/Mariehamn|English|fi
+Marigot|Saint Martin|MF|America/Marigot|English|us
 Maseru|Lesotho|LS|Africa/Maseru|English|gb
+Mata-Utu|Wallis and Futuna|WF|Pacific/Wallis|English|us
 Mbabane|Eswatini|SZ|Africa/Mbabane|English|gb
 Mexico City|Mexico|MX|America/Mexico_City|Spanish|mx
 Minsk|Belarus|BY|Europe/Minsk|Belarusian|by
 Mogadishu|Somalia|SO|Africa/Mogadishu|English|us
 Monaco|Monaco|MC|Europe/Monaco|French|fr
 Monrovia|Liberia|LR|Africa/Monrovia|English|us
-Montevideo|Uruguay|UY|America/Montevideo|Spanish|es
+Montevideo|Uruguay|UY|America/Montevideo|Spanish|us
 Moroni|Comoros|KM|Indian/Comoro|French|fr
 Moscow|Russia|RU|Europe/Moscow|Russian|ru
 Muscat|Oman|OM|Asia/Muscat|Arabic|ara
+N'Djamena|Chad|TD|Africa/Ndjamena|French|fr
 Nairobi|Kenya|KE|Africa/Nairobi|English|ke
 Nassau|Bahamas|BS|America/Nassau|English|us
 Naypyidaw|Myanmar|MM|Asia/Yangon|English|us
-N'Djamena|Chad|TD|Africa/Ndjamena|French|fr
 New Delhi|India|IN|Asia/Kolkata|English|in
+Ngerulmud|Palau|PW|Pacific/Palau|English|us
 Niamey|Niger|NE|Africa/Niamey|French|fr
 Nicosia|Cyprus|CY|Asia/Nicosia|Greek|gr
 Nouakchott|Mauritania|MR|Africa/Nouakchott|Arabic|ara
+Nouméa|New Caledonia|NC|Pacific/Noumea|English|us
 Nuku'alofa|Tonga|TO|Pacific/Tongatapu|English|us
-Nur-Sultan|Kazakhstan|KZ|Asia/Almaty|English|us
+Nuuk|Greenland|GL|America/Godthab|English|us
+Oranjestad|Aruba|AW|America/Aruba|English|us
 Oslo|Norway|NO|Europe/Oslo|Norwegian|no
 Ottawa|Canada|CA|America/Toronto|English|ca
 Ouagadougou|Burkina Faso|BF|Africa/Ouagadougou|French|fr
+Pago Pago|American Samoa|AS|Pacific/Pago_Pago|English|us
 Palikir|Micronesia|FM|Pacific/Pohnpei|English|us
-Panama City|Panama|PA|America/Panama|Spanish|es
-Paramaribo|Suriname|SR|America/Paramaribo|Dutch|sr
+Panama City|Panama|PA|America/Panama|Spanish|us
+Papeetē|French Polynesia|PF|Pacific/Tahiti|English|us
+Paramaribo|Suriname|SR|America/Paramaribo|Dutch|us
 Paris|France|FR|Europe/Paris|French|fr
+Philipsburg|Sint Maarten|SX|America/Lower_Princes|English|us
 Phnom Penh|Cambodia|KH|Asia/Phnom_Penh|Khmer|kh
+Plymouth|Montserrat|MS|America/Montserrat|English|us
 Podgorica|Montenegro|ME|Europe/Podgorica|English|me
 Port Louis|Mauritius|MU|Indian/Mauritius|English|mu
 Port Moresby|Papua New Guinea|PG|Pacific/Port_Moresby|English|us
-Port of Spain|Trinidad and Tobago|TT|America/Port_of_Spain|English|us
 Port Vila|Vanuatu|VU|Pacific/Efate|English|us
-Port-au-Prince|Haiti|HT|America/Port-au-Prince|French|fr
+Port of Spain|Trinidad and Tobago|TT|America/Port_of_Spain|English|us
+Port-au-Prince|Haiti|HT|America/Port-au-Prince|French|us
+Port-aux-Français|French Southern and Antarctic Lands|TF|Indian/Kerguelen|English|us
 Porto-Novo|Benin|BJ|Africa/Porto-Novo|French|fr
-Prague|Czech Republic|CZ|Europe/Prague|Czech|cz
-Praia|Cabo Verde|CV|Atlantic/Cape_Verde|Portuguese|pt
+Prague|Czechia|CZ|Europe/Prague|Czech|cz
+Praia|Cape Verde|CV|Atlantic/Cape_Verde|Portuguese|pt
 Pretoria|South Africa|ZA|Africa/Johannesburg|English|za
 Pristina|Kosovo|XK|Europe/Belgrade|English|us
-Pyongyang|North Korea|KP|Asia/Pyongyang|Korean|kr
-Quito|Ecuador|EC|America/Guayaquil|Spanish|es
+Pyongyang|North Korea|KP|Asia/Pyongyang|Korean|us
+Quito|Ecuador|EC|America/Guayaquil|Spanish|us
 Rabat|Morocco|MA|Africa/Casablanca|Arabic|ara
+Ramallah|Palestine|PS|Asia/Gaza|English|us
 Reykjavik|Iceland|IS|Atlantic/Reykjavik|Icelandic|is
 Riga|Latvia|LV|Europe/Riga|Latvian|lv
 Riyadh|Saudi Arabia|SA|Asia/Riyadh|Arabic|ara
+Road Town|British Virgin Islands|VG|America/Tortola|English|us
 Rome|Italy|IT|Europe/Rome|Italian|it
 Roseau|Dominica|DM|America/Dominica|English|us
-San José|Costa Rica|CR|America/Costa_Rica|Spanish|es
-San Marino|San Marino|SM|Europe/San_Marino|Italian|it
-San Salvador|El Salvador|SV|America/El_Salvador|Spanish|es
+Saint Helier|Jersey|JE|Europe/Jersey|English|gb
+Saint John's|Antigua and Barbuda|AG|America/Antigua|English|us
+Saint-Denis|Réunion|RE|Indian/Reunion|English|us
+Saint-Pierre|Saint Pierre and Miquelon|PM|America/Miquelon|English|us
+Saipan|Northern Mariana Islands|MP|UTC|English|us
+San José|Costa Rica|CR|America/Costa_Rica|Spanish|us
+San Juan|Puerto Rico|PR|America/Puerto_Rico|English|us
+San Salvador|El Salvador|SV|America/El_Salvador|Spanish|us
 Sana'a|Yemen|YE|Asia/Aden|Arabic|ara
-Santiago|Chile|CL|America/Santiago|Spanish|es
-Santo Domingo|Dominican Republic|DO|America/Santo_Domingo|Spanish|es
-São Tomé|São Tomé and Príncipe|ST|Africa/Sao_Tome|Portuguese|pt
+Santiago|Chile|CL|America/Santiago|Spanish|us
+Santo Domingo|Dominican Republic|DO|America/Santo_Domingo|Spanish|us
 Sarajevo|Bosnia and Herzegovina|BA|Europe/Sarajevo|English|ba
 Seoul|South Korea|KR|Asia/Seoul|Korean|kr
 Singapore|Singapore|SG|Asia/Singapore|English|us
 Skopje|North Macedonia|MK|Europe/Skopje|English|mk
 Sofia|Bulgaria|BG|Europe/Sofia|Bulgarian|bg
+South Tarawa|Kiribati|KI|Pacific/Tarawa|English|us
 Sri Jayawardenepura Kotte|Sri Lanka|LK|Asia/Colombo|English|us
+St. George's|Grenada|GD|America/Grenada|English|us
+St. Peter Port|Guernsey|GG|Europe/Guernsey|English|gb
+Stanley|Falkland Islands|FK|Atlantic/Stanley|English|us
 Stockholm|Sweden|SE|Europe/Stockholm|Swedish|se
+Sucre|Bolivia|BO|America/La_Paz|Spanish|us
 Suva|Fiji|FJ|Pacific/Fiji|English|us
+São Tomé|São Tomé and Príncipe|ST|Africa/Sao_Tome|Portuguese|pt
 Taipei|Taiwan|TW|Asia/Taipei|Chinese|tw
 Tallinn|Estonia|EE|Europe/Tallinn|Estonian|ee
-Tarawa|Kiribati|KI|Pacific/Tarawa|English|us
 Tashkent|Uzbekistan|UZ|Asia/Tashkent|English|uz
 Tbilisi|Georgia|GE|Asia/Tbilisi|Georgian|ge
-Tegucigalpa|Honduras|HN|America/Tegucigalpa|Spanish|es
+Tegucigalpa|Honduras|HN|America/Tegucigalpa|Spanish|us
 Tehran|Iran|IR|Asia/Tehran|Persian|ir
+The Valley|Anguilla|AI|America/Anguilla|English|us
 Thimphu|Bhutan|BT|Asia/Thimphu|English|bt
 Tirana|Albania|AL|Europe/Tirane|Albanian|al
 Tokyo|Japan|JP|Asia/Tokyo|Japanese|jp
 Tripoli|Libya|LY|Africa/Tripoli|Arabic|ara
 Tunis|Tunisia|TN|Africa/Tunis|Arabic|ara
-Ulaanbaatar|Mongolia|MN|Asia/Ulaanbaatar|English|mn
+Tórshavn|Faroe Islands|FO|Atlantic/Faroe|English|us
+Ulan Bator|Mongolia|MN|Asia/Ulaanbaatar|English|mn
 Vaduz|Liechtenstein|LI|Europe/Vaduz|German|de
 Valletta|Malta|MT|Europe/Malta|English|mt
 Vatican City|Vatican City|VA|Europe/Vatican|Italian|it
 Victoria|Seychelles|SC|Indian/Mahe|English|us
 Vienna|Austria|AT|Europe/Vienna|German|at
-Vientiane|Laos|LA|Asia/Vientiane|English|us
+Vientiane|Laos|LA|Asia/Vientiane|Lao|us
 Vilnius|Lithuania|LT|Europe/Vilnius|Lithuanian|lt
 Warsaw|Poland|PL|Europe/Warsaw|Polish|pl
+Washington DC|United States Minor Outlying Islands|UM|UTC|English|us
 Washington, D.C.|United States|US|America/New_York|English|us
 Wellington|New Zealand|NZ|Pacific/Auckland|English|nz
+West Island|Cocos (Keeling) Islands|CC|Indian/Cocos|English|us
+Willemstad|Curaçao|CW|America/Curacao|English|us
 Windhoek|Namibia|NA|Africa/Windhoek|English|us
 Yamoussoukro|Ivory Coast|CI|Africa/Abidjan|French|ci
 Yaoundé|Cameroon|CM|Africa/Douala|French|cm

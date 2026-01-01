@@ -81,6 +81,40 @@ public:
      */
     size_t getSystemPageSize();
 
+    /**
+     * @brief Calculate optimal ring buffer slot count based on available memory
+     * 
+     * Balances pipelining depth against memory usage. More slots allow
+     * better overlap between producer and consumer, but use more memory.
+     * 
+     * @param slotSize Size of each slot in bytes
+     * @return Optimal number of slots for the ring buffer
+     */
+    size_t getOptimalRingBufferSlots(size_t slotSize);
+
+    /**
+     * @brief Log a summary of all memory-based configuration
+     * 
+     * Useful for diagnostics - shows all adaptive settings based on detected memory.
+     */
+    void logConfigurationSummary();
+
+    /**
+     * @brief Calculate optimal async I/O queue depth based on system resources
+     * 
+     * The queue depth determines how many async writes can be in flight simultaneously.
+     * Higher values can hide device latency but use more memory for buffer copies.
+     * 
+     * Returns a value between 4 (conservative) and 64 (aggressive) based on:
+     * - Total system memory
+     * - Available memory
+     * - Expected write block size
+     * 
+     * @param writeBlockSize Size of write blocks in bytes (default 1MB)
+     * @return Optimal async queue depth
+     */
+    int getOptimalAsyncQueueDepth(size_t writeBlockSize = 1024 * 1024);
+
 private:
     SystemMemoryManager() = default;
     ~SystemMemoryManager() = default;

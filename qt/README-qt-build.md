@@ -7,7 +7,7 @@ This document explains how to build Qt from source with Debian-like configuratio
 The `build-qt.sh` script automates the process of:
 1. Installing dependencies required for building Qt
 2. Downloading the Qt source code
-3. Configuring it with optimizations for Raspberry Pi OS
+3. Configuring it for Raspberry Pi OS
 4. Building and installing Qt to a specified location
 
 By default, Qt is built to work with the Raspberry Pi OS Wayland-based desktop environment.
@@ -33,7 +33,6 @@ This will:
 - Build Qt 6.9.1
 - Install it to `/opt/qt6`
 - Use all available CPU cores
-- Automatically detect and optimize for your Raspberry Pi model
 - Configure for the Wayland desktop environment
 
 ## Command Line Options
@@ -47,7 +46,6 @@ The script supports the following options:
 --no-clean           Don't clean the build directory
 --debug              Build with debug information
 --skip-dependencies  Skip installing build dependencies
---rpi-optimize       Apply Raspberry Pi specific optimizations
 -h, --help           Show this help message
 ```
 
@@ -76,21 +74,6 @@ By default, Qt is built to work with the Raspberry Pi OS desktop, which uses Way
 - Regular desktop applications
 - Windowed applications
 - Applications that need to work alongside other desktop software
-
-## Raspberry Pi Optimizations
-
-The script automatically detects Raspberry Pi models and applies appropriate optimizations:
-
-- **Raspberry Pi 2**: Optimized for Cortex-A7
-- **Raspberry Pi 3**: Optimized for Cortex-A53
-- **Raspberry Pi 4**: Optimized for Cortex-A72
-- **Raspberry Pi 5**: Optimized for Cortex-A76
-
-These optimizations include:
-
-- CPU-specific compiler flags
-- Platform-specific configurations
-- Raspberry Pi specific dependencies
 
 ## Using the Built Qt
 

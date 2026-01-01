@@ -30,10 +30,13 @@ set(PLATFORM_SOURCES
     dependencies/drivelist/src/windows/list.cpp
     windows/winfile.cpp
     windows/winfile.h
+    windows/bootimgcreator_windows.cpp
+    windows/rsakeyfingerprint_windows.cpp
     windows/diskpart_util.cpp
     windows/diskpart_util.h
     windows/file_operations_windows.cpp
     windows/platformquirks_windows.cpp
+    windows/windows_suspend_inhibitor.cpp
 )
 
 # Only include GUI-specific components for non-CLI builds
@@ -51,9 +54,18 @@ else()
 endif()
 
 set(DEPENDENCIES
-    windows/rpi-imager.rc
+    ${CMAKE_BINARY_DIR}/rpi-imager.rc
     wlanapi_delayed.lib
 )
 set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll ole32 oleaut32 wbemuuid)
 
-
+# ---- Relay exe ----
+add_executable(rpi-imager-callback-relay WIN32 windows/CallbackRelay.cpp)
+target_compile_definitions(rpi-imager-callback-relay
+    PRIVATE RPI_IMAGER_PORT=${IMAGER_CALLBACK_PORT}
+            RPI_IMAGER_EXE_NAME=L"rpi-imager.exe"
+            RPI_IMAGER_START_ON_FAIL=1)
+target_link_libraries(rpi-imager-callback-relay PRIVATE ws2_32)
+if (MINGW)
+  target_link_options(rpi-imager-callback-relay PRIVATE -municode)
+endif()

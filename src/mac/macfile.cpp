@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <security/Authorization.h>
 #include <QDebug>
+#include <QCoreApplication>
 
 MacFile::MacFile(QObject *parent)
     : QFile(parent)
@@ -33,8 +34,19 @@ MacFile::authOpenResult MacFile::authOpen(const QByteArray &filename)
     AuthorizationFlags flags = kAuthorizationFlagInteractionAllowed |
             kAuthorizationFlagExtendRights |
             kAuthorizationFlagPreAuthorize;
+    
+    // Create authorization environment with custom prompt
+    // This provides better context in the authorization dialog
+    QString promptText = QCoreApplication::translate("MacFile", "Raspberry Pi Imager needs to access the disk to write the image.");
+    QByteArray promptBytes = promptText.toUtf8();
+    const char *promptKey = "prompt";
+    AuthorizationItem envItems[] = {
+        { promptKey, (size_t)promptBytes.length(), (void*)promptBytes.constData(), 0 }
+    };
+    AuthorizationEnvironment env = { 1, envItems };
+    
     AuthorizationRef authRef;
-    if (AuthorizationCreate(&rights, nullptr, flags, &authRef) != 0)
+    if (AuthorizationCreate(&rights, &env, flags, &authRef) != 0)
         return authOpenCancelled;
 
     AuthorizationExternalForm externalForm;

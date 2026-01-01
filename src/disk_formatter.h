@@ -23,7 +23,8 @@ enum class FormatError {
   kFileWriteError,
   kFileSeekError,
   kInvalidParameters,
-  kInsufficientSpace
+  kInsufficientSpace,
+  kCancelled
 };
 
 // Result type for operations that can fail

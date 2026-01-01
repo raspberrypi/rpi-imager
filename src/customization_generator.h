@@ -12,6 +12,10 @@
 
 namespace rpi_imager {
 
+// Raspberry Pi Connect configuration paths
+constexpr auto PI_CONNECT_CONFIG_PATH = ".config/com.raspberrypi.connect";
+constexpr auto PI_CONNECT_DEPLOY_KEY_FILENAME = "auth.key";
+
 /**
  * @brief Generates firstrun.sh and cloud-init customisation scripts for Raspberry Pi images
  * 
@@ -37,14 +41,14 @@ public:
      * 
      * @param settings Map containing customisation settings
      * @param piConnectToken Optional Raspberry Pi Connect token
-     * @param isRpiosCloudInit Whether the OS supports rpios_cloudinit capability
+     * @param hasCcRpi Whether the OS supports the cc_raspberry_pi cloud-init module
      * @param sshEnabled Whether SSH is enabled
      * @param getCurrentUser Function to get current user name
      * @return QByteArray containing the generated user-data YAML
      */
     static QByteArray generateCloudInitUserData(const QVariantMap& settings,
                                                const QString& piConnectToken = QString(),
-                                               bool isRpiosCloudInit = false,
+                                               bool hasCcRpi = false,
                                                bool sshEnabled = false,
                                                const QString& currentUser = QString());
     
@@ -52,11 +56,11 @@ public:
      * @brief Generate cloud-init network-config YAML from settings
      * 
      * @param settings Map containing customisation settings
-     * @param isRpiosCloudInit Whether the OS supports rpios_cloudinit capability
+     * @param hasCcRpi Whether the OS supports the cc_raspberry_pi cloud-init module
      * @return QByteArray containing the generated network-config YAML
      */
     static QByteArray generateCloudInitNetworkConfig(const QVariantMap& settings,
-                                                    bool isRpiosCloudInit = false);
+                                                    bool hasCcRpi = false);
 
 private:
     /**
@@ -75,6 +79,18 @@ private:
      * @return Hashed password
      */
     static QString pbkdf2(const QByteArray& password, const QByteArray& ssid);
+    
+    /**
+     * @brief Escape a string for use in YAML double-quoted strings
+     * 
+     * Per IEEE 802.11, SSIDs can be 0-32 octets containing ANY byte value,
+     * including null, control characters, and non-printable bytes.
+     * This function escapes all special characters for safe YAML inclusion.
+     * 
+     * @param value String to escape
+     * @return Escaped string safe for YAML double-quoted context
+     */
+    static QString yamlEscapeString(const QString& value);
 };
 
 } // namespace rpi_imager

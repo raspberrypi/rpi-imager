@@ -24,7 +24,6 @@ qtwebview
 qtremoteobjects
 qt5compat
 qtcoap
-qtlanguageserver
 qtactiveqt
 qtgrpc
 qtopcua

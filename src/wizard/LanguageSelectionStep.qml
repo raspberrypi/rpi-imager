@@ -3,9 +3,9 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../qmlcomponents"
 import "components"
 
@@ -35,18 +35,24 @@ WizardStepBase {
         }
         comboLanguage.model = display
 
-        // Default to English (British) if present, else current language
-        var idx = display.indexOf("English (British)")
+        // Pre-select based on current language (which may have been loaded from saved preference in main.cpp)
+        // Fall back to English (British) if current language is not set
+        var current = imageWriter.getCurrentLanguage()
+        var idx = -1
+        
+        if (current && current.length > 0) {
+            var currentDisplay = (current === "English") ? "English (British)" : current
+            idx = display.indexOf(currentDisplay)
+        }
+        
         if (idx === -1) {
-            var current = imageWriter.getCurrentLanguage()
-            var wantedDisplay = (current === "English") ? "English (British)" : current
-            idx = display.indexOf(wantedDisplay)
+            idx = display.indexOf("English (British)")
         }
         comboLanguage.currentIndex = idx !== -1 ? idx : 0
 
-        // Focus first interactive control
-        root.registerFocusGroup("language_controls", function(){ return [comboLanguage] }, 0)
-        root.initialFocusItem = comboLanguage
+        // Include label before combo box so users hear the explanation first (only focusable when screen reader is active)
+        root.registerFocusGroup("language_controls", function(){ return [labelLanguage, comboLanguage] }, 0)
+        // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
     }
 
     content: [
@@ -62,13 +68,24 @@ WizardStepBase {
                     Layout.fillWidth: true
                     spacing: Style.spacingMedium
 
-                    WizardFormLabel { text: qsTr("Language:") }
+                    WizardFormLabel { 
+                        id: labelLanguage
+                        text: qsTr("Language:") 
+                    }
                     ImComboBox {
                         id: comboLanguage
                         Layout.fillWidth: true
                         editable: false
                         selectTextByMouse: true
                         font.pixelSize: Style.fontSizeInput
+                        Accessible.description: qsTr("Select the language for the Raspberry Pi Imager interface")
+                        onActivated: function(index) {
+                            if (index >= 0 && index < _internalLanguages.length) {
+                                var internalName = _internalLanguages[index]
+                                if (internalName && internalName.length > 0)
+                                    imageWriter.changeLanguage(internalName)
+                            }
+                        }
                     }
                 }
             }
@@ -79,8 +96,12 @@ WizardStepBase {
         var idx = comboLanguage.currentIndex
         if (idx >= 0 && idx < _internalLanguages.length) {
             var internalName = _internalLanguages[idx]
-            if (internalName && internalName.length > 0)
+            if (internalName && internalName.length > 0) {
                 imageWriter.changeLanguage(internalName)
+                // Persist the language selection so it's remembered for future sessions
+                // This also ensures the language selector is always shown on next launch
+                imageWriter.setSetting("savedLanguage", internalName)
+            }
         }
     }
 }

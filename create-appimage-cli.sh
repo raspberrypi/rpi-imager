@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Script to create AppImage for CLI-only rpi-imager
@@ -46,8 +46,24 @@ for arg in "$@"; do
     esac
 done
 
+# Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
+if [ -n "$QT_ROOT_ARG" ]; then
+    # Expand tilde if present at the start
+    case "$QT_ROOT_ARG" in
+        "~"/*) QT_ROOT_ARG="$HOME/${QT_ROOT_ARG#\~/}" ;;
+        "~")   QT_ROOT_ARG="$HOME" ;;
+    esac
+    # Convert to absolute path if it exists
+    if [ -e "$QT_ROOT_ARG" ]; then
+        QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
+    else
+        echo "Warning: Specified Qt root path does not exist: $QT_ROOT_ARG"
+        echo "Will attempt to use it anyway, but this may fail..."
+    fi
+fi
+
 # Validate architecture
-if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" && "$ARCH" != "armv7l" ]]; then
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
     echo "Error: Architecture must be one of: x86_64, aarch64, armv7l"
     exit 1
 fi
@@ -58,16 +74,29 @@ echo "Building CLI-only AppImage for architecture: $ARCH"
 SOURCE_DIR="src/"
 CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 
-# Extract version components
-MAJOR=$(grep -E "set\(IMAGER_VERSION_MAJOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MAJOR \([0-9]*\).*/\1/')
-MINOR=$(grep -E "set\(IMAGER_VERSION_MINOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MINOR \([0-9]*\).*/\1/')
-PATCH=$(grep -E "set\(IMAGER_VERSION_PATCH [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_PATCH \([0-9]*\).*/\1/')
-PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+# Get version from git tag (same approach as CMake)
+GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
+
+# Extract numeric version components for compatibility
+# Match versions like: v1.2.3, 1.2.3, v1.2.3-extra, etc.
+MAJOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}\([0-9]\{1,\}\)\.[0-9]\{1,\}\.[0-9]\{1,\}.*/\1/p')
+MINOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.\([0-9]\{1,\}\)\.[0-9]\{1,\}.*/\1/p')
+PATCH=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.[0-9]\{1,\}\.\([0-9]\{1,\}\).*/\1/p')
+
+if [ -n "$MAJOR" ] && [ -n "$MINOR" ] && [ -n "$PATCH" ]; then
+    PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+else
+    MAJOR="0"
+    MINOR="0"
+    PATCH="0"
+    PROJECT_VERSION="0.0.0"
+    echo "Warning: Could not parse version from git tag: $GIT_VERSION"
+fi
 
 # Extract project name (lowercase for AppImage naming convention)
 PROJECT_NAME=$(grep "project(" "$CMAKE_FILE" | head -1 | sed 's/project(\([^[:space:]]*\).*/\1/' | tr '[:upper:]' '[:lower:]')
 
-echo "Building $PROJECT_NAME version $PROJECT_VERSION for CLI-only operation"
+echo "Building $PROJECT_NAME version $GIT_VERSION (numeric: $PROJECT_VERSION) for CLI-only operation"
 
 QT_VERSION=""
 QT_DIR=""
@@ -155,7 +184,7 @@ BUILD_TYPE="MinSizeRel"  # Optimize for size
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-cli-$ARCH"
-OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-cli-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-cli-${ARCH}.AppImage"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"
@@ -223,19 +252,14 @@ CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DBUILD_CLI_ONLY=ON"
 
 # shellcheck disable=SC2086
 cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
-make -j$(nproc)
+make -j"$(nproc)"
 
 echo "Creating CLI-only AppDir..."
 # Install to AppDir
 make DESTDIR="$APPDIR" install
 cd ..
 
-# Desktop file is already installed by CMake from debian/com.raspberrypi.rpi-imager-cli.desktop
-# No need to create it here
-
-# Copy the icon for AppImage tools (required even though NoDisplay=true)
-mkdir -p "$APPDIR/usr/share/icons/hicolor/128x128/apps"
-cp "debian/rpi-imager.png" "$APPDIR/usr/share/icons/hicolor/128x128/apps/com.raspberrypi.rpi-imager.png"
+# Desktop file and icon are already installed by CMake
 
 # Create the AppRun file for CLI operation
 cat > "$APPDIR/AppRun" << 'EOF'
@@ -296,20 +320,27 @@ find "$APPDIR" -name "*.prl" -delete 2>/dev/null || true
 find "$APPDIR" -type f -executable -exec strip {} \; 2>/dev/null || true
 
 echo "Stripping shared libraries..."
-pushd "$APPDIR"
-if [ -n "$(find . -name "*.so*")" ]; then
-    echo $(find . -name "*.so*")
-    strip --strip-unneeded $(find . -name "*.so*")
+SAVED_DIR="$PWD"
+cd "$APPDIR"
+SO_FILES=$(find . -name "*.so*" 2>/dev/null || true)
+if [ -n "$SO_FILES" ]; then
+    echo "$SO_FILES"
+    # shellcheck disable=SC2086
+    strip --strip-unneeded $SO_FILES 2>/dev/null || true
 fi
-popd
+cd "$SAVED_DIR"
 
 echo "Creating CLI-only AppImage..."
-# Remove old AppImage symlink
+# Remove old symlinks for CLI variant only
 rm -f "$PWD/rpi-imager-cli.AppImage"
+rm -f "$PWD/rpi-imager-cli-$ARCH.AppImage"
 
 if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
     # Create AppImage using linuxdeploy
-    LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage \
+    # Explicitly specify the desktop file to ensure correct naming
+    LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH" "$LINUXDEPLOY" --appdir="$APPDIR" \
+        --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager-cli.desktop" \
+        --output=appimage \
         --exclude-library="libwayland-*" \
         --exclude-library="libX11*" \
         --exclude-library="libxcb*" \
@@ -320,12 +351,19 @@ if [ -n "$LINUXDEPLOY" ] && [ -f "$LINUXDEPLOY" ]; then
         --exclude-library="libGL*" \
         --exclude-library="libEGL*"
     
-    # Rename the output file
-    for appimage in *.AppImage; do
-        if [ "$PWD/$appimage" != "$OUTPUT_FILE" ]; then
-            mv "$appimage" "$OUTPUT_FILE"
-        fi
-    done
+    # Rename the output file from linuxdeploy's default name to our versioned name
+    # linuxdeploy creates: Raspberry_Pi_Imager_(CLI)-${ARCH}.AppImage (based on Name= in desktop file)
+    LINUXDEPLOY_OUTPUT="Raspberry_Pi_Imager_(CLI)-${ARCH}.AppImage"
+    if [ -f "$LINUXDEPLOY_OUTPUT" ]; then
+        echo "Renaming '$LINUXDEPLOY_OUTPUT' to '$(basename "$OUTPUT_FILE")'"
+        mv "$LINUXDEPLOY_OUTPUT" "$OUTPUT_FILE"
+    elif [ -f "$OUTPUT_FILE" ]; then
+        echo "Output file already exists: $OUTPUT_FILE"
+    else
+        echo "Warning: Expected linuxdeploy output '$LINUXDEPLOY_OUTPUT' not found"
+        echo "Looking for any matching AppImage..."
+        ls -la ./*.AppImage 2>/dev/null || true
+    fi
 else
     # Manual AppImage creation (basic implementation)
     echo "Creating AppImage manually (basic implementation)..."
@@ -339,16 +377,26 @@ fi
 if [ -f "$OUTPUT_FILE" ]; then
     echo "CLI-only AppImage created at $OUTPUT_FILE"
     
-    # Create a symlink with a simpler name
-    SYMLINK_NAME="$PWD/rpi-imager-cli.AppImage"
-    if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
-        rm -f "$SYMLINK_NAME"
+    # Create symlinks for debian packaging and user convenience
+    # Primary symlink matches debian/rpi-imager-cli.install expectations
+    DEBIAN_SYMLINK="$PWD/rpi-imager-cli-$ARCH.AppImage"
+    if [ -L "$DEBIAN_SYMLINK" ] || [ -f "$DEBIAN_SYMLINK" ]; then
+        rm -f "$DEBIAN_SYMLINK"
     fi
-    ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_NAME"
-    echo "Created symlink: $SYMLINK_NAME -> $(basename "$OUTPUT_FILE")"
+    ln -s "$(basename "$OUTPUT_FILE")" "$DEBIAN_SYMLINK"
+    echo "Created symlink: $DEBIAN_SYMLINK -> $(basename "$OUTPUT_FILE")"
     
-    # Show size comparison if regular AppImage exists
-    REGULAR_APPIMAGE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-${ARCH}.AppImage"
+    # Additional architecture-independent symlink for convenience
+    SIMPLE_SYMLINK="$PWD/rpi-imager-cli.AppImage"
+    if [ -L "$SIMPLE_SYMLINK" ] || [ -f "$SIMPLE_SYMLINK" ]; then
+        rm -f "$SIMPLE_SYMLINK"
+    fi
+    ln -s "$(basename "$OUTPUT_FILE")" "$SIMPLE_SYMLINK"
+    echo "Created symlink: $SIMPLE_SYMLINK -> $(basename "$OUTPUT_FILE")"
+    
+    # Show size comparison if desktop AppImage exists
+    # Desktop AppImage uses GIT_VERSION and has -desktop- suffix
+    REGULAR_APPIMAGE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-desktop-${ARCH}.AppImage"
     if [ -f "$REGULAR_APPIMAGE" ]; then
         CLI_SIZE=$(stat -f%z "$OUTPUT_FILE" 2>/dev/null || stat -c%s "$OUTPUT_FILE" 2>/dev/null || echo "unknown")
         REGULAR_SIZE=$(stat -f%z "$REGULAR_APPIMAGE" 2>/dev/null || stat -c%s "$REGULAR_APPIMAGE" 2>/dev/null || echo "unknown")

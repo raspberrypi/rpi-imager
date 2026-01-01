@@ -5,7 +5,7 @@
 
 pragma Singleton
 
-import QtQuick 2.15
+import QtQuick
 
 Item {
     id: root
@@ -135,6 +135,11 @@ Item {
     readonly property int scrollBarWidth: 10
     readonly property int sidebarWidth: 200
     readonly property int sidebarItemBorderRadius: 4
+    // Embedded-mode overrides (0 radius to avoid software renderer artifacts)
+    readonly property int sectionBorderRadiusEmbedded: 0
+    readonly property int listItemBorderRadiusEmbedded: 0
+    readonly property int sidebarItemBorderRadiusEmbedded: 0
+    readonly property int buttonBorderRadiusEmbedded: 0
     // Sidebar item heights
     readonly property int sidebarItemHeight: buttonHeightStandard
     readonly property int sidebarSubItemHeight: sidebarItemHeight - 12

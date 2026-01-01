@@ -1,3 +1,81 @@
+rpi-imager (2.0.3) unstable; urgency=medium
+
+  * Networking:
+    - Implement comprehensive network monitoring to detect connectivity changes
+    - Automatic retry of OS list fetching when network is restored
+    - Add CA certificate bundle detection for AppImage compatibility on Linux
+  * Custom Repositories:
+    - Support rpi-imager:// URI scheme for deep-linking to custom repositories
+    - Register .rpi-imager-manifest file type on all platforms
+    - Show custom repository host in window title with security hardening
+  * Counterfeit Card Detection:
+    - Detect and handle counterfeit storage devices that hang during I/O
+    - Add timeout mechanism for critical disk operations
+    - Add debug option to skip end-of-device operations
+  * Performance:
+    - Implement bottleneck detection showing network/decompression/write status
+    - Add detailed write timing breakdown for analysis
+    - Skip periodic sync when direct I/O is enabled
+  * UI:
+    - Add sticky language preference across sessions
+    - Enhance title display with offline status indication
+    - Improve text wrapping and marquee scrolling throughout
+  * Drive Handling:
+    - Add support for NVMe over Fabrics bus type on Windows
+    - Enhance storage bus type recognition and device classification
+  * Customization:
+    - Enhance WiFi configuration for open networks
+    - Add initFormat parameter to CLI setImageCustomisation call
+  * Windows:
+    - Enhance uninstallation to clean up old installation directories
+  * Bug Fixes:
+    - Fix language selection persistence
+    - Fix async write ID overlap with cancellation markers
+    - Fix async cache hash reset on open
+    - Fix unmounting logic and error handling
+    - Fix hardware/software capability case sensitivity
+  * i18n: Updated Spanish, Czech, French, Russian, Portuguese translations
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Mon, 22 Dec 2025 18:00:00 +0000
+
+rpi-imager (2.0.2) unstable; urgency=medium
+
+  * OS customisation:
+    - Fixup init_format validation
+    - Fixup telemetry version string
+    - Update cloud-init user-data generation for Pi Connect
+    - Support SSH public key authentication without username/password
+    - Enhance WiFi configuration for WPA2/WPA3 compatibility
+  * UI:
+    - Improve focus handling for labels in wizard steps
+    - Update accessibility properties for form labels
+    - Enhance ComboBox keyboard navigation and search functionality
+  * macOS: Enhance file dialog with file type selection popup
+  * Linux: Implement privilege escalation support for elevatable bundles
+  * all:
+    - Add file logging support for debugging
+    - Remove O_SYNC flag from file open operations
+
+  -- Tom Dewey <tom.dewey@raspberrypi.com>  Wed, 26 Nov 2025 13:00:00 +0100
+
+rpi-imager (2.0.1) unstable; urgency=medium
+
+  * i18n: Updated Italian translation
+  * Windows: Migrate to modern IFileDialog for file selection
+  * Windows: Fix SSH key file selection filters
+
+  -- Tom Dewey <tom.dewey@raspberrypi.com>  Mon, 24 Nov 2025 13:00:00 +0100
+
+rpi-imager (2.0.0) unstable; urgency=medium
+
+  * UI: Complete redesign, now as a wizard
+  * OS customisation: Add Raspberry Pi Connect step
+  * App Options: Custom repository selection UI
+  * OS customisation: Rebuilt back-end in C++
+  * build: Custom Qt 6.9.3 builds for each platform
+
+  -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 10 Oct 2025 17:00:00 +0100
+
 rpi-imager (1.9.7) unstable; urgency=medium
 
   * OS customisation:
@@ -16,7 +94,7 @@ rpi-imager (1.9.7) unstable; urgency=medium
   * Embedded: Unified build
   * macOS: Build custom Qt 6.9.1
 
- -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 31 Jul 2025 17:00:00 +0100
+  -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 31 Jul 2025 17:00:00 +0100
 
 rpi-imager (1.9.6) unstable; urgency=medium
 

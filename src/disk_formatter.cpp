@@ -4,6 +4,7 @@
  */
 
 #include "disk_formatter.h"
+#include "aligned_buffer.h"
 
 #include <cstring>
 #include <algorithm>
@@ -81,6 +82,8 @@ FormatError ConvertFileError(FileError error) {
     case FileError::kSyncError:
     case FileError::kFlushError:
       return FormatError::kFileWriteError;
+    case FileError::kCancelled:
+      return FormatError::kCancelled;
   }
   return FormatError::kFileOpenError;
 }
@@ -161,7 +164,12 @@ Result<void> DiskFormatter::FormatFile(
 Result<void> DiskFormatter::WriteMbr(
     std::uint64_t device_size_bytes) const {
   
-  std::array<std::uint8_t, kSectorSize> mbr_sector{};
+  // Use aligned buffer for O_DIRECT compatibility on Linux
+  AlignedBuffer mbr_sector(kSectorSize);
+  if (!mbr_sector.valid()) {
+    std::cout << "Failed to allocate aligned buffer for MBR" << std::endl;
+    return Result<void>(FormatError::kFileWriteError);
+  }
   
   // Calculate total sectors
   std::uint64_t total_sectors = device_size_bytes / kSectorSize;
@@ -201,10 +209,10 @@ Result<void> DiskFormatter::WriteMbr(
   std::memcpy(mbr_sector.data() + 446, &partition, sizeof(partition));
 
   // MBR signature
-  mbr_sector[510] = 0x55;
-  mbr_sector[511] = 0xAA;
+  mbr_sector.data()[510] = 0x55;
+  mbr_sector.data()[511] = 0xAA;
 
-  FileError error = file_ops_->WriteAtOffset(0, mbr_sector.data(), mbr_sector.size());
+  FileError error = file_ops_->WriteAtOffset(0, mbr_sector.data(), kSectorSize);
   if (error != FileError::kSuccess) {
     std::cout << "Failed to write MBR to device. Error: " << static_cast<int>(error) << std::endl;
     return Result<void>(ConvertError(error));
@@ -306,10 +314,17 @@ Result<void> DiskFormatter::WriteBootSector(
   // Boot signature
   boot_sector.signature = ToLittleEndian(static_cast<std::uint16_t>(0xAA55));
 
+  // Use aligned buffer for O_DIRECT compatibility on Linux
+  AlignedBuffer aligned_buffer(sizeof(boot_sector));
+  if (!aligned_buffer.valid()) {
+    std::cout << "Failed to allocate aligned buffer for boot sector" << std::endl;
+    return Result<void>(FormatError::kFileWriteError);
+  }
+  std::memcpy(aligned_buffer.data(), &boot_sector, sizeof(boot_sector));
+
   std::uint64_t offset = static_cast<std::uint64_t>(offset_sectors) * kSectorSize;
-  const auto* data = reinterpret_cast<const std::uint8_t*>(&boot_sector);
   
-  FileError error = file_ops_->WriteAtOffset(offset, data, sizeof(boot_sector));
+  FileError error = file_ops_->WriteAtOffset(offset, aligned_buffer.data(), sizeof(boot_sector));
   if (error != FileError::kSuccess) {
     std::cout << "Failed to write boot sector at offset " << offset << " (sector " << offset_sectors << "). Error: " << static_cast<int>(error) << std::endl;
     return Result<void>(ConvertError(error));
@@ -339,9 +354,15 @@ Result<void> DiskFormatter::WriteFsInfo(
   fs_info.next_free = ToLittleEndian(static_cast<std::uint32_t>(3));  // Next available cluster
   fs_info.trail_signature = ToLittleEndian(static_cast<std::uint32_t>(0xAA550000));
 
+  // Use aligned buffer for O_DIRECT compatibility on Linux
+  AlignedBuffer aligned_buffer(sizeof(fs_info));
+  if (!aligned_buffer.valid()) {
+    return Result<void>(FormatError::kFileWriteError);
+  }
+  std::memcpy(aligned_buffer.data(), &fs_info, sizeof(fs_info));
+
   std::uint64_t offset = static_cast<std::uint64_t>(offset_sectors) * kSectorSize;
-  const auto* data = reinterpret_cast<const std::uint8_t*>(&fs_info);
-  FileError error = file_ops_->WriteAtOffset(offset, data, sizeof(fs_info));
+  FileError error = file_ops_->WriteAtOffset(offset, aligned_buffer.data(), sizeof(fs_info));
   if (error != FileError::kSuccess) {
     return Result<void>(ConvertError(error));
   }
@@ -355,9 +376,13 @@ Result<void> DiskFormatter::WriteFatTables(
   std::uint32_t sectors_per_fat = CalculateSectorsPerFat(config);
   std::uint32_t fat_size_bytes = sectors_per_fat * kSectorSize;
   
-  // Create FAT table in memory
-  std::vector<std::uint8_t> fat_table(fat_size_bytes, 0);
-  auto* fat_entries = reinterpret_cast<std::uint32_t*>(fat_table.data());
+  // Use aligned buffer for O_DIRECT compatibility on Linux
+  AlignedBuffer fat_table(fat_size_bytes);
+  if (!fat_table.valid()) {
+    return Result<void>(FormatError::kFileWriteError);
+  }
+  
+  auto* fat_entries = fat_table.as<std::uint32_t>();
   
   // First three entries are special
   fat_entries[0] = ToLittleEndian(0x0FFFFFF8);  // Media descriptor + end marker
@@ -367,7 +392,7 @@ Result<void> DiskFormatter::WriteFatTables(
   // Write both FAT copies
   for (std::uint8_t fat_num = 0; fat_num < config.num_fats; ++fat_num) {
     std::uint64_t fat_offset = static_cast<std::uint64_t>(fat_start_sector + (fat_num * sectors_per_fat)) * kSectorSize;
-    FileError error = file_ops_->WriteAtOffset(fat_offset, fat_table.data(), fat_table.size());
+    FileError error = file_ops_->WriteAtOffset(fat_offset, fat_table.data(), fat_size_bytes);
     if (error != FileError::kSuccess) {
       return Result<void>(ConvertError(error));
     }
@@ -379,11 +404,16 @@ Result<void> DiskFormatter::WriteFatTables(
 Result<void> DiskFormatter::WriteRootDirectory(
     std::uint32_t root_cluster_sector) const {
   
-  // Root directory is just an empty cluster
-  std::array<std::uint8_t, 4096> root_cluster{};  // 8 sectors * 512 bytes
+  // Root directory is just an empty cluster (8 sectors * 512 bytes)
+  // Use aligned buffer for O_DIRECT compatibility on Linux
+  constexpr std::size_t root_cluster_size = 4096;
+  AlignedBuffer root_cluster(root_cluster_size);
+  if (!root_cluster.valid()) {
+    return Result<void>(FormatError::kFileWriteError);
+  }
   
   std::uint64_t offset = static_cast<std::uint64_t>(root_cluster_sector) * kSectorSize;
-  FileError error = file_ops_->WriteAtOffset(offset, root_cluster.data(), root_cluster.size());
+  FileError error = file_ops_->WriteAtOffset(offset, root_cluster.data(), root_cluster_size);
   if (error != FileError::kSuccess) {
     return Result<void>(ConvertError(error));
   }

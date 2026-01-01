@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2025 Raspberry Pi Ltd
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 import RpiImager
 import "../../qmlcomponents"
 
@@ -16,6 +16,7 @@ BaseDialog {
 
     property string driveName: ""
     property string device: ""
+    property real deviceSize: 0
     property string sizeStr: ""
     property var mountpoints: []
 
@@ -34,12 +35,22 @@ BaseDialog {
 
     // Register focus groups when component is ready
     Component.onCompleted: {
-        registerFocusGroup("input", function(){ 
-            return [nameInput] 
+        registerFocusGroup("warning", function(){ 
+            // Only include warning text when screen reader is active (otherwise it's not focusable)
+            return (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? [warningTextElement] : []
         }, 0)
+        registerFocusGroup("input", function(){ 
+            // Only include drive name text when screen reader is active (otherwise it's not focusable)
+            var items = []
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                items.push(driveNameText)
+            }
+            items.push(nameInput)
+            return items
+        }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, continueButton] 
-        }, 1)
+        }, 2)
     }
     
     onOpened: {
@@ -50,6 +61,7 @@ BaseDialog {
 
     // Dialog content
     Text {
+        id: warningTextElement
         textFormat: Text.StyledText
         wrapMode: Text.WordWrap
         font.family: Style.fontFamily
@@ -57,21 +69,37 @@ BaseDialog {
         color: Style.textDescriptionColor
         Layout.fillWidth: true
         text: root.riskText + "<br><br>" + root.systemDriveText + "<br><br>" + root.proceedText
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text.replace(/<[^>]+>/g, '')  // Strip HTML tags for accessibility
+        Accessible.ignored: false
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
-    Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor }
+    Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor; Accessible.ignored: true }
 
     ColumnLayout {
         Layout.fillWidth: true
-        Text { text: qsTr("Size: %1").arg(root.sizeStr); font.family: Style.fontFamily; color: Style.textDescriptionColor }
+        Accessible.role: Accessible.Grouping
+        Accessible.name: qsTr("Drive information")
+        Text { 
+            text: qsTr("Size: %1").arg(root.sizeStr)
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+        }
         Text {
             text: qsTr("Mounted as: %1").arg(root.mountpoints && root.mountpoints.length > 0 ? root.mountpoints.join(", ") : qsTr("Not mounted"))
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
     }
 
-    Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor }
+    Rectangle { implicitHeight: 1; Layout.fillWidth: true; color: Style.titleSeparatorColor; Accessible.ignored: true }
 
     Text {
         Layout.fillWidth: true
@@ -80,13 +108,24 @@ BaseDialog {
         font.pixelSize: Style.fontSizeDescription
         color: Style.textDescriptionColor
         text: qsTr("To continue, type the exact drive name below:")
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
+        Accessible.ignored: false
     }
 
     Text {
+        id: driveNameText
         font.family: Style.fontFamily
         font.bold: true
         color: Style.textDescriptionColor
         text: root.driveName
+        // Make this text focusable when screen reader is active
+        Accessible.role: Accessible.StaticText
+        Accessible.name: qsTr("Drive name to type: %1").arg(text)
+        Accessible.ignored: false
+        Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+        focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+        activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
     }
 
     TextField {
@@ -95,6 +134,9 @@ BaseDialog {
         placeholderText: qsTr("Type drive name exactly as shown above")
         text: ""
         activeFocusOnTab: true
+        // Combine all information in the name for VoiceOver
+        Accessible.name: qsTr("Drive name input. Type exactly: %1. %2").arg(root.driveName).arg(placeholderText)
+        Accessible.description: ""
         Keys.onPressed: (event) => {
             if ((event.key === Qt.Key_V && (event.modifiers & (Qt.ControlModifier | Qt.MetaModifier))) ||
                 (event.key === Qt.Key_Insert && (event.modifiers & Qt.ShiftModifier))) {
@@ -120,6 +162,7 @@ BaseDialog {
         ImButtonRed {
             id: cancelButton
             text: qsTr("CANCEL")
+            accessibleDescription: qsTr("Cancel operation and return to storage selection to choose a different device")
             activeFocusOnTab: true
             onClicked: {
                 root.close()
@@ -130,6 +173,7 @@ BaseDialog {
         ImButton {
             id: continueButton
             text: qsTr("CONTINUE")
+            accessibleDescription: qsTr("Proceed to write the image to this system drive after confirming the drive name")
             enabled: nameInput.text === root.driveName
             activeFocusOnTab: true
             onClicked: {

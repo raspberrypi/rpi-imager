@@ -22,91 +22,88 @@ WizardStepBase {
     title: qsTr("Customisation: SSH authentication")
     subtitle: qsTr("Configure SSH access")
     showSkipButton: true
+    nextButtonAccessibleDescription: qsTr("Save SSH settings and continue to next customisation step")
+    backButtonAccessibleDescription: qsTr("Return to previous step")
+    skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
     
     // Content
     content: [
-    ColumnLayout {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.margins: Style.sectionPadding
-        spacing: Style.stepContentSpacing
+    ScrollView {
+        id: sshScroll
+        anchors.fill: parent
+        clip: true
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
         
-        WizardSectionContainer {
-            // Replace checkbox with an option pill and help link
-            ImOptionPill {
-                id: sshEnablePill
-                Layout.fillWidth: true
-                text: qsTr("Enable SSH")
-                helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn about SSH")
-                helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh"
-                checked: false
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Style.spacingSmallPlus
-                enabled: sshEnablePill.checked
-                
-                WizardFormLabel {
-                    text: qsTr("Authentication mechanism:")
-                }
-
-                ButtonGroup { id: authGroup }
-                
-                ImRadioButton {
-                    id: radioPassword
-                    text: qsTr("Use password authentication")
-                    checked: true
-                    ButtonGroup.group: authGroup
-                }
-                
-                ImRadioButton {
-                    id: radioPublicKey
-                    text: qsTr("Use public key authentication")
-                    checked: false
-                    ButtonGroup.group: authGroup
-                }
-                
-                RowLayout {
+        ColumnLayout {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.margins: Style.sectionPadding
+            spacing: Style.spacingSmall  // Reduced spacing to trim whitespace under subtitle
+            width: sshScroll.availableWidth
+            
+            WizardSectionContainer {
+                // Replace checkbox with an option pill and help link
+                ImOptionPill {
+                    id: sshEnablePill
                     Layout.fillWidth: true
-                    spacing: Style.spacingMedium
-                    visible: radioPublicKey.checked
+                    text: qsTr("Enable SSH")
+                    accessibleDescription: qsTr("Enable secure shell access for remote command-line control of your Raspberry Pi")
+                    helpLabel: imageWriter.isEmbeddedMode() ? "" : qsTr("Learn about SSH")
+                    helpUrl: imageWriter.isEmbeddedMode() ? "" : "https://www.raspberrypi.com/documentation/computers/remote-access.html#ssh"
+                    checked: false
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacingSmallPlus
+                    enabled: sshEnablePill.checked
                     
-                    ImTextField {
-                        id: fieldPublicKey
+                    // Compact authentication mechanism: label on left, radio buttons on right
+                    RowLayout {
                         Layout.fillWidth: true
-                        placeholderText: qsTr("Enter public key or click BROWSE")
-                        font.pixelSize: Style.fontSizeInput
-                    }
-                    
-                    ImButton {
-                        id: browseButton
-                        text: qsTr("Browse")
-                        Layout.minimumWidth: 80
-                        onClicked: {
-                            // Prefer native file dialog via Imager's wrapper, but only if available
-                            if (imageWriter.nativeFileDialogAvailable()) {
-                                var home = String(StandardPaths.writableLocation(StandardPaths.HomeLocation))
-                                var startDir = home && home.length > 0 ? home + "/.ssh" : ""
-                                var filters = CommonStrings.sshFiltersList
-                                var picked = imageWriter.getNativeOpenFileName(qsTr("Select SSH Public Key"), startDir, filters)
-                                if (picked && picked.length > 0) {
-                                    var contents = imageWriter.readFileContents(picked)
-                                    if (contents && contents.length > 0) {
-                                        fieldPublicKey.text = contents
-                                    } else {
-                                        // Failed to read file contents
-                                        fieldPublicKey.text = qsTr("Failed to read SSH key file")
-                                    }
-                                } else {
-                                    // User cancelled native dialog; do not auto-open fallback
-                                }
-                            } else {
-                                // Fallback to QML dialog (forced non-native)
-                                sshKeyFileDialog.open()
+                        spacing: Style.spacingMedium
+                        
+                        WizardFormLabel {
+                            id: labelAuthMechanism
+                            text: qsTr("Authentication mechanism:")
+                            accessibleDescription: qsTr("Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.")
+                            Layout.alignment: Qt.AlignTop
+                            Layout.topMargin: Style.spacingXXSmall  // Align with first radio button
+                        }
+                        
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Style.spacingXXSmall
+                            
+                            ButtonGroup { id: authGroup }
+                            
+                            ImRadioButton {
+                                id: radioPassword
+                                text: qsTr("Use password authentication")
+                                checked: true
+                                ButtonGroup.group: authGroup
+                                Layout.fillWidth: true  // Enable text wrapping for long translations
+                                Accessible.description: qsTr("Allow SSH login using the username and password you configured in the previous step.")
+                            }
+                            
+                            ImRadioButton {
+                                id: radioPublicKey
+                                text: qsTr("Use public key authentication")
+                                checked: false
+                                ButtonGroup.group: authGroup
+                                Layout.fillWidth: true  // Enable text wrapping for long translations
+                                Accessible.description: qsTr("Allow SSH login using a cryptographic key pair instead of a password. More secure than password authentication.")
                             }
                         }
+                    }
+                    
+                    // SSH Key Manager (expands naturally within outer ScrollView)
+                    SshKeyManager {
+                        id: sshKeyManager
+                        Layout.fillWidth: true
+                        imageWriter: root.imageWriter
+                        visible: radioPublicKey.checked
                     }
                 }
             }
@@ -115,19 +112,49 @@ WizardStepBase {
     ]
 
     Component.onCompleted: {
-        root.registerFocusGroup("ssh_controller", function(){ return [sshEnablePill.focusItem] }, 0)
-        root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [radioPassword, radioPublicKey] : [] }, 1)
-        root.registerFocusGroup("ssh_key", function(){ return sshEnablePill.checked && radioPublicKey.checked ? [fieldPublicKey, browseButton] : [] }, 2)
-        // Prefill from saved settings
-        var saved = imageWriter.getSavedCustomizationSettings()
-        if (saved.sshEnabled === true || saved.sshEnabled === "true") {
+        root.registerFocusGroup("ssh_controller", function(){ 
+            var items = [sshEnablePill.focusItem]
+            // Include help link if visible
+            if (sshEnablePill.helpLinkItem && sshEnablePill.helpLinkItem.visible)
+                items.push(sshEnablePill.helpLinkItem)
+            return items
+        }, 0)
+        // Include labels before their corresponding controls so users hear the explanation first
+        // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
+        root.registerFocusGroup("ssh_auth", function(){ return sshEnablePill.checked ? [labelAuthMechanism, radioPassword, radioPublicKey] : [] }, 1)
+        // Prefill from conserved customization settings
+        var settings = wizardContainer.customizationSettings
+        if (settings.sshEnabled === true || settings.sshEnabled === "true") {
             sshEnablePill.checked = true
         }
-        if (saved.sshPublicKey) {
+        
+        // Load SSH keys from settings (prefer sshAuthorizedKeys, fallback to sshPublicKey)
+        var keysToLoad = []
+        if (settings.sshAuthorizedKeys) {
+            // Split by newlines
+            var lines = settings.sshAuthorizedKeys.split(/\r?\n/)
+            for (var i = 0; i < lines.length; i++) {
+                var trimmed = lines[i].trim()
+                if (trimmed.length > 0) {
+                    keysToLoad.push(trimmed)
+                }
+            }
+        } else if (settings.sshPublicKey) {
+            // Legacy: single key, split by newlines in case it's multi-line
+            var pubLines = settings.sshPublicKey.split(/\r?\n/)
+            for (var j = 0; j < pubLines.length; j++) {
+                var pubTrimmed = pubLines[j].trim()
+                if (pubTrimmed.length > 0) {
+                    keysToLoad.push(pubTrimmed)
+                }
+            }
+        }
+        
+        if (keysToLoad.length > 0) {
             radioPublicKey.checked = true
             radioPassword.checked = false
-            fieldPublicKey.text = saved.sshPublicKey
-        } else if (saved.sshPasswordAuth === true || saved.sshPasswordAuth === "true") {
+            sshKeyManager.keys = keysToLoad
+        } else if (settings.sshPasswordAuth === true || settings.sshPasswordAuth === "true") {
             radioPassword.checked = true
             radioPublicKey.checked = false
         }
@@ -146,27 +173,62 @@ WizardStepBase {
         }
     }
     
+    // Validation: allow proceed when
+    // - SSH is not enabled, or
+    // - SSH is enabled with password auth, or  
+    // - SSH is enabled with public key auth AND at least one key is provided
+    nextButtonEnabled: (
+        !sshEnablePill.checked
+        || radioPassword.checked
+        || (radioPublicKey.checked && sshKeyManager.keys.length > 0)
+    )
+    
     // Save settings when moving to next step
     onNextClicked: {
-        // Merge-and-save strategy
-        var saved = imageWriter.getSavedCustomizationSettings()
+        // Update conserved customization settings (runtime state)
         if (sshEnablePill.checked) {
-            saved.sshEnabled = true
-            saved.sshPasswordAuth = radioPassword.checked
-            if (radioPublicKey.checked && fieldPublicKey.text && fieldPublicKey.text.trim().length > 0) {
-                saved.sshPublicKey = fieldPublicKey.text.trim()
+            wizardContainer.customizationSettings.sshEnabled = true
+            wizardContainer.customizationSettings.sshPasswordAuth = radioPassword.checked
+            if (radioPublicKey.checked && sshKeyManager.keys.length > 0) {
+                // Save as sshAuthorizedKeys (multi-line string) for consistency
+                wizardContainer.customizationSettings.sshAuthorizedKeys = sshKeyManager.getAllKeysAsString()
+                // Remove legacy sshPublicKey if it exists
+                delete wizardContainer.customizationSettings.sshPublicKey
             } else {
-                delete saved.sshPublicKey
+                delete wizardContainer.customizationSettings.sshAuthorizedKeys
+                delete wizardContainer.customizationSettings.sshPublicKey
             }
             wizardContainer.sshEnabled = true
         } else {
-            // User disabled SSH -> remove SSH settings from persistence
-            delete saved.sshEnabled
-            delete saved.sshPasswordAuth
-            delete saved.sshPublicKey
+            // User disabled SSH -> remove SSH settings
+            delete wizardContainer.customizationSettings.sshEnabled
+            delete wizardContainer.customizationSettings.sshPasswordAuth
+            delete wizardContainer.customizationSettings.sshAuthorizedKeys
+            delete wizardContainer.customizationSettings.sshPublicKey
             wizardContainer.sshEnabled = false
         }
-        imageWriter.setSavedCustomizationSettings(saved)
+        
+        // Also persist for future sessions
+        var saved = imageWriter.getSavedCustomisationSettings()
+        if (sshEnablePill.checked) {
+            saved.sshEnabled = true
+            saved.sshPasswordAuth = radioPassword.checked
+            if (radioPublicKey.checked && sshKeyManager.keys.length > 0) {
+                // Save as sshAuthorizedKeys (multi-line string) for consistency
+                saved.sshAuthorizedKeys = sshKeyManager.getAllKeysAsString()
+                // Remove legacy sshPublicKey if it exists
+                delete saved.sshPublicKey
+            } else {
+                delete saved.sshAuthorizedKeys
+                delete saved.sshPublicKey
+            }
+        } else {
+            delete saved.sshEnabled
+            delete saved.sshPasswordAuth
+            delete saved.sshAuthorizedKeys
+            delete saved.sshPublicKey
+        }
+        imageWriter.setSavedCustomisationSettings(saved)
         // Do not log remote access settings (may contain sensitive data)
     }
     
@@ -181,49 +243,5 @@ WizardStepBase {
         
         // Jump to writing step
         wizardContainer.jumpToStep(wizardContainer.stepWriting)
-    }
-    
-    // File dialog for SSH key selection
-    property alias sshKeyFileDialog: sshKeyFileDialog
-    
-    ImFileDialog {
-        id: sshKeyFileDialog
-        parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
-        anchors.centerIn: parent
-        dialogTitle: qsTr("Select SSH Public Key")
-        nameFilters: CommonStrings.sshFiltersList
-        Component.onCompleted: {
-            if (Qt.platform.os === "osx" || Qt.platform.os === "darwin") {
-                // Default to ~/.ssh on macOS
-                var home = StandardPaths.writableLocation(StandardPaths.HomeLocation)
-                var url = "file://" + home + "/.ssh"
-                sshKeyFileDialog.currentFolder = url
-                sshKeyFileDialog.folder = url
-            } else if (Qt.platform.os === "linux") {
-                // Default to ~/.ssh on Linux
-                var lhome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
-                var lurl = "file://" + lhome + "/.ssh"
-                sshKeyFileDialog.currentFolder = lurl
-                sshKeyFileDialog.folder = lurl
-            } else if (Qt.platform.os === "windows") {
-                // Default to %USERPROFILE%\.ssh on Windows
-                var whome = StandardPaths.writableLocation(StandardPaths.HomeLocation)
-                // Use file:/// prefix on Windows
-                var wurl = "file:///" + whome + "/.ssh"
-                sshKeyFileDialog.currentFolder = wurl
-                sshKeyFileDialog.folder = wurl
-            }
-        }
-        onAccepted: {
-            if (selectedFile && selectedFile.toString().length > 0) {
-                var filePath = selectedFile.toString().replace(/^file:\/\//, "")
-                var contents = imageWriter.readFileContents(filePath)
-                if (contents && contents.length > 0) {
-                    fieldPublicKey.text = contents
-                } else {
-                    fieldPublicKey.text = qsTr("Failed to read SSH key file")
-                }
-            }
-        }
     }
 } 

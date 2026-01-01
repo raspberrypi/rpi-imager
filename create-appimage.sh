@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Parse command line arguments
@@ -37,8 +37,24 @@ for arg in "$@"; do
     esac
 done
 
+# Resolve Qt root path argument if provided (expand ~ and convert to absolute path)
+if [ -n "$QT_ROOT_ARG" ]; then
+    # Expand tilde if present at the start
+    case "$QT_ROOT_ARG" in
+        "~"/*) QT_ROOT_ARG="$HOME/${QT_ROOT_ARG#\~/}" ;;
+        "~")   QT_ROOT_ARG="$HOME" ;;
+    esac
+    # Convert to absolute path if it exists
+    if [ -e "$QT_ROOT_ARG" ]; then
+        QT_ROOT_ARG=$(cd "$QT_ROOT_ARG" && pwd)
+    else
+        echo "Warning: Specified Qt root path does not exist: $QT_ROOT_ARG"
+        echo "Will attempt to use it anyway, but this may fail..."
+    fi
+fi
+
 # Validate architecture
-if [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; then
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ]; then
     echo "Error: Architecture must be one of: x86_64, aarch64"
     exit 1
 fi
@@ -49,16 +65,29 @@ echo "Building for architecture: $ARCH"
 SOURCE_DIR="src/"
 CMAKE_FILE="${SOURCE_DIR}CMakeLists.txt"
 
-# Extract version components
-MAJOR=$(grep -E "set\(IMAGER_VERSION_MAJOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MAJOR \([0-9]*\).*/\1/')
-MINOR=$(grep -E "set\(IMAGER_VERSION_MINOR [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_MINOR \([0-9]*\).*/\1/')
-PATCH=$(grep -E "set\(IMAGER_VERSION_PATCH [0-9]+" "$CMAKE_FILE" | sed 's/set(IMAGER_VERSION_PATCH \([0-9]*\).*/\1/')
-PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+# Get version from git tag (same approach as CMake)
+GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-unknown")
+
+# Extract numeric version components for compatibility
+# Match versions like: v1.2.3, 1.2.3, v1.2.3-extra, etc.
+MAJOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}\([0-9]\{1,\}\)\.[0-9]\{1,\}\.[0-9]\{1,\}.*/\1/p')
+MINOR=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.\([0-9]\{1,\}\)\.[0-9]\{1,\}.*/\1/p')
+PATCH=$(echo "$GIT_VERSION" | sed -n 's/^v\{0,1\}[0-9]\{1,\}\.[0-9]\{1,\}\.\([0-9]\{1,\}\).*/\1/p')
+
+if [ -n "$MAJOR" ] && [ -n "$MINOR" ] && [ -n "$PATCH" ]; then
+    PROJECT_VERSION="$MAJOR.$MINOR.$PATCH"
+else
+    MAJOR="0"
+    MINOR="0"
+    PATCH="0"
+    PROJECT_VERSION="0.0.0"
+    echo "Warning: Could not parse version from git tag: $GIT_VERSION"
+fi
 
 # Extract project name (lowercase for AppImage naming convention)
 PROJECT_NAME=$(grep "project(" "$CMAKE_FILE" | head -1 | sed 's/project(\([^[:space:]]*\).*/\1/' | tr '[:upper:]' '[:lower:]')
 
-echo "Building $PROJECT_NAME version $PROJECT_VERSION"
+echo "Building $PROJECT_NAME version $GIT_VERSION (numeric: $PROJECT_VERSION)"
 
 # Check for Qt installation
 # Priority: 1. Command line argument, 2. Environment variable, 3. Auto-detection
@@ -138,7 +167,7 @@ QML_SOURCES_PATH="$PWD/src/qmlcomponents/"
 
 # Location of AppDir and output file
 APPDIR="$PWD/AppDir-$ARCH"
-OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${PROJECT_VERSION}-${ARCH}.AppImage"
+OUTPUT_FILE="$PWD/Raspberry_Pi_Imager-${GIT_VERSION}-desktop-${ARCH}.AppImage"
 
 # Tools directory for downloaded binaries
 TOOLS_DIR="$PWD/appimage-tools"
@@ -147,20 +176,24 @@ mkdir -p "$TOOLS_DIR"
 # Download linuxdeploy and plugins if they don't exist
 echo "Ensuring linuxdeploy tools are available..."
 
+# Pin to specific stable versions
+LINUXDEPLOY_VERSION="1-alpha-20250213-2"
+LINUXDEPLOY_PLUGIN_QT_VERSION="1-alpha-20250213-1"
+
 # Choose the right linuxdeploy tools based on architecture
 if [ "$ARCH" = "x86_64" ]; then
     LINUXDEPLOY="$TOOLS_DIR/linuxdeploy-x86_64.AppImage"
     LINUXDEPLOY_QT="$TOOLS_DIR/linuxdeploy-plugin-qt-x86_64.AppImage"
     
     if [ ! -f "$LINUXDEPLOY" ]; then
-        echo "Downloading linuxdeploy for x86_64..."
-        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+        echo "Downloading linuxdeploy $LINUXDEPLOY_VERSION for x86_64..."
+        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_VERSION/linuxdeploy-x86_64.AppImage"
         chmod +x "$LINUXDEPLOY"
     fi
     
     if [ ! -f "$LINUXDEPLOY_QT" ]; then
-        echo "Downloading linuxdeploy-plugin-qt for x86_64..."
-        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+        echo "Downloading linuxdeploy-plugin-qt $LINUXDEPLOY_PLUGIN_QT_VERSION for x86_64..."
+        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/$LINUXDEPLOY_PLUGIN_QT_VERSION/linuxdeploy-plugin-qt-x86_64.AppImage"
         chmod +x "$LINUXDEPLOY_QT"
     fi
 elif [ "$ARCH" = "aarch64" ]; then
@@ -168,14 +201,14 @@ elif [ "$ARCH" = "aarch64" ]; then
     LINUXDEPLOY_QT="$TOOLS_DIR/linuxdeploy-plugin-qt-aarch64.AppImage"
     
     if [ ! -f "$LINUXDEPLOY" ]; then
-        echo "Downloading linuxdeploy for aarch64..."
-        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-aarch64.AppImage"
+        echo "Downloading linuxdeploy $LINUXDEPLOY_VERSION for aarch64..."
+        curl -L -o "$LINUXDEPLOY" "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_VERSION/linuxdeploy-aarch64.AppImage"
         chmod +x "$LINUXDEPLOY"
     fi
     
     if [ ! -f "$LINUXDEPLOY_QT" ]; then
-        echo "Downloading linuxdeploy-plugin-qt for aarch64..."
-        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-aarch64.AppImage"
+        echo "Downloading linuxdeploy-plugin-qt $LINUXDEPLOY_PLUGIN_QT_VERSION for aarch64..."
+        curl -L -o "$LINUXDEPLOY_QT" "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/$LINUXDEPLOY_PLUGIN_QT_VERSION/linuxdeploy-plugin-qt-aarch64.AppImage"
         chmod +x "$LINUXDEPLOY_QT"
     fi
 fi
@@ -210,7 +243,7 @@ CMAKE_EXTRA_FLAGS="$CMAKE_EXTRA_FLAGS -DQt6_ROOT=$QT_DIR"
 
 # shellcheck disable=SC2086
 cmake "../$SOURCE_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_INSTALL_PREFIX=/usr $CMAKE_EXTRA_FLAGS
-make -j$(nproc)
+make -j"$(nproc)"
 
 echo "Creating AppDir..."
 # Install to AppDir
@@ -221,20 +254,67 @@ cd ..
 if [ ! -f "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" ]; then
     mkdir -p "$APPDIR/usr/share/applications"
     cp "debian/com.raspberrypi.rpi-imager.desktop" "$APPDIR/usr/share/applications/"
-    # Update the Exec line to match the AppImage requirements
-    sed -i 's|Exec=.*|Exec=rpi-imager|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop"
+    # Update the Exec line to match the AppImage requirements (preserve %F for file arguments)
+    sed -i 's|Exec=.*|Exec=rpi-imager %F|' "$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop"
 fi
 
 # Create the AppRun file if not created by the install process
 if [ ! -f "$APPDIR/AppRun" ]; then
     cat > "$APPDIR/AppRun" << 'EOF'
-#!/bin/bash
+#!/bin/sh
 HERE="$(dirname "$(readlink -f "${0}")")"
 export PATH="${HERE}/usr/bin:${PATH}"
 export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="${HERE}/usr/plugins"
 export QML_IMPORT_PATH="${HERE}/usr/qml"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
+
+# Handle X11 authorization when running as root (via sudo or pkexec)
+# This fixes "Authorization required, but no authorization protocol specified" errors
+if [ "$(id -u)" = "0" ]; then
+    # Determine original user from sudo or pkexec
+    ORIGINAL_USER=""
+    ORIGINAL_UID=""
+    ORIGINAL_HOME=""
+    
+    if [ -n "$SUDO_USER" ]; then
+        ORIGINAL_USER="$SUDO_USER"
+        ORIGINAL_UID="$SUDO_UID"
+        ORIGINAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    elif [ -n "$PKEXEC_UID" ]; then
+        ORIGINAL_UID="$PKEXEC_UID"
+        ORIGINAL_USER=$(getent passwd "$PKEXEC_UID" | cut -d: -f1)
+        ORIGINAL_HOME=$(getent passwd "$PKEXEC_UID" | cut -d: -f6)
+    fi
+    
+    if [ -n "$ORIGINAL_USER" ] && [ -n "$ORIGINAL_HOME" ]; then
+        # Try to grant root access to the X display using xhost
+        # This must be run as the original user who owns the display
+        if command -v xhost >/dev/null 2>&1; then
+            if [ -n "$DISPLAY" ]; then
+                # Run xhost as the original user to grant root access
+                su "$ORIGINAL_USER" -c "xhost +local:root" >/dev/null 2>&1 || true
+            fi
+        fi
+        
+        # Set XAUTHORITY to the original user's .Xauthority if not already set
+        if [ -z "$XAUTHORITY" ]; then
+            if [ -f "$ORIGINAL_HOME/.Xauthority" ]; then
+                export XAUTHORITY="$ORIGINAL_HOME/.Xauthority"
+            fi
+        fi
+        
+        # Ensure DISPLAY is set (for pkexec which may not preserve it)
+        if [ -z "$DISPLAY" ]; then
+            # Try common X11 display socket
+            if [ -S "/tmp/.X11-unix/X0" ]; then
+                export DISPLAY=":0"
+            fi
+        fi
+    fi
+fi
+
+# The binary handles privilege elevation internally via pkexec if needed
 exec "${HERE}/usr/bin/rpi-imager" "$@"
 EOF
     chmod +x "$APPDIR/AppRun"
@@ -247,11 +327,13 @@ export QML_SOURCES_PATHS="$QML_SOURCES_PATH"
 export APPIMAGE_EXTRACT_AND_RUN=1
 # Set Qt path for linuxdeploy-plugin-qt
 export QMAKE="$QT_DIR/bin/qmake"
-# Set LD_LIBRARY_PATH to include Qt libraries
+# Set library paths to include Qt libraries (both runtime and linker search paths)
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 # Optimize deployment: exclude translations and unnecessary libraries
 export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
-"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*"
+# Exclude libsystemd - it must come from the host system to work correctly with DBus
+# Including it causes compatibility issues (see https://github.com/raspberrypi/rpi-imager/issues/1304)
+"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*" --exclude-library="libsystemd*" --verbosity=0
 
 # Hook for removing files before AppImage creation
 echo "Pre-packaging hook - opportunity to remove unwanted files"
@@ -294,26 +376,49 @@ rm -f "$APPDIR/usr/lib/libQt6QuickControls2WindowsStyleImpl.so"*
 
 # Create the AppImage
 echo "Creating AppImage..."
-# Remove old AppImage symlink
-rm -f "$PWD/rpi-imager.AppImage"
-# Ensure LD_LIBRARY_PATH is still set for this call too
-"$LINUXDEPLOY" --appdir="$APPDIR" --output=appimage
+# Remove old symlinks for this variant only
+rm -f "$PWD/rpi-imager-desktop-$ARCH.AppImage"
+rm -f "$PWD/rpi-imager-$ARCH.AppImage"  # Legacy symlink name
 
-# Rename the output file if needed
-for appimage in *.AppImage; do
-    if [ "$PWD/$appimage" != "$OUTPUT_FILE" ]; then
-        mv "$appimage" "$OUTPUT_FILE"
-    fi
-done
+# Ensure LD_LIBRARY_PATH is still set for this call too
+export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
+# Explicitly specify the desktop file to ensure correct naming
+"$LINUXDEPLOY" --appdir="$APPDIR" \
+    --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
+    --output=appimage \
+    --verbosity=0
+
+# Rename the output file from linuxdeploy's default name to our versioned name
+# linuxdeploy creates: Raspberry_Pi_Imager-${ARCH}.AppImage (based on Name= in desktop file)
+LINUXDEPLOY_OUTPUT="Raspberry_Pi_Imager-${ARCH}.AppImage"
+if [ -f "$LINUXDEPLOY_OUTPUT" ]; then
+    echo "Renaming '$LINUXDEPLOY_OUTPUT' to '$(basename "$OUTPUT_FILE")'"
+    mv "$LINUXDEPLOY_OUTPUT" "$OUTPUT_FILE"
+elif [ -f "$OUTPUT_FILE" ]; then
+    echo "Output file already exists: $OUTPUT_FILE"
+else
+    echo "Warning: Expected linuxdeploy output '$LINUXDEPLOY_OUTPUT' not found"
+    echo "Looking for any matching AppImage..."
+    ls -la ./*.AppImage 2>/dev/null || true
+fi
 
 echo "AppImage created at $OUTPUT_FILE"
 
-# Create a symlink with an architecture-specific name
-SYMLINK_NAME="$PWD/rpi-imager-$ARCH.AppImage"
-if [ -L "$SYMLINK_NAME" ] || [ -f "$SYMLINK_NAME" ]; then
-    rm -f "$SYMLINK_NAME"
+# Create symlinks for debian packaging and user convenience
+# Primary symlink matches debian/rpi-imager.install expectations
+DEBIAN_SYMLINK="$PWD/rpi-imager-$ARCH.AppImage"
+if [ -L "$DEBIAN_SYMLINK" ] || [ -f "$DEBIAN_SYMLINK" ]; then
+    rm -f "$DEBIAN_SYMLINK"
 fi
-ln -s "$(basename "$OUTPUT_FILE")" "$SYMLINK_NAME"
-echo "Created symlink: $SYMLINK_NAME -> $(basename "$OUTPUT_FILE")"
+ln -s "$(basename "$OUTPUT_FILE")" "$DEBIAN_SYMLINK"
+echo "Created symlink: $DEBIAN_SYMLINK -> $(basename "$OUTPUT_FILE")"
 
-echo "Build completed successfully for $ARCH architecture." 
+# Additional descriptive symlink for clarity when multiple variants exist
+DESCRIPTIVE_SYMLINK="$PWD/rpi-imager-desktop-$ARCH.AppImage"
+if [ -L "$DESCRIPTIVE_SYMLINK" ] || [ -f "$DESCRIPTIVE_SYMLINK" ]; then
+    rm -f "$DESCRIPTIVE_SYMLINK"
+fi
+ln -s "$(basename "$OUTPUT_FILE")" "$DESCRIPTIVE_SYMLINK"
+echo "Created symlink: $DESCRIPTIVE_SYMLINK -> $(basename "$OUTPUT_FILE")"
+
+echo "Build completed successfully for $ARCH architecture."

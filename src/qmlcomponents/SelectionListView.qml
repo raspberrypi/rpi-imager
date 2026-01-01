@@ -5,8 +5,8 @@
 
 pragma ComponentBehavior: Bound
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Controls
 
 import RpiImager
 
@@ -14,12 +14,16 @@ ListView {
     id: root
     
     // Properties that can be customized
-    property bool autoSelectFirst: true
+    property bool autoSelectFirst: false
     property bool keyboardAutoAdvance: false
     property var nextFunction: null
+    property var isItemSelectableFunction: null  // Function(index) that returns true if item can be selected
+    property string accessibleName: "Selection list"
+    property string accessibleDescription: "Use arrow keys to navigate, Enter or Space to select"
     
     // Signals for selection actions
     signal itemSelected(int index, var item)
+    signal itemDoubleClicked(int index, var item)
     signal spacePressed(int index, var item)
     signal enterPressed(int index, var item) 
     signal returnPressed(int index, var item)
@@ -44,14 +48,21 @@ ListView {
     boundsBehavior: Flickable.StopAtBounds
     currentIndex: -1
     
+    // Keep delegates instantiated beyond the visible area to prevent
+    // itemAtIndex() returning null during keyboard/accessibility navigation
+    cacheBuffer: 2000
+    
+    // Accessibility properties
+    Accessible.role: Accessible.List
+    Accessible.name: root.accessibleName
+    Accessible.description: root.accessibleDescription
+    
     // Standard highlight configuration
     highlight: Rectangle {
         // When focused: use stronger highlight color
-        // When not focused (default selected): use focus border style to show it's the default choice
+        // When not focused (default selected): use subtle highlight to show it's the default choice
         color: root.activeFocus ? Style.listViewHighlightColor : Style.listViewRowBackgroundColor
         radius: 0
-        border.color: root.activeFocus ? Style.buttonFocusedBackgroundColor : Style.buttonFocusedBackgroundColor
-        border.width: root.activeFocus ? 2 : 2
         anchors.fill: parent
         anchors.rightMargin: (root.contentHeight > root.height ? Style.scrollBarWidth : 0)
     }
@@ -69,29 +80,93 @@ ListView {
     // Focus management
     onActiveFocusChanged: {
         if (activeFocus && currentIndex === -1 && count > 0 && autoSelectFirst) {
-            currentIndex = 0
+            // Delay selection to allow VoiceOver to announce the list container first
+            Qt.callLater(function() {
+                if (activeFocus && currentIndex === -1 && count > 0) {
+                    currentIndex = 0
+                }
+            })
         }
     }
     
     // Ensure we have a selection when count changes
     onCountChanged: {
         if (count > 0 && currentIndex === -1 && autoSelectFirst) {
-            currentIndex = 0
+            // Delay selection to allow VoiceOver to announce the list container first
+            Qt.callLater(function() {
+                if (count > 0 && currentIndex === -1) {
+                    currentIndex = 0
+                }
+            })
         }
+    }
+    
+    // Helper function to check if an item is selectable
+    function isItemSelectable(index) {
+        if (isItemSelectableFunction && typeof isItemSelectableFunction === "function") {
+            return isItemSelectableFunction(index)
+        }
+        return true  // By default, all items are selectable
+    }
+    
+    // Helper function to find next selectable item in a direction
+    function findNextSelectableIndex(fromIndex, direction) {
+        var nextIndex = fromIndex + direction
+        var maxIterations = count  // Prevent infinite loops
+        var iterations = 0
+        
+        while (iterations < maxIterations) {
+            // Check bounds
+            if (nextIndex < 0 || nextIndex >= count) {
+                return fromIndex  // Stay at current position if we hit the edge
+            }
+            
+            // Check if this index is selectable
+            if (isItemSelectable(nextIndex)) {
+                return nextIndex
+            }
+            
+            // Move to next index in the direction
+            nextIndex += direction
+            iterations++
+        }
+        
+        // If no selectable item found, stay at current position
+        return fromIndex
     }
     
     // Standard keyboard navigation
     Keys.onUpPressed: {
-        if (currentIndex > 0) {
-            currentIndex--
-            positionViewAtIndex(currentIndex, ListView.Center)
+        // Initialize selection if needed
+        if (currentIndex === -1 && count > 0) {
+            // Find first selectable item from the top
+            var firstSelectable = findNextSelectableIndex(-1, 1)
+            if (firstSelectable !== -1) {
+                currentIndex = firstSelectable
+            }
+        } else if (currentIndex > 0) {
+            var newIndex = findNextSelectableIndex(currentIndex, -1)
+            if (newIndex !== currentIndex) {
+                currentIndex = newIndex
+                positionViewAtIndex(currentIndex, ListView.Center)
+            }
         }
     }
     
     Keys.onDownPressed: {
-        if (currentIndex < count - 1) {
-            currentIndex++
-            positionViewAtIndex(currentIndex, ListView.Center)
+        // Initialize selection if needed
+        if (currentIndex === -1 && count > 0) {
+            // Find first selectable item from the top
+            var firstSelectable = findNextSelectableIndex(-1, 1)
+            if (firstSelectable !== -1) {
+                currentIndex = firstSelectable
+            }
+        } else if (currentIndex < count - 1) {
+            var newIndex = findNextSelectableIndex(currentIndex, 1)
+            if (newIndex !== currentIndex) {
+                currentIndex = newIndex
+                positionViewAtIndex(currentIndex, ListView.Center)
+            }
         }
     }
     

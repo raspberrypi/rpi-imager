@@ -5,13 +5,36 @@
 
 #include "../platformquirks.h"
 #include <cstdlib>
+#include <cstdio>
+#include <QProcess>
 #import <AppKit/AppKit.h>
+#import <SystemConfiguration/SystemConfiguration.h>
+
+namespace {
+    // Network monitoring state
+    SCNetworkReachabilityRef g_reachabilityRef = nullptr;
+    PlatformQuirks::NetworkStatusCallback g_networkCallback = nullptr;
+    
+    void reachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void* info) {
+        (void)target;
+        (void)info;
+        
+        if (!g_networkCallback) return;
+        
+        bool isReachable = (flags & kSCNetworkReachabilityFlagsReachable) != 0;
+        bool needsConnection = (flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0;
+        bool isAvailable = isReachable && !needsConnection;
+        
+        fprintf(stderr, "Network status changed: reachable=%d needsConnection=%d\n", isReachable, needsConnection);
+        g_networkCallback(isAvailable);
+    }
+}
 
 namespace PlatformQuirks {
 
 void applyQuirks() {
     // Currently no platform-specific quirks needed for macOS
-    // This is a placeholder for future macOS-specific workarounds
+    // macOS has a sensible permissions model that operates as expected
     
     // Example of how to set environment variables without Qt:
     // setenv("VARIABLE_NAME", "value", 1);
@@ -20,6 +43,160 @@ void applyQuirks() {
 void beep() {
     // Use macOS NSBeep for system beep sound
     NSBeep();
+}
+
+bool hasNetworkConnectivity() {
+    // Use SystemConfiguration framework to check network reachability
+    SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithName(NULL, "www.raspberrypi.com");
+    if (!reachability) {
+        return false;
+    }
+    
+    SCNetworkReachabilityFlags flags;
+    bool success = SCNetworkReachabilityGetFlags(reachability, &flags);
+    CFRelease(reachability);
+    
+    if (!success) {
+        return false;
+    }
+    
+    // Check if network is reachable
+    bool isReachable = (flags & kSCNetworkReachabilityFlagsReachable) != 0;
+    // Check if connection is required (e.g., captive portal)
+    bool needsConnection = (flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0;
+    
+    return isReachable && !needsConnection;
+}
+
+bool isNetworkReady() {
+    // On macOS, no special time sync check needed - system time is reliable
+    return hasNetworkConnectivity();
+}
+
+void startNetworkMonitoring(NetworkStatusCallback callback) {
+    // Stop any existing monitoring
+    stopNetworkMonitoring();
+    
+    g_networkCallback = callback;
+    
+    // Create reachability reference for a known host
+    g_reachabilityRef = SCNetworkReachabilityCreateWithName(NULL, "www.raspberrypi.com");
+    if (!g_reachabilityRef) {
+        fprintf(stderr, "Failed to create network reachability reference\n");
+        return;
+    }
+    
+    // Set up callback context
+    SCNetworkReachabilityContext context = {0, nullptr, nullptr, nullptr, nullptr};
+    
+    if (!SCNetworkReachabilitySetCallback(g_reachabilityRef, reachabilityCallback, &context)) {
+        fprintf(stderr, "Failed to set network reachability callback\n");
+        CFRelease(g_reachabilityRef);
+        g_reachabilityRef = nullptr;
+        return;
+    }
+    
+    // Schedule on main run loop
+    if (!SCNetworkReachabilityScheduleWithRunLoop(g_reachabilityRef, CFRunLoopGetMain(), kCFRunLoopDefaultMode)) {
+        fprintf(stderr, "Failed to schedule network reachability on run loop\n");
+        CFRelease(g_reachabilityRef);
+        g_reachabilityRef = nullptr;
+        return;
+    }
+    
+    fprintf(stderr, "Network monitoring started\n");
+}
+
+void stopNetworkMonitoring() {
+    if (g_reachabilityRef) {
+        SCNetworkReachabilityUnscheduleFromRunLoop(g_reachabilityRef, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+        CFRelease(g_reachabilityRef);
+        g_reachabilityRef = nullptr;
+        fprintf(stderr, "Network monitoring stopped\n");
+    }
+    g_networkCallback = nullptr;
+}
+
+void bringWindowToForeground(void* windowHandle) {
+    // No-op on macOS - not implemented
+    // macOS handles window activation differently and has restrictions on
+    // applications bringing themselves to the foreground
+    (void)windowHandle;
+}
+
+bool hasElevatedPrivileges() {
+    // macOS has a sensible permissions model that operates as expected
+    // No special privilege check needed - return true
+    return true;
+}
+
+void attachConsole() {
+    // No-op on macOS - console is already available
+}
+
+bool isElevatableBundle() {
+    // macOS .app bundles don't need this mechanism - Authorization Services handles elevation
+    return false;
+}
+
+const char* getBundlePath() {
+    // Not applicable on macOS
+    return nullptr;
+}
+
+bool hasElevationPolicyInstalled() {
+    // Not applicable on macOS
+    return false;
+}
+
+bool installElevationPolicy() {
+    // Not applicable on macOS
+    return false;
+}
+
+bool tryElevate(int argc, char** argv) {
+    // macOS uses Authorization Services, not polkit-style elevation
+    (void)argc;
+    (void)argv;
+    return false;
+}
+
+bool launchDetached(const QString& program, const QStringList& arguments) {
+    // On macOS, QProcess::startDetached works correctly for launching
+    // detached processes that outlive the parent
+    return QProcess::startDetached(program, arguments);
+}
+
+bool runElevatedPolicyInstaller() {
+    return false;
+}
+
+void execElevated(const QStringList& extraArgs) {
+    Q_UNUSED(extraArgs);
+}
+
+bool isScrollInverted(bool qtInvertedFlag) {
+    // On macOS, Qt correctly reports the inverted flag in WheelEvent
+    // so we just pass through the Qt value.
+    return qtInvertedFlag;
+}
+
+QString getWriteDevicePath(const QString& devicePath) {
+    // On macOS, use raw disk device (/dev/rdisk) for direct I/O.
+    // This bypasses the macOS buffer cache and provides significantly
+    // faster write performance for large sequential writes.
+    QString result = devicePath;
+    result.replace("/dev/disk", "/dev/rdisk");
+    return result;
+}
+
+QString getEjectDevicePath(const QString& devicePath) {
+    // Convert back to block device path for eject operations.
+    // While DADiskCreateFromBSDName technically accepts both forms,
+    // using /dev/disk is the canonical form for disk operations.
+    QString result = devicePath;
+    result.replace("/dev/rdisk", "/dev/disk");
+    return result;
 }
 
 } // namespace PlatformQuirks

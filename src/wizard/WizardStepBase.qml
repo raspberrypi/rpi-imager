@@ -3,14 +3,40 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  */
 
-import QtQuick 2.15
-import QtQuick.Window 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Window
+import QtQuick.Controls
+import QtQuick.Layouts
 import "../qmlcomponents"
+
+import RpiImager
 
 FocusScope {
     id: root
+    
+    // Access imageWriter from parent context if not explicitly provided
+    property var imageWriter: {
+        var item = parent;
+        while (item) {
+            if (item.imageWriter !== undefined) {
+                return item.imageWriter;
+            }
+            item = item.parent;
+        }
+        return null;
+    }
+    
+    // Access networkInfoText from parent context (WizardContainer)
+    property string networkInfoText: {
+        var item = parent;
+        while (item) {
+            if (item.networkInfoText !== undefined) {
+                return item.networkInfoText;
+            }
+            item = item.parent;
+        }
+        return "";
+    }
     
     property string title: ""
     property string subtitle: ""
@@ -18,12 +44,16 @@ FocusScope {
     property bool showNextButton: true
     property bool showSkipButton: false
     property string nextButtonText: qsTr("Next")
-    property string backButtonText: qsTr("Back")
+    property string backButtonText: CommonStrings.back
     property string skipButtonText: qsTr("Skip customisation")
     property bool nextButtonEnabled: true
     property bool backButtonEnabled: true
     property bool skipButtonEnabled: true
+    property string nextButtonAccessibleDescription: ""
+    property string backButtonAccessibleDescription: ""
+    property string skipButtonAccessibleDescription: ""
     property alias content: contentArea.children
+    property alias customButtonContainer: customButtonArea.children
     // Step may set the first item to receive focus when the step becomes visible
     property var initialFocusItem: null
     // Expose action buttons for KeyNavigation in child content
@@ -63,7 +93,7 @@ FocusScope {
             spacing: Style.spacingSmall
             visible: (root.title && root.title.length > 0) || (root.subtitle && root.subtitle.length > 0)
             
-            Text {
+            MarqueeText {
                 id: titleText
                 text: root.title
                 font.pixelSize: Style.fontSizeTitle
@@ -72,9 +102,15 @@ FocusScope {
                 color: Style.formLabelColor
                 Layout.fillWidth: true
                 visible: root.title && root.title.length > 0
+                Accessible.role: Accessible.Heading
+                Accessible.name: root.title
+                Accessible.ignored: false
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
             
-            Text {
+            MarqueeText {
                 id: subtitleText
                 text: root.subtitle
                 font.pixelSize: Style.fontSizeSubtitle
@@ -82,6 +118,12 @@ FocusScope {
                 color: Style.textDescriptionColor
                 Layout.fillWidth: true
                 visible: root.subtitle && root.subtitle.length > 0
+                Accessible.role: Accessible.StaticText
+                Accessible.name: root.subtitle
+                Accessible.ignored: false
+                Accessible.focusable: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+                activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
             }
         }
         
@@ -92,17 +134,42 @@ FocusScope {
             Layout.fillHeight: true
         }
         
-        // Navigation buttons
+        // Navigation buttons and network info
         RowLayout {
+            id: buttonRow
             Layout.fillWidth: true
             spacing: Style.spacingMedium
             
+            // Embedded mode network info on the left
+            Text {
+                id: networkInfoLabel
+                text: root.networkInfoText
+                font.pixelSize: Style.fontSizeCaption
+                font.family: Style.fontFamily
+                color: Style.textDescriptionColor
+                visible: root.imageWriter && root.imageWriter.isEmbeddedMode() && root.networkInfoText.length > 0
+                Layout.alignment: Qt.AlignVCenter
+                elide: Text.ElideRight
+                Layout.maximumWidth: parent.width * 0.4  // Don't let it take up too much space
+            }
+            
+            // Custom button container - a nested RowLayout for steps that need custom button layouts
+            RowLayout {
+                id: customButtonArea
+                Layout.fillWidth: true
+                spacing: Style.spacingMedium
+                visible: children.length > 0
+            }
+            
+            // Standard buttons (only shown when no custom button container is provided)
             ImButton {
                 id: skipButton
                 text: root.skipButtonText
-                visible: root.showSkipButton
+                visible: customButtonArea.children.length === 0 && root.showSkipButton
                 enabled: root.skipButtonEnabled
+                accessibleDescription: root.skipButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthSkip
+                Layout.maximumWidth: Style.buttonWidthSkip * 1.5  // Allow some growth but cap it
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.skipClicked()
                 // Tab order among action buttons: next -> back -> skip -> wrap to first field
@@ -112,14 +179,17 @@ FocusScope {
             
             Item {
                 Layout.fillWidth: true
+                visible: customButtonArea.children.length === 0
             }
             
             ImButton {
                 id: backButton
                 text: root.backButtonText
-                visible: root.showBackButton
+                visible: customButtonArea.children.length === 0 && root.showBackButton
                 enabled: root.backButtonEnabled
+                accessibleDescription: root.backButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthMinimum
+                Layout.maximumWidth: Style.buttonWidthMinimum * 1.5  // Allow some growth but cap it
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.backClicked()
                 // After back, Tab goes to skip; Shift+Tab goes to next
@@ -130,9 +200,11 @@ FocusScope {
             ImButtonRed {
                 id: nextButton
                 text: root.nextButtonText
-                visible: root.showNextButton
+                visible: customButtonArea.children.length === 0 && root.showNextButton
                 enabled: root.nextButtonEnabled
+                accessibleDescription: root.nextButtonAccessibleDescription
                 Layout.minimumWidth: Style.buttonWidthMinimum
+                Layout.maximumWidth: Style.buttonWidthMinimum * 1.5  // Allow some growth but cap it
                 Layout.preferredHeight: Style.buttonHeightStandard
                 onClicked: root.nextClicked()
                 // After next, Tab goes to back; Shift+Tab goes to skip
@@ -143,15 +215,49 @@ FocusScope {
     }
 
     Component.onCompleted: {
+        // Automatically register header elements (title, subtitle) as first focus group
+        registerFocusGroup("_wizard_header", function(){ 
+            var items = []
+            // Only include title/subtitle in focus order when screen reader is active
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                if (titleText.visible) items.push(titleText)
+                if (subtitleText.visible) items.push(subtitleText)
+            }
+            return items
+        }, -100) // Negative order ensures header is always first when included
+        
         rebuildFocusOrder()
-        if (initialFocusItem && typeof initialFocusItem.forceActiveFocus === 'function') {
-            initialFocusItem.forceActiveFocus()
+        
+        // Set initial focus based on screen reader state
+        var firstFocusTarget = null
+        if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+            // Screen reader active: start at title for full context
+            firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
+        } else {
+            // No screen reader: skip to first interactive element
+            firstFocusTarget = initialFocusItem
+        }
+        
+        if (firstFocusTarget && typeof firstFocusTarget.forceActiveFocus === 'function') {
+            firstFocusTarget.forceActiveFocus()
         }
     }
 
     onVisibleChanged: {
-        if (visible && initialFocusItem && typeof initialFocusItem.forceActiveFocus === 'function') {
-            initialFocusItem.forceActiveFocus()
+        if (visible) {
+            // Set initial focus based on screen reader state
+            var firstFocusTarget = null
+            if (root.imageWriter && root.imageWriter.isScreenReaderActive()) {
+                // Screen reader active: start at title for full context
+                firstFocusTarget = (titleText.visible ? titleText : initialFocusItem)
+            } else {
+                // No screen reader: skip to first interactive element
+                firstFocusTarget = initialFocusItem
+            }
+            
+            if (firstFocusTarget && typeof firstFocusTarget.forceActiveFocus === 'function') {
+                firstFocusTarget.forceActiveFocus()
+            }
         }
     }
 
@@ -194,7 +300,8 @@ FocusScope {
             if (!arr || !arr.length) continue
             for (var k = 0; k < arr.length; k++) {
                 var it = arr[k]
-                if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function') {
+                // Skip items that have activeFocusOnTab explicitly set to false (e.g. labels when screen reader inactive)
+                if (it && it.visible && it.enabled && typeof it.forceActiveFocus === 'function' && it.activeFocusOnTab !== false) {
                     items.push(it)
                 }
             }
