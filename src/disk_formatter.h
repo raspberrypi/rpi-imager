@@ -182,7 +182,8 @@ class DiskFormatter {
       const Fat32Config& config) const;
 
   Result<void> WriteRootDirectory(
-      std::uint32_t root_cluster_sector) const;
+      std::uint32_t root_cluster_sector,
+      const Fat32Config& config) const;
 
   // Utility functions
   Fat32Config CalculateFat32Config(std::uint32_t partition_size_sectors) const;

@@ -239,8 +239,9 @@ Result<void> DiskFormatter::WriteFat32(
     return result;
   }
 
-  // Write backup boot sector
-  if (auto result = WriteBootSector(partition_start_sector + config.reserved_sectors / 2, config); !result) {
+  // Write backup boot sector at sector 6 (as specified in the boot sector's backup_boot_sector field)
+  constexpr std::uint32_t kBackupBootSector = 6;
+  if (auto result = WriteBootSector(partition_start_sector + kBackupBootSector, config); !result) {
     return result;
   }
 
@@ -253,7 +254,7 @@ Result<void> DiskFormatter::WriteFat32(
   // Write root directory
   std::uint32_t sectors_per_fat = CalculateSectorsPerFat(config);
   std::uint32_t root_sector = fat_start_sector + (config.num_fats * sectors_per_fat);
-  return WriteRootDirectory(root_sector);
+  return WriteRootDirectory(root_sector, config);
 }
 
 Result<void> DiskFormatter::WriteBootSector(
@@ -402,11 +403,14 @@ Result<void> DiskFormatter::WriteFatTables(
 }
 
 Result<void> DiskFormatter::WriteRootDirectory(
-    std::uint32_t root_cluster_sector) const {
+    std::uint32_t root_cluster_sector,
+    const Fat32Config& config) const {
   
-  // Root directory is just an empty cluster (8 sectors * 512 bytes)
+  // Root directory occupies one cluster - size depends on sectors_per_cluster
+  // Must zero the ENTIRE cluster to prevent old data appearing as directory entries
+  std::size_t root_cluster_size = static_cast<std::size_t>(config.sectors_per_cluster) * kSectorSize;
+  
   // Use aligned buffer for O_DIRECT compatibility on Linux
-  constexpr std::size_t root_cluster_size = 4096;
   AlignedBuffer root_cluster(root_cluster_size);
   if (!root_cluster.valid()) {
     return Result<void>(FormatError::kFileWriteError);
