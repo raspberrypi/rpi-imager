@@ -273,7 +273,8 @@ protected:
     char *_firstBlock;
     size_t _firstBlockSize;
     static QByteArray _proxy;
-    bool _cancelled, _successful, _verifyEnabled, _cacheEnabled, _ejectEnabled;
+    std::atomic<bool> _cancelled;  // Atomic for safe access from timeout utility
+    bool _successful, _verifyEnabled, _cacheEnabled, _ejectEnabled;
     time_t _lastModified, _serverTime, _lastFailureTime;
     QElapsedTimer _timer;
     int _inputBufferSize;
