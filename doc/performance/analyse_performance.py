@@ -71,7 +71,7 @@ class ImagingCycle:
     COMPLETION_EVENTS = {'deviceClose', 'finalSync', 'verifyComplete'}
     
     # Events that indicate a cycle failed
-    FAILURE_EVENTS = {'writeError', 'verifyError', 'downloadError', 'cancelled'}
+    FAILURE_EVENTS = {'writeError', 'verifyError', 'downloadError', 'cancelled', 'hardTimeout'}
     
     def __init__(self, cycle_id: int):
         self.id = cycle_id
@@ -600,7 +600,10 @@ def print_cycles(cycles: list) -> None:
         # Key events
         key_event_types = {
             'driveOpen', 'driveUnmount', 'cacheLookup', 'directIOAttempt',
-            'pipelineDecompressionTime', 'pipelineWriteWaitTime', 'finalSync', 'deviceClose'
+            'pipelineDecompressionTime', 'pipelineWriteWaitTime', 'finalSync', 'deviceClose',
+            # Recovery events
+            'queueDepthReduction', 'syncFallbackActivated', 'drainAndHotSwap', 
+            'watchdogRecovery', 'progressStall', 'deviceIOTimeout'
         }
         key_events = [e for e in cycle.events if e.get('type') in key_event_types]
         if key_events:
@@ -1149,6 +1152,95 @@ def print_pipeline_analysis(pipeline: dict) -> None:
             print(f"    Consider enabling direct I/O to bypass page cache.")
 
 
+def print_recovery_events(events: list) -> None:
+    """Print summary of recovery events that occurred during the write."""
+    recovery_types = {
+        'queueDepthReduction', 'syncFallbackActivated', 'drainAndHotSwap',
+        'watchdogRecovery', 'progressStall', 'deviceIOTimeout'
+    }
+    
+    recovery_events = [e for e in events if e.get('type') in recovery_types]
+    
+    if not recovery_events:
+        return
+    
+    print("\n" + "-" * 60)
+    print("RECOVERY EVENTS")
+    print("-" * 60)
+    
+    # Group by type
+    by_type = {}
+    for event in recovery_events:
+        event_type = event.get('type', 'unknown')
+        if event_type not in by_type:
+            by_type[event_type] = []
+        by_type[event_type].append(event)
+    
+    # Queue depth reductions
+    if 'queueDepthReduction' in by_type:
+        reductions = by_type['queueDepthReduction']
+        print(f"\n  Queue Depth Reductions: {len(reductions)}")
+        for event in reductions:
+            metadata = event.get('metadata', '')
+            print(f"    • {metadata}")
+    
+    # Stall warnings
+    if 'progressStall' in by_type:
+        stalls = by_type['progressStall']
+        print(f"\n  Progress Stall Warnings: {len(stalls)}")
+        max_stall_ms = max(e.get('durationMs', 0) for e in stalls)
+        print(f"    Maximum stall duration: {format_duration(max_stall_ms)}")
+    
+    # Sync fallback
+    if 'syncFallbackActivated' in by_type:
+        fallbacks = by_type['syncFallbackActivated']
+        print(f"\n  ⚠️  Sync Fallback Activated: {len(fallbacks)} time(s)")
+        for event in fallbacks:
+            metadata = event.get('metadata', '')
+            print(f"    Reason: {metadata}")
+    
+    # Drain and hot-swap
+    if 'drainAndHotSwap' in by_type:
+        drains = by_type['drainAndHotSwap']
+        print(f"\n  Drain & Hot-Swap Attempts: {len(drains)}")
+        for event in drains:
+            duration_ms = event.get('durationMs', 0)
+            success = event.get('success', True)
+            metadata = event.get('metadata', '')
+            status = "✓ Success" if success else "✗ Failed"
+            print(f"    • {status} in {format_duration(duration_ms)} ({metadata})")
+    
+    # Watchdog recovery
+    if 'watchdogRecovery' in by_type:
+        watchdog_events = by_type['watchdogRecovery']
+        print(f"\n  Watchdog Recovery Actions: {len(watchdog_events)}")
+        for event in watchdog_events:
+            metadata = event.get('metadata', '')
+            success = event.get('success', True)
+            status = "✓" if success else "✗"
+            print(f"    {status} {metadata}")
+    
+    # Device I/O timeout
+    if 'deviceIOTimeout' in by_type:
+        timeouts = by_type['deviceIOTimeout']
+        print(f"\n  ⚠️  Device I/O Timeouts: {len(timeouts)}")
+        for event in timeouts:
+            metadata = event.get('metadata', '')
+            print(f"    • {metadata}")
+    
+    # Summary assessment
+    total_recovery = len(recovery_events)
+    has_fallback = 'syncFallbackActivated' in by_type or 'watchdogRecovery' in by_type
+    
+    print(f"\n  Summary:")
+    if has_fallback:
+        print(f"    ⚠️  Write required recovery intervention - device may be slow or unreliable")
+    elif total_recovery > 5:
+        print(f"    ℹ️  Multiple queue depth adjustments - device responding slowly")
+    elif total_recovery > 0:
+        print(f"    ℹ️  Minor recovery events - write completed successfully with adaptation")
+
+
 def print_analysis(analysis: dict) -> None:
     """Print histogram analysis results."""
     print("\n" + "-" * 60)
@@ -1311,6 +1403,10 @@ def plot_timeline(data: dict, output_path: Path = None, cycles: list = None) -> 
         'driveUnmount': '#9C27B0', 'driveUnmountVolumes': '#9C27B0',
         'driveDiskClean': '#9C27B0', 'driveRescan': '#9C27B0',
         'driveFormat': '#9C27B0',
+        # Recovery events (orange/red for warnings)
+        'queueDepthReduction': '#FF9800', 'syncFallbackActivated': '#FF5722',
+        'drainAndHotSwap': '#FF9800', 'watchdogRecovery': '#F44336',
+        'progressStall': '#FFC107', 'deviceIOTimeout': '#D32F2F',
         # Cache operations
         'cacheLookup': '#00BCD4', 'cacheVerification': '#00BCD4',
         'cacheWrite': '#00BCD4', 'cacheFlush': '#00BCD4',
@@ -1479,6 +1575,10 @@ def plot_throughput(data: dict, analysis: dict, output_path: Path = None, cycles
         'driveUnmount': '#7B1FA2', 'driveUnmountVolumes': '#7B1FA2',
         'driveDiskClean': '#7B1FA2', 'driveRescan': '#7B1FA2',
         'driveFormat': '#7B1FA2',
+        # Recovery events (orange/red for warnings)
+        'queueDepthReduction': '#FF9800', 'syncFallbackActivated': '#FF5722',
+        'drainAndHotSwap': '#FF9800', 'watchdogRecovery': '#F44336',
+        'progressStall': '#FFC107', 'deviceIOTimeout': '#D32F2F',
         # Cache (cyan)
         'cacheLookup': '#00838F', 'cacheVerification': '#00838F',
         'cacheWrite': '#00838F', 'cacheFlush': '#00838F',
@@ -2446,6 +2546,9 @@ def main():
     # Pipeline bottleneck and sync overhead analysis
     pipeline = analyse_pipeline_timing(data)
     print_pipeline_analysis(pipeline)
+    
+    # Recovery events (queue depth reduction, sync fallback, etc.)
+    print_recovery_events(events)
     
     # Detailed write timing breakdown (for hypothesis testing)
     write_breakdown = analyse_write_timing_breakdown(data)

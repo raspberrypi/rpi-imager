@@ -13,6 +13,19 @@
 #include <errno.h>
 #include <sstream>
 #include <cstring>
+#include <algorithm>
+#include <thread>
+#include <functional>
+#include "../timeout_utils.h"
+
+using rpi_imager::TimeoutResult;
+using rpi_imager::TimeoutConfig;
+using rpi_imager::runWithTimeout;
+using rpi_imager::TimeoutDefaults::kSyncWriteTimeoutSeconds;
+using rpi_imager::TimeoutDefaults::kSyncFsyncTimeoutSeconds;
+using rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth;
+using rpi_imager::TimeoutDefaults::kHighLatencyThresholdMs;
+using rpi_imager::TimeoutDefaults::kAsyncFirstCompletionTimeoutMs;
 
 // io_uring support (Linux 5.1+)
 #ifdef HAVE_LIBURING
@@ -107,10 +120,19 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
     
     if (wait && !cancelled_.load()) {
         // Use timeout-based wait so we can check for cancellation
+        // Also add overall timeout to prevent infinite waiting if device stops responding
         struct __kernel_timespec ts = {.tv_sec = 0, .tv_nsec = 100000000};  // 100ms
+        auto waitStart = std::chrono::steady_clock::now();
+        
         ret = io_uring_wait_cqe_timeout(ring_, &cqe, &ts);
-        // If timeout (-ETIME) and not cancelled, try again
+        // If timeout (-ETIME) and not cancelled, try again with overall limit
         while (ret == -ETIME && !cancelled_.load() && pending_writes_.load() > 0) {
+            auto elapsed = std::chrono::steady_clock::now() - waitStart;
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() >= kAsyncFirstCompletionTimeoutMs) {
+                Log("ProcessCompletions: No completion received in " + std::to_string(kAsyncFirstCompletionTimeoutMs) + 
+                    "ms, returning to allow recovery");
+                return;  // Return to caller so queue-wait timeout can trigger
+            }
             ret = io_uring_wait_cqe_timeout(ring_, &cqe, &ts);
         }
     } else {
@@ -145,7 +167,26 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
         }
         
         // Record write latency (submit to completion) - uses base class's thread-safe stats
+        auto completionTime = std::chrono::steady_clock::now();
+        auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(completionTime - submit_time).count();
         write_latency_stats_.recordCompletion(submit_time);
+        
+        // Adaptive recovery: if individual write latency is very high, reduce queue depth
+        // This helps the system recover when conditions change (memory pressure, slow device)
+        constexpr int kMinQueueDepthForReduction = kMinAsyncQueueDepth * 2;  // Trigger reduction above 2x minimum
+        
+        int currentPending = pending_writes_.load();
+        
+        // Only reduce if we've drained to the current depth (reached equilibrium)
+        // This prevents rapid successive reductions before the system can stabilize
+        if (latency > kHighLatencyThresholdMs && 
+            async_queue_depth_ >= kMinQueueDepthForReduction && 
+            currentPending <= async_queue_depth_ &&  // Must be at equilibrium first
+            !sync_fallback_mode_) {
+          int newDepth = async_queue_depth_ / 2;
+          Log("High write latency detected (" + std::to_string(latency) + "ms) - reducing queue depth to " + std::to_string(newDepth));
+          ReduceQueueDepthForRecovery(newDepth);
+        }
         
         FileError error = FileError::kSuccess;
         if (result < 0) {
@@ -533,8 +574,8 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
     return FileError::kOpenError;
   }
   
-  // If async not enabled or io_uring not available, fall back to sync
-  if (async_queue_depth_ <= 1 || !io_uring_available_ || ring_ == nullptr) {
+  // If async not enabled, io_uring not available, or in sync fallback mode, use sync
+  if (async_queue_depth_ <= 1 || !io_uring_available_ || ring_ == nullptr || sync_fallback_mode_) {
     FileError result = WriteSequential(data, size);
     // Note: WriteSequential already updates async_write_offset_
     if (callback) callback(result, result == FileError::kSuccess ? size : 0);
@@ -551,8 +592,16 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   // Process any completed writes first (non-blocking)
   ProcessCompletions(false);
   
-  // If queue is full, wait for completions
+  // If queue is full, wait for completions (checking for cancellation)
+  // Note: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
+  // Here we just wait for a slot, with periodic cancellation checks.
   while (pending_writes_.load() >= async_queue_depth_) {
+    if (cancelled_.load()) {
+      if (callback) callback(FileError::kCancelled, 0);
+      return FileError::kCancelled;
+    }
+    
+    // Wait for completions
     ProcessCompletions(true);
   }
   
@@ -580,10 +629,10 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   // Mark first submit for wall-clock timing (uses base class's thread-safe stats)
   write_latency_stats_.recordSubmit();
   
-  // Store callback for later
+  // Store callback and info for later (includes data/offset for sync fallback)
   {
     std::lock_guard<std::mutex> lock(pending_mutex_);
-    pending_callbacks_[write_id] = PendingWrite{callback, size, submit_time};
+    pending_callbacks_[write_id] = PendingWrite{callback, data, write_offset, size, submit_time};
   }
   
   pending_writes_.fetch_add(1);
@@ -658,9 +707,32 @@ FileError LinuxFileOperations::WaitForPendingWrites() {
     return FileError::kSuccess;
   }
   
-  // Process completions until all pending writes are done
+  // Process completions until all pending writes are done, with overall timeout
+  // If the device becomes unresponsive, we don't want to block forever.
+  constexpr int kMaxTotalWaitSeconds = 30;
+  auto startTime = std::chrono::steady_clock::now();
+  int lastLogSecond = 0;
+  
   while (pending_writes_.load() > 0) {
     ProcessCompletions(true);
+    
+    // Check overall timeout
+    auto elapsed = std::chrono::steady_clock::now() - startTime;
+    int elapsedSeconds = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
+    
+    if (elapsedSeconds >= kMaxTotalWaitSeconds) {
+      int remaining = pending_writes_.load();
+      Log("WaitForPendingWrites timeout: " + std::to_string(remaining) + 
+          " writes still pending after " + std::to_string(kMaxTotalWaitSeconds) + "s - attempting sync fallback");
+      return AttemptSyncFallback();
+    }
+    
+    // Log progress every 5 seconds
+    if (elapsedSeconds >= 5 && elapsedSeconds % 5 == 0 && elapsedSeconds != lastLogSecond) {
+      lastLogSecond = elapsedSeconds;
+      Log("WaitForPendingWrites: " + std::to_string(pending_writes_.load()) + 
+          " writes pending after " + std::to_string(elapsedSeconds) + "s");
+    }
   }
   
   return first_async_error_;
@@ -670,6 +742,213 @@ FileError LinuxFileOperations::WaitForPendingWrites() {
 }
 
 // GetAsyncIOStats() inherited from FileOperations base class
+
+std::vector<FileOperations::PendingWriteInfo> LinuxFileOperations::GetPendingWritesSorted() const {
+  std::vector<PendingWriteInfo> result;
+  
+  std::lock_guard<std::mutex> lock(pending_mutex_);
+  result.reserve(pending_callbacks_.size());
+  
+  for (const auto& [write_id, pw] : pending_callbacks_) {
+    result.push_back(PendingWriteInfo{pw.offset, pw.data, pw.size, pw.callback});
+  }
+  
+  // Sort by offset for sequential replay
+  std::sort(result.begin(), result.end(), 
+            [](const PendingWriteInfo& a, const PendingWriteInfo& b) {
+              return a.offset < b.offset;
+            });
+  
+  return result;
+}
+
+FileError LinuxFileOperations::AttemptSyncFallback() {
+#ifdef HAVE_LIBURING
+  // Get pending writes before cancelling (they're still valid in ring buffer)
+  auto pendingWrites = GetPendingWritesSorted();
+  
+  if (pendingWrites.empty()) {
+    Log("Sync fallback: no pending writes to replay");
+    sync_fallback_mode_ = true;
+    return FileError::kSuccess;
+  }
+  
+  Log("Sync fallback: replaying " + std::to_string(pendingWrites.size()) + " writes synchronously");
+  
+  // Cancel any remaining async operations
+  cancelled_.store(true);
+  CancelAsyncIO();
+  
+  // Give async operations a moment to respond to cancellation
+  usleep(100000);  // 100ms
+  
+  // Switch to sync mode for all future writes
+  sync_fallback_mode_ = true;
+  
+  // Clear the pending callbacks (we'll handle them synchronously)
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    pending_callbacks_.clear();
+  }
+  pending_writes_.store(0);
+  
+  // Replay pending writes synchronously with timeout protection
+  for (const auto& pw : pendingWrites) {
+    ssize_t written = -1;
+    
+    auto result = runWithTimeout(
+        [this, &pw, &written]() {
+          written = pwrite(fd_, pw.data, pw.size, static_cast<off_t>(pw.offset));
+        },
+        TimeoutConfig(kSyncWriteTimeoutSeconds)
+            .withOnTimeout([this, &pw]() {
+              Log("Timeout: write at offset " + std::to_string(pw.offset) + " - closing fd");
+              int fd_copy = fd_;
+              fd_ = -1;
+              close(fd_copy);
+            })
+    );
+    
+    if (result == TimeoutResult::TimedOut) {
+      Log("Sync fallback: write timed out at offset " + std::to_string(pw.offset));
+      return FileError::kTimeout;
+    }
+    
+    if (written < 0 || static_cast<std::size_t>(written) != pw.size) {
+      Log("Sync fallback: write failed at offset " + std::to_string(pw.offset));
+      return FileError::kWriteError;
+    }
+    
+    if (pw.callback) {
+      pw.callback(FileError::kSuccess, pw.size);
+    }
+  }
+  
+  if (fd_ < 0) {
+    Log("Sync fallback: fd was closed - device unresponsive");
+    return FileError::kTimeout;
+  }
+  
+  // Sync to device with timeout protection
+  int syncResult = -1;
+  auto fsyncResult = runWithTimeout(
+      [this, &syncResult]() { syncResult = fsync(fd_); },
+      TimeoutConfig(kSyncFsyncTimeoutSeconds)
+          .withOnTimeout([this]() {
+            Log("Timeout: fsync - closing fd");
+            int fd_copy = fd_;
+            fd_ = -1;
+            close(fd_copy);
+          })
+  );
+  
+  if (fsyncResult == TimeoutResult::TimedOut) {
+    Log("Sync fallback: fsync timed out");
+    return FileError::kTimeout;
+  }
+  
+  if (syncResult != 0) {
+    Log("Sync fallback: fsync failed");
+    return FileError::kSyncError;
+  }
+  
+  // Update async_write_offset_ to reflect completed writes
+  if (!pendingWrites.empty()) {
+    const auto& lastWrite = pendingWrites.back();
+    async_write_offset_ = lastWrite.offset + lastWrite.size;
+  }
+  
+  // Reset cancelled flag so future operations can proceed (in sync mode)
+  cancelled_.store(false);
+  first_async_error_ = FileError::kSuccess;
+  
+  Log("Sync fallback successful - continuing in sync mode");
+  return FileError::kSuccess;
+#else
+  return FileError::kSuccess;
+#endif
+}
+
+bool LinuxFileOperations::DrainAndSwitchToSync(int stallTimeoutSeconds) {
+#ifdef HAVE_LIBURING
+  // First, prevent new async writes by switching to sync mode
+  sync_fallback_mode_ = true;
+  
+  int pending = pending_writes_.load();
+  if (pending == 0) {
+    Log("DrainAndSwitchToSync: No pending writes, switching to sync mode");
+    return true;
+  }
+  
+  Log("DrainAndSwitchToSync: Waiting for " + std::to_string(pending) + 
+      " pending writes to drain (stall timeout: " + std::to_string(stallTimeoutSeconds) + "s per completion)");
+  
+  auto startTime = std::chrono::steady_clock::now();
+  auto lastProgressTime = startTime;
+  int lastPending = pending;
+  
+  while (pending_writes_.load() > 0) {
+    // Actively poll for completions
+    ProcessCompletions(false);
+    
+    int currentPending = pending_writes_.load();
+    auto now = std::chrono::steady_clock::now();
+    
+    if (currentPending < lastPending) {
+      // Progress! Reset the stall timer
+      Log("DrainAndSwitchToSync: Draining... " + std::to_string(currentPending) + " remaining");
+      lastPending = currentPending;
+      lastProgressTime = now;
+    } else {
+      // No progress - check stall timeout
+      auto stallDuration = std::chrono::duration_cast<std::chrono::seconds>(now - lastProgressTime);
+      if (stallDuration.count() >= stallTimeoutSeconds) {
+        int remaining = pending_writes_.load();
+        auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
+        Log("DrainAndSwitchToSync: Stalled - no completions for " + 
+            std::to_string(stallTimeoutSeconds) + "s, " + std::to_string(remaining) + 
+            " writes still pending after " + std::to_string(totalElapsed.count()) + "s total");
+        return false;
+      }
+    }
+    
+    // Brief sleep to avoid spinning
+    usleep(100000);  // 100ms
+  }
+  
+  auto elapsed = std::chrono::steady_clock::now() - startTime;
+  int elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+  
+  Log("DrainAndSwitchToSync: Successfully drained all writes in " + 
+      std::to_string(elapsedMs) + "ms - now in sync mode");
+  return true;
+#else
+  (void)stallTimeoutSeconds;
+  sync_fallback_mode_ = true;
+  return true;
+#endif
+}
+
+void LinuxFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
+#ifdef HAVE_LIBURING
+  int oldDepth = async_queue_depth_;
+  
+  // Only reduce, never increase during recovery
+  if (newDepth >= oldDepth) {
+    return;
+  }
+  
+  // Ensure minimum viable depth (2 still allows some pipelining)
+  newDepth = std::max(newDepth, TimeoutDefaults::kMinAsyncQueueDepth);
+  
+  async_queue_depth_ = newDepth;
+  
+  Log("Queue depth reduced for recovery: " + std::to_string(oldDepth) + " -> " + std::to_string(newDepth) +
+      " (pending: " + std::to_string(pending_writes_.load()) + ")");
+#else
+  (void)newDepth;
+#endif
+}
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {

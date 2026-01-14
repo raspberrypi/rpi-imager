@@ -78,34 +78,37 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     _extractThread = new _extractThreadClass(this);
     size_t pageSize = SystemMemoryManager::instance().getSystemPageSize();
     
+    // Get optimal buffer slot sizes (hints based on total system memory)
+    size_t inputBufferSizeHint = SystemMemoryManager::instance().getOptimalInputBufferSize();
+    size_t writeBufferSizeHint = _writeBufferSize;  // Already set from getOptimalWriteBufferSize()
+    
+    // Use COORDINATED ring buffer allocation to prevent memory exhaustion
+    // This ensures both ring buffers together fit within 30% of available memory.
+    // Buffer sizes may be scaled down on low-memory systems while maintaining
+    // page alignment for I/O efficiency.
+    size_t inputSlots, writeSlots;
+    size_t actualInputSize, actualWriteSize;
+    size_t totalMemory = SystemMemoryManager::instance().getCoordinatedRingBufferConfig(
+        inputBufferSizeHint, writeBufferSizeHint, 
+        inputSlots, writeSlots,
+        actualInputSize, actualWriteSize);
+    
+    // Update write buffer size if it was scaled down
+    if (actualWriteSize != _writeBufferSize) {
+        qDebug() << "Write buffer size adjusted:" << _writeBufferSize << "->" << actualWriteSize;
+        _writeBufferSize = actualWriteSize;
+    }
+    
     // Create zero-copy ring buffer for curl -> libarchive data transfer (compressed data)
-    // Both slot size and slot count are determined by SystemMemoryManager based on available RAM
-    size_t inputBufferSize = SystemMemoryManager::instance().getOptimalInputBufferSize();
-    size_t numSlots = SystemMemoryManager::instance().getOptimalRingBufferSlots(inputBufferSize);
-    _ringBuffer = std::make_unique<RingBuffer>(numSlots, inputBufferSize, pageSize);
+    _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize);
     
     // Create ring buffer for decompress -> write path (decompressed data)
-    // With zero-copy async I/O, ring buffer slots serve as async I/O buffers.
-    // Size based on optimal queue depth (calculated from available memory) plus headroom.
-    // This avoids over-allocation while still allowing decompression to stay ahead.
-    int optimalDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth(_writeBufferSize);
-    
-    // Add headroom: 2x optimal depth or optimal + 64, whichever is larger
-    // This allows decompression to buffer ahead while async writes drain
-    int writeRingBufferDepth = qMax(optimalDepth * 2, optimalDepth + 64);
-    
-    // Cap to a reasonable maximum to prevent excessive memory usage
-    // 512 slots @ 8MB = 4GB, which is reasonable for high-memory systems
-    static const int MAX_RING_BUFFER_DEPTH = 512;
-    writeRingBufferDepth = qMin(writeRingBufferDepth, MAX_RING_BUFFER_DEPTH);
-    
-    size_t writeRingBufferSlots = static_cast<size_t>(writeRingBufferDepth + 4);
-    _writeRingBuffer = std::make_unique<RingBuffer>(writeRingBufferSlots, _writeBufferSize, pageSize);
+    _writeRingBuffer = std::make_unique<RingBuffer>(writeSlots, actualWriteSize, pageSize);
     
     qDebug() << "Using buffer size:" << _writeBufferSize << "bytes with page size:" << pageSize << "bytes";
-    qDebug() << "Ring buffer:" << RING_BUFFER_SLOTS << "slots of" << inputBufferSize << "bytes";
-    qDebug() << "Write ring buffer:" << writeRingBufferSlots << "slots of" << _writeBufferSize << "bytes"
-             << "(optimal depth:" << optimalDepth << ", max configurable:" << writeRingBufferDepth << ")";
+    qDebug() << "Input ring buffer:" << inputSlots << "slots of" << actualInputSize << "bytes";
+    qDebug() << "Write ring buffer:" << writeSlots << "slots of" << actualWriteSize << "bytes";
+    qDebug() << "Total ring buffer memory:" << (totalMemory / (1024 * 1024)) << "MB";
 }
 
 DownloadExtractThread::~DownloadExtractThread()
@@ -329,12 +332,39 @@ void DownloadExtractThread::extractImageRun()
             // Acquire a slot from the write ring buffer
             // This blocks if all slots are in use (back-pressure from slow writes or async I/O)
             RingBuffer::Slot* slot = _writeRingBuffer->acquireWriteSlot(100);
-            while (!slot && !_cancelled && !_writeRingBuffer->isCancelled()) {
+            while (!slot && !_cancelled && !_writeRingBuffer->isCancelled() && !_writeRingBuffer->isStallTimeoutExceeded()) {
+                // CRITICAL: Poll for async I/O completions while waiting for ring buffer slots!
+                // Without this, we deadlock: slots are freed by async write callbacks,
+                // but callbacks only fire when we poll IOCP. If we're blocked here not
+                // polling, completions pile up and slots never get freed.
+                if (_file && _file->IsAsyncIOSupported()) {
+                    _file->PollAsyncCompletions();
+                }
                 slot = _writeRingBuffer->acquireWriteSlot(100);
             }
             if (!slot) {
                 if (_cancelled) break;
-                throw runtime_error("Failed to acquire write buffer slot");
+                if (_writeRingBuffer->isStallTimeoutExceeded()) {
+                    // Ring buffer stall timeout - record event and emit a clear error message
+                    RingBuffer::StallType stallType = _writeRingBuffer->getStallType();
+                    qDebug() << "DownloadExtractThread: Write ring buffer stall timeout:" << RingBuffer::stallTypeToString(stallType);
+                    
+                    // Emit a ring buffer stall event
+                    qint64 timestampMs = _sessionTimer.isValid() ? _sessionTimer.elapsed() : 0;
+                    QString metadata = QString("buffer: write; type: stall_timeout; stall_type: %1").arg(RingBuffer::stallTypeToString(stallType));
+                    emit eventRingBufferStats(timestampMs, 30000, metadata);  // 30s stall timeout
+                    
+                    // Convert stall type to user-facing message
+                    QString errorMsg = tr("The write operation has stalled.\n\n"
+                                         "No data has been written for 30 seconds. "
+                                         "This could be caused by:\n"
+                                         "• Storage device disconnected or unresponsive\n"
+                                         "• Device has failed or is faulty\n"
+                                         "• System resource exhaustion\n\n"
+                                         "Please check the storage device and try again.");
+                    throw runtime_error(errorMsg.toStdString());
+                }
+                throw runtime_error(tr("Failed to acquire write buffer slot").toStdString());
             }
             
             // Time decompression (includes ring buffer wait inside libarchive's read callback)
@@ -420,7 +450,13 @@ void DownloadExtractThread::extractImageRun()
         {
             // Fatal error
             DownloadThread::cancelDownload();
-            emit error(tr("Error extracting archive: %1").arg(e.what()));
+            
+            // Use stall error message if set (from ring buffer stall), otherwise use exception message
+            if (!_stallErrorMessage.isEmpty()) {
+                emit error(_stallErrorMessage);
+            } else {
+                emit error(tr("Error extracting archive: %1").arg(e.what()));
+            }
         }
     }
 
@@ -660,7 +696,13 @@ void DownloadExtractThread::extractMultiFileRun()
         {
             /* Fatal error */
             DownloadThread::cancelDownload();
-            emit error(tr("Error extracting archive: %1").arg(e.what()));
+            
+            // Use stall error message if set (from ring buffer stall), otherwise use exception message
+            if (!_stallErrorMessage.isEmpty()) {
+                emit error(_stallErrorMessage);
+            } else {
+                emit error(tr("Error extracting archive: %1").arg(e.what()));
+            }
         }
     }
 
@@ -725,9 +767,32 @@ ssize_t DownloadExtractThread::_on_read(struct archive *, const void **buff)
     // Acquire next read slot (blocks until data available or producer done)
     _currentReadSlot = _ringBuffer->acquireReadSlot(100);  // 100ms timeout
     
-    // Handle timeout - retry
-    while (!_currentReadSlot && !_ringBuffer->isCancelled() && !_ringBuffer->isComplete()) {
+    // Handle timeout - retry, but also check for stall timeout
+    while (!_currentReadSlot && !_ringBuffer->isCancelled() && !_ringBuffer->isComplete() && !_ringBuffer->isStallTimeoutExceeded()) {
         _currentReadSlot = _ringBuffer->acquireReadSlot(100);
+    }
+    
+    // Check for stall timeout (network stalled for too long)
+    if (_ringBuffer->isStallTimeoutExceeded()) {
+        RingBuffer::StallType stallType = _ringBuffer->getStallType();
+        qDebug() << "DownloadExtractThread: Input ring buffer stall timeout:" << RingBuffer::stallTypeToString(stallType);
+        
+        // Emit a ring buffer stall event
+        qint64 timestampMs = _sessionTimer.isValid() ? _sessionTimer.elapsed() : 0;
+        QString metadata = QString("buffer: input; type: stall_timeout; stall_type: %1").arg(RingBuffer::stallTypeToString(stallType));
+        emit eventRingBufferStats(timestampMs, 30000, metadata);  // 30s stall timeout
+        
+        // Set error message for user - this is a consumer stall (waiting for download data)
+        _stallErrorMessage = tr("The download has stalled.\n\n"
+                               "No data received for 30 seconds. "
+                               "This could be caused by:\n"
+                               "• Network connection lost or unstable\n"
+                               "• Remote server became unresponsive\n"
+                               "• Firewall or proxy blocking the connection\n\n"
+                               "Please check your network connection and try again.");
+        
+        *buff = nullptr;
+        return -1;  // Signal error to libarchive
     }
     
     // Record ring buffer wait time
@@ -853,6 +918,15 @@ void DownloadExtractThread::_pushQueue(const char *data, size_t len)
         if (!slot) {
             if (_ringBuffer->isCancelled() || _cancelled) {
                 return;
+            }
+            // Poll for async I/O completions while waiting (prevents deadlock)
+            if (_file && _file->IsAsyncIOSupported()) {
+                _file->PollAsyncCompletions();
+            }
+            // Check for stall timeout (disk writes stalled for too long)
+            if (_ringBuffer->isStallTimeoutExceeded()) {
+                qDebug() << "DownloadExtractThread: Write ring buffer stall timeout in _pushQueue";
+                return;  // Let the caller handle the error
             }
             // Timeout - try again
             continue;

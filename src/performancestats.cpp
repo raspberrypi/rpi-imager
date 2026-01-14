@@ -425,6 +425,15 @@ QString PerformanceStats::eventTypeName(EventType type)
         case EventType::CycleStart: return "cycleStart";
         case EventType::CycleEnd: return "cycleEnd";
         
+        // Stall detection
+        case EventType::ProgressStall: return "progressStall";
+        case EventType::MemoryAllocationFailure: return "memoryAllocationFailure";
+        case EventType::DeviceIOTimeout: return "deviceIOTimeout";
+        case EventType::QueueDepthReduction: return "queueDepthReduction";
+        case EventType::SyncFallbackActivated: return "syncFallbackActivated";
+        case EventType::DrainAndHotSwap: return "drainAndHotSwap";
+        case EventType::WatchdogRecovery: return "watchdogRecovery";
+        
         // Customisation
         case EventType::Customisation: return "customisation";
         case EventType::CloudInitGeneration: return "cloudInitGeneration";

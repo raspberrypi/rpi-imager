@@ -122,3 +122,37 @@ if decomp and write_wait and ring_wait:
     else:
         print("BOTTLENECK: Decompression CPU (decompressor is compute-bound)")
 
+print()
+print('=== RECOVERY EVENTS ===')
+queue_reductions = [e for e in data['events'] if e['type'] == 'queueDepthReduction']
+sync_fallback = [e for e in data['events'] if e['type'] == 'syncFallbackActivated']
+drain_hotswap = [e for e in data['events'] if e['type'] == 'drainAndHotSwap']
+watchdog = [e for e in data['events'] if e['type'] == 'watchdogRecovery']
+stall_warnings = [e for e in data['events'] if e['type'] == 'progressStall']
+
+if queue_reductions:
+    print(f"Queue depth reductions: {len(queue_reductions)}")
+    for e in queue_reductions:
+        print(f"  • {e.get('metadata', '')}")
+
+if stall_warnings:
+    print(f"Progress stall warnings: {len(stall_warnings)}")
+    max_stall = max(e.get('durationMs', 0) for e in stall_warnings)
+    print(f"  Max stall duration: {max_stall/1000:.1f}s")
+
+if drain_hotswap:
+    print(f"Drain & hot-swap attempts: {len(drain_hotswap)}")
+    for e in drain_hotswap:
+        status = "SUCCESS" if e.get('success', True) else "FAILED"
+        print(f"  • {status} in {e.get('durationMs', 0)}ms ({e.get('metadata', '')})")
+
+if sync_fallback:
+    print(f"⚠️  Sync fallback activated: {len(sync_fallback)} time(s)")
+
+if watchdog:
+    print(f"Watchdog recovery actions: {len(watchdog)}")
+    for e in watchdog:
+        print(f"  • {e.get('metadata', '')}")
+
+if not any([queue_reductions, sync_fallback, drain_hotswap, watchdog, stall_warnings]):
+    print("No recovery events - write completed without intervention")

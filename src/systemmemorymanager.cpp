@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QRegularExpression>
+#include <cmath>
 
 // Platform-specific includes
 #ifdef Q_OS_WIN
@@ -499,57 +500,167 @@ int SystemMemoryManager::getOptimalAsyncQueueDepth(size_t writeBlockSize)
     // 2. Memory usage: Ring buffer = (depth + 4) * writeBlockSize
     // 3. Device characteristics: SD cards benefit up to ~32-64, NVMe can use more
     //
-    // SD cards over USB have ~5-15ms per-write latency with direct I/O.
-    // At 8MB blocks and 10ms latency:
-    //   - Queue depth 1:  ~800 MB/s theoretical max (but blocked by latency)
-    //   - Queue depth 32: ~800 MB/s actual (latency fully hidden)
-    //   - Queue depth 64+: Useful for NVMe or very slow SD cards
+    // IMPORTANT: This is called independently of input buffer allocation.
+    // Use getCoordinatedRingBufferConfig() for coordinated allocation that
+    // respects total available memory.
     
-    // Target: Use up to 30% of available memory for async buffers
-    // Generous budget since zero-copy means the ring buffer IS the async buffer
-    // and this memory is actively being used for I/O, not wasted
-    size_t asyncBufferBudget = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 3 / 10;
+    // Target: Use up to 15% of available memory for async buffers
+    // (Reduced from 30% since input buffer also needs memory)
+    size_t asyncBufferBudget = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 15 / 100;
     
     // Calculate depth from budget
     int depthFromMemory = static_cast<int>(asyncBufferBudget / writeBlockSize);
     
-    // Memory-tier based baseline - based on 30% of RAM / 8MB blocks
-    // With zero-copy async I/O, the ring buffer IS the async buffer
-    // Capped at 512 to keep ring buffer memory reasonable (512 * 8MB = 4GB max)
-    //
-    // Calculation: (RAM * 30%) / 8MB = queue depth
-    //   1GB → 32,  2GB → 64,  4GB → 128,  8GB → 256,  16GB+ → 512 (capped)
+    // Memory-tier based baseline - conservative values based on AVAILABLE memory
+    // rather than total, to handle high-memory systems with low availability
     int baselineDepth;
-    if (totalMemMB < 1536) {
-        // Very low memory (< 1.5GB): Conservative
+    if (availableMemMB < 512) {
+        // Very low available (< 512MB): Minimal
+        baselineDepth = 8;
+    } else if (availableMemMB < 1024) {
+        // Low available (512MB-1GB): Conservative
+        baselineDepth = 16;
+    } else if (availableMemMB < 2048) {
+        // Moderate available (1-2GB): Basic
         baselineDepth = 32;
-    } else if (totalMemMB < 3072) {
-        // Low memory (1.5-3GB): Moderate  
+    } else if (availableMemMB < 4096) {
+        // Good available (2-4GB): Standard
         baselineDepth = 64;
-    } else if (totalMemMB < 6144) {
-        // Medium memory (3-6GB): Good headroom
+    } else if (availableMemMB < 8192) {
+        // High available (4-8GB): Good headroom
         baselineDepth = 128;
-    } else if (totalMemMB < 12288) {
-        // High memory (6-12GB)
-        baselineDepth = 256;
     } else {
-        // Very high memory (12GB+): Maximum (capped to limit ring buffer size)
-        baselineDepth = 512;
+        // Very high available (8GB+): Maximum
+        baselineDepth = 256;
     }
     
     // Use the minimum of memory-based and baseline
     int optimalDepth = qMin(depthFromMemory, baselineDepth);
     
     // Apply hard bounds
-    const int minDepth = 8;    // Below this, async overhead may exceed benefit
-    const int maxDepth = 512;  // Maximum supported by ring buffer (caps memory usage)
+    const int minDepth = 4;    // Minimum for basic async operation
+    const int maxDepth = 256;  // Reasonable maximum
     optimalDepth = qBound(minDepth, optimalDepth, maxDepth);
     
     qDebug() << "Optimal async queue depth:" << optimalDepth
-             << "(memory budget:" << (asyncBufferBudget / (1024 * 1024)) << "MB,"
+             << "(available:" << availableMemMB << "MB,"
+             << "budget:" << (asyncBufferBudget / (1024 * 1024)) << "MB,"
              << "block size:" << (writeBlockSize / 1024) << "KB,"
              << "baseline:" << baselineDepth << ")";
     
     return optimalDepth;
+}
+
+size_t SystemMemoryManager::getCoordinatedRingBufferConfig(size_t inputSlotSizeHint, size_t writeSlotSizeHint,
+                                                            size_t& inputSlots, size_t& writeSlots,
+                                                            size_t& actualInputSize, size_t& actualWriteSize)
+{
+    qint64 availableMemMB = getAvailableMemoryMB();
+    qint64 totalMemMB = getTotalMemoryMB();
+    size_t pageSize = getSystemPageSize();
+    
+    // COORDINATED MEMORY BUDGET STRATEGY
+    //
+    // Both ring buffers share a single memory budget to prevent over-allocation.
+    // This is critical for low-memory systems where available << total.
+    //
+    // Strategy:
+    // 1. Start with optimal/hinted buffer sizes (passed in)
+    // 2. Check if minimum slot counts fit in 30% of available RAM
+    // 3. If not, scale down buffer sizes (maintaining page alignment)
+    // 4. Allocate as many slots as budget allows, prioritizing write (2/3)
+    //
+    // Minimum viable configuration:
+    // - At least 4 input slots (for producer/consumer overlap)
+    // - At least 8 write slots (for effective async I/O latency hiding)
+    
+    const size_t minInputSlots = 4;
+    const size_t minWriteSlots = 8;
+    const size_t maxInputSlots = 512;
+    const size_t maxWriteSlots = 256;
+    
+    // Calculate budget: 30% of available RAM
+    size_t budgetBytes = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 30 / 100;
+    
+    // Absolute minimum budget floor (need at least some working memory)
+    const size_t absoluteMinBudget = 4 * 1024 * 1024;  // 4 MB floor
+    budgetBytes = qMax(budgetBytes, absoluteMinBudget);
+    
+    // Step 1: Check if minimum slots fit at optimal sizes
+    size_t minMemoryNeeded = (minInputSlots * inputSlotSizeHint) + (minWriteSlots * writeSlotSizeHint);
+    
+    // Step 2: If minimum exceeds budget, scale down buffer sizes
+    actualInputSize = inputSlotSizeHint;
+    actualWriteSize = writeSlotSizeHint;
+    
+    if (minMemoryNeeded > budgetBytes) {
+        // Need to shrink buffer sizes to fit
+        // Calculate scale factor, but preserve write buffer priority
+        // (shrink input more aggressively than write)
+        
+        double scaleFactor = static_cast<double>(budgetBytes) / minMemoryNeeded;
+        
+        // Scale input more aggressively (use scaleFactor^1.5 for input)
+        double inputScale = scaleFactor * std::sqrt(scaleFactor);
+        double writeScale = scaleFactor / std::sqrt(scaleFactor);  // Compensate to hit target
+        
+        // Apply scaling with page alignment
+        actualInputSize = static_cast<size_t>(inputSlotSizeHint * inputScale);
+        actualWriteSize = static_cast<size_t>(writeSlotSizeHint * writeScale);
+        
+        // Align down to page boundaries (maintain alignment)
+        actualInputSize = (actualInputSize / pageSize) * pageSize;
+        actualWriteSize = (actualWriteSize / pageSize) * pageSize;
+        
+        // Enforce minimum sizes (at least 1 page for input, 2 pages for write)
+        actualInputSize = qMax(actualInputSize, pageSize);
+        actualWriteSize = qMax(actualWriteSize, pageSize * 2);
+        
+        qDebug() << "Buffer sizes scaled for low memory:"
+                 << "input" << (inputSlotSizeHint / 1024) << "KB ->" << (actualInputSize / 1024) << "KB,"
+                 << "write" << (writeSlotSizeHint / 1024) << "KB ->" << (actualWriteSize / 1024) << "KB";
+    }
+    
+    // Step 3: Recalculate minimum memory with adjusted sizes
+    minMemoryNeeded = (minInputSlots * actualInputSize) + (minWriteSlots * actualWriteSize);
+    
+    // Step 4: Calculate slot counts from remaining budget
+    // Split: 1/3 for input, 2/3 for write (prioritize write for latency smoothing)
+    size_t inputBudget = budgetBytes / 3;
+    size_t writeBudget = budgetBytes * 2 / 3;
+    
+    size_t calculatedInputSlots = inputBudget / actualInputSize;
+    size_t calculatedWriteSlots = writeBudget / actualWriteSize;
+    
+    // Apply bounds
+    inputSlots = qBound(minInputSlots, calculatedInputSlots, maxInputSlots);
+    writeSlots = qBound(minWriteSlots, calculatedWriteSlots, maxWriteSlots);
+    
+    // Calculate actual memory usage
+    size_t actualInputBytes = inputSlots * actualInputSize;
+    size_t actualWriteBytes = writeSlots * actualWriteSize;
+    size_t totalActual = actualInputBytes + actualWriteBytes;
+    
+    // Final safety check: if still over 40% (due to minimums), log warning
+    size_t safetyLimit = static_cast<size_t>(availableMemMB) * 1024 * 1024 * 40 / 100;
+    if (totalActual > safetyLimit) {
+        qDebug() << "Warning: Ring buffer allocation" << (totalActual / (1024 * 1024)) << "MB"
+                 << "exceeds 40% of available memory (" << availableMemMB << "MB)"
+                 << "- using minimum viable configuration";
+    }
+    
+    // Log final configuration
+    qDebug() << "Coordinated ring buffer config:"
+             << "available=" << availableMemMB << "MB"
+             << "total_system=" << totalMemMB << "MB"
+             << "budget=" << (budgetBytes / (1024 * 1024)) << "MB";
+    qDebug() << "  Input:" << inputSlots << "slots x" << (actualInputSize / 1024) << "KB ="
+             << (actualInputBytes / (1024 * 1024)) << "MB";
+    qDebug() << "  Write:" << writeSlots << "slots x" << (actualWriteSize / 1024) << "KB ="
+             << (actualWriteBytes / (1024 * 1024)) << "MB";
+    qDebug() << "  Total:" << (totalActual / (1024 * 1024)) << "MB"
+             << "(" << (availableMemMB > 0 ? ((totalActual * 100) / (static_cast<size_t>(availableMemMB) * 1024 * 1024)) : 0) << "% of available)";
+    
+    return totalActual;
 }
 

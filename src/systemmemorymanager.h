@@ -100,6 +100,29 @@ public:
     void logConfigurationSummary();
 
     /**
+     * @brief Calculate coordinated ring buffer configuration
+     * 
+     * Returns slot counts and sizes for both input and write ring buffers that 
+     * together fit within a safe memory budget (30% of available RAM).
+     * 
+     * Strategy:
+     * 1. Start with optimal buffer sizes (passed in as hints)
+     * 2. If minimum slots don't fit in budget, scale down sizes (page-aligned)
+     * 3. Allocate slots with 2/3 budget to write (for latency smoothing)
+     * 
+     * @param inputSlotSizeHint Optimal input slot size (may be scaled down)
+     * @param writeSlotSizeHint Optimal write slot size (may be scaled down)
+     * @param inputSlots Output: number of input ring buffer slots
+     * @param writeSlots Output: number of write ring buffer slots
+     * @param actualInputSize Output: actual input slot size (may differ from hint)
+     * @param actualWriteSize Output: actual write slot size (may differ from hint)
+     * @return Total memory that will be allocated in bytes
+     */
+    size_t getCoordinatedRingBufferConfig(size_t inputSlotSizeHint, size_t writeSlotSizeHint,
+                                          size_t& inputSlots, size_t& writeSlots,
+                                          size_t& actualInputSize, size_t& actualWriteSize);
+
+    /**
      * @brief Calculate optimal async I/O queue depth based on system resources
      * 
      * The queue depth determines how many async writes can be in flight simultaneously.

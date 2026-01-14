@@ -37,6 +37,7 @@ class QQmlApplicationEngine;
 class DownloadThread;
 class DownloadExtractThread;
 class QTranslator;
+class WriteProgressWatchdog;
 #ifndef CLI_ONLY_BUILD
 class NativeFileDialog;
 #endif
@@ -359,6 +360,7 @@ signals:
     void preparationStatusUpdate(QVariant msg);
     void osListPrepared();
     void bottleneckStatusChanged(QVariant status, QVariant throughputKBps);
+    void operationWarning(QVariant message);  // Non-fatal warning during operation (e.g., sync fallback)
     void hwFilterChanged();
     void networkInfo(QVariant msg);
     void cacheVerificationStarted();
@@ -383,6 +385,8 @@ protected slots:
     void startProgressPolling();
     void stopProgressPolling();
     void pollNetwork();
+    void restartWrite(QString reason);  // Restart write in sync mode after stall
+    
     void onSuccess();
     void onError(QString msg);
     void onFileSelected(QString filename);
@@ -456,6 +460,10 @@ protected:
     // Performance statistics capture
     PerformanceStats *_performanceStats;
     
+    // Progress watchdog - separate component that monitors for stalls
+    WriteProgressWatchdog* _progressWatchdog = nullptr;
+    bool _forceSyncMode = false;  // Force sync I/O on next write (after recovery restart)
+    
     // Debug options (secret menu)
     bool _debugDirectIO;
     bool _debugPeriodicSync;
@@ -476,6 +484,8 @@ protected:
     void _applyCloudInitCustomisationFromSettings(const QVariantMap &s);
     void _continueStartWriteAfterCacheVerification(bool cacheIsValid);
     void scheduleOsListRefresh();
+    void _handleMemoryAllocationFailure(const char* what);
+    void _handleSetupException(const char* what);
 };
 
 #endif // IMAGEWRITER_H

@@ -67,6 +67,7 @@ WizardStepBase {
     property bool confirmOpen: false
     property string bottleneckStatus: ""
     property int writeThroughputKBps: 0
+    property string operationWarning: ""  // Non-fatal warning message (e.g., sync fallback)
     readonly property bool anyCustomizationsApplied: (
         wizardContainer.customizationSupported && (
             wizardContainer.hostnameConfigured ||
@@ -348,6 +349,19 @@ WizardStepBase {
                 horizontalAlignment: Text.AlignHCenter
                 visible: root.isWriting && root.bottleneckStatus !== ""
             }
+            
+            // Operation warning (e.g., sync fallback due to slow device)
+            Text {
+                id: operationWarningText
+                text: "⚠ " + root.operationWarning
+                font.pixelSize: Style.fontSizeSmall
+                font.family: Style.fontFamily
+                color: "#FFA500"  // Orange/amber for warning
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                visible: root.isWriting && root.operationWarning !== ""
+            }
         }
 
         // Bottom spacer to vertically center progress section when writing/complete
@@ -544,6 +558,7 @@ WizardStepBase {
             wizardContainer.isWriting = true
             root.bottleneckStatus = ""
             root.writeThroughputKBps = 0
+            root.operationWarning = ""
             progressText.text = qsTr("Starting write process...")
             progressBar.value = 0
             Qt.callLater(function(){ imageWriter.startWrite() })
@@ -567,6 +582,7 @@ WizardStepBase {
         if (root.isWriting) {
             root.isVerifying = true
             root.bottleneckStatus = ""  // Clear write bottleneck during verification
+            root.operationWarning = ""  // Clear write warnings during verification
             var progress = total > 0 ? (now / total) * 100 : 0
             progressBar.value = progress
             progressText.text = qsTr("Verifying... %1%").arg(Math.round(progress))
@@ -613,6 +629,10 @@ WizardStepBase {
         function onBottleneckStatusChanged(status, throughputKBps) {
             root.bottleneckStatus = status
             root.writeThroughputKBps = throughputKBps
+        }
+        
+        function onOperationWarning(message) {
+            root.operationWarning = message
         }
     }
     

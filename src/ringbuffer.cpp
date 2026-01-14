@@ -5,6 +5,7 @@
 
 #include "ringbuffer.h"
 #include <QtGlobal>
+#include <QString>
 #include <chrono>
 
 RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
@@ -17,6 +18,8 @@ RingBuffer::RingBuffer(size_t numSlots, size_t slotSize, size_t alignment)
     , _availableCount(numSlots)
     , _producerDone(false)
     , _cancelled(false)
+    , _stallTimeoutExceeded(false)
+    , _stallType(StallType::None)
     , _producerStalls(0)
     , _consumerStalls(0)
     , _producerWaitMs(0)
@@ -81,31 +84,49 @@ RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
     std::unique_lock<std::mutex> lock(_mutex);
     
     auto waitPred = [this] {
-        return _availableCount > 0 || _cancelled;
+        return _availableCount > 0 || _cancelled || _stallTimeoutExceeded;
     };
     
     // Check if we need to wait (producer starvation)
-    if (_availableCount == 0 && !_cancelled) {
+    if (_availableCount == 0 && !_cancelled && !_stallTimeoutExceeded) {
         _producerStalls++;
         auto waitStart = std::chrono::steady_clock::now();
+        uint64_t cumulativeWaitMs = 0;
         
-        if (timeoutMs > 0) {
-            if (!_writeAvailable.wait_for(lock, std::chrono::milliseconds(timeoutMs), waitPred)) {
+        // Loop with timeout, checking for overall stall timeout
+        while (_availableCount == 0 && !_cancelled && !_stallTimeoutExceeded) {
+            int waitMs = timeoutMs > 0 ? timeoutMs : 100;  // Use 100ms chunks if no timeout specified
+            
+            if (!_writeAvailable.wait_for(lock, std::chrono::milliseconds(waitMs), waitPred)) {
+                // Timeout expired - check cumulative wait time
                 auto waitEnd = std::chrono::steady_clock::now();
-                auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
-                _producerWaitMs += waitDuration;
-                return nullptr;  // Timeout
+                cumulativeWaitMs = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
+                _producerWaitMs += waitMs;
+                
+                if (cumulativeWaitMs >= STALL_TIMEOUT_MS) {
+                    // Stall timeout exceeded - this is a fatal condition
+                    _stallTimeoutExceeded = true;
+                    _stallType.store(StallType::ProducerStall);
+                    qDebug() << "RingBuffer: Producer stall timeout exceeded after" << cumulativeWaitMs << "ms";
+                    return nullptr;
+                }
+                
+                if (timeoutMs > 0) {
+                    // Caller requested specific timeout, honour it
+                    return nullptr;
+                }
+                // Otherwise continue waiting
+                continue;
             }
-        } else {
-            _writeAvailable.wait(lock, waitPred);
+            break;  // Condition satisfied
         }
         
         auto waitEnd = std::chrono::steady_clock::now();
         auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
-        _producerWaitMs += waitDuration;
+        _producerWaitMs += (waitDuration - cumulativeWaitMs);  // Add remaining time not counted in loop
         
         // Record significant stalls for time-series correlation
-        if (waitDuration >= STALL_THRESHOLD_MS) {
+        if (waitDuration >= STALL_EVENT_THRESHOLD_MS) {
             std::lock_guard<std::mutex> eventLock(_stallEventsMutex);
             StallEvent event;
             event.timestampMs = _sessionTimer ? _sessionTimer->elapsed() : 0;
@@ -115,7 +136,7 @@ RingBuffer::Slot* RingBuffer::acquireWriteSlot(int timeoutMs)
         }
     }
     
-    if (_cancelled) {
+    if (_cancelled || _stallTimeoutExceeded) {
         return nullptr;
     }
     
@@ -150,33 +171,49 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
     std::unique_lock<std::mutex> lock(_mutex);
     
     auto waitPred = [this] {
-        return _committedCount > 0 || _producerDone || _cancelled;
+        return _committedCount > 0 || _producerDone || _cancelled || _stallTimeoutExceeded;
     };
     
     // Check if we need to wait (consumer starvation - waiting for producer)
-    if (_committedCount == 0 && !_producerDone && !_cancelled) {
+    if (_committedCount == 0 && !_producerDone && !_cancelled && !_stallTimeoutExceeded) {
         _consumerStalls++;
         auto waitStart = std::chrono::steady_clock::now();
+        uint64_t cumulativeWaitMs = 0;
         
-        if (timeoutMs > 0) {
-            if (!_readAvailable.wait_for(lock, std::chrono::milliseconds(timeoutMs), waitPred)) {
+        // Loop with timeout, checking for overall stall timeout
+        while (_committedCount == 0 && !_producerDone && !_cancelled && !_stallTimeoutExceeded) {
+            int waitMs = timeoutMs > 0 ? timeoutMs : 100;  // Use 100ms chunks if no timeout specified
+            
+            if (!_readAvailable.wait_for(lock, std::chrono::milliseconds(waitMs), waitPred)) {
+                // Timeout expired - check cumulative wait time
                 auto waitEnd = std::chrono::steady_clock::now();
-                auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
-                _consumerWaitMs += waitDuration;
+                cumulativeWaitMs = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
+                _consumerWaitMs += waitMs;
                 
-                // Don't log short timeouts - they're expected during normal polling
-                return nullptr;  // Timeout
+                if (cumulativeWaitMs >= STALL_TIMEOUT_MS) {
+                    // Stall timeout exceeded - this is a fatal condition
+                    _stallTimeoutExceeded = true;
+                    _stallType.store(StallType::ConsumerStall);
+                    qDebug() << "RingBuffer: Consumer stall timeout exceeded after" << cumulativeWaitMs << "ms";
+                    return nullptr;
+                }
+                
+                if (timeoutMs > 0) {
+                    // Caller requested specific timeout, honour it
+                    return nullptr;
+                }
+                // Otherwise continue waiting
+                continue;
             }
-        } else {
-            _readAvailable.wait(lock, waitPred);
+            break;  // Condition satisfied
         }
         
         auto waitEnd = std::chrono::steady_clock::now();
         auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
-        _consumerWaitMs += waitDuration;
+        _consumerWaitMs += (waitDuration - cumulativeWaitMs);  // Add remaining time not counted in loop
         
         // Record significant stalls for time-series correlation
-        if (waitDuration >= STALL_THRESHOLD_MS) {
+        if (waitDuration >= STALL_EVENT_THRESHOLD_MS) {
             std::lock_guard<std::mutex> eventLock(_stallEventsMutex);
             StallEvent event;
             event.timestampMs = _sessionTimer ? _sessionTimer->elapsed() : 0;
@@ -186,7 +223,7 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
         }
     }
     
-    if (_cancelled) {
+    if (_cancelled || _stallTimeoutExceeded) {
         return nullptr;
     }
     
@@ -208,6 +245,11 @@ RingBuffer::Slot* RingBuffer::acquireReadSlot(int timeoutMs)
     _committedCount--;
     
     return slot;
+}
+
+RingBuffer::StallType RingBuffer::getStallType() const
+{
+    return _stallType.load();
 }
 
 void RingBuffer::releaseReadSlot(Slot* slot)
@@ -272,6 +314,8 @@ void RingBuffer::reset()
     _availableCount = _numSlots;
     _producerDone = false;
     _cancelled = false;
+    _stallTimeoutExceeded = false;
+    _stallType.store(StallType::None);
     _producerStalls = 0;
     _consumerStalls = 0;
     _producerWaitMs = 0;

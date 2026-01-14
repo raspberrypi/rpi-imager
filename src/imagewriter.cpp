@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "writeprogresswatchdog.h"
 #include "embedded_config.h"
 #include "config.h"
 #include "file_operations.h"
@@ -69,6 +70,7 @@
 #include <QAccessible>
 #endif
 #include <stdlib.h>
+#include <new>
 #include <QLocale>
 #include <QMetaType>
 #include "imageadvancedoptions.h"
@@ -122,10 +124,12 @@ ImageWriter::ImageWriter(QObject *parent)
       _refreshJitterOverrideMinutes(-1),
 #ifndef CLI_ONLY_BUILD
       _piConnectToken(),
-      _mainWindow(nullptr)
+      _mainWindow(nullptr),
 #else
-      _piConnectToken()
+      _piConnectToken(),
 #endif
+      _progressWatchdog(nullptr),
+      _forceSyncMode(false)
 {
     // Initialise CacheManager
     _cacheManager = new CacheManager(this);
@@ -649,14 +653,17 @@ void ImageWriter::startWrite()
 
     if (_devLen && _extrLen > _devLen)
     {
-        emit error(tr("Storage capacity is not large enough.<br>Needs to be at least %1.")
+        emit error(tr("Storage capacity is not large enough.\n\n"
+                      "The image requires at least %1 of storage.")
                    .arg(formatSize(_extrLen)));
         return;
     }
 
     if (_extrLen && !_multipleFilesInZip && _extrLen % 512 != 0)
     {
-        emit error(tr("Input file is not a valid disk image.<br>File size %1 bytes is not a multiple of 512 bytes.").arg(_extrLen));
+        emit error(tr("Input file is not a valid disk image.\n\n"
+                      "File size %1 bytes is not a multiple of 512 bytes.")
+                   .arg(_extrLen));
         return;
     }
 
@@ -794,19 +801,58 @@ void ImageWriter::startWrite()
         }
     }
 
-    if (QUrl(urlstr).isLocalFile())
-    {
-        _thread = new LocalFileExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
-    }
-    else
-    {
-        _thread = new DownloadExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
-        if (_repo.toString() == OSLIST_URL)
+    try {
+        if (QUrl(urlstr).isLocalFile())
         {
-            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
-            connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
-            tele->start();
+            _thread = new LocalFileExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
         }
+        else
+        {
+            _thread = new DownloadExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
+            if (_repo.toString() == OSLIST_URL)
+            {
+                DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr, _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
+                connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
+                tele->start();
+            }
+        }
+    } catch (const std::bad_alloc& e) {
+        // Memory allocation failed during thread/buffer creation
+        qDebug() << "Memory allocation failed during write setup:" << e.what();
+        
+        // Log the failure to performance stats
+        _performanceStats->recordEvent(
+            PerformanceStats::EventType::MemoryAllocationFailure,
+            0,  // No duration - immediate failure
+            false,
+            QString("Failed to allocate memory for write operation: %1").arg(e.what())
+        );
+        
+        // Provide a clear, actionable error message to the user
+        QString errorMsg = tr("Failed to start write operation: insufficient memory.\n\n"
+                              "The system does not have enough available memory to perform this operation. "
+                              "Try closing other applications to free up memory, then try again.\n\n"
+                              "Technical details: %1").arg(e.what());
+        
+        setWriteState(WriteState::Failed);
+        _performanceStats->endSession(false, "Memory allocation failure");
+        emit error(errorMsg);
+        return;
+    } catch (const std::exception& e) {
+        // Other exception during thread creation
+        qDebug() << "Exception during write setup:" << e.what();
+        
+        _performanceStats->recordEvent(
+            PerformanceStats::EventType::MemoryAllocationFailure,
+            0,
+            false,
+            QString("Exception during write setup: %1").arg(e.what())
+        );
+        
+        setWriteState(WriteState::Failed);
+        _performanceStats->endSession(false, QString("Setup exception: %1").arg(e.what()));
+        emit error(tr("Failed to start write operation: %1").arg(e.what()));
+        return;
     }
 
     // Set the extract size for accurate write progress (compressed images have larger extracted size)
@@ -986,6 +1032,28 @@ void ImageWriter::startWrite()
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
             });
+    connect(_thread, &DownloadThread::eventDeviceIOTimeout,
+            this, [this](quint32 pendingWrites, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceIOTimeout, 
+                    30000, false, QString("pending=%1; %2").arg(pendingWrites).arg(metadata));
+            });
+    connect(_thread, &DownloadThread::eventQueueDepthReduction,
+            this, [this](int oldDepth, int newDepth, int pendingWrites){
+                _performanceStats->recordEvent(PerformanceStats::EventType::QueueDepthReduction, 0, true,
+                    QString("depth=%1->%2; pending=%3").arg(oldDepth).arg(newDepth).arg(pendingWrites));
+            });
+    connect(_thread, &DownloadThread::eventDrainAndHotSwap,
+            this, [this](quint32 durationMs, int pendingBefore, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DrainAndHotSwap, durationMs, success,
+                    QString("pending=%1").arg(pendingBefore));
+            });
+    connect(_thread, &DownloadThread::syncFallbackActivated,
+            this, [this](QString reason){
+                _performanceStats->recordEvent(PerformanceStats::EventType::SyncFallbackActivated, 0, true, reason);
+                emit operationWarning(reason);
+            });
+    connect(_thread, &DownloadThread::requestWriteRestart,
+            this, &ImageWriter::restartWrite);
     connect(_thread, &DownloadThread::eventNetworkRetry,
             this, [this](quint32 sleepMs, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::NetworkRetry, sleepMs, true, metadata);
@@ -1072,7 +1140,11 @@ void ImageWriter::startWrite()
     _thread->setDebugDirectIO(_debugDirectIO);
     _thread->setDebugPeriodicSync(_debugPeriodicSync);
     _thread->setDebugVerboseLogging(_debugVerboseLogging);
-    _thread->setDebugAsyncIO(_debugAsyncIO);
+    // Disable async I/O if forced to sync mode (due to previous recovery)
+    _thread->setDebugAsyncIO(_debugAsyncIO && !_forceSyncMode);
+    if (_forceSyncMode) {
+        qDebug() << "Compatibility mode active - using synchronous I/O";
+    }
     _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
     _thread->setDebugIPv4Only(_debugIPv4Only);
     _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
@@ -1129,12 +1201,11 @@ void ImageWriter::startWrite()
 
 // Cache file update methods removed - now handled by connecting DownloadThread directly to CacheManager
 
-/* Cancel write */
+/* Cancel write - for user-initiated cancellation only */
 void ImageWriter::cancelWrite()
 {
     if (_waitingForCacheVerification)
     {
-        // If we're waiting for cache verification, treat this as skip cache verification
         skipCacheVerification();
         return;
     }
@@ -1193,6 +1264,8 @@ void ImageWriter::skipCacheVerification()
 void ImageWriter::onCancelled()
 {
     setWriteState(WriteState::Cancelled);
+    
+    // Clean up thread
     QObject *senderObj = sender();
     if (senderObj) {
         senderObj->deleteLater();
@@ -1205,7 +1278,7 @@ void ImageWriter::onCancelled()
     // End performance stats session
     _performanceStats->endSession(false, _cancelledDueToDeviceRemoval ? "Device removed" : "Cancelled by user");
 
-    // If cancellation was due to device removal, emit a dedicated signal (localization-safe for QML routing)
+    // If cancellation was due to device removal, emit a dedicated signal
     if (_cancelledDueToDeviceRemoval) {
         _cancelledDueToDeviceRemoval = false;
         emit writeCancelledDueToDeviceRemoval();
@@ -1822,26 +1895,98 @@ OSListModel *ImageWriter::getOSList()
 void ImageWriter::startProgressPolling()
 {
     // Prevent system suspend and display sleep during imaging
-    try
-    {
+    try {
         if (_suspendInhibitor == nullptr)
             _suspendInhibitor = CreateSuspendInhibitor();
+    } catch (...) {
+        // Continue anyway if we can't create the inhibitor
     }
-    catch (...)
-    {
-        // If we can't create the inhibitor, continue anyway
-    }
+    
     _dlnow = 0;
     _verifynow = 0;
+    
+    // Create and start the progress watchdog component
+    if (!_progressWatchdog) {
+        _progressWatchdog = new WriteProgressWatchdog(this);
+        
+        // Connect watchdog signals to our handlers
+        connect(_progressWatchdog, &WriteProgressWatchdog::switchedToSyncMode,
+                this, [this](QString reason) {
+                    qDebug() << "Watchdog: Hot-swap to sync mode succeeded";
+                    _performanceStats->recordEvent(PerformanceStats::EventType::WatchdogRecovery, 0, true,
+                        QString("action=hotSwap; %1").arg(reason));
+                    emit operationWarning(reason);
+                });
+        connect(_progressWatchdog, &WriteProgressWatchdog::restartNeeded,
+                this, [this](QString reason) {
+                    _performanceStats->recordEvent(PerformanceStats::EventType::WatchdogRecovery, 0, false,
+                        QString("action=restart; %1").arg(reason));
+                    restartWrite(reason);
+                });
+        connect(_progressWatchdog, &WriteProgressWatchdog::hardTimeout,
+                this, [this](QString error) {
+                    _performanceStats->recordEvent(PerformanceStats::EventType::WatchdogRecovery, 0, false,
+                        QString("action=hardTimeout; %1").arg(error));
+                    onError(error);
+                });
+        connect(_progressWatchdog, &WriteProgressWatchdog::stallWarning,
+                this, [this](int seconds, int pending) {
+                    qDebug() << "Stall warning:" << seconds << "s," << pending << "pending";
+                    _performanceStats->recordEvent(PerformanceStats::EventType::ProgressStall, 
+                        static_cast<uint32_t>(seconds * 1000), true,
+                        QString("pending=%1").arg(pending));
+                });
+    }
+    
+    if (_thread) {
+        _progressWatchdog->start(_thread);
+    }
 }
 
 void ImageWriter::stopProgressPolling()
 {
+    // Stop the progress watchdog
+    if (_progressWatchdog) {
+        _progressWatchdog->stop();
+    }
+    
     // Release the inhibition on system suspend and display sleep
-    if (_suspendInhibitor != nullptr)
-    {
+    if (_suspendInhibitor != nullptr) {
         delete _suspendInhibitor;
         _suspendInhibitor = nullptr;
+    }
+}
+
+void ImageWriter::restartWrite(QString reason)
+{
+    qDebug() << "Restarting write:" << reason;
+    
+    // Show warning to user
+    emit operationWarning(reason);
+    
+    // Force sync mode for the retry
+    _forceSyncMode = true;
+    
+    // Record the failed attempt
+    _performanceStats->endSession(false, "Async I/O stall - restarting in sync mode");
+    
+    // Stop current thread and restart when it finishes
+    if (_thread && _thread->isRunning()) {
+        connect(_thread, &QThread::finished, this, [this]() {
+            qDebug() << "Thread stopped, starting new write in sync mode";
+            _thread->deleteLater();
+            _thread = nullptr;
+            startWrite();
+        }, Qt::SingleShotConnection);
+        
+        _thread->cancelDownload();
+    } else {
+        // Thread already stopped
+        if (_thread) {
+            _thread->deleteLater();
+            _thread = nullptr;
+        }
+        startWrite();
     }
 }
 
@@ -3315,18 +3460,34 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         // Continue with the write operation (this is the code that was after cache verification)
         // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
         QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
-        _thread = new LocalFileExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
+        try {
+            _thread = new LocalFileExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
+        } catch (const std::bad_alloc& e) {
+            _handleMemoryAllocationFailure(e.what());
+            return;
+        } catch (const std::exception& e) {
+            _handleSetupException(e.what());
+            return;
+        }
     }
     else
     {
         // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
         QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
-        _thread = new DownloadExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
-        if (_repo.toString() == OSLIST_URL)
-        {
-            DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr.toLatin1(), _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
-            connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
-            tele->start();
+        try {
+            _thread = new DownloadExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
+            if (_repo.toString() == OSLIST_URL)
+            {
+                DownloadStatsTelemetry *tele = new DownloadStatsTelemetry(urlstr.toLatin1(), _parentCategory.toLatin1(), _osName.toLatin1(), isEmbeddedMode(), _currentLangcode, this);
+                connect(tele, SIGNAL(finished()), tele, SLOT(deleteLater()));
+                tele->start();
+            }
+        } catch (const std::bad_alloc& e) {
+            _handleMemoryAllocationFailure(e.what());
+            return;
+        } catch (const std::exception& e) {
+            _handleSetupException(e.what());
+            return;
         }
     }
 
@@ -3507,6 +3668,28 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DeviceClose, durationMs, success);
             });
+    connect(_thread, &DownloadThread::eventDeviceIOTimeout,
+            this, [this](quint32 pendingWrites, QString metadata){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DeviceIOTimeout, 
+                    30000, false, QString("pending=%1; %2").arg(pendingWrites).arg(metadata));
+            });
+    connect(_thread, &DownloadThread::eventQueueDepthReduction,
+            this, [this](int oldDepth, int newDepth, int pendingWrites){
+                _performanceStats->recordEvent(PerformanceStats::EventType::QueueDepthReduction, 0, true,
+                    QString("depth=%1->%2; pending=%3").arg(oldDepth).arg(newDepth).arg(pendingWrites));
+            });
+    connect(_thread, &DownloadThread::eventDrainAndHotSwap,
+            this, [this](quint32 durationMs, int pendingBefore, bool success){
+                _performanceStats->recordEvent(PerformanceStats::EventType::DrainAndHotSwap, durationMs, success,
+                    QString("pending=%1").arg(pendingBefore));
+            });
+    connect(_thread, &DownloadThread::syncFallbackActivated,
+            this, [this](QString reason){
+                _performanceStats->recordEvent(PerformanceStats::EventType::SyncFallbackActivated, 0, true, reason);
+                emit operationWarning(reason);
+            });
+    connect(_thread, &DownloadThread::requestWriteRestart,
+            this, &ImageWriter::restartWrite);
     connect(_thread, &DownloadThread::eventNetworkRetry,
             this, [this](quint32 sleepMs, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::NetworkRetry, sleepMs, true, metadata);
@@ -3588,6 +3771,19 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     _thread->setUserAgent(QString("Mozilla/5.0 rpi-imager/%1").arg(staticVersion()).toUtf8());
     qDebug() << "_continueStartWrite: Passing to thread - initFormat:" << _initFormat << "cloudinit empty:" << _cloudinit.isEmpty() << "cloudinitNetwork empty:" << _cloudinitNetwork.isEmpty();
     _thread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat, _advancedOptions);
+    
+    // Pass debug options to the thread
+    _thread->setDebugDirectIO(_debugDirectIO);
+    _thread->setDebugPeriodicSync(_debugPeriodicSync);
+    _thread->setDebugVerboseLogging(_debugVerboseLogging);
+    // Disable async I/O if forced to sync mode (due to previous recovery)
+    _thread->setDebugAsyncIO(_debugAsyncIO && !_forceSyncMode);
+    if (_forceSyncMode) {
+        qDebug() << "Compatibility mode active - using synchronous I/O";
+    }
+    _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
+    _thread->setDebugIPv4Only(_debugIPv4Only);
+    _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)
@@ -4039,4 +4235,43 @@ bool ImageWriter::exportPerformanceDataToFile(const QString &filePath)
     qDebug() << "Performance data export not available in CLI build";
     return false;
 #endif
+}
+
+void ImageWriter::_handleMemoryAllocationFailure(const char* what)
+{
+    qDebug() << "Memory allocation failed during write setup:" << what;
+    
+    // Log the failure to performance stats
+    _performanceStats->recordEvent(
+        PerformanceStats::EventType::MemoryAllocationFailure,
+        0,  // No duration - immediate failure
+        false,
+        QString("Failed to allocate memory for write operation: %1").arg(what)
+    );
+    
+    // Provide a clear, actionable error message to the user
+    QString errorMsg = tr("Failed to start write operation: insufficient memory.\n\n"
+                          "The system does not have enough available memory to perform this operation. "
+                          "Try closing other applications to free up memory, then try again.\n\n"
+                          "Technical details: %1").arg(what);
+    
+    setWriteState(WriteState::Failed);
+    _performanceStats->endSession(false, "Memory allocation failure");
+    emit error(errorMsg);
+}
+
+void ImageWriter::_handleSetupException(const char* what)
+{
+    qDebug() << "Exception during write setup:" << what;
+    
+    _performanceStats->recordEvent(
+        PerformanceStats::EventType::MemoryAllocationFailure,
+        0,
+        false,
+        QString("Exception during write setup: %1").arg(what)
+    );
+    
+    setWriteState(WriteState::Failed);
+    _performanceStats->endSession(false, QString("Setup exception: %1").arg(what));
+    emit error(tr("Failed to start write operation: %1").arg(what));
 }
