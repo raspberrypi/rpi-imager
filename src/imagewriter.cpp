@@ -641,6 +641,8 @@ void ImageWriter::startWrite()
             _extrLen = _downloadLen;
         else if (lowercaseurl.endsWith(".xz"))
             _parseXZFile();
+        else if (lowercaseurl.endsWith(".gz"))
+            _parseGzFile();
         else
             _parseCompressedFile();
     }
@@ -2075,6 +2077,56 @@ void ImageWriter::_parseXZFile()
         }
 
         f.close();
+    }
+}
+
+void ImageWriter::_parseGzFile()
+{
+    QFile f(_src.toLocalFile());
+    _extrLen = 0;
+
+    // Gzip trailer format (last 8 bytes):
+    // - CRC32 (4 bytes, little-endian)
+    // - ISIZE (4 bytes, little-endian) - original file size modulo 2^32
+    const qint64 GZIP_TRAILER_SIZE = 8;
+
+    if (f.size() > GZIP_TRAILER_SIZE && f.open(QIODevice::ReadOnly))
+    {
+        f.seek(f.size() - 4);  // Seek to ISIZE field (last 4 bytes)
+        QByteArray isizeData = f.read(4);
+
+        if (isizeData.size() == 4)
+        {
+            // ISIZE is stored as little-endian 32-bit unsigned integer
+            quint32 isize = static_cast<quint8>(isizeData[0]) |
+                           (static_cast<quint8>(isizeData[1]) << 8) |
+                           (static_cast<quint8>(isizeData[2]) << 16) |
+                           (static_cast<quint8>(isizeData[3]) << 24);
+
+            _extrLen = isize;
+
+            // Handle files larger than 4GB where ISIZE wraps around
+            // If the uncompressed size appears smaller than the compressed size,
+            // the original file was likely > 4GB
+            qint64 compressedSize = f.size();
+            while (_extrLen < static_cast<quint64>(compressedSize))
+            {
+                _extrLen += Q_UINT64_C(0x100000000);  // Add 4GB
+            }
+
+            qDebug() << "Parsed .gz file. Uncompressed size:" << _extrLen
+                     << "(ISIZE field:" << isize << ")";
+        }
+        else
+        {
+            qDebug() << "Unable to read ISIZE from .gz file";
+        }
+
+        f.close();
+    }
+    else
+    {
+        qDebug() << "Unable to open .gz file for parsing";
     }
 }
 
