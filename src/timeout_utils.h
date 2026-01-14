@@ -24,6 +24,7 @@
 #include <future>
 #include <thread>
 #include <atomic>
+#include <type_traits>
 
 namespace rpi_imager {
 
@@ -129,8 +130,14 @@ TimeoutResult runWithTimeout(
 
 /**
  * @brief Run an operation with timeout, capturing the return value
+ * 
+ * @note This overload is only enabled when Func returns a non-void type
+ *       that can be assigned to ResultType. This prevents ambiguity with
+ *       the void-returning overload above.
  */
-template<typename Func, typename ResultType>
+template<typename Func, typename ResultType,
+         typename = typename std::enable_if<!std::is_void<
+             decltype(std::declval<Func>()())>::value>::type>
 TimeoutResult runWithTimeout(
     Func&& operation,
     ResultType& result,
