@@ -89,6 +89,15 @@ public:
         CycleStart,            // Start of a new imaging cycle (metadata: image name, device)
         CycleEnd,              // End of an imaging cycle (metadata: success/failure reason)
         
+        // Stall detection and recovery
+        ProgressStall,         // Pipeline stalled - no progress for extended period
+        MemoryAllocationFailure, // Failed to allocate memory for buffers
+        DeviceIOTimeout,       // Device/OS failed to complete writes within timeout
+        QueueDepthReduction,   // Async queue depth reduced due to high latency (metadata: old->new depth)
+        SyncFallbackActivated, // Switched from async to sync I/O mode
+        DrainAndHotSwap,       // Drained async queue and hot-swapped to sync (metadata: pending count, drain time)
+        WatchdogRecovery,      // Watchdog triggered recovery action (metadata: action taken)
+        
         // Customisation
         Customisation,         // Time to apply customisation (config, firstrun, etc.)
         CloudInitGeneration,   // Time to generate cloud-init config

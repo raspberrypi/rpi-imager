@@ -73,6 +73,9 @@ protected:
     std::atomic<quint64> _totalDecompressionMs;   // Time spent in archive_read_data()
     std::atomic<quint64> _totalRingBufferWaitMs;  // Time in _on_read() waiting for data
     std::atomic<quint64> _bytesReadFromRingBuffer;// Bytes read from ring buffer
+    
+    // Stall error message (set from libarchive callback, used in error handler)
+    QString _stallErrorMessage;
 
     void _pushQueue(const char *data, size_t len);
     void _cancelExtract();

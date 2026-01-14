@@ -4,9 +4,19 @@
  */
 
 #include "file_operations_windows.h"
+#include "../timeout_utils.h"
 
 #include <winioctl.h>
 #include <sstream>
+#include <chrono>
+#include <algorithm>
+
+using rpi_imager::TimeoutDefaults::kSyncWriteTimeoutSeconds;
+using rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth;
+using rpi_imager::TimeoutDefaults::kHighLatencyThresholdMs;
+using rpi_imager::TimeoutDefaults::kSlowProgressThresholdSeconds;
+using rpi_imager::TimeoutDefaults::kAsyncQueueWaitTimeoutSeconds;
+using rpi_imager::TimeoutDefaults::kAsyncFirstCompletionTimeoutMs;
 
 namespace rpi_imager {
 
@@ -90,6 +100,9 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
   DWORD timeout = wait ? 100 : 0;  // 100ms when waiting, 0 when polling
   bool processed_at_least_one = false;
   
+  // Overall timeout for waiting - don't wait forever if device stops responding
+  auto waitStart = std::chrono::steady_clock::now();
+  
   while (pending_writes_.load() > 0) {
     // Check for cancellation
     if (cancelled_.load()) {
@@ -113,7 +126,17 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
       // If we already processed at least one, don't keep blocking - return
       // so caller can queue more work. Only block if we haven't processed any.
       if (processed_at_least_one) break;
-      continue;  // Keep waiting for the first completion
+      
+      // Check overall timeout - don't wait forever for first completion
+      auto elapsed = std::chrono::steady_clock::now() - waitStart;
+      if (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() >= kAsyncFirstCompletionTimeoutMs) {
+        Log("ProcessCompletions: No completion received in " + std::to_string(kAsyncFirstCompletionTimeoutMs) + 
+            "ms, returning to allow recovery");
+        // Diagnose why we're not getting completions
+        DiagnoseStuckWrites();
+        break;  // Return to caller so queue-wait timeout can trigger
+      }
+      continue;  // Keep waiting, but with overall timeout
     }
     
     // Find the context for this completion
@@ -133,7 +156,26 @@ void WindowsFileOperations::ProcessCompletions(bool wait) {
     }
     
     // Record completion latency (thread-safe via atomic operations in base class)
+    auto completionTime = std::chrono::steady_clock::now();
+    auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(completionTime - ctx->submit_time).count();
     write_latency_stats_.recordCompletion(ctx->submit_time);
+    
+    // Adaptive recovery: if individual write latency is very high, reduce queue depth
+    // This helps the system recover when conditions change (memory pressure, slow device)
+    constexpr int kMinQueueDepthForReduction = kMinAsyncQueueDepth * 2;  // Trigger reduction above 2x minimum
+    
+    int currentPending = pending_writes_.load();
+    
+    // Only reduce if we've drained to the current depth (reached equilibrium)
+    // This prevents rapid successive reductions before the system can stabilize
+    if (latency > kHighLatencyThresholdMs && 
+        async_queue_depth_ >= kMinQueueDepthForReduction && 
+        currentPending <= async_queue_depth_ &&  // Must be at equilibrium first
+        !sync_fallback_mode_) {
+      int newDepth = async_queue_depth_ / 2;
+      Log("High write latency detected (" + std::to_string(latency) + "ms) - reducing queue depth to " + std::to_string(newDepth));
+      ReduceQueueDepthForRecovery(newDepth);
+    }
     
     FileError error = FileError::kSuccess;
     
@@ -1016,8 +1058,8 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
     return FileError::kCancelled;
   }
   
-  // If async not enabled or IOCP not initialized, fall back to sync
-  if (async_queue_depth_ <= 1 || iocp_ == INVALID_HANDLE_VALUE) {
+  // If async not enabled, IOCP not initialized, or in sync fallback mode, use sync
+  if (async_queue_depth_ <= 1 || iocp_ == INVALID_HANDLE_VALUE || sync_fallback_mode_) {
     FileError result = WriteSequential(data, size);
     // Note: WriteSequential already updates async_write_offset_
     if (callback) callback(result, result == FileError::kSuccess ? size : 0);
@@ -1034,11 +1076,15 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
   ProcessCompletions(false);
   
   // If queue is full, wait for completions (checking for cancellation)
+  // Note: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
+  // Here we just wait for a slot, with periodic cancellation checks.
   while (pending_writes_.load() >= async_queue_depth_) {
     if (cancelled_.load()) {
       if (callback) callback(FileError::kCancelled, 0);
       return FileError::kCancelled;
     }
+    
+    // Wait for completions (will unblock when IOCP has results or timeout)
     ProcessCompletions(true);
   }
   
@@ -1046,6 +1092,7 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
   AsyncWriteContext* ctx = new AsyncWriteContext();
   ZeroMemory(&ctx->overlapped, sizeof(OVERLAPPED));
   ctx->callback = callback;
+  ctx->data = data;  // Store for potential sync fallback replay
   ctx->size = size;
   ctx->self = this;
   
@@ -1096,6 +1143,15 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
       return FileError::kWriteError;
     }
     // ERROR_IO_PENDING is expected - the operation is in progress
+  } else {
+    // WriteFile returned TRUE - I/O completed synchronously
+    // With IOCP, a completion packet should still be queued, but let's log this
+    // as it's unusual for disk I/O and might indicate a problem
+    static int syncCompleteCount = 0;
+    if (++syncCompleteCount <= 5) {  // Only log first few to avoid spam
+      Log("WriteFile completed synchronously (unusual for disk I/O) - count: " + 
+          std::to_string(syncCompleteCount));
+    }
   }
   
   return FileError::kSuccess;
@@ -1104,6 +1160,71 @@ FileError WindowsFileOperations::AsyncWriteSequential(const std::uint8_t* data, 
 void WindowsFileOperations::PollAsyncCompletions() {
   if (iocp_ != INVALID_HANDLE_VALUE && pending_writes_.load() > 0) {
     ProcessCompletions(false);  // Non-blocking poll
+  }
+}
+
+void WindowsFileOperations::DiagnoseStuckWrites() {
+  // Check the actual state of pending writes - are they truly pending in Windows?
+  std::lock_guard<std::mutex> lock(pending_mutex_);
+  
+  int trulyPending = 0;
+  int alreadyCompleted = 0;
+  std::vector<LPOVERLAPPED> completedOverlaps;
+  
+  for (const auto& [overlapped_ptr, ctx] : pending_contexts_) {
+    // HasOverlappedIoCompleted checks if the I/O has completed (regardless of IOCP retrieval)
+    LPOVERLAPPED ov = const_cast<LPOVERLAPPED>(overlapped_ptr);
+    if (HasOverlappedIoCompleted(ov)) {
+      alreadyCompleted++;
+      completedOverlaps.push_back(ov);
+    } else {
+      trulyPending++;
+    }
+  }
+  
+  std::ostringstream oss;
+  oss << "DiagnoseStuckWrites: pending_writes_=" << pending_writes_.load()
+      << ", contexts=" << pending_contexts_.size()
+      << ", trulyPending=" << trulyPending
+      << ", alreadyCompleted=" << alreadyCompleted;
+  Log(oss.str());
+  
+  // If we have completed writes that we didn't get via IOCP, recover them manually
+  if (alreadyCompleted > 0) {
+    Log("WARNING: " + std::to_string(alreadyCompleted) + 
+        " writes completed but not retrieved from IOCP - recovering manually");
+    
+    for (LPOVERLAPPED ov : completedOverlaps) {
+      auto it = pending_contexts_.find(ov);
+      if (it == pending_contexts_.end()) continue;
+      
+      AsyncWriteContext* ctx = it->second;
+      pending_contexts_.erase(it);
+      
+      // Get the result of the completed I/O
+      DWORD bytesTransferred = 0;
+      BOOL result = GetOverlappedResult(handle_, ov, &bytesTransferred, FALSE);
+      
+      FileError error = FileError::kSuccess;
+      if (!result) {
+        error = FileError::kWriteError;
+        DWORD err = GetLastError();
+        Log("Recovered write had error: " + std::to_string(err));
+      } else if (bytesTransferred != ctx->size) {
+        error = FileError::kWriteError;
+        Log("Recovered write short: expected " + std::to_string(ctx->size) + 
+            ", got " + std::to_string(bytesTransferred));
+      }
+      
+      if (ctx->callback) {
+        ctx->callback(error, error == FileError::kSuccess ? ctx->size : 0);
+      }
+      
+      pending_writes_.fetch_sub(1);
+      delete ctx;
+    }
+    
+    Log("Recovered " + std::to_string(completedOverlaps.size()) + " missed completions");
   }
 }
 
@@ -1127,8 +1248,17 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
     return FileError::kSuccess;
   }
   
-  // Process completions until all pending writes are done or cancelled
-  // Unlike the normal ProcessCompletions flow, we must drain everything here.
+  // Process completions until all pending writes are done, cancelled, or timeout
+  // If the device becomes unresponsive, we don't want to block forever.
+  constexpr DWORD kNormalTimeoutMs = 5000;    // 5 second poll interval
+  constexpr DWORD kCancelledTimeoutMs = 100;  // Fast drain when cancelled
+  
+  auto startTime = std::chrono::steady_clock::now();
+  int initialPending = pending_writes_.load();
+  int lastPendingCheck = initialPending;
+  auto lastProgressTime = startTime;
+  bool depthAlreadyReduced = false;
+  
   while (pending_writes_.load() > 0) {
     if (cancelled_.load()) {
       // Cancel all pending I/O - this will cause them to complete with ERROR_OPERATION_ABORTED
@@ -1137,20 +1267,59 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
       // Continue the loop to process the ERROR_OPERATION_ABORTED completions
     }
     
-    // Block waiting for completions, processing one at a time until empty
+    // Check overall timeout
+    auto elapsed = std::chrono::steady_clock::now() - startTime;
+    int elapsedSeconds = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
+    if (elapsedSeconds >= kAsyncQueueWaitTimeoutSeconds) {
+      int remaining = pending_writes_.load();
+      Log("WaitForPendingWrites timeout: " + std::to_string(remaining) + 
+          " writes still pending after " + std::to_string(kAsyncQueueWaitTimeoutSeconds) + "s - attempting sync fallback");
+      return AttemptSyncFallback();
+    }
+    
+    // Adaptive recovery: if we're making slow progress, reduce queue depth for future operations
+    // This helps prevent the same situation from recurring on the next write cycle
+    int currentPending = pending_writes_.load();
+    if (currentPending < lastPendingCheck) {
+      lastProgressTime = std::chrono::steady_clock::now();
+      lastPendingCheck = currentPending;
+    }
+    
+    auto timeSinceProgress = std::chrono::steady_clock::now() - lastProgressTime;
+    int secondsSinceProgress = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(timeSinceProgress).count());
+    
+    if (!depthAlreadyReduced && secondsSinceProgress >= kSlowProgressThresholdSeconds && currentPending > 4) {
+      // Slow progress - reduce queue depth for future operations
+      int newDepth = std::max(4, async_queue_depth_ / 2);
+      Log("WaitForPendingWrites: slow progress (" + std::to_string(secondsSinceProgress) + 
+          "s since last completion) - reducing queue depth from " + std::to_string(async_queue_depth_) +
+          " to " + std::to_string(newDepth));
+      ReduceQueueDepthForRecovery(newDepth);
+      depthAlreadyReduced = true;
+    }
+    
+    // Block waiting for completions with timeout
     DWORD bytes_transferred = 0;
     ULONG_PTR completion_key = 0;
     LPOVERLAPPED overlapped = nullptr;
+    DWORD timeout = cancelled_.load() ? kCancelledTimeoutMs : kNormalTimeoutMs;
     
     BOOL success = GetQueuedCompletionStatus(
         iocp_,
         &bytes_transferred,
         &completion_key,
         &overlapped,
-        cancelled_.load() ? 100 : INFINITE);  // Short timeout if cancelled
+        timeout);
     
     if (overlapped == nullptr) {
-      // Timeout - only happens if cancelled, keep trying
+      // Timeout with no completion - check if we should keep waiting
+      if (pending_writes_.load() > 0 && !cancelled_.load()) {
+        // Log progress every 5 seconds
+        if (elapsedSeconds > 0 && elapsedSeconds % 5 == 0) {
+          Log("WaitForPendingWrites: " + std::to_string(pending_writes_.load()) + 
+              " writes pending after " + std::to_string(elapsedSeconds) + "s");
+        }
+      }
       continue;
     }
     
@@ -1207,6 +1376,239 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
 }
 
 // GetAsyncIOStats() inherited from FileOperations base class
+
+std::vector<FileOperations::PendingWriteInfo> WindowsFileOperations::GetPendingWritesSorted() const {
+  std::vector<PendingWriteInfo> result;
+  
+  std::lock_guard<std::mutex> lock(pending_mutex_);
+  result.reserve(pending_contexts_.size());
+  
+  for (const auto& [overlapped_ptr, ctx] : pending_contexts_) {
+    // Extract offset from OVERLAPPED structure
+    LARGE_INTEGER offset;
+    offset.LowPart = ctx->overlapped.Offset;
+    offset.HighPart = ctx->overlapped.OffsetHigh;
+    
+    result.push_back(PendingWriteInfo{
+      static_cast<std::uint64_t>(offset.QuadPart),
+      ctx->data,
+      ctx->size,
+      ctx->callback
+    });
+  }
+  
+  // Sort by offset for sequential replay
+  std::sort(result.begin(), result.end(), 
+            [](const PendingWriteInfo& a, const PendingWriteInfo& b) {
+              return a.offset < b.offset;
+            });
+  
+  return result;
+}
+
+FileError WindowsFileOperations::AttemptSyncFallback() {
+  // Get pending writes before cancelling (they're still valid in ring buffer)
+  auto pendingWrites = GetPendingWritesSorted();
+  
+  if (pendingWrites.empty()) {
+    Log("Sync fallback: no pending writes to replay");
+    sync_fallback_mode_ = true;
+    return FileError::kSuccess;
+  }
+  
+  Log("Sync fallback: replaying " + std::to_string(pendingWrites.size()) + " writes synchronously");
+  
+  // Cancel any remaining async operations
+  cancelled_.store(true);
+  CancelIoEx(handle_, nullptr);
+  
+  // Give async operations a moment to respond to cancellation
+  Sleep(100);
+  
+  // Switch to sync mode for all future writes
+  sync_fallback_mode_ = true;
+  
+  // Clear the pending contexts (we'll handle them synchronously)
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    for (auto& [overlapped_ptr, ctx] : pending_contexts_) {
+      delete ctx;
+    }
+    pending_contexts_.clear();
+  }
+  pending_writes_.store(0);
+  
+  // Replay pending writes synchronously in order, with per-write timeout
+  const DWORD perWriteTimeoutMs = TimeoutDefaults::kSyncWriteTimeoutSeconds * 1000;
+  size_t writesCompleted = 0;
+  
+  for (const auto& pw : pendingWrites) {
+    // Set file pointer to the correct offset
+    LARGE_INTEGER offset;
+    offset.QuadPart = static_cast<LONGLONG>(pw.offset);
+    if (!SetFilePointerEx(handle_, offset, nullptr, FILE_BEGIN)) {
+      Log("Sync fallback: seek failed for offset " + std::to_string(pw.offset));
+      return FileError::kSeekError;
+    }
+    
+    // Write synchronously using overlapped struct (still needed for FILE_FLAG_OVERLAPPED)
+    OVERLAPPED syncOverlapped = {0};
+    syncOverlapped.Offset = offset.LowPart;
+    syncOverlapped.OffsetHigh = offset.HighPart;
+    syncOverlapped.hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    
+    if (!syncOverlapped.hEvent) {
+      Log("Sync fallback: CreateEvent failed");
+      return FileError::kWriteError;
+    }
+    
+    DWORD bytesWritten = 0;
+    BOOL writeResult = WriteFile(handle_, pw.data, static_cast<DWORD>(pw.size), 
+                                  &bytesWritten, &syncOverlapped);
+    
+    if (!writeResult && GetLastError() == ERROR_IO_PENDING) {
+      // Wait for completion with timeout
+      DWORD waitResult = WaitForSingleObject(syncOverlapped.hEvent, perWriteTimeoutMs);
+      
+      if (waitResult == WAIT_TIMEOUT) {
+        CancelIoEx(handle_, &syncOverlapped);
+        CloseHandle(syncOverlapped.hEvent);
+        Log("Sync fallback: write timed out at offset " + std::to_string(pw.offset) + 
+            " after " + std::to_string(writesCompleted) + "/" + std::to_string(pendingWrites.size()) + " writes");
+        return FileError::kTimeout;
+      } else if (waitResult != WAIT_OBJECT_0) {
+        CloseHandle(syncOverlapped.hEvent);
+        Log("Sync fallback: wait failed at offset " + std::to_string(pw.offset));
+        return FileError::kWriteError;
+      }
+      
+      // Get the result
+      if (!GetOverlappedResult(handle_, &syncOverlapped, &bytesWritten, FALSE)) {
+        CloseHandle(syncOverlapped.hEvent);
+        Log("Sync fallback: GetOverlappedResult failed at offset " + std::to_string(pw.offset));
+        return FileError::kWriteError;
+      }
+    } else if (!writeResult) {
+      CloseHandle(syncOverlapped.hEvent);
+      Log("Sync fallback: write failed at offset " + std::to_string(pw.offset));
+      return FileError::kWriteError;
+    }
+    
+    CloseHandle(syncOverlapped.hEvent);
+    
+    if (bytesWritten != pw.size) {
+      Log("Sync fallback: partial write at offset " + std::to_string(pw.offset) + 
+          ", expected " + std::to_string(pw.size) + ", wrote " + std::to_string(bytesWritten));
+      return FileError::kWriteError;
+    }
+    
+    writesCompleted++;
+    
+    // Call the callback to release the ring buffer slot
+    if (pw.callback) {
+      pw.callback(FileError::kSuccess, pw.size);
+    }
+  }
+  
+  Log("Sync fallback: replayed " + std::to_string(writesCompleted) + " writes, now flushing");
+  
+  // Sync to ensure all data is on device (also with timeout)
+  // Note: FlushFileBuffers is synchronous but can take a long time for large writes
+  // We don't have a good way to timeout this, but at least the individual writes are bounded
+  if (!FlushFileBuffers(handle_)) {
+    Log("Sync fallback: FlushFileBuffers failed");
+    return FileError::kSyncError;
+  }
+  
+  // Update async_write_offset_ to reflect completed writes
+  if (!pendingWrites.empty()) {
+    const auto& lastWrite = pendingWrites.back();
+    async_write_offset_ = lastWrite.offset + lastWrite.size;
+  }
+  
+  // Reset cancelled flag so future operations can proceed (in sync mode)
+  cancelled_.store(false);
+  first_async_error_ = FileError::kSuccess;
+  
+  Log("Sync fallback successful - continuing in sync mode");
+  return FileError::kSuccess;
+}
+
+bool WindowsFileOperations::DrainAndSwitchToSync(int stallTimeoutSeconds) {
+  // First, prevent new async writes by switching to sync mode
+  sync_fallback_mode_ = true;
+  
+  int pending = pending_writes_.load();
+  if (pending == 0) {
+    Log("DrainAndSwitchToSync: No pending writes, switching to sync mode");
+    return true;
+  }
+  
+  Log("DrainAndSwitchToSync: Waiting for " + std::to_string(pending) + 
+      " pending writes to drain (stall timeout: " + std::to_string(stallTimeoutSeconds) + "s per completion)");
+  
+  auto startTime = std::chrono::steady_clock::now();
+  auto lastProgressTime = startTime;
+  int lastPending = pending;
+  
+  while (pending_writes_.load() > 0) {
+    // Actively poll for completions
+    ProcessCompletions(false);
+    
+    int currentPending = pending_writes_.load();
+    auto now = std::chrono::steady_clock::now();
+    
+    if (currentPending < lastPending) {
+      // Progress! Reset the stall timer
+      Log("DrainAndSwitchToSync: Draining... " + std::to_string(currentPending) + " remaining");
+      lastPending = currentPending;
+      lastProgressTime = now;
+    } else {
+      // No progress - check stall timeout
+      auto stallDuration = std::chrono::duration_cast<std::chrono::seconds>(now - lastProgressTime);
+      if (stallDuration.count() >= stallTimeoutSeconds) {
+        int remaining = pending_writes_.load();
+        auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
+        Log("DrainAndSwitchToSync: Stalled - no completions for " + 
+            std::to_string(stallTimeoutSeconds) + "s, " + std::to_string(remaining) + 
+            " writes still pending after " + std::to_string(totalElapsed.count()) + "s total");
+        return false;
+      }
+    }
+    
+    // Brief sleep to avoid spinning
+    Sleep(100);
+  }
+  
+  auto elapsed = std::chrono::steady_clock::now() - startTime;
+  int elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+  
+  Log("DrainAndSwitchToSync: Successfully drained all writes in " + 
+      std::to_string(elapsedMs) + "ms - now in sync mode");
+  return true;
+}
+
+void WindowsFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
+  int oldDepth = async_queue_depth_;
+  
+  // Only reduce, never increase during recovery
+  if (newDepth >= oldDepth) {
+    return;
+  }
+  
+  // Ensure minimum viable depth (2 still allows some pipelining)
+  newDepth = std::max(newDepth, TimeoutDefaults::kMinAsyncQueueDepth);
+  
+  async_queue_depth_ = newDepth;
+  
+  Log("Queue depth reduced for recovery: " + std::to_string(oldDepth) + " -> " + std::to_string(newDepth) +
+      " (pending: " + std::to_string(pending_writes_.load()) + ")");
+  
+  // Note: Existing pending writes continue normally.
+  // The reduced depth will be respected by AsyncWriteSequential's queue-full check:
+  // while (pending_writes_.load() >= async_queue_depth_) { ... }
+  // This naturally throttles new writes until pending count drops.
+}
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {

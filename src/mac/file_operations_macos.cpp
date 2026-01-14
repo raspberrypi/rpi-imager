@@ -15,6 +15,18 @@
 #include <errno.h>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
+#include <chrono>
+#include <thread>
+#include <functional>
+#include "../timeout_utils.h"
+
+using rpi_imager::TimeoutResult;
+using rpi_imager::TimeoutConfig;
+using rpi_imager::runWithTimeout;
+using rpi_imager::TimeoutDefaults::kSyncWriteTimeoutSeconds;
+using rpi_imager::TimeoutDefaults::kSyncFsyncTimeoutSeconds;
+using rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth;
 
 namespace rpi_imager {
 
@@ -26,7 +38,8 @@ static void Log(const std::string& msg) {
 MacOSFileOperations::MacOSFileOperations() 
     : fd_(-1), last_error_code_(0), using_direct_io_(false),
       async_queue_depth_(1), pending_writes_(0), cancelled_(false), first_async_error_(FileError::kSuccess),
-      async_queue_(nullptr), queue_semaphore_(nullptr), async_write_offset_(0) {
+      async_queue_(nullptr), queue_semaphore_(nullptr), async_write_offset_(0),
+      next_write_id_(1) {
 }
 
 bool MacOSFileOperations::IsBlockDevicePath(const std::string& path) {
@@ -482,18 +495,18 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
     return FileError::kCancelled;
   }
   
-  // If async not enabled (queue_depth == 1), fall back to sync
-  if (async_queue_depth_ <= 1 || async_queue_ == nullptr) {
+  // If async not enabled (queue_depth == 1) or in sync fallback mode, use sync
+  if (async_queue_depth_ <= 1 || async_queue_ == nullptr || sync_fallback_mode_) {
     FileError result = WriteSequential(data, size);
     if (callback) callback(result, result == FileError::kSuccess ? size : 0);
     return result;
   }
   
-  // Wait for a slot in the queue with timeout so we can check for cancellation
-  // 100ms timeout allows responsive cancellation
+  // Wait for a slot in the queue (checking for cancellation)
+  // Note: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
+  // Here we just wait for a slot, with periodic cancellation checks via semaphore timeout.
   dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC);
   while (dispatch_semaphore_wait(queue_semaphore_, timeout) != 0) {
-    // Timeout - check for cancellation
     if (cancelled_.load()) {
       if (callback) callback(FileError::kCancelled, 0);
       return FileError::kCancelled;
@@ -523,6 +536,13 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
   auto submit_time = std::chrono::steady_clock::now();
   write_latency_stats_.recordSubmit();
   
+  // Generate write ID and track pending write for potential sync fallback
+  std::uint64_t write_id = next_write_id_++;
+  {
+    std::lock_guard<std::mutex> lock(pending_writes_mutex_);
+    pending_writes_map_[write_id] = PendingAsyncWrite{write_offset, data, size, callback, submit_time};
+  }
+  
   pending_writes_.fetch_add(1);
   
   // Queue the async write using GCD
@@ -541,6 +561,12 @@ FileError MacOSFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
       // Store first error
       FileError expected = FileError::kSuccess;
       first_async_error_.compare_exchange_strong(expected, result);
+    }
+    
+    // Remove from pending writes map
+    {
+      std::lock_guard<std::mutex> lock(pending_writes_mutex_);
+      pending_writes_map_.erase(write_id);
     }
     
     // Free a slot in the queue for more writes
@@ -588,16 +614,86 @@ void MacOSFileOperations::CancelAsyncIO() {
   // in AsyncWriteSequential so the caller can respond to cancellation.
 }
 
+std::vector<FileOperations::PendingWriteInfo> MacOSFileOperations::GetPendingWritesSorted() const {
+  std::vector<PendingWriteInfo> result;
+  
+  std::lock_guard<std::mutex> lock(pending_writes_mutex_);
+  result.reserve(pending_writes_map_.size());
+  
+  for (const auto& [id, pw] : pending_writes_map_) {
+    result.push_back(PendingWriteInfo{pw.offset, pw.data, pw.size, pw.callback});
+  }
+  
+  // Sort by offset for sequential replay
+  std::sort(result.begin(), result.end(), 
+            [](const PendingWriteInfo& a, const PendingWriteInfo& b) {
+              return a.offset < b.offset;
+            });
+  
+  return result;
+}
+
 FileError MacOSFileOperations::WaitForPendingWrites() {
   if (async_queue_depth_ <= 1 || async_queue_ == nullptr) {
     return FileError::kSuccess;
   }
   
-  // Wait for all pending writes to complete, or until cancelled
+  // Wait for all pending writes to complete, with timeout to detect stuck I/O
+  // If the device becomes unresponsive (disconnect, hardware failure), we don't
+  // want to block forever. 30 seconds should be more than enough for any real I/O.
+  constexpr int kTimeoutSeconds = 30;
+  constexpr int kPollIntervalMs = 500;
+  constexpr int kSlowProgressThresholdMs = 10000; // 10 seconds with no progress
+  int totalWaitMs = 0;
+  int lastPendingCount = pending_writes_.load();
+  int msSinceProgress = 0;
+  bool depthAlreadyReduced = false;
+  
   std::unique_lock<std::mutex> lock(completion_mutex_);
-  completion_cv_.wait(lock, [this]() {
-    return pending_writes_.load() == 0 || cancelled_.load();
-  });
+  while (pending_writes_.load() > 0 && !cancelled_.load()) {
+    auto result = completion_cv_.wait_for(lock, std::chrono::milliseconds(kPollIntervalMs));
+    
+    if (result == std::cv_status::timeout) {
+      totalWaitMs += kPollIntervalMs;
+      
+      // Check if we made progress
+      int currentPending = pending_writes_.load();
+      if (currentPending < lastPendingCount) {
+        lastPendingCount = currentPending;
+        msSinceProgress = 0;
+      } else {
+        msSinceProgress += kPollIntervalMs;
+      }
+      
+      // Adaptive recovery: if slow progress, reduce queue depth for future operations
+      if (!depthAlreadyReduced && msSinceProgress >= kSlowProgressThresholdMs && currentPending > 4) {
+        int newDepth = std::max(4, async_queue_depth_ / 2);
+        Log("WaitForPendingWrites: slow progress (" + std::to_string(msSinceProgress / 1000) + 
+            "s since last completion) - reducing queue depth from " + std::to_string(async_queue_depth_) +
+            " to " + std::to_string(newDepth));
+        lock.unlock();  // Release lock while modifying queue depth
+        ReduceQueueDepthForRecovery(newDepth);
+        lock.lock();
+        depthAlreadyReduced = true;
+      }
+      
+      if (totalWaitMs >= kTimeoutSeconds * 1000) {
+        // Timeout waiting for async completions - attempt sync fallback
+        int remaining = pending_writes_.load();
+        Log("WaitForPendingWrites timeout: " + std::to_string(remaining) + 
+            " writes still pending after " + std::to_string(kTimeoutSeconds) + "s - attempting sync fallback");
+        
+        lock.unlock();  // Release lock before fallback attempt
+        return AttemptSyncFallback();
+      }
+      
+      // Log progress if waiting a long time
+      if (totalWaitMs % 5000 == 0) {
+        Log("WaitForPendingWrites: " + std::to_string(pending_writes_.load()) + 
+            " writes pending after " + std::to_string(totalWaitMs / 1000) + "s");
+      }
+    }
+  }
   
   if (cancelled_.load() && pending_writes_.load() > 0) {
     return FileError::kCancelled;
@@ -605,6 +701,177 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
   
   // Return any error that occurred
   return first_async_error_.load();
+}
+
+FileError MacOSFileOperations::AttemptSyncFallback() {
+  // Get pending writes before cancelling (they're still valid in ring buffer)
+  auto pendingWrites = GetPendingWritesSorted();
+  
+  if (pendingWrites.empty()) {
+    Log("Sync fallback: no pending writes to replay");
+    sync_fallback_mode_ = true;
+    return FileError::kSuccess;
+  }
+  
+  Log("Sync fallback: replaying " + std::to_string(pendingWrites.size()) + " writes synchronously");
+  
+  // Cancel any remaining async operations
+  cancelled_.store(true);
+  
+  // Give async operations a moment to respond to cancellation
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  
+  // Switch to sync mode for all future writes
+  sync_fallback_mode_ = true;
+  
+  // Clear the pending writes map (we'll handle them synchronously)
+  {
+    std::lock_guard<std::mutex> lock(pending_writes_mutex_);
+    pending_writes_map_.clear();
+  }
+  pending_writes_.store(0);
+  
+  // Replay pending writes synchronously with timeout protection
+  for (const auto& pw : pendingWrites) {
+    ssize_t written = -1;
+    
+    auto result = runWithTimeout(
+        [this, &pw, &written]() {
+          written = pwrite(fd_, pw.data, pw.size, static_cast<off_t>(pw.offset));
+        },
+        TimeoutConfig(kSyncWriteTimeoutSeconds)
+            .withOnTimeout([this, &pw]() {
+              Log("Timeout: write at offset " + std::to_string(pw.offset) + " - closing fd");
+              int fd_copy = fd_;
+              fd_ = -1;
+              close(fd_copy);
+            })
+    );
+    
+    if (result == TimeoutResult::TimedOut) {
+      Log("Sync fallback: write timed out at offset " + std::to_string(pw.offset));
+      return FileError::kTimeout;
+    }
+    
+    if (written < 0 || static_cast<std::size_t>(written) != pw.size) {
+      Log("Sync fallback: write failed at offset " + std::to_string(pw.offset));
+      return FileError::kWriteError;
+    }
+    
+    if (pw.callback) {
+      pw.callback(FileError::kSuccess, pw.size);
+    }
+  }
+  
+  if (fd_ < 0) {
+    Log("Sync fallback: fd was closed - device unresponsive");
+    return FileError::kTimeout;
+  }
+  
+  // Sync to device with timeout protection
+  int syncResult = -1;
+  auto fsyncResult = runWithTimeout(
+      [this, &syncResult]() { syncResult = fsync(fd_); },
+      TimeoutConfig(kSyncFsyncTimeoutSeconds)
+          .withOnTimeout([this]() {
+            Log("Timeout: fsync - closing fd");
+            int fd_copy = fd_;
+            fd_ = -1;
+            close(fd_copy);
+          })
+  );
+  
+  if (fsyncResult == TimeoutResult::TimedOut) {
+    Log("Sync fallback: fsync timed out");
+    return FileError::kTimeout;
+  }
+  
+  if (syncResult != 0) {
+    Log("Sync fallback: fsync failed");
+    return FileError::kSyncError;
+  }
+  
+  // Update async_write_offset_ to reflect completed writes
+  if (!pendingWrites.empty()) {
+    const auto& lastWrite = pendingWrites.back();
+    async_write_offset_ = lastWrite.offset + lastWrite.size;
+  }
+  
+  // Reset cancelled flag so future operations can proceed (in sync mode)
+  cancelled_.store(false);
+  first_async_error_.store(FileError::kSuccess);
+  
+  Log("Sync fallback successful - continuing in sync mode");
+  return FileError::kSuccess;
+}
+
+bool MacOSFileOperations::DrainAndSwitchToSync(int stallTimeoutSeconds) {
+  // First, prevent new async writes by switching to sync mode
+  sync_fallback_mode_ = true;
+  
+  int pending = pending_writes_.load();
+  if (pending == 0) {
+    Log("DrainAndSwitchToSync: No pending writes, switching to sync mode");
+    return true;
+  }
+  
+  Log("DrainAndSwitchToSync: Waiting for " + std::to_string(pending) + 
+      " pending writes to drain (stall timeout: " + std::to_string(stallTimeoutSeconds) + "s per completion)");
+  
+  auto startTime = std::chrono::steady_clock::now();
+  auto lastProgressTime = startTime;
+  int lastPending = pending;
+  
+  while (pending_writes_.load() > 0) {
+    // GCD completions happen automatically on their dispatch queue
+    int currentPending = pending_writes_.load();
+    auto now = std::chrono::steady_clock::now();
+    
+    if (currentPending < lastPending) {
+      // Progress! Reset the stall timer
+      Log("DrainAndSwitchToSync: Draining... " + std::to_string(currentPending) + " remaining");
+      lastPending = currentPending;
+      lastProgressTime = now;
+    } else {
+      // No progress - check stall timeout
+      auto stallDuration = std::chrono::duration_cast<std::chrono::seconds>(now - lastProgressTime);
+      if (stallDuration.count() >= stallTimeoutSeconds) {
+        int remaining = pending_writes_.load();
+        auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
+        Log("DrainAndSwitchToSync: Stalled - no completions for " + 
+            std::to_string(stallTimeoutSeconds) + "s, " + std::to_string(remaining) + 
+            " writes still pending after " + std::to_string(totalElapsed.count()) + "s total");
+        return false;
+      }
+    }
+    
+    // Brief sleep to avoid spinning
+    usleep(100000);  // 100ms
+  }
+  
+  auto elapsed = std::chrono::steady_clock::now() - startTime;
+  int elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+  
+  Log("DrainAndSwitchToSync: Successfully drained all writes in " + 
+      std::to_string(elapsedMs) + "ms - now in sync mode");
+  return true;
+}
+
+void MacOSFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
+  int oldDepth = async_queue_depth_;
+  
+  // Only reduce, never increase during recovery
+  if (newDepth >= oldDepth) {
+    return;
+  }
+  
+  // Ensure minimum viable depth (2 still allows some pipelining)
+  newDepth = std::max(newDepth, TimeoutDefaults::kMinAsyncQueueDepth);
+  
+  async_queue_depth_ = newDepth;
+  
+  Log("Queue depth reduced for recovery: " + std::to_string(oldDepth) + " -> " + std::to_string(newDepth) +
+      " (pending: " + std::to_string(pending_writes_.load()) + ")");
 }
 
 // GetAsyncIOStats() inherited from FileOperations base class

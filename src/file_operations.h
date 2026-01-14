@@ -13,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <mutex>
+#include <vector>
 
 namespace rpi_imager {
 
@@ -35,7 +36,8 @@ enum class FileError {
   kLockError,
   kSyncError,
   kFlushError,
-  kCancelled
+  kCancelled,
+  kTimeout  // Device/OS failed to complete I/O within timeout period
 };
 
 // Thread-safe write latency statistics for async I/O
@@ -199,6 +201,63 @@ class FileOperations {
   // After calling this, WaitForPendingWrites and AsyncWriteSequential will return quickly.
   virtual void CancelAsyncIO() {}
   
+  // Attempt to recover from async I/O stall by switching to sync mode.
+  // Cancels pending async writes and replays them synchronously.
+  // Returns kSuccess if recovery succeeded, error code otherwise.
+  virtual FileError AttemptSyncFallback() { 
+    sync_fallback_mode_ = true; 
+    return FileError::kSuccess; 
+  }
+  
+  // Information about a pending async write (for sync fallback)
+  struct PendingWriteInfo {
+    std::uint64_t offset;
+    const std::uint8_t* data;
+    std::size_t size;
+    AsyncWriteCallback callback;
+  };
+  
+  // Get list of pending async writes, sorted by offset.
+  // Used for sync fallback when async I/O stalls.
+  virtual std::vector<PendingWriteInfo> GetPendingWritesSorted() const { return {}; }
+  
+  // Check if we're in sync fallback mode (async timed out, now using sync)
+  virtual bool IsInSyncFallbackMode() const { return sync_fallback_mode_; }
+  
+  // Reduce queue depth for recovery (can be called mid-operation)
+  // This allows the system to adapt when initial settings prove too aggressive.
+  // Pending writes continue, but new writes will wait until pending count drops below new depth.
+  virtual void ReduceQueueDepthForRecovery(int newDepth) {
+    (void)newDepth;  // Default: no-op for sync implementations
+  }
+  
+  // Drain pending async writes and switch to sync mode.
+  // Uses a per-completion stall timeout: if ANY write completes, the timer resets.
+  // This allows slow-but-progressing devices to complete without timeout.
+  // Returns true if drain succeeded (pending==0), false if stalled (no progress for stallTimeoutSeconds).
+  // After this call, IsInSyncFallbackMode() returns true.
+  //
+  // Implementation pattern (shared by Linux, macOS, Windows implementations):
+  //   1. Set sync_fallback_mode_ = true (prevents new async writes)
+  //   2. If no pending writes, return true immediately
+  //   3. Loop until pending == 0 or stall timeout:
+  //      a. Poll for completions (PollAsyncCompletions or platform equivalent)
+  //      b. Check if pending count decreased (= progress)
+  //      c. If progress, reset stall timer
+  //      d. If no progress for stallTimeoutSeconds, return false
+  //      e. Brief sleep (100ms) to avoid busy-spin
+  //   4. Log success with duration, return true
+  //
+  // Note: Each platform implements this pattern with platform-specific polling
+  // and sleep primitives. The logic is intentionally duplicated rather than
+  // abstracted because the abstraction would require exposing pending_writes_
+  // and platform-specific sleep/log functions, adding more complexity than saved.
+  virtual bool DrainAndSwitchToSync(int stallTimeoutSeconds) {
+    (void)stallTimeoutSeconds;
+    sync_fallback_mode_ = true;
+    return true;  // Default: no async to drain
+  }
+  
   // Get async I/O timing statistics
   // - wallClockMs: total time from first submit to last completion
   // - writeCount: number of async writes completed
@@ -216,6 +275,7 @@ class FileOperations {
   
  protected:
   mutable WriteLatencyStats write_latency_stats_;
+  bool sync_fallback_mode_ = false;  // True if async I/O timed out and we fell back to sync
   
  public:
   // File positioning for streaming operations

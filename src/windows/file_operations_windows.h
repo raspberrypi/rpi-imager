@@ -83,6 +83,9 @@ class WindowsFileOperations : public FileOperations {
   void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
   void CancelAsyncIO() override;
+  void DiagnoseStuckWrites();  // Debug helper to check actual I/O state
+  std::vector<PendingWriteInfo> GetPendingWritesSorted() const override;
+  void ReduceQueueDepthForRecovery(int newDepth) override;
   // GetAsyncIOStats() inherited from FileOperations base class
 
  private:
@@ -105,12 +108,13 @@ class WindowsFileOperations : public FileOperations {
   struct AsyncWriteContext {
     OVERLAPPED overlapped;
     AsyncWriteCallback callback;
+    const std::uint8_t* data;  // For sync fallback replay
     std::size_t size;
     WindowsFileOperations* self;
     std::chrono::steady_clock::time_point submit_time;  // For latency tracking
   };
   
-  std::mutex pending_mutex_;
+  mutable std::mutex pending_mutex_;
   std::unordered_map<OVERLAPPED*, AsyncWriteContext*> pending_contexts_;
   
   // Note: write_latency_stats_ is inherited from FileOperations base class
@@ -124,6 +128,8 @@ class WindowsFileOperations : public FileOperations {
   bool InitIOCP();
   void CleanupIOCP();
   void ProcessCompletions(bool wait);
+  FileError AttemptSyncFallback() override;
+  bool DrainAndSwitchToSync(int timeoutSeconds) override;
   
   // Wait for overlapped I/O with cancellation support
   // Returns true if completed successfully, false if cancelled or error

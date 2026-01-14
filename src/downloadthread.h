@@ -146,6 +146,28 @@ public:
     uint64_t verifyNow();
     uint64_t verifyTotal();
     uint64_t bytesWritten();
+    int pendingAsyncWrites() const;
+    
+    // Force poll for async I/O completions - call when stall detected
+    // This can unstick deadlocks where no one is polling IOCP
+    void forcePollAsyncCompletions();
+    
+    // Reduce async queue depth for recovery - allows pending writes to drain
+    // Returns true if reduction was applied, false if not supported
+    bool reduceAsyncQueueDepth(int newDepth);
+    
+    // Get current async queue depth
+    int getAsyncQueueDepth() const;
+    
+    // Drain pending async writes and switch to sync mode for hot-swap.
+    // Waits up to timeoutSeconds for pending writes to complete naturally.
+    // Returns true if drain succeeded (all pending completed), false if timeout.
+    // After success, writes continue in sync mode without restart.
+    bool drainAndSwitchToSync(int timeoutSeconds);
+    
+    // Force recovery from stuck async I/O - cancels pending writes and switches to sync
+    // Call this when stall is persistent and forcePollAsyncCompletions doesn't help
+    void forceAsyncRecovery();
 
     virtual bool isImage();
     
@@ -188,6 +210,11 @@ signals:
     void eventDeviceClose(quint32 durationMs, bool success);          // Device handle close
     void eventNetworkRetry(quint32 sleepMs, QString metadata);        // Network retry with reason
     void eventNetworkConnectionStats(QString metadata);               // CURL connection timing stats
+    void eventDeviceIOTimeout(quint32 pendingWrites, QString metadata); // Device failed to complete I/O
+    void eventQueueDepthReduction(int oldDepth, int newDepth, int pendingWrites); // Async queue depth reduced
+    void eventDrainAndHotSwap(quint32 durationMs, int pendingBefore, bool success); // Drained queue and switched to sync
+    void syncFallbackActivated(QString reason); // Async I/O stalled, fell back to sync mode
+    void requestWriteRestart(QString reason);  // Request ImageWriter to restart write from scratch
     
     // Write timing breakdown signals (for hypothesis testing)
     void eventWriteTimingBreakdown(quint32 totalWriteOps, quint64 totalSyscallMs, quint64 totalPreHashWaitMs,
@@ -209,6 +236,7 @@ protected:
     virtual void _onDownloadSuccess();
     virtual void _onDownloadError(const QString &msg);
     virtual void _onWriteError();
+    QString _fileErrorToString(rpi_imager::FileError error, const QString &operation = QString());
 
     void _hashData(const char *buf, size_t len);
     void _writeComplete();
@@ -290,6 +318,10 @@ protected:
     BottleneckState _currentBottleneck;
     QElapsedTimer _bottleneckTimer;
     static constexpr int BOTTLENECK_HYSTERESIS_MS = 500;  // Minimum time before changing state
+    
+    // Adaptive memory recovery state (instance members, not static, for thread safety)
+    QElapsedTimer _memoryCheckTimer;
+    bool _memoryCheckStarted = false;
     
     // Write timing breakdown tracking (for performance hypothesis testing)
     struct WriteTimingStats {

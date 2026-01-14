@@ -9,6 +9,7 @@
 #include "devicewrapper.h"
 #include "devicewrapperfatpartition.h"
 #include "systemmemorymanager.h"
+#include "timeout_utils.h"
 #include "dependencies/mountutils/src/mountutils.hpp"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include <fstream>
@@ -37,6 +38,7 @@
 #include <chrono>
 #include "windows/winfile.h"
 #include "windows/diskpart_util.h"
+#include "windows/file_operations_windows.h"
 #endif
 
 #include "imageadvancedoptions.h"
@@ -52,42 +54,13 @@
 
 using namespace std;
 
-namespace {
-    // Timeout for operations that might hang on counterfeit storage devices
-    // These devices may report fake capacities and hang when accessing non-existent sectors
-    constexpr int kCounterfeitDetectionTimeoutSeconds = 30;
-
-    // Helper to run a potentially-hanging I/O operation with a timeout.
-    // Returns true if the operation completed within the timeout, false if it timed out.
-    // The result of the operation is stored in 'result' if it completed.
-    template<typename Func>
-    bool runWithTimeout(Func&& operation, rpi_imager::FileError& result, int timeoutSeconds) {
-        std::promise<rpi_imager::FileError> promise;
-        std::future<rpi_imager::FileError> future = promise.get_future();
-        
-        std::thread worker([&promise, op = std::forward<Func>(operation)]() {
-            try {
-                promise.set_value(op());
-            } catch (...) {
-                promise.set_value(rpi_imager::FileError::kWriteError);
-            }
-        });
-        
-        auto status = future.wait_for(std::chrono::seconds(timeoutSeconds));
-        
-        if (status == std::future_status::timeout) {
-            // Operation is still running - detach the thread (it will eventually complete or not)
-            // We can't safely terminate it, but we can return and report the timeout
-            worker.detach();
-            qDebug() << "I/O operation timed out after" << timeoutSeconds << "seconds";
-            return false;
-        }
-        
-        worker.join();
-        result = future.get();
-        return true;
-    }
-} // anonymous namespace
+// Using the timeout utility for unblocking stuck syscalls
+using rpi_imager::TimeoutResult;
+using rpi_imager::TimeoutConfig;
+using rpi_imager::runWithTimeout;
+using rpi_imager::TimeoutDefaults::kHardTimeoutSeconds;
+using rpi_imager::TimeoutDefaults::kMemoryCheckIntervalMs;
+using rpi_imager::TimeoutDefaults::kCriticalMemoryMB;
 
 QByteArray DownloadThread::_proxy;
 
@@ -438,25 +411,31 @@ bool DownloadThread::_openAndPrepareDevice()
                 emit preparationStatusUpdate(tr("Discarding existing data on drive..."));
                 _timer.start();
                 
-                // BLKDISCARD can hang on counterfeit cards with fake capacity, so use a timeout
-                std::promise<int> discardPromise;
-                std::future<int> discardFuture = discardPromise.get_future();
-                std::thread discardThread([&discardPromise, fd, &range]() {
-                    discardPromise.set_value(::ioctl(fd, BLKDISCARD, &range));
-                });
+                // BLKDISCARD can take a long time on large/slow devices, and can hang 
+                // on counterfeit cards. Use timeout to unblock if it hangs.
+                // Note: User-facing warnings are handled by WriteProgressWatchdog
+                int discardResult = -1;
+                auto timeoutResult = runWithTimeout(
+                    [fd, &range]() { return ::ioctl(fd, BLKDISCARD, &range); },
+                    discardResult,
+                    TimeoutConfig(kHardTimeoutSeconds).withCancelFlag(&_cancelled)
+                );
                 
-                auto discardStatus = discardFuture.wait_for(std::chrono::seconds(kCounterfeitDetectionTimeoutSeconds));
-                if (discardStatus == std::future_status::timeout) {
-                    qDebug() << "BLKDISCARD timed out - possible counterfeit device with fake capacity";
-                    discardThread.detach();
-                    // Continue anyway - BLKDISCARD is optional
-                } else {
-                    discardThread.join();
-                    if (discardFuture.get() == -1) {
-                        qDebug() << "BLKDISCARD failed.";
-                    } else {
-                        qDebug() << "BLKDISCARD successful. Discarding took" << _timer.elapsed() / 1000 << "seconds";
-                    }
+                switch (timeoutResult) {
+                    case TimeoutResult::Completed:
+                        if (discardResult == -1) {
+                            qDebug() << "BLKDISCARD failed:" << strerror(errno);
+                        } else {
+                            qDebug() << "BLKDISCARD successful in" << _timer.elapsed() / 1000 << "s";
+                        }
+                        break;
+                    case TimeoutResult::TimedOut:
+                        qDebug() << "BLKDISCARD timed out after" << kHardTimeoutSeconds << "s";
+                        // Continue anyway - BLKDISCARD is optional
+                        break;
+                    case TimeoutResult::Cancelled:
+                        qDebug() << "BLKDISCARD cancelled";
+                        return false;
                 }
             }
         }
@@ -469,8 +448,9 @@ bool DownloadThread::_openAndPrepareDevice()
     mbrTimer.start();
     
     std::uint64_t knownsize = 0;
-    if (_file->GetSize(knownsize) != rpi_imager::FileError::kSuccess) {
-        emit error(tr("Error getting device size"));
+    rpi_imager::FileError sizeResult = _file->GetSize(knownsize);
+    if (sizeResult != rpi_imager::FileError::kSuccess) {
+        emit error(_fileErrorToString(sizeResult, tr("getting device size")));
         return false;
     }
     
@@ -479,7 +459,8 @@ bool DownloadThread::_openAndPrepareDevice()
     constexpr size_t emptyMBSize = 1024 * 1024;
     rpi_imager::AlignedBuffer emptyMB(emptyMBSize);
     if (!emptyMB) {
-        emit error(tr("Failed to allocate buffer for MBR zeroing"));
+        emit error(tr("Failed to allocate buffer for MBR zeroing.\n\n"
+                     "The system may be low on memory."));
         return false;
     }
     
@@ -487,10 +468,12 @@ bool DownloadThread::_openAndPrepareDevice()
     qDebug() << "Zeroing out first and last MB of drive";
     _timer.start();
 
-    if (_file->WriteSequential(emptyMB.data(), emptyMBSize) != rpi_imager::FileError::kSuccess ||
-        _file->Flush() != rpi_imager::FileError::kSuccess)
+    rpi_imager::FileError mbrWriteResult = _file->WriteSequential(emptyMB.data(), emptyMBSize);
+    rpi_imager::FileError mbrFlushResult = (mbrWriteResult == rpi_imager::FileError::kSuccess) ? _file->Flush() : mbrWriteResult;
+    if (mbrWriteResult != rpi_imager::FileError::kSuccess || mbrFlushResult != rpi_imager::FileError::kSuccess)
     {
-        emit error(tr("Write error while zero'ing out MBR"));
+        rpi_imager::FileError errorToReport = (mbrWriteResult != rpi_imager::FileError::kSuccess) ? mbrWriteResult : mbrFlushResult;
+        emit error(_fileErrorToString(errorToReport, tr("preparing storage device")));
         return false;
     }
     qint64 firstMBMs = _timer.elapsed();
@@ -507,36 +490,50 @@ bool DownloadThread::_openAndPrepareDevice()
     else if (knownsize > emptyMBSize)
     {
         _timer.restart();
+        emit preparationStatusUpdate(tr("Zero'ing out end of drive..."));
         
         // Capture needed values for the lambda
         auto file = _file.get();
         const uint8_t* bufferData = emptyMB.data();
         uint64_t seekPosition = knownsize - emptyMBSize;
         
-        rpi_imager::FileError lastMBResult;
-        bool completed = runWithTimeout([file, seekPosition, bufferData, emptyMBSize]() {
-            if (file->Seek(seekPosition) != rpi_imager::FileError::kSuccess)
-                return rpi_imager::FileError::kSeekError;
-            if (file->WriteSequential(bufferData, emptyMBSize) != rpi_imager::FileError::kSuccess)
-                return rpi_imager::FileError::kWriteError;
-            if (file->Flush() != rpi_imager::FileError::kSuccess)
-                return rpi_imager::FileError::kFlushError;
-            if (file->ForceSync() != rpi_imager::FileError::kSuccess)
-                return rpi_imager::FileError::kSyncError;
-            return rpi_imager::FileError::kSuccess;
-        }, lastMBResult, kCounterfeitDetectionTimeoutSeconds);
+        // Write to end of device can hang on counterfeit cards with fake capacity
+        // Use timeout to detect counterfeit cards with fake capacity
+        int lastMBResultInt = 0;
+        auto timeoutResult = runWithTimeout(
+            [file, seekPosition, bufferData, emptyMBSize]() {
+                if (file->Seek(seekPosition) != rpi_imager::FileError::kSuccess)
+                    return static_cast<int>(rpi_imager::FileError::kSeekError);
+                if (file->WriteSequential(bufferData, emptyMBSize) != rpi_imager::FileError::kSuccess)
+                    return static_cast<int>(rpi_imager::FileError::kWriteError);
+                if (file->Flush() != rpi_imager::FileError::kSuccess)
+                    return static_cast<int>(rpi_imager::FileError::kFlushError);
+                if (file->ForceSync() != rpi_imager::FileError::kSuccess)
+                    return static_cast<int>(rpi_imager::FileError::kSyncError);
+                return static_cast<int>(rpi_imager::FileError::kSuccess);
+            },
+            lastMBResultInt,
+            TimeoutConfig(kHardTimeoutSeconds).withCancelFlag(&_cancelled)
+        );
         
-        if (!completed) {
-            emit error(tr("Timeout while writing to the end of the storage device.<br>"
-                          "This often indicates a counterfeit SD card that reports a larger "
-                          "capacity than it actually has (e.g., claims to be 2TB but only has 8GB).<br><br>"
+        if (timeoutResult == TimeoutResult::Cancelled) {
+            qDebug() << "Last MB write cancelled";
+            return false;
+        }
+        
+        if (timeoutResult == TimeoutResult::TimedOut) {
+            emit error(tr("Timeout writing to end of storage device.\n\n"
+                          "This may indicate a counterfeit SD card with fake capacity.\n\n"
                           "Please try a different storage device."));
             return false;
         }
         
+        auto lastMBResult = static_cast<rpi_imager::FileError>(lastMBResultInt);
         if (lastMBResult != rpi_imager::FileError::kSuccess) {
-            emit error(tr("Write error while trying to zero out last part of card.<br>"
-                          "Card could be advertising wrong capacity (possible counterfeit)."));
+            emit error(tr("Write error while trying to zero out last part of card.\n\n"
+                          "This could indicate the card is advertising wrong capacity "
+                          "(possible counterfeit).\n\n"
+                          "Please try a different storage device."));
             return false;
         }
         qDebug() << "  Last MB + flush + sync took" << _timer.elapsed() << "ms";
@@ -1257,6 +1254,104 @@ uint64_t DownloadThread::bytesWritten()
         return _bytesWritten;
 }
 
+int DownloadThread::pendingAsyncWrites() const
+{
+    if (_file && _file->IsAsyncIOSupported()) {
+        return _file->GetPendingWriteCount();
+    }
+    return 0;
+}
+
+void DownloadThread::forcePollAsyncCompletions()
+{
+    // Called from progress watchdog when stall detected
+    // This can unstick deadlocks where the download thread is blocked
+    // in the ring buffer and not polling for IOCP completions
+    if (_file && _file->IsAsyncIOSupported()) {
+        int beforeCount = _file->GetPendingWriteCount();
+        _file->PollAsyncCompletions();
+        int afterCount = _file->GetPendingWriteCount();
+        
+        if (afterCount < beforeCount) {
+            qDebug() << "forcePollAsyncCompletions: Retrieved" << (beforeCount - afterCount) 
+                     << "completions! (was:" << beforeCount << "now:" << afterCount << ")";
+        } else {
+            qDebug() << "forcePollAsyncCompletions: No completions available, still" 
+                     << afterCount << "pending";
+#ifdef Q_OS_WIN
+            // On Windows, run diagnostics to check actual I/O state
+            static int diagCount = 0;
+            if (++diagCount <= 3) {  // Only first few times to avoid spam
+                auto* winFile = dynamic_cast<rpi_imager::WindowsFileOperations*>(_file.get());
+                if (winFile) {
+                    winFile->DiagnoseStuckWrites();
+                }
+            }
+#endif
+        }
+    }
+}
+
+void DownloadThread::forceAsyncRecovery()
+{
+    // Request restart - used by thread if it detects async I/O issues
+    // The watchdog will detect the stopped thread and restart in sync mode
+    if (_file && _file->IsAsyncIOSupported()) {
+        qDebug() << "Thread requesting restart due to async I/O issues";
+        emit requestWriteRestart(tr("Storage device responding slowly. Restarting in compatibility mode..."));
+        _file->CancelAsyncIO();
+        _cancelled = true;
+    }
+}
+
+bool DownloadThread::reduceAsyncQueueDepth(int newDepth)
+{
+    if (_file && _file->IsAsyncIOSupported()) {
+        int currentDepth = _file->GetAsyncQueueDepth();
+        int pendingWrites = _file->GetPendingWriteCount();
+        if (newDepth < currentDepth && newDepth >= 2) {
+            qDebug() << "Reducing async queue depth from" << currentDepth << "to" << newDepth;
+            _file->ReduceQueueDepthForRecovery(newDepth);
+            emit eventQueueDepthReduction(currentDepth, newDepth, pendingWrites);
+            return true;
+        }
+    }
+    return false;
+}
+
+int DownloadThread::getAsyncQueueDepth() const
+{
+    if (_file && _file->IsAsyncIOSupported()) {
+        return _file->GetAsyncQueueDepth();
+    }
+    return 0;
+}
+
+bool DownloadThread::drainAndSwitchToSync(int timeoutSeconds)
+{
+    if (_file && _file->IsAsyncIOSupported()) {
+        int pendingBefore = _file->GetPendingWriteCount();
+        qDebug() << "Draining" << pendingBefore << "pending writes before switching to sync...";
+        
+        QElapsedTimer timer;
+        timer.start();
+        
+        bool success = _file->DrainAndSwitchToSync(timeoutSeconds);
+        quint32 durationMs = static_cast<quint32>(timer.elapsed());
+        
+        emit eventDrainAndHotSwap(durationMs, pendingBefore, success);
+        
+        if (success) {
+            qDebug() << "Drain successful in" << durationMs << "ms - continuing in sync mode (hot-swap)";
+            return true;
+        }
+        
+        qDebug() << "Drain timeout after" << durationMs << "ms -" << _file->GetPendingWriteCount() << "writes still pending";
+        return false;
+    }
+    return true;  // No async to drain
+}
+
 void DownloadThread::_onDownloadSuccess()
 {
     // Emit a final progress update to guard against tiny downloads completing
@@ -1269,6 +1364,78 @@ void DownloadThread::_onDownloadError(const QString &msg)
 {
     _cancelled = true;
     emit error(msg);
+}
+
+QString DownloadThread::_fileErrorToString(rpi_imager::FileError error, const QString &operation)
+{
+    QString context = operation.isEmpty() ? tr("storage operation") : operation;
+    
+    switch (error) {
+        case rpi_imager::FileError::kSuccess:
+            return QString();
+            
+        case rpi_imager::FileError::kOpenError:
+            return tr("Failed to open storage device.\n\n"
+                     "The device may be in use by another application, "
+                     "or you may not have permission to access it.");
+                     
+        case rpi_imager::FileError::kWriteError:
+            return tr("Error writing to storage device during %1.\n\n"
+                     "This could be caused by:\n"
+                     "• Device disconnected or became unresponsive\n"
+                     "• Device is full or write-protected\n"
+                     "• Hardware failure or bad sectors\n\n"
+                     "Please check the device and try again.").arg(context);
+                     
+        case rpi_imager::FileError::kReadError:
+            return tr("Error reading from storage device during %1.\n\n"
+                     "The device may have been disconnected or is malfunctioning.")
+                     .arg(context);
+                     
+        case rpi_imager::FileError::kSeekError:
+            return tr("Error seeking on storage device during %1.\n\n"
+                     "The device may be malfunctioning or disconnected.")
+                     .arg(context);
+                     
+        case rpi_imager::FileError::kSizeError:
+            return tr("Error getting storage device size.\n\n"
+                     "The device may not be properly recognized.");
+                     
+        case rpi_imager::FileError::kCloseError:
+            return tr("Error closing storage device.\n\n"
+                     "The device may have been disconnected.");
+                     
+        case rpi_imager::FileError::kLockError:
+            return tr("Failed to lock storage device.\n\n"
+                     "The device may be in use by another application. "
+                     "Please close any applications using this device and try again.");
+                     
+        case rpi_imager::FileError::kSyncError:
+            return tr("Error syncing data to storage device.\n\n"
+                     "The device may have been disconnected or is not responding. "
+                     "Data may not have been fully written.");
+                     
+        case rpi_imager::FileError::kFlushError:
+            return tr("Error flushing data to storage device.\n\n"
+                     "The device may have been disconnected or is not responding.");
+                     
+        case rpi_imager::FileError::kCancelled:
+            return QString();  // Cancellation is not an error to report
+            
+        case rpi_imager::FileError::kTimeout:
+            return tr("Storage device timed out during %1.\n\n"
+                     "The device is not responding. This may indicate:\n"
+                     "• Device was disconnected\n"
+                     "• Device has failed\n"
+                     "• Driver or system issue\n\n"
+                     "Please disconnect and reconnect the device, then try again.")
+                     .arg(context);
+                     
+        default:
+            return tr("Unknown storage error during %1.\n\n"
+                     "Please try again or use a different storage device.")
+                     .arg(context);
+    }
 }
 
 void DownloadThread::_onWriteError()
@@ -1378,8 +1545,43 @@ void DownloadThread::_writeComplete()
         
         emit eventAsyncIOTiming(wallClockMs, _bytesWritten.load(), writeCount);
         
+        // Check if we fell back to sync mode (async I/O stalled but sync fallback succeeded)
+        if (_file->IsInSyncFallbackMode()) {
+            qDebug() << "Note: Operation completed after falling back to synchronous I/O";
+            // Record the event - this is notable but not an error since fallback succeeded
+            // Note: We don't emit syncFallbackActivated here because the write completed
+            // successfully and we're about to start verification - showing a UI warning
+            // that immediately disappears would just confuse users
+            emit eventDeviceIOTimeout(static_cast<quint32>(pendingBefore),
+                QString("Async stall recovered: %1 writes replayed synchronously").arg(pendingBefore));
+        }
+        
         if (asyncResult != rpi_imager::FileError::kSuccess) {
-            qDebug() << "Warning: Some async writes may have failed, error:" << static_cast<int>(asyncResult);
+            qDebug() << "Async I/O error during drain:" << static_cast<int>(asyncResult);
+            
+            if (asyncResult == rpi_imager::FileError::kTimeout) {
+                // Device/OS failed to complete writes AND sync fallback failed
+                // Record the event for diagnostics
+                emit eventDeviceIOTimeout(static_cast<quint32>(pendingBefore),
+                    QString("Timeout waiting for %1 async writes; sync fallback also failed").arg(pendingBefore));
+                emit error(tr("The storage device is not responding. This may indicate:\n"
+                             "• The device was disconnected\n"
+                             "• The device has failed\n"
+                             "• A driver or system issue\n\n"
+                             "Please disconnect and reconnect the device, then try again."));
+                _closeFiles();
+                return;
+            } else if (asyncResult != rpi_imager::FileError::kCancelled) {
+                // Some other async write error occurred
+                emit error(tr("Error writing to storage device.\n\n"
+                             "Some writes failed to complete. This could be caused by:\n"
+                             "• Storage device disconnected during write\n"
+                             "• Device is full or write-protected\n"
+                             "• Hardware failure\n\n"
+                             "Please check the device and try again."));
+                _closeFiles();
+                return;
+            }
         }
     }
     
@@ -1459,16 +1661,18 @@ void DownloadThread::_writeComplete()
         }
     }
 
-    if (_file->Flush() != rpi_imager::FileError::kSuccess)
+    rpi_imager::FileError flushResult = _file->Flush();
+    if (flushResult != rpi_imager::FileError::kSuccess)
     {
-        DownloadThread::_onDownloadError(tr("Error writing to storage (while flushing)"));
+        DownloadThread::_onDownloadError(_fileErrorToString(flushResult, tr("flush")));
         _closeFiles();
         return;
     }
 
 #ifndef Q_OS_WIN
-    if (_file->ForceSync() != rpi_imager::FileError::kSuccess) {
-        DownloadThread::_onDownloadError(tr("Error writing to storage (while fsync)"));
+    rpi_imager::FileError syncResult = _file->ForceSync();
+    if (syncResult != rpi_imager::FileError::kSuccess) {
+        DownloadThread::_onDownloadError(_fileErrorToString(syncResult, tr("sync")));
         _closeFiles();
         return;
     }
@@ -1501,12 +1705,16 @@ void DownloadThread::_writeComplete()
     {
         qDebug() << "Writing first block (which we skipped at first)";
         _file->Seek(0);
-        if (_file->WriteSequential(reinterpret_cast<const std::uint8_t*>(_firstBlock), _firstBlockSize) != rpi_imager::FileError::kSuccess || _file->Flush() != rpi_imager::FileError::kSuccess)
+        rpi_imager::FileError writeResult = _file->WriteSequential(reinterpret_cast<const std::uint8_t*>(_firstBlock), _firstBlockSize);
+        rpi_imager::FileError flushResult = (writeResult == rpi_imager::FileError::kSuccess) ? _file->Flush() : writeResult;
+        
+        if (writeResult != rpi_imager::FileError::kSuccess || flushResult != rpi_imager::FileError::kSuccess)
         {
             qFreeAligned(_firstBlock);
             _firstBlock = nullptr;
-
-            DownloadThread::_onDownloadError(tr("Error writing first block (partition table)"));
+            
+            rpi_imager::FileError errorToReport = (writeResult != rpi_imager::FileError::kSuccess) ? writeResult : flushResult;
+            DownloadThread::_onDownloadError(_fileErrorToString(errorToReport, tr("writing partition table")));
             return;
         }
         _bytesWritten += _firstBlockSize;
@@ -1517,18 +1725,20 @@ void DownloadThread::_writeComplete()
     QElapsedTimer syncTimer;
     syncTimer.start();
     
-    if (_file->Flush() != rpi_imager::FileError::kSuccess)
+    rpi_imager::FileError finalFlushResult = _file->Flush();
+    if (finalFlushResult != rpi_imager::FileError::kSuccess)
     {
         emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), false);
-        DownloadThread::_onDownloadError(tr("Error writing to storage (while flushing)"));
+        DownloadThread::_onDownloadError(_fileErrorToString(finalFlushResult, tr("final flush")));
         _closeFiles();
         return;
     }
 
 #ifndef Q_OS_WIN
-    if (_file->ForceSync() != rpi_imager::FileError::kSuccess) {
+    rpi_imager::FileError finalSyncResult = _file->ForceSync();
+    if (finalSyncResult != rpi_imager::FileError::kSuccess) {
         emit eventFinalSync(static_cast<quint32>(syncTimer.elapsed()), false);
-        DownloadThread::_onDownloadError(tr("Error writing to storage (while fsync)"));
+        DownloadThread::_onDownloadError(_fileErrorToString(finalSyncResult, tr("final sync")));
         _closeFiles();
         return;
     }
@@ -1626,6 +1836,25 @@ void DownloadThread::_updateBottleneckState()
     // This prevents progress from jumping when completions batch up
     if (_file) {
         _file->PollAsyncCompletions();
+    }
+    
+    // Adaptive recovery: periodically check if memory conditions have changed
+    // If memory is now critically low, reduce queue depth to recover
+    // Uses instance members (not static) for thread safety across multiple DownloadThread instances
+    if (!_memoryCheckStarted) {
+        _memoryCheckTimer.start();
+        _memoryCheckStarted = true;
+    } else if (_memoryCheckTimer.elapsed() >= kMemoryCheckIntervalMs) {
+        _memoryCheckTimer.restart();
+        
+        if (_file && _file->IsAsyncIOSupported() && _file->GetAsyncQueueDepth() > 8) {
+            qint64 availableMemMB = SystemMemoryManager::instance().getAvailableMemoryMB();
+            if (availableMemMB < kCriticalMemoryMB) {
+                qDebug() << "DownloadThread: Memory critically low (" << availableMemMB 
+                         << "MB) - requesting queue depth reduction for recovery";
+                _file->ReduceQueueDepthForRecovery(_file->GetAsyncQueueDepth() / 2);
+            }
+        }
     }
     
     // Detect current bottleneck based on pipeline state
@@ -1895,8 +2124,30 @@ void DownloadThread::setDebugAsyncIO(bool enabled)
 
 void DownloadThread::setDebugAsyncQueueDepth(int depth)
 {
-    _debugAsyncQueueDepth = (depth < 1) ? 1 : ((depth > 256) ? 256 : depth);
-    qDebug() << "DownloadThread: Async queue depth set to" << _debugAsyncQueueDepth;
+    // Hard cap at 256 to prevent resource exhaustion
+    const int maxDepth = 256;
+    int requestedDepth = (depth < 1) ? 1 : ((depth > maxDepth) ? maxDepth : depth);
+    
+    // Memory-based sanity check: warn if queue depth would use excessive memory
+    // With 8MB write blocks, each pending write uses 8MB of ring buffer memory
+    qint64 availableMemMB = SystemMemoryManager::instance().getAvailableMemoryMB();
+    size_t writeBlockSize = SystemMemoryManager::instance().getOptimalWriteBufferSize();
+    size_t estimatedMemoryMB = (requestedDepth * writeBlockSize) / (1024 * 1024);
+    
+    if (estimatedMemoryMB > static_cast<size_t>(availableMemMB / 2)) {
+        // Queue depth would use more than 50% of available RAM - cap it
+        int safeDepth = static_cast<int>((availableMemMB * 1024 * 1024 / 2) / writeBlockSize);
+        safeDepth = qMax(4, qMin(safeDepth, requestedDepth));
+        
+        qDebug() << "DownloadThread: WARNING - Requested queue depth" << requestedDepth
+                 << "would use" << estimatedMemoryMB << "MB (only" << availableMemMB << "MB available)."
+                 << "Capping to" << safeDepth;
+        requestedDepth = safeDepth;
+    }
+    
+    _debugAsyncQueueDepth = requestedDepth;
+    qDebug() << "DownloadThread: Async queue depth set to" << _debugAsyncQueueDepth
+             << "(estimated memory:" << estimatedMemoryMB << "MB)";
 }
 
 void DownloadThread::setDebugIPv4Only(bool enabled)

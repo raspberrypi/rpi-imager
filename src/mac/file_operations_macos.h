@@ -13,6 +13,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include <map>
 
 namespace rpi_imager {
 
@@ -84,6 +85,8 @@ class MacOSFileOperations : public FileOperations {
   void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
   void CancelAsyncIO() override;
+  std::vector<PendingWriteInfo> GetPendingWritesSorted() const override;
+  void ReduceQueueDepthForRecovery(int newDepth) override;
   // GetAsyncIOStats() inherited from FileOperations base class
 
  private:
@@ -103,6 +106,18 @@ class MacOSFileOperations : public FileOperations {
   std::condition_variable completion_cv_;
   std::uint64_t async_write_offset_;  // Current write position for async
   
+  // Tracking for sync fallback: map write_id -> pending write info
+  struct PendingAsyncWrite {
+    std::uint64_t offset;
+    const std::uint8_t* data;
+    std::size_t size;
+    AsyncWriteCallback callback;
+    std::chrono::steady_clock::time_point submit_time;
+  };
+  std::uint64_t next_write_id_;
+  mutable std::mutex pending_writes_mutex_;
+  std::map<std::uint64_t, PendingAsyncWrite> pending_writes_map_;
+  
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
   
   // Helper to determine if path is a block device
@@ -116,6 +131,10 @@ class MacOSFileOperations : public FileOperations {
   
   // Cleanup async I/O resources
   void CleanupAsyncIO();
+  
+  // Attempt sync fallback when async I/O stalls
+  FileError AttemptSyncFallback() override;
+  bool DrainAndSwitchToSync(int timeoutSeconds) override;
   
   // Note: write_latency_stats_ is inherited from FileOperations base class
 };

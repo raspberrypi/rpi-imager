@@ -16,6 +16,7 @@
 #include <queue>
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QString>
 
 /**
  * @brief Lock-free (for single producer/consumer) ring buffer with pre-allocated slots
@@ -52,6 +53,27 @@ public:
         uint32_t durationMs; // How long the stall lasted
         bool isProducer;     // true = producer stall (download waiting), false = consumer stall
     };
+    
+    /**
+     * @brief Type of stall that caused timeout
+     */
+    enum class StallType {
+        None,           // No stall
+        ProducerStall,  // Write buffer full - consumer (disk write) is slow
+        ConsumerStall   // Read buffer empty - producer (download/decompress) is slow
+    };
+    
+    /**
+     * @brief Convert StallType to human-readable string (for logging)
+     */
+    static const char* stallTypeToString(StallType type) {
+        switch (type) {
+            case StallType::None:          return "None";
+            case StallType::ProducerStall: return "ProducerStall (write buffer full, disk is slow)";
+            case StallType::ConsumerStall: return "ConsumerStall (read buffer empty, download is slow)";
+            default:                       return "Unknown";
+        }
+    }
 
     /**
      * @brief Constructor
@@ -128,6 +150,18 @@ public:
      * @brief Check if cancelled
      */
     bool isCancelled() const { return _cancelled; }
+    
+    /**
+     * @brief Check if stall timeout was exceeded
+     * This is set when acquire operations exceed STALL_TIMEOUT_MS cumulative wait time
+     */
+    bool isStallTimeoutExceeded() const { return _stallTimeoutExceeded; }
+    
+    /**
+     * @brief Get stall type (for error handling)
+     * Returns the type of stall that caused the timeout
+     */
+    StallType getStallType() const;
 
     /**
      * @brief Get the capacity of each slot
@@ -188,6 +222,8 @@ private:
     // State
     std::atomic<bool> _producerDone;
     std::atomic<bool> _cancelled;
+    std::atomic<bool> _stallTimeoutExceeded;
+    std::atomic<StallType> _stallType;
     
     // Starvation tracking for diagnostics
     std::atomic<uint64_t> _producerStalls;      // Times producer waited for free slot
@@ -199,7 +235,13 @@ private:
     QElapsedTimer* _sessionTimer;               // External timer for timestamps (not owned)
     std::queue<StallEvent> _stallEvents;        // Queue of significant stall events
     std::mutex _stallEventsMutex;               // Protects _stallEvents
-    static const uint32_t STALL_THRESHOLD_MS = 50;  // Minimum stall duration to record
+    
+    // Stall detection constants
+    // Note: These should match TimeoutDefaults in timeout_utils.h for consistency.
+    // We don't include timeout_utils.h here to avoid adding dependencies to this
+    // low-level data structure, but values should be kept in sync.
+    static const uint32_t STALL_EVENT_THRESHOLD_MS = 50;   // = TimeoutDefaults::kRingBufferStallEventThresholdMs
+    static const uint32_t STALL_TIMEOUT_MS = 30000;        // = TimeoutDefaults::kRingBufferStallTimeoutMs
 };
 
 #endif // RINGBUFFER_H

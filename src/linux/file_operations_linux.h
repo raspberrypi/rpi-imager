@@ -88,6 +88,8 @@ class LinuxFileOperations : public FileOperations {
   void PollAsyncCompletions() override;
   FileError WaitForPendingWrites() override;
   void CancelAsyncIO() override;
+  std::vector<PendingWriteInfo> GetPendingWritesSorted() const override;
+  void ReduceQueueDepthForRecovery(int newDepth) override;
   // GetAsyncIOStats() inherited from FileOperations base class
 
  private:
@@ -109,12 +111,14 @@ class LinuxFileOperations : public FileOperations {
   // Track callbacks by user_data pointer
   struct PendingWrite {
     AsyncWriteCallback callback;
+    const std::uint8_t* data;  // For sync fallback replay
+    std::uint64_t offset;      // For sync fallback replay
     std::size_t size;
     std::chrono::steady_clock::time_point submit_time;
   };
   std::unordered_map<std::uint64_t, PendingWrite> pending_callbacks_;
   std::uint64_t next_write_id_;
-  std::mutex pending_mutex_;
+  mutable std::mutex pending_mutex_;
   
   // Note: write_latency_stats_ is inherited from FileOperations base class
   
@@ -124,6 +128,8 @@ class LinuxFileOperations : public FileOperations {
   bool InitIOUring();
   void CleanupIOUring();
   void ProcessCompletions(bool wait);
+  FileError AttemptSyncFallback() override;
+  bool DrainAndSwitchToSync(int timeoutSeconds) override;
 };
 
 } // namespace rpi_imager
