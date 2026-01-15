@@ -623,6 +623,10 @@ bool launchDetached(const QString& program, const QStringList& arguments) {
         }
         
         // Grandchild - build argv and exec
+        
+        // Clear AppImage environment before running external tools
+        clearAppImageEnvironment();
+        
         QByteArray programBytes = program.toUtf8();
         std::vector<QByteArray> argBytes;
         std::vector<char*> argv;
@@ -805,6 +809,19 @@ const char* findCACertBundle()
     }
 
     return nullptr;  // Not found, curl will use its compiled-in default
+}
+
+void clearAppImageEnvironment() {
+    // AppImages set LD_LIBRARY_PATH and LD_PRELOAD to use bundled libraries.
+    // External tools need system libraries instead, otherwise they may fail
+    // due to symbol conflicts (e.g., PAM modules failing with "cannot open
+    // session: Module is unknown", or KDE tools failing with Qt version
+    // mismatches like "version `Qt_6.10' not found").
+    //
+    // This is safe because forked children running external tools don't need
+    // our bundled libraries.
+    unsetenv("LD_LIBRARY_PATH");
+    unsetenv("LD_PRELOAD");
 }
 
 } // namespace PlatformQuirks

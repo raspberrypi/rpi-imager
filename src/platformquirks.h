@@ -100,6 +100,18 @@ namespace PlatformQuirks {
      * @return Path to CA certificate bundle, or nullptr if not found.
      */
     const char* findCACertBundle();
+
+    /**
+     * Clear AppImage-specific environment variables before exec'ing external tools.
+     *
+     * AppImages set LD_LIBRARY_PATH and LD_PRELOAD to use bundled libraries.
+     * External tools (runuser, kde-inhibit, systemd-inhibit, etc.) need to use
+     * system libraries instead, otherwise they may fail due to symbol conflicts
+     * (e.g., PAM modules failing with "cannot open session: Module is unknown").
+     *
+     * Call this in forked child processes before execvp().
+     */
+    void clearAppImageEnvironment();
 #endif
 }
 
