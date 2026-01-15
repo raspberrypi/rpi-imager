@@ -14,8 +14,6 @@
 using rpi_imager::TimeoutDefaults::kSyncWriteTimeoutSeconds;
 using rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth;
 using rpi_imager::TimeoutDefaults::kHighLatencyThresholdMs;
-using rpi_imager::TimeoutDefaults::kSlowProgressThresholdSeconds;
-using rpi_imager::TimeoutDefaults::kAsyncQueueWaitTimeoutSeconds;
 using rpi_imager::TimeoutDefaults::kAsyncFirstCompletionTimeoutMs;
 
 namespace rpi_imager {
@@ -1248,16 +1246,16 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
     return FileError::kSuccess;
   }
   
-  // Process completions until all pending writes are done, cancelled, or timeout
-  // If the device becomes unresponsive, we don't want to block forever.
+  // Wait for pending writes to complete or be cancelled.
+  // 
+  // DESIGN: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
+  // This function simply waits, responding to cancellation. We keep a very long safety-net
+  // timeout (5 minutes) only as emergency fallback if cancellation somehow fails.
   constexpr DWORD kNormalTimeoutMs = 5000;    // 5 second poll interval
   constexpr DWORD kCancelledTimeoutMs = 100;  // Fast drain when cancelled
+  constexpr int kEmergencyTimeoutSeconds = 300;  // 5 minute emergency fallback
   
   auto startTime = std::chrono::steady_clock::now();
-  int initialPending = pending_writes_.load();
-  int lastPendingCheck = initialPending;
-  auto lastProgressTime = startTime;
-  bool depthAlreadyReduced = false;
   
   while (pending_writes_.load() > 0) {
     if (cancelled_.load()) {
@@ -1267,35 +1265,15 @@ FileError WindowsFileOperations::WaitForPendingWrites() {
       // Continue the loop to process the ERROR_OPERATION_ABORTED completions
     }
     
-    // Check overall timeout
+    // Emergency safety-net: if we've been waiting 5 minutes, something is very wrong
+    // (normal stall detection at 30-60s is handled by WriteProgressWatchdog)
     auto elapsed = std::chrono::steady_clock::now() - startTime;
     int elapsedSeconds = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
-    if (elapsedSeconds >= kAsyncQueueWaitTimeoutSeconds) {
+    if (elapsedSeconds >= kEmergencyTimeoutSeconds) {
       int remaining = pending_writes_.load();
-      Log("WaitForPendingWrites timeout: " + std::to_string(remaining) + 
-          " writes still pending after " + std::to_string(kAsyncQueueWaitTimeoutSeconds) + "s - attempting sync fallback");
+      Log("WaitForPendingWrites: EMERGENCY timeout after " + std::to_string(elapsedSeconds) + 
+          "s with " + std::to_string(remaining) + " writes still pending - forcing sync fallback");
       return AttemptSyncFallback();
-    }
-    
-    // Adaptive recovery: if we're making slow progress, reduce queue depth for future operations
-    // This helps prevent the same situation from recurring on the next write cycle
-    int currentPending = pending_writes_.load();
-    if (currentPending < lastPendingCheck) {
-      lastProgressTime = std::chrono::steady_clock::now();
-      lastPendingCheck = currentPending;
-    }
-    
-    auto timeSinceProgress = std::chrono::steady_clock::now() - lastProgressTime;
-    int secondsSinceProgress = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(timeSinceProgress).count());
-    
-    if (!depthAlreadyReduced && secondsSinceProgress >= kSlowProgressThresholdSeconds && currentPending > 4) {
-      // Slow progress - reduce queue depth for future operations
-      int newDepth = std::max(4, async_queue_depth_ / 2);
-      Log("WaitForPendingWrites: slow progress (" + std::to_string(secondsSinceProgress) + 
-          "s since last completion) - reducing queue depth from " + std::to_string(async_queue_depth_) +
-          " to " + std::to_string(newDepth));
-      ReduceQueueDepthForRecovery(newDepth);
-      depthAlreadyReduced = true;
     }
     
     // Block waiting for completions with timeout

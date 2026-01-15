@@ -707,28 +707,36 @@ FileError LinuxFileOperations::WaitForPendingWrites() {
     return FileError::kSuccess;
   }
   
-  // Process completions until all pending writes are done, with overall timeout
-  // If the device becomes unresponsive, we don't want to block forever.
-  constexpr int kMaxTotalWaitSeconds = 30;
+  // Wait for pending writes to complete or be cancelled.
+  // 
+  // DESIGN: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
+  // This function simply waits, responding to cancellation. We keep a very long safety-net
+  // timeout (5 minutes) only as emergency fallback if cancellation somehow fails.
+  constexpr int kEmergencyTimeoutSeconds = 300;  // 5 minute emergency fallback
   auto startTime = std::chrono::steady_clock::now();
   int lastLogSecond = 0;
   
   while (pending_writes_.load() > 0) {
+    // Check cancellation
+    if (cancelled_.load()) {
+      CancelAsyncIO();
+    }
+    
     ProcessCompletions(true);
     
-    // Check overall timeout
+    // Emergency safety-net: if we've been waiting 5 minutes, something is very wrong
     auto elapsed = std::chrono::steady_clock::now() - startTime;
     int elapsedSeconds = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
     
-    if (elapsedSeconds >= kMaxTotalWaitSeconds) {
+    if (elapsedSeconds >= kEmergencyTimeoutSeconds) {
       int remaining = pending_writes_.load();
-      Log("WaitForPendingWrites timeout: " + std::to_string(remaining) + 
-          " writes still pending after " + std::to_string(kMaxTotalWaitSeconds) + "s - attempting sync fallback");
+      Log("WaitForPendingWrites: EMERGENCY timeout after " + std::to_string(elapsedSeconds) + 
+          "s with " + std::to_string(remaining) + " writes still pending - forcing sync fallback");
       return AttemptSyncFallback();
     }
     
-    // Log progress every 5 seconds
-    if (elapsedSeconds >= 5 && elapsedSeconds % 5 == 0 && elapsedSeconds != lastLogSecond) {
+    // Log progress every 30 seconds (informational only, not stall detection)
+    if (elapsedSeconds >= 30 && elapsedSeconds % 30 == 0 && elapsedSeconds != lastLogSecond) {
       lastLogSecond = elapsedSeconds;
       Log("WaitForPendingWrites: " + std::to_string(pending_writes_.load()) + 
           " writes pending after " + std::to_string(elapsedSeconds) + "s");
