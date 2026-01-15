@@ -8,6 +8,7 @@ rpi-imager (2.0.4) unstable; urgency=medium
     - Add 5-minute emergency timeout as fallback for stalled operations
   * Performance:
     - Enhance recovery event handling and monitoring diagnostics
+    - Capture SHA256 hash values in performance profiles for verification diagnostics
   * Image Handling:
     - Add support for parsing .gz files to extract uncompressed size information
     - Improve handling for files larger than 4GB
