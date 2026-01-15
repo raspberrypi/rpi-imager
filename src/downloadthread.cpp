@@ -1818,12 +1818,14 @@ bool DownloadThread::_verify()
 
     if (_verifyhash.result() == _writehash.result() || !_verifyEnabled || _cancelled)
     {
-        emit eventVerify(static_cast<quint32>(t1.elapsed()), true);
+        emit eventVerify(static_cast<quint32>(t1.elapsed()), true, 
+                         _writehash.result().toHex(), _verifyhash.result().toHex());
         return true;
     }
     else
     {
-        emit eventVerify(static_cast<quint32>(t1.elapsed()), false);
+        emit eventVerify(static_cast<quint32>(t1.elapsed()), false,
+                         _writehash.result().toHex(), _verifyhash.result().toHex());
         DownloadThread::_onDownloadError(tr("Verifying write failed. Contents of SD card is different from what was written to it."));
     }
 

@@ -201,7 +201,7 @@ signals:
     void eventDirectIOAttempt(bool attempted, bool succeeded, bool currentlyEnabled, int errorCode, QString errorMessage);
     void eventCustomisation(quint32 durationMs, bool success, QString metadata);
     void eventFinalSync(quint32 durationMs, bool success);
-    void eventVerify(quint32 durationMs, bool success);
+    void eventVerify(quint32 durationMs, bool success, QByteArray writeHash, QByteArray verifyHash);
     void eventDecompressInit(quint32 durationMs, bool success);
     void eventPeriodicSync(quint32 durationMs, bool success, quint64 bytesWritten);
     void eventImageExtraction(quint32 durationMs, bool success);      // Archive extraction setup
