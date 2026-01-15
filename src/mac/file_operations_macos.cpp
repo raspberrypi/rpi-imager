@@ -638,16 +638,14 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
     return FileError::kSuccess;
   }
   
-  // Wait for all pending writes to complete, with timeout to detect stuck I/O
-  // If the device becomes unresponsive (disconnect, hardware failure), we don't
-  // want to block forever. 30 seconds should be more than enough for any real I/O.
-  constexpr int kTimeoutSeconds = 30;
+  // Wait for pending writes to complete or be cancelled.
+  // 
+  // DESIGN: Stall detection is handled by WriteProgressWatchdog at the ImageWriter level.
+  // This function simply waits, responding to cancellation. We keep a very long safety-net
+  // timeout (5 minutes) only as emergency fallback if cancellation somehow fails.
+  constexpr int kEmergencyTimeoutMs = 300000;  // 5 minute emergency fallback
   constexpr int kPollIntervalMs = 500;
-  constexpr int kSlowProgressThresholdMs = 10000; // 10 seconds with no progress
   int totalWaitMs = 0;
-  int lastPendingCount = pending_writes_.load();
-  int msSinceProgress = 0;
-  bool depthAlreadyReduced = false;
   
   std::unique_lock<std::mutex> lock(completion_mutex_);
   while (pending_writes_.load() > 0 && !cancelled_.load()) {
@@ -656,39 +654,18 @@ FileError MacOSFileOperations::WaitForPendingWrites() {
     if (result == std::cv_status::timeout) {
       totalWaitMs += kPollIntervalMs;
       
-      // Check if we made progress
-      int currentPending = pending_writes_.load();
-      if (currentPending < lastPendingCount) {
-        lastPendingCount = currentPending;
-        msSinceProgress = 0;
-      } else {
-        msSinceProgress += kPollIntervalMs;
-      }
-      
-      // Adaptive recovery: if slow progress, reduce queue depth for future operations
-      if (!depthAlreadyReduced && msSinceProgress >= kSlowProgressThresholdMs && currentPending > 4) {
-        int newDepth = std::max(4, async_queue_depth_ / 2);
-        Log("WaitForPendingWrites: slow progress (" + std::to_string(msSinceProgress / 1000) + 
-            "s since last completion) - reducing queue depth from " + std::to_string(async_queue_depth_) +
-            " to " + std::to_string(newDepth));
-        lock.unlock();  // Release lock while modifying queue depth
-        ReduceQueueDepthForRecovery(newDepth);
-        lock.lock();
-        depthAlreadyReduced = true;
-      }
-      
-      if (totalWaitMs >= kTimeoutSeconds * 1000) {
-        // Timeout waiting for async completions - attempt sync fallback
+      // Emergency safety-net: if we've been waiting 5 minutes, something is very wrong
+      if (totalWaitMs >= kEmergencyTimeoutMs) {
         int remaining = pending_writes_.load();
-        Log("WaitForPendingWrites timeout: " + std::to_string(remaining) + 
-            " writes still pending after " + std::to_string(kTimeoutSeconds) + "s - attempting sync fallback");
+        Log("WaitForPendingWrites: EMERGENCY timeout after " + std::to_string(totalWaitMs / 1000) + 
+            "s with " + std::to_string(remaining) + " writes still pending - forcing sync fallback");
         
-        lock.unlock();  // Release lock before fallback attempt
+        lock.unlock();
         return AttemptSyncFallback();
       }
       
-      // Log progress if waiting a long time
-      if (totalWaitMs % 5000 == 0) {
+      // Log progress every 30 seconds (informational only, not stall detection)
+      if (totalWaitMs % 30000 == 0) {
         Log("WaitForPendingWrites: " + std::to_string(pending_writes_.load()) + 
             " writes pending after " + std::to_string(totalWaitMs / 1000) + "s");
       }
