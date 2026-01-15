@@ -249,23 +249,38 @@ void applyQuirks() {
 void beep() {
     // Try multiple Linux beep mechanisms in order of preference
     
-    // 1. Try pactl (PulseAudio) beep - most common on modern Linux desktop systems
+    // 1. Try canberra-gtk-play (XDG Sound Theme compliant, works with PulseAudio/PipeWire)
+    if (QProcess::execute("canberra-gtk-play", QStringList() << "--id=bell") == 0) {
+        return;
+    }
+    
+    // 2. Try pw-play (PipeWire native - default on Raspberry Pi OS and modern distros)
+    if (QProcess::execute("pw-play", QStringList() << "/usr/share/sounds/alsa/Front_Left.wav") == 0) {
+        return;
+    }
+    
+    // 3. Try aplay (ALSA - widely available low-level fallback)
+    if (QProcess::execute("aplay", QStringList() << "-q" << "/usr/share/sounds/alsa/Front_Left.wav") == 0) {
+        return;
+    }
+    
+    // 4. Try pactl (PulseAudio) - legacy systems
     if (QProcess::execute("pactl", QStringList() << "upload-sample" << "/usr/share/sounds/alsa/Front_Left.wav" << "beep") == 0) {
         QProcess::execute("pactl", QStringList() << "play-sample" << "beep");
         return;
     }
     
-    // 2. Try system bell via echo (works on most terminals)
+    // 5. Try system bell via echo (works on some terminals)
     if (QProcess::execute("echo", QStringList() << "-e" << "\\a") == 0) {
         return;
     }
     
-    // 3. Try beep command if available
+    // 6. Try beep command if available
     if (QProcess::execute("beep", QStringList()) == 0) {
         return;
     }
     
-    // 4. Fallback: just log that beep was requested
+    // 7. Fallback: just log that beep was requested
     qDebug() << "Beep requested but no suitable audio mechanism found on this Linux system";
 }
 
