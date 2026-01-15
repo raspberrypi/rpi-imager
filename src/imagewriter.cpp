@@ -1008,8 +1008,10 @@ void ImageWriter::startWrite()
                 _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
             });
     connect(_thread, &DownloadThread::eventVerify,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, "Post-write verification");
+            this, [this](quint32 durationMs, bool success, QByteArray writeHash, QByteArray verifyHash){
+                QString metadata = QString("Post-write verification; writeHash: %1; verifyHash: %2")
+                    .arg(QString::fromLatin1(writeHash), QString::fromLatin1(verifyHash));
+                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, metadata);
             });
     connect(_thread, &DownloadThread::eventPeriodicSync,
             this, [this](quint32 durationMs, bool success, quint64 bytesWritten){
@@ -3362,11 +3364,14 @@ void ImageWriter::onCacheVerificationComplete(bool isValid)
         return; // Not waiting for this verification
     }
 
-    // Record cache verification duration for performance tracking
+    // Record cache verification duration for performance tracking with hash values
     quint32 verificationDurationMs = static_cast<quint32>(_cacheVerificationTimer.elapsed());
+    CacheManager::CacheStatus cacheStatus = _cacheManager->getCacheStatus();
+    QString metadata = QString("Cache verification; expectedHash: %1; computedHash: %2")
+        .arg(QString::fromLatin1(cacheStatus.cacheFileHash),
+             QString::fromLatin1(cacheStatus.computedHash));
     _performanceStats->recordEvent(PerformanceStats::EventType::CacheVerification,
-        verificationDurationMs, isValid,
-        isValid ? "valid" : "invalid");
+        verificationDurationMs, isValid, metadata);
 
     _waitingForCacheVerification = false;
 
@@ -3644,8 +3649,10 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                 _performanceStats->recordEvent(PerformanceStats::EventType::FinalSync, durationMs, success);
             });
     connect(_thread, &DownloadThread::eventVerify,
-            this, [this](quint32 durationMs, bool success){
-                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, "Post-write verification");
+            this, [this](quint32 durationMs, bool success, QByteArray writeHash, QByteArray verifyHash){
+                QString metadata = QString("Post-write verification; writeHash: %1; verifyHash: %2")
+                    .arg(QString::fromLatin1(writeHash), QString::fromLatin1(verifyHash));
+                _performanceStats->recordEvent(PerformanceStats::EventType::HashComputation, durationMs, success, metadata);
             });
     connect(_thread, &DownloadThread::eventPeriodicSync,
             this, [this](quint32 durationMs, bool success, quint64 bytesWritten){

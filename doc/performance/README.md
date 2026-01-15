@@ -45,7 +45,7 @@ The following operations are timed individually, grouped by category:
 | Event | Description |
 |-------|-------------|
 | `cacheLookup` | Time to look up file in cache |
-| `cacheVerification` | Time to verify cached file hash |
+| `cacheVerification` | Time to verify cached file hash (includes expectedHash and computedHash in metadata) |
 | `cacheWrite` | Time to write data to cache file |
 | `cacheFlush` | Time to flush cache to disk |
 
@@ -62,7 +62,7 @@ The following operations are timed individually, grouped by category:
 |-------|-------------|
 | `imageDecompressInit` | Time to initialise decompression |
 | `imageExtraction` | Time for archive extraction setup |
-| `hashComputation` | Time spent computing hashes |
+| `hashComputation` | Time spent computing hashes (includes writeHash and verifyHash in metadata for post-write verification) |
 
 **Customisation**
 | Event | Description |

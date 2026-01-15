@@ -45,6 +45,7 @@ public:
         QString cacheFileName;
         QByteArray cachedHash;      // Uncompressed hash (extract_sha256) - for UI matching
         QByteArray cacheFileHash;   // Compressed hash (image_download_sha256) - for cache verification
+        QByteArray computedHash;    // Computed hash from verification - for performance diagnostics
         bool verificationComplete = false;
         bool diskSpaceCheckComplete = false;
         bool customCacheFile = false;
@@ -87,7 +88,7 @@ signals:
     void cacheFileUpdated(const QByteArray& uncompressedHash);
 
 private slots:
-    void onVerificationComplete(bool isValid, const QString& fileName, const QByteArray& hash);
+    void onVerificationComplete(bool isValid, const QString& fileName, const QByteArray& expectedHash, const QByteArray& computedHash);
     void onDiskSpaceCheckComplete(qint64 availableBytes, const QString& directory);
 
 private:
@@ -120,7 +121,7 @@ public slots:
     void checkDiskSpace();
 
 signals:
-    void verificationComplete(bool isValid, const QString& fileName, const QByteArray& hash);
+    void verificationComplete(bool isValid, const QString& fileName, const QByteArray& expectedHash, const QByteArray& computedHash);
     void diskSpaceCheckComplete(qint64 availableBytes, const QString& directory);
     void verificationProgress(qint64 bytesProcessed, qint64 totalBytes);
 
