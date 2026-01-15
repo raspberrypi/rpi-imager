@@ -1,3 +1,29 @@
+rpi-imager (2.0.4) unstable; urgency=medium
+
+  * Write Robustness:
+    - Introduce WriteProgressWatchdog to monitor write progress and detect stalls
+    - Implement recovery strategies for async I/O including queue depth reduction
+      and sync fallback mechanisms
+    - Standardize timeout handling for pending writes across all platforms
+    - Add 5-minute emergency timeout as fallback for stalled operations
+  * Performance:
+    - Enhance recovery event handling and monitoring diagnostics
+  * Image Handling:
+    - Add support for parsing .gz files to extract uncompressed size information
+    - Improve handling for files larger than 4GB
+  * Disk Formatting:
+    - Fix FAT32 formatting for large drives (>8GB)
+    - Improve root directory handling based on sectors per cluster
+  * Bug Fixes:
+    - Improve thread safety for download cancellation
+    - Enhance error handling for timeout conditions
+    - Use Pathlib to generate file:// URIs in local JSON helper script
+  * Build:
+    - Refactor Qt build scripts for improved POSIX compliance and consistency
+    - Add macOS-specific optimizations for universal builds
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Wed, 15 Jan 2026 12:00:00 +0000
+
 rpi-imager (2.0.3) unstable; urgency=medium
 
   * Networking:
