@@ -438,9 +438,17 @@ WizardStepBase {
         }
 
         onOpened: {
-            allowAccept = false
-            countdown = 2
-            confirmDelay.start()
+            // If a screen reader is active, bypass the timer - screen reader users
+            // need time to hear the content, not wait for a visual countdown
+            if (confirmDialog.imageWriter && confirmDialog.imageWriter.isScreenReaderActive()) {
+                allowAccept = true
+                countdown = 0
+                rebuildFocusOrder()
+            } else {
+                allowAccept = false
+                countdown = 2
+                confirmDelay.start()
+            }
         }
         onClosed: {
             confirmDelay.stop()
