@@ -18,6 +18,8 @@ rpi-imager (2.0.4) unstable; urgency=medium
     - Improve thread safety for download cancellation
     - Enhance error handling for timeout conditions
     - Use Pathlib to generate file:// URIs in local JSON helper script
+  * Accessibility:
+    - Bypass confirmation dialog timer when screen reader is active
   * Build:
     - Refactor Qt build scripts for improved POSIX compliance and consistency
     - Add macOS-specific optimizations for universal builds
