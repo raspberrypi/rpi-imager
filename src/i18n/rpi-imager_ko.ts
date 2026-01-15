@@ -1936,7 +1936,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>No password (open network)</source>
-        <translation>비밀번호 없음(공개 네트워크)</translation
+        <translation>비밀번호 없음(공개 네트워크)</translation>
     </message>
     <message>
         <source>Saved (hidden) — leave blank to keep</source>
