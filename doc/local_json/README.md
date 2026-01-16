@@ -2,13 +2,13 @@
 
 TL;DR - to add capabilities (like USB Gadget mode) to official Raspberry Pi OS images:
 ```
-./create_local_json.py --online --capabilities usb_otg
+./create_local_json.py --online --capabilities usb_otg --device-capabilities usb_otg
 ```
 Then double-click `os_list_local.rpi-imager-manifest` to open it in Imager.
 
 Or, if you want to use locally downloaded images:
 ```
-./create_local_json.py --search-dir /path/to/images --capabilities usb_otg
+./create_local_json.py --search-dir /path/to/images --capabilities usb_otg --device-capabilities usb_otg
 ```
 
 ## Purpose
@@ -36,8 +36,9 @@ You can customise the behaviour of `create_local_json.py` with the following com
   * `--download-icons` - make a local copy of the device and OS icons referenced in the manifest file (this creates a manifest that can be used entirely offline)
   * `--verify-checksums` - check that any matching local filenames also match the `image_download_sha256` in the online manifest, before adding them to the output (ignored with `--online`)
   * `--capabilities CAP [CAP ...]` - add OS capabilities to enable features in the customization wizard
+  * `--device-capabilities CAP [CAP ...]` - add device (hardware) capabilities to all devices
 
-### Available capabilities
+### Available OS capabilities
 
 The `--capabilities` option accepts one or more of the following values:
 
@@ -51,17 +52,35 @@ The `--capabilities` option accepts one or more of the following values:
 | `spi` | Enable SPI interface option |
 | `usb_otg` | Enable USB Gadget mode option |
 
-**Note:** Interface capabilities (`i2c`, `spi`, `onewire`, `serial`, `usb_otg`) require both hardware and OS support to be available in the customization wizard. The hardware capabilities are defined per-device in the manifest.
+### Available device capabilities
+
+The `--device-capabilities` option accepts one or more of the following values:
+
+| Capability | Description |
+|------------|-------------|
+| `i2c` | Device supports I2C interface |
+| `onewire` | Device supports 1-Wire interface |
+| `serial` | Device supports serial interface |
+| `serial_on_console_only` | Serial is console-only mode |
+| `spi` | Device supports SPI interface |
+| `usb_otg` | Device supports USB Gadget mode |
+
+**Note:** Interface capabilities (`i2c`, `spi`, `onewire`, `serial`, `usb_otg`) require both hardware (device) and OS support to be available in the customization wizard. You typically need to specify the same capabilities in both `--capabilities` and `--device-capabilities`.
 
 ### Examples
 
 Create a manifest with USB Gadget mode enabled for all official Raspberry Pi OS images (downloads from official servers):
 ```
-./create_local_json.py --online --capabilities usb_otg
+./create_local_json.py --online --capabilities usb_otg --device-capabilities usb_otg
 ```
 
-Enable multiple capabilities for locally downloaded images:
+Enable multiple interface capabilities for locally downloaded images:
 ```
-./create_local_json.py --capabilities usb_otg i2c spi
+./create_local_json.py --capabilities usb_otg i2c spi --device-capabilities usb_otg i2c spi
+```
+
+Enable only OS-level capabilities (like Raspberry Pi Connect) that don't require device support:
+```
+./create_local_json.py --online --capabilities rpi_connect secure_boot
 ```
 
