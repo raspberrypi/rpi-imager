@@ -16,7 +16,7 @@ ICONS_DIR = os.path.join(CACHE_DIR, "icons")
 CHUNK_SIZE = 1024 * 1024 # read files in 1MB chunks
 
 # Valid OS capabilities (see doc/json-schema/os-list-schema.json)
-VALID_CAPABILITIES = {
+VALID_OS_CAPABILITIES = {
     "i2c":         "Enable I2C interface option",
     "onewire":     "Enable 1-Wire interface option",
     "rpi_connect": "Enable Raspberry Pi Connect setup",
@@ -24,6 +24,16 @@ VALID_CAPABILITIES = {
     "serial":      "Enable serial interface option",
     "spi":         "Enable SPI interface option",
     "usb_otg":     "Enable USB Gadget mode option",
+}
+
+# Valid device (hardware) capabilities
+VALID_DEVICE_CAPABILITIES = {
+    "i2c":                   "Device supports I2C interface",
+    "onewire":               "Device supports 1-Wire interface",
+    "serial":                "Device supports serial interface",
+    "serial_on_console_only": "Serial is console-only mode",
+    "spi":                   "Device supports SPI interface",
+    "usb_otg":               "Device supports USB Gadget mode",
 }
 
 
@@ -80,12 +90,14 @@ def calculate_checksum(filename):
 
 
 if __name__ == "__main__":
-    capabilities_epilog = "available capabilities for --capabilities:\n"
-    capabilities_epilog += "\n".join(f"  {cap:12}  {desc}" for cap, desc in VALID_CAPABILITIES.items())
+    epilog = "available OS capabilities for --capabilities:\n"
+    epilog += "\n".join(f"  {cap:12}  {desc}" for cap, desc in VALID_OS_CAPABILITIES.items())
+    epilog += "\n\navailable device capabilities for --device-capabilities:\n"
+    epilog += "\n".join(f"  {cap:20}  {desc}" for cap, desc in VALID_DEVICE_CAPABILITIES.items())
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=capabilities_epilog)
+        epilog=epilog)
     parser.add_argument("--repo", default=DEFAULT_REPO_URL, help="custom repository URL")
     parser.add_argument("--search-dir", default=".", help="directory to search for downloaded images")
     parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON_FILE, help=f"manifest file to create (defaults to {DEFAULT_OUTPUT_JSON_FILE})")
@@ -96,14 +108,22 @@ if __name__ == "__main__":
     parser.add_argument("--verify-checksums", action="store_true", help="verify the checksums of the downloaded images (ignored with --online)")
     parser.add_argument("--capabilities", nargs="+", metavar="CAP",
                         help="add OS capabilities to enable features in the customization wizard (see below)")
+    parser.add_argument("--device-capabilities", nargs="+", metavar="CAP",
+                        help="add device (hardware) capabilities to all devices (see below)")
 
     args = parser.parse_args()
 
-    # Validate capabilities if provided
+    # Validate OS capabilities if provided
     if args.capabilities:
-        invalid_caps = set(args.capabilities) - VALID_CAPABILITIES.keys()
+        invalid_caps = set(args.capabilities) - VALID_OS_CAPABILITIES.keys()
         if invalid_caps:
-            fatal_error(f"Invalid capabilities: {', '.join(sorted(invalid_caps))}. Valid capabilities are: {', '.join(VALID_CAPABILITIES.keys())}")
+            fatal_error(f"Invalid OS capabilities: {', '.join(sorted(invalid_caps))}. Valid capabilities are: {', '.join(VALID_OS_CAPABILITIES.keys())}")
+
+    # Validate device capabilities if provided
+    if args.device_capabilities:
+        invalid_caps = set(args.device_capabilities) - VALID_DEVICE_CAPABILITIES.keys()
+        if invalid_caps:
+            fatal_error(f"Invalid device capabilities: {', '.join(sorted(invalid_caps))}. Valid capabilities are: {', '.join(VALID_DEVICE_CAPABILITIES.keys())}")
 
     repo_urlparts = urllib.parse.urlparse(args.repo)
     if not repo_urlparts.netloc or repo_urlparts.scheme not in ("http", "https"):
@@ -201,6 +221,11 @@ if __name__ == "__main__":
                     local_icon_filename = download_icon(device["icon"])
                     if local_icon_filename:
                         device["icon"] = pathlib.Path(os.path.abspath(local_icon_filename)).as_uri()
+                # Add device capabilities if specified
+                if args.device_capabilities:
+                    existing_caps = set(device.get("capabilities", []))
+                    merged_caps = existing_caps | set(args.device_capabilities)
+                    device["capabilities"] = sorted(merged_caps)
     # Sort the output OSes into the same order as the input OSes
     os_order = list(online_os_entries.keys())
     local_data["os_list"] = sorted(local_os_entries.values(), key=lambda x: os_order.index(os.path.basename(x["url"])))
