@@ -10,10 +10,21 @@ import urllib.request
 from collections import OrderedDict
 
 DEFAULT_REPO_URL = "https://downloads.raspberrypi.com/os_list_imagingutility_v4.json"
-DEFAULT_OUTPUT_JSON_FILE = "os_list_local.json"
+DEFAULT_OUTPUT_JSON_FILE = "os_list_local.rpi-imager-manifest"
 CACHE_DIR = "cache"
 ICONS_DIR = os.path.join(CACHE_DIR, "icons")
 CHUNK_SIZE = 1024 * 1024 # read files in 1MB chunks
+
+# Valid OS capabilities (see doc/json-schema/os-list-schema.json)
+VALID_CAPABILITIES = {
+    "i2c":         "Enable I2C interface option",
+    "onewire":     "Enable 1-Wire interface option",
+    "rpi_connect": "Enable Raspberry Pi Connect setup",
+    "secure_boot": "Enable secure boot signing",
+    "serial":      "Enable serial interface option",
+    "spi":         "Enable SPI interface option",
+    "usb_otg":     "Enable USB Gadget mode option",
+}
 
 
 def fatal_error(reason):
@@ -69,16 +80,30 @@ def calculate_checksum(filename):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    capabilities_epilog = "available capabilities for --capabilities:\n"
+    capabilities_epilog += "\n".join(f"  {cap:12}  {desc}" for cap, desc in VALID_CAPABILITIES.items())
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=capabilities_epilog)
     parser.add_argument("--repo", default=DEFAULT_REPO_URL, help="custom repository URL")
     parser.add_argument("--search-dir", default=".", help="directory to search for downloaded images")
-    parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON_FILE, help=f"JSON file to create (defaults to {DEFAULT_OUTPUT_JSON_FILE})")
+    parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON_FILE, help=f"manifest file to create (defaults to {DEFAULT_OUTPUT_JSON_FILE})")
+    parser.add_argument("--online", action="store_true", help="use online URLs from the repository instead of searching for local files")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--dry-run", action="store_true", help="dry run only, don't create JSON output file")
+    group.add_argument("--dry-run", action="store_true", help="dry run only, don't create manifest file")
     group.add_argument("--download-icons", action="store_true", help="make a local copy of the device and OS icons")
-    parser.add_argument("--verify-checksums", action="store_true", help="verify the checksums of the downloaded images")
+    parser.add_argument("--verify-checksums", action="store_true", help="verify the checksums of the downloaded images (ignored with --online)")
+    parser.add_argument("--capabilities", nargs="+", metavar="CAP",
+                        help="add OS capabilities to enable features in the customization wizard (see below)")
 
     args = parser.parse_args()
+
+    # Validate capabilities if provided
+    if args.capabilities:
+        invalid_caps = set(args.capabilities) - VALID_CAPABILITIES.keys()
+        if invalid_caps:
+            fatal_error(f"Invalid capabilities: {', '.join(sorted(invalid_caps))}. Valid capabilities are: {', '.join(VALID_CAPABILITIES.keys())}")
 
     repo_urlparts = urllib.parse.urlparse(args.repo)
     if not repo_urlparts.netloc or repo_urlparts.scheme not in ("http", "https"):
@@ -104,43 +129,60 @@ if __name__ == "__main__":
         fatal_error(f"No matching OSes found in {online_json_file}")
     if args.download_icons:
         os.makedirs(ICONS_DIR, exist_ok=True)
-    # Recursively search for any matching local filenames
+
     local_os_entries = dict()
-    duplicate_local_filenames = set()
     local_device_tags = set()
-    abs_search_dir_len = len(os.path.abspath(args.search_dir)) + 1
-    for root, dirs, files in os.walk(args.search_dir):
-        for name in files:
-            abs_local_image_filename = os.path.abspath(os.path.join(root, name))
-            # remove leading search_dir prefix
-            display_filename = abs_local_image_filename[abs_search_dir_len:]
-            if name in duplicate_online_filenames:
-                display_warning(f"Ignoring {display_filename} as it matched multiple filenames in {online_json_file}")
-            elif name in duplicate_local_filenames:
-                pass
-            elif name in local_os_entries:
-                display_warning(f"Ignoring {display_filename} as there are multiple local copies")
-                del local_os_entries[name]
-                duplicate_local_filenames.add(name)
-            elif name in online_os_entries:
-                os_entry = online_os_entries[name]
-                if "image_download_size" in os_entry and os.path.getsize(abs_local_image_filename) != os_entry["image_download_size"]:
-                    display_warning(f"Ignoring {display_filename} as its size doesn't match with {online_json_file}")
-                elif args.verify_checksums and "image_download_sha256" in os_entry and calculate_checksum(abs_local_image_filename) != os_entry["image_download_sha256"]:
-                    display_warning(f"Ignoring {display_filename} as its checksum doesn't match with {online_json_file}")
-                else:
-                    if args.dry_run:
-                        print(f"Found {display_filename} ({os_entry['name']})")
-                    # point at our local file instead of the online URL
-                    os_entry["url"] = pathlib.Path(abs_local_image_filename).as_uri()
-                    local_os_entries[name] = os_entry
-                    if "devices" in os_entry:
-                        for tag in os_entry["devices"]:
-                            local_device_tags.add(tag)
-                    if args.download_icons and "icon" in os_entry:
-                        local_icon_filename = download_icon(os_entry["icon"])
-                        if local_icon_filename:
-                            os_entry["icon"] = pathlib.Path(os.path.abspath(local_icon_filename)).as_uri()
+
+    if args.online:
+        # Use all OS entries from online manifest with their original URLs
+        for name, os_entry in online_os_entries.items():
+            if args.dry_run:
+                print(f"Including {os_entry['name']}")
+            local_os_entries[name] = os_entry
+            if "devices" in os_entry:
+                for tag in os_entry["devices"]:
+                    local_device_tags.add(tag)
+            if args.download_icons and "icon" in os_entry:
+                local_icon_filename = download_icon(os_entry["icon"])
+                if local_icon_filename:
+                    os_entry["icon"] = pathlib.Path(os.path.abspath(local_icon_filename)).as_uri()
+    else:
+        # Recursively search for any matching local filenames
+        duplicate_local_filenames = set()
+        abs_search_dir_len = len(os.path.abspath(args.search_dir)) + 1
+        for root, dirs, files in os.walk(args.search_dir):
+            for name in files:
+                abs_local_image_filename = os.path.abspath(os.path.join(root, name))
+                # remove leading search_dir prefix
+                display_filename = abs_local_image_filename[abs_search_dir_len:]
+                if name in duplicate_online_filenames:
+                    display_warning(f"Ignoring {display_filename} as it matched multiple filenames in {online_json_file}")
+                elif name in duplicate_local_filenames:
+                    pass
+                elif name in local_os_entries:
+                    display_warning(f"Ignoring {display_filename} as there are multiple local copies")
+                    del local_os_entries[name]
+                    duplicate_local_filenames.add(name)
+                elif name in online_os_entries:
+                    os_entry = online_os_entries[name]
+                    if "image_download_size" in os_entry and os.path.getsize(abs_local_image_filename) != os_entry["image_download_size"]:
+                        display_warning(f"Ignoring {display_filename} as its size doesn't match with {online_json_file}")
+                    elif args.verify_checksums and "image_download_sha256" in os_entry and calculate_checksum(abs_local_image_filename) != os_entry["image_download_sha256"]:
+                        display_warning(f"Ignoring {display_filename} as its checksum doesn't match with {online_json_file}")
+                    else:
+                        if args.dry_run:
+                            print(f"Found {display_filename} ({os_entry['name']})")
+                        # point at our local file instead of the online URL
+                        os_entry["url"] = pathlib.Path(abs_local_image_filename).as_uri()
+                        local_os_entries[name] = os_entry
+                        if "devices" in os_entry:
+                            for tag in os_entry["devices"]:
+                                local_device_tags.add(tag)
+                        if args.download_icons and "icon" in os_entry:
+                            local_icon_filename = download_icon(os_entry["icon"])
+                            if local_icon_filename:
+                                os_entry["icon"] = pathlib.Path(os.path.abspath(local_icon_filename)).as_uri()
+
     num_images = len(local_os_entries)
     if num_images < 1:
         if args.dry_run:
@@ -161,7 +203,15 @@ if __name__ == "__main__":
                         device["icon"] = pathlib.Path(os.path.abspath(local_icon_filename)).as_uri()
     # Sort the output OSes into the same order as the input OSes
     os_order = list(online_os_entries.keys())
-    local_data["os_list"] =  sorted(local_os_entries.values(), key=lambda x: os_order.index(os.path.basename(x["url"])))
+    local_data["os_list"] = sorted(local_os_entries.values(), key=lambda x: os_order.index(os.path.basename(x["url"])))
+
+    # Add capabilities to OS entries if specified
+    if args.capabilities:
+        for os_entry in local_data["os_list"]:
+            # Merge with existing capabilities if present
+            existing_caps = set(os_entry.get("capabilities", []))
+            merged_caps = existing_caps | set(args.capabilities)
+            os_entry["capabilities"] = sorted(merged_caps)
     # And finally write the local JSON file
     if args.dry_run:
         print(f"Would write {num_images} image{'s' if num_images > 1 else ''} to {args.output_json}")
