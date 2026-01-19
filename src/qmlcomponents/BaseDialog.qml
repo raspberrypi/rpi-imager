@@ -38,7 +38,8 @@ Dialog {
     width: Math.min(maxDialogWidth, Math.max(minDialogWidth, implicitWidth, contentBasedWidth))
     
     // Dynamic height based on content (can be overridden)
-    height: Math.max(200, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 200)
+    // Use content-based height with a small minimum to ensure dialog is never too tiny
+    height: Math.max(100, contentLayout ? (contentLayout.implicitHeight + Style.cardPadding * 2) : 100)
     
     // Positioning - only set if no anchors are used
     x: anchors.centerIn ? 0 : (parent ? (parent.width - width) / 2 : 0)
