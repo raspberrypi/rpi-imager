@@ -16,6 +16,7 @@ BaseDialog {
     property alias overlayParent: root.parent
 
     property url url
+    property string version: ""
 
     // Custom escape handling
     function escapePressed() {
@@ -54,7 +55,9 @@ BaseDialog {
 
     Text {
         id: descriptionText
-        text: qsTr("There is a newer version of Imager available. Would you like to visit the website to download it?")
+        text: root.version.length > 0
+            ? qsTr("Imager version %1 is available. Would you like to visit the website to download it?").arg(root.version)
+            : qsTr("There is a newer version of Imager available. Would you like to visit the website to download it?")
         wrapMode: Text.WordWrap
         font.pixelSize: Style.fontSizeDescription
         font.family: Style.fontFamily
@@ -69,6 +72,7 @@ BaseDialog {
 
     RowLayout {
         Layout.fillWidth: true
+        Layout.topMargin: Style.spacingSmall
         spacing: Style.spacingMedium
         Item { Layout.fillWidth: true }
 
@@ -84,7 +88,10 @@ BaseDialog {
 
         ImButtonRed {
             id: yesButton
-            text: CommonStrings.yes
+            text: qsTr("Update")
+            // Make the primary action button wider to encourage clicking
+            Layout.minimumWidth: Style.buttonWidthMinimum * 1.5
+            implicitWidth: Style.buttonWidthMinimum * 1.5
             accessibleDescription: qsTr("Open the Raspberry Pi website in your browser to download the latest version")
             activeFocusOnTab: true
             onClicked: {

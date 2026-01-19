@@ -1387,7 +1387,14 @@ QString ImageWriter::constantVersion() const
 /* Returns true if version argument is newer than current program */
 bool ImageWriter::isVersionNewer(const QString &version)
 {
-    return QVersionNumber::fromString(version) > QVersionNumber::fromString(IMAGER_VERSION_STR);
+    // Strip 'v' prefix if present - QVersionNumber requires strings to start with a digit
+    QString serverVersion = version.startsWith('v', Qt::CaseInsensitive) ? version.mid(1) : version;
+    QString currentVersion = QString(IMAGER_VERSION_STR);
+    if (currentVersion.startsWith('v', Qt::CaseInsensitive)) {
+        currentVersion = currentVersion.mid(1);
+    }
+    
+    return QVersionNumber::fromString(serverVersion) > QVersionNumber::fromString(currentVersion);
 }
 
 void ImageWriter::setCustomOsListUrl(const QUrl &url)

@@ -135,10 +135,11 @@ BaseDialog {
     function _canGoUp() { return !_isRoot(dialog.currentFolder) }
     function _goUp() { if (_canGoUp()) dialog.currentFolder = _parentUrl(dialog.currentFolder) }
 
-    // Data models
+    // Data models - only scan folders when dialog is visible to avoid triggering
+    // macOS permission dialogs during component initialization
     FolderListModel {
         id: folderModel
-        folder: dialog.currentFolder
+        folder: dialog.visible ? dialog.currentFolder : ""
         showDirs: true
         showFiles: true
         showDotAndDotDot: true
@@ -150,7 +151,7 @@ BaseDialog {
     // Directories-only model for left pane (subfolders of current folder)
     FolderListModel {
         id: dirsOnlyModel
-        folder: dialog.currentFolder
+        folder: dialog.visible ? dialog.currentFolder : ""
         showDirs: true
         showFiles: false
         showDotAndDotDot: false
@@ -162,7 +163,7 @@ BaseDialog {
     // Files-only model for right pane (files of current folder)
     FolderListModel {
         id: filesOnlyModel
-        folder: dialog.currentFolder
+        folder: dialog.visible ? dialog.currentFolder : ""
         showDirs: false
         showFiles: true
         showDotAndDotDot: false
