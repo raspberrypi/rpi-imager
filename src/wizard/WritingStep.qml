@@ -68,6 +68,7 @@ WizardStepBase {
     property string bottleneckStatus: ""
     property int writeThroughputKBps: 0
     property string operationWarning: ""  // Non-fatal warning message (e.g., sync fallback)
+    property bool isIndeterminateProgress: false  // True when we can't determine accurate progress (e.g., gz files >4GB)
     readonly property bool anyCustomizationsApplied: (
         wizardContainer.customizationSupported && (
             wizardContainer.hostnameConfigured ||
@@ -321,6 +322,7 @@ WizardStepBase {
                 value: 0
                 from: 0
                 to: 100
+                indeterminate: root.isIndeterminateProgress && !root.isVerifying && !root.isFinalising
 
                 Material.accent: Style.progressBarVerifyForegroundColor
                 Material.background: Style.progressBarBackgroundColor
@@ -567,6 +569,8 @@ WizardStepBase {
             root.bottleneckStatus = ""
             root.writeThroughputKBps = 0
             root.operationWarning = ""
+            // Check if extract size is known upfront (e.g., gz files can't reliably store sizes >4GB)
+            root.isIndeterminateProgress = !imageWriter.isExtractSizeKnown()
             progressText.text = qsTr("Starting write process...")
             progressBar.value = 0
             Qt.callLater(function(){ imageWriter.startWrite() })
@@ -580,9 +584,15 @@ WizardStepBase {
 
     function onWriteProgress(now, total) {
         if (root.isWriting) {
-            var progress = total > 0 ? (now / total) * 100 : 0
-            progressBar.value = progress
-            progressText.text = qsTr("Writing... %1%").arg(Math.round(progress))
+            if (root.isIndeterminateProgress) {
+                // Show indeterminate progress with bytes written (in human-readable format)
+                var bytesWrittenMB = Math.round(now / (1024 * 1024))
+                progressText.text = qsTr("Writing... %1 MB written").arg(bytesWrittenMB)
+            } else {
+                var progress = total > 0 ? (now / total) * 100 : 0
+                progressBar.value = progress
+                progressText.text = qsTr("Writing... %1%").arg(Math.round(progress))
+            }
         }
     }
 

@@ -116,7 +116,7 @@ ImageWriter::ImageWriter(QObject *parent)
       _osListRefreshTimer(),
       _suspendInhibitor(nullptr),
       _thread(nullptr),
-      _verifyEnabled(true), _multipleFilesInZip(false), _online(false),
+      _verifyEnabled(true), _multipleFilesInZip(false), _online(false), _extractSizeKnown(true),
       _settings(),
       _translations(),
       _trans(nullptr),
@@ -489,6 +489,8 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
     _osReleaseDate = releaseDate;
+    // If extract size is provided from manifest, we can trust it; otherwise assume known until proven otherwise
+    _extractSizeKnown = true;
     qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
 
     if (!_downloadLen && url.isLocalFile())
@@ -2235,7 +2237,17 @@ void ImageWriter::_parseGzFile()
     // Gzip trailer format (last 8 bytes):
     // - CRC32 (4 bytes, little-endian)
     // - ISIZE (4 bytes, little-endian) - original file size modulo 2^32
+    //
+    // IMPORTANT: The ISIZE field is only 32 bits, so it stores the original size
+    // modulo 2^32. This means we cannot reliably determine the uncompressed size
+    // for files larger than 4GB. We still parse it for storage space estimation,
+    // but mark the size as unreliable for progress display purposes.
     const qint64 GZIP_TRAILER_SIZE = 8;
+
+    // Mark gzip extract size as unreliable - the format cannot accurately represent
+    // sizes >4GB, so progress percentage cannot be reliably calculated.
+    // This causes the UI to show an indeterminate progress bar instead of misleading percentages.
+    _extractSizeKnown = false;
 
     if (f.size() > GZIP_TRAILER_SIZE && f.open(QIODevice::ReadOnly))
     {
@@ -2254,15 +2266,16 @@ void ImageWriter::_parseGzFile()
 
             // Handle files larger than 4GB where ISIZE wraps around
             // If the uncompressed size appears smaller than the compressed size,
-            // the original file was likely > 4GB
+            // the original file was likely > 4GB. This is a heuristic for storage
+            // space checks but NOT reliable for progress calculation.
             qint64 compressedSize = f.size();
             while (_extrLen < static_cast<quint64>(compressedSize))
             {
                 _extrLen += Q_UINT64_C(0x100000000);  // Add 4GB
             }
 
-            qDebug() << "Parsed .gz file. Uncompressed size:" << _extrLen
-                     << "(ISIZE field:" << isize << ")";
+            qDebug() << "Parsed .gz file. Estimated uncompressed size:" << _extrLen
+                     << "(ISIZE field:" << isize << ") - size unreliable for progress";
         }
         else
         {
