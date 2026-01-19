@@ -1,3 +1,19 @@
+rpi-imager (2.0.5) unstable; urgency=medium
+
+  * macOS:
+    - Add dark mode and Liquid Glass icon support with pre-compiled assets
+    - Add icon compilation script for regenerating icon assets
+  * UI:
+    - Enhance update popup with version tracking functionality
+    - Improve BaseDialog minimum height for better usability
+    - Use indeterminate progressbar for local gzip files without size info
+    - Fixup updatePopupRequested trigger
+  * Local JSON Helper:
+    - Add device capabilities support
+    - Add OS capabilities support
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Sun, 19 Jan 2026 17:00:00 +0000
+
 rpi-imager (2.0.4) unstable; urgency=medium
 
   * Write Robustness:
