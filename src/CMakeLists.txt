@@ -417,10 +417,8 @@ if(GENERATE_COUNTRIES_FROM_REGDB AND DEFINED GENERATE_COUNTRIES_TGT)
     set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_COUNTRIES_TGT})
 endif()
 
-# Add Icon Composer dependency for macOS dark mode icons
-if(APPLE AND DEFINED ICON_COMPOSER_TARGET AND NOT "${ICON_COMPOSER_TARGET}" STREQUAL "")
-    add_dependencies(${PROJECT_NAME} ${ICON_COMPOSER_TARGET})
-endif()
+# Note: Icon Composer compilation for macOS dark mode icons is handled in
+# mac/PlatformPackaging.cmake as a POST_BUILD step after macdeployqt runs
 
 if(ENABLE_TELEMETRY)
     add_definitions(-DTELEMETRY_ENABLED_DEFAULT=true)
