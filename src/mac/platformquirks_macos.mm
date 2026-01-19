@@ -45,6 +45,11 @@ void beep() {
     NSBeep();
 }
 
+bool isBeepAvailable() {
+    // macOS NSBeep is always available via AppKit
+    return true;
+}
+
 bool hasNetworkConnectivity() {
     // Use SystemConfiguration framework to check network reachability
     SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithName(NULL, "www.raspberrypi.com");

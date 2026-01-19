@@ -4176,6 +4176,11 @@ void ImageWriter::restartWithElevatedPrivileges()
     PlatformQuirks::execElevated(extraArgs);
 }
 
+bool ImageWriter::isBeepAvailable()
+{
+    return PlatformQuirks::isBeepAvailable();
+}
+
 bool ImageWriter::hasPerformanceData()
 {
     return _performanceStats->hasData();
