@@ -118,9 +118,13 @@ ApplicationWindow {
                 wizardContainer.currentStep = 0;
             }
             
-            onUpdatePopupRequested: function(updateUrl) {
-                updatepopup.url = updateUrl
-                updatepopup.open()
+            onUpdatePopupRequested: function(updateUrl, version) {
+                if (!window.updatePopupShown) {
+                    window.updatePopupShown = true
+                    updatepopup.url = updateUrl
+                    updatepopup.version = version
+                    updatepopup.open()
+                }
             }
         }
     }
@@ -370,6 +374,9 @@ ApplicationWindow {
             window.imageWriter.keychainPermissionResponse(false);
         }
     }
+
+    // Track whether update popup has been shown this session
+    property bool updatePopupShown: false
 
     UpdateAvailableDialog {
         id: updatepopup

@@ -39,6 +39,9 @@ Button {
         clip: true  // Prevent content overflow at non-integer scale factors
     }
 
+    // Override implicit width to match ImButton minimum width
+    implicitWidth: Style.buttonWidthMinimum
+
     contentItem: Text {
         text: control.text
         font: control.font

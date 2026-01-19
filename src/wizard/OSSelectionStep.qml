@@ -52,7 +52,7 @@ WizardStepBase {
         }
     }
     
-    signal updatePopupRequested(var url)
+    signal updatePopupRequested(var url, string version)
     signal defaultEmbeddedDriveRequested(var drive)
     
     // Forward the nextClicked signal as next() function
@@ -868,7 +868,7 @@ WizardStepBase {
                 var imager = o["imager"]
                 if (root.imageWriter.getBoolSetting("check_version") && "latest_version" in imager && "url" in imager) {
                     if (!root.imageWriter.isEmbeddedMode() && root.imageWriter.isVersionNewer(imager["latest_version"])) {
-                        root.updatePopupRequested(imager["url"])
+                        root.updatePopupRequested(imager["url"], imager["latest_version"])
                     }
                 }
                 if ("default_os" in imager) {
