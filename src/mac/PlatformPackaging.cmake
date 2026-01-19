@@ -15,7 +15,7 @@ else()
     set(MACOSX_BUNDLE_BUNDLE_VERSION "${IMAGER_VERSION_STR}")
     set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${IMAGER_VERSION_STR}")
     set(MACOSX_BUNDLE_LONG_VERSION_STRING "${IMAGER_VERSION_STR}")
-    set(MACOSX_BUNDLE_ICON_FILE "rpi-imager.icns")
+    set(MACOSX_BUNDLE_ICON_FILE "AppIcon")
     string(TIMESTAMP CURRENT_YEAR "%Y")
     set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2020-${CURRENT_YEAR} Raspberry Pi Ltd")
 
@@ -51,17 +51,6 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/Info.plist" "${APP_BUNDLE_PATH}/Contents/Info.plist"
     COMMENT "Installing custom Info.plist"
 )
-
-# Copy Icon Composer .icon file for dark mode support (macOS Tahoe+)
-set(ICON_COMPOSER_OUTPUT "${CMAKE_BINARY_DIR}/AppIcon.icon")
-if(EXISTS "${ICON_COMPOSER_OUTPUT}" OR EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/icons/app_icon_macos.icon")
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory 
-            "${CMAKE_CURRENT_SOURCE_DIR}/icons/app_icon_macos.icon"
-            "${APP_BUNDLE_PATH}/Contents/Resources/AppIcon.icon"
-        COMMENT "Installing Icon Composer file for dark mode support"
-    )
-endif()
 
 find_program(MACDEPLOYQT "macdeployqt" PATHS "${Qt6_ROOT}/bin")
 if (NOT MACDEPLOYQT)
@@ -173,6 +162,34 @@ add_custom_command(TARGET ${PROJECT_NAME}
     COMMAND /bin/sh -c "find \"${APP_BUNDLE_PATH}/Contents/Resources/qml\" -type d -name 'objects-*' -prune -exec rm -rf {} +"
     COMMENT "Removing unused QML theme directories and modules (keeping Material theme + Basic fallback)"
 )
+
+# Install pre-compiled icon assets for dark mode + Liquid Glass support (macOS Tahoe+)
+# These were compiled from app_icon_macos.icon using Xcode's actool via a helper project
+# The pre-compiled Assets.car properly contains all appearance variants (light/dark/tinted)
+set(PRECOMPILED_ASSETS_CAR "${CMAKE_CURRENT_SOURCE_DIR}/icons/AppIcon-compiled.car")
+set(PRECOMPILED_ICNS "${CMAKE_CURRENT_SOURCE_DIR}/icons/AppIcon-compiled.icns")
+if(EXISTS "${PRECOMPILED_ASSETS_CAR}" AND NOT BUILD_CLI_ONLY)
+    message(STATUS "Found pre-compiled icon Assets.car: ${PRECOMPILED_ASSETS_CAR}")
+    message(STATUS "Will install pre-compiled icons for Liquid Glass support on macOS Tahoe+")
+    
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Installing pre-compiled icon assets for Liquid Glass..."
+        # Remove Qt's Assets.car - replace with our pre-compiled version containing AppIcon
+        COMMAND ${CMAKE_COMMAND} -E remove -f "${APP_BUNDLE_PATH}/Contents/Resources/Assets.car"
+        # Remove any stale .icon copies from previous build attempts
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/app_icon_macos.icon"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${APP_BUNDLE_PATH}/Contents/Resources/AppIcon.icon"
+        # Copy pre-compiled Assets.car (contains all icon variants for Liquid Glass)
+        COMMAND ${CMAKE_COMMAND} -E copy 
+            "${PRECOMPILED_ASSETS_CAR}"
+            "${APP_BUNDLE_PATH}/Contents/Resources/Assets.car"
+        # Copy pre-compiled icns for legacy fallback (named AppIcon.icns to match CFBundleIconFile)
+        COMMAND ${CMAKE_COMMAND} -E copy 
+            "${PRECOMPILED_ICNS}"
+            "${APP_BUNDLE_PATH}/Contents/Resources/AppIcon.icns"
+        COMMENT "Installing pre-compiled icon assets for Liquid Glass support"
+    )
+endif()
 
 if(IMAGER_SIGNED_APP)
     if(IMAGER_SIGNING_IDENTITY)

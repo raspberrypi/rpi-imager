@@ -46,6 +46,7 @@
               }
             }
           ],
+          "glass" : true,
           "hidden" : false,
           "image-name" : "SD Red.svg",
           "name" : "SD Red",
@@ -71,6 +72,7 @@
               }
             }
           ],
+          "glass" : true,
           "hidden" : false,
           "image-name" : "SD Green.svg",
           "name" : "SD Green",
@@ -91,6 +93,7 @@
               }
             }
           ],
+          "glass" : true,
           "hidden" : false,
           "image-name" : "SD Blue.svg",
           "name" : "SD Blue",
