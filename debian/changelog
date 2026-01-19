@@ -12,7 +12,7 @@ rpi-imager (2.0.5) unstable; urgency=medium
     - Add device capabilities support
     - Add OS capabilities support
 
- -- Tom Dewey <tom.dewey@raspberrypi.com>  Sun, 19 Jan 2026 17:00:00 +0000
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Mon, 19 Jan 2026 17:00:00 +0000
 
 rpi-imager (2.0.4) unstable; urgency=medium
 
@@ -45,7 +45,7 @@ rpi-imager (2.0.4) unstable; urgency=medium
     - Refactor Qt build scripts for improved POSIX compliance and consistency
     - Add macOS-specific optimizations for universal builds
 
- -- Tom Dewey <tom.dewey@raspberrypi.com>  Wed, 15 Jan 2026 12:00:00 +0000
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 15 Jan 2026 12:00:00 +0000
 
 rpi-imager (2.0.3) unstable; urgency=medium
 
