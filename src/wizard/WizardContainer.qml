@@ -125,6 +125,7 @@ Item {
     readonly property int stepDone: 12
     
     signal wizardCompleted()
+    signal updatePopupRequested(url updateUrl)
     
     // Focus anchor for global keyboard navigation
     Item {
@@ -921,6 +922,7 @@ Item {
             appOptionsButton: optionsButton
             onNextClicked: root.nextStep()
             onBackClicked: root.previousStep()
+            onUpdatePopupRequested: function(url) { root.updatePopupRequested(url) }
         }
     }
     

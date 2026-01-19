@@ -117,6 +117,11 @@ ApplicationWindow {
                 // Reset to start of wizard or close application
                 wizardContainer.currentStep = 0;
             }
+            
+            onUpdatePopupRequested: function(updateUrl) {
+                updatepopup.url = updateUrl
+                updatepopup.open()
+            }
         }
     }
 
