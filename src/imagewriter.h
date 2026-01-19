@@ -69,6 +69,9 @@ public:
     Q_PROPERTY(WriteState writeState READ writeState NOTIFY writeStateChanged)
     Q_PROPERTY(bool isOsListUnavailable READ isOsListUnavailable NOTIFY osListUnavailableChanged)
 
+    /* Returns true if the extract size is reliably known (false for gz files which can't store sizes >4GB) */
+    Q_INVOKABLE bool isExtractSizeKnown() const { return _extractSizeKnown; }
+
     /* Set URL to download from, and if known download length and uncompressed length */
     Q_INVOKABLE void setSrc(const QUrl &url, quint64 downloadLen = 0, quint64 extrLen = 0, QByteArray expectedHash = "", bool multifilesinzip = false, QString parentcategory = "", QString osname = "", QByteArray initFormat = "", QString releaseDate = "");
 
@@ -443,7 +446,7 @@ protected:
     QTimer _osListRefreshTimer;
     SuspendInhibitor *_suspendInhibitor;
     DownloadThread *_thread;
-    bool _verifyEnabled, _multipleFilesInZip, _online;
+    bool _verifyEnabled, _multipleFilesInZip, _online, _extractSizeKnown;
     QSettings _settings;
     QMap<QString,QString> _translations;
     QTranslator *_trans;
