@@ -239,6 +239,11 @@ void beep() {
     MessageBeep(MB_OK);
 }
 
+bool isBeepAvailable() {
+    // Windows MessageBeep is always available via kernel32.dll
+    return true;
+}
+
 bool hasNetworkConnectivity() {
     // Use Windows API to check network connectivity
     // Check if any network adapter has an IP address

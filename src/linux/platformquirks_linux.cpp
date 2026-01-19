@@ -24,6 +24,7 @@
 #include <QDebug>
 #include <QProcess>
 #include <QFile>
+#include <QStandardPaths>
 #include <QDir>
 #include <QFileInfo>
 #include <QCryptographicHash>
@@ -246,41 +247,97 @@ void applyQuirks() {
     }
 }
 
+namespace {
+    // Sound files in order of preference (Freedesktop sound theme)
+    static const char* const SOUND_FILES[] = {
+        "/usr/share/sounds/freedesktop/stereo/complete.oga",  // Completion notification
+        "/usr/share/sounds/freedesktop/stereo/bell.oga",      // Bell/alert
+        nullptr
+    };
+    
+    // Find the first available sound file
+    static const char* findSoundFile() {
+        for (int i = 0; SOUND_FILES[i] != nullptr; i++) {
+            if (access(SOUND_FILES[i], R_OK) == 0) {
+                return SOUND_FILES[i];
+            }
+        }
+        return nullptr;
+    }
+    
+    static bool commandExists(const char* cmd) {
+        return !QStandardPaths::findExecutable(QString::fromLatin1(cmd)).isEmpty();
+    }
+}
+
+bool isBeepAvailable() {
+    // canberra-gtk-play uses the system sound theme - no file needed
+    if (commandExists("canberra-gtk-play")) {
+        return true;
+    }
+    
+    // Other mechanisms need a sound file
+    const char* soundFile = findSoundFile();
+    if (soundFile) {
+        if (commandExists("pw-play") || commandExists("aplay") || commandExists("pactl")) {
+            return true;
+        }
+    }
+    
+    // PC speaker beep - no dependencies
+    if (commandExists("beep")) {
+        return true;
+    }
+    
+    qDebug() << "No beep mechanism available on this Linux system";
+    return false;
+}
+
 void beep() {
-    // Try multiple Linux beep mechanisms in order of preference
-    
-    // 1. Try canberra-gtk-play (XDG Sound Theme compliant, works with PulseAudio/PipeWire)
-    if (QProcess::execute("canberra-gtk-play", QStringList() << "--id=bell") == 0) {
-        return;
+    // 1. canberra-gtk-play (XDG Sound Theme - best option, uses system theme)
+    if (commandExists("canberra-gtk-play")) {
+        if (QProcess::execute("canberra-gtk-play", {"--id=complete"}) == 0) {
+            return;
+        }
     }
     
-    // 2. Try pw-play (PipeWire native - default on Raspberry Pi OS and modern distros)
-    if (QProcess::execute("pw-play", QStringList() << "/usr/share/sounds/alsa/Front_Left.wav") == 0) {
-        return;
+    // Find a sound file for the remaining mechanisms
+    const char* soundFile = findSoundFile();
+    
+    if (soundFile) {
+        // 2. pw-play (PipeWire - default on modern distros including Raspberry Pi OS)
+        if (commandExists("pw-play")) {
+            if (QProcess::execute("pw-play", {soundFile}) == 0) {
+                return;
+            }
+        }
+        
+        // 3. aplay (ALSA - widely available, but only supports WAV)
+        if (commandExists("aplay")) {
+            if (QProcess::execute("aplay", {"-q", soundFile}) == 0) {
+                return;
+            }
+        }
+        
+        // 4. pactl (PulseAudio - legacy systems)
+        if (commandExists("pactl")) {
+            if (QProcess::execute("pactl", {"upload-sample", soundFile, "imager-beep"}) == 0) {
+                QProcess::execute("pactl", {"play-sample", "imager-beep"});
+                return;
+            }
+        }
     }
     
-    // 3. Try aplay (ALSA - widely available low-level fallback)
-    if (QProcess::execute("aplay", QStringList() << "-q" << "/usr/share/sounds/alsa/Front_Left.wav") == 0) {
-        return;
+    // 5. PC speaker beep command
+    if (commandExists("beep")) {
+        if (QProcess::execute("beep", {}) == 0) {
+            return;
+        }
     }
     
-    // 4. Try pactl (PulseAudio) - legacy systems
-    if (QProcess::execute("pactl", QStringList() << "upload-sample" << "/usr/share/sounds/alsa/Front_Left.wav" << "beep") == 0) {
-        QProcess::execute("pactl", QStringList() << "play-sample" << "beep");
-        return;
-    }
+    // 6. System bell via echo (rarely works in GUI environments, but worth trying)
+    QProcess::execute("echo", {"-e", "\\a"});
     
-    // 5. Try system bell via echo (works on some terminals)
-    if (QProcess::execute("echo", QStringList() << "-e" << "\\a") == 0) {
-        return;
-    }
-    
-    // 6. Try beep command if available
-    if (QProcess::execute("beep", QStringList()) == 0) {
-        return;
-    }
-    
-    // 7. Fallback: just log that beep was requested
     qDebug() << "Beep requested but no suitable audio mechanism found on this Linux system";
 }
 

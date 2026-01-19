@@ -23,6 +23,9 @@ namespace PlatformQuirks {
     /** Play a system beep sound. */
     void beep();
 
+    /** Check if beep/audio notification is available on this system. */
+    bool isBeepAvailable();
+
     /** Check if the system has network connectivity. */
     bool hasNetworkConnectivity();
     

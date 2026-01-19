@@ -96,8 +96,11 @@ BaseDialog {
             ImOptionPill {
                 id: chkBeep
                 text: qsTr("Play sound when finished")
-                accessibleDescription: qsTr("Play an audio notification when the image write process completes")
+                accessibleDescription: imageWriter.isBeepAvailable() 
+                    ? qsTr("Play an audio notification when the image write process completes")
+                    : qsTr("Audio notification unavailable - no viable audio player found on this system")
                 Layout.fillWidth: true
+                enabled: imageWriter.isBeepAvailable()
                 Component.onCompleted: {
                     focusItem.activeFocusOnTab = true
                 }
@@ -326,7 +329,8 @@ BaseDialog {
             isInitializing = true;
             
             // Load current settings from ImageWriter
-            chkBeep.checked = imageWriter.getBoolSetting("beep");
+            // Only enable beep if it's both saved as enabled AND available on this system
+            chkBeep.checked = imageWriter.getBoolSetting("beep") && imageWriter.isBeepAvailable();
             chkEject.checked = imageWriter.getBoolSetting("eject");
             chkTelemetry.checked = imageWriter.getBoolSetting("telemetry");
             // Do not load from QSettings; keep ephemeral
@@ -349,7 +353,8 @@ BaseDialog {
 
     function applySettings() {
         // Save settings to ImageWriter
-        imageWriter.setSetting("beep", chkBeep.checked);
+        // Only save beep as enabled if it's actually available on this system
+        imageWriter.setSetting("beep", chkBeep.checked && imageWriter.isBeepAvailable());
         imageWriter.setSetting("eject", chkEject.checked);
         imageWriter.setSetting("telemetry", chkTelemetry.checked);
         imageWriter.setSetting("secureboot_rsa_key", rsaKeyPath.text);

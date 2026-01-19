@@ -329,6 +329,9 @@ public:
     Q_INVOKABLE bool installElevationPolicy();
     Q_INVOKABLE void restartWithElevatedPrivileges();
 
+    /* Check if audio notification (beep) is available on this system */
+    Q_INVOKABLE bool isBeepAvailable();
+
     /* Performance data export - opens native save dialog and writes performance data to file.
        If native dialogs aren't available, emits performanceSaveDialogNeeded for QML fallback. */
     Q_INVOKABLE bool exportPerformanceData();
