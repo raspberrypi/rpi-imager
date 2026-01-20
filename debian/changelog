@@ -1,5 +1,6 @@
 rpi-imager (2.0.5) unstable; urgency=medium
 
+  * all platforms: CLI option added to help on GUI builds
   * macOS:
     - Add dark mode and Liquid Glass icon support with pre-compiled assets
     - Add icon compilation script for regenerating icon assets
@@ -12,7 +13,7 @@ rpi-imager (2.0.5) unstable; urgency=medium
     - Add device capabilities support
     - Add OS capabilities support
 
- -- Tom Dewey <tom.dewey@raspberrypi.com>  Mon, 19 Jan 2026 17:00:00 +0000
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Tue, 20 Jan 2026 17:00:00 +0000
 
 rpi-imager (2.0.4) unstable; urgency=medium
 
