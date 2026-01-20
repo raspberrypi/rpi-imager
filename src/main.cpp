@@ -325,6 +325,7 @@ int main(int argc, char *argv[])
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOptions({
+        {"cli", "Run in command-line mode (use --cli --help for CLI options)"},
         {"repo", "Custom OS list repository URL or local file", "url-or-file", ""},
         {"qm", "Custom translation .qm file", "file", ""},
         {"debug", "Output debug messages to console"},
