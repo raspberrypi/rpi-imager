@@ -167,7 +167,7 @@
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation>No s&apos;ha progut formatar el dispositiu: no hi ha prou permisos i l&apos;udisks2 no és disponible.</translation>
+        <translation>No s&apos;ha pogut formatar el dispositiu: no hi ha prou permisos i «udisks2» no és disponible.</translation>
     </message>
 </context>
 <context>
@@ -266,15 +266,15 @@
     </message>
     <message>
         <source>starting extraction</source>
-        <translation>S&apos;està inciant l&apos;extracció.</translation>
+        <translation>S&apos;està iniciant l&apos;extracció.</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation>S&apos;ha produït una error en llegir el fitxer d&apos;image.</translation>
+        <translation>S&apos;ha produït una error en llegir el fitxer d&apos;imatge.</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation>S&apos;ha produït una error en escriure al dispositu.</translation>
+        <translation>S&apos;ha produït una error en escriure al dispositiu.</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
@@ -432,15 +432,15 @@
     </message>
     <message>
         <source>Please fix validation errors in General and Services tabs</source>
-        <translation>Arregleu les errors de validació en les pestanyes General i Serveis</translation>
+        <translation>Corregiu les errors de validació en les pestanyes «General» i Serveis»</translation>
     </message>
     <message>
         <source>Please fix validation errors in General tab</source>
-        <translation>Arregleu les errors de validació en la pestanya General</translation>
+        <translation>Corregiu les errors de validació en la pestanya «General»</translation>
     </message>
     <message>
         <source>Please fix validation errors in Services tab</source>
-        <translation>Arregleu les errors de validació en la pestanya Serveis</translation>
+        <translation>Corregiu les errors de validació en la pestanya «Serveis»</translation>
     </message>
 </context>
 <context>
@@ -451,7 +451,7 @@
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation>Utilitza l&apos;autenticació de contrasenya</translation>
+        <translation>Usa l&apos;autenticació de contrasenya</translation>
     </message>
     <message>
         <source>Allow public-key authentication only</source>
@@ -467,7 +467,7 @@
     </message>
     <message>
         <source>RUN SSH-KEYGEN</source>
-        <translation>EXECUTA SSH-KEYGEN</translation>
+        <translation>EXECUTA «SSH-KEYGEN»</translation>
     </message>
     <message>
         <source>Add SSH Key</source>
@@ -484,7 +484,7 @@ Exemple: ssh-rsa AAAAB3NzaC1yc2E... usuari@nommaquina
     </message>
     <message>
         <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation>El format de la clau SSH no és vàlid. Les claus SSH han de comencar amb ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com o amb certificats SSH, seguits de les dades de la clau i comentaris opcionals.</translation>
+        <translation>El format de la clau SSH no és vàlid. Les claus SSH han de començar amb «ssh-rsa», «ssh-ed25519», «ssh-dss», «ecdsa-sha2-nistp», «sk-ssh-ed25519@openssh.com», «sk-ecdsa-sha2-nistp256@openssh.com» o amb un certificat SSH, seguits de les dades de la clau i comentaris opcionals.</translation>
     </message>
 </context>
 <context>
@@ -658,7 +658,7 @@ Exemple: ssh-rsa AAAAB3NzaC1yc2E... usuari@nommaquina
     </message>
     <message>
         <source>Use custom</source>
-        <translation>Utilitza&apos; una de personalitzada</translation>
+        <translation>Usa&apos;n una de personalitzada</translation>
     </message>
     <message>
         <source>Select a custom .img from your computer</source>
