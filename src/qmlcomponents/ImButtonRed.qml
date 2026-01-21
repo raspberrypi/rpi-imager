@@ -39,8 +39,8 @@ Button {
         clip: true  // Prevent content overflow at non-integer scale factors
     }
 
-    // Override implicit width to match ImButton minimum width
-    implicitWidth: Style.buttonWidthMinimum
+    // Size to fit content, with minimum width for short labels
+    implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
 
     contentItem: Text {
         text: control.text
@@ -50,6 +50,7 @@ Button {
                : Qt.rgba(0, 0, 0, 0.3)
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
+        elide: Text.ElideRight  // Truncate if layout constrains button below content width
     }
 
     activeFocusOnTab: true

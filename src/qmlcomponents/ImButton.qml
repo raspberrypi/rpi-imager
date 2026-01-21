@@ -37,20 +37,16 @@ Button {
         clip: true  // Prevent content overflow at non-integer scale factors
     }
 
-    // Override implicit width to prevent button from growing based on text length
-    implicitWidth: Style.buttonWidthMinimum
+    // Size to fit content, with minimum width for short labels
+    implicitWidth: Math.max(Style.buttonWidthMinimum, implicitContentWidth + leftPadding + rightPadding)
     
     contentItem: Text {
         text: control.text
-        font.family: control.font.family
-        font.capitalization: control.font.capitalization
-        font.pixelSize: control.font.pixelSize
-        minimumPixelSize: Math.round(control.font.pixelSize * 0.7)  // Don't shrink below 70%
-        fontSizeMode: Text.HorizontalFit
+        font: control.font
         color: control.enabled ? Style.buttonForegroundColor : Qt.rgba(0, 0, 0, 0.3)
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight  // Fallback if still too long at minimum size
+        elide: Text.ElideRight  // Truncate if layout constrains button below content width
     }
 
     activeFocusOnTab: true
