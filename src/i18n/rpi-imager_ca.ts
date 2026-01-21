@@ -5,11 +5,11 @@
     <name>DownloadExtractThread</name>
     <message>
         <source>Error extracting archive: %1</source>
-        <translation>S&apos;ha produït un error en extreure l&apos;arxiu: %1</translation>
+        <translation>S&apos;ha produït una error en extreure l&apos;arxiu: %1</translation>
     </message>
     <message>
         <source>Error mounting FAT32 partition</source>
-        <translation>S&apos;ha produït un error en muntar la partició FAT32</translation>
+        <translation>S&apos;ha produït una error en muntar la partició FAT32</translation>
     </message>
     <message>
         <source>Operating system did not mount FAT32 partition</source>
@@ -17,15 +17,15 @@
     </message>
     <message>
         <source>Error changing to directory &apos;%1&apos;</source>
-        <translation>S&apos;ha produït un error en canviar al directori «%1»</translation>
+        <translation>S&apos;ha produït una error en canviar al directori «%1»</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation type="unfinished">S&apos;ha produït un error en llegir l&apos;emmagatzematge.&lt;br&gt;És possible que la targeta SD estigui malmesa.</translation>
+        <translation>S&apos;ha produït una error en llegir l&apos;emmagatzematge.&lt;br&gt;És possible que la targeta SD estigui malmesa.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation type="unfinished">Ha fallat la verificació de l&apos;escriptura. El contingut de la targeta SD és diferent del que s&apos;hi ha escrit.</translation>
+        <translation>Ha fallat la verificació de l&apos;escriptura. El contingut de la targeta SD és diferent del que s&apos;hi ha escrit.</translation>
     </message>
 </context>
 <context>
@@ -40,11 +40,11 @@
     </message>
     <message>
         <source>Error running diskpart: %1</source>
-        <translation>S&apos;ha produït un error en executar «diskpart»: %1</translation>
+        <translation>S&apos;ha produït una error en executar «diskpart»: %1</translation>
     </message>
     <message>
         <source>Error removing existing partitions</source>
-        <translation>S&apos;ha produït un error en eliminar les particions existents.</translation>
+        <translation>S&apos;ha produït una error en eliminar les particions existents.</translation>
     </message>
     <message>
         <source>Authentication cancelled</source>
@@ -52,11 +52,11 @@
     </message>
     <message>
         <source>Error running authopen to gain access to disk device &apos;%1&apos;</source>
-        <translation>S&apos;ha produït un error en executar «authopen» per a obtenir l&apos;accés al dispositiu de disc «%1»</translation>
+        <translation>S&apos;ha produït una error en executar «authopen» per a obtenir l&apos;accés al dispositiu de disc «%1»</translation>
     </message>
     <message>
         <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
-        <translation>Verifiqueu si el «Raspberry Pi Imager» té accés als «volums extraïbles» des de la configuració de privacitat (sota «fitxers i carpetes» o doneu-li «accés complet al disc»)</translation>
+        <translation>Verifiqueu si el «Raspberry Pi Imager» té accés als «volums extraïbles» en la configuració de privacitat (sota «fitxers i carpetes» o doneu-li «accés complet al disc»)</translation>
     </message>
     <message>
         <source>Cannot open storage device &apos;%1&apos;.</source>
@@ -72,11 +72,11 @@
     </message>
     <message>
         <source>Write error while zero&apos;ing out MBR</source>
-        <translation>S&apos;ha produït un error en esborrar amb zeros l&apos;«MBR».</translation>
+        <translation>S&apos;ha produït una error en esborrar amb zeros l&apos;«MBR».</translation>
     </message>
     <message>
         <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>S&apos;ha produït un error d&apos;escriptura en esborrar amb zeros l&apos;última part de la targeta.&lt;br&gt;La targeta podria estar indicant una capacitat errònia (possible falsificació)</translation>
+        <translation>S&apos;ha produït una error d&apos;escriptura en esborrar amb zeros l&apos;última part de la targeta.&lt;br&gt;La targeta podria estar indicant una capacitat errònia (possible falsificació)</translation>
     </message>
     <message>
         <source>starting download</source>
@@ -84,31 +84,31 @@
     </message>
     <message>
         <source>Error downloading: %1</source>
-        <translation>S&apos;ha produït un error en la baixada: %1</translation>
+        <translation>S&apos;ha produït una error en la baixada: %1</translation>
     </message>
     <message>
         <source>Access denied error while writing file to disk.</source>
-        <translation>S&apos;ha produït un error d&apos;accés denegat en escriure el fitxer al disc.</translation>
+        <translation>S&apos;ha produït una error d&apos;accés denegat en escriure el fitxer al disc.</translation>
     </message>
     <message>
         <source>Error writing file to disk</source>
-        <translation>S&apos;ha produït un error en escriure el fitxer al disc</translation>
+        <translation>S&apos;ha produït una error en escriure el fitxer al disc</translation>
     </message>
     <message>
         <source>Error writing to storage (while flushing)</source>
-        <translation>S&apos;ha produït un error en escriure a l&apos;emmagatzematge (procés: Flushing)</translation>
+        <translation>S&apos;ha produït una error en escriure a l&apos;emmagatzematge (procés: Flushing)</translation>
     </message>
     <message>
         <source>Error writing to storage (while fsync)</source>
-        <translation>S&apos;ha produït un error en escriure a l&apos;emmagatzematge (procés: fsync)</translation>
+        <translation>S&apos;ha produït una error en escriure a l&apos;emmagatzematge (procés: fsync)</translation>
     </message>
     <message>
         <source>Error writing first block (partition table)</source>
-        <translation>S&apos;ha produït un error en escriure el primer bloc (taula de particions)</translation>
+        <translation>S&apos;ha produït una error en escriure el primer bloc (taula de particions)</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>S&apos;ha produït un error en llegir l&apos;emmagatzematge.&lt;br&gt;És possible que la targeta SD estigui malmesa.</translation>
+        <translation>S&apos;ha produït una error en llegir l&apos;emmagatzematge.&lt;br&gt;És possible que la targeta SD estigui malmesa.</translation>
     </message>
     <message>
         <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
@@ -120,107 +120,107 @@
     </message>
     <message>
         <source>Cached file is corrupt. SHA256 hash does not match expected value.&lt;br&gt;The cache file will be removed and the download will restart.</source>
-        <translation type="unfinished"></translation>
+        <translation>El fitxer en la memòria cau és malmès. El hash SHA256 no coincideix amb la valor esperada.&lt;br&gt;El fitxer s&apos;esborrarà de la memòria cau i es tornarà a baixar.</translation>
     </message>
     <message>
         <source>Local file is corrupt or has incorrect SHA256 hash.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>El fitxer en la memòria cau és malmès o té un hash SHA256 incorrecte.&lt;br&gt;Esperat: %1&lt;br&gt;Real: %2</translation>
     </message>
     <message>
         <source>Download appears to be corrupt. SHA256 hash does not match.&lt;br&gt;Expected: %1&lt;br&gt;Actual: %2&lt;br&gt;Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>La baixada sembla malmesa. El hash SHA256 no coincideix.&lt;br&gt;Esperat: %1&lt;br&gt;Real: %2&lt;br&gt;Comproveu la connexió a la xarxa i torneu-ho a intentar.</translation>
     </message>
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;accés controlat a les carpetes sembla actiu. Afegiu rpi-imager.exe a la llista d&apos;aplicacions permeses i torneu-ho a provar.</translation>
     </message>
 </context>
 <context>
     <name>DriveFormatThread</name>
     <message>
         <source>Error formatting (through udisks2)</source>
-        <translation>S&apos;ha produït un error en formatar (a través d&apos;«udisks2»)</translation>
+        <translation>S&apos;ha produït una error en formatar (a través d&apos;«udisks2»).</translation>
     </message>
     <message>
         <source>Error opening device for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produït una error en obrir el dispositiu per a formatar.</translation>
     </message>
     <message>
         <source>Error writing to device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produït una error durant la formatació.</translation>
     </message>
     <message>
         <source>Error seeking on device during formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produït una error en la cerca del dispositiu durant la formatació.</translation>
     </message>
     <message>
         <source>Invalid parameters for formatting</source>
-        <translation type="unfinished"></translation>
+        <translation>Paràmetres no vàlids per a la formatació.</translation>
     </message>
     <message>
         <source>Insufficient space on device</source>
-        <translation type="unfinished"></translation>
+        <translation>No hi ha prou espai al dispositiu.</translation>
     </message>
     <message>
         <source>Unknown formatting error</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produït una error desconeguda durant la formatació.</translation>
     </message>
     <message>
         <source>Cannot format device: insufficient permissions and udisks2 not available</source>
-        <translation type="unfinished"></translation>
+        <translation>No s&apos;ha progut formatar el dispositiu: no hi ha prou permisos i l&apos;udisks2 no és disponible.</translation>
     </message>
 </context>
 <context>
     <name>DstPopup</name>
     <message>
         <source>Storage</source>
-        <translation type="unfinished">Emmagatzematge</translation>
+        <translation>Emmagatzematge</translation>
     </message>
     <message>
         <source>No storage devices found</source>
-        <translation type="unfinished">No s&apos;ha trobat cap dispositiu d&apos;emmagatzematge</translation>
+        <translation>No s&apos;ha trobat cap dispositiu d&apos;emmagatzematge</translation>
     </message>
     <message>
         <source>Exclude System Drives</source>
-        <translation type="unfinished"></translation>
+        <translation>Exclou les unitats del sistema</translation>
     </message>
     <message>
         <source>gigabytes</source>
-        <translation type="unfinished"></translation>
+        <translation>gigabytes</translation>
     </message>
     <message>
         <source>Mounted as %1</source>
-        <translation type="unfinished">Muntat com a %1</translation>
+        <translation>Muntat com a %1</translation>
     </message>
     <message>
         <source>GB</source>
-        <translation type="unfinished"></translation>
+        <translation>GB</translation>
     </message>
     <message>
         <source>[WRITE PROTECTED]</source>
-        <translation type="unfinished">[PROTEGIT CONTRA ESCRIPTURA]</translation>
+        <translation>[PROTEGIT CONTRA L&apos;ESCRIPTURA]</translation>
     </message>
     <message>
         <source>SYSTEM</source>
-        <translation type="unfinished"></translation>
+        <translation>SISTEMA</translation>
     </message>
     <message>
         <source>SD card is write protected.&lt;br&gt;Push the lock switch on the left side of the card upwards, and try again.</source>
-        <translation type="unfinished">La targeta SD està protegida contra escriptura.&lt;br&gt;Accioneu l&apos;interruptor del costat esquerre de la targeta SD per tal que quedi posicionat a la part superior i torneu-ho a provar.</translation>
+        <translation>La targeta SD està protegida contra l&apos;escriptura.&lt;br&gt;Accioneu l'interruptor de blocatge del costat esquerre de la targeta cap amunt i torneu-ho a provar.</translation>
     </message>
 </context>
 <context>
     <name>HWListModel</name>
     <message>
         <source>CHOOSE DEVICE</source>
-        <translation type="unfinished">TRIA LA PLACA</translation>
+        <translation>TRIA LA PLACA</translation>
     </message>
 </context>
 <context>
     <name>HwPopup</name>
     <message>
         <source>Raspberry Pi Device</source>
-        <translation type="unfinished">Placa Raspberry Pi</translation>
+        <translation>Placa Raspberry Pi</translation>
     </message>
 </context>
 <context>
@@ -239,7 +239,7 @@
     </message>
     <message>
         <source>Select image</source>
-        <translation>Selecciona una imatge</translation>
+        <translation>Tria una imatge</translation>
     </message>
     <message>
         <source>Error synchronizing time. Trying again in 3 seconds</source>
@@ -262,23 +262,23 @@
     </message>
     <message>
         <source>Error opening image file</source>
-        <translation>S&apos;ha produït un error en obrir el fitxer de la imatge</translation>
+        <translation>S&apos;ha produït una error en obrir el fitxer de la imatge</translation>
     </message>
     <message>
         <source>starting extraction</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està inciant l&apos;extracció.</translation>
     </message>
     <message>
         <source>Error reading from image file</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produït una error en llegir el fitxer d&apos;image.</translation>
     </message>
     <message>
         <source>Error writing to device</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;ha produït una error en escriure al dispositu.</translation>
     </message>
     <message>
         <source>Failed to read complete image file</source>
-        <translation type="unfinished"></translation>
+        <translation>No s&apos;ha pogut llegir el fitxer d&apos;imatge sencer.</translation>
     </message>
 </context>
 <context>
@@ -304,104 +304,104 @@
     <name>OSListModel</name>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished"></translation>
+        <translation>Recomanat</translation>
     </message>
 </context>
 <context>
     <name>OSPopup</name>
     <message>
         <source>Operating System</source>
-        <translation type="unfinished">Sistema operatiu</translation>
+        <translation>Sistema operatiu</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Enrere</translation>
+        <translation>Enrere</translation>
     </message>
     <message>
         <source>Go back to main menu</source>
-        <translation type="unfinished">Torna al menú principal</translation>
+        <translation>Torna al menú principal</translation>
     </message>
     <message>
         <source>Released: %1</source>
-        <translation type="unfinished">Llançat el: %1</translation>
+        <translation>Llançat el: %1</translation>
     </message>
     <message>
         <source>Cached on your computer</source>
-        <translation type="unfinished">A la memòria cau de l&apos;ordinador</translation>
+        <translation>A la memòria cau de l&apos;ordinador</translation>
     </message>
     <message>
         <source>Local file</source>
-        <translation type="unfinished">Fitxer local</translation>
+        <translation>Fitxer local</translation>
     </message>
     <message>
         <source>Online - %1 GB download</source>
-        <translation type="unfinished">Disponible en línia (%1 GB)</translation>
+        <translation>Disponible en línia (%1 GB)</translation>
     </message>
     <message>
         <source>Connect an USB stick containing images first.&lt;br&gt;The images must be located in the root folder of the USB stick.</source>
-        <translation type="unfinished">Connecteu una memòria USB que contingui primer imatges.&lt;br&gt;Les imatges s&apos;han de trobar a la carpeta arrel de la memòria.</translation>
+        <translation>Connecteu una memòria USB que contingui primer imatges.&lt;br&gt;Les imatges s&apos;han de trobar a la carpeta arrel de la memòria.</translation>
     </message>
 </context>
 <context>
     <name>OptionsGeneralTab</name>
     <message>
         <source>Set hostname:</source>
-        <translation type="unfinished">Defineix un nom de la màquina (hostname):</translation>
+        <translation>Defineix un nom de la màquina (hostname):</translation>
     </message>
     <message>
         <source>Set username and password</source>
-        <translation type="unfinished">Defineix el nom d&apos;usuari i contrasenya</translation>
+        <translation>Defineix el nom d&apos;usuari i contrasenya</translation>
     </message>
     <message>
         <source>Username:</source>
-        <translation type="unfinished">Nom d&apos;usuari:</translation>
+        <translation>Nom d&apos;usuari:</translation>
     </message>
     <message>
         <source>Password:</source>
-        <translation type="unfinished">Contrasenya:</translation>
+        <translation>Contrasenya:</translation>
     </message>
     <message>
         <source>Configure wireless LAN</source>
-        <translation type="unfinished">Configura la wifi</translation>
+        <translation>Configura el wifi</translation>
     </message>
     <message>
         <source>SSID:</source>
-        <translation type="unfinished">SSID:</translation>
+        <translation>SSID:</translation>
     </message>
     <message>
         <source>Hidden SSID</source>
-        <translation type="unfinished">SSID oculta</translation>
+        <translation>SSID oculta</translation>
     </message>
     <message>
         <source>Wireless LAN country:</source>
-        <translation type="unfinished">País del wifi:</translation>
+        <translation>País del wifi:</translation>
     </message>
     <message>
         <source>Set locale settings</source>
-        <translation type="unfinished">Estableix la configuració regional</translation>
+        <translation>Estableix la configuració regional</translation>
     </message>
     <message>
         <source>Time zone:</source>
-        <translation type="unfinished">Fus horari:</translation>
+        <translation>Fus horari:</translation>
     </message>
     <message>
         <source>Keyboard layout:</source>
-        <translation type="unfinished">Disposició del teclat:</translation>
+        <translation>Disposició del teclat:</translation>
     </message>
 </context>
 <context>
     <name>OptionsMiscTab</name>
     <message>
         <source>Play sound when finished</source>
-        <translation type="unfinished">Fes un so quan acabi</translation>
+        <translation>Fes un so quan acabi</translation>
     </message>
     <message>
         <source>Eject media when finished</source>
-        <translation type="unfinished">Expulsa el mitjà quan acabi</translation>
+        <translation>Expulsa el mitjà quan acabi</translation>
     </message>
     <message>
         <source>Enable telemetry</source>
-        <translation type="unfinished">Activa la telemetria</translation>
+        <translation>Activa la telemetria</translation>
     </message>
 </context>
 <context>
@@ -428,60 +428,63 @@
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished"></translation>
+        <translation>CANCEL·LA</translation>
     </message>
     <message>
         <source>Please fix validation errors in General and Services tabs</source>
-        <translation type="unfinished"></translation>
+        <translation>Arregleu les errors de validació en les pestanyes General i Serveis</translation>
     </message>
     <message>
         <source>Please fix validation errors in General tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Arregleu les errors de validació en la pestanya General</translation>
     </message>
     <message>
         <source>Please fix validation errors in Services tab</source>
-        <translation type="unfinished"></translation>
+        <translation>Arregleu les errors de validació en la pestanya Serveis</translation>
     </message>
 </context>
 <context>
     <name>OptionsServicesTab</name>
     <message>
         <source>Enable SSH</source>
-        <translation type="unfinished">Activa el protocol SSH</translation>
+        <translation>Activa el protocol SSH</translation>
     </message>
     <message>
         <source>Use password authentication</source>
-        <translation type="unfinished">Utilitza l&apos;autenticació de contrasenya</translation>
+        <translation>Utilitza l&apos;autenticació de contrasenya</translation>
     </message>
     <message>
         <source>Allow public-key authentication only</source>
-        <translation type="unfinished">Permet només l&apos;autenticació de claus públiques</translation>
+        <translation>Permet només l&apos;autenticació de claus públiques</translation>
     </message>
     <message>
         <source>Set authorized_keys for &apos;%1&apos;:</source>
-        <translation type="unfinished">Establiu «authorized_keys» per a l&apos;usuari «%1»:</translation>
+        <translation>Establiu «authorized_keys» per a l&apos;usuari «%1»:</translation>
     </message>
     <message>
         <source>Delete Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Suprimeix la clau</translation>
     </message>
     <message>
         <source>RUN SSH-KEYGEN</source>
-        <translation type="unfinished">EXECUTA SSH-KEYGEN</translation>
+        <translation>EXECUTA SSH-KEYGEN</translation>
     </message>
     <message>
         <source>Add SSH Key</source>
-        <translation type="unfinished"></translation>
+        <translation>Afegeix una clau SSH</translation>
     </message>
     <message>
         <source>Paste your SSH public key here.
 Supported formats: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, and SSH certificates
 Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
-        <translation type="unfinished"></translation>
+        <translation>Enganxeu la clau SSH pública ací.
+Formats vàlids: ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com i certificats SSH
+Exemple: ssh-rsa AAAAB3NzaC1yc2E... usuari@nommaquina
+</translation>
     </message>
     <message>
         <source>Invalid SSH key format. SSH keys must start with ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, or SSH certificates, followed by the key data and optional comment.</source>
-        <translation type="unfinished"></translation>
+        <translation>El format de la clau SSH no és vàlid. Les claus SSH han de comencar amb ssh-rsa, ssh-ed25519, ssh-dss, ecdsa-sha2-nistp, sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com o amb certificats SSH, seguits de les dades de la clau i comentaris opcionals.</translation>
     </message>
 </context>
 <context>
@@ -519,7 +522,7 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>Select this button to choose your target Raspberry Pi</source>
-        <translation>Seleccioneu aquest botó per a escollir la placa Raspberry Pi objectiu</translation>
+        <translation>Seleccioneu aquest botó per a triar la placa Raspberry Pi objectiu</translation>
     </message>
     <message>
         <source>Operating System</source>
@@ -595,7 +598,7 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>Raspberry Pi Imager is still busy.&lt;br&gt;Are you sure you want to quit?</source>
-        <translation>El Raspberry Pi Imager està ocupat.&lt;br&gt;Esteu segur que en voleu sortir?</translation>
+        <translation>El Raspberry Pi Imager és ocupat.&lt;br&gt;Esteu segur que en voleu sortir?</translation>
     </message>
     <message>
         <source>Warning</source>
@@ -619,23 +622,23 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>Writing... %1%</source>
-        <translation>S&apos;està escrivint... %1%</translation>
+        <translation>S&apos;està escrivint. (%1 %)</translation>
     </message>
     <message>
         <source>Verifying... %1%</source>
-        <translation>S&apos;està verificant... %1%</translation>
+        <translation>S&apos;està verificant. (%1 %)</translation>
     </message>
     <message>
         <source>Preparing to write... (%1)</source>
-        <translation>S&apos;està preparant per escriure... (%1)</translation>
+        <translation>S&apos;està preparant per escriure. (%1)</translation>
     </message>
     <message>
         <source>Error</source>
-        <translation>S&apos;ha produït un error</translation>
+        <translation>S&apos;ha produït una error</translation>
     </message>
     <message>
         <source>Write Successful</source>
-        <translation>S&apos;ha escrit amb èxit</translation>
+        <translation>L&apos;escriptura ha reeixit.</translation>
     </message>
     <message>
         <source>Erase</source>
@@ -655,31 +658,31 @@ Example: ssh-rsa AAAAB3NzaC1yc2E... user@hostname</source>
     </message>
     <message>
         <source>Use custom</source>
-        <translation>Utilitza una personalitzada</translation>
+        <translation>Utilitza&apos; una de personalitzada</translation>
     </message>
     <message>
         <source>Select a custom .img from your computer</source>
-        <translation>Selecciona una imatge .img personalitzada de l&apos;ordinador</translation>
+        <translation>Trieu una imatge .img personalitzada de l&apos;ordinador</translation>
     </message>
     <message>
         <source>SKIP CACHE VERIFICATION</source>
-        <translation type="unfinished"></translation>
+        <translation>OMET LA VERIFICACIÓ DE LA MEMÒRIA CAU</translation>
     </message>
     <message>
         <source>Starting download...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està iniciant la baixada.</translation>
     </message>
     <message>
         <source>Verifying cached file... %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està verificant el fitxer en memòria cau. (%1 %)</translation>
     </message>
     <message>
         <source>Verifying cached file...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està verificant el fitxer en memòria cau.</translation>
     </message>
     <message>
         <source>Starting write...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està començant a escriure.</translation>
     </message>
 </context>
 </TS>
