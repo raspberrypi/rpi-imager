@@ -10,7 +10,7 @@
 #include <QCommandLineParser>
 #include <QFileInfo>
 #include "drivelistmodel.h"
-#include "dependencies/drivelist/src/drivelist.hpp"
+#include "drivelist/drivelist.h"
 #include "imageadvancedoptions.h"
 #include "platformquirks.h"
 

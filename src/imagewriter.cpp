@@ -11,7 +11,7 @@
 #include "file_operations.h"
 #include "drivelistitem.h"
 #include "customization_generator.h"
-#include "dependencies/drivelist/src/drivelist.hpp"
+#include "drivelist/drivelist.h"
 #include "dependencies/sha256crypt/sha256crypt.h"
 #include "dependencies/yescrypt/yescrypt_wrapper.h"
 #include "driveformatthread.h"

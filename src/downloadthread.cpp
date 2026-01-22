@@ -11,7 +11,7 @@
 #include "systemmemorymanager.h"
 #include "timeout_utils.h"
 #include "platformquirks.h"
-#include "dependencies/drivelist/src/drivelist.hpp"
+#include "drivelist/drivelist.h"
 #include <fstream>
 #include <sstream>
 #include <iostream>

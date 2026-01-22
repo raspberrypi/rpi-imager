@@ -4,7 +4,7 @@
  */
 
 #include "driveformatthread.h"
-#include "dependencies/drivelist/src/drivelist.hpp"
+#include "drivelist/drivelist.h"
 #include "disk_formatter.h"
 #include "platformquirks.h"
 #include <QDebug>

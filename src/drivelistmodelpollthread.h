@@ -9,7 +9,7 @@
 #include <QThread>
 #include <QMutex>
 #include <QWaitCondition>
-#include "dependencies/drivelist/src/drivelist.hpp"
+#include "drivelist/drivelist.h"
 
 /**
  * @brief Background thread for polling available storage devices

@@ -4,7 +4,7 @@
  */
 
 #include "diskpart_util.h"
-#include "../dependencies/drivelist/src/drivelist.hpp"
+#include "../drivelist/drivelist.h"
 #include "../platformquirks.h"
 #include "winfile.h"
 #include <QDebug>
