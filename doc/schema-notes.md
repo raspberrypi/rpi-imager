@@ -1202,7 +1202,7 @@ Before deploying your OS list JSON:
 
 You will need to write a sublist JSON, and test it prior to submission:
 
-General principals you should follow:
+General principles you should follow:
 
 1. Follow the schema strictly
 2. Test with multiple Imager versions
