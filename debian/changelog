@@ -1,3 +1,10 @@
+rpi-imager (2.0.6) unstable; urgency=medium
+
+  * UI: Improve ImButton width calculation for better content fitting
+  * i18n: Updated German translation
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Thu, 22 Jan 2026 14:30:00 +0000
+
 rpi-imager (2.0.5) unstable; urgency=medium
 
   * all platforms: CLI option added to help on GUI builds
