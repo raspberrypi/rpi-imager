@@ -488,28 +488,28 @@ QString getEjectDevicePath(const QString& devicePath) {
     return devicePath;
 }
 
-namespace {
-    // Helper to extract device number from PhysicalDrive path
-    int parseDeviceNumber(const QString& device) {
-        // Expected format: \\.\PhysicalDriveN
-        QByteArray deviceBytes = device.toLower().toUtf8();
-        const char* deviceStr = deviceBytes.constData();
-        
-        char prefix[32];
-        int deviceId = -1;
-        
-        // Try to parse as \\.\PhysicalDriveN
-        if (sscanf(deviceStr, "\\\\.\\physicaldrive%d", &deviceId) == 1) {
-            return deviceId;
-        }
-        // Also accept //./PhysicalDriveN (forward slashes)
-        if (sscanf(deviceStr, "//./physicaldrive%d", &deviceId) == 1) {
-            return deviceId;
-        }
-        
-        return -1;
+// Helper to extract device number from PhysicalDrive path
+// Defined outside anonymous namespace for test API access
+static int parseDeviceNumberImpl(const QString& device) {
+    // Expected format: \\.\PhysicalDriveN
+    QByteArray deviceBytes = device.toLower().toUtf8();
+    const char* deviceStr = deviceBytes.constData();
+    
+    int deviceId = -1;
+    
+    // Try to parse as \\.\PhysicalDriveN
+    if (sscanf(deviceStr, "\\\\.\\physicaldrive%d", &deviceId) == 1) {
+        return deviceId;
+    }
+    // Also accept //./PhysicalDriveN (forward slashes)
+    if (sscanf(deviceStr, "//./physicaldrive%d", &deviceId) == 1) {
+        return deviceId;
     }
     
+    return -1;
+}
+
+namespace {
     // Get device number from volume handle
     ULONG getDeviceNumberFromHandle(HANDLE volume) {
         STORAGE_DEVICE_NUMBER storageDeviceNumber;
@@ -653,7 +653,7 @@ namespace {
 }
 
 DiskResult unmountDisk(const QString& device) {
-    int deviceNumber = parseDeviceNumber(device);
+    int deviceNumber = parseDeviceNumberImpl(device);
     if (deviceNumber < 0) {
         qDebug() << "unmountDisk: invalid device path" << device;
         return DiskResult::InvalidDrive;
@@ -687,7 +687,7 @@ DiskResult unmountDisk(const QString& device) {
 }
 
 DiskResult ejectDisk(const QString& device) {
-    int deviceNumber = parseDeviceNumber(device);
+    int deviceNumber = parseDeviceNumberImpl(device);
     if (deviceNumber < 0) {
         qDebug() << "ejectDisk: invalid device path" << device;
         return DiskResult::InvalidDrive;
@@ -741,5 +741,14 @@ DiskResult ejectDisk(const QString& device) {
     
     return result;
 }
+
+// Test API for unit testing internal functions
+#ifdef PLATFORMQUIRKS_ENABLE_TEST_API
+namespace TestAPI {
+    int parseDeviceNumber(const QString& device) {
+        return parseDeviceNumberImpl(device);
+    }
+}
+#endif
 
 } // namespace PlatformQuirks
