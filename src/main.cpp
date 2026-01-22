@@ -157,15 +157,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Attempt automatic elevation if running from an elevatable bundle without privileges
-    // This happens BEFORE Qt initialization to avoid overhead
-    // If elevation succeeds, this process is replaced; if it fails, we continue
-    if (PlatformQuirks::isElevatableBundle() && !PlatformQuirks::hasElevatedPrivileges()) {
-        // Try to elevate - this will only work if an elevation policy is installed
-        PlatformQuirks::tryElevate(argc, argv);
-        // If we get here, elevation failed or wasn't possible
-        // Continue running without elevation - the UI will show a warning
-    }
+    // NOTE: We intentionally do NOT auto-elevate at startup any more.
+    // The UI runs unprivileged (enabling D-Bus registration for callbacks on Linux),
+    // and only the actual disk write operation is elevated via pkexec.
+    // See: https://github.com/raspberrypi/rpi-imager/issues/1469
 
     // Apply platform-specific quirks and workarounds FIRST
     // This must happen before any Qt initialization (QCoreApplication/QGuiApplication)
@@ -181,7 +176,7 @@ int main(int argc, char *argv[])
     {
         if (strcmp(argv[i], "--cli") == 0)
         {
-            /* CLI mode */
+            /* CLI mode - also used for elevated writes from GUI via --json-output */
             Cli cli(argc, argv);
             return cli.run();
         }
@@ -246,15 +241,9 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Early check for elevated privileges on platforms that require them (Linux/Windows)
-    bool hasPermissionIssue = false;
-#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
-    if (!PlatformQuirks::hasElevatedPrivileges())
-    {
-        hasPermissionIssue = true;
-        qWarning() << "Not running with elevated privileges - device access may fail";
-    }
-#endif
+    // NOTE: We no longer show a permission warning at startup.
+    // The UI runs unprivileged, and elevation happens on-demand when writing.
+    // This allows D-Bus registration to work on Linux for Pi Connect callbacks.
 
     qmlRegisterUncreatableMetaObject(
         ImageOptions::staticMetaObject, // from Q_NAMESPACE
@@ -732,48 +721,6 @@ int main(int argc, char *argv[])
     QTimer::singleShot(0, &imageWriter, [&imageWriter]() {
         imageWriter.isOnline();
     });
-
-    // Emit permission warning signal after UI is loaded so dialog can be shown
-    if (hasPermissionIssue)
-    {
-        // Common message parts to reduce translation effort
-        QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
-        QString footer = QObject::tr("Without this, you will encounter permission errors when writing images.");
-        QString statusAndAction = {};
-
-#ifdef Q_OS_LINUX
-        // Get the actual executable name (e.g., AppImage name or 'rpi-imager')
-        // Check if running from AppImage first
-        QString execName;
-        QByteArray appImagePath = qgetenv("APPIMAGE");
-        if (!appImagePath.isEmpty()) {
-            execName = QFileInfo(QString::fromUtf8(appImagePath)).fileName();
-            // AppImage-specific message with Install Authorization option
-            statusAndAction = QObject::tr(
-                "You are not running as root.\n\n"
-                "Click \"Install Authorization\" to set up automatic privilege elevation, "
-                "or run manually with: sudo %1"
-            ).arg(execName);
-        } else {
-            execName = QFileInfo(QString::fromUtf8(argv[0])).fileName();
-            statusAndAction = QObject::tr(
-                "You are not running as root.\n\n"
-                "Please run with elevated privileges: sudo %1"
-            ).arg(execName);
-        }
-#elif defined(Q_OS_WIN)
-        statusAndAction = QObject::tr(
-            "You are not running as Administrator.\n\n"
-            "Please run as Administrator."
-        );
-#endif
-
-        QString permissionMessage = QString("%1\n\n%2\n\n%3").arg(header, statusAndAction, footer);
-
-        QMetaObject::invokeMethod(&imageWriter, [&imageWriter, permissionMessage]() {
-            emit imageWriter.permissionWarning(permissionMessage);
-        }, Qt::QueuedConnection);
-    }
 
     int rc = app.exec();
 

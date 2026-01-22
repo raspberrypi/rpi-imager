@@ -38,6 +38,7 @@ class DownloadThread;
 class DownloadExtractThread;
 class QTranslator;
 class WriteProgressWatchdog;
+class ElevatedWriteProcess;
 #ifndef CLI_ONLY_BUILD
 class NativeFileDialog;
 #endif
@@ -469,6 +470,9 @@ protected:
     // Progress watchdog - separate component that monitors for stalls
     WriteProgressWatchdog* _progressWatchdog = nullptr;
     bool _forceSyncMode = false;  // Force sync I/O on next write (after recovery restart)
+    
+    // Elevated write process - used when UI runs unprivileged
+    ElevatedWriteProcess* _elevatedWriteProcess = nullptr;
     
     // Debug options (secret menu)
     bool _debugDirectIO;

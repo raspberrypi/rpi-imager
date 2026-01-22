@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "elevatedwriteprocess.h"
 #include "writeprogresswatchdog.h"
 #include "embedded_config.h"
 #include "config.h"
@@ -592,6 +593,81 @@ void ImageWriter::startWrite()
     }
 
     setWriteState(WriteState::Preparing);
+
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    // On Linux and Windows, check if we need to use elevated write process
+    // This allows the UI to run unprivileged (enabling D-Bus on Linux) while
+    // the actual disk write runs with elevated privileges
+    if (!PlatformQuirks::hasElevatedPrivileges())
+    {
+        qDebug() << "Starting elevated write process (UI is unprivileged)";
+        
+        // Create elevated write process if needed
+        if (!_elevatedWriteProcess) {
+            _elevatedWriteProcess = new ElevatedWriteProcess(this);
+            
+            // Connect signals to forward progress to QML
+            // CLI emits download_progress for both download and write phases
+            connect(_elevatedWriteProcess, &ElevatedWriteProcess::downloadProgress,
+                    this, &ImageWriter::downloadProgress);
+            connect(_elevatedWriteProcess, &ElevatedWriteProcess::verifyProgress,
+                    this, &ImageWriter::verifyProgress);
+            connect(_elevatedWriteProcess, &ElevatedWriteProcess::preparationStatusUpdate,
+                    this, &ImageWriter::preparationStatusUpdate);
+            connect(_elevatedWriteProcess, &ElevatedWriteProcess::error,
+                    this, [this](QVariant msg) {
+                        setWriteState(WriteState::Failed);
+                        emit error(msg);
+                    });
+            connect(_elevatedWriteProcess, &ElevatedWriteProcess::success,
+                    this, [this]() {
+                        setWriteState(WriteState::Succeeded);
+                        emit success();
+                        // Clear the Connect token after successful write
+                        clearConnectToken();
+                    });
+            connect(_elevatedWriteProcess, &ElevatedWriteProcess::cancelled,
+                    this, [this]() {
+                        setWriteState(WriteState::Cancelled);
+                        emit cancelled();
+                    });
+        }
+        
+        // Build parameters JSON for elevated process
+        QJsonObject params;
+        params["src"] = _src.toString();
+        params["srcSize"] = static_cast<qint64>(_downloadLen);
+        params["expectedHash"] = QString::fromLatin1(_expectedHash);
+        params["dst"] = _dst;
+        params["dstSize"] = static_cast<qint64>(_devLen);
+        params["verify"] = _verifyEnabled;
+        
+        // Include customization settings
+        QJsonObject customization;
+        customization["config"] = QString::fromUtf8(_config);
+        customization["cmdline"] = QString::fromUtf8(_cmdline);
+        customization["firstrun"] = QString::fromUtf8(_firstrun);
+        customization["cloudinit"] = QString::fromUtf8(_cloudinit);
+        customization["cloudinitNetwork"] = QString::fromUtf8(_cloudinitNetwork);
+        customization["initFormat"] = QString::fromUtf8(_initFormat);
+        customization["advancedOptions"] = static_cast<int>(_advancedOptions);
+        params["customization"] = customization;
+        
+        // Start the elevated process
+        if (!_elevatedWriteProcess->start(params)) {
+            setWriteState(WriteState::Failed);
+            // Error already emitted by ElevatedWriteProcess
+            return;
+        }
+        
+        // Inhibit system suspend during elevated write
+        if (_suspendInhibitor) {
+            _suspendInhibitor->inhibit();
+        }
+        
+        return;  // Don't continue with local thread creation
+    }
+#endif
 
     if (_src.toString() == "internal://format")
     {
@@ -1213,6 +1289,15 @@ void ImageWriter::cancelWrite()
         skipCacheVerification();
         return;
     }
+
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    // Cancel elevated write process if running
+    if (_elevatedWriteProcess && _elevatedWriteProcess->isRunning())
+    {
+        _elevatedWriteProcess->cancel();
+        return;  // cancelled signal will be emitted by the process
+    }
+#endif
 
     if (_thread)
     {

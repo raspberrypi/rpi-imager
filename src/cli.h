@@ -6,6 +6,7 @@
 
 class ImageWriter;
 class QCoreApplication;
+class QJsonObject;
 
 class Cli : public QObject
 {
@@ -21,9 +22,11 @@ protected:
     int _lastPercent;
     QByteArray _lastMsg;
     bool _quiet;
+    bool _jsonOutput;
 
     void _printProgress(const QByteArray &msg, QVariant now, QVariant total);
     void _clearLine();
+    void _sendJson(const QString &type, const QJsonObject &data);
 
 protected slots:
     void onSuccess();

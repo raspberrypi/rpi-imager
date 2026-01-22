@@ -4,7 +4,7 @@
 [linux-amd64] rpi-imager-x86_64.AppImage => /usr/bin/rpi-imager
 [linux-arm64] rpi-imager-aarch64.AppImage => /usr/bin/rpi-imager
 
-# Install PolicyKit policy for privilege escalation
+# Install PolicyKit policy for privilege escalation (used by on-demand elevation)
 debian/com.raspberrypi.rpi-imager.policy /usr/share/polkit-1/actions/
 
 src/linux/icon/rpi-imager.svg /usr/share/icons/hicolor/scalable/apps/

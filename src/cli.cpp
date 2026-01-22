@@ -9,6 +9,8 @@
 #include <QCoreApplication>
 #include <QCommandLineParser>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include "drivelistmodel.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include "imageadvancedoptions.h"
@@ -56,6 +58,8 @@ int Cli::run()
         {"disable-eject", "Disable automatic ejection of storage media after verification"},
         {"debug", "Output debug messages to console"},
         {"quiet", "Only write to console on error"},
+        {"json-output", "Output progress as JSON lines to stdout (for GUI integration)"},
+        {"write-spec", "Read write parameters from JSON file (for GUI integration)", "json-file", ""},
         {"log-file", "Log output to file (for debugging)", "path", ""},
         {"secure-boot-key", "Path to RSA private key (PEM format) for secure boot signing", "key-file", ""},
     });
@@ -97,11 +101,65 @@ int Cli::run()
     }
 
 
-    const QStringList args = parser.positionalArguments();
-    if (args.count() != 2)
+    // Handle write-spec file (for GUI integration)
+    // This allows the GUI to pass all write parameters via a JSON file
+    QString writeSpecFile = parser.value("write-spec");
+    QJsonObject writeSpec;
+    if (!writeSpecFile.isEmpty())
     {
-        std::cerr << parser.helpText().toStdString() << std::endl;
-        return 1;
+        QFile f(writeSpecFile);
+        if (!f.exists())
+        {
+            std::cerr << "Error: write-spec file does not exist: " << writeSpecFile.toStdString() << std::endl;
+            return 1;
+        }
+        if (!f.open(QIODevice::ReadOnly))
+        {
+            std::cerr << "Error: cannot open write-spec file: " << writeSpecFile.toStdString() << std::endl;
+            return 1;
+        }
+        
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &parseError);
+        f.close();
+        
+        if (parseError.error != QJsonParseError::NoError)
+        {
+            std::cerr << "Error: invalid JSON in write-spec file: " << parseError.errorString().toStdString() << std::endl;
+            return 1;
+        }
+        
+        if (!doc.isObject())
+        {
+            std::cerr << "Error: write-spec must be a JSON object" << std::endl;
+            return 1;
+        }
+        
+        writeSpec = doc.object();
+    }
+
+    // Get src and dst from write-spec or positional arguments
+    QString srcArg, dstArg;
+    if (!writeSpec.isEmpty())
+    {
+        srcArg = writeSpec["src"].toString();
+        dstArg = writeSpec["dst"].toString();
+        if (srcArg.isEmpty() || dstArg.isEmpty())
+        {
+            std::cerr << "Error: write-spec must contain 'src' and 'dst' fields" << std::endl;
+            return 1;
+        }
+    }
+    else
+    {
+        const QStringList args = parser.positionalArguments();
+        if (args.count() != 2)
+        {
+            std::cerr << parser.helpText().toStdString() << std::endl;
+            return 1;
+        }
+        srcArg = args[0];
+        dstArg = args[1];
     }
 
     // Now create ImageWriter for actual write operations
@@ -117,6 +175,12 @@ int Cli::run()
         qInstallMessageHandler(devnullMsgHandler);
     }
     _quiet = parser.isSet("quiet");
+    _jsonOutput = parser.isSet("json-output");
+    
+    // JSON output implies quiet (no text progress)
+    if (_jsonOutput) {
+        _quiet = true;
+    }
     QByteArray initFormat = (parser.value("cloudinit-userdata").isEmpty()
                              && parser.value("cloudinit-networkconfig").isEmpty() ) ? "systemd" : "cloudinit";
     
@@ -147,26 +211,33 @@ int Cli::run()
         }
     }
 
-    if (args[0].startsWith("http:", Qt::CaseInsensitive) || args[0].startsWith("https:", Qt::CaseInsensitive))
+    // Get hash from write-spec or command line
+    QByteArray expectedHash = parser.value("sha256").toLatin1();
+    if (expectedHash.isEmpty() && !writeSpec.isEmpty())
     {
-        _imageWriter->setSrc(args[0], 0, 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
+        expectedHash = writeSpec["expectedHash"].toString().toLatin1();
+    }
+
+    if (srcArg.startsWith("http:", Qt::CaseInsensitive) || srcArg.startsWith("https:", Qt::CaseInsensitive))
+    {
+        _imageWriter->setSrc(srcArg, 0, 0, expectedHash, false, "", "", initFormat);
 
         if (!parser.value("cache-file").isEmpty())
         {
-            _imageWriter->setCustomCacheFile(parser.value("cache-file"), parser.value("sha256").toLatin1() );
+            _imageWriter->setCustomCacheFile(parser.value("cache-file"), expectedHash);
         }
     }
     else
     {
-        QFileInfo fi(args[0]);
+        QFileInfo fi(srcArg);
 
         if (fi.isFile())
         {
-            _imageWriter->setSrc(QUrl::fromLocalFile(args[0]), fi.size(), 0, parser.value("sha256").toLatin1(), false, "", "", initFormat);
+            _imageWriter->setSrc(QUrl::fromLocalFile(srcArg), fi.size(), 0, expectedHash, false, "", "", initFormat);
         }
         else if (!fi.exists())
         {
-            std::cerr << "Error: source file does not exists" << std::endl;
+            std::cerr << "Error: source file does not exist" << std::endl;
             return 1;
         }
         else
@@ -176,6 +247,7 @@ int Cli::run()
         }
     }
 
+    // Check if system drives are allowed (CLI arg only - not from write-spec for security)
     if (parser.isSet("enable-writing-system-drives"))
     {
         std::cerr << "WARNING: writing to system drives is enabled." << std::endl;
@@ -183,13 +255,13 @@ int Cli::run()
     else
     {
         DriveListModel dlm;
-        dlm.processDriveList(Drivelist::ListStorageDevices() );
+        dlm.processDriveList(Drivelist::ListStorageDevices());
         bool foundDrive = false;
-        int numDrives = dlm.rowCount( QModelIndex() );
+        int numDrives = dlm.rowCount(QModelIndex());
 
         for (int i = 0; i < numDrives; i++)
         {
-            if (dlm.index(i, 0).data(dlm.deviceRole) == args[1])
+            if (dlm.index(i, 0).data(dlm.deviceRole) == dstArg)
             {
                 foundDrive = true;
                 break;
@@ -213,7 +285,30 @@ int Cli::run()
         }
     }
 
-    if (!parser.value("cloudinit-userdata").isEmpty() || !parser.value("cloudinit-networkconfig").isEmpty())
+    // Handle customization from write-spec or command line
+    QJsonObject customization = writeSpec["customization"].toObject();
+    
+    if (!customization.isEmpty())
+    {
+        // Customization from write-spec (GUI integration)
+        QByteArray config = customization["config"].toString().toUtf8();
+        QByteArray cmdline = customization["cmdline"].toString().toUtf8();
+        QByteArray firstrun = customization["firstrun"].toString().toUtf8();
+        QByteArray cloudinit = customization["cloudinit"].toString().toUtf8();
+        QByteArray cloudinitNetwork = customization["cloudinitNetwork"].toString().toUtf8();
+        QByteArray specInitFormat = customization["initFormat"].toString().toUtf8();
+        ImageOptions::AdvancedOptions specAdvancedOptions = 
+            static_cast<ImageOptions::AdvancedOptions>(customization["advancedOptions"].toInt());
+        
+        if (!specInitFormat.isEmpty()) {
+            initFormat = specInitFormat;
+        }
+        
+        _imageWriter->setImageCustomisation(config, cmdline, firstrun, 
+                                            cloudinit, cloudinitNetwork,
+                                            specAdvancedOptions | advancedOptions, initFormat);
+    }
+    else if (!parser.value("cloudinit-userdata").isEmpty() || !parser.value("cloudinit-networkconfig").isEmpty())
     {
         QByteArray userData, networkConfig;
         if (!parser.value("cloudinit-userdata").isEmpty())
@@ -222,7 +317,7 @@ int Cli::run()
 
             if (!f.exists())
             {
-                std::cerr << "Error: user-data file does not exists" << std::endl;
+                std::cerr << "Error: user-data file does not exist" << std::endl;
                 return 1;
             }
             if (f.open(f.ReadOnly))
@@ -243,7 +338,7 @@ int Cli::run()
 
             if (!f.exists())
             {
-                std::cerr << "Error: network-config file does not exists" << std::endl;
+                std::cerr << "Error: network-config file does not exist" << std::endl;
                 return 1;
             }
             if (f.open(f.ReadOnly))
@@ -266,7 +361,7 @@ int Cli::run()
         QFile f(parser.value("first-run-script"));
         if (!f.exists())
         {
-            std::cerr << "Error: firstrun script does not exists" << std::endl;
+            std::cerr << "Error: firstrun script does not exist" << std::endl;
             return 1;
         }
         if (f.open(f.ReadOnly))
@@ -288,8 +383,12 @@ int Cli::run()
         _imageWriter->setImageCustomisation("", "", "", "", "", advancedOptions, initFormat);
     }
 
-    _imageWriter->setDst(args[1]);
-    _imageWriter->setVerifyEnabled(!parser.isSet("disable-verify"));
+    _imageWriter->setDst(dstArg);
+    
+    // Get verify setting from write-spec or command line
+    bool disableVerify = parser.isSet("disable-verify") || 
+                         !writeSpec.value("verify", true).toBool();
+    _imageWriter->setVerifyEnabled(!disableVerify);
     _imageWriter->setSetting("eject", !parser.isSet("disable-eject"));
 
     /* Run startWrite() in event loop (otherwise calling _app->exit() on error does not work) */
@@ -299,8 +398,9 @@ int Cli::run()
 
 void Cli::onSuccess()
 {
-    if (!_quiet)
-    {
+    if (_jsonOutput) {
+        _sendJson("success", QJsonObject());
+    } else if (!_quiet) {
         _clearLine();
         std::cerr << "Write successful." << std::endl;
     }
@@ -313,32 +413,75 @@ void Cli::_clearLine()
     std::cerr << "\e[0K";
 }
 
+void Cli::_sendJson(const QString &type, const QJsonObject &data)
+{
+    QJsonObject msg = data;
+    msg["type"] = type;
+    QJsonDocument doc(msg);
+    std::cout << doc.toJson(QJsonDocument::Compact).constData() << std::endl;
+    std::cout.flush();
+}
+
 void Cli::onError(QVariant msg)
 {
     QByteArray m = msg.toByteArray();
 
-    if (!_quiet)
-    {
-        _clearLine();
+    if (_jsonOutput) {
+        QJsonObject data;
+        data["message"] = QString::fromUtf8(m);
+        _sendJson("error", data);
+    } else {
+        if (!_quiet) {
+            _clearLine();
+        }
+        std::cerr << "Error: " << m.constData() << std::endl;
     }
-    std::cerr << "Error: " << m.constData() << std::endl;
     _app->exit(1);
 }
 
 void Cli::onDownloadProgress(QVariant dlnow, QVariant dltotal)
 {
-    _printProgress("Writing",  dlnow, dltotal);
+    if (_jsonOutput) {
+        // Throttle JSON output to avoid flooding
+        int percent = dltotal.toLongLong() > 0 ? 
+            static_cast<int>(dlnow.toLongLong() * 100 / dltotal.toLongLong()) : 0;
+        if (percent != _lastPercent) {
+            QJsonObject data;
+            data["now"] = dlnow.toLongLong();
+            data["total"] = dltotal.toLongLong();
+            _sendJson("download_progress", data);
+            _lastPercent = percent;
+        }
+    } else {
+        _printProgress("Writing", dlnow, dltotal);
+    }
 }
 
 void Cli::onVerifyProgress(QVariant now, QVariant total)
 {
-    _printProgress("Verifying", now, total);
+    if (_jsonOutput) {
+        // Throttle JSON output to avoid flooding
+        int percent = total.toLongLong() > 0 ? 
+            static_cast<int>(now.toLongLong() * 100 / total.toLongLong()) : 0;
+        if (percent != _lastPercent) {
+            QJsonObject data;
+            data["now"] = now.toLongLong();
+            data["total"] = total.toLongLong();
+            _sendJson("verify_progress", data);
+            _lastPercent = percent;
+        }
+    } else {
+        _printProgress("Verifying", now, total);
+    }
 }
 
 void Cli::onPreparationStatusUpdate(QVariant msg)
 {
-    if (!_quiet)
-    {
+    if (_jsonOutput) {
+        QJsonObject data;
+        data["message"] = msg.toString();
+        _sendJson("status", data);
+    } else if (!_quiet) {
         QByteArray ascii = QByteArray("  ")+msg.toByteArray()+"\r";
         _clearLine();
         std::cerr << ascii.constData();
