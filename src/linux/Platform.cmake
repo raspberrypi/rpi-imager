@@ -15,7 +15,7 @@ else()
 endif()
 
 set(PLATFORM_SOURCES
-    linux/linuxdrivelist.cpp
+    drivelist/drivelist_linux.cpp
     linux/stpanalyzer.h
     linux/stpanalyzer.cpp
     linux/acceleratedcryptographichash_gnutls.cpp

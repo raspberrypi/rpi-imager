@@ -5,7 +5,7 @@
 
 #include "drivelistmodel.h"
 #include "config.h"
-#include "dependencies/drivelist/src/drivelist.hpp"
+#include "drivelist/drivelist.h"
 #include <QSet>
 #include <QDebug>
 
