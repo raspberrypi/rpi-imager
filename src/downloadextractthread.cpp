@@ -8,7 +8,6 @@
 #include "platformquirks.h"
 #include "systemmemorymanager.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
-#include "dependencies/mountutils/src/mountutils.hpp"
 #include <iostream>
 #include <archive.h>
 #include <archive_entry.h>
@@ -743,7 +742,7 @@ void DownloadExtractThread::extractMultiFileRun()
     {
         // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
         QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
-        eject_disk(ejectPath.toLocal8Bit().constData());
+        PlatformQuirks::ejectDisk(ejectPath);
     }
 }
 
