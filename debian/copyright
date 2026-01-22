@@ -6,7 +6,7 @@ Files: *
 Copyright: 2020 Raspberry Pi Ltd
 License: Apache-2.0
 
-Files: src/dependencies/mountutils/* src/dependencies/drivelist/*
+Files: src/dependencies/drivelist/*
 Copyright: 2017 Balena.io 
 License: Apache-2.0
 

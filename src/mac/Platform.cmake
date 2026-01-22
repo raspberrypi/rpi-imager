@@ -18,7 +18,6 @@ set(PLATFORM_SOURCES
     mac/macfile.h
     mac/bootimgcreator_macos.cpp
     mac/rsakeyfingerprint_macos.mm
-    dependencies/mountutils/src/darwin/functions.cpp
     dependencies/drivelist/src/darwin/list.mm
     dependencies/drivelist/src/darwin/REDiskList.m
     mac/file_operations_macos.cpp
