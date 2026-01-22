@@ -10,9 +10,7 @@
  * - Platform-independent filtering logic
  */
 
-// Must define before including drivelist.h to enable test API
-#define DRIVELIST_ENABLE_TEST_API
-
+// DRIVELIST_ENABLE_TEST_API is defined via CMake compile definitions
 // Include Qt first to get platform macros
 #include <QtGlobal>
 
@@ -573,6 +571,12 @@ TEST_CASE("System drive detection works", "[drivelist][integration]")
     REQUIRE(systemDrive != nullptr);
 
     INFO("System drive: " << systemDrive->device);
+    
+    // System drives should be marked as such
+    // Note: isDisplayable() only filters obviously bad devices (zero-size,
+    // read-only virtual, etc.). The actual "should we show this to the user"
+    // logic is in DriveListModel, which additionally filters based on
+    // mountpoints containing "/" or "C:\\"
     CHECK(systemDrive->isSystem);
-    CHECK_FALSE(systemDrive->isDisplayable());  // System drives shouldn't be shown
+    CHECK(systemDrive->hasSystemMountpoint());
 }
