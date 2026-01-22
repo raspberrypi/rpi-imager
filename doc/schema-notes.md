@@ -1211,7 +1211,7 @@ General principles you should follow:
 5. Host images on reliable infrastructure
 6. Keep icons lightweight and properly sized
 
-With those principals in mind, you can then fill out the form: https://forms.gle/U6JkxVfhHkn5ok2X7
+With those principles in mind, you can then fill out the form: https://forms.gle/U6JkxVfhHkn5ok2X7
 
 ## License
 
