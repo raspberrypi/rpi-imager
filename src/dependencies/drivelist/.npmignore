@@ -1,9 +1,0 @@
-.*
-*.yml
-
-build
-doc
-example
-tests
-prebuilds
-ci

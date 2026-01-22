@@ -7,7 +7,7 @@
 #include "config.h"
 #include "platformquirks.h"
 #include "systemmemorymanager.h"
-#include "dependencies/drivelist/src/drivelist.hpp"
+#include "drivelist/drivelist.h"
 #include <iostream>
 #include <archive.h>
 #include <archive_entry.h>

@@ -18,8 +18,7 @@ set(PLATFORM_SOURCES
     mac/macfile.h
     mac/bootimgcreator_macos.cpp
     mac/rsakeyfingerprint_macos.mm
-    dependencies/drivelist/src/darwin/list.mm
-    dependencies/drivelist/src/darwin/REDiskList.m
+    drivelist/drivelist_darwin.mm
     mac/file_operations_macos.cpp
     mac/platformquirks_macos.mm
     mac/mac_suspend_inhibitor.cpp

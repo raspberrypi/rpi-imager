@@ -136,3 +136,69 @@ add_custom_target(test_fat_partition
     COMMENT "FAT partition test built - set FAT_TEST_MOUNT_PATH to run"
 )
 
+# ============================================================================
+# Drivelist Tests
+# ============================================================================
+
+# Determine platform-specific drivelist implementation
+if(WIN32)
+    set(DRIVELIST_PLATFORM_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_windows.cpp
+    )
+    set(DRIVELIST_PLATFORM_LIBS setupapi)
+elseif(APPLE)
+    set(DRIVELIST_PLATFORM_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_darwin.mm
+    )
+    set(DRIVELIST_PLATFORM_LIBS
+        "-framework DiskArbitration"
+        "-framework IOKit"
+        "-framework Cocoa"
+        "-framework CoreFoundation"
+    )
+else()
+    set(DRIVELIST_PLATFORM_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_linux.cpp
+    )
+    set(DRIVELIST_PLATFORM_LIBS "")
+endif()
+
+# Add the drivelist test executable
+add_executable(drivelist_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist.h
+    ${DRIVELIST_PLATFORM_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../drivelist/drivelist_test.cpp
+)
+
+# Enable test API for access to parsing functions
+target_compile_definitions(drivelist_test PRIVATE DRIVELIST_ENABLE_TEST_API)
+
+# Link against Catch2, Qt, and platform libraries
+target_link_libraries(drivelist_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${DRIVELIST_PLATFORM_LIBS}
+)
+
+# Include parent directory for headers
+target_include_directories(drivelist_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(drivelist_test PRIVATE cxx_std_20)
+target_compile_options(drivelist_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+# Register with CTest for automatic test discovery
+catch_discover_tests(drivelist_test)
+
+# Custom target for manual running
+add_custom_target(test_drivelist
+    COMMAND drivelist_test
+    DEPENDS drivelist_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running drivelist tests"
+)
+
