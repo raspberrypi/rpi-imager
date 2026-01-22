@@ -26,7 +26,6 @@ add_custom_command(
 
 set(PLATFORM_SOURCES
     windows/acceleratedcryptographichash_cng.cpp
-    dependencies/mountutils/src/windows/functions.cpp
     dependencies/drivelist/src/windows/list.cpp
     windows/winfile.cpp
     windows/winfile.h

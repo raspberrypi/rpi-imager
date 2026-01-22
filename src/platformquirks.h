@@ -14,6 +14,15 @@ namespace PlatformQuirks {
     
     /** Callback type for network status changes. Parameter is true if network is available. */
     using NetworkStatusCallback = std::function<void(bool)>;
+
+    /** Result codes for disk unmount/eject operations. */
+    enum class DiskResult {
+        Success,
+        InvalidDrive,
+        AccessDenied,
+        Busy,
+        Error
+    };
     /**
      * Apply platform-specific quirks and workarounds.
      * This function should be called early in main() before Qt initialization.
@@ -91,6 +100,25 @@ namespace PlatformQuirks {
      * On other platforms, returns the path unchanged.
      */
     QString getEjectDevicePath(const QString& devicePath);
+
+    /**
+     * Unmount all volumes associated with a disk device.
+     * This prepares the disk for writing by unmounting all mounted partitions.
+     *
+     * @param device The device path (e.g., "/dev/sda", "\\.\PhysicalDrive1", "/dev/disk2")
+     * @return DiskResult::Success on success, error code otherwise
+     */
+    DiskResult unmountDisk(const QString& device);
+
+    /**
+     * Eject a disk device after writing is complete.
+     * On removable media, this makes it safe to physically remove.
+     * On card readers, this ejects the card but not the reader itself.
+     *
+     * @param device The device path (e.g., "/dev/sda", "\\.\PhysicalDrive1", "/dev/disk2")
+     * @return DiskResult::Success on success, error code otherwise
+     */
+    DiskResult ejectDisk(const QString& device);
 
 #ifdef Q_OS_LINUX
     /**

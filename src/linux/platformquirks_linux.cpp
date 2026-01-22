@@ -11,9 +11,11 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/mount.h>
 #include <net/if.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <mntent.h>
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
@@ -29,6 +31,7 @@
 #include <QFileInfo>
 #include <QCryptographicHash>
 #include <vector>
+#include <string>
 
 namespace {
     // Network monitoring state
@@ -848,6 +851,95 @@ QString getWriteDevicePath(const QString& devicePath) {
 QString getEjectDevicePath(const QString& devicePath) {
     // No path transformation needed on Linux.
     return devicePath;
+}
+
+DiskResult unmountDisk(const QString& device) {
+    QByteArray deviceBytes = device.toUtf8();
+    const char* devicePath = deviceBytes.constData();
+    
+    // Verify device exists and is not a directory
+    struct stat stats;
+    if (stat(devicePath, &stats) != 0) {
+        qDebug() << "unmountDisk: stat failed for" << device;
+        return DiskResult::InvalidDrive;
+    }
+    if (S_ISDIR(stats.st_mode)) {
+        qDebug() << "unmountDisk: path is a directory" << device;
+        return DiskResult::InvalidDrive;
+    }
+    
+    // Find all mount points for this device and its partitions
+    std::vector<std::string> mountDirs;
+    
+    FILE* procMounts = setmntent("/proc/mounts", "r");
+    if (!procMounts) {
+        qDebug() << "unmountDisk: couldn't read /proc/mounts";
+        return DiskResult::Error;
+    }
+    
+    struct mntent* mnt;
+    struct mntent data;
+    char mntBuf[4096 + 1024];  // Buffer for getmntent_r
+    
+    while ((mnt = getmntent_r(procMounts, &data, mntBuf, sizeof(mntBuf)))) {
+        // Check if this mount is on the device or any of its partitions
+        if (strncmp(mnt->mnt_fsname, devicePath, strlen(devicePath)) == 0) {
+            qDebug() << "unmountDisk: found mount" << mnt->mnt_dir << "for" << mnt->mnt_fsname;
+            mountDirs.push_back(mnt->mnt_dir);
+        }
+    }
+    endmntent(procMounts);
+    
+    if (mountDirs.empty()) {
+        qDebug() << "unmountDisk: no mounts found for" << device;
+        return DiskResult::Success;  // Nothing to unmount
+    }
+    
+    // Unmount each mount point
+    // Try MNT_EXPIRE first (gentle), then MNT_DETACH (lazy), then MNT_FORCE
+    size_t unmountCount = 0;
+    for (const std::string& mountDir : mountDirs) {
+        const char* mountPath = mountDir.c_str();
+        
+        // First attempt: MNT_EXPIRE (mark for expiry)
+        if (umount2(mountPath, MNT_EXPIRE) == 0) {
+            qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_EXPIRE first call)";
+            unmountCount++;
+            continue;
+        }
+        // Second MNT_EXPIRE attempt (actually unmounts if still idle)
+        if (umount2(mountPath, MNT_EXPIRE) == 0) {
+            qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_EXPIRE second call)";
+            unmountCount++;
+            continue;
+        }
+        
+        // Fallback: MNT_DETACH (lazy unmount - makes mount point unavailable immediately)
+        if (umount2(mountPath, MNT_DETACH) == 0) {
+            qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_DETACH)";
+            unmountCount++;
+            continue;
+        }
+        
+        // Last resort: MNT_FORCE
+        if (umount2(mountPath, MNT_FORCE) == 0) {
+            qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_FORCE)";
+            unmountCount++;
+            continue;
+        }
+        
+        qDebug() << "unmountDisk: failed to unmount" << mountPath << ":" << strerror(errno);
+    }
+    
+    return (unmountCount == mountDirs.size()) ? DiskResult::Success : DiskResult::Busy;
+}
+
+DiskResult ejectDisk(const QString& device) {
+    // On Linux, ejecting is essentially the same as unmounting.
+    // The kernel handles making the device safe to remove.
+    // For true hardware eject (e.g., CD drives), we would use CDROMEJECT ioctl,
+    // but for SD cards and USB drives, unmounting is sufficient.
+    return unmountDisk(device);
 }
 
 const char* findCACertBundle()

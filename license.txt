@@ -27,7 +27,6 @@ This software depends on the following third-party components covered by open so
 - GNU C library (LGPL license)
 - MinGW library (MIT license)
 - Balena.io drivelist (Apache license)
-- Balena.io mountutils (Apache license)
 - libarchive (new BSD license)
 - liblzma (public domain)
 - sha256crypt (public domain)

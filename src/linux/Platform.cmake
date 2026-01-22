@@ -15,7 +15,6 @@ else()
 endif()
 
 set(PLATFORM_SOURCES
-    dependencies/mountutils/src/linux/functions.cpp
     linux/linuxdrivelist.cpp
     linux/stpanalyzer.h
     linux/stpanalyzer.cpp

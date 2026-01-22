@@ -3864,11 +3864,6 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     startProgressPolling();
 }
 
-void MountUtilsLog(std::string msg) {
-    Q_UNUSED(msg)
-    //qDebug() << "mountutils:" << msg.c_str();
-}
-
 void ImageWriter::reboot()
 {
     qDebug() << "Rebooting system.";

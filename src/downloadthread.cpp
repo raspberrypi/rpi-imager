@@ -10,7 +10,7 @@
 #include "devicewrapperfatpartition.h"
 #include "systemmemorymanager.h"
 #include "timeout_utils.h"
-#include "dependencies/mountutils/src/mountutils.hpp"
+#include "platformquirks.h"
 #include "dependencies/drivelist/src/drivelist.hpp"
 #include <fstream>
 #include <sstream>
@@ -43,7 +43,6 @@
 
 #include "imageadvancedoptions.h"
 #include "secureboot.h"
-#include "platformquirks.h"
 #include "curlnetworkconfig.h"
 #include <QTemporaryDir>
 
@@ -206,12 +205,12 @@ bool DownloadThread::_openAndPrepareDevice()
         // all child volumes (APFS containers, partitions, etc.)
         QString unmountPath = PlatformQuirks::getEjectDevicePath(_filename);
         qDebug() << "Unmounting:" << unmountPath;
-        MOUNTUTILS_RESULT unmountResult = unmount_disk(unmountPath.toUtf8().constData());
-        bool unmountSuccess = (unmountResult == MOUNTUTILS_SUCCESS);
+        PlatformQuirks::DiskResult unmountResult = PlatformQuirks::unmountDisk(unmountPath);
+        bool unmountSuccess = (unmountResult == PlatformQuirks::DiskResult::Success);
         emit eventDriveUnmount(static_cast<quint32>(unmountTimer.elapsed()), unmountSuccess);
         
         if (!unmountSuccess) {
-            qDebug() << "Unmount failed with result:" << unmountResult;
+            qDebug() << "Unmount failed with result:" << static_cast<int>(unmountResult);
 #ifdef Q_OS_DARWIN
             emit error(tr("Failed to unmount disk '%1'. Please close any applications using the disk and try again.").arg(unmountPath));
 #else
@@ -1758,7 +1757,7 @@ void DownloadThread::_writeComplete()
     {
         // Use canonical device path for eject (e.g., /dev/disk on macOS, not rdisk)
         QString ejectPath = PlatformQuirks::getEjectDevicePath(_filename);
-        eject_disk(ejectPath.toLocal8Bit().constData());
+        PlatformQuirks::ejectDisk(ejectPath);
     }
 }
 
