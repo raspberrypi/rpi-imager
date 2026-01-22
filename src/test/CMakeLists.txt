@@ -202,3 +202,75 @@ add_custom_target(test_drivelist
     COMMENT "Running drivelist tests"
 )
 
+# ============================================================================
+# PlatformQuirks Tests
+# ============================================================================
+
+# Determine platform-specific platformquirks implementation
+if(WIN32)
+    set(PLATFORMQUIRKS_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../windows/platformquirks_windows.cpp
+    )
+    set(PLATFORMQUIRKS_LIBS
+        ws2_32
+        iphlpapi
+        wbemuuid
+        ole32
+        oleaut32
+    )
+elseif(APPLE)
+    set(PLATFORMQUIRKS_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../mac/platformquirks_macos.mm
+    )
+    set(PLATFORMQUIRKS_LIBS
+        "-framework AppKit"
+        "-framework SystemConfiguration"
+        "-framework DiskArbitration"
+        "-framework CoreFoundation"
+    )
+else()
+    set(PLATFORMQUIRKS_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../linux/platformquirks_linux.cpp
+    )
+    set(PLATFORMQUIRKS_LIBS "")
+endif()
+
+# Add the platformquirks test executable
+add_executable(platformquirks_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../platformquirks.h
+    ${PLATFORMQUIRKS_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/platformquirks_test.cpp
+)
+
+# Enable test API for Windows parseDeviceNumber
+target_compile_definitions(platformquirks_test PRIVATE PLATFORMQUIRKS_ENABLE_TEST_API)
+
+# Link against Catch2, Qt, and platform libraries
+target_link_libraries(platformquirks_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${PLATFORMQUIRKS_LIBS}
+)
+
+# Include parent directory for headers
+target_include_directories(platformquirks_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(platformquirks_test PRIVATE cxx_std_20)
+target_compile_options(platformquirks_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+
+# Register with CTest for automatic test discovery
+catch_discover_tests(platformquirks_test)
+
+# Custom target for manual running
+add_custom_target(test_platformquirks
+    COMMAND platformquirks_test
+    DEPENDS platformquirks_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running platformquirks tests"
+)
+
