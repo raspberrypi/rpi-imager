@@ -119,6 +119,9 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_LINUX
             // On Linux, use separate log files for unprivileged vs elevated instances
             static char logPathBuffer[512];
+            if(strlen(logPath) + strlen("-elevated") >= sizeof(logPathBuffer)) {
+                fprintf(stderr, "WARNING: log path '%s' is too long, will be truncated to fit buffer\n", logPath);
+            }
             if (geteuid() == 0) {
                 const char* dot = strrchr(logPath, '.');
                 if (dot && dot > strrchr(logPath, '/')) {
