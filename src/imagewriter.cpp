@@ -166,30 +166,15 @@ ImageWriter::ImageWriter(QObject *parent)
         stpAnalyzer->startListening("eth0");
     }
 #endif
-
-    if (!_settings.isWritable() && !_settings.fileName().isEmpty())
     {
-        /* Settings file is not writable, probably run by root previously */
-        QString settingsFile = _settings.fileName();
-        qDebug() << "Settings file" << settingsFile << "not writable. Recreating it";
-        QFile f(_settings.fileName());
-        QByteArray oldsettings;
+        const auto expectedPermissions = (QFileDevice::WriteOwner | QFileDevice::ReadOwner);
+        auto settingsFile = QFile(_settings.fileName());
 
-        if (f.open(f.ReadOnly))
-        {
-            oldsettings = f.readAll();
-            f.close();
-        }
-        f.remove();
-        if (f.open(f.WriteOnly))
-        {
-            f.write(oldsettings);
-            f.close();
-            _settings.sync();
-        }
-        else
-        {
-            qDebug() << "Error deleting and recreating settings file. Please remove manually.";
+        if (settingsFile.exists() && settingsFile.permissions() != expectedPermissions) {
+            if (!settingsFile.setPermissions(expectedPermissions)) {
+                qDebug() << "Failed to set expected permissions for settings file. Errant behaviour may follow, including settings failing to persist";
+                qDebug() << "To prevent future messages of this form, please delete " << _settings.fileName();
+            }
         }
     }
 
