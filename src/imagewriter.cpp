@@ -1547,7 +1547,7 @@ bool ImageWriter::checkSWCapability(const QString &cap) {
     return false;
 }
 
-void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url)
+void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url, const QUrl &effectiveUrl)
 {
     // Calculate request duration for performance tracking
     quint32 durationMs = 0;
@@ -1560,6 +1560,20 @@ void ImageWriter::onOsListFetchComplete(const QByteArray &data, const QUrl &url)
     
     // Track if this is the top-level OS list request
     bool isTopLevelRequest = (url == osListUrl());
+    
+    // If this is the top-level custom repo request and the URL was redirected,
+    // update _repo to reflect the final URL. This ensures "Using data from X"
+    // shows the actual server that served the data, not the original redirect source.
+    // This is a security consideration - users should see where data actually came from.
+    if (isTopLevelRequest && customRepo() && effectiveUrl.isValid() && effectiveUrl != url) {
+        QString oldHost = _repo.host();
+        _repo = effectiveUrl;
+        QString newHost = _repo.host();
+        qDebug() << "Custom repo URL was redirected. Updated display from" << oldHost << "to" << newHost;
+        if (oldHost != newHost) {
+            emit customRepoHostChanged();
+        }
+    }
 
     auto response_object = QJsonDocument::fromJson(data).object();
 

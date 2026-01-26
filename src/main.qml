@@ -544,6 +544,12 @@ ApplicationWindow {
         function onCustomRepoChanged() {
             window.customRepoHost = imageWriter.customRepoHost()
         }
+        
+        // Update title when repo host changes after redirect
+        // This ensures "Using data from X" shows the final URL host after redirects
+        function onCustomRepoHostChanged() {
+            window.customRepoHost = imageWriter.customRepoHost()
+        }
     }
 
     /* Slots for signals imagewrite emits */
