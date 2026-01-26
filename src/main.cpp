@@ -120,7 +120,8 @@ int main(int argc, char *argv[])
             // On Linux, use separate log files for unprivileged vs elevated instances
             static char logPathBuffer[512];
             if(strlen(logPath) + strlen("-elevated") >= sizeof(logPathBuffer)) {
-                fprintf(stderr, "WARNING: log path '%s' is too long, will be truncated to fit buffer\n", logPath);
+                fprintf(stderr, "[ERROR] log path '%s' is too long and cannot be used safely\n", logPath);
+                return EXIT_FAILURE;
             }
             if (geteuid() == 0) {
                 const char* dot = strrchr(logPath, '.');
