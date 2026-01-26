@@ -381,6 +381,7 @@ signals:
     void connectTokenCleared();
     void repositoryUrlReceived(const QString &url);
     void customRepoChanged();
+    void customRepoHostChanged();  // Emitted when displayed repo host changes (e.g., after redirect)
     void cacheStatusChanged();
     void osListUnavailableChanged();
     void permissionWarning(QVariant msg);
@@ -399,7 +400,7 @@ protected slots:
     void onCancelled();
     void onFinalizing();
     void onPreparationStatusUpdate(QString msg);
-    void onOsListFetchComplete(const QByteArray &data, const QUrl &url);
+    void onOsListFetchComplete(const QByteArray &data, const QUrl &url, const QUrl &effectiveUrl);
     void onOsListFetchError(const QString &errorMessage, const QUrl &url);
     void onNetworkConnectionStats(const QString &statsMetadata, const QUrl &url);
     void onSTPdetected();

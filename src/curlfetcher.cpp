@@ -67,6 +67,9 @@ public:
         // Perform the request
         CURLcode res = curl_easy_perform(curl);
         
+        // Track the effective URL after redirects (empty string if not available)
+        QString effectiveUrlStr;
+        
         if (res == CURLE_ABORTED_BY_CALLBACK) {
             error = QStringLiteral("Cancelled");
         } else if (res != CURLE_OK) {
@@ -84,7 +87,17 @@ public:
             }
             qDebug() << "CurlFetcher: fetch failed for" << _url.toString() << "-" << error;
         } else {
-            // Success - collect CURL connection timing metrics for performance analysis
+            // Success - get the effective URL after any redirects
+            char *effectiveUrl = nullptr;
+            curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl);
+            if (effectiveUrl) {
+                effectiveUrlStr = QString::fromUtf8(effectiveUrl);
+                if (effectiveUrlStr != _url.toString()) {
+                    qDebug() << "CurlFetcher: URL was redirected from" << _url.toString() << "to" << effectiveUrlStr;
+                }
+            }
+            
+            // Collect CURL connection timing metrics for performance analysis
             double dnsTime = 0, connectTime = 0, tlsTime = 0, startTransferTime = 0, totalTime = 0;
             curl_off_t downloadSpeed = 0;
             curl_off_t downloadSize = 0;
@@ -125,7 +138,7 @@ public:
         }
         
         curl_easy_cleanup(curl);
-        deliverResult(data, error, stats);
+        deliverResult(data, error, stats, effectiveUrlStr);
     }
     
 private:
@@ -147,7 +160,7 @@ private:
         return task->_fetcher->isCancelled() ? 1 : 0;
     }
     
-    void deliverResult(const QByteArray &data, const QString &error, const QString &stats)
+    void deliverResult(const QByteArray &data, const QString &error, const QString &stats, const QString &effectiveUrl = QString())
     {
         // Only deliver if fetcher still exists
         if (_fetcher) {
@@ -155,7 +168,8 @@ private:
                                       Qt::QueuedConnection,
                                       Q_ARG(QByteArray, data),
                                       Q_ARG(QString, error),
-                                      Q_ARG(QString, stats));
+                                      Q_ARG(QString, stats),
+                                      Q_ARG(QString, effectiveUrl));
         }
     }
     
@@ -187,6 +201,7 @@ void CurlFetcher::fetch(const QUrl &url)
                                   Qt::QueuedConnection,
                                   Q_ARG(QByteArray, QByteArray()),
                                   Q_ARG(QString, QStringLiteral("Unsupported URL scheme")),
+                                  Q_ARG(QString, QString()),
                                   Q_ARG(QString, QString()));
         return;
     }
@@ -204,7 +219,7 @@ void CurlFetcher::cancel()
     _cancelled.store(true, std::memory_order_relaxed);
 }
 
-void CurlFetcher::onFetchComplete(const QByteArray &data, const QString &errorMsg, const QString &stats)
+void CurlFetcher::onFetchComplete(const QByteArray &data, const QString &errorMsg, const QString &stats, const QString &effectiveUrl)
 {
     // Emit connection stats if available (for performance tracking)
     if (!stats.isEmpty()) {
@@ -214,7 +229,9 @@ void CurlFetcher::onFetchComplete(const QByteArray &data, const QString &errorMs
     if (!errorMsg.isEmpty()) {
         emit error(errorMsg, _url);
     } else {
-        emit finished(data, _url);
+        // Use effective URL if available, otherwise fall back to original URL
+        QUrl finalUrl = effectiveUrl.isEmpty() ? _url : QUrl(effectiveUrl);
+        emit finished(data, _url, finalUrl);
     }
     
     // Auto-delete after delivering result

@@ -67,9 +67,10 @@ signals:
     /**
      * Emitted when the fetch completes successfully.
      * @param data The downloaded data
-     * @param url The URL that was fetched (for identification)
+     * @param url The original URL that was requested (for identification)
+     * @param effectiveUrl The final URL after any redirects (may differ from url)
      */
-    void finished(const QByteArray &data, const QUrl &url);
+    void finished(const QByteArray &data, const QUrl &url, const QUrl &effectiveUrl);
     
     /**
      * Emitted when the fetch fails or is cancelled.
@@ -88,7 +89,7 @@ signals:
 
 public slots:
     // Internal: called from worker thread
-    void onFetchComplete(const QByteArray &data, const QString &error, const QString &stats);
+    void onFetchComplete(const QByteArray &data, const QString &error, const QString &stats, const QString &effectiveUrl);
 
 private:
     QUrl _url;
