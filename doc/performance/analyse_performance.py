@@ -2548,6 +2548,7 @@ def main():
     print_pipeline_analysis(pipeline)
     
     # Recovery events (queue depth reduction, sync fallback, etc.)
+    events = data.get('events', [])
     print_recovery_events(events)
     
     # Detailed write timing breakdown (for hypothesis testing)
