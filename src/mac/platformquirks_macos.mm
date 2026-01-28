@@ -1,34 +1,68 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2025 Raspberry Pi Ltd
+ *
+ * macOS platform-specific implementation.
+ *
+ * Design notes:
+ * - Uses os_log for unified logging (Console.app, log collect)
+ * - Uses DiskArbitration for disk operations (unmount, eject)
+ * - Uses SystemConfiguration for network reachability
  */
 
 #include "../platformquirks.h"
 #include <cstdlib>
 #include <cstdio>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <QProcess>
 #include <QDebug>
 #import <AppKit/AppKit.h>
 #import <SystemConfiguration/SystemConfiguration.h>
 #import <DiskArbitration/DiskArbitration.h>
+#include <os/log.h>
+
+// Unified logging - visible in Console.app
+// Users can capture with: log collect --device --last 1h
+static os_log_t platform_log() {
+    static os_log_t log = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("com.raspberrypi.imager", "platform");
+    });
+    return log;
+}
+
+#define PLATFORM_LOG_INFO(fmt, ...) os_log_info(platform_log(), fmt, ##__VA_ARGS__)
+#define PLATFORM_LOG_ERROR(fmt, ...) os_log_error(platform_log(), fmt, ##__VA_ARGS__)
+#define PLATFORM_LOG_DEBUG(fmt, ...) os_log_debug(platform_log(), fmt, ##__VA_ARGS__)
 
 namespace {
     // Network monitoring state
     SCNetworkReachabilityRef g_reachabilityRef = nullptr;
     PlatformQuirks::NetworkStatusCallback g_networkCallback = nullptr;
+    pthread_mutex_t g_networkCallbackMutex = PTHREAD_MUTEX_INITIALIZER;
     
     void reachabilityCallback(SCNetworkReachabilityRef target, SCNetworkReachabilityFlags flags, void* info) {
         (void)target;
         (void)info;
         
-        if (!g_networkCallback) return;
+        // Lock mutex to safely access callback - prevents race with stopNetworkMonitoring()
+        pthread_mutex_lock(&g_networkCallbackMutex);
+        PlatformQuirks::NetworkStatusCallback callback = g_networkCallback;
+        pthread_mutex_unlock(&g_networkCallbackMutex);
+        
+        if (!callback) return;
         
         bool isReachable = (flags & kSCNetworkReachabilityFlagsReachable) != 0;
         bool needsConnection = (flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0;
+        bool isWWAN = (flags & kSCNetworkReachabilityFlagsIsWWAN) != 0;
         bool isAvailable = isReachable && !needsConnection;
         
-        fprintf(stderr, "Network status changed: reachable=%d needsConnection=%d\n", isReachable, needsConnection);
-        g_networkCallback(isAvailable);
+        PLATFORM_LOG_INFO("Network status changed: flags=%#x reachable=%d needsConnection=%d wwan=%d available=%d",
+                          flags, isReachable, needsConnection, isWWAN, isAvailable);
+        callback(isAvailable);
     }
     
     // DiskArbitration context for unmount/eject operations
@@ -43,14 +77,33 @@ namespace {
         }
         
         DAReturn status = DADissenterGetStatus(dissenter);
-        if (status == kDAReturnBadArgument || status == kDAReturnNotFound) {
-            return PlatformQuirks::DiskResult::InvalidDrive;
-        } else if (status == kDAReturnNotPermitted || status == kDAReturnNotPrivileged) {
-            return PlatformQuirks::DiskResult::AccessDenied;
-        } else if (status == kDAReturnBusy) {
-            return PlatformQuirks::DiskResult::Busy;
+        CFStringRef statusString = DADissenterGetStatusString(dissenter);
+        
+        // Log the full error details for remote debugging
+        if (statusString) {
+            PLATFORM_LOG_ERROR("DiskArbitration error: status=%#x (%{public}@)", 
+                               status, (__bridge NSString*)statusString);
+        } else {
+            PLATFORM_LOG_ERROR("DiskArbitration error: status=%#x", status);
         }
-        return PlatformQuirks::DiskResult::Error;
+        
+        // Map DAReturn to our result enum
+        // See DiskArbitration/DADissenter.h for full list
+        switch (status) {
+            case kDAReturnSuccess:
+                return PlatformQuirks::DiskResult::Success;
+            case kDAReturnBadArgument:
+            case kDAReturnNotFound:
+                return PlatformQuirks::DiskResult::InvalidDrive;
+            case kDAReturnNotPermitted:
+            case kDAReturnNotPrivileged:
+                return PlatformQuirks::DiskResult::AccessDenied;
+            case kDAReturnBusy:
+            case kDAReturnExclusiveAccess:
+                return PlatformQuirks::DiskResult::Busy;
+            default:
+                return PlatformQuirks::DiskResult::Error;
+        }
     }
     
     void unmountCallback(DADiskRef disk, DADissenterRef dissenter, void* context) {
@@ -81,20 +134,24 @@ namespace {
         }
     }
     
-    PlatformQuirks::DiskResult runDiskOperation(const char* device, DADiskUnmountCallback callback, int maxRetries = 5) {
+    // Default timeout: 60 seconds (maxRetries * 100 * 0.05s = 60s with maxRetries=12)
+    // Slow USB drives with many files open may take significant time to unmount
+    PlatformQuirks::DiskResult runDiskOperation(const char* device, DADiskUnmountCallback callback, int maxRetries = 12) {
         DiskOpContext context;
+        
+        PLATFORM_LOG_INFO("runDiskOperation: starting operation on %{public}s", device);
         
         // Create DiskArbitration session
         DASessionRef session = DASessionCreate(kCFAllocatorDefault);
         if (!session) {
-            qDebug() << "runDiskOperation: failed to create DA session";
+            PLATFORM_LOG_ERROR("runDiskOperation: failed to create DA session");
             return PlatformQuirks::DiskResult::Error;
         }
         
         // Get disk object from BSD name
         DADiskRef disk = DADiskCreateFromBSDName(kCFAllocatorDefault, session, device);
         if (!disk) {
-            qDebug() << "runDiskOperation: failed to create disk object for" << device;
+            PLATFORM_LOG_ERROR("runDiskOperation: failed to create disk object for %{public}s", device);
             CFRelease(session);
             return PlatformQuirks::DiskResult::InvalidDrive;
         }
@@ -121,10 +178,12 @@ namespace {
         CFRelease(session);
         
         if (!context.completed) {
-            qDebug() << "runDiskOperation: timeout waiting for operation";
+            PLATFORM_LOG_ERROR("runDiskOperation: timeout after %d iterations on %{public}s", retries, device);
             return PlatformQuirks::DiskResult::Busy;
         }
         
+        PLATFORM_LOG_INFO("runDiskOperation: completed on %{public}s with result %d", 
+                          device, static_cast<int>(context.result));
         return context.result;
     }
 }
@@ -132,11 +191,18 @@ namespace {
 namespace PlatformQuirks {
 
 void applyQuirks() {
-    // Currently no platform-specific quirks needed for macOS
-    // macOS has a sensible permissions model that operates as expected
-    
-    // Example of how to set environment variables without Qt:
-    // setenv("VARIABLE_NAME", "value", 1);
+    @autoreleasepool {
+        // Log macOS version for remote debugging
+        NSOperatingSystemVersion osVersion = [[NSProcessInfo processInfo] operatingSystemVersion];
+        PLATFORM_LOG_INFO("Platform: macOS %ld.%ld.%ld (%{public}s)",
+                          (long)osVersion.majorVersion,
+                          (long)osVersion.minorVersion,
+                          (long)osVersion.patchVersion,
+                          [[[NSProcessInfo processInfo] operatingSystemVersionString] UTF8String]);
+        
+        // Currently no platform-specific quirks needed for macOS
+        // macOS has a sensible permissions model that operates as expected
+    }
 }
 
 void beep() {
@@ -151,23 +217,36 @@ bool isBeepAvailable() {
 
 bool hasNetworkConnectivity() {
     // Use SystemConfiguration framework to check network reachability
-    SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithName(NULL, "www.raspberrypi.com");
+    // Check reachability to 0.0.0.0 (general internet connectivity)
+    // rather than a specific host, which would fail if DNS is broken
+    struct sockaddr_in zeroAddress;
+    bzero(&zeroAddress, sizeof(zeroAddress));
+    zeroAddress.sin_len = sizeof(zeroAddress);
+    zeroAddress.sin_family = AF_INET;
+    
+    SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithAddress(
+        NULL, reinterpret_cast<const struct sockaddr*>(&zeroAddress));
     if (!reachability) {
+        PLATFORM_LOG_ERROR("hasNetworkConnectivity: failed to create reachability ref");
         return false;
     }
     
-    SCNetworkReachabilityFlags flags;
+    SCNetworkReachabilityFlags flags = 0;
     bool success = SCNetworkReachabilityGetFlags(reachability, &flags);
     CFRelease(reachability);
     
     if (!success) {
+        PLATFORM_LOG_ERROR("hasNetworkConnectivity: failed to get reachability flags");
         return false;
     }
     
     // Check if network is reachable
     bool isReachable = (flags & kSCNetworkReachabilityFlagsReachable) != 0;
-    // Check if connection is required (e.g., captive portal)
+    // Check if connection is required (e.g., captive portal, VPN on demand)
     bool needsConnection = (flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0;
+    
+    PLATFORM_LOG_DEBUG("hasNetworkConnectivity: flags=%#x reachable=%d needsConnection=%d",
+                       flags, isReachable, needsConnection);
     
     return isReachable && !needsConnection;
 }
@@ -181,12 +260,22 @@ void startNetworkMonitoring(NetworkStatusCallback callback) {
     // Stop any existing monitoring
     stopNetworkMonitoring();
     
+    // Set callback under mutex
+    pthread_mutex_lock(&g_networkCallbackMutex);
     g_networkCallback = callback;
+    pthread_mutex_unlock(&g_networkCallbackMutex);
     
-    // Create reachability reference for a known host
-    g_reachabilityRef = SCNetworkReachabilityCreateWithName(NULL, "www.raspberrypi.com");
+    // Create reachability reference for general connectivity (0.0.0.0)
+    // This monitors overall network status rather than a specific host
+    struct sockaddr_in zeroAddress;
+    bzero(&zeroAddress, sizeof(zeroAddress));
+    zeroAddress.sin_len = sizeof(zeroAddress);
+    zeroAddress.sin_family = AF_INET;
+    
+    g_reachabilityRef = SCNetworkReachabilityCreateWithAddress(
+        NULL, reinterpret_cast<const struct sockaddr*>(&zeroAddress));
     if (!g_reachabilityRef) {
-        fprintf(stderr, "Failed to create network reachability reference\n");
+        PLATFORM_LOG_ERROR("startNetworkMonitoring: failed to create reachability reference");
         return;
     }
     
@@ -194,7 +283,7 @@ void startNetworkMonitoring(NetworkStatusCallback callback) {
     SCNetworkReachabilityContext context = {0, nullptr, nullptr, nullptr, nullptr};
     
     if (!SCNetworkReachabilitySetCallback(g_reachabilityRef, reachabilityCallback, &context)) {
-        fprintf(stderr, "Failed to set network reachability callback\n");
+        PLATFORM_LOG_ERROR("startNetworkMonitoring: failed to set callback");
         CFRelease(g_reachabilityRef);
         g_reachabilityRef = nullptr;
         return;
@@ -202,13 +291,13 @@ void startNetworkMonitoring(NetworkStatusCallback callback) {
     
     // Schedule on main run loop
     if (!SCNetworkReachabilityScheduleWithRunLoop(g_reachabilityRef, CFRunLoopGetMain(), kCFRunLoopDefaultMode)) {
-        fprintf(stderr, "Failed to schedule network reachability on run loop\n");
+        PLATFORM_LOG_ERROR("startNetworkMonitoring: failed to schedule on run loop");
         CFRelease(g_reachabilityRef);
         g_reachabilityRef = nullptr;
         return;
     }
     
-    fprintf(stderr, "Network monitoring started\n");
+    PLATFORM_LOG_INFO("Network monitoring started");
 }
 
 void stopNetworkMonitoring() {
@@ -216,16 +305,34 @@ void stopNetworkMonitoring() {
         SCNetworkReachabilityUnscheduleFromRunLoop(g_reachabilityRef, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
         CFRelease(g_reachabilityRef);
         g_reachabilityRef = nullptr;
-        fprintf(stderr, "Network monitoring stopped\n");
+        PLATFORM_LOG_INFO("Network monitoring stopped");
     }
+    
+    // Clear callback under mutex to prevent race with reachabilityCallback
+    pthread_mutex_lock(&g_networkCallbackMutex);
     g_networkCallback = nullptr;
+    pthread_mutex_unlock(&g_networkCallbackMutex);
 }
 
 void bringWindowToForeground(void* windowHandle) {
-    // No-op on macOS - not implemented
-    // macOS handles window activation differently and has restrictions on
-    // applications bringing themselves to the foreground
-    (void)windowHandle;
+    @autoreleasepool {
+        // Activate the application and bring it to foreground
+        // This works when called from user interaction context
+        [NSApp activateIgnoringOtherApps:YES];
+        
+        // If we have a specific window handle, make it key
+        if (windowHandle) {
+            // windowHandle could be NSWindow* or NSView*
+            // For Qt windows, it's typically the NSView from QWindow::winId()
+            NSView* view = (__bridge NSView*)windowHandle;
+            NSWindow* window = [view window];
+            if (window) {
+                [window makeKeyAndOrderFront:nil];
+            }
+        }
+        
+        PLATFORM_LOG_DEBUG("bringWindowToForeground: activated app");
+    }
 }
 
 bool hasElevatedPrivileges() {

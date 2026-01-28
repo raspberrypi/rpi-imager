@@ -24,11 +24,21 @@ namespace Drivelist {
 
 namespace {
 
+// Maximum recursion depth for walking device children
+// Prevents stack overflow from malformed or malicious lsblk output
+constexpr int MAX_CHILD_RECURSION_DEPTH = 10;
+
 /**
  * @brief Walk device children to collect mountpoints and labels
+ * @param depth Current recursion depth (starts at 0)
  */
-void walkStorageChildren(DeviceDescriptor& device, QStringList& labels, const QJsonArray& children)
+void walkStorageChildren(DeviceDescriptor& device, QStringList& labels, const QJsonArray& children, int depth = 0)
 {
+    if (depth >= MAX_CHILD_RECURSION_DEPTH) {
+        qWarning() << "walkStorageChildren: max recursion depth reached, stopping traversal";
+        return;
+    }
+    
     for (const auto& child : children) {
         QJsonObject childObj = child.toObject();
         QString label = childObj["label"].toString();
@@ -45,7 +55,7 @@ void walkStorageChildren(DeviceDescriptor& device, QStringList& labels, const QJ
         // Recurse into nested children (e.g., LVM on partition)
         QJsonArray subChildren = childObj["children"].toArray();
         if (!subChildren.isEmpty()) {
-            walkStorageChildren(device, labels, subChildren);
+            walkStorageChildren(device, labels, subChildren, depth + 1);
         }
     }
 }
@@ -127,18 +137,24 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     if (device.logicalBlockSize == 0) device.logicalBlockSize = 512;
 
     // Build description from label, vendor, model
-    QStringList descParts = {
-        bdev["label"].toString().trimmed(),
-        bdev["vendor"].toString().trimmed(),
-        bdev["model"].toString().trimmed()
+    // Pre-filter empty strings to avoid multiple removeAll("") calls
+    QStringList descParts;
+    descParts.reserve(4);
+    
+    auto addIfNotEmpty = [&descParts](const QString& s) {
+        QString trimmed = s.trimmed();
+        if (!trimmed.isEmpty()) {
+            descParts.append(trimmed);
+        }
     };
+    
+    addIfNotEmpty(bdev["label"].toString());
+    addIfNotEmpty(bdev["vendor"].toString());
+    addIfNotEmpty(bdev["model"].toString());
 
     // Special case for internal SD card reader
-    if (name == "/dev/mmcblk0") {
-        descParts.removeAll("");
-        if (descParts.empty()) {
-            descParts.append(QObject::tr("Internal SD card reader"));
-        }
+    if (name == "/dev/mmcblk0" && descParts.isEmpty()) {
+        descParts.append(QObject::tr("Internal SD card reader"));
     }
 
     // Collect mountpoints from this device
@@ -157,8 +173,10 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     if (!labels.isEmpty()) {
         descParts.append("(" + labels.join(", ") + ")");
     }
-    descParts.removeAll("");
-    device.description = descParts.join(" ").toStdString();
+    
+    // Sanitize description to prevent Unicode display attacks
+    // (e.g., RTL override characters that could make device names misleading)
+    device.description = sanitizeForDisplay(descParts.join(" ").toStdString());
 
     // For virtual devices, check if they're backing system paths
     if (device.isVirtual && !device.isSystem) {
@@ -215,13 +233,24 @@ std::optional<QByteArray> executeLsblk()
     };
 
     process.start("lsblk", args);
-    if (!process.waitForFinished(2000)) {
-        qWarning() << "lsblk timed out";
+    // Use 5 second timeout - embedded systems with many block devices or slow
+    // USB hubs may take longer than 2 seconds to enumerate
+    if (!process.waitForFinished(5000)) {
+        qWarning() << "lsblk timed out after 5000ms";
+        qWarning() << "  state:" << process.state() << "error:" << process.error();
+        // Capture any partial stderr for debugging
+        QByteArray partialStderr = process.readAllStandardError();
+        if (!partialStderr.isEmpty()) {
+            qWarning() << "  stderr:" << partialStderr;
+        }
+        process.kill();
+        process.waitForFinished(1000);
         return std::nullopt;
     }
 
     if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-        qWarning() << "lsblk failed:" << process.readAllStandardError();
+        qWarning() << "lsblk failed with exit code" << process.exitCode();
+        qWarning() << "  stderr:" << process.readAllStandardError();
         return std::nullopt;
     }
 
@@ -246,6 +275,13 @@ std::vector<DeviceDescriptor> ListStorageDevices()
 
     auto jsonOutput = executeLsblk();
     if (!jsonOutput) {
+        // Return a sentinel device with error message so UI can display failure
+        // instead of showing an empty list (which looks like "no drives found")
+        DeviceDescriptor errorDevice;
+        errorDevice.device = "__error__";
+        errorDevice.error = "Failed to enumerate drives: lsblk command failed or timed out";
+        errorDevice.description = "Drive enumeration failed";
+        deviceList.push_back(std::move(errorDevice));
         return deviceList;
     }
 
@@ -253,11 +289,19 @@ std::vector<DeviceDescriptor> ListStorageDevices()
     QJsonDocument doc = QJsonDocument::fromJson(*jsonOutput, &parseError);
     if (parseError.error != QJsonParseError::NoError) {
         qWarning() << "Failed to parse lsblk JSON:" << parseError.errorString();
+        DeviceDescriptor errorDevice;
+        errorDevice.device = "__error__";
+        errorDevice.error = "Failed to enumerate drives: " + parseError.errorString().toStdString();
+        errorDevice.description = "Drive enumeration failed";
+        deviceList.push_back(std::move(errorDevice));
         return deviceList;
     }
 
     const bool embeddedMode = ::isEmbeddedMode();
     const QJsonArray blockDevices = doc.object().value("blockdevices").toArray();
+    
+    // Reserve capacity to avoid reallocations during enumeration
+    deviceList.reserve(static_cast<size_t>(blockDevices.size()));
 
     for (const auto& item : blockDevices) {
         auto device = parseBlockDevice(item.toObject(), embeddedMode);
@@ -288,6 +332,10 @@ std::vector<DeviceDescriptor> parseLinuxBlockDevices(const std::string& jsonOutp
     }
 
     const QJsonArray blockDevices = doc.object().value("blockdevices").toArray();
+    
+    // Reserve capacity to avoid reallocations during enumeration
+    deviceList.reserve(static_cast<size_t>(blockDevices.size()));
+    
     for (const auto& item : blockDevices) {
         auto device = parseBlockDevice(item.toObject(), embeddedMode);
         if (device) {

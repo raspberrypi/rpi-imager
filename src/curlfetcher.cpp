@@ -10,6 +10,7 @@
 #include <QPointer>
 #include <QDebug>
 #include <curl/curl.h>
+#include <cstring>
 
 /**
  * Worker task that fetches data using libcurl in a thread pool.
@@ -91,8 +92,10 @@ public:
             char *effectiveUrl = nullptr;
             curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl);
             if (effectiveUrl) {
-                effectiveUrlStr = QString::fromUtf8(effectiveUrl);
-                if (effectiveUrlStr != _url.toString()) {
+                // Compare raw C strings first to avoid QString construction when no redirect occurred
+                QByteArray originalUrlBytes = _url.toEncoded();
+                if (strcmp(effectiveUrl, originalUrlBytes.constData()) != 0) {
+                    effectiveUrlStr = QString::fromUtf8(effectiveUrl);
                     qDebug() << "CurlFetcher: URL was redirected from" << _url.toString() << "to" << effectiveUrlStr;
                 }
             }
