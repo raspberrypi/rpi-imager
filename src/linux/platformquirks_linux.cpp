@@ -1,6 +1,14 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2025 Raspberry Pi Ltd
+ *
+ * Linux platform-specific implementation.
+ *
+ * Design notes:
+ * - Uses modern Linux APIs: poll() instead of select(), eventfd() for signaling
+ * - All fds created with CLOEXEC to prevent leaks to child processes
+ * - Thread-safe: uses reentrant functions (getpwuid_r) and proper synchronization
+ * - Netlink for network monitoring (no polling, kernel pushes events)
  */
 
 #include "../platformquirks.h"
@@ -12,6 +20,10 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/mount.h>
+#include <sys/eventfd.h>  // eventfd for modern thread signaling
+#include <sys/utsname.h>   // uname() for kernel version logging
+#include <poll.h>          // poll() instead of select()
+#include <signal.h>        // Signal masking for worker thread
 #include <net/if.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
@@ -22,6 +34,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <atomic>
+#include <mutex>
 #include <net/if_arp.h>
 #include <QDebug>
 #include <QProcess>
@@ -38,52 +51,66 @@ namespace {
     int g_netlinkSocket = -1;
     pthread_t g_monitorThread;
     std::atomic<bool> g_monitorRunning{false};
-    int g_stopPipe[2] = {-1, -1};  // Pipe to signal thread to stop
+    int g_stopEventFd = -1;  // eventfd for signaling thread to stop (more efficient than pipe)
     PlatformQuirks::NetworkStatusCallback g_networkCallback = nullptr;
     pthread_mutex_t g_callbackMutex = PTHREAD_MUTEX_INITIALIZER;
     
+    // Cached network connectivity state (updated by netlink monitor)
+    std::atomic<bool> g_cachedNetworkConnectivity{false};
+    std::atomic<bool> g_networkConnectivityCacheValid{false};
+    
     void* netlinkMonitorThread(void* arg) {
         (void)arg;
+        
+        // Block all signals in this thread - let the main thread handle them
+        // This prevents EINTR interruptions and signal handler races
+        sigset_t allSignals;
+        sigfillset(&allSignals);
+        pthread_sigmask(SIG_BLOCK, &allSignals, nullptr);
         
         char buf[4096];
         struct iovec iov = { buf, sizeof(buf) };
         struct sockaddr_nl sa;
         struct msghdr msg = { &sa, sizeof(sa), &iov, 1, nullptr, 0, 0 };
         
-        fd_set readfds;
-        int maxfd = (g_netlinkSocket > g_stopPipe[0]) ? g_netlinkSocket : g_stopPipe[0];
+        // Use poll() instead of select() - no fd number limitations
+        struct pollfd fds[2];
+        fds[0].fd = g_netlinkSocket;
+        fds[0].events = POLLIN;
+        fds[1].fd = g_stopEventFd;
+        fds[1].events = POLLIN;
         
-        while (g_monitorRunning.load()) {
-            FD_ZERO(&readfds);
-            FD_SET(g_netlinkSocket, &readfds);
-            FD_SET(g_stopPipe[0], &readfds);
-            
+        while (g_monitorRunning.load(std::memory_order_acquire)) {
             // Wait for events with 1 second timeout
-            struct timeval tv = { 1, 0 };
-            int ret = select(maxfd + 1, &readfds, nullptr, nullptr, &tv);
+            int ret = poll(fds, 2, 1000);
             
             if (ret < 0) {
                 if (errno == EINTR) continue;
+                int savedErrno = errno;
+                fprintf(stderr, "netlinkMonitorThread: poll() failed: %s\n", strerror(savedErrno));
                 break;
             }
             
-            // Check if we should stop
-            if (FD_ISSET(g_stopPipe[0], &readfds)) {
+            // Check if we should stop (eventfd signaled)
+            if (fds[1].revents & POLLIN) {
                 break;
             }
             
-            if (ret == 0) continue;  // Timeout
+            if (ret == 0) continue;  // Timeout, check g_monitorRunning again
             
-            if (FD_ISSET(g_netlinkSocket, &readfds)) {
-                ssize_t len = recvmsg(g_netlinkSocket, &msg, 0);
+            // Check for netlink events
+            if (fds[0].revents & POLLIN) {
+                ssize_t len = recvmsg(g_netlinkSocket, &msg, MSG_DONTWAIT);
                 if (len < 0) {
-                    if (errno == EINTR) continue;
+                    if (errno == EINTR || errno == EAGAIN) continue;
+                    int savedErrno = errno;
+                    fprintf(stderr, "netlinkMonitorThread: recvmsg() failed: %s\n", strerror(savedErrno));
                     break;
                 }
                 
                 // Parse netlink messages
-                for (struct nlmsghdr* nh = (struct nlmsghdr*)buf;
-                     NLMSG_OK(nh, len);
+                for (struct nlmsghdr* nh = reinterpret_cast<struct nlmsghdr*>(buf);
+                     NLMSG_OK(nh, static_cast<size_t>(len));
                      nh = NLMSG_NEXT(nh, len)) {
                     
                     if (nh->nlmsg_type == NLMSG_DONE) break;
@@ -96,7 +123,7 @@ namespace {
                             continue;  // Malformed message, skip
                         }
                         
-                        struct ifinfomsg* ifi = (struct ifinfomsg*)NLMSG_DATA(nh);
+                        struct ifinfomsg* ifi = reinterpret_cast<struct ifinfomsg*>(NLMSG_DATA(nh));
                         
                         // Skip loopback interface
                         if (ifi->ifi_type == ARPHRD_LOOPBACK) continue;
@@ -106,7 +133,11 @@ namespace {
                                 ifi->ifi_index, linkUp);
                         
                         // Check overall connectivity and invoke callback under mutex
+                        // Invalidate cache INSIDE the mutex to prevent race where another
+                        // thread could re-populate cache with stale data between invalidation
+                        // and our re-check
                         pthread_mutex_lock(&g_callbackMutex);
+                        g_networkConnectivityCacheValid.store(false, std::memory_order_relaxed);
                         if (g_networkCallback) {
                             bool isAvailable = PlatformQuirks::hasNetworkConnectivity();
                             g_networkCallback(isAvailable);
@@ -114,6 +145,13 @@ namespace {
                         pthread_mutex_unlock(&g_callbackMutex);
                     }
                 }
+            }
+            
+            // Handle error conditions on fds
+            if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                fprintf(stderr, "netlinkMonitorThread: netlink socket error (revents=0x%x)\n", 
+                        fds[0].revents);
+                break;
             }
         }
         
@@ -124,6 +162,14 @@ namespace {
 namespace PlatformQuirks {
 
 void applyQuirks() {
+    // Log system information for remote debugging
+    // This helps diagnose distro-specific issues from user reports
+    struct utsname sysInfo;
+    if (uname(&sysInfo) == 0) {
+        std::fprintf(stderr, "Platform: %s %s (%s)\n", 
+                     sysInfo.sysname, sysInfo.release, sysInfo.machine);
+    }
+    
     // When running as root via sudo or pkexec, ensure cache and settings directories
     // are tied to the original user, not root
     if (::geteuid() == 0) {
@@ -143,29 +189,58 @@ void applyQuirks() {
         
         if (originalUidStr) {
             // We're running under sudo or pkexec - get the original user's information
-            uid_t originalUid = static_cast<uid_t>(::atoi(originalUidStr));
-            struct passwd* pw = ::getpwuid(originalUid);
+            // Security: Use strtoul with validation instead of atoi to prevent integer overflow
+            // An attacker could set SUDO_UID to a value that overflows uid_t
+            char* endptr = nullptr;
+            errno = 0;
+            unsigned long parsedUid = std::strtoul(originalUidStr, &endptr, 10);
             
-            if (pw && pw->pw_dir) {
+            // Validate the conversion:
+            // 1. Check for conversion errors (errno set, or no digits consumed)
+            // 2. Check for trailing garbage (endptr should point to '\0')
+            // 3. Check for overflow (parsedUid > maximum uid_t value)
+            if (errno != 0 || endptr == originalUidStr || *endptr != '\0' ||
+                parsedUid > static_cast<unsigned long>(static_cast<uid_t>(-1))) {
+                std::fprintf(stderr, "WARNING: Invalid UID value in environment: %s\n", originalUidStr);
+                return;  // Don't proceed with invalid UID
+            }
+            
+            uid_t originalUid = static_cast<uid_t>(parsedUid);
+            
+            // Use getpwuid_r for thread safety - getpwuid returns static buffer
+            // that could be overwritten by another thread
+            struct passwd pwBuf;
+            struct passwd* pwResult = nullptr;
+            char pwStrBuf[4096];  // Buffer for string fields (name, dir, shell, etc.)
+            
+            int pwErr = getpwuid_r(originalUid, &pwBuf, pwStrBuf, sizeof(pwStrBuf), &pwResult);
+            if (pwErr != 0 || pwResult == nullptr) {
+                std::fprintf(stderr, "WARNING: Could not retrieve user info for UID %lu: %s\n",
+                             parsedUid, pwErr != 0 ? strerror(pwErr) : "user not found");
+                return;
+            }
+            
+            // Use pwResult (== &pwBuf) for the retrieved data
+            if (pwResult->pw_dir) {
                 // Use C-style strings since this happens before Qt is fully initialized
                 char xdgCacheHome[512];
                 char xdgConfigHome[512];
                 char xdgDataHome[512];
                 char xdgRuntimeDir[512];
                 
-                std::snprintf(xdgCacheHome, sizeof(xdgCacheHome), "%s/.cache", pw->pw_dir);
-                std::snprintf(xdgConfigHome, sizeof(xdgConfigHome), "%s/.config", pw->pw_dir);
-                std::snprintf(xdgDataHome, sizeof(xdgDataHome), "%s/.local/share", pw->pw_dir);
+                std::snprintf(xdgCacheHome, sizeof(xdgCacheHome), "%s/.cache", pwResult->pw_dir);
+                std::snprintf(xdgConfigHome, sizeof(xdgConfigHome), "%s/.config", pwResult->pw_dir);
+                std::snprintf(xdgDataHome, sizeof(xdgDataHome), "%s/.local/share", pwResult->pw_dir);
                 std::snprintf(xdgRuntimeDir, sizeof(xdgRuntimeDir), "/run/user/%s", originalUidStr);
                 
                 std::fprintf(stderr, "Running as root via %s\n", elevationMethod);
-                std::fprintf(stderr, "Original user: %s\n", pw->pw_name);
+                std::fprintf(stderr, "Original user: %s\n", pwResult->pw_name);
                 std::fprintf(stderr, "Original UID: %s\n", originalUidStr);
-                std::fprintf(stderr, "Original home directory: %s\n", pw->pw_dir);
+                std::fprintf(stderr, "Original home directory: %s\n", pwResult->pw_dir);
                 
                 // Override HOME to point to the original user's home directory
                 // This ensures QStandardPaths and QSettings use the correct user's directories
-                ::setenv("HOME", pw->pw_dir, 1);
+                ::setenv("HOME", pwResult->pw_dir, 1);
                 
                 // Set XDG environment variables to ensure proper directory usage
                 // Qt respects XDG Base Directory specification on Linux
@@ -226,7 +301,7 @@ void applyQuirks() {
                     // Common location is ~/.Xauthority
                     char xauthorityPath[512];
                     std::snprintf(xauthorityPath, sizeof(xauthorityPath), 
-                                 "%s/.Xauthority", pw->pw_dir);
+                                 "%s/.Xauthority", pwResult->pw_dir);
                     if (access(xauthorityPath, R_OK) == 0) {
                         ::setenv("XAUTHORITY", xauthorityPath, 1);
                         std::fprintf(stderr, "Set XAUTHORITY to: %s\n", xauthorityPath);
@@ -237,7 +312,7 @@ void applyQuirks() {
                     std::fprintf(stderr, "XAUTHORITY already set to: %s\n", currentXauthority);
                 }
                 
-                std::fprintf(stderr, "Set HOME to: %s\n", pw->pw_dir);
+                std::fprintf(stderr, "Set HOME to: %s\n", pwResult->pw_dir);
                 std::fprintf(stderr, "Set XDG_CACHE_HOME to: %s\n", xdgCacheHome);
                 std::fprintf(stderr, "Set XDG_CONFIG_HOME to: %s\n", xdgConfigHome);
                 std::fprintf(stderr, "Set XDG_DATA_HOME to: %s\n", xdgDataHome);
@@ -258,37 +333,72 @@ namespace {
         nullptr
     };
     
-    // Find the first available sound file
+    // Find the first available sound file (cached, thread-safe)
     static const char* findSoundFile() {
-        for (int i = 0; SOUND_FILES[i] != nullptr; i++) {
-            if (access(SOUND_FILES[i], R_OK) == 0) {
-                return SOUND_FILES[i];
+        static const char* cachedSoundFile = nullptr;
+        static std::once_flag soundFileOnce;
+        
+        std::call_once(soundFileOnce, []() {
+            for (int i = 0; SOUND_FILES[i] != nullptr; i++) {
+                if (access(SOUND_FILES[i], R_OK) == 0) {
+                    cachedSoundFile = SOUND_FILES[i];
+                    break;
+                }
             }
-        }
-        return nullptr;
+        });
+        return cachedSoundFile;
     }
     
-    static bool commandExists(const char* cmd) {
-        return !QStandardPaths::findExecutable(QString::fromLatin1(cmd)).isEmpty();
+    // Command availability cache to avoid repeated PATH searches
+    enum class AudioCommand {
+        CanberraGtkPlay,
+        PwPlay,
+        Aplay,
+        Pactl,
+        Beep,
+        COUNT
+    };
+    
+    // Thread-safe command availability cache using std::call_once per command
+    static std::once_flag commandOnceFlags[static_cast<int>(AudioCommand::COUNT)];
+    static bool commandExistsResult[static_cast<int>(AudioCommand::COUNT)] = {false};
+    
+    static bool commandExists(AudioCommand cmd) {
+        int idx = static_cast<int>(cmd);
+        std::call_once(commandOnceFlags[idx], [idx, cmd]() {
+            const char* cmdName = nullptr;
+            switch (cmd) {
+                case AudioCommand::CanberraGtkPlay: cmdName = "canberra-gtk-play"; break;
+                case AudioCommand::PwPlay: cmdName = "pw-play"; break;
+                case AudioCommand::Aplay: cmdName = "aplay"; break;
+                case AudioCommand::Pactl: cmdName = "pactl"; break;
+                case AudioCommand::Beep: cmdName = "beep"; break;
+                default: return;
+            }
+            commandExistsResult[idx] = !QStandardPaths::findExecutable(QString::fromLatin1(cmdName)).isEmpty();
+        });
+        return commandExistsResult[idx];
     }
 }
 
 bool isBeepAvailable() {
     // canberra-gtk-play uses the system sound theme - no file needed
-    if (commandExists("canberra-gtk-play")) {
+    if (commandExists(AudioCommand::CanberraGtkPlay)) {
         return true;
     }
     
     // Other mechanisms need a sound file
     const char* soundFile = findSoundFile();
     if (soundFile) {
-        if (commandExists("pw-play") || commandExists("aplay") || commandExists("pactl")) {
+        if (commandExists(AudioCommand::PwPlay) || 
+            commandExists(AudioCommand::Aplay) || 
+            commandExists(AudioCommand::Pactl)) {
             return true;
         }
     }
     
     // PC speaker beep - no dependencies
-    if (commandExists("beep")) {
+    if (commandExists(AudioCommand::Beep)) {
         return true;
     }
     
@@ -298,32 +408,32 @@ bool isBeepAvailable() {
 
 void beep() {
     // 1. canberra-gtk-play (XDG Sound Theme - best option, uses system theme)
-    if (commandExists("canberra-gtk-play")) {
+    if (commandExists(AudioCommand::CanberraGtkPlay)) {
         if (QProcess::execute("canberra-gtk-play", {"--id=complete"}) == 0) {
             return;
         }
     }
     
-    // Find a sound file for the remaining mechanisms
+    // Find a sound file for the remaining mechanisms (result is cached)
     const char* soundFile = findSoundFile();
     
     if (soundFile) {
         // 2. pw-play (PipeWire - default on modern distros including Raspberry Pi OS)
-        if (commandExists("pw-play")) {
+        if (commandExists(AudioCommand::PwPlay)) {
             if (QProcess::execute("pw-play", {soundFile}) == 0) {
                 return;
             }
         }
         
         // 3. aplay (ALSA - widely available, but only supports WAV)
-        if (commandExists("aplay")) {
+        if (commandExists(AudioCommand::Aplay)) {
             if (QProcess::execute("aplay", {"-q", soundFile}) == 0) {
                 return;
             }
         }
         
         // 4. pactl (PulseAudio - legacy systems)
-        if (commandExists("pactl")) {
+        if (commandExists(AudioCommand::Pactl)) {
             if (QProcess::execute("pactl", {"upload-sample", soundFile, "imager-beep"}) == 0) {
                 QProcess::execute("pactl", {"play-sample", "imager-beep"});
                 return;
@@ -332,7 +442,7 @@ void beep() {
     }
     
     // 5. PC speaker beep command
-    if (commandExists("beep")) {
+    if (commandExists(AudioCommand::Beep)) {
         if (QProcess::execute("beep", {}) == 0) {
             return;
         }
@@ -344,15 +454,52 @@ void beep() {
     qDebug() << "Beep requested but no suitable audio mechanism found on this Linux system";
 }
 
+// Helper to validate network interface names for safe path construction
+// Linux interface names can contain: letters, digits, hyphens, underscores, and dots
+// but must not start with a dot or contain path traversal sequences
+static bool isValidInterfaceName(const QString& name) {
+    if (name.isEmpty() || name.length() > 15) {  // IFNAMSIZ is 16 including null
+        return false;
+    }
+    // Must not start with dot (hidden files, path traversal)
+    if (name.startsWith('.')) {
+        return false;
+    }
+    // Check each character is allowed
+    for (const QChar& c : name) {
+        char ch = c.toLatin1();
+        bool isAlnum = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || 
+                       (ch >= '0' && ch <= '9');
+        bool isAllowedSpecial = (ch == '-' || ch == '_' || ch == '.');
+        if (!isAlnum && !isAllowedSpecial) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool hasNetworkConnectivity() {
+    // Return cached value if valid (invalidated by netlink monitor on changes)
+    if (g_networkConnectivityCacheValid.load(std::memory_order_relaxed)) {
+        return g_cachedNetworkConnectivity.load(std::memory_order_relaxed);
+    }
+    
     // Check multiple indicators of network connectivity on Linux
     
     // Method 1: Check if any network interface (other than loopback) is up
+    // This is fast (sysfs read) and avoids spawning processes
     QDir sysNet("/sys/class/net");
     if (sysNet.exists()) {
         QStringList interfaces = sysNet.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
         for (const QString &iface : interfaces) {
             if (iface == "lo") continue; // Skip loopback
+            
+            // Security: Validate interface name to prevent path traversal attacks
+            // A malicious interface name like "../../../etc/passwd" could read arbitrary files
+            if (!isValidInterfaceName(iface)) {
+                qWarning() << "Skipping invalid interface name:" << iface;
+                continue;
+            }
             
             // Check if interface is up
             QFile operstate(QString("/sys/class/net/%1/operstate").arg(iface));
@@ -360,7 +507,9 @@ bool hasNetworkConnectivity() {
                 QString state = QString::fromLatin1(operstate.readAll()).trimmed();
                 operstate.close();
                 if (state == "up") {
-                    // Interface is up - likely have connectivity
+                    // Interface is up - cache and return
+                    g_cachedNetworkConnectivity.store(true, std::memory_order_relaxed);
+                    g_networkConnectivityCacheValid.store(true, std::memory_order_relaxed);
                     return true;
                 }
             }
@@ -368,16 +517,30 @@ bool hasNetworkConnectivity() {
     }
     
     // Method 2: Check NetworkManager (if available)
-    QProcess nmcli;
-    nmcli.start("nmcli", QStringList() << "networking" << "connectivity" << "check");
-    if (nmcli.waitForFinished(1000)) {
-        QString output = QString::fromLatin1(nmcli.readAllStandardOutput()).trimmed();
-        if (output == "full" || output == "limited") {
-            return true;
+    // Only spawn nmcli if sysfs check didn't find connectivity
+    // This is expensive (process spawn) so we do it last
+    static std::once_flag nmcliOnce;
+    static bool nmcliAvailable = false;
+    std::call_once(nmcliOnce, []() {
+        nmcliAvailable = !QStandardPaths::findExecutable("nmcli").isEmpty();
+    });
+    
+    if (nmcliAvailable) {
+        QProcess nmcli;
+        nmcli.start("nmcli", QStringList() << "networking" << "connectivity" << "check");
+        if (nmcli.waitForFinished(1000)) {
+            QString output = QString::fromLatin1(nmcli.readAllStandardOutput()).trimmed();
+            if (output == "full" || output == "limited") {
+                g_cachedNetworkConnectivity.store(true, std::memory_order_relaxed);
+                g_networkConnectivityCacheValid.store(true, std::memory_order_relaxed);
+                return true;
+            }
         }
     }
     
-    // If we can't determine connectivity, assume offline for safety
+    // No connectivity found - cache the result
+    g_cachedNetworkConnectivity.store(false, std::memory_order_relaxed);
+    g_networkConnectivityCacheValid.store(true, std::memory_order_relaxed);
     return false;
 }
 
@@ -427,75 +590,86 @@ void startNetworkMonitoring(NetworkStatusCallback callback) {
     pthread_mutex_unlock(&g_callbackMutex);
     
     // Create netlink socket for routing/link messages
-    g_netlinkSocket = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    // Use SOCK_CLOEXEC to prevent fd leak to child processes after fork/exec
+    g_netlinkSocket = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE);
     if (g_netlinkSocket < 0) {
-        fprintf(stderr, "Failed to create netlink socket: %s\n", strerror(errno));
+        int savedErrno = errno;
+        fprintf(stderr, "Failed to create netlink socket: %s (errno %d)\n", strerror(savedErrno), savedErrno);
         return;
     }
     
     // Bind to multicast group for link changes
-    struct sockaddr_nl addr;
-    memset(&addr, 0, sizeof(addr));
+    struct sockaddr_nl addr = {};
     addr.nl_family = AF_NETLINK;
     addr.nl_groups = RTMGRP_LINK;  // Subscribe to link up/down events
     
-    if (bind(g_netlinkSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        fprintf(stderr, "Failed to bind netlink socket: %s\n", strerror(errno));
+    if (bind(g_netlinkSocket, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
+        int savedErrno = errno;
+        fprintf(stderr, "Failed to bind netlink socket: %s (errno %d)\n", strerror(savedErrno), savedErrno);
         close(g_netlinkSocket);
         g_netlinkSocket = -1;
         return;
     }
     
-    // Create pipe to signal thread to stop
-    if (pipe(g_stopPipe) < 0) {
-        fprintf(stderr, "Failed to create stop pipe: %s\n", strerror(errno));
+    // Create eventfd to signal thread to stop
+    // eventfd is more efficient than pipe (single fd, 8-byte counter, lighter weight)
+    // EFD_CLOEXEC prevents fd leak to child processes
+    g_stopEventFd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (g_stopEventFd < 0) {
+        int savedErrno = errno;
+        fprintf(stderr, "Failed to create stop eventfd: %s (errno %d)\n", strerror(savedErrno), savedErrno);
         close(g_netlinkSocket);
         g_netlinkSocket = -1;
         return;
     }
     
     // Start monitoring thread
-    g_monitorRunning.store(true);
-    if (pthread_create(&g_monitorThread, nullptr, netlinkMonitorThread, nullptr) != 0) {
-        fprintf(stderr, "Failed to create monitor thread: %s\n", strerror(errno));
+    g_monitorRunning.store(true, std::memory_order_release);
+    
+    // Create thread with explicit attributes for better control
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+    
+    int err = pthread_create(&g_monitorThread, &attr, netlinkMonitorThread, nullptr);
+    pthread_attr_destroy(&attr);
+    
+    if (err != 0) {
+        fprintf(stderr, "Failed to create monitor thread: %s (errno %d)\n", strerror(err), err);
         close(g_netlinkSocket);
         g_netlinkSocket = -1;
-        close(g_stopPipe[0]);
-        close(g_stopPipe[1]);
-        g_stopPipe[0] = g_stopPipe[1] = -1;
-        g_monitorRunning.store(false);
+        close(g_stopEventFd);
+        g_stopEventFd = -1;
+        g_monitorRunning.store(false, std::memory_order_release);
         return;
     }
     
-    fprintf(stderr, "Network monitoring started (netlink)\n");
+    fprintf(stderr, "Network monitoring started (netlink + poll)\n");
 }
 
 void stopNetworkMonitoring() {
-    if (g_monitorRunning.load()) {
-        g_monitorRunning.store(false);
+    if (g_monitorRunning.load(std::memory_order_acquire)) {
+        g_monitorRunning.store(false, std::memory_order_release);
         
-        // Signal thread to stop
-        if (g_stopPipe[1] >= 0) {
-            char c = 'x';
-            ssize_t unused = write(g_stopPipe[1], &c, 1);
-            (void)unused;
+        // Signal thread to stop via eventfd
+        // Write any non-zero value to wake up poll()
+        if (g_stopEventFd >= 0) {
+            uint64_t val = 1;
+            ssize_t written = write(g_stopEventFd, &val, sizeof(val));
+            (void)written;  // Ignore errors - thread will exit on timeout anyway
         }
         
         // Wait for thread to finish
         pthread_join(g_monitorThread, nullptr);
         
-        // Clean up
+        // Clean up file descriptors
         if (g_netlinkSocket >= 0) {
             close(g_netlinkSocket);
             g_netlinkSocket = -1;
         }
-        if (g_stopPipe[0] >= 0) {
-            close(g_stopPipe[0]);
-            g_stopPipe[0] = -1;
-        }
-        if (g_stopPipe[1] >= 0) {
-            close(g_stopPipe[1]);
-            g_stopPipe[1] = -1;
+        if (g_stopEventFd >= 0) {
+            close(g_stopEventFd);
+            g_stopEventFd = -1;
         }
         
         fprintf(stderr, "Network monitoring stopped\n");
@@ -552,6 +726,31 @@ static bool generatePolkitPolicyFilename(const char* appImagePath, char* buffer,
     return written > 0 && static_cast<size_t>(written) < bufferSize;
 }
 
+// Internal helper to XML-escape a string for safe embedding in XML content
+static QString xmlEscape(const QString& input) {
+    QString result;
+    result.reserve(input.size() + 16);  // Reserve a bit extra for escapes
+    
+    for (const QChar& c : input) {
+        switch (c.unicode()) {
+            case '&':  result += QStringLiteral("&amp;");  break;
+            case '<':  result += QStringLiteral("&lt;");   break;
+            case '>':  result += QStringLiteral("&gt;");   break;
+            case '"':  result += QStringLiteral("&quot;"); break;
+            case '\'': result += QStringLiteral("&apos;"); break;
+            default:
+                // Also escape control characters (except tab, newline, carriage return)
+                if (c.unicode() < 0x20 && c != '\t' && c != '\n' && c != '\r') {
+                    result += QString("&#x%1;").arg(c.unicode(), 0, 16);
+                } else {
+                    result += c;
+                }
+                break;
+        }
+    }
+    return result;
+}
+
 // Internal helper to check if policy exists for a specific path
 static bool hasPolkitPolicyForPath(const char* appImagePath) {
     if (!appImagePath) {
@@ -567,24 +766,25 @@ static bool hasPolkitPolicyForPath(const char* appImagePath) {
     std::snprintf(policyPath, sizeof(policyPath), 
         "/usr/share/polkit-1/actions/%s", policyFilename);
     
-    // Check if file exists
-    if (access(policyPath, F_OK) != 0) {
-        return false;
-    }
+    // Security: Removed redundant access() check to eliminate TOCTOU race condition.
+    // The file could be swapped between access() and open(). Instead, just try
+    // to open the file directly - if it doesn't exist, open() will fail.
     
-    // Verify the policy file contains the correct path
+    // Verify the policy file exists and contains the correct path
     // (in case the AppImage was moved but hash collision occurred)
     QFile policyFile(policyPath);
     if (!policyFile.open(QIODevice::ReadOnly)) {
-        return false;
+        return false;  // File doesn't exist or can't be read
     }
     
     QByteArray content = policyFile.readAll();
     policyFile.close();
     
-    // Check if the policy contains the exact AppImage path
+    // Check if the policy contains the exact AppImage path (XML-escaped form)
+    // Since we now XML-escape the path when writing, we must search for the escaped form
+    QString escapedPath = xmlEscape(QString::fromUtf8(appImagePath));
     QString searchPath = QString("org.freedesktop.policykit.exec.path\">%1</annotate>")
-        .arg(QString::fromUtf8(appImagePath));
+        .arg(escapedPath);
     
     return content.contains(searchPath.toUtf8());
 }
@@ -609,6 +809,18 @@ static bool installPolkitPolicyForPath(const char* appImagePath) {
         return false;
     }
     
+    // Security: Validate the path doesn't contain suspicious characters
+    // that could be used for XML injection attacks
+    QString pathStr = QString::fromUtf8(appImagePath);
+    
+    // Reject paths with null bytes (could truncate strings in C code)
+    if (pathStr.contains(QChar('\0'))) {
+        // Log the path length and first portion for debugging (don't log full path - could be malicious)
+        std::fprintf(stderr, "Security: Rejecting AppImage path with embedded null byte (length=%d, prefix=%.50s...)\n",
+                     static_cast<int>(strlen(appImagePath)), appImagePath);
+        return false;
+    }
+    
     char policyFilename[256];
     if (!generatePolkitPolicyFilename(appImagePath, policyFilename, sizeof(policyFilename))) {
         return false;
@@ -623,7 +835,11 @@ static bool installPolkitPolicyForPath(const char* appImagePath) {
     QByteArray hash = QCryptographicHash::hash(pathBytes, QCryptographicHash::Md5).toHex();
     QString actionId = QString("com.raspberrypi.rpi-imager.appimage.%1").arg(QString::fromUtf8(hash.left(12)));
     
-    // Create policy XML
+    // Security: XML-escape the AppImage path to prevent XML injection attacks
+    // An attacker-controlled path like "</annotate><evil>..." could break the XML
+    QString escapedPath = xmlEscape(pathStr);
+    
+    // Create policy XML with escaped path
     QString policyContent = QString(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         "<!DOCTYPE policyconfig PUBLIC\n"
@@ -645,21 +861,47 @@ static bool installPolkitPolicyForPath(const char* appImagePath) {
         "    <annotate key=\"org.freedesktop.policykit.exec.allow_gui\">true</annotate>\n"
         "  </action>\n"
         "</policyconfig>\n"
-    ).arg(actionId, QString::fromUtf8(appImagePath));
+    ).arg(actionId, escapedPath);
     
     // Write policy file
-    int fd = open(policyPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    // O_CLOEXEC prevents fd leak to child processes after fork/exec
+    int fd = open(policyPath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     if (fd < 0) {
+        int savedErrno = errno;
+        std::fprintf(stderr, "Failed to create policy file %s: %s\n", policyPath, strerror(savedErrno));
         return false;
     }
     
     QByteArray contentBytes = policyContent.toUtf8();
-    ssize_t written = write(fd, contentBytes.constData(), contentBytes.size());
-    close(fd);
+    ssize_t written = write(fd, contentBytes.constData(), static_cast<size_t>(contentBytes.size()));
     
-    if (written != contentBytes.size()) {
+    if (written < 0 || static_cast<size_t>(written) != static_cast<size_t>(contentBytes.size())) {
+        int savedErrno = errno;
+        std::fprintf(stderr, "Failed to write policy file: %s\n", strerror(savedErrno));
+        close(fd);
         unlink(policyPath);
         return false;
+    }
+    
+    // fsync to ensure data is flushed to disk before close
+    // This prevents data loss if system crashes immediately after
+    // Also sync the parent directory to ensure the directory entry is persisted
+    if (fsync(fd) != 0) {
+        int savedErrno = errno;
+        std::fprintf(stderr, "Failed to fsync policy file: %s\n", strerror(savedErrno));
+        close(fd);
+        unlink(policyPath);
+        return false;
+    }
+    
+    close(fd);
+    
+    // fsync parent directory to ensure the directory entry is persisted
+    // This is often overlooked but necessary for full durability
+    int dirFd = open("/usr/share/polkit-1/actions", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (dirFd >= 0) {
+        fsync(dirFd);
+        close(dirFd);
     }
     
     return true;
@@ -860,11 +1102,12 @@ DiskResult unmountDisk(const QString& device) {
     // Verify device exists and is not a directory
     struct stat stats;
     if (stat(devicePath, &stats) != 0) {
-        qDebug() << "unmountDisk: stat failed for" << device;
+        int savedErrno = errno;
+        qWarning() << "unmountDisk: stat failed for" << device << "-" << strerror(savedErrno);
         return DiskResult::InvalidDrive;
     }
     if (S_ISDIR(stats.st_mode)) {
-        qDebug() << "unmountDisk: path is a directory" << device;
+        qWarning() << "unmountDisk: path is a directory, not a device:" << device;
         return DiskResult::InvalidDrive;
     }
     
@@ -873,7 +1116,8 @@ DiskResult unmountDisk(const QString& device) {
     
     FILE* procMounts = setmntent("/proc/mounts", "r");
     if (!procMounts) {
-        qDebug() << "unmountDisk: couldn't read /proc/mounts";
+        int savedErrno = errno;
+        qWarning() << "unmountDisk: couldn't read /proc/mounts -" << strerror(savedErrno);
         return DiskResult::Error;
     }
     
@@ -883,9 +1127,19 @@ DiskResult unmountDisk(const QString& device) {
     
     while ((mnt = getmntent_r(procMounts, &data, mntBuf, sizeof(mntBuf)))) {
         // Check if this mount is on the device or any of its partitions
-        if (strncmp(mnt->mnt_fsname, devicePath, strlen(devicePath)) == 0) {
-            qDebug() << "unmountDisk: found mount" << mnt->mnt_dir << "for" << mnt->mnt_fsname;
-            mountDirs.push_back(mnt->mnt_dir);
+        // Match exact device path or device path followed by a partition number (digit)
+        // This prevents matching /dev/sda when we have /dev/sda_backup or similar
+        size_t devicePathLen = strlen(devicePath);
+        if (strncmp(mnt->mnt_fsname, devicePath, devicePathLen) == 0) {
+            char nextChar = mnt->mnt_fsname[devicePathLen];
+            // Accept exact match, partition number (digit), or 'p' followed by digit (nvme style)
+            if (nextChar == '\0' || 
+                (nextChar >= '0' && nextChar <= '9') ||
+                (nextChar == 'p' && mnt->mnt_fsname[devicePathLen + 1] >= '0' && 
+                 mnt->mnt_fsname[devicePathLen + 1] <= '9')) {
+                qDebug() << "unmountDisk: found mount" << mnt->mnt_dir << "for" << mnt->mnt_fsname;
+                mountDirs.push_back(mnt->mnt_dir);
+            }
         }
     }
     endmntent(procMounts);
@@ -896,42 +1150,79 @@ DiskResult unmountDisk(const QString& device) {
     }
     
     // Unmount each mount point
-    // Try MNT_EXPIRE first (gentle), then MNT_DETACH (lazy), then MNT_FORCE
+    // Strategy:
+    // 1. Try normal unmount first (no flags) - cleanest, ensures all data flushed
+    // 2. MNT_EXPIRE (mark for expiry, second call unmounts if idle)
+    // 3. MNT_DETACH (lazy unmount) - WARNING: can leave fs in inconsistent state
+    //    if there are open files, use only after user has been warned
+    // 4. MNT_FORCE - for truly stuck filesystems (usually network mounts)
+    //
+    // Note: We prefer MNT_DETACH over MNT_FORCE because MNT_FORCE can corrupt
+    // data on some filesystem types, while MNT_DETACH is safer (waits for
+    // open files to close before actual unmount).
+    
     size_t unmountCount = 0;
+    std::vector<std::string> failedMounts;
+    
     for (const std::string& mountDir : mountDirs) {
         const char* mountPath = mountDir.c_str();
+        bool unmounted = false;
         
-        // First attempt: MNT_EXPIRE (mark for expiry)
-        if (umount2(mountPath, MNT_EXPIRE) == 0) {
+        // First attempt: normal unmount (cleanest, waits for all I/O)
+        if (umount(mountPath) == 0) {
+            qDebug() << "unmountDisk: unmounted" << mountPath << "(normal)";
+            unmounted = true;
+        }
+        // Second attempt: MNT_EXPIRE (mark for expiry)
+        else if (umount2(mountPath, MNT_EXPIRE) == 0) {
             qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_EXPIRE first call)";
-            unmountCount++;
-            continue;
+            unmounted = true;
         }
-        // Second MNT_EXPIRE attempt (actually unmounts if still idle)
-        if (umount2(mountPath, MNT_EXPIRE) == 0) {
+        // Third attempt: MNT_EXPIRE again (actually unmounts if still idle)
+        else if (umount2(mountPath, MNT_EXPIRE) == 0) {
             qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_EXPIRE second call)";
-            unmountCount++;
-            continue;
+            unmounted = true;
+        }
+        // Fourth attempt: MNT_DETACH (lazy unmount)
+        // This makes the mount point unavailable immediately but actual unmount
+        // happens when all open file handles are closed. Safe for our use case
+        // since we're about to overwrite the device anyway.
+        else if (umount2(mountPath, MNT_DETACH) == 0) {
+            qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_DETACH/lazy)";
+            unmounted = true;
+        }
+        // Last resort: MNT_FORCE (can cause data loss on some filesystems!)
+        else if (umount2(mountPath, MNT_FORCE) == 0) {
+            qWarning() << "unmountDisk: force-unmounted" << mountPath << "(MNT_FORCE - may cause data loss)";
+            unmounted = true;
         }
         
-        // Fallback: MNT_DETACH (lazy unmount - makes mount point unavailable immediately)
-        if (umount2(mountPath, MNT_DETACH) == 0) {
-            qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_DETACH)";
+        if (unmounted) {
             unmountCount++;
-            continue;
+        } else {
+            int savedErrno = errno;
+            qWarning() << "unmountDisk: failed to unmount" << mountPath << ":" << strerror(savedErrno);
+            failedMounts.push_back(mountDir);
         }
-        
-        // Last resort: MNT_FORCE
-        if (umount2(mountPath, MNT_FORCE) == 0) {
-            qDebug() << "unmountDisk: unmounted" << mountPath << "(MNT_FORCE)";
-            unmountCount++;
-            continue;
-        }
-        
-        qDebug() << "unmountDisk: failed to unmount" << mountPath << ":" << strerror(errno);
     }
     
-    return (unmountCount == mountDirs.size()) ? DiskResult::Success : DiskResult::Busy;
+    if (unmountCount == mountDirs.size()) {
+        return DiskResult::Success;
+    } else if (unmountCount == 0) {
+        // All mounts failed - likely a permissions or busy issue
+        qWarning() << "unmountDisk: all" << mountDirs.size() << "mounts failed for" << device;
+        return DiskResult::Busy;
+    } else {
+        // Partial success - some mounts succeeded, some failed
+        // This is still a failure but we should log what succeeded for debugging
+        qWarning() << "unmountDisk: partial failure -" << unmountCount << "of" 
+                   << mountDirs.size() << "mounts succeeded for" << device;
+        qWarning() << "unmountDisk: failed mounts:" << failedMounts.size();
+        for (const auto& failed : failedMounts) {
+            qWarning() << "  -" << QString::fromStdString(failed);
+        }
+        return DiskResult::Busy;
+    }
 }
 
 DiskResult ejectDisk(const QString& device) {
@@ -944,6 +1235,14 @@ DiskResult ejectDisk(const QString& device) {
 
 const char* findCACertBundle()
 {
+    // Cache the result - this is called on every curl handle setup
+    static const char* cachedPath = nullptr;
+    static bool cacheInitialized = false;
+    
+    if (cacheInitialized) {
+        return cachedPath;
+    }
+    
     // Common CA certificate bundle paths across Linux distributions.
     // AppImages and other portable distributions bundle libcurl with a
     // hardcoded CA certificate path from the build system. When run on a
@@ -968,11 +1267,13 @@ const char* findCACertBundle()
     {
         if (access(caPaths[i], R_OK) == 0)
         {
-            return caPaths[i];
+            cachedPath = caPaths[i];
+            break;
         }
     }
-
-    return nullptr;  // Not found, curl will use its compiled-in default
+    
+    cacheInitialized = true;
+    return cachedPath;  // May be nullptr if not found, curl will use its compiled-in default
 }
 
 void clearAppImageEnvironment() {

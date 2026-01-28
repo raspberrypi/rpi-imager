@@ -9,6 +9,7 @@
  * - Uses IOKit for APFS parent device discovery
  * - Uses NSFileManager for mount point enumeration
  * - Separates disk enumeration from property extraction for testability
+ * - Uses os_log for unified logging (Console.app integration)
  */
 
 #include "drivelist.h"
@@ -19,6 +20,23 @@
 #import <IOKit/IOKitLib.h>
 #import <IOKit/storage/IOMedia.h>
 #import <IOKit/IOBSD.h>
+#include <os/log.h>
+#include <sys/sysctl.h>
+
+// Unified logging for disk operations - visible in Console.app
+// Users can capture with: log collect --device --last 1h
+static os_log_t drivelist_log() {
+    static os_log_t log = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("com.raspberrypi.imager", "drivelist");
+    });
+    return log;
+}
+
+#define DRIVELIST_LOG_INFO(fmt, ...) os_log_info(drivelist_log(), fmt, ##__VA_ARGS__)
+#define DRIVELIST_LOG_ERROR(fmt, ...) os_log_error(drivelist_log(), fmt, ##__VA_ARGS__)
+#define DRIVELIST_LOG_DEBUG(fmt, ...) os_log_debug(drivelist_log(), fmt, ##__VA_ARGS__)
 
 namespace Drivelist {
 
@@ -91,56 +109,84 @@ NSString* getString(CFDictionaryRef dict, const void* key)
 std::string findAPFSParent(const char* bsdName)
 {
     std::string result;
+    
+    @autoreleasepool {
+        io_service_t service = IOServiceGetMatchingService(
+            kIOMainPortDefault,
+            IOBSDNameMatching(kIOMainPortDefault, 0, bsdName));
 
-    io_service_t service = IOServiceGetMatchingService(
-        kIOMainPortDefault,
-        IOBSDNameMatching(kIOMainPortDefault, 0, bsdName));
-
-    if (!service) return result;
-
-    // Navigate up the IORegistry hierarchy to find the physical media
-    // APFS structure: APFSVolume -> APFSContainer -> AppleAPFSContainerScheme -> IOMedia
-    io_service_t current = service;
-
-    for (int i = 0; i < 3; i++) {
-        io_service_t parent;
-        kern_return_t kr = IORegistryEntryGetParentEntry(current, kIOServicePlane, &parent);
-
-        if (current != service) {
-            IOObjectRelease(current);
+        if (!service) {
+            DRIVELIST_LOG_DEBUG("findAPFSParent: no IOService for %{public}s", bsdName);
+            return result;
         }
 
-        if (kr != KERN_SUCCESS) {
+        // Navigate up the IORegistry hierarchy to find the physical media
+        // APFS structure: APFSVolume -> APFSContainer -> AppleAPFSContainerScheme -> IOMedia
+        io_service_t current = service;
+        io_service_t toRelease = IO_OBJECT_NULL;  // Track object to release
+
+        for (int i = 0; i < 3; i++) {
+            io_service_t parent = IO_OBJECT_NULL;
+            kern_return_t kr = IORegistryEntryGetParentEntry(current, kIOServicePlane, &parent);
+
+            // Release previous 'current' if it's not the original service
+            if (toRelease != IO_OBJECT_NULL) {
+                IOObjectRelease(toRelease);
+                toRelease = IO_OBJECT_NULL;
+            }
+
+            if (kr != KERN_SUCCESS) {
+                DRIVELIST_LOG_DEBUG("findAPFSParent: IORegistry traversal failed at level %d (kr=%#x)", i, kr);
+                if (current != service) {
+                    IOObjectRelease(current);
+                }
+                IOObjectRelease(service);
+                return result;
+            }
+
+            toRelease = current;  // Mark current for release on next iteration
+            current = parent;
+        }
+
+        // Release the last intermediate object
+        if (toRelease != IO_OBJECT_NULL && toRelease != service) {
+            IOObjectRelease(toRelease);
+        }
+
+        // Now look for sibling that is IOMedia class
+        io_iterator_t iterator = IO_OBJECT_NULL;
+        kern_return_t kr = IORegistryEntryGetParentIterator(current, kIOServicePlane, &iterator);
+        
+        if (kr != KERN_SUCCESS || iterator == IO_OBJECT_NULL) {
+            DRIVELIST_LOG_DEBUG("findAPFSParent: failed to get parent iterator (kr=%#x)", kr);
+            IOObjectRelease(current);
             IOObjectRelease(service);
             return result;
         }
 
-        current = parent;
-    }
+        io_service_t parent;
+        while ((parent = IOIteratorNext(iterator))) {
+            if (IOObjectConformsTo(parent, kIOMediaClass)) {
+                CFTypeRef bsdNameRef = IORegistryEntryCreateCFProperty(
+                    parent, CFSTR(kIOBSDNameKey), kCFAllocatorDefault, 0);
 
-    // Now look for sibling that is IOMedia class
-    io_iterator_t iterator;
-    IORegistryEntryGetParentIterator(current, kIOServicePlane, &iterator);
-
-    io_service_t parent;
-    while ((parent = IOIteratorNext(iterator))) {
-        if (IOObjectConformsTo(parent, kIOMediaClass)) {
-            CFTypeRef bsdNameRef = IORegistryEntryCreateCFProperty(
-                parent, CFSTR(kIOBSDNameKey), kCFAllocatorDefault, 0);
-
-            if (bsdNameRef && CFGetTypeID(bsdNameRef) == CFStringGetTypeID()) {
-                NSString* name = (__bridge NSString*)bsdNameRef;
-                result = [name UTF8String];
-                CFRelease(bsdNameRef);
+                if (bsdNameRef && CFGetTypeID(bsdNameRef) == CFStringGetTypeID()) {
+                    NSString* name = (__bridge NSString*)bsdNameRef;
+                    result = [name UTF8String];
+                    DRIVELIST_LOG_DEBUG("findAPFSParent: %{public}s -> %{public}s", bsdName, result.c_str());
+                }
+                if (bsdNameRef) {
+                    CFRelease(bsdNameRef);
+                }
             }
+            IOObjectRelease(parent);
+            if (!result.empty()) break;
         }
-        IOObjectRelease(parent);
-        if (!result.empty()) break;
-    }
 
-    IOObjectRelease(iterator);
-    IOObjectRelease(current);
-    IOObjectRelease(service);
+        IOObjectRelease(iterator);
+        IOObjectRelease(current);
+        IOObjectRelease(service);
+    }
 
     return result;
 }
@@ -163,9 +209,9 @@ DeviceDescriptor createDeviceDescriptor(const std::string& bsdName, CFDictionary
     device.device = "/dev/" + bsdName;
     device.raw = "/dev/r" + bsdName;
 
-    // Description
+    // Description - sanitize to prevent Unicode display attacks
     NSString* mediaName = getString(diskDescription, kDADiskDescriptionMediaNameKey);
-    device.description = mediaName ? [mediaName UTF8String] : "";
+    device.description = mediaName ? sanitizeForDisplay([mediaName UTF8String]) : "";
 
     // Device path (bus path)
     NSString* busPath = getString(diskDescription, kDADiskDescriptionBusPathKey);
@@ -333,51 +379,87 @@ void addMountPoints(std::vector<DeviceDescriptor>& deviceList, DASessionRef sess
 std::vector<DeviceDescriptor> ListStorageDevices()
 {
     std::vector<DeviceDescriptor> deviceList;
+    
+    @autoreleasepool {
+        // Log macOS version for debugging
+        NSOperatingSystemVersion osVersion = [[NSProcessInfo processInfo] operatingSystemVersion];
+        DRIVELIST_LOG_INFO("ListStorageDevices: macOS %ld.%ld.%ld",
+                           (long)osVersion.majorVersion,
+                           (long)osVersion.minorVersion,
+                           (long)osVersion.patchVersion);
 
-    DASessionRef session = DASessionCreate(kCFAllocatorDefault);
-    if (!session) {
-        return deviceList;
-    }
+        DASessionRef session = DASessionCreate(kCFAllocatorDefault);
+        if (!session) {
+            DRIVELIST_LOG_ERROR("ListStorageDevices: failed to create DiskArbitration session");
+            // Return sentinel error device so UI can display failure
+            DeviceDescriptor errorDevice;
+            errorDevice.device = "__error__";
+            errorDevice.error = "Failed to enumerate drives: DiskArbitration session creation failed";
+            errorDevice.description = "Drive enumeration failed";
+            deviceList.push_back(std::move(errorDevice));
+            return deviceList;
+        }
 
-    // Enumerate all disks (caller owns the array)
-    NSMutableArray* diskNames = [[NSMutableArray alloc] init];
-    if (!enumerateDisks(diskNames)) {
-        [diskNames release];
+        // Enumerate all disks
+        NSMutableArray* diskNames = [[NSMutableArray alloc] init];
+        if (!enumerateDisks(diskNames)) {
+            DRIVELIST_LOG_ERROR("ListStorageDevices: disk enumeration failed");
+            CFRelease(session);
+            DeviceDescriptor errorDevice;
+            errorDevice.device = "__error__";
+            errorDevice.error = "Failed to enumerate drives: DiskArbitration enumeration failed";
+            errorDevice.description = "Drive enumeration failed";
+            deviceList.push_back(std::move(errorDevice));
+            return deviceList;
+        }
+        
+        DRIVELIST_LOG_INFO("ListStorageDevices: found %lu disk entries", (unsigned long)[diskNames count]);
+        
+        // Reserve capacity to avoid reallocations during enumeration
+        deviceList.reserve(static_cast<size_t>([diskNames count]));
+
+        // Process each whole disk (skip partitions)
+        for (NSString* diskName in diskNames) {
+            @autoreleasepool {
+                if (isPartition(diskName)) {
+                    continue;
+                }
+
+                std::string bsdName = [diskName UTF8String];
+                DADiskRef disk = DADiskCreateFromBSDName(
+                    kCFAllocatorDefault, session, bsdName.c_str());
+
+                if (!disk) {
+                    DRIVELIST_LOG_DEBUG("ListStorageDevices: skipping %{public}s (no DADiskRef)", bsdName.c_str());
+                    continue;
+                }
+
+                CFDictionaryRef diskDescription = DADiskCopyDescription(disk);
+                if (!diskDescription) {
+                    DRIVELIST_LOG_DEBUG("ListStorageDevices: skipping %{public}s (no description)", bsdName.c_str());
+                    CFRelease(disk);
+                    continue;
+                }
+
+                DeviceDescriptor device = createDeviceDescriptor(bsdName, diskDescription);
+                DRIVELIST_LOG_DEBUG("ListStorageDevices: %{public}s size=%llu removable=%d system=%d",
+                                    bsdName.c_str(), device.size, device.isRemovable, device.isSystem);
+                deviceList.push_back(std::move(device));
+
+                CFRelease(diskDescription);
+                CFRelease(disk);
+            }
+        }
+
+        // Add mount point information
+        addMountPoints(deviceList, session);
+
         CFRelease(session);
-        return deviceList;
+        // Note: diskNames will be released by ARC when leaving @autoreleasepool
+        // If building with MRC, uncomment: [diskNames release];
     }
 
-    // Process each whole disk (skip partitions)
-    for (NSString* diskName in diskNames) {
-        if (isPartition(diskName)) {
-            continue;
-        }
-
-        std::string bsdName = [diskName UTF8String];
-        DADiskRef disk = DADiskCreateFromBSDName(
-            kCFAllocatorDefault, session, bsdName.c_str());
-
-        if (!disk) continue;
-
-        CFDictionaryRef diskDescription = DADiskCopyDescription(disk);
-        if (!diskDescription) {
-            CFRelease(disk);
-            continue;
-        }
-
-        DeviceDescriptor device = createDeviceDescriptor(bsdName, diskDescription);
-        deviceList.push_back(std::move(device));
-
-        CFRelease(diskDescription);
-        CFRelease(disk);
-    }
-
-    // Add mount point information
-    addMountPoints(deviceList, session);
-
-    [diskNames release];
-    CFRelease(session);
-
+    DRIVELIST_LOG_INFO("ListStorageDevices: returning %zu devices", deviceList.size());
     return deviceList;
 }
 

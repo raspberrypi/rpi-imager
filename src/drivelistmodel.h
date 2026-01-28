@@ -22,6 +22,7 @@ class DriveListModel : public QAbstractListModel
     QML_ELEMENT
     QML_UNCREATABLE("Created by C++")
 #endif
+    Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 public:
     DriveListModel(QObject *parent = nullptr);
     virtual int rowCount(const QModelIndex &) const;
@@ -64,6 +65,14 @@ public:
      * @return List of child device paths, empty if device not found
      */
     Q_INVOKABLE QStringList getChildDevices(const QString &device) const;
+    
+    /**
+     * @brief Get the last enumeration error message
+     * 
+     * Returns the error message from the most recent failed drive enumeration,
+     * or empty string if enumeration succeeded.
+     */
+    QString lastError() const { return _lastError; }
 
     enum driveListRoles {
         deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole, childDevicesRole
@@ -72,6 +81,24 @@ public:
 signals:
     void deviceRemoved(const QString &device);
     void eventDriveListPoll(quint32 durationMs);
+    
+    /**
+     * @brief Emitted when the lastError property changes
+     * 
+     * Used by Qt's property binding system. For UI notifications,
+     * connect to enumerationError() instead which includes the message.
+     */
+    void lastErrorChanged();
+    
+    /**
+     * @brief Emitted when drive enumeration fails or recovers
+     * 
+     * @param errorMessage Human-readable error description, or empty if recovered
+     * 
+     * The UI should display this error to the user and potentially
+     * offer troubleshooting steps (e.g., "Try running as administrator").
+     */
+    void enumerationError(const QString &errorMessage);
 
 public slots:
     void processDriveList(std::vector<Drivelist::DeviceDescriptor> l);
@@ -80,6 +107,7 @@ protected:
     QMap<QString,DriveListItem *> _drivelist;
     QHash<int, QByteArray> _rolenames;
     DriveListModelPollThread _thread;
+    QString _lastError;  // Last enumeration error message (empty if successful)
 };
 
 #endif // DRIVELISTMODEL_H

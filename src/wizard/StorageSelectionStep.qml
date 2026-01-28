@@ -65,6 +65,7 @@ WizardStepBase {
     property bool hasValidStorageOptions: false
     property bool hasAnyDevices: false
     property bool hasOnlyReadOnlyDevices: false
+    property string enumerationErrorMessage: ""
     
     Component.onCompleted: {
         // Register the ListView for keyboard navigation
@@ -93,6 +94,18 @@ WizardStepBase {
         }
     }
     
+    // Watch for drive enumeration errors from the model
+    // This handles cases where the OS can't enumerate drives (permissions, driver issues, etc.)
+    Connections {
+        target: root.imageWriter ? root.imageWriter.getDriveList() : null
+        function onEnumerationError(errorMessage) {
+            root.enumerationErrorMessage = errorMessage || ""
+            if (errorMessage) {
+                console.warn("Drive enumeration error:", errorMessage)
+            }
+        }
+    }
+    
     // Removed drive list polling calls; backend handles device updates
     
     // Content
@@ -100,6 +113,42 @@ WizardStepBase {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        
+        // Error banner for drive enumeration failures
+        Rectangle {
+            id: enumerationErrorBanner
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? errorBannerContent.implicitHeight + Style.spacingMedium * 2 : 0
+            visible: root.enumerationErrorMessage.length > 0
+            color: Style.formLabelErrorColor
+            opacity: 0.9
+            
+            RowLayout {
+                id: errorBannerContent
+                anchors.fill: parent
+                anchors.margins: Style.spacingMedium
+                spacing: Style.spacingSmall
+                
+                // Warning icon
+                Text {
+                    text: "⚠"
+                    font.pixelSize: Style.fontSizeFormLabel
+                    color: "white"
+                }
+                
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Could not list storage devices: %1").arg(root.enumerationErrorMessage)
+                    font.pixelSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: "white"
+                    wrapMode: Text.WordWrap
+                }
+            }
+            
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: qsTr("Error: Could not list storage devices. %1").arg(root.enumerationErrorMessage)
+        }
         
         // Storage device list fills available space
         SelectionListView {
@@ -186,7 +235,10 @@ WizardStepBase {
                 anchors.fill: parent
                 visible: !root.hasValidStorageOptions
                 text: {
-                    if (!root.hasAnyDevices) {
+                    // Check for enumeration error first
+                    if (root.enumerationErrorMessage.length > 0) {
+                        return qsTr("Could not list storage devices: %1").arg(root.enumerationErrorMessage)
+                    } else if (!root.hasAnyDevices) {
                         return qsTr("No storage devices found")
                     } else if (root.hasOnlyReadOnlyDevices) {
                         if (filterSystemDrives.checked) {
@@ -550,7 +602,10 @@ WizardStepBase {
     
     // Get the storage status message for accessibility
     function getStorageStatusMessage() {
-        if (!root.hasAnyDevices) {
+        // Check for enumeration error first
+        if (root.enumerationErrorMessage.length > 0) {
+            return qsTr("Could not list storage devices: %1. This may be a permissions issue. Try running the application with administrator privileges.").arg(root.enumerationErrorMessage)
+        } else if (!root.hasAnyDevices) {
             return qsTr("No storage devices found. Please connect a storage device to continue.")
         } else if (root.hasOnlyReadOnlyDevices) {
             if (filterSystemDrives.checked) {

@@ -3361,9 +3361,31 @@ QString ImageWriter::customRepoHost()
         return _repo.fileName();
     }
     
-    // For remote URLs, return the host in ASCII (punycode) to prevent IDN homograph attacks
-    // Also truncate very long hostnames to prevent UI issues
+    // Security: Detect IDN homograph attacks where attackers use lookalike Unicode
+    // characters (e.g., Cyrillic 'а' U+0430 looks identical to Latin 'a' U+0061)
+    // to create domains like "rаspberrypi.com" that appear legitimate.
+    //
+    // Strategy: Always display the punycode (ASCII) form of the hostname.
+    // If the domain contains non-ASCII characters, the punycode will start with
+    // "xn--" making it obvious something is unusual. For example:
+    // - "raspberrypi.com" → "raspberrypi.com" (safe, no change)
+    // - "rаspberrypi.com" (Cyrillic а) → "xn--rspberrypi-h4e.com" (suspicious)
+    
     QString host = _repo.host(QUrl::FullyEncoded);
+    
+    // Additional check: if decoded host differs from encoded, it contains IDN
+    // In this case, prepend a warning indicator
+    QString decodedHost = _repo.host(QUrl::FullyDecoded);
+    if (!decodedHost.isEmpty() && decodedHost != host) {
+        // IDN detected - the punycode form will already show "xn--" prefix
+        // Add explicit warning prefix so users know to be cautious
+        host = QStringLiteral("⚠ ") + host;
+        qWarning() << "IDN hostname detected in custom repo URL:"
+                   << "displayed as" << host
+                   << "decoded form:" << decodedHost;
+    }
+    
+    // Truncate very long hostnames to prevent UI issues
     if (host.length() > 50) {
         host = host.left(47) + QStringLiteral("...");
     }
