@@ -4200,6 +4200,12 @@ bool ImageWriter::exportPerformanceData()
         return false;
     }
     
+    // Warn if there's no imaging session data (only background events)
+    if (!_performanceStats->hasImagingData()) {
+        qWarning() << "Performance data contains no imaging session - data may have been exported"
+                   << "before a write operation or after app restart";
+    }
+    
     // Generate default filename with timestamp
     QString defaultFilename = getPerformanceDataFilename();
     QString initialDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);

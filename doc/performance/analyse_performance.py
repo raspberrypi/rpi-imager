@@ -61,6 +61,101 @@ def format_throughput(kbps: int) -> str:
 
 
 # =============================================================================
+# SESSION STATE INFERENCE
+# =============================================================================
+
+# Events that are recorded even without an imaging session (background/startup events)
+BACKGROUND_EVENT_TYPES = {
+    'osListFetch', 'osListParse', 'sublistFetch', 'networkConnectionStats',
+    'networkLatency', 'networkRetry', 'driveListPoll', 'fileDialogOpen'
+}
+
+def infer_session_state(data: dict) -> str:
+    """
+    Infer the session state from performance data.
+    
+    For newer traces (v3+), uses the sessionState field directly.
+    For older traces, infers the state from available data:
+    - 'never_started': No imaging session was initiated (only background events)
+    - 'succeeded': Session completed successfully
+    - 'failed': Session failed with an error
+    - 'cancelled': Session was cancelled (detected from error message)
+    - 'in_progress': Session was still running when exported
+    
+    Returns the inferred session state string.
+    """
+    summary = data.get('summary', {})
+    
+    # If sessionState is present, use it directly
+    session_state = summary.get('sessionState', '')
+    if session_state:
+        return session_state
+    
+    # Infer from older traces
+    events = data.get('events', [])
+    histograms = data.get('histograms', {})
+    phases = summary.get('phases', {})
+    
+    # Check if there are any CycleStart events
+    has_cycle_start = any(e.get('type') == 'cycleStart' for e in events)
+    
+    # Check if sessionStartTime is non-zero
+    session_start_time = summary.get('sessionStartTime', 0)
+    
+    # Check if there's any imaging data (throughput samples)
+    has_imaging_data = False
+    for phase in ['download', 'decompress', 'write', 'verify']:
+        phase_data = phases.get(phase, {})
+        if phase_data.get('sampleCount', 0) > 0:
+            has_imaging_data = True
+            break
+        if histograms.get(phase):
+            has_imaging_data = True
+            break
+    
+    # Check what types of events we have
+    event_types = {e.get('type') for e in events}
+    has_only_background_events = event_types.issubset(BACKGROUND_EVENT_TYPES)
+    
+    # Infer state based on available data
+    if not has_cycle_start and session_start_time == 0 and not has_imaging_data:
+        # No session was ever started
+        if has_only_background_events or not events:
+            return 'never_started'
+    
+    # Check for explicit success/failure
+    success = summary.get('success', False)
+    error_message = summary.get('errorMessage', '').lower()
+    
+    if success:
+        return 'succeeded'
+    
+    # Check for cancellation indicators in error message
+    if error_message:
+        if 'cancel' in error_message or 'removed' in error_message or 'user' in error_message:
+            return 'cancelled'
+        return 'failed'
+    
+    # Check for CycleEnd events
+    cycle_end_events = [e for e in events if e.get('type') == 'cycleEnd']
+    if cycle_end_events:
+        last_cycle_end = cycle_end_events[-1]
+        if last_cycle_end.get('success', False):
+            return 'succeeded'
+        metadata = str(last_cycle_end.get('metadata', '')).lower()
+        if 'cancel' in metadata or 'removed' in metadata:
+            return 'cancelled'
+        return 'failed'
+    
+    # If we have imaging data but no completion, it's in progress
+    if has_imaging_data or has_cycle_start:
+        return 'in_progress'
+    
+    # Default fallback - treat as never started if no evidence of imaging
+    return 'never_started'
+
+
+# =============================================================================
 # IMAGING CYCLE DETECTION
 # =============================================================================
 
@@ -88,7 +183,8 @@ class ImagingCycle:
         self.success: bool = True
         self.is_complete: bool = False  # True if we saw completion events
         self.is_final_cycle: bool = False  # True if this is the last cycle in the capture
-        self.completion_reason: str = ''  # 'completed', 'failed', 'in_progress', 'exported_early'
+        # Completion reasons: 'completed', 'failed', 'cancelled', 'in_progress', 'exported_early', 'never_started'
+        self.completion_reason: str = ''
         
     @property
     def duration_ms(self) -> int:
@@ -436,12 +532,12 @@ def _update_cycle_from_event(cycle: 'ImagingCycle', event: dict) -> None:
 
 
 def _determine_cycle_completion(cycles: list, data: dict) -> None:
-    """Determine whether each cycle completed, failed, or is still in progress."""
+    """Determine whether each cycle completed, failed, cancelled, or is still in progress."""
     if not cycles:
         return
     
-    summary = data.get('summary', {})
-    session_success = summary.get('success', False)
+    # Infer session state (works for both new and old traces)
+    session_state = infer_session_state(data)
     
     for i, cycle in enumerate(cycles):
         cycle.is_final_cycle = (i == len(cycles) - 1)
@@ -454,7 +550,17 @@ def _determine_cycle_completion(cycles: list, data: dict) -> None:
         # Check for failed events
         failed_events = [e for e in cycle.events if not e.get('success', True)]
         
-        if has_failure or failed_events:
+        # Check for cancellation indicators in cycleEnd metadata
+        cycle_end_events = [e for e in cycle.events if e.get('type') == 'cycleEnd']
+        is_cancelled = any('cancel' in str(e.get('metadata', '')).lower() or 
+                          'removed' in str(e.get('metadata', '')).lower()
+                          for e in cycle_end_events)
+        
+        if is_cancelled:
+            cycle.is_complete = True
+            cycle.success = False
+            cycle.completion_reason = 'cancelled'
+        elif has_failure or failed_events:
             cycle.is_complete = True
             cycle.success = False
             cycle.completion_reason = 'failed'
@@ -471,11 +577,18 @@ def _determine_cycle_completion(cycles: list, data: dict) -> None:
             
             if all_slices:
                 last_activity = max(s[0] for s in all_slices)
-                # If the session was marked as failed and this is the last cycle
-                if not session_success:
+                # Use inferred session state for more accurate status
+                if session_state == 'cancelled':
+                    cycle.is_complete = True
+                    cycle.success = False
+                    cycle.completion_reason = 'cancelled'
+                elif session_state in ('failed', 'never_started'):
                     cycle.is_complete = False
                     cycle.success = False
                     cycle.completion_reason = 'exported_early'
+                elif session_state == 'in_progress':
+                    cycle.is_complete = False
+                    cycle.completion_reason = 'in_progress'
                 else:
                     # Has activity but no completion event - likely exported mid-operation
                     cycle.is_complete = False
@@ -548,14 +661,18 @@ def print_cycles(cycles: list) -> None:
         status_indicators = {
             'completed': '✓',
             'failed': '✗',
+            'cancelled': '⊘',
             'in_progress': '⋯',
-            'exported_early': '⚠'
+            'exported_early': '⚠',
+            'never_started': '○'
         }
         status_labels = {
             'completed': 'COMPLETED',
             'failed': 'FAILED',
+            'cancelled': 'CANCELLED',
             'in_progress': 'IN PROGRESS (capture exported mid-cycle)',
-            'exported_early': 'INCOMPLETE (capture exported early)'
+            'exported_early': 'INCOMPLETE (capture exported early)',
+            'never_started': 'NEVER STARTED'
         }
         indicator = status_indicators.get(cycle.completion_reason, '?')
         status_label = status_labels.get(cycle.completion_reason, 'UNKNOWN')
@@ -634,8 +751,10 @@ def get_cycle_comparison_table(cycles: list) -> str:
         status_short = {
             'completed': 'Complete',
             'failed': 'Failed',
+            'cancelled': 'Cancelled',
             'in_progress': 'In Progress',
-            'exported_early': 'Incomplete'
+            'exported_early': 'Incomplete',
+            'never_started': 'Not Started'
         }
         row += f"{status_short.get(c.completion_reason, '?'):>15}"
     lines.append(row)
@@ -704,7 +823,18 @@ def print_summary(data: dict) -> None:
     print(f"Device:   {summary.get('deviceName', 'Unknown')}")
     print(f"Size:     {format_bytes(summary.get('imageSize', 0))}")
     print(f"Duration: {format_duration(summary.get('durationMs', 0))}")
-    print(f"Result:   {'[OK] Success' if summary.get('success') else '[FAIL] Failed'}")
+    
+    # Infer session state (works for both new and old traces)
+    session_state = infer_session_state(data)
+    state_labels = {
+        'succeeded': '[OK] Success',
+        'failed': '[FAIL] Failed',
+        'cancelled': '[CANCEL] Cancelled by user',
+        'in_progress': '[...] In progress',
+        'never_started': '[--] No imaging session started'
+    }
+    result = state_labels.get(session_state, f'[?] {session_state}')
+    print(f"Result:   {result}")
     
     if summary.get('errorMessage'):
         print(f"Error:    {summary['errorMessage']}")
@@ -2217,10 +2347,26 @@ def generate_html_report(data: dict, analysis: dict, output_path: Path, cycles: 
         <p class="subtitle">Generated: ''' + html.escape(data.get('exportTime', 'Unknown')) + '''</p>
 ''']
 
-    # Summary section
-    success = summary.get('success', False)
-    status_class = 'success' if success else 'error'
-    status_text = 'Success' if success else 'Failed'
+    # Summary section - infer session state (works for both new and old traces)
+    session_state = infer_session_state(data)
+    
+    state_classes = {
+        'succeeded': 'success',
+        'failed': 'error',
+        'cancelled': 'warning',
+        'in_progress': 'warning',
+        'never_started': 'error'
+    }
+    state_texts = {
+        'succeeded': 'Success',
+        'failed': 'Failed',
+        'cancelled': 'Cancelled',
+        'in_progress': 'In Progress',
+        'never_started': 'No Session'
+    }
+    
+    status_class = state_classes.get(session_state, 'error')
+    status_text = state_texts.get(session_state, session_state)
     
     html_parts.append(f'''
         <div class="card">
@@ -2326,14 +2472,18 @@ def generate_html_report(data: dict, analysis: dict, output_path: Path, cycles: 
             status_colors = {
                 'completed': 'var(--success)',
                 'failed': 'var(--error)',
+                'cancelled': 'var(--warning)',
                 'in_progress': 'var(--warning)',
-                'exported_early': 'var(--warning)'
+                'exported_early': 'var(--warning)',
+                'never_started': 'var(--error)'
             }
             status_labels = {
                 'completed': 'Completed',
                 'failed': 'Failed',
+                'cancelled': 'Cancelled',
                 'in_progress': 'In Progress',
-                'exported_early': 'Incomplete'
+                'exported_early': 'Incomplete',
+                'never_started': 'Not Started'
             }
             status_color = status_colors.get(cycle.completion_reason, 'var(--text-secondary)')
             status_label = status_labels.get(cycle.completion_reason, 'Unknown')
@@ -2519,6 +2669,30 @@ def main():
     
     # Print textual analysis
     print_summary(data)
+    
+    # Check for "never started" session and provide helpful guidance
+    # Uses inference to detect this condition even in older traces
+    session_state = infer_session_state(data)
+    if session_state == 'never_started':
+        print("\n" + "!" * 60)
+        print("WARNING: No imaging session was captured in this data file.")
+        print("!" * 60)
+        print("""
+This typically means the performance data was exported before or without
+performing an actual write operation. Possible causes:
+
+  1. The app was restarted after a write - performance data is stored
+     in memory and does not persist across app restarts.
+     
+  2. The data was exported before starting a write operation.
+  
+  3. The write was performed in a different app instance.
+
+To capture complete performance data:
+  - Start the write operation
+  - Wait for it to complete (or cancel it)
+  - Export performance data BEFORE closing the app
+""")
     
     # Detect and analyse imaging cycles
     cycles = []

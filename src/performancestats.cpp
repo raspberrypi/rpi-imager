@@ -16,7 +16,7 @@ PerformanceStats::PerformanceStats(QObject *parent)
     , _imageSize(0)
     , _sessionStartTime(0)
     , _sessionEndTime(0)
-    , _sessionSuccess(false)
+    , _sessionState(SessionState::NeverStarted)
     , _currentPhase(Phase::Idle)
     , _nextEventId(1)
     , _downloadTotal(0)
@@ -63,7 +63,7 @@ void PerformanceStats::startSession(const QString &imageName, quint64 imageSize,
     _imageSize = imageSize;
     _sessionStartTime = QDateTime::currentMSecsSinceEpoch();
     _sessionEndTime = 0;
-    _sessionSuccess = false;
+    _sessionState = SessionState::InProgress;
     _errorMessage.clear();
     
     _currentPhase = Phase::Idle;
@@ -104,7 +104,7 @@ void PerformanceStats::reset()
     _imageSize = 0;
     _sessionStartTime = 0;
     _sessionEndTime = 0;
-    _sessionSuccess = false;
+    _sessionState = SessionState::NeverStarted;
     _errorMessage.clear();
     _sessionActive = false;
     
@@ -150,6 +150,23 @@ void PerformanceStats::endSession(bool success, const QString &errorMessage)
     if (!_sessionActive)
         return;
     
+    // Determine session state based on success and error message
+    SessionState newState;
+    if (success) {
+        newState = SessionState::Succeeded;
+    } else {
+        // Check if this was a cancellation vs a failure
+        // Common cancellation indicators: "Cancel", "cancelled", "removed", "user"
+        QString lowerError = errorMessage.toLower();
+        if (lowerError.contains("cancel") || 
+            lowerError.contains("removed") ||
+            lowerError.contains("user")) {
+            newState = SessionState::Cancelled;
+        } else {
+            newState = SessionState::Failed;
+        }
+    }
+    
     // Emit CycleEnd event to mark the end of this imaging cycle
     TimedEvent cycleEndEvent;
     cycleEndEvent.type = EventType::CycleEnd;
@@ -161,12 +178,12 @@ void PerformanceStats::endSession(bool success, const QString &errorMessage)
     _events.append(cycleEndEvent);
     
     _sessionEndTime = QDateTime::currentMSecsSinceEpoch();
-    _sessionSuccess = success;
+    _sessionState = newState;
     _errorMessage = errorMessage;
     _sessionActive = false;
     _currentPhase = Phase::Idle;
     
-    qDebug() << "PerformanceStats: Cycle ended, success:" << success
+    qDebug() << "PerformanceStats: Cycle ended, state:" << sessionStateName(newState)
              << "events:" << _events.size()
              << "samples: dl=" << _downloadSamples.size()
              << "dec=" << _decompressSamples.size()
@@ -178,6 +195,12 @@ bool PerformanceStats::isSessionActive() const
 {
     QMutexLocker locker(&_mutex);
     return _sessionActive;
+}
+
+PerformanceStats::SessionState PerformanceStats::sessionState() const
+{
+    QMutexLocker locker(&_mutex);
+    return _sessionState;
 }
 
 int PerformanceStats::beginEvent(EventType type, const QString &metadata)
@@ -368,6 +391,20 @@ bool PerformanceStats::hasData() const
            !_verifySamples.isEmpty();
 }
 
+bool PerformanceStats::hasImagingData() const
+{
+    QMutexLocker locker(&_mutex);
+    
+    // Has imaging data if:
+    // 1. A session was started (state is not NeverStarted), OR
+    // 2. We have actual throughput samples from imaging operations
+    return _sessionState != SessionState::NeverStarted ||
+           !_downloadSamples.isEmpty() || 
+           !_decompressSamples.isEmpty() ||
+           !_writeSamples.isEmpty() || 
+           !_verifySamples.isEmpty();
+}
+
 QString PerformanceStats::eventTypeName(EventType type)
 {
     switch (type) {
@@ -449,6 +486,18 @@ QString PerformanceStats::eventTypeName(EventType type)
         // UI operations
         case EventType::FileDialogOpen: return "fileDialogOpen";
         
+        default: return "unknown";
+    }
+}
+
+QString PerformanceStats::sessionStateName(SessionState state)
+{
+    switch (state) {
+        case SessionState::NeverStarted: return "never_started";
+        case SessionState::InProgress: return "in_progress";
+        case SessionState::Succeeded: return "succeeded";
+        case SessionState::Failed: return "failed";
+        case SessionState::Cancelled: return "cancelled";
         default: return "unknown";
     }
 }
@@ -570,7 +619,11 @@ QJsonObject PerformanceStats::buildSummary() const
     summary["sessionStartTime"] = _sessionStartTime;
     summary["sessionEndTime"] = _sessionEndTime;
     summary["durationMs"] = _sessionEndTime > 0 ? _sessionEndTime - _sessionStartTime : 0;
-    summary["success"] = _sessionSuccess;
+    
+    // Include both the detailed state and legacy success boolean for compatibility
+    summary["sessionState"] = sessionStateName(_sessionState);
+    summary["success"] = (_sessionState == SessionState::Succeeded);
+    
     if (!_errorMessage.isEmpty()) {
         summary["errorMessage"] = _errorMessage;
     }

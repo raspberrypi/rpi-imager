@@ -131,6 +131,25 @@ public:
     Q_ENUM(Phase)
 
     /**
+     * @brief Session state for tracking imaging operation lifecycle
+     * 
+     * Provides richer state than a simple success/fail boolean:
+     * - NeverStarted: No imaging session was initiated (only background events captured)
+     * - InProgress: Session started but not yet completed
+     * - Succeeded: Session completed successfully
+     * - Failed: Session ended with an error
+     * - Cancelled: Session was cancelled by user or due to device removal
+     */
+    enum class SessionState : uint8_t {
+        NeverStarted = 0,  // startSession() was never called
+        InProgress = 1,    // startSession() called, endSession() not yet called
+        Succeeded = 2,     // endSession(true) called
+        Failed = 3,        // endSession(false) called with error
+        Cancelled = 4      // endSession(false) called due to user cancel or device removal
+    };
+    Q_ENUM(SessionState)
+
+    /**
      * @brief Minimal raw sample - just timestamp and bytes (12 bytes)
      * Throughput calculation deferred to export time
      */
@@ -220,8 +239,20 @@ public:
     /**
      * @brief End the current imaging cycle
      * Emits a CycleEnd event with success/failure status.
+     * @param success True if the operation completed successfully
+     * @param errorMessage Optional error message (used to determine if cancelled vs failed)
+     * 
+     * The session state is determined as follows:
+     * - success=true → SessionState::Succeeded
+     * - success=false, errorMessage contains "Cancel" or "removed" → SessionState::Cancelled
+     * - success=false, other error → SessionState::Failed
      */
     void endSession(bool success, const QString &errorMessage = QString());
+    
+    /**
+     * @brief Get the current session state
+     */
+    SessionState sessionState() const;
     
     /**
      * @brief Reset all captured data (start fresh)
@@ -296,9 +327,18 @@ public:
     // ===== Export (Complex processing happens here) =====
     
     /**
-     * @brief Check if there is data available to export
+     * @brief Check if there is any data available to export
+     * Returns true if there are any events or samples (including background events)
      */
     bool hasData() const;
+    
+    /**
+     * @brief Check if there is actual imaging session data to export
+     * Returns true only if an imaging session was started (startSession() was called).
+     * This distinguishes between having just background events (osListFetch, etc.)
+     * and having actual imaging operation data.
+     */
+    bool hasImagingData() const;
     
     /**
      * @brief Export performance data to JSON format
@@ -320,6 +360,11 @@ public:
      * @brief Get event type name as string
      */
     static QString eventTypeName(EventType type);
+    
+    /**
+     * @brief Get session state name as string
+     */
+    static QString sessionStateName(SessionState state);
 
 private:
     // Minimum interval between samples (ms) to limit data volume
@@ -349,7 +394,7 @@ private:
     quint64 _imageSize;
     qint64 _sessionStartTime;  // Unix timestamp ms
     qint64 _sessionEndTime;
-    bool _sessionSuccess;
+    SessionState _sessionState;  // Richer state than simple success/fail
     QString _errorMessage;
     
     // System information
