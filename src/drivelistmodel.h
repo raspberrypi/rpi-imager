@@ -24,10 +24,12 @@ class DriveListModel : public QAbstractListModel
 #endif
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 public:
-    DriveListModel(QObject *parent = nullptr);
-    virtual int rowCount(const QModelIndex &) const;
-    virtual QHash<int, QByteArray> roleNames() const;
-    virtual QVariant data(const QModelIndex &index, int role) const;
+    explicit DriveListModel(QObject *parent = nullptr);
+    
+    // QAbstractListModel overrides
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    QHash<int, QByteArray> roleNames() const override;
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     void startPolling();
     void stopPolling();
     
