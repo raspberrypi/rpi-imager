@@ -57,11 +57,10 @@ namespace {
         
         bool isReachable = (flags & kSCNetworkReachabilityFlagsReachable) != 0;
         bool needsConnection = (flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0;
-        bool isWWAN = (flags & kSCNetworkReachabilityFlagsIsWWAN) != 0;
         bool isAvailable = isReachable && !needsConnection;
         
-        PLATFORM_LOG_INFO("Network status changed: flags=%#x reachable=%d needsConnection=%d wwan=%d available=%d",
-                          flags, isReachable, needsConnection, isWWAN, isAvailable);
+        PLATFORM_LOG_INFO("Network status changed: flags=%#x reachable=%d needsConnection=%d available=%d",
+                          flags, isReachable, needsConnection, isAvailable);
         callback(isAvailable);
     }
     
