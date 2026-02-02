@@ -2195,7 +2195,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Writing... %1%</source>
-        <translation>A salvar... %1%</translation>
+        <translation>Salvando... %1%</translation>
     </message>
     <message>
         <source>Verifying... %1%</source>
