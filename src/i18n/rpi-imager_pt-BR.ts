@@ -2187,7 +2187,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>I understand, erase and write</source>
-        <translation>Eu compreendo, apagar e gravar</translation>
+        <translation>Eu compreendo, apagar e salvar</translation>
     </message>
     <message>
         <source>Please wait...</source>
@@ -2195,7 +2195,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Writing... %1%</source>
-        <translation>Gravando... %1%</translation>
+        <translation>A salvar... %1%</translation>
     </message>
     <message>
         <source>Verifying... %1%</source>
@@ -2207,7 +2207,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Write failed: %1</source>
-        <translation>Falha ao gravar: %1</translation>
+        <translation>Falha ao salvar: %1</translation>
     </message>
     <message>
         <source>Customisations to apply:</source>
@@ -2219,7 +2219,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Write image</source>
-        <translation>Gravar imagem</translation>
+        <translation>Salvar imagem</translation>
     </message>
     <message>
         <source>Operating system:</source>
@@ -2231,7 +2231,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Confirm erasure and begin writing the image to the storage device</source>
-        <translation>Confirmar a eliminação e começar a gravação a imagem no dispositivo de armazenamento</translation>
+        <translation>Confirmar a eliminação e começar a salvar a imagem no dispositivo de armazenamento</translation>
     </message>
     <message>
         <source>Skip verification</source>
@@ -2251,11 +2251,11 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Continue to the completion screen</source>
-        <translation>Continuar para o ecrã de conclusão</translation>
+        <translation>Continuar para o tela de conclusão</translation>
     </message>
     <message>
         <source>Begin writing the image to the storage device. All existing data will be erased.</source>
-        <translation>Começar a gravar a imagem no dispositivo de armazenamento. Todos os dados existentes serão apagados.</translation>
+        <translation>Começar a salvar a imagem no dispositivo de armazenamento. Todos os dados existentes serão apagados.</translation>
     </message>
     <message>
         <source>Return to previous customization step</source>
@@ -2366,7 +2366,7 @@ para mostrar as unidades do sistema.</translation>
     </message>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
-        <translation>Sair do Raspberry Pi Imager - tem de reiniciar com privilégios elevados para gravar imagens</translation>
+        <translation>Sair do Raspberry Pi Imager - tem de reiniciar com privilégios elevados para salvar imagens</translation>
     </message>
     <message>
         <source>Install Authorization</source>
