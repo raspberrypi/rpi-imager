@@ -590,8 +590,17 @@ WizardStepBase {
                 progressText.text = qsTr("Writing... %1 MB written").arg(bytesWrittenMB)
             } else {
                 var progress = total > 0 ? (now / total) * 100 : 0
-                progressBar.value = progress
-                progressText.text = qsTr("Writing... %1%").arg(Math.round(progress))
+                if (progress > 100) {
+                    // Extract size estimate was wrong (e.g., compressed download
+                    // without extract_size in manifest). Switch to showing bytes
+                    // written instead of a misleading percentage.
+                    root.isIndeterminateProgress = true
+                    var bytesWrittenMB = Math.round(now / (1024 * 1024))
+                    progressText.text = qsTr("Writing... %1 MB written").arg(bytesWrittenMB)
+                } else {
+                    progressBar.value = progress
+                    progressText.text = qsTr("Writing... %1%").arg(Math.round(progress))
+                }
             }
         }
     }
@@ -601,7 +610,7 @@ WizardStepBase {
             root.isVerifying = true
             root.bottleneckStatus = ""  // Clear write bottleneck during verification
             root.operationWarning = ""  // Clear write warnings during verification
-            var progress = total > 0 ? (now / total) * 100 : 0
+            var progress = total > 0 ? Math.min((now / total) * 100, 100) : 0
             progressBar.value = progress
             progressText.text = qsTr("Verifying... %1%").arg(Math.round(progress))
         }
