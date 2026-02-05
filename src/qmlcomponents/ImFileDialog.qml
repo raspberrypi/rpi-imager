@@ -475,7 +475,7 @@ BaseDialog {
                     delegate: ItemDelegate {
                         required property int index
                         required property string fileName
-                        required property string fileURL
+                        required property url fileUrl
                         
                         width: (ListView.view ? ListView.view.width : 0)
                         text: "📁 " + fileName
@@ -496,7 +496,7 @@ BaseDialog {
                         }
                         onClicked: {
                             subfoldersList.currentIndex = index
-                            dialog.currentFolder = fileURL
+                            dialog.currentFolder = fileUrl
                         }
                     }
                     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: Style.scrollBarWidth }
@@ -512,12 +512,12 @@ BaseDialog {
                     }
                     Keys.onEnterPressed: {
                         if (currentIndex >= 0) {
-                            dialog.currentFolder = model.get(currentIndex, "fileURL")
+                            dialog.currentFolder = model.get(currentIndex, "fileUrl")
                         }
                     }
                     Keys.onReturnPressed: {
                         if (currentIndex >= 0) {
-                            dialog.currentFolder = model.get(currentIndex, "fileURL")
+                            dialog.currentFolder = model.get(currentIndex, "fileUrl")
                         }
                     }
                 }
@@ -552,8 +552,8 @@ BaseDialog {
                         currentFileIndex--
                         // Update selection
                         var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
-                        if (fileItem && fileItem.fileURL) {
-                            dialog.selectedFile = fileItem.fileURL
+                        if (fileItem && fileItem.fileUrl) {
+                            dialog.selectedFile = fileItem.fileUrl
                         }
                     }
                 }
@@ -562,8 +562,8 @@ BaseDialog {
                         currentFileIndex++
                         // Update selection
                         var fileItem = fileColumn.children[currentFileIndex + 1] // +1 because of up entry
-                        if (fileItem && fileItem.fileURL) {
-                            dialog.selectedFile = fileItem.fileURL
+                        if (fileItem && fileItem.fileUrl) {
+                            dialog.selectedFile = fileItem.fileUrl
                         }
                     }
                 }
@@ -648,7 +648,7 @@ BaseDialog {
                                 currentIndex = 0
                                 // Set the selected file to the first file
                                 if (count > 0) {
-                                    dialog.selectedFile = model.get(0, "fileURL")
+                                    dialog.selectedFile = model.get(0, "fileUrl")
                                 }
                             }
                         }
@@ -657,20 +657,20 @@ BaseDialog {
                         Keys.onUpPressed: {
                             if (currentIndex > 0) {
                                 currentIndex--
-                                dialog.selectedFile = model.get(currentIndex, "fileURL")
+                                dialog.selectedFile = model.get(currentIndex, "fileUrl")
                             }
                         }
                         Keys.onDownPressed: {
                             if (currentIndex < count - 1) {
                                 currentIndex++
-                                dialog.selectedFile = model.get(currentIndex, "fileURL")
+                                dialog.selectedFile = model.get(currentIndex, "fileUrl")
                             }
                         }
                         
                         delegate: ItemDelegate {
                             required property int index
                             required property string fileName
-                            required property string fileURL
+                            required property url fileUrl
                             
                             width: fileColumn.width
                             text: "📄 " + fileName
@@ -679,7 +679,7 @@ BaseDialog {
                             Accessible.name: qsTr("File: %1").arg(fileName)
                             background: Rectangle {
                                 color: {
-                                    if (dialog.selectedFile === fileURL)
+                                    if (dialog.selectedFile === fileUrl)
                                         return Style.listViewHighlightColor
                                     else if (ListView.isCurrentItem && filesList.activeFocus)
                                         return Style.listViewHighlightColor
@@ -693,7 +693,7 @@ BaseDialog {
                             }
                             onClicked: {
                                 filesList.currentIndex = index
-                                dialog.selectedFile = fileURL
+                                dialog.selectedFile = fileUrl
                             }
                         }
                         
