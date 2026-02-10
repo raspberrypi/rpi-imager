@@ -36,7 +36,8 @@ BaseDialog {
         chkEject.naturalWidth,
         chkTelemetry.naturalWidth,
         chkDisableWarnings.naturalWidth,
-        editRepoButton.naturalWidth
+        editRepoButton.naturalWidth,
+        clearSettingsButton.naturalWidth
     ) + Style.cardPadding * 4  // Double padding: contentLayout + optionsLayout margins
     
     // Register focus groups when component is ready
@@ -58,6 +59,7 @@ BaseDialog {
             // Only include secure boot key button if visible
             if (secureBootKeyButton.visible)
                 items.push(secureBootKeyButton.focusItem)
+            items.push(clearSettingsButton.focusItem)
             return items
         }, 1)
         registerFocusGroup("buttons", function(){ 
@@ -215,6 +217,20 @@ BaseDialog {
                     id: rsaKeyPath
                     text: ""
                     visible: false
+                }
+            }
+
+            ImOptionButton {
+                id: clearSettingsButton
+                text: qsTr("Saved Customisation")
+                btnText: qsTr("Clear")
+                accessibleDescription: qsTr("Remove all saved OS customisation settings such as hostname, WiFi, and user credentials")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+                onClicked: {
+                    confirmClearSettings.open()
                 }
             }
         }
@@ -461,6 +477,101 @@ BaseDialog {
                     if (popup.wizardContainer)
                         popup.wizardContainer.disableWarnings = true;
                     confirmDisableWarnings.close();
+                }
+            }
+        }
+    }
+
+    // Confirmation dialog for clearing saved customisation settings
+    BaseDialog {
+        id: confirmClearSettings
+        imageWriter: popup.imageWriter
+        parent: popup.contentItem
+        anchors.centerIn: parent
+
+        // Custom escape handling
+        function escapePressed() {
+            confirmClearSettings.close()
+        }
+
+        // Register focus groups when component is ready
+        Component.onCompleted: {
+            registerFocusGroup("content", function(){
+                // Only include text elements when screen reader is active (otherwise they're not focusable)
+                if (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) {
+                    return [clearSettingsTitleText, clearSettingsDescriptionText]
+                }
+                return []
+            }, 0)
+            registerFocusGroup("buttons", function(){
+                return [clearSettingsCancelButton, clearSettingsConfirmButton]
+            }, 1)
+        }
+
+        // Dialog content
+        Text {
+            id: clearSettingsTitleText
+            text: qsTr("Clear saved customisation?")
+            font.pixelSize: Style.fontSizeHeading
+            font.family: Style.fontFamilyBold
+            font.bold: true
+            color: Style.formLabelColor
+            Layout.fillWidth: true
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+            Accessible.focusable: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
+        }
+
+        Text {
+            id: clearSettingsDescriptionText
+            textFormat: Text.StyledText
+            wrapMode: Text.WordWrap
+            font.pixelSize: Style.fontSizeDescription
+            font.family: Style.fontFamily
+            color: Style.textDescriptionColor
+            Layout.fillWidth: true
+            text: qsTr("This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.")
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text.replace(/<[^>]+>/g, '')
+            Accessible.focusable: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
+            focusPolicy: (popup.imageWriter && popup.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
+            activeFocusOnTab: popup.imageWriter ? popup.imageWriter.isScreenReaderActive() : false
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.spacingMedium
+            Item {
+                Layout.fillWidth: true
+            }
+
+            ImButton {
+                id: clearSettingsCancelButton
+                text: CommonStrings.cancel
+                accessibleDescription: qsTr("Keep saved customisation settings and return to the options dialog")
+                activeFocusOnTab: true
+                onClicked: confirmClearSettings.close()
+            }
+
+            ImButtonRed {
+                id: clearSettingsConfirmButton
+                text: qsTr("Clear")
+                accessibleDescription: qsTr("Remove all saved OS customisation settings permanently")
+                activeFocusOnTab: true
+                onClicked: {
+                    imageWriter.clearSavedCustomisationSettings()
+                    if (popup.wizardContainer) {
+                        popup.wizardContainer.customizationSettings = ({})
+                        popup.wizardContainer.hostnameConfigured = false
+                        popup.wizardContainer.localeConfigured = false
+                        popup.wizardContainer.userConfigured = false
+                        popup.wizardContainer.wifiConfigured = false
+                        popup.wizardContainer.sshEnabled = false
+                    }
+                    confirmClearSettings.close()
+                    popup.close()
                 }
             }
         }

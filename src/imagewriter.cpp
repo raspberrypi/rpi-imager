@@ -3203,6 +3203,14 @@ void ImageWriter::removePersistedCustomisationSetting(const QString &key)
     _settings.sync();
 }
 
+void ImageWriter::clearSavedCustomisationSettings()
+{
+    _settings.beginGroup("imagecustomization");
+    _settings.remove("");
+    _settings.endGroup();
+    _settings.sync();
+}
+
 bool ImageWriter::imageSupportsCustomization()
 {
     return !_initFormat.isEmpty();
