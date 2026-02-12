@@ -444,7 +444,12 @@ int main(int argc, char *argv[])
     const QStringList posArgs = parser.positionalArguments();
     if (!posArgs.isEmpty())
     {
-        const QString firstPos = posArgs.first();
+        // The .desktop file uses %u, so file managers may pass file:// URLs instead of plain paths
+        QString firstPos = posArgs.first();
+        const QUrl posUrl(firstPos);
+        if (posUrl.isLocalFile())
+            firstPos = posUrl.toLocalFile();
+
         if (firstPos.startsWith("rpi-imager:", Qt::CaseInsensitive))
         {
             callbackUrl = QUrl(firstPos);
@@ -698,7 +703,13 @@ int main(int argc, char *argv[])
 
     // If launched via custom URL scheme on Windows/Linux, deliver it now
     if (!callbackUrl.isEmpty()) {
-        imageWriter.handleIncomingUrl(callbackUrl);
+        if (callbackUrl.isLocalFile()) {
+            // Local manifest file opened by double-click: set repo URL directly (like --repo)
+            // so the deferred isOnline() fetch uses the correct URL instead of the default.
+            imageWriter.setCustomOsListUrl(callbackUrl);
+        } else {
+            imageWriter.handleIncomingUrl(callbackUrl);
+        }
     }
     // Forward platform URL open events to QML via ImageWriter (no-ops, kept for future use)
     QObject::connect(&app, &QGuiApplication::applicationStateChanged, &imageWriter, [](Qt::ApplicationState){ /* no-op */ });

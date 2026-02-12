@@ -4119,7 +4119,9 @@ void ImageWriter::handleIncomingUrl(const QUrl &url)
             QFileInfo fi(localPath);
             if (fi.isFile() && fi.isReadable()) {
                 qDebug() << "Local manifest file opened:" << localPath;
-                emit repositoryUrlReceived(url.toString());
+                // Local files are trusted (user explicitly opened them) — load directly
+                // without a confirmation dialog, consistent with --repo CLI behavior.
+                refreshOsListFrom(url);
                 return;
             } else {
                 qWarning() << "Cannot read manifest file:" << localPath;
