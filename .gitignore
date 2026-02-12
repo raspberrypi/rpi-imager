@@ -46,3 +46,6 @@ timezones.txt
 
 # build-cli-only related
 test-cli-**
+
+# clangd related
+.cache/clangd
