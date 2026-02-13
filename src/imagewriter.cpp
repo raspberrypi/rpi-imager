@@ -561,6 +561,24 @@ QString ImageWriter::getHardwareName()
 /* Start writing */
 void ImageWriter::startWrite()
 {
+    // Refuse re-entry while a write is already in progress.  The deferred-watchdog
+    // fix (#1511) prevents false stall timeouts during macOS auth, so users should
+    // no longer reach this path.  The guard remains as defence-in-depth. (#1511)
+    if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing ||
+        _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing) {
+        qDebug() << "startWrite: ignoring — write already in progress, state:" << _writeState;
+        return;
+    }
+
+    // Clean up a finished-but-not-yet-collected thread (deleteLater timing gap).
+    // A *running* thread here is a bug — our exit paths (onError, onCancelled,
+    // QThread::finished handler) should have cleaned up already.
+    if (_thread) {
+        Q_ASSERT(!_thread->isRunning());
+        _thread->deleteLater();
+        _thread = nullptr;
+    }
+
     if (!readyToWrite())
     {
         // Provide a user-visible error rather than silently returning, so the UI can recover
@@ -984,6 +1002,13 @@ void ImageWriter::startWrite()
     connect(_thread, &DownloadThread::eventDriveAuthorization,
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DriveAuthorization, durationMs, success);
+                // Start the progress watchdog only after device authorization completes.
+                // On macOS, authorization shows system dialogs (passkey + removable media access)
+                // that can take an indeterminate amount of time. Starting the watchdog earlier
+                // would cause false stall detection during this auth period. (#1511)
+                if (success && _progressWatchdog && _thread) {
+                    _progressWatchdog->start(_thread);
+                }
             });
     connect(_thread, &DownloadThread::eventDriveMbrZeroing,
             this, [this](quint32 durationMs, bool success, QString metadata){
@@ -1963,9 +1988,10 @@ void ImageWriter::startProgressPolling()
                 });
     }
     
-    if (_thread) {
-        _progressWatchdog->start(_thread);
-    }
+    // NOTE: The watchdog is NOT started here. It will be started after device
+    // authorization completes, via the eventDriveAuthorization signal handler.
+    // This prevents false stall detection during the indeterminate macOS auth
+    // period where system dialogs block the thread but no I/O has begun. (#1511)
 }
 
 void ImageWriter::stopProgressPolling()
@@ -2097,6 +2123,13 @@ void ImageWriter::onError(QString msg)
     
     setWriteState(WriteState::Failed);
     stopProgressPolling();
+    
+    // Cancel any running write thread to prevent orphaned operations.
+    // Without this, a thread blocked on macOS auth could resume writing
+    // after the user starts a new write attempt, causing dual-write crashes. (#1511)
+    if (_thread && _thread->isRunning()) {
+        _thread->cancelDownload();
+    }
     
     // End performance stats session with error
     _performanceStats->endSession(false, msg);
@@ -3679,6 +3712,13 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     connect(_thread, &DownloadThread::eventDriveAuthorization,
             this, [this](quint32 durationMs, bool success){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DriveAuthorization, durationMs, success);
+                // Start the progress watchdog only after device authorization completes.
+                // On macOS, authorization shows system dialogs (passkey + removable media access)
+                // that can take an indeterminate amount of time. Starting the watchdog earlier
+                // would cause false stall detection during this auth period. (#1511)
+                if (success && _progressWatchdog && _thread) {
+                    _progressWatchdog->start(_thread);
+                }
             });
     connect(_thread, &DownloadThread::eventDriveMbrZeroing,
             this, [this](quint32 durationMs, bool success, QString metadata){
