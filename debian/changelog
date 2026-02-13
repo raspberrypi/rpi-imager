@@ -1,3 +1,31 @@
+rpi-imager (2.0.7) unstable; urgency=medium
+
+  * Write Operations:
+    - Prevent re-entry during write operations and improve thread management
+    - Start progress watchdog only after device authorization to avoid false
+      stall detections during macOS authorization dialogs
+  * Local Files:
+    - Load local manifest files directly without confirmation dialog
+    - Improve URL handling to differentiate local file URLs from remote URLs
+  * Drive Enumeration:
+    - Replace vendored drivelist/mountutils dependencies with new
+      platform-specific implementations for macOS, Linux and Windows
+    - Enhance error handling and show UI banner on enumeration failures
+    - Improve code clarity and signal-slot connection syntax
+  * Networking:
+    - Track effective URL after redirects in CurlFetcher for better
+      transparency and security feedback
+  * macOS:
+    - Simplify network status logging in platform quirks
+    - Update disk unmount and eject operations to handle device paths directly
+  * Tests:
+    - Add unit tests for platform-specific quirks
+    - Update drivelist test API definitions via CMake compile definitions
+  * Build:
+    - Update .gitignore to include clangd cache files
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Fri, 13 Feb 2026 15:25:00 +0000
+
 rpi-imager (2.0.6) unstable; urgency=medium
 
   * UI: Improve ImButton width calculation for better content fitting
