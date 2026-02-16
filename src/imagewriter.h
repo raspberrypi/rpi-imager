@@ -283,6 +283,7 @@ public:
     Q_INVOKABLE QVariantMap getSavedCustomisationSettings();
     Q_INVOKABLE void setPersistedCustomisationSetting(const QString &key, const QVariant &value);
     Q_INVOKABLE void removePersistedCustomisationSetting(const QString &key);
+    Q_INVOKABLE void clearSavedCustomisationSettings();
     Q_INVOKABLE bool imageSupportsCustomization();
     Q_INVOKABLE bool imageSupportsCcRpi();
 
