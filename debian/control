@@ -9,7 +9,9 @@ Homepage: https://www.raspberrypi.com/software
 Package: rpi-imager
 Build-Profiles: <desktop>
 Architecture: amd64 arm64
-Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2, util-linux (>= 2.37), pkexec
+Depends: ${shlibs:Depends}, ${misc:Depends}, dosfstools, fdisk, fuse, libfuse2,
+         util-linux (>= 2.37), pkexec,
+         libfontconfig1, libx11-6, libegl1, libgl1
 Recommends: udisks2
 Conflicts: rpi-imager-embedded
 Description: Raspberry Pi Imaging utility
