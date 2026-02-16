@@ -590,8 +590,10 @@ WizardStepBase {
                 progressText.text = qsTr("Writing... %1 MB written").arg(bytesWrittenMB)
             } else {
                 var progress = total > 0 ? (now / total) * 100 : 0
-                progressBar.value = progress
-                progressText.text = qsTr("Writing... %1%").arg(Math.round(progress))
+                // Clamp progress to avoid exceeding 100% due to extra writes
+                var clamped = Math.min(100, Math.max(0, progress))
+                progressBar.value = clamped
+                progressText.text = qsTr("Writing... %1%").arg(Math.round(clamped))
             }
         }
     }
@@ -602,8 +604,10 @@ WizardStepBase {
             root.bottleneckStatus = ""  // Clear write bottleneck during verification
             root.operationWarning = ""  // Clear write warnings during verification
             var progress = total > 0 ? (now / total) * 100 : 0
-            progressBar.value = progress
-            progressText.text = qsTr("Verifying... %1%").arg(Math.round(progress))
+            // Clamp verification progress to 0..100
+            var clamped = Math.min(100, Math.max(0, progress))
+            progressBar.value = clamped
+            progressText.text = qsTr("Verifying... %1%").arg(Math.round(clamped))
         }
     }
 
