@@ -10,6 +10,7 @@
 #include <archive_entry.h>
 
 #include <QUrl>
+#include <QFileInfo>
 #include <QDebug>
 
 LocalFileExtractThread::LocalFileExtractThread(const QByteArray &url, const QByteArray &dst, const QByteArray &expectedHash, QObject *parent)
@@ -81,6 +82,16 @@ void LocalFileExtractThread::run()
         canUseArchive = _testArchiveFormat();
     }
     
+    if (isImage() && canUseArchive && _needsDecompressScan)
+    {
+        quint64 estimatedSize = _estimateDecompressedSize();
+        if (estimatedSize > 0 && !_cancelled)
+        {
+            setExtractTotal(estimatedSize);
+            qDebug() << "Estimation complete. Estimated decompressed size:" << estimatedSize;
+        }
+    }
+
     if (isImage() && canUseArchive)
         extractImageRun();  // Use libarchive for compressed/archive files
     else if (isImage() && !canUseArchive)
@@ -164,6 +175,71 @@ void LocalFileExtractThread::extractRawImageRun()
     {
         _onDownloadError(tr("Failed to read complete image file"));
     }
+}
+
+quint64 LocalFileExtractThread::_estimateDecompressedSize()
+{
+    emit preparationStatusUpdate(tr("Estimating compressed image size..."));
+
+    QString filePath = QUrl(_url).toLocalFile();
+    struct archive *a = archive_read_new();
+    struct archive_entry *entry;
+    quint64 decompressedSample = 0;
+
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+    archive_read_support_format_raw(a);
+
+    const size_t blockSize = 1024 * 1024;
+    // Sample ~50MB of compressed data to get a representative compression ratio
+    const qint64 compressedSampleTarget = 50 * 1024 * 1024;
+
+    if (archive_read_open_filename(a, filePath.toLocal8Bit().constData(), blockSize) == ARCHIVE_OK)
+    {
+        if (archive_read_next_header(a, &entry) == ARCHIVE_OK)
+        {
+            // Reuse the existing heap-allocated input buffer for reading
+            ssize_t size;
+            while ((size = archive_read_data(a, _inputBuf, _inputBufSize)) > 0)
+            {
+                decompressedSample += size;
+                if (_cancelled)
+                    break;
+
+                qint64 compressedConsumed = archive_filter_bytes(a, -1);
+                if (compressedConsumed >= compressedSampleTarget)
+                    break;
+            }
+        }
+    }
+
+    qint64 compressedConsumed = archive_filter_bytes(a, -1);
+    archive_read_free(a);
+
+    // Reset input file position and download counter for the actual extraction pass
+    _inputfile.seek(0);
+    _lastDlNow = 0;
+
+    if (_cancelled || compressedConsumed <= 0 || decompressedSample == 0)
+    {
+        qDebug() << "Decompressed size estimation failed or cancelled";
+        return 0;
+    }
+
+    // Calculate compression ratio and extrapolate
+    QFileInfo fi(filePath);
+    qint64 totalCompressedSize = fi.size();
+    double ratio = static_cast<double>(decompressedSample) / static_cast<double>(compressedConsumed);
+    quint64 estimated = static_cast<quint64>(totalCompressedSize * ratio);
+
+    qDebug() << "Decompressed size estimation:"
+             << "sample_compressed=" << compressedConsumed
+             << "sample_decompressed=" << decompressedSample
+             << "ratio=" << ratio
+             << "estimated_total=" << estimated
+             << QString("(%1 GB)").arg(estimated / 1073741824.0, 0, 'f', 2);
+
+    return estimated;
 }
 
 bool LocalFileExtractThread::_testArchiveFormat()

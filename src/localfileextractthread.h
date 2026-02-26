@@ -20,6 +20,7 @@ class LocalFileExtractThread : public DownloadExtractThread
 public:
     explicit LocalFileExtractThread(const QByteArray &url, const QByteArray &dst = "", const QByteArray &expectedHash = "", QObject *parent = nullptr);
     virtual ~LocalFileExtractThread();
+    void setNeedsDecompressScan(bool needs) { _needsDecompressScan = needs; }
 
 protected:
     virtual void _cancelExtract();
@@ -27,6 +28,7 @@ protected:
     virtual ssize_t _on_read(struct archive *a, const void **buff);
     virtual int _on_close(struct archive *a);
     void extractRawImageRun();
+    quint64 _estimateDecompressedSize();
     bool _testArchiveFormat();
     static ssize_t _archive_read_test(struct archive *, void *client_data, const void **buff);
     static int _archive_close_test(struct archive *, void *client_data);
@@ -36,6 +38,7 @@ protected:
 
 private:
     SuspendInhibitor *_suspendInhibitor;
+    bool _needsDecompressScan = false;
 };
 
 #endif // LOCALFILEEXTRACTTHREAD_H

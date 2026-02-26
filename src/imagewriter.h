@@ -450,7 +450,7 @@ protected:
     QTimer _osListRefreshTimer;
     SuspendInhibitor *_suspendInhibitor;
     DownloadThread *_thread;
-    bool _verifyEnabled, _multipleFilesInZip, _online, _extractSizeKnown;
+    bool _verifyEnabled, _multipleFilesInZip, _online, _extractSizeKnown, _needsDecompressScan;
     QSettings _settings;
     QMap<QString,QString> _translations;
     QTranslator *_trans;
