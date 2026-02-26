@@ -162,7 +162,8 @@ function(get_default_language country_code result_var)
         set(lang "Italian")
     elseif(country_code STREQUAL "RU" OR country_code STREQUAL "BY")
         set(lang "Russian")
-    elseif(country_code STREQUAL "CN" OR country_code STREQUAL "TW")
+    elseif(country_code STREQUAL "CN" OR country_code STREQUAL "TW" OR
+           country_code STREQUAL "MO")
         set(lang "Chinese")
     elseif(country_code STREQUAL "JP")
         set(lang "Japanese")
@@ -326,6 +327,8 @@ function(get_timezone_for_country country_code result_var)
         set(tz "Asia/Taipei")
     elseif(country_code STREQUAL "HK")
         set(tz "Asia/Hong_Kong")
+    elseif(country_code STREQUAL "MO")
+        set(tz "Asia/Macau")
     endif()
     
     set(${result_var} "${tz}" PARENT_SCOPE)
@@ -355,6 +358,11 @@ foreach(country_obj ${country_objects})
     else()
         continue()
     endif()
+
+    # Skip US Minor Outlying Islands — uninhabited, no real capital
+    if(country_code STREQUAL "UM")
+        continue()
+    endif()
     
     # Country name (common name from nested structure)
     if(country_obj MATCHES "\"common\" *: *\"([^\"]+)\"")
@@ -367,8 +375,12 @@ foreach(country_obj ${country_objects})
     if(country_obj MATCHES "\"capital\" *: *\\[ *\"([^\"]+)\"")
         set(capital "${CMAKE_MATCH_1}")
     else()
-        # Skip countries without capitals
-        continue()
+        # Territories/SARs where the API returns no capital -- use the territory name
+        if(country_code STREQUAL "MO")
+            set(capital "Macau")
+        else()
+            continue()
+        endif()
     endif()
     
     # Get keyboard and language using helper functions

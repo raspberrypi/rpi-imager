@@ -120,6 +120,7 @@ Longyearbyen|Svalbard and Jan Mayen|SJ|Arctic/Longyearbyen|English|no
 Luanda|Angola|AO|Africa/Luanda|Portuguese|pt
 Lusaka|Zambia|ZM|Africa/Lusaka|English|gb
 Luxembourg|Luxembourg|LU|Europe/Luxembourg|French|lu
+Macau|Macau|MO|Asia/Macau|Chinese|us
 Madrid|Spain|ES|Europe/Madrid|Spanish|es
 Majuro|Marshall Islands|MH|Pacific/Majuro|English|us
 Malabo|Equatorial Guinea|GQ|Africa/Malabo|Spanish|es
@@ -237,7 +238,6 @@ Vienna|Austria|AT|Europe/Vienna|German|at
 Vientiane|Laos|LA|Asia/Vientiane|Lao|us
 Vilnius|Lithuania|LT|Europe/Vilnius|Lithuanian|lt
 Warsaw|Poland|PL|Europe/Warsaw|Polish|pl
-Washington DC|United States Minor Outlying Islands|UM|UTC|English|us
 Washington, D.C.|United States|US|America/New_York|English|us
 Wellington|New Zealand|NZ|Pacific/Auckland|English|nz
 West Island|Cocos (Keeling) Islands|CC|Indian/Cocos|English|us
