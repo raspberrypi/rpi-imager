@@ -489,14 +489,39 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
     _osReleaseDate = releaseDate;
-    // If extract size is provided from manifest, we can trust it; otherwise assume known until proven otherwise
-    _extractSizeKnown = true;
+    // Gzip ISIZE is 32-bit, so uncompressed size is unreliable for files >4GB.
+    // When no trusted extract size is provided by the manifest, mark it so the
+    // UI can show indeterminate progress instead of a misleading percentage.
+    _extractSizeKnown = !(!_extrLen && url.toString().toLower().endsWith(".gz"));
+
     qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
 
     if (!_downloadLen && url.isLocalFile())
     {
         QFileInfo fi(url.toLocalFile());
         _downloadLen = fi.size();
+    }
+
+    // Parse local compressed files to estimate _extrLen for capacity checks.
+    if (!_extrLen && _src.isLocalFile())
+    {
+        QString lowercaseurl = _src.toLocalFile().toLower();
+        bool compressed = lowercaseurl.endsWith(".zip") ||
+                          lowercaseurl.endsWith(".xz") ||
+                          lowercaseurl.endsWith(".bz2") ||
+                          lowercaseurl.endsWith(".gz") ||
+                          lowercaseurl.endsWith(".7z") ||
+                          lowercaseurl.endsWith(".zst") ||
+                          lowercaseurl.endsWith(".cache");
+
+        if (!compressed)
+            _extrLen = _downloadLen;
+        else if (lowercaseurl.endsWith(".xz"))
+            _parseXZFile();
+        else if (lowercaseurl.endsWith(".gz"))
+            _parseGzFile();
+        else
+            _parseCompressedFile();
     }
 }
 
@@ -628,14 +653,6 @@ void ImageWriter::startWrite()
     }
 
     QByteArray urlstr = _src.toString(_src.FullyEncoded).toLatin1();
-    QString lowercaseurl = urlstr.toLower();
-    const bool compressed = lowercaseurl.endsWith(".zip") ||
-                            lowercaseurl.endsWith(".xz") ||
-                            lowercaseurl.endsWith(".bz2") ||
-                            lowercaseurl.endsWith(".gz") ||
-                            lowercaseurl.endsWith(".7z") ||
-                            lowercaseurl.endsWith(".zst") ||
-                            lowercaseurl.endsWith(".cache");
 
     // Proactive validation for local sources before spawning threads
     if (_src.isLocalFile())
@@ -657,18 +674,6 @@ void ImageWriter::startWrite()
             onError(tr("Source file is not readable: %1").arg(localPath));
             return;
         }
-    }
-
-    if (!_extrLen && _src.isLocalFile())
-    {
-        if (!compressed)
-            _extrLen = _downloadLen;
-        else if (lowercaseurl.endsWith(".xz"))
-            _parseXZFile();
-        else if (lowercaseurl.endsWith(".gz"))
-            _parseGzFile();
-        else
-            _parseCompressedFile();
     }
 
     if (_devLen && _extrLen > _devLen)
@@ -2292,16 +2297,10 @@ void ImageWriter::_parseGzFile()
     // - CRC32 (4 bytes, little-endian)
     // - ISIZE (4 bytes, little-endian) - original file size modulo 2^32
     //
-    // IMPORTANT: The ISIZE field is only 32 bits, so it stores the original size
-    // modulo 2^32. This means we cannot reliably determine the uncompressed size
-    // for files larger than 4GB. We still parse it for storage space estimation,
-    // but mark the size as unreliable for progress display purposes.
+    // ISIZE is only 32 bits so this is a best-effort estimate for capacity
+    // checks.  The caller (setSrc) owns the _extractSizeKnown flag that
+    // controls whether the UI trusts this value for progress display.
     const qint64 GZIP_TRAILER_SIZE = 8;
-
-    // Mark gzip extract size as unreliable - the format cannot accurately represent
-    // sizes >4GB, so progress percentage cannot be reliably calculated.
-    // This causes the UI to show an indeterminate progress bar instead of misleading percentages.
-    _extractSizeKnown = false;
 
     if (f.size() > GZIP_TRAILER_SIZE && f.open(QIODevice::ReadOnly))
     {
