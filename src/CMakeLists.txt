@@ -417,6 +417,12 @@ if(GENERATE_COUNTRIES_FROM_REGDB AND DEFINED GENERATE_COUNTRIES_TGT)
     set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_COUNTRIES_TGT})
 endif()
 
+# Ensure capital cities list is generated before building resources
+if(GENERATE_CAPITAL_CITIES AND DEFINED GENERATE_CAPITAL_CITIES_TGT)
+    add_dependencies(${PROJECT_NAME} ${GENERATE_CAPITAL_CITIES_TGT})
+    set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${GENERATE_CAPITAL_CITIES_TGT})
+endif()
+
 # Note: Icon Composer compilation for macOS dark mode icons is handled in
 # mac/PlatformPackaging.cmake as a POST_BUILD step after macdeployqt runs
 

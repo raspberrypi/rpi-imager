@@ -34,24 +34,25 @@ function(add_generated_resource_with_fallback OUT_QRC_VAR OUT_TARGET_VAR NAME SC
     cmake_parse_arguments(AGR "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     set(output_file "${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_BASENAME}")
+    set(tmp_file "${output_file}.tmp")
     set(gen_target "generate_${NAME}")
     set(gen_qrc    "${CMAKE_CURRENT_BINARY_DIR}/${NAME}_generated.qrc")
 
-    # Invoke the provided script with OUTPUT_FILE and SOURCE_DIR plus any extra args
-    # DEPENDS on the script and fallback ensures regeneration when either changes
-    add_custom_command(
-        OUTPUT ${output_file}
+    # Custom targets always run, so we re-fetch from the API on every build.
+    # Generate to a temp file first, then copy_if_different so downstream
+    # targets (rcc, compile, link) only rebuild when content actually changes.
+    add_custom_target(${gen_target}
         COMMAND ${CMAKE_COMMAND}
-            -DOUTPUT_FILE=${output_file}
+            -DOUTPUT_FILE=${tmp_file}
             -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             ${AGR_EXTRA_CMAKE_ARGS}
             -P ${SCRIPT}
-        DEPENDS ${SCRIPT} ${FALLBACK_SOURCE}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${tmp_file} ${output_file}
+        COMMAND ${CMAKE_COMMAND} -E remove -f ${tmp_file}
+        BYPRODUCTS ${output_file}
         COMMENT "Generating ${NAME} data (downloads from API, falls back to source if offline)"
         VERBATIM
     )
-
-    add_custom_target(${gen_target} DEPENDS ${output_file})
 
     # Generate a QRC that aliases the generated file to the desired resource path
     file(GENERATE OUTPUT "${gen_qrc}" CONTENT
