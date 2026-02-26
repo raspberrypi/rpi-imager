@@ -116,7 +116,7 @@ ImageWriter::ImageWriter(QObject *parent)
       _osListRefreshTimer(),
       _suspendInhibitor(nullptr),
       _thread(nullptr),
-      _verifyEnabled(true), _multipleFilesInZip(false), _online(false), _extractSizeKnown(true),
+      _verifyEnabled(true), _multipleFilesInZip(false), _online(false), _extractSizeKnown(true), _needsDecompressScan(false),
       _settings(),
       _translations(),
       _trans(nullptr),
@@ -491,6 +491,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osReleaseDate = releaseDate;
     // If extract size is provided from manifest, we can trust it; otherwise assume known until proven otherwise
     _extractSizeKnown = true;
+    _needsDecompressScan = false;
     qDebug() << "setSrc: initFormat parameter:" << initFormat << "-> _initFormat set to:" << _initFormat;
 
     if (!_downloadLen && url.isLocalFile())
@@ -824,7 +825,9 @@ void ImageWriter::startWrite()
     try {
         if (QUrl(urlstr).isLocalFile())
         {
-            _thread = new LocalFileExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
+            auto *localThread = new LocalFileExtractThread(urlstr, writeDevicePath.toLatin1(), _expectedHash, this);
+            localThread->setNeedsDecompressScan(_needsDecompressScan);
+            _thread = localThread;
         }
         else
         {
@@ -2298,10 +2301,10 @@ void ImageWriter::_parseGzFile()
     // but mark the size as unreliable for progress display purposes.
     const qint64 GZIP_TRAILER_SIZE = 8;
 
-    // Mark gzip extract size as unreliable - the format cannot accurately represent
-    // sizes >4GB, so progress percentage cannot be reliably calculated.
-    // This causes the UI to show an indeterminate progress bar instead of misleading percentages.
-    _extractSizeKnown = false;
+    // By default, assume ISIZE is accurate (files <4GB).
+    // Will be overridden below if ISIZE wraps.
+    _extractSizeKnown = true;
+    _needsDecompressScan = false;
 
     if (f.size() > GZIP_TRAILER_SIZE && f.open(QIODevice::ReadOnly))
     {
@@ -2320,16 +2323,30 @@ void ImageWriter::_parseGzFile()
 
             // Handle files larger than 4GB where ISIZE wraps around
             // If the uncompressed size appears smaller than the compressed size,
-            // the original file was likely > 4GB. This is a heuristic for storage
-            // space checks but NOT reliable for progress calculation.
+            // the original file was likely > 4GB.
             qint64 compressedSize = f.size();
+            bool isizeWrapped = false;
             while (_extrLen < static_cast<quint64>(compressedSize))
             {
                 _extrLen += Q_UINT64_C(0x100000000);  // Add 4GB
+                isizeWrapped = true;
             }
 
-            qDebug() << "Parsed .gz file. Estimated uncompressed size:" << _extrLen
-                     << "(ISIZE field:" << isize << ") - size unreliable for progress";
+            if (isizeWrapped)
+            {
+                // ISIZE wrapped: 32-bit field cannot represent the true size.
+                // Use sample-based estimation on the worker thread for progress.
+                _extractSizeKnown = false;
+                _needsDecompressScan = true;
+                qDebug() << "Parsed .gz file. ISIZE wrapped (>4GB). Heuristic estimate:"
+                         << _extrLen << "- will estimate via sampling";
+            }
+            else
+            {
+                // ISIZE did not wrap: the 32-bit value is the exact uncompressed size.
+                qDebug() << "Parsed .gz file. Exact uncompressed size:" << _extrLen
+                         << "(ISIZE field:" << isize << ")";
+            }
         }
         else
         {
@@ -3555,7 +3572,9 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         // Use platform-specific write device path (e.g., rdisk on macOS for direct I/O)
         QString writeDevicePath = PlatformQuirks::getWriteDevicePath(_dst);
         try {
-            _thread = new LocalFileExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
+            auto *localThread = new LocalFileExtractThread(urlstr.toLatin1(), writeDevicePath.toLatin1(), _expectedHash, this);
+            localThread->setNeedsDecompressScan(_needsDecompressScan);
+            _thread = localThread;
         } catch (const std::bad_alloc& e) {
             _handleMemoryAllocationFailure(e.what());
             return;
