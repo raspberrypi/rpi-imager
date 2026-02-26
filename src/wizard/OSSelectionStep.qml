@@ -752,18 +752,26 @@ WizardStepBase {
                     delete root.wizardContainer.customizationSettings.secureBootEnabled
                     root.wizardContainer.secureBootEnabled = false
                 }
-                if (!root.wizardContainer.ccRpiAvailable) {
-                    delete root.wizardContainer.customizationSettings.enableI2C
-                    delete root.wizardContainer.customizationSettings.enableSPI
-                    delete root.wizardContainer.customizationSettings.enable1Wire
-                    delete root.wizardContainer.customizationSettings.enableSerial
-                    delete root.wizardContainer.customizationSettings.enableUsbGadget
-                    root.wizardContainer.ifI2cEnabled = false
-                    root.wizardContainer.ifSpiEnabled = false
-                    root.wizardContainer.if1WireEnabled = false
-                    root.wizardContainer.ifSerial = "Disabled"
-                    root.wizardContainer.featUsbGadgetEnabled = false
-                }
+                // Interface/feature settings are capability-dependent and never
+                // persisted, but older versions may have saved them.  Scrub any
+                // stale values from persistent storage and from the runtime map
+                // so they cannot leak into an image that doesn't advertise the
+                // corresponding capability.
+                delete root.wizardContainer.customizationSettings.enableI2C
+                delete root.wizardContainer.customizationSettings.enableSPI
+                delete root.wizardContainer.customizationSettings.enable1Wire
+                delete root.wizardContainer.customizationSettings.enableSerial
+                delete root.wizardContainer.customizationSettings.enableUsbGadget
+                root.wizardContainer.ifI2cEnabled = false
+                root.wizardContainer.ifSpiEnabled = false
+                root.wizardContainer.if1WireEnabled = false
+                root.wizardContainer.ifSerial = "Disabled"
+                root.wizardContainer.featUsbGadgetEnabled = false
+                imageWriter.removePersistedCustomisationSetting("enableI2C")
+                imageWriter.removePersistedCustomisationSetting("enableSPI")
+                imageWriter.removePersistedCustomisationSetting("enable1Wire")
+                imageWriter.removePersistedCustomisationSetting("enableSerial")
+                imageWriter.removePersistedCustomisationSetting("enableUsbGadget")
 
                 root.customSelected = false
                 root.nextButtonEnabled = true
