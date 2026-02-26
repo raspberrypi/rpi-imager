@@ -46,11 +46,6 @@
 #include "curlnetworkconfig.h"
 #include <QTemporaryDir>
 
-#ifdef Q_OS_LINUX
-#include <sys/ioctl.h>
-#include <linux/fs.h>
-#endif
-
 using namespace std;
 
 // Using the timeout utility for unblocking stuck syscalls
@@ -369,8 +364,6 @@ bool DownloadThread::_openAndPrepareDevice()
     }
 
 #ifdef Q_OS_LINUX
-    /* Optional optimizations for Linux */
-
     if (_filename.startsWith("/dev/"))
     {
         QString devname = _filename.mid(5);
@@ -382,62 +375,6 @@ bool DownloadThread::_openAndPrepareDevice()
             qDebug() << "SD card CID:" << cid;
         if (!csd.isEmpty())
             qDebug() << "SD card CSD:" << csd;
-
-        QByteArray discardmax = _fileGetContentsTrimmed("/sys/block/"+devname+"/queue/discard_max_bytes");
-
-        if (_debugSkipEndOfDevice)
-        {
-            qDebug() << "Skipping BLKDISCARD (debug: skip end-of-device operations for counterfeit card support)";
-        }
-        else if (discardmax.isEmpty() || discardmax == "0")
-        {
-            qDebug() << "BLKDISCARD not supported";
-        }
-        else
-        {
-            /* DISCARD/TRIM the SD card */
-            uint64_t devsize, range[2];
-            int fd = _file->GetHandle();
-
-            if (::ioctl(fd, BLKGETSIZE64, &devsize) == -1) {
-                qDebug() << "Error getting device/sector size with BLKGETSIZE64 ioctl():" << strerror(errno);
-            }
-            else
-            {
-                qDebug() << "Try to perform TRIM/DISCARD on device";
-                range[0] = 0;
-                range[1] = devsize;
-                emit preparationStatusUpdate(tr("Discarding existing data on drive..."));
-                _timer.start();
-                
-                // BLKDISCARD can take a long time on large/slow devices, and can hang 
-                // on counterfeit cards. Use timeout to unblock if it hangs.
-                // Note: User-facing warnings are handled by WriteProgressWatchdog
-                int discardResult = -1;
-                auto timeoutResult = runWithTimeout(
-                    [fd, &range]() { return ::ioctl(fd, BLKDISCARD, &range); },
-                    discardResult,
-                    TimeoutConfig(kHardTimeoutSeconds).withCancelFlag(&_cancelled)
-                );
-                
-                switch (timeoutResult) {
-                    case TimeoutResult::Completed:
-                        if (discardResult == -1) {
-                            qDebug() << "BLKDISCARD failed:" << strerror(errno);
-                        } else {
-                            qDebug() << "BLKDISCARD successful in" << _timer.elapsed() / 1000 << "s";
-                        }
-                        break;
-                    case TimeoutResult::TimedOut:
-                        qDebug() << "BLKDISCARD timed out after" << kHardTimeoutSeconds << "s";
-                        // Continue anyway - BLKDISCARD is optional
-                        break;
-                    case TimeoutResult::Cancelled:
-                        qDebug() << "BLKDISCARD cancelled";
-                        return false;
-                }
-            }
-        }
     }
 #endif
 
