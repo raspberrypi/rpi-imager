@@ -131,6 +131,29 @@ WizardStepBase {
                         Qt.callLater(root.onCapitalCityChanged)
                     }
                 }
+                Text {
+                    id: capitalCityInfoIcon
+                    text: "ⓘ"
+                    font.pixelSize: Style.fontSizeFormLabel
+                    color: capitalCityInfoArea.containsMouse ? Style.textDescriptionColor : Style.textMetadataColor
+                    Layout.alignment: Qt.AlignVCenter
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("Why am I being asked this?")
+                    Accessible.description: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
+
+                    ToolTip.text: qsTr("This also sets the Wi-Fi regulatory domain for your region.")
+                    ToolTip.visible: capitalCityInfoArea.containsMouse
+                    ToolTip.delay: 300
+
+                    MouseArea {
+                        id: capitalCityInfoArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        acceptedButtons: Qt.NoButton
+                    }
+                }
             }
             
             RowLayout {
