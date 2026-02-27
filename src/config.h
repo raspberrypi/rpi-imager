@@ -22,6 +22,10 @@
 /* Phone home the name of images downloaded for image popularity ranking */
 #define TELEMETRY_URL                     "https://rpi-imager-stats.raspberrypi.com/downloads"
 
+/* GitHub releases URL for discovering the latest rpiboot firmware version.
+ * A HEAD request returns 302 → Location contains the tag name. */
+#define RPIBOOT_FIRMWARE_RELEASES_URL     "https://github.com/raspberrypi/usbboot/releases/latest"
+
 /* Hash algorithm for verifying (uncompressed image) checksum */
 #define OSLIST_HASH_ALGORITHM             QCryptographicHash::Sha256
 
