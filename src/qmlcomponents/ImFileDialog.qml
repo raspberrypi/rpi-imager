@@ -28,6 +28,7 @@ BaseDialog {
     // Use Dialog's built-in accepted/rejected signals; do not redeclare to avoid overrides
 
     property string _currentFilename: suggestedFilename
+    property string _pathFieldFile: ""
     
     function open() {
         // For save dialogs, initialize filename from suggestion
@@ -69,6 +70,15 @@ BaseDialog {
         }
         if (out.length === 0) out = ["*"]
         return out
+    }
+
+    function _looksLikeFilePath(path) {
+        var s = String(path || "").trim()
+        if (!s || s.endsWith("/"))
+            return false
+        var lastSlash = s.lastIndexOf("/")
+        var basename = (lastSlash >= 0) ? s.substring(lastSlash + 1) : s
+        return basename.indexOf(".") > 0
     }
 
     // Normalize a typed path to a file URL
@@ -180,6 +190,7 @@ BaseDialog {
         pathField.text = dialog._toDisplayPath(dialog.currentFolder)
         // Reset selection when navigating
         dialog.selectedFile = ""
+        dialog._pathFieldFile = ""
     }
 
     // Override escape handler to call rejected signal
@@ -291,11 +302,25 @@ BaseDialog {
             id: pathField
             Layout.fillWidth: true
             text: dialog._toDisplayPath(dialog.currentFolder)
-            placeholderText: qsTr("Enter path or URL…")
+            placeholderText: dialog.isSaveDialog
+                ? qsTr("Enter path or URL\u2026")
+                : qsTr("Enter folder or file path\u2026")
             activeFocusOnTab: true
+            onTextChanged: {
+                if (!dialog.isSaveDialog) {
+                    dialog._pathFieldFile = dialog._looksLikeFilePath(text)
+                        ? dialog._toFileUrl(text) : ""
+                }
+            }
             onAccepted: {
                 var newUrl = dialog._toFileUrl(text)
-                if (newUrl && newUrl.length > 0) {
+                if (!newUrl || newUrl.length === 0)
+                    return
+                if (!dialog.isSaveDialog && dialog._looksLikeFilePath(text)) {
+                    dialog.selectedFile = newUrl
+                    dialog.close()
+                    dialog.accepted()
+                } else {
                     dialog.currentFolder = newUrl
                 }
             }
@@ -755,13 +780,15 @@ BaseDialog {
         ImButton {
             id: openButton
             text: dialog.isSaveDialog ? qsTr("Save") : qsTr("Open")
-            enabled: dialog.isSaveDialog 
-                ? String(dialog._currentFilename).trim().length > 0 
-                : String(dialog.selectedFile).length > 0
+            enabled: dialog.isSaveDialog
+                ? String(dialog._currentFilename).trim().length > 0
+                : (String(dialog.selectedFile).length > 0 || String(dialog._pathFieldFile).length > 0)
             activeFocusOnTab: true
             onClicked: {
                 if (dialog.isSaveDialog) {
                     dialog.selectedFile = dialog._toFileUrl(dialog._buildFilePath())
+                } else if (String(dialog.selectedFile).length === 0 && dialog._looksLikeFilePath(pathField.text)) {
+                    dialog.selectedFile = dialog._toFileUrl(pathField.text)
                 }
                 dialog.close()
                 dialog.accepted()
