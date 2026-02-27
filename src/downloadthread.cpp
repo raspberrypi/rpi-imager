@@ -1866,11 +1866,8 @@ void DownloadThread::_periodicSync()
         return;
     }
     
-    // Skip periodic sync when direct I/O is enabled (F_NOCACHE on macOS, O_DIRECT on Linux).
-    // With direct I/O, data bypasses the page cache entirely, so periodic fsync() provides
-    // no benefit - the data is already going directly to the device. This avoids the severe
-    // performance penalty of frequent fsync() calls on slow media like SD cards over USB.
-    // The final sync at the end of the write is still performed to ensure data integrity.
+    // Skip periodic syncs when using direct I/O - there's no page cache to flush
+    // Direct I/O bypasses the OS page cache, so syncing is unnecessary and wasteful
     if (_file && _file->IsDirectIOEnabled()) {
         return;
     }
@@ -1894,17 +1891,8 @@ void DownloadThread::_periodicSync()
                  << timeSinceLastSync << "ms elapsed)"
                  << "on" << SystemMemoryManager::instance().getPlatformName();
         
-        // Use unified FileOperations for flushing and syncing
-        if (_file->Flush() != rpi_imager::FileError::kSuccess) {
-            quint64 syncMs = static_cast<quint64>(syncTimer.elapsed());
-            _writeTimingStats.totalSyncMs.fetch_add(syncMs);
-            _writeTimingStats.syncCount.fetch_add(1);
-            emit eventPeriodicSync(static_cast<quint32>(syncMs), false, currentBytes);
-            qDebug() << "Warning: Flush() failed during periodic sync";
-            return;
-        }
-        
-        // Force filesystem sync using unified FileOperations
+        // ForceSync() already handles both flushing and syncing to disk
+        // No need for redundant Flush() call - ForceSync() does everything
         if (_file->ForceSync() != rpi_imager::FileError::kSuccess) {
             quint64 syncMs = static_cast<quint64>(syncTimer.elapsed());
             _writeTimingStats.totalSyncMs.fetch_add(syncMs);
