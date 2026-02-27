@@ -154,15 +154,17 @@ const std::set<std::string> USB_STORAGE_DRIVERS = {
 // Generic/SCSI storage driver names
 const std::set<std::string> GENERIC_STORAGE_DRIVERS = {
     "SCSI", "SD", "PCISTOR",
-    "RTSOR", "JMCR", "JMCF", "RIMMPTSK", "RIMSPTSK", "RIXDPTSK",
-    "TI21SONY", "ESD7SK", "ESM7SK", "O2MD", "O2SD", "VIACR"
+    "RTSOR", "RTSPER", "JMCR", "JMCF", "RIMMPTSK", "RIMSPTSK", "RIXDPTSK",
+    "TI21SONY", "ESD7SK", "ESM7SK", "O2MD", "O2SD", "BHT", "VIACR"
 };
 
-// Virtual hard disk hardware ID patterns
+// Virtual hard disk hardware ID patterns (substring-matched against SCSI PnP IDs)
 const std::set<std::string> VHD_HARDWARE_IDS = {
     "Arsenal_________Virtual_",
     "KernSafeVirtual_________",
     "Msft____Virtual_Disk____",
+    "QEMU____QEMU_HARDDISK___",
+    "VBOX____HARDDISK________",
     "VMware__VMware_Virtual_S"
 };
 
@@ -170,6 +172,7 @@ const std::set<std::string> VHD_HARDWARE_IDS = {
 const GUID KNOWN_FOLDER_IDS[] = {
     FOLDERID_Windows,
     FOLDERID_Profile,
+    FOLDERID_ProgramData,
     FOLDERID_ProgramFiles,
     FOLDERID_ProgramFilesX86
 };

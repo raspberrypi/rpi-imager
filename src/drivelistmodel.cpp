@@ -21,7 +21,8 @@ DriveListModel::DriveListModel(QObject *parent)
         {isReadOnlyRole, "isReadOnly"},
         {isSystemRole, "isSystem"},
         {mountpointsRole, "mountpoints"},
-        {childDevicesRole, "childDevices"}
+        {childDevicesRole, "childDevices"},
+        {isRpibootRole, "isRpiboot"}
     };
 
     // Enumerate drives in separate thread, but process results in UI thread
@@ -100,6 +101,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         bool isSystem;
         QStringList mountpoints;
         QStringList childDevices;
+        bool isRpiboot = false;
     };
     QList<NewDriveInfo> drivesToAdd;
 
@@ -116,8 +118,10 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         if (mountpoints.contains("/") || mountpoints.contains("C://"))
             continue;
 
-        // Skip zero-sized devices
-        if (i.size == 0)
+        bool isRpibootDevice = i.isRpiboot;
+
+        // Skip zero-sized devices (but not rpiboot devices which are always size 0)
+        if (i.size == 0 && !isRpibootDevice)
             continue;
 
         // Allow read/write virtual devices (mounted disk images) but filter out:
@@ -127,9 +131,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         if (i.isVirtual && (i.isReadOnly || i.isSystem || !i.isRemovable))
             continue;
 
-        QString deviceNamePlusSize = QString::fromStdString(i.device)+":"+QString::number(i.size);
-        if (i.isReadOnly)
-            deviceNamePlusSize += "ro";
+        QString deviceNamePlusSize = QString::fromStdString(i.uniqueKey());
         drivesInNewList.insert(deviceNamePlusSize);
 
         if (!_drivelist.contains(deviceNamePlusSize))
@@ -161,6 +163,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
             info.isSystem = isSystemOverride;
             info.mountpoints = mountpoints;
             info.childDevices = childDevices;
+            info.isRpiboot = isRpibootDevice;
             drivesToAdd.append(info);
         }
     }
@@ -207,7 +210,9 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         _drivelist[info.key] = new DriveListItem(
             info.device, info.description, info.size,
             info.isUSB, info.isScsi, info.isReadOnly, info.isSystem,
-            info.mountpoints, info.childDevices, this);
+            info.mountpoints, info.childDevices,
+            info.isRpiboot,
+            this);
         endInsertRows();
 
         qDebug() << "Drive added:" << info.device;

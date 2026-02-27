@@ -274,3 +274,188 @@ add_custom_target(test_platformquirks
     COMMENT "Running platformquirks tests"
 )
 
+# ============================================================================
+# rpiboot Tests
+# ============================================================================
+
+# rpiboot protocol tests (bootcode loader, file server, types)
+add_executable(rpiboot_protocol_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_types.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/usb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootcode_loader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootcode_loader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/file_server.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/file_server.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_protocol.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_protocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/test/mock_usb_transport.h
+    rpiboot_protocol_test.cpp
+)
+
+target_link_libraries(rpiboot_protocol_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${LibArchive_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+    ${LIBLZMA_LIBRARIES}
+    ${ZSTD_LIBRARIES}
+)
+
+target_include_directories(rpiboot_protocol_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${LibArchive_INCLUDE_DIR}
+    ${ZLIB_INCLUDE_DIRS}
+    ${LIBLZMA_INCLUDE_DIRS}
+    ${ZSTD_INCLUDE_DIR}
+)
+
+target_compile_features(rpiboot_protocol_test PRIVATE cxx_std_20)
+target_compile_options(rpiboot_protocol_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(rpiboot_protocol_test)
+
+add_custom_target(test_rpiboot_protocol
+    COMMAND rpiboot_protocol_test
+    DEPENDS rpiboot_protocol_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running rpiboot protocol tests"
+)
+
+# Bootfiles (tar extraction) tests
+add_executable(rpiboot_bootfiles_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.cpp
+    rpiboot_bootfiles_test.cpp
+)
+
+target_link_libraries(rpiboot_bootfiles_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${LibArchive_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+    ${LIBLZMA_LIBRARIES}
+    ${ZSTD_LIBRARIES}
+)
+
+target_include_directories(rpiboot_bootfiles_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${LibArchive_INCLUDE_DIR}
+    ${ZLIB_INCLUDE_DIRS}
+    ${LIBLZMA_INCLUDE_DIRS}
+    ${ZSTD_INCLUDE_DIR}
+)
+
+target_compile_features(rpiboot_bootfiles_test PRIVATE cxx_std_20)
+target_compile_options(rpiboot_bootfiles_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(rpiboot_bootfiles_test)
+
+add_custom_target(test_rpiboot_bootfiles
+    COMMAND rpiboot_bootfiles_test
+    DEPENDS rpiboot_bootfiles_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running rpiboot bootfiles tests"
+)
+
+# Fastboot protocol tests
+add_executable(fastboot_protocol_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/usb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_types.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/test/mock_usb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/fastboot_protocol.cpp
+    fastboot_protocol_test.cpp
+)
+
+target_link_libraries(fastboot_protocol_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+target_include_directories(fastboot_protocol_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(fastboot_protocol_test PRIVATE cxx_std_20)
+target_compile_options(fastboot_protocol_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(fastboot_protocol_test)
+
+add_custom_target(test_fastboot_protocol
+    COMMAND fastboot_protocol_test
+    DEPENDS fastboot_protocol_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running fastboot protocol tests"
+)
+
+# Hardware integration tests (gated by RPIBOOT_TEST_DEVICE env var)
+add_executable(rpiboot_integration_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_types.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/usb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/libusb_transport.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/libusb_transport.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootcode_loader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootcode_loader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/file_server.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/file_server.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/bootfiles.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_protocol.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_protocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/firmware_manager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/firmware_manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../curlnetworkconfig.cpp
+    rpiboot_integration_test.cpp
+)
+
+target_link_libraries(rpiboot_integration_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+    ${LIBUSB_LIBRARIES}
+    ${CURL_LIBRARIES}
+    ${LibArchive_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+    ${LIBLZMA_LIBRARIES}
+    ${ZSTD_LIBRARIES}
+)
+
+target_include_directories(rpiboot_integration_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${LIBUSB_INCLUDE_DIR}
+    ${CURL_INCLUDE_DIR}
+    ${LibArchive_INCLUDE_DIR}
+    ${ZLIB_INCLUDE_DIRS}
+    ${LIBLZMA_INCLUDE_DIRS}
+    ${ZSTD_INCLUDE_DIR}
+)
+
+target_compile_features(rpiboot_integration_test PRIVATE cxx_std_20)
+target_compile_options(rpiboot_integration_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(rpiboot_integration_test)
+
+add_custom_target(test_rpiboot_integration
+    COMMAND rpiboot_integration_test
+    DEPENDS rpiboot_integration_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running rpiboot integration tests (requires hardware)"
+)
+
+# Combined target for all rpiboot tests
+add_custom_target(test_rpiboot
+    DEPENDS rpiboot_protocol_test rpiboot_bootfiles_test fastboot_protocol_test
+    COMMENT "Running all rpiboot unit tests"
+)
+
+

@@ -13,7 +13,9 @@ class DriveListItem : public QObject
 {
     Q_OBJECT
 public:
-    explicit DriveListItem(QString device, QString description, quint64 size, bool isUsb = false, bool isScsi = false, bool readOnly = false, bool isSystem = false, QStringList mountpoints = QStringList(), QStringList childDevices = QStringList(), QObject *parent = nullptr);
+    explicit DriveListItem(QString device, QString description, quint64 size, bool isUsb = false, bool isScsi = false, bool readOnly = false, bool isSystem = false, QStringList mountpoints = QStringList(), QStringList childDevices = QStringList(),
+                           bool isRpiboot = false,
+                           QObject *parent = nullptr);
 
     Q_PROPERTY(QString device MEMBER _device CONSTANT)
     Q_PROPERTY(QString description MEMBER _description CONSTANT)
@@ -24,6 +26,7 @@ public:
     Q_PROPERTY(bool isScsi MEMBER _isScsi CONSTANT)
     Q_PROPERTY(bool isReadOnly MEMBER _isReadOnly CONSTANT)
     Q_PROPERTY(bool isSystem MEMBER _isSystem CONSTANT)
+    Q_PROPERTY(bool isRpiboot MEMBER _isRpiboot CONSTANT)
     Q_INVOKABLE int sizeInGb();
 
 signals:
@@ -40,6 +43,7 @@ protected:
     bool _isScsi;
     bool _isReadOnly;
     bool _isSystem;
+    bool _isRpiboot;
 };
 
 #endif // DRIVELISTITEM_H

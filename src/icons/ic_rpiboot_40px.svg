@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Raspberry Pi chip icon for rpiboot devices -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <!-- Chip body -->
+  <rect x="8" y="8" width="24" height="24" rx="2" ry="2" fill="#C51A4A" stroke="#8B1234" stroke-width="1"/>
+  <!-- Pins - top -->
+  <rect x="13" y="4" width="2" height="5" fill="#666"/>
+  <rect x="19" y="4" width="2" height="5" fill="#666"/>
+  <rect x="25" y="4" width="2" height="5" fill="#666"/>
+  <!-- Pins - bottom -->
+  <rect x="13" y="31" width="2" height="5" fill="#666"/>
+  <rect x="19" y="31" width="2" height="5" fill="#666"/>
+  <rect x="25" y="31" width="2" height="5" fill="#666"/>
+  <!-- Pins - left -->
+  <rect x="4" y="13" width="5" height="2" fill="#666"/>
+  <rect x="4" y="19" width="5" height="2" fill="#666"/>
+  <rect x="4" y="25" width="5" height="2" fill="#666"/>
+  <!-- Pins - right -->
+  <rect x="31" y="13" width="5" height="2" fill="#666"/>
+  <rect x="31" y="19" width="5" height="2" fill="#666"/>
+  <rect x="31" y="25" width="5" height="2" fill="#666"/>
+  <!-- USB arrow symbol on chip -->
+  <path d="M20 13 L20 27 M16 23 L20 27 L24 23" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="20" cy="13" r="1.5" fill="white"/>
+</svg>

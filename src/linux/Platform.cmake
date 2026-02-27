@@ -54,4 +54,7 @@ endif()
 set(DEPENDENCIES "")
 add_definitions(-DHAVE_GNUTLS)
 
+# libusb requires libudev for rpiboot support
+pkg_check_modules(UDEV REQUIRED libudev)
+
 

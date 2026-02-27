@@ -58,6 +58,9 @@ set(DEPENDENCIES
 )
 set(EXTRALIBS setupapi ${CMAKE_BINARY_DIR}/wlanapi_delayed.lib Bcrypt.dll ole32 oleaut32 wbemuuid)
 
+# Add winusb for rpiboot support
+set(EXTRALIBS ${EXTRALIBS} winusb)
+
 # ---- Relay exe ----
 add_executable(rpi-imager-callback-relay WIN32 windows/CallbackRelay.cpp)
 target_compile_definitions(rpi-imager-callback-relay

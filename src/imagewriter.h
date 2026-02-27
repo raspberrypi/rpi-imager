@@ -32,6 +32,7 @@
 #include "device_info.h"
 #include "imageadvancedoptions.h"
 #include "performancestats.h"
+#include "rpiboot/rpiboot_types.h"
 
 class QQmlApplicationEngine;
 class DownloadThread;
@@ -41,6 +42,7 @@ class WriteProgressWatchdog;
 #ifndef CLI_ONLY_BUILD
 class NativeFileDialog;
 #endif
+class RpibootThread;
 
 class ImageWriter : public QObject
 {
@@ -333,6 +335,11 @@ public:
     /* Check if audio notification (beep) is available on this system */
     Q_INVOKABLE bool isBeepAvailable();
 
+    /* Set an rpiboot device as the write target */
+    Q_INVOKABLE void setRpibootDevice(const QString &deviceId);
+    /* Returns true if the current target is an rpiboot device */
+    Q_INVOKABLE bool isRpibootDevice() const;
+
     /* Performance data export - opens native save dialog and writes performance data to file.
        If native dialogs aren't available, emits performanceSaveDialogNeeded for QML fallback. */
     Q_INVOKABLE bool exportPerformanceData();
@@ -409,6 +416,8 @@ protected slots:
     void onCacheVerificationComplete(bool isValid);
     void onSelectedDeviceRemoved(const QString &device);
     void onOsListRefreshTimeout();
+    void onRpibootFastbootReady(const QString &fastbootId);
+    void onRpibootError(const QString &msg);
 
 private:
     void setWriteState(WriteState state);
@@ -480,6 +489,11 @@ protected:
     int _debugAsyncQueueDepth;
     bool _debugIPv4Only;
     bool _debugSkipEndOfDevice;
+
+    QString _rpibootDeviceId;
+    bool _isRpibootDevice = false;
+    RpibootThread *_rpibootThread = nullptr;
+    rpiboot::SideloadMode _rpibootSideloadMode = rpiboot::SideloadMode::Fastboot;
 
     void _parseCompressedFile();
     void _parseXZFile();
