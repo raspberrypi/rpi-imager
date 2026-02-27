@@ -2183,9 +2183,17 @@ bool DownloadThread::_customizeImage()
             // Write meta-data file for NoCloud datasource
             // cloud-init requires meta-data to be present for proper datasource detection
             // instance-id should be unique per imaging to ensure cloud-init processes user-data
-            QByteArray metadata = "instance-id: rpi-imager-" + 
-                QByteArray::number(QDateTime::currentMSecsSinceEpoch()) + "\n";
+            QByteArray instanceId = "rpi-imager-" + QByteArray::number(QDateTime::currentMSecsSinceEpoch());
+            QByteArray metadata = "instance-id: " + instanceId + "\n";
             fat->writeFile("meta-data", metadata);
+
+            // Expose datasource type and instance-id on kernel cmdline so that
+            // cloud-init's check_instance_id() can validate the cache without
+            // reading from seed_dirs (which are never populated for this
+            // deployment pattern). Without this, the NoCloud datasource cache
+            // is invalidated on every reboot (/run is tmpfs), forcing a full
+            // re-discovery from /boot/firmware on every boot.
+            _cmdline += " ds=nocloud;i=" + instanceId;
 
             if (!_cloudinit.isEmpty())
             {
