@@ -57,6 +57,8 @@
 #include <QHostAddress>
 #include <QDateTime>
 #include "curlfetcher.h"
+#include "rpibootthread.h"
+#include "fastbootflashthread.h"
 #include "curlnetworkconfig.h"
 #include <QDebug>
 #include <QJsonObject>
@@ -540,6 +542,59 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     qDebug() << "Device selection changed to:" << device;
 }
 
+void ImageWriter::setRpibootDevice(const QString &deviceId)
+{
+    _rpibootDeviceId = deviceId;
+    _isRpibootDevice = true;
+    _selectedDeviceValid = true;
+    // Set _dst to the rpiboot ID so readyToWrite() passes
+    _dst = deviceId;
+    _devLen = 0;
+
+    qDebug() << "rpiboot device selected:" << deviceId;
+}
+
+bool ImageWriter::isRpibootDevice() const
+{
+    return _isRpibootDevice;
+}
+
+void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
+{
+    qDebug() << "rpiboot fastboot device ready:" << fastbootId;
+
+    if (_rpibootThread) {
+        _rpibootThread->deleteLater();
+        _rpibootThread = nullptr;
+    }
+
+    // Start FastbootFlashThread
+    auto *fbt = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
+    connect(fbt, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+    connect(fbt, &FastbootFlashThread::error, this, &ImageWriter::onError);
+    connect(fbt, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+    connect(fbt, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
+        emit downloadProgress(QVariant(now), QVariant(total));
+    });
+    connect(fbt, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
+        emit writeProgress(QVariant(now), QVariant(total));
+    });
+    connect(fbt, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+    fbt->start();
+}
+
+void ImageWriter::onRpibootError(const QString &msg)
+{
+    qWarning() << "rpiboot error:" << msg;
+
+    if (_rpibootThread) {
+        _rpibootThread->deleteLater();
+        _rpibootThread = nullptr;
+    }
+
+    onError(msg);
+}
+
 /* Returns true if src and dst are set and destination device is still valid */
 bool ImageWriter::readyToWrite()
 {
@@ -635,6 +690,43 @@ void ImageWriter::startWrite()
     }
 
     setWriteState(WriteState::Preparing);
+
+    if (_isRpibootDevice)
+    {
+        emit preparationStatusUpdate(tr("Preparing device for imaging..."));
+
+        // Parse the rpiboot device ID to extract USB bus/address/port info
+        RpibootThread::DeviceInfo devInfo;
+
+        // Parse "rpiboot://bus:addr:port1.port2..."
+        QString devPath = _rpibootDeviceId;
+        if (devPath.startsWith("rpiboot://"))
+            devPath = devPath.mid(10);
+        QStringList parts = devPath.split(':');
+        if (parts.size() >= 2) {
+            devInfo.busNumber = static_cast<uint8_t>(parts[0].toUInt());
+            devInfo.deviceAddress = static_cast<uint8_t>(parts[1].toUInt());
+        }
+        if (parts.size() >= 3) {
+            for (const auto& p : parts[2].split('.'))
+                devInfo.portPath.push_back(static_cast<uint8_t>(p.toUInt()));
+        }
+
+        // Determine chip generation from the port path or stored PID
+        // For now, default to BCM2711; the scanner stores this info
+        devInfo.chipGeneration = rpiboot::ChipGeneration::BCM2711;
+
+        _rpibootThread = new RpibootThread(devInfo, _rpibootSideloadMode, this);
+
+        // After sideload, start FastbootFlashThread
+        connect(_rpibootThread, &RpibootThread::fastbootDeviceReady, this, &ImageWriter::onRpibootFastbootReady);
+
+        connect(_rpibootThread, &RpibootThread::error, this, &ImageWriter::onRpibootError);
+        connect(_rpibootThread, &RpibootThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+
+        _rpibootThread->start();
+        return;
+    }
 
     if (_src.toString() == "internal://format")
     {

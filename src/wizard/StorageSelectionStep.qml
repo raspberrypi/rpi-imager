@@ -337,9 +337,10 @@ WizardStepBase {
             required property bool isSystem
             required property var mountpoints
             required property QtObject modelData
-            
+            property bool isRpiboot: modelData && typeof modelData.isRpiboot !== "undefined" ? modelData.isRpiboot : false
+
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
-            readonly property bool unselectable: isReadOnly
+            readonly property bool unselectable: isReadOnly && !isRpiboot
             
             // Accessibility properties
             Accessible.role: Accessible.ListItem
@@ -401,7 +402,8 @@ WizardStepBase {
                     // Storage icon
                     Image {
                         id: storageIcon
-                        source: dstitem.isUsb ? "../icons/ic_usb_40px.svg" :
+                        source: dstitem.isRpiboot ? "../icons/ic_rpiboot_40px.svg" :
+                                dstitem.isUsb ? "../icons/ic_usb_40px.svg" :
                                 dstitem.isScsi ? "../icons/ic_storage_40px.svg" :
                                 "../icons/ic_sd_storage_40px.svg"
                         Layout.preferredWidth: 40
@@ -438,7 +440,7 @@ WizardStepBase {
                         }
                         
                         Text {
-                            text: imageWriter.formatSize(parseFloat(dstitem.size))
+                            text: dstitem.isRpiboot ? qsTr("Ready for USB boot") : imageWriter.formatSize(parseFloat(dstitem.size))
                             font.pixelSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textDescriptionColor
@@ -489,7 +491,12 @@ WizardStepBase {
             return
         }
 
-        imageWriter.setDst(dstitem.device, dstitem.size)
+        // rpiboot devices use setRpibootDevice instead of setDst
+        if (dstitem.isRpiboot && typeof imageWriter.setRpibootDevice === "function") {
+            imageWriter.setRpibootDevice(dstitem.device)
+        } else {
+            imageWriter.setDst(dstitem.device, dstitem.size)
+        }
         selectedDeviceName = dstitem.description
         root.wizardContainer.selectedStorageName = dstitem.description
 
