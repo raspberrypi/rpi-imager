@@ -371,16 +371,21 @@ foreach(country_obj ${country_objects})
         continue()
     endif()
     
-    # Capital city (first capital if multiple, inside array)
+    # Capital city (first capital if multiple, inside array).
+    # When the API returns an empty capital array (e.g. Macau), fall back to
+    # the territory's common name so it still appears in the list.
     if(country_obj MATCHES "\"capital\" *: *\\[ *\"([^\"]+)\"")
         set(capital "${CMAKE_MATCH_1}")
+    elseif(country_name)
+        set(capital "${country_name}")
     else()
-        # Territories/SARs where the API returns no capital -- use the territory name
-        if(country_code STREQUAL "MO")
-            set(capital "Macau")
-        else()
-            continue()
-        endif()
+        continue()
+    endif()
+
+    # REST Countries API returns "City of Victoria" for Hong Kong, which users
+    # won't recognise. Use "Hong Kong" instead (matches the territory name).
+    if(country_code STREQUAL "HK")
+        set(capital "Hong Kong")
     endif()
     
     # Get keyboard and language using helper functions

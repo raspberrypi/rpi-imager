@@ -55,7 +55,6 @@ Cayenne|French Guiana|GF|America/Cayenne|English|us
 Charlotte Amalie|United States Virgin Islands|VI|America/Virgin|English|us
 Chișinău|Moldova|MD|Europe/Chisinau|Romanian|us
 City of San Marino|San Marino|SM|Europe/San_Marino|Italian|it
-City of Victoria|Hong Kong|HK|Asia/Hong_Kong|English|us
 Cockburn Town|Turks and Caicos Islands|TC|America/Grand_Turk|English|us
 Conakry|Guinea|GN|Africa/Conakry|French|fr
 Copenhagen|Denmark|DK|Europe/Copenhagen|Danish|dk
@@ -89,6 +88,7 @@ Hanoi|Vietnam|VN|Asia/Ho_Chi_Minh|Vietnamese|vn
 Harare|Zimbabwe|ZW|Africa/Harare|English|gb
 Havana|Cuba|CU|America/Havana|Spanish|us
 Helsinki|Finland|FI|Europe/Helsinki|Finnish|fi
+Hong Kong|Hong Kong|HK|Asia/Hong_Kong|English|us
 Honiara|Solomon Islands|SB|Pacific/Guadalcanal|English|us
 Islamabad|Pakistan|PK|Asia/Karachi|English|pk
 Jakarta|Indonesia|ID|Asia/Jakarta|Indonesian|id
