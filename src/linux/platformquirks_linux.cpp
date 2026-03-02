@@ -43,6 +43,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QCryptographicHash>
+#include <filesystem>
 #include <QUuid>
 #include <vector>
 #include <string>
@@ -157,6 +158,26 @@ namespace {
         }
         
         return nullptr;
+    }
+
+    // Grant root access to the user's X11 display via xhost.
+    // Must be run as the original (non-root) user who owns the display session,
+    // since root doesn't yet have permission to connect.
+    // Uses +SI:localuser:root (server-interpreted, narrowly scoped to root only).
+    void grantRootDisplayAccess(uid_t uid, gid_t gid) {
+        pid_t pid = fork();
+        if (pid < 0) return;
+
+        if (pid == 0) {
+            // POSIX: only async-signal-safe functions between fork() and exec()
+            if (setgid(gid) != 0) _exit(1);
+            if (setuid(uid) != 0) _exit(1);
+            execlp("xhost", "xhost", "+SI:localuser:root", nullptr);
+            _exit(127);
+        }
+
+        int status;
+        waitpid(pid, &status, 0);
     }
 }
 
@@ -279,14 +300,22 @@ void applyQuirks() {
                         std::fprintf(stderr, "Detected X11 display socket, set DISPLAY to: :0\n");
                     }
                     
-                    // Check for Wayland socket in the user's XDG_RUNTIME_DIR
-                    char waylandSocketPath[512];
-                    std::snprintf(waylandSocketPath, sizeof(waylandSocketPath), 
-                                 "%s/wayland-0", xdgRuntimeDir);
-                    if (access(waylandSocketPath, F_OK) == 0) {
-                        ::setenv("WAYLAND_DISPLAY", "wayland-0", 1);
-                        std::fprintf(stderr, "Detected Wayland socket, set WAYLAND_DISPLAY to: wayland-0\n");
-                    }
+                    // Scan XDG_RUNTIME_DIR for a Wayland compositor socket
+                    // Sway, nested compositors, and multi-seat setups may use
+                    // wayland-1 or higher, not just wayland-0
+                    namespace fs = std::filesystem;
+                    try {
+                        for (const auto& entry : fs::directory_iterator(xdgRuntimeDir)) {
+                            auto name = entry.path().filename().string();
+                            if (name.starts_with("wayland-") && !name.ends_with(".lock") &&
+                                entry.is_socket()) {
+                                ::setenv("WAYLAND_DISPLAY", name.c_str(), 1);
+                                std::fprintf(stderr, "Detected Wayland socket, set WAYLAND_DISPLAY to: %s\n",
+                                            name.c_str());
+                                break;
+                            }
+                        }
+                    } catch (const fs::filesystem_error&) {}
                 } else {
                     // Display variables already set, just log them
                     if (currentDisplay) {
@@ -311,6 +340,13 @@ void applyQuirks() {
                     }
                 } else {
                     std::fprintf(stderr, "XAUTHORITY already set to: %s\n", currentXauthority);
+                }
+                
+                // If an X11 display is available, grant root access via xhost.
+                // This runs as the original user (who owns the display session)
+                // and must happen after DISPLAY and XAUTHORITY are configured.
+                if (::getenv("DISPLAY")) {
+                    grantRootDisplayAccess(originalUid, pwResult->pw_gid);
                 }
                 
                 std::fprintf(stderr, "Set HOME to: %s\n", pwResult->pw_dir);
