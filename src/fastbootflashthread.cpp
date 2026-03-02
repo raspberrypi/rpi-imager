@@ -12,6 +12,7 @@
 #include "systemmemorymanager.h"
 
 #include <QDebug>
+#include <QElapsedTimer>
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -282,6 +283,9 @@ void FastbootFlashThread::run()
     emit preparationStatusUpdate(tr("Connecting to fastboot device..."));
 
     // 1. Open the fastboot USB device
+    QElapsedTimer deviceOpenTimer;
+    deviceOpenTimer.start();
+
     rpiboot::LibusbContext ctx;
     std::unique_ptr<rpiboot::LibusbTransport> transport;
 
@@ -298,6 +302,7 @@ void FastbootFlashThread::run()
 
     transport = ctx.openDevice(targetInfo);
     if (!transport || !transport->isOpen()) {
+        emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), false, _fastbootId);
         emit error(tr("Failed to open fastboot device: %1").arg(_fastbootId));
         return;
     }
@@ -320,6 +325,8 @@ void FastbootFlashThread::run()
         }
     }
     qDebug() << "FastbootFlashThread: max-download-size =" << maxDownloadSize;
+    emit eventFastbootDeviceOpen(static_cast<quint32>(deviceOpenTimer.elapsed()), true,
+                                 QStringLiteral("max-download-size=%1").arg(maxDownloadSize));
 
     // 3. Allocate ring buffers
     size_t inputSlotSize, writeSlotSize, inputSlots, writeSlots;

@@ -56,7 +56,8 @@ public:
      * but doesn't need frequent drive list updates.
      */
     void setSlowPolling();
-    
+    void setRpibootEnabled(bool enabled);
+
     /**
      * @brief Get child devices (e.g., APFS volumes) for a given device path
      * 

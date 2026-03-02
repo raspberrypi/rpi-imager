@@ -719,8 +719,11 @@ def print_cycles(cycles: list) -> None:
             'driveOpen', 'driveUnmount', 'cacheLookup', 'directIOAttempt',
             'pipelineDecompressionTime', 'pipelineWriteWaitTime', 'finalSync', 'deviceClose',
             # Recovery events
-            'queueDepthReduction', 'syncFallbackActivated', 'drainAndHotSwap', 
-            'watchdogRecovery', 'progressStall', 'deviceIOTimeout'
+            'queueDepthReduction', 'syncFallbackActivated', 'drainAndHotSwap',
+            'watchdogRecovery', 'progressStall', 'deviceIOTimeout',
+            # Rpiboot / Fastboot
+            'rpibootFirmwareSetup', 'rpibootProtocol', 'rpibootFastbootWait',
+            'fastbootDeviceOpen',
         }
         key_events = [e for e in cycle.events if e.get('type') in key_event_types]
         if key_events:
@@ -1553,14 +1556,17 @@ def plot_timeline(data: dict, output_path: Path = None, cycles: list = None) -> 
         # Finalisation
         'partitionTableWrite': '#FF5722', 'fatPartitionSetup': '#FF5722',
         'finalSync': '#FF5722', 'deviceClose': '#FF5722',
+        # Rpiboot / Fastboot (teal)
+        'rpibootFirmwareSetup': '#009688', 'rpibootProtocol': '#009688',
+        'rpibootFastbootWait': '#009688', 'fastbootDeviceOpen': '#009688',
         # Phases
         'download': '#2196F3', 'write': '#4CAF50', 'verify': '#FF9800',
     }
-    
+
     y_labels = []
     y_positions = []
     current_y = 0
-    
+
     # Calculate total duration
     total_duration_ms = summary.get('durationMs', 0)
     if total_duration_ms == 0:
@@ -1571,9 +1577,9 @@ def plot_timeline(data: dict, output_path: Path = None, cycles: list = None) -> 
         for phase, slices in histograms.items():
             if slices:
                 total_duration_ms = max(total_duration_ms, slices[-1][0] + 1000)
-    
+
     total_duration_s = total_duration_ms / 1000
-    
+
     # Add phase bars (download, write, verify)
     phases = summary.get('phases', {})
     phase_order = ['download', 'write', 'verify']
@@ -1725,8 +1731,11 @@ def plot_throughput(data: dict, analysis: dict, output_path: Path = None, cycles
         # Finalisation (deep orange)
         'partitionTableWrite': '#E64A19', 'fatPartitionSetup': '#E64A19',
         'finalSync': '#E64A19', 'deviceClose': '#E64A19',
+        # Rpiboot / Fastboot (teal)
+        'rpibootFirmwareSetup': '#00796B', 'rpibootProtocol': '#00796B',
+        'rpibootFastbootWait': '#00796B', 'fastbootDeviceOpen': '#00796B',
     }
-    
+
     fig, axes = plt.subplots(len(phases_with_data), 1, figsize=(14, 5 * len(phases_with_data)))
     if len(phases_with_data) == 1:
         axes = [axes]
@@ -1859,9 +1868,11 @@ def create_timeline_figure(data: dict):
         'firstRunGeneration': '#E91E63', 'secureBootSetup': '#E91E63',
         'partitionTableWrite': '#FF5722', 'fatPartitionSetup': '#FF5722',
         'finalSync': '#FF5722', 'deviceClose': '#FF5722',
+        'rpibootFirmwareSetup': '#009688', 'rpibootProtocol': '#009688',
+        'rpibootFastbootWait': '#009688', 'fastbootDeviceOpen': '#009688',
         'download': '#2196F3', 'write': '#4CAF50', 'verify': '#FF9800',
     }
-    
+
     y_labels = []
     y_positions = []
     current_y = 0

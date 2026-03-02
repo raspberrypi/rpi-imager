@@ -244,6 +244,11 @@ void DriveListModel::setSlowPolling()
     _thread.setScanMode(DriveListModelPollThread::ScanMode::Slow);
 }
 
+void DriveListModel::setRpibootEnabled(bool enabled)
+{
+    _thread.setRpibootEnabled(enabled);
+}
+
 QStringList DriveListModel::getChildDevices(const QString &device) const
 {
     // Search through cached drive list for matching device
