@@ -293,7 +293,7 @@ if [ "$(id -u)" = "0" ]; then
         if command -v xhost >/dev/null 2>&1; then
             if [ -n "$DISPLAY" ]; then
                 # Run xhost as the original user to grant root access
-                su "$ORIGINAL_USER" -c "xhost +local:root" >/dev/null 2>&1 || true
+                su "$ORIGINAL_USER" -c "xhost +SI:localuser:root" >/dev/null 2>&1 || true
             fi
         fi
         
