@@ -9,6 +9,7 @@
 #include "rpiboot/firmware_manager.h"
 
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QThread>
 
 #include <algorithm>
@@ -43,6 +44,9 @@ void RpibootThread::run()
     // ── Step 1: Ensure firmware is available ───────────────────────────
     emit preparationStatusUpdate(tr("Downloading firmware..."));
 
+    QElapsedTimer phaseTimer;
+    phaseTimer.start();
+
     FirmwareManager fwMgr;
     auto fwDir = fwMgr.ensureAvailable(_mode, _device.chipGeneration,
         [this](uint64_t current, uint64_t total, const std::string& status) {
@@ -51,15 +55,22 @@ void RpibootThread::run()
         }, _cancelled);
 
     if (fwDir.empty()) {
+        emit eventFirmwareSetup(static_cast<quint32>(phaseTimer.elapsed()), false,
+                                QString::fromStdString(fwMgr.lastError()));
         emit error(tr("Failed to obtain rpiboot firmware: %1")
                    .arg(QString::fromStdString(fwMgr.lastError())));
         return;
     }
 
+    emit eventFirmwareSetup(static_cast<quint32>(phaseTimer.elapsed()), true,
+                            QString::fromStdString(fwDir));
+
     if (_cancelled.load()) return;
 
     // ── Step 2: Open USB device and execute protocol ───────────────────
     emit preparationStatusUpdate(tr("Connecting to device..."));
+
+    phaseTimer.restart();
 
     try {
         LibusbContext ctx;
@@ -73,6 +84,8 @@ void RpibootThread::run()
 
         auto transport = ctx.openDevice(usbInfo);
         if (!transport || !transport->isOpen()) {
+            emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
+                                      QStringLiteral("Failed to open USB device"));
             emit error(tr("Failed to open USB device"));
             return;
         }
@@ -85,12 +98,21 @@ void RpibootThread::run()
             }, _cancelled);
 
         if (!ok) {
+            emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
+                                      QString::fromStdString(protocol.lastError()));
             if (!_cancelled.load())
                 emit error(tr("rpiboot protocol failed: %1")
                            .arg(QString::fromStdString(protocol.lastError())));
             return;
         }
+
+        emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), true,
+                                  QStringLiteral("chip=%1; mode=%2")
+                                      .arg(static_cast<int>(_device.chipGeneration))
+                                      .arg(static_cast<int>(_mode)));
     } catch (const std::exception& e) {
+        emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
+                                  QString::fromUtf8(e.what()));
         emit error(tr("USB error: %1").arg(e.what()));
         return;
     }
@@ -101,8 +123,13 @@ void RpibootThread::run()
     switch (_mode) {
     case SideloadMode::Fastboot:
         emit preparationStatusUpdate(tr("Waiting for fastboot device..."));
-        if (!waitForFastbootDevice())
-            return;
+        phaseTimer.restart();
+        {
+            bool found = waitForFastbootDevice();
+            emit eventFastbootWait(static_cast<quint32>(phaseTimer.elapsed()), found);
+            if (!found)
+                return;
+        }
         break;
 
     case SideloadMode::SecureBootRecovery:

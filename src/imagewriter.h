@@ -275,7 +275,9 @@ public:
     Q_INVOKABLE void setDebugIPv4Only(bool enabled);
     Q_INVOKABLE bool getDebugSkipEndOfDevice() const;
     Q_INVOKABLE void setDebugSkipEndOfDevice(bool enabled);
-    
+    Q_INVOKABLE bool getDebugRpiboot() const;
+    Q_INVOKABLE void setDebugRpiboot(bool enabled);
+
     // Customisation API
     Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
     Q_INVOKABLE void setImageCustomisation(const QByteArray &config, const QByteArray &cmdline, const QByteArray &firstrun, const QByteArray &cloudinit, const QByteArray &cloudinitNetwork, const ImageOptions::AdvancedOptions opts = {}, const QByteArray &initFormat = {});  // Advanced: bypass generator with pre-made scripts
@@ -489,6 +491,7 @@ protected:
     int _debugAsyncQueueDepth;
     bool _debugIPv4Only;
     bool _debugSkipEndOfDevice;
+    bool _debugRpiboot;
 
     QString _rpibootDeviceId;
     bool _isRpibootDevice = false;

@@ -485,7 +485,13 @@ QString PerformanceStats::eventTypeName(EventType type)
         
         // UI operations
         case EventType::FileDialogOpen: return "fileDialogOpen";
-        
+
+        // Rpiboot / Fastboot
+        case EventType::RpibootFirmwareSetup: return "rpibootFirmwareSetup";
+        case EventType::RpibootProtocol: return "rpibootProtocol";
+        case EventType::RpibootFastbootWait: return "rpibootFastbootWait";
+        case EventType::FastbootDeviceOpen: return "fastbootDeviceOpen";
+
         default: return "unknown";
     }
 }

@@ -39,6 +39,9 @@ signals:
     void preparationStatusUpdate(QString msg);
     void progressChanged(quint64 current, quint64 total);
     void fastbootDeviceReady(const QString& fastbootId);
+    void eventFirmwareSetup(quint32 durationMs, bool success, QString metadata);
+    void eventRpibootProtocol(quint32 durationMs, bool success, QString metadata);
+    void eventFastbootWait(quint32 durationMs, bool success);
 
 protected:
     void run() override;
