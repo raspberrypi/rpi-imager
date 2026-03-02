@@ -112,7 +112,13 @@ public:
         
         // UI operations
         FileDialogOpen,        // Time to open native file dialog (with detailed breakdown)
-        
+
+        // Rpiboot / Fastboot
+        RpibootFirmwareSetup,    // Firmware download/cache lookup (FirmwareManager)
+        RpibootProtocol,         // USB sideload protocol execution
+        RpibootFastbootWait,     // Polling for fastboot device to appear
+        FastbootDeviceOpen,      // Opening fastboot USB device
+
         _Count                 // Sentinel for array sizing
     };
     Q_ENUM(EventType)

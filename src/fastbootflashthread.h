@@ -43,6 +43,7 @@ signals:
     void preparationStatusUpdate(QString msg);
     void downloadProgress(quint64 dlnow, quint64 dltotal);
     void writeProgress(quint64 now, quint64 total);
+    void eventFastbootDeviceOpen(quint32 durationMs, bool success, QString metadata);
 
 protected:
     void run() override;

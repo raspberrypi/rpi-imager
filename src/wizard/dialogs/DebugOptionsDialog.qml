@@ -36,7 +36,7 @@ BaseDialog {
             return []
         }, 0)
         registerFocusGroup("options", function(){ 
-            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem, chkSkipEndOfDevice.focusItem]
+            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem, chkSkipEndOfDevice.focusItem, chkRpiboot.focusItem]
         }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, applyButton]
@@ -286,6 +286,31 @@ BaseDialog {
                 wrapMode: Text.WordWrap
             }
 
+            // Spacer
+            Item {
+                Layout.preferredHeight: Style.spacingMedium
+            }
+
+            // Section header for advanced features
+            Text {
+                text: qsTr("Advanced Features")
+                font.pixelSize: Style.fontSizeFormLabel
+                font.family: Style.fontFamilyBold
+                font.bold: true
+                color: Style.textDescriptionColor
+                Layout.fillWidth: true
+            }
+
+            ImOptionPill {
+                id: chkRpiboot
+                text: qsTr("Enable Rpiboot/Fastboot Support")
+                accessibleDescription: qsTr("Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.")
+                Layout.fillWidth: true
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
+            }
+
             // Status display
             Rectangle {
                 Layout.fillWidth: true
@@ -318,6 +343,7 @@ BaseDialog {
                             lines.push("Periodic Sync: " + (chkPeriodicSync.checked ? "Enabled" : "Disabled"));
                             lines.push("IPv4-only: " + (chkIPv4Only.checked ? "Enabled" : "Disabled"));
                             lines.push("Counterfeit Card Mode: " + (chkSkipEndOfDevice.checked ? "Enabled" : "Disabled"));
+                            lines.push("Rpiboot/Fastboot: " + (chkRpiboot.checked ? "Enabled" : "Disabled"));
                             if (chkDirectIO.checked && chkAsyncIO.checked) {
                                 lines.push("✓ Optimal: Direct I/O + Async I/O for best performance");
                             } else if (chkDirectIO.checked) {
@@ -398,6 +424,7 @@ BaseDialog {
             chkVerboseLogging.checked = imageWriter.getDebugVerboseLogging();
             chkIPv4Only.checked = imageWriter.getDebugIPv4Only();
             chkSkipEndOfDevice.checked = imageWriter.getDebugSkipEndOfDevice();
+            chkRpiboot.checked = imageWriter.getDebugRpiboot();
 
             initialized = true;
             isInitializing = false;
@@ -413,14 +440,16 @@ BaseDialog {
         imageWriter.setDebugVerboseLogging(chkVerboseLogging.checked);
         imageWriter.setDebugIPv4Only(chkIPv4Only.checked);
         imageWriter.setDebugSkipEndOfDevice(chkSkipEndOfDevice.checked);
-        
-        console.log("Debug options applied: DirectIO=" + chkDirectIO.checked + 
+        imageWriter.setDebugRpiboot(chkRpiboot.checked);
+
+        console.log("Debug options applied: DirectIO=" + chkDirectIO.checked +
                     ", AsyncIO=" + chkAsyncIO.checked +
                     ", AsyncQueueDepth=" + Math.round(asyncQueueDepthSlider.value) +
                     ", PeriodicSync=" + chkPeriodicSync.checked +
                     ", VerboseLogging=" + chkVerboseLogging.checked +
                     ", IPv4Only=" + chkIPv4Only.checked +
-                    ", SkipEndOfDevice=" + chkSkipEndOfDevice.checked);
+                    ", SkipEndOfDevice=" + chkSkipEndOfDevice.checked +
+                    ", Rpiboot=" + chkRpiboot.checked);
     }
 
     onOpened: {

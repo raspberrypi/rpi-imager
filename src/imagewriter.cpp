@@ -148,6 +148,7 @@ ImageWriter::ImageWriter(QObject *parent)
     _debugAsyncIO = true;       // Async I/O enabled by default for performance
     _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
     _debugSkipEndOfDevice = false; // Normal behavior; enable for counterfeit cards
+    _debugRpiboot = false;          // Rpiboot/fastboot support disabled by default
     
     // Calculate optimal async queue depth based on system memory
     _debugAsyncQueueDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth();
@@ -580,6 +581,21 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
         emit writeProgress(QVariant(now), QVariant(total));
     });
     connect(fbt, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+
+    // Wire fastboot timing events and progress to PerformanceStats
+    connect(fbt, &FastbootFlashThread::eventFastbootDeviceOpen,
+            this, [this](quint32 ms, bool ok, QString meta){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
+            });
+    connect(fbt, &FastbootFlashThread::downloadProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordDownloadProgress(now, total);
+            });
+    connect(fbt, &FastbootFlashThread::writeProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordWriteProgress(now, total);
+            });
+
     fbt->start();
 }
 
@@ -723,6 +739,20 @@ void ImageWriter::startWrite()
 
         connect(_rpibootThread, &RpibootThread::error, this, &ImageWriter::onRpibootError);
         connect(_rpibootThread, &RpibootThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+
+        // Wire rpiboot timing events to PerformanceStats
+        connect(_rpibootThread, &RpibootThread::eventFirmwareSetup,
+                this, [this](quint32 ms, bool ok, QString meta){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootFirmwareSetup, ms, ok, meta);
+                });
+        connect(_rpibootThread, &RpibootThread::eventRpibootProtocol,
+                this, [this](quint32 ms, bool ok, QString meta){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootProtocol, ms, ok, meta);
+                });
+        connect(_rpibootThread, &RpibootThread::eventFastbootWait,
+                this, [this](quint32 ms, bool ok){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootFastbootWait, ms, ok);
+                });
 
         _rpibootThread->start();
         return;
@@ -3055,6 +3085,20 @@ void ImageWriter::setDebugSkipEndOfDevice(bool enabled)
     if (_debugSkipEndOfDevice != enabled) {
         _debugSkipEndOfDevice = enabled;
         qDebug() << "Debug: Skip end-of-device operations" << (enabled ? "enabled (counterfeit card mode)" : "disabled");
+    }
+}
+
+bool ImageWriter::getDebugRpiboot() const
+{
+    return _debugRpiboot;
+}
+
+void ImageWriter::setDebugRpiboot(bool enabled)
+{
+    if (_debugRpiboot != enabled) {
+        _debugRpiboot = enabled;
+        _drivelist.setRpibootEnabled(enabled);
+        qDebug() << "Debug: Rpiboot/fastboot support" << (enabled ? "enabled" : "disabled");
     }
 }
 

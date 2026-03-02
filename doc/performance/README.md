@@ -80,6 +80,14 @@ The following operations are timed individually, grouped by category:
 | `finalSync` | Time for final sync/flush operations |
 | `deviceClose` | Time to close device handles |
 
+**Rpiboot / Fastboot** (Compute Module imaging)
+| Event | Description |
+|-------|-------------|
+| `rpibootFirmwareSetup` | Time for firmware download or cache lookup (FirmwareManager) |
+| `rpibootProtocol` | Time for USB sideload protocol execution (includes chip generation and mode) |
+| `rpibootFastbootWait` | Time polling for the fastboot device to appear after sideload |
+| `fastbootDeviceOpen` | Time to open the fastboot USB device and query max-download-size |
+
 ### Throughput Histograms
 
 For the download, decompress, write, and verify phases, throughput is captured as a time-series of histograms. Each one-second window contains:
