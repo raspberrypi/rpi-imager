@@ -162,7 +162,8 @@ function(get_default_language country_code result_var)
         set(lang "Italian")
     elseif(country_code STREQUAL "RU" OR country_code STREQUAL "BY")
         set(lang "Russian")
-    elseif(country_code STREQUAL "CN" OR country_code STREQUAL "TW")
+    elseif(country_code STREQUAL "CN" OR country_code STREQUAL "TW" OR
+           country_code STREQUAL "MO")
         set(lang "Chinese")
     elseif(country_code STREQUAL "JP")
         set(lang "Japanese")
@@ -326,6 +327,8 @@ function(get_timezone_for_country country_code result_var)
         set(tz "Asia/Taipei")
     elseif(country_code STREQUAL "HK")
         set(tz "Asia/Hong_Kong")
+    elseif(country_code STREQUAL "MO")
+        set(tz "Asia/Macau")
     endif()
     
     set(${result_var} "${tz}" PARENT_SCOPE)
@@ -355,6 +358,11 @@ foreach(country_obj ${country_objects})
     else()
         continue()
     endif()
+
+    # Skip US Minor Outlying Islands — uninhabited, no real capital
+    if(country_code STREQUAL "UM")
+        continue()
+    endif()
     
     # Country name (common name from nested structure)
     if(country_obj MATCHES "\"common\" *: *\"([^\"]+)\"")
@@ -363,12 +371,21 @@ foreach(country_obj ${country_objects})
         continue()
     endif()
     
-    # Capital city (first capital if multiple, inside array)
+    # Capital city (first capital if multiple, inside array).
+    # When the API returns an empty capital array (e.g. Macau), fall back to
+    # the territory's common name so it still appears in the list.
     if(country_obj MATCHES "\"capital\" *: *\\[ *\"([^\"]+)\"")
         set(capital "${CMAKE_MATCH_1}")
+    elseif(country_name)
+        set(capital "${country_name}")
     else()
-        # Skip countries without capitals
         continue()
+    endif()
+
+    # REST Countries API returns "City of Victoria" for Hong Kong, which users
+    # won't recognise. Use "Hong Kong" instead (matches the territory name).
+    if(country_code STREQUAL "HK")
+        set(capital "Hong Kong")
     endif()
     
     # Get keyboard and language using helper functions

@@ -293,12 +293,13 @@ WizardStepBase {
         wizardContainer.customizationSettings.enableSerial = serialVal
         wizardContainer.customizationSettings.enableUsbGadget = usbGadgetVal
 
-        // Persist for future sessions
-        imageWriter.setPersistedCustomisationSetting("enableI2C", i2cVal)
-        imageWriter.setPersistedCustomisationSetting("enableSPI", spiVal)
-        imageWriter.setPersistedCustomisationSetting("enable1Wire", oneWireVal)
-        imageWriter.setPersistedCustomisationSetting("enableSerial", serialVal)
-        imageWriter.setPersistedCustomisationSetting("enableUsbGadget", usbGadgetVal)
+        // These settings depend on per-OS capabilities so must NOT be persisted.
+        // Remove any stale values left by older versions.
+        imageWriter.removePersistedCustomisationSetting("enableI2C")
+        imageWriter.removePersistedCustomisationSetting("enableSPI")
+        imageWriter.removePersistedCustomisationSetting("enable1Wire")
+        imageWriter.removePersistedCustomisationSetting("enableSerial")
+        imageWriter.removePersistedCustomisationSetting("enableUsbGadget")
 
         // Mirror into wizardContainer
         wizardContainer.ifI2cEnabled     = i2cVal
