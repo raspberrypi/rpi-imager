@@ -129,13 +129,13 @@ ComboBox {
             if (!root.popup.visible) {
                 var dy = event.pixelDelta && Math.abs(event.pixelDelta.y) > 0 ? event.pixelDelta.y : event.angleDelta.y
                 
-                // Qt provides deltas that match the system scroll direction (natural vs traditional).
-                // However, for combo boxes (discrete item selection), users expect consistent behavior:
-                // "scroll down gesture" should always mean "next item" regardless of scroll preferences.
+                // Use PlatformHelper.isScrollInverted() instead of event.inverted directly,
+                // because Qt doesn't reliably report the scroll direction on all platforms.
+                // PlatformHelper reads the actual OS setting for accuracy.
                 //
-                // When event.inverted is true (natural scrolling), Qt's deltas are content-oriented,
+                // When natural scrolling is active, Qt's deltas are content-oriented,
                 // which feels backwards for discrete selection. We invert to match user expectations.
-                if (event.inverted) {
+                if (PlatformHelper.isScrollInverted(event.inverted)) {
                     dy = -dy
                 }
                 
