@@ -783,42 +783,49 @@ static QString xmlEscape(const QString& input) {
     return result;
 }
 
+// Polkit action directories in order of preference:
+// - /etc/polkit-1/actions/ is the local override location (writable on immutable distros)
+// - /usr/share/polkit-1/actions/ is the vendor location (read-only on immutable distros)
+static const char* const POLKIT_ACTIONS_DIRS[] = {
+    "/etc/polkit-1/actions",
+    "/usr/share/polkit-1/actions",
+    nullptr
+};
+
 // Internal helper to check if policy exists for a specific path
 static bool hasPolkitPolicyForPath(const char* appImagePath) {
     if (!appImagePath) {
         return false;
     }
-    
+
     char policyFilename[256];
     if (!generatePolkitPolicyFilename(appImagePath, policyFilename, sizeof(policyFilename))) {
         return false;
     }
-    
-    char policyPath[512];
-    std::snprintf(policyPath, sizeof(policyPath), 
-        "/usr/share/polkit-1/actions/%s", policyFilename);
-    
-    // Security: Removed redundant access() check to eliminate TOCTOU race condition.
-    // The file could be swapped between access() and open(). Instead, just try
-    // to open the file directly - if it doesn't exist, open() will fail.
-    
-    // Verify the policy file exists and contains the correct path
-    // (in case the AppImage was moved but hash collision occurred)
-    QFile policyFile(policyPath);
-    if (!policyFile.open(QIODevice::ReadOnly)) {
-        return false;  // File doesn't exist or can't be read
-    }
-    
-    QByteArray content = policyFile.readAll();
-    policyFile.close();
-    
+
     // Check if the policy contains the exact AppImage path (XML-escaped form)
     // Since we now XML-escape the path when writing, we must search for the escaped form
     QString escapedPath = xmlEscape(QString::fromUtf8(appImagePath));
     QString searchPath = QString("org.freedesktop.policykit.exec.path\">%1</annotate>")
         .arg(escapedPath);
-    
-    return content.contains(searchPath.toUtf8());
+
+    // Search both polkit directories for the policy file
+    char policyPath[512];
+    for (int i = 0; POLKIT_ACTIONS_DIRS[i]; i++) {
+        std::snprintf(policyPath, sizeof(policyPath),
+            "%s/%s", POLKIT_ACTIONS_DIRS[i], policyFilename);
+
+        QFile policyFile(policyPath);
+        if (!policyFile.open(QIODevice::ReadOnly))
+            continue;
+
+        QByteArray content = policyFile.readAll();
+        policyFile.close();
+
+        if (content.contains(searchPath.toUtf8()))
+            return true;
+    }
+    return false;
 }
 
 bool hasElevationPolicyInstalled() {
@@ -858,10 +865,34 @@ static bool installPolkitPolicyForPath(const char* appImagePath) {
         return false;
     }
     
+    // Find a writable polkit actions directory
+    // Prefer /etc/ (local overrides) over /usr/share/ (vendor, read-only on immutable distros)
+    const char* targetDir = nullptr;
+    for (int i = 0; POLKIT_ACTIONS_DIRS[i]; i++) {
+        struct stat dirSt;
+        if (stat(POLKIT_ACTIONS_DIRS[i], &dirSt) == 0 && S_ISDIR(dirSt.st_mode)) {
+            targetDir = POLKIT_ACTIONS_DIRS[i];
+            break;
+        }
+    }
+
+    // If no directory exists, try to create the preferred one (with parent)
+    if (!targetDir) {
+        if (mkdir("/etc/polkit-1", 0755) != 0 && errno != EEXIST) {
+            std::fprintf(stderr, "Failed to create /etc/polkit-1: %s\n", strerror(errno));
+            return false;
+        }
+        if (mkdir("/etc/polkit-1/actions", 0755) == 0 || errno == EEXIST) {
+            targetDir = "/etc/polkit-1/actions";
+        } else {
+            std::fprintf(stderr, "Failed to create /etc/polkit-1/actions: %s\n", strerror(errno));
+            return false;
+        }
+    }
+
     char policyPath[512];
-    std::snprintf(policyPath, sizeof(policyPath), 
-        "/usr/share/polkit-1/actions/%s", policyFilename);
-    
+    std::snprintf(policyPath, sizeof(policyPath), "%s/%s", targetDir, policyFilename);
+
     // Generate unique action ID based on path hash
     QByteArray pathBytes(appImagePath);
     QByteArray hash = QCryptographicHash::hash(pathBytes, QCryptographicHash::Md5).toHex();
@@ -930,7 +961,7 @@ static bool installPolkitPolicyForPath(const char* appImagePath) {
     
     // fsync parent directory to ensure the directory entry is persisted
     // This is often overlooked but necessary for full durability
-    int dirFd = open("/usr/share/polkit-1/actions", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    int dirFd = open(targetDir, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (dirFd >= 0) {
         fsync(dirFd);
         close(dirFd);
