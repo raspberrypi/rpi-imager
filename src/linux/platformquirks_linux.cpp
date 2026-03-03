@@ -43,6 +43,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QCryptographicHash>
+#include <QCoreApplication>
 #include <vector>
 #include <string>
 
@@ -326,23 +327,52 @@ void applyQuirks() {
 }
 
 namespace {
-    // Sound files in order of preference (Freedesktop sound theme)
+    // Sound files in order of preference (various distro locations)
     static const char* const SOUND_FILES[] = {
-        "/usr/share/sounds/freedesktop/stereo/complete.oga",  // Completion notification
-        "/usr/share/sounds/freedesktop/stereo/bell.oga",      // Bell/alert
+        "/usr/share/sounds/freedesktop/stereo/complete.oga",       // Freedesktop (RPi OS, Debian, Fedora)
+        "/usr/share/sounds/freedesktop/stereo/bell.oga",           // Freedesktop fallback
+        "/usr/share/sounds/Yaru/stereo/complete.oga",              // Ubuntu Yaru theme
+        "/usr/share/sounds/ocean/stereo/completion.oga",           // KDE Ocean theme
+        "/usr/share/sounds/gnome/default/alerts/glass.ogg",        // GNOME legacy
         nullptr
     };
     
     // Find the first available sound file (cached, thread-safe)
+    // Falls back to extracting a bundled chime from Qt resources if no system sound exists.
     static const char* findSoundFile() {
         static const char* cachedSoundFile = nullptr;
         static std::once_flag soundFileOnce;
-        
+
         std::call_once(soundFileOnce, []() {
+            // 1. Try system sound files
             for (int i = 0; SOUND_FILES[i] != nullptr; i++) {
                 if (access(SOUND_FILES[i], R_OK) == 0) {
                     cachedSoundFile = SOUND_FILES[i];
-                    break;
+                    return;
+                }
+            }
+
+            // 2. Extract bundled fallback chime to a temp file.
+            //    Use PID in filename to avoid symlink attacks and multi-instance collisions
+            //    (rpi-imager runs as root via pkexec, so temp file security matters).
+            QFile bundled(":/sounds/chime.wav");
+            if (bundled.exists()) {
+                static QString tempPath = QDir::tempPath()
+                    + QString("/rpi-imager-chime-%1.wav").arg(QCoreApplication::applicationPid());
+
+                // Remove any pre-existing file or symlink at this path
+                QFile::remove(tempPath);
+
+                if (bundled.copy(tempPath)) {
+                    QFile::setPermissions(tempPath,
+                        QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+                    // static storage ensures pathBytes outlives the lambda so constData() remains valid
+                    static QByteArray pathBytes = tempPath.toLocal8Bit();
+                    cachedSoundFile = pathBytes.constData();
+                    qDebug() << "Using bundled fallback chime:" << tempPath;
+
+                    // Clean up temp file on application exit
+                    std::atexit([]() { QFile::remove(tempPath); });
                 }
             }
         });

@@ -6,6 +6,7 @@
         <file alias="countries.txt">countries.txt</file>
         <file>keymap-layouts.txt</file>
         <file>capital-cities.txt</file>
+        <file>sounds/chime.wav</file>
     </qresource>
 
     <!-- Resources used by QML: -->
