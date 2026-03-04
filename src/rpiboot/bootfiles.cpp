@@ -59,7 +59,8 @@ bool Bootfiles::extractFromFile(const std::string& path)
     return ok;
 }
 
-const std::vector<uint8_t>* Bootfiles::find(const std::string& name) const
+const std::vector<uint8_t>* Bootfiles::find(const std::string& name,
+                                              std::string_view chipPrefix) const
 {
     auto it = _files.find(name);
     if (it != _files.end())
@@ -76,6 +77,16 @@ const std::vector<uint8_t>* Bootfiles::find(const std::string& name) const
     it = _files.find("./" + name);
     if (it != _files.end())
         return &it->second;
+
+    // Chip-specific subdirectory lookup: the TAR may store files in
+    // directories like "2712/mcb.bin" but the device requests the bare
+    // filename "mcb.bin".  Try "<chipPrefix>/<name>" directly.
+    if (!chipPrefix.empty() && name.find('/') == std::string::npos) {
+        std::string prefixed = std::string(chipPrefix) + "/" + name;
+        it = _files.find(prefixed);
+        if (it != _files.end())
+            return &it->second;
+    }
 
     return nullptr;
 }

@@ -54,6 +54,20 @@ inline std::string_view chipGenerationName(ChipGeneration gen)
     return "Unknown";
 }
 
+// Directory prefix used inside bootfiles.bin TAR archives.
+// Files are stored as e.g. "2712/mcb.bin" — this returns the numeric
+// chip model prefix ("2712") for a given generation.
+inline std::string_view chipDirectoryPrefix(ChipGeneration gen)
+{
+    switch (gen) {
+    case ChipGeneration::BCM2835:   return "2835";
+    case ChipGeneration::BCM2836_7: return "2836";
+    case ChipGeneration::BCM2711:   return "2711";
+    case ChipGeneration::BCM2712:   return "2712";
+    }
+    return "";
+}
+
 // Friendly device description for the UI (e.g. drive-list delegate)
 inline std::string deviceDescription(ChipGeneration gen)
 {
@@ -76,7 +90,7 @@ static_assert(sizeof(BootMessage) == 24, "BootMessage must be 24 bytes");
 
 // ── File server commands ───────────────────────────────────────────────
 // The device's firmware drives the file-server conversation by sending
-// FileMessage structs over the bulk IN endpoint.
+// FileMessage structs via vendor control transfers (ep_read protocol).
 enum class FileCommand : int32_t {
     GetFileSize = 0,
     ReadFile    = 1,
@@ -116,7 +130,17 @@ constexpr uint8_t VENDOR_REQUEST_TYPE   = 0x40;         // bmRequestType for ven
 constexpr uint8_t VENDOR_REQUEST        = 0;             // bRequest
 constexpr int     DEFAULT_TIMEOUT_MS    = 3000;
 
+// Fastboot USB VID/PID used by the RPi fastboot gadget after rpiboot
+// sideloads it.  Note: the standard Android fastboot PID is 0x4ee0;
+// the RPi gadget uses 0x4e40.
+constexpr uint16_t FASTBOOT_VID         = 0x18d1;       // Google
+constexpr uint16_t FASTBOOT_PID         = 0x4e40;       // RPi Fastboot gadget
+
 // ── Progress callback ──────────────────────────────────────────────────
+// (current, total, status):
+//   - Percentage mode: current/total in [0,100] range (e.g. download progress)
+//   - Discrete steps:  current/total as step indices (e.g. 2/3)
+//   - Indeterminate:   total == 0 means "unknown total" (e.g. file server)
 using ProgressCallback = std::function<void(uint64_t current, uint64_t total, const std::string& status)>;
 
 } // namespace rpiboot

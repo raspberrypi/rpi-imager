@@ -7,6 +7,7 @@
 #include <libusb.h>
 #include <cstring>
 #include <stdexcept>
+#include <QDebug>
 
 namespace rpiboot {
 
@@ -52,6 +53,7 @@ std::vector<UsbDeviceInfo> LibusbContext::scanBootDevices() const
         info.vendorId = desc.idVendor;
         info.productId = desc.idProduct;
         info.chipGeneration = *gen;
+        info.serialNumberIndex = desc.iSerialNumber;
 
         // Get USB port path for multi-device tracking
         uint8_t ports[7];
@@ -65,10 +67,6 @@ std::vector<UsbDeviceInfo> LibusbContext::scanBootDevices() const
     libusb_free_device_list(list, 1);
     return result;
 }
-
-// Fastboot VID/PID (Google's Android fastboot interface)
-static constexpr uint16_t FASTBOOT_VID = 0x18d1;
-static constexpr uint16_t FASTBOOT_PID = 0x4ee0;
 
 std::vector<UsbDeviceInfo> LibusbContext::scanFastbootDevices() const
 {
@@ -140,25 +138,73 @@ std::unique_ptr<LibusbTransport> LibusbContext::openDevice(const UsbDeviceInfo& 
 LibusbTransport::LibusbTransport(libusb_device_handle* handle)
     : _handle(handle)
 {
-    // Detach any kernel driver on interface 0 so we can claim it
-#ifdef LIBUSB_HAS_CAPABILITY
-    if (libusb_has_capability(LIBUSB_CAP_SUPPORTS_DETACH_KERNEL_DRIVER)) {
-#endif
-        libusb_detach_kernel_driver(_handle, 0);
-#ifdef LIBUSB_HAS_CAPABILITY
+    // Read the active config descriptor to determine the correct interface
+    // and bulk endpoints, matching the upstream rpiboot Initialize_Device() logic.
+    libusb_config_descriptor* config = nullptr;
+    if (libusb_get_active_config_descriptor(libusb_get_device(_handle), &config) == LIBUSB_SUCCESS && config) {
+        if (config->bNumInterfaces == 1) {
+            _interface = 0;
+            _outEp = 0x01;
+            _inEp = 0x82;
+        } else {
+            _interface = 1;
+            _outEp = 0x03;
+            _inEp = 0x84;
+        }
+        _initDiag += QStringLiteral("ifaces=%1 if=%2 ep=0x%3; ")
+            .arg(config->bNumInterfaces).arg(_interface).arg(_outEp, 2, 16, QLatin1Char('0'));
+        qDebug() << "rpiboot: USB config numInterfaces=" << config->bNumInterfaces
+                 << "interface=" << _interface
+                 << "outEp=0x" << Qt::hex << (int)_outEp;
+        libusb_free_config_descriptor(config);
+    } else {
+        _initDiag += QStringLiteral("ifaces=? (get_config failed); ");
+        qDebug() << "rpiboot: get_active_config_descriptor failed; using defaults"
+                 << "interface=" << _interface << "outEp=0x" << Qt::hex << (int)_outEp;
+    }
+
+    // Enable automatic kernel driver detach on Linux if a driver is attached
+    // when claim_interface is called.  This is a no-op on macOS.
+    libusb_set_auto_detach_kernel_driver(_handle, 1);
+
+#ifdef __APPLE__
+    // macOS IOKit only enables bulk transfers beyond the first Full Speed
+    // packet (64 bytes) after USBSetConfiguration() is called by a user-space
+    // process.  Root processes bypass this; our GUI app runs unprivileged so
+    // we must call it explicitly.  On Linux this is unnecessary — the kernel
+    // USB stack does not impose this restriction — and calling it causes an
+    // avoidable bus reset (device already in config 1).
+    // NOTE: do NOT call libusb_detach_kernel_driver before this; a failed
+    // detach (LIBUSB_ERROR_ACCESS) corrupts IOKit state and causes
+    // LIBUSB_ERROR_IO on subsequent bulk writes even when claim succeeds.
+    int sc = libusb_set_configuration(_handle, 1);
+    if (sc != LIBUSB_SUCCESS) {
+        _initDiag += QStringLiteral("set_cfg=%1; ").arg(libusb_strerror(static_cast<libusb_error>(sc)));
+        qDebug() << "rpiboot: set_configuration(1) failed:"
+                 << libusb_strerror(static_cast<libusb_error>(sc));
+    } else {
+        _initDiag += QStringLiteral("set_cfg=OK; ");
+        qDebug() << "rpiboot: set_configuration(1) OK";
     }
 #endif
 
-    int rc = libusb_claim_interface(_handle, 0);
-    if (rc == LIBUSB_SUCCESS)
+    int ci = libusb_claim_interface(_handle, _interface);
+    if (ci == LIBUSB_SUCCESS) {
         _interfaceClaimed = true;
+        _initDiag += QStringLiteral("claim=OK");
+        qDebug() << "rpiboot: claim_interface" << _interface << "OK";
+    } else {
+        _initDiag += QStringLiteral("claim=%1").arg(libusb_strerror(static_cast<libusb_error>(ci)));
+        qDebug() << "rpiboot: claim_interface" << _interface << "failed:"
+                 << libusb_strerror(static_cast<libusb_error>(ci));
+    }
 }
 
 LibusbTransport::~LibusbTransport()
 {
     if (_handle) {
         if (_interfaceClaimed)
-            libusb_release_interface(_handle, 0);
+            libusb_release_interface(_handle, _interface);
         libusb_close(_handle);
     }
 }
@@ -177,7 +223,29 @@ bool LibusbTransport::controlTransfer(uint8_t requestType, uint8_t request,
         static_cast<uint16_t>(data.size()),
         static_cast<unsigned int>(timeoutMs));
 
+    if (rc < 0)
+        qDebug() << "controlTransfer OUT failed: req=0x" << Qt::hex << request
+                 << "wValue=" << wValue << "wIndex=" << wIndex
+                 << "->" << libusb_strerror(static_cast<libusb_error>(rc));
+
     return rc >= 0;
+}
+
+int LibusbTransport::controlTransferIn(uint8_t requestType, uint8_t request,
+                                        uint16_t wValue, uint16_t wIndex,
+                                        std::span<uint8_t> buffer,
+                                        int timeoutMs)
+{
+    if (!_handle)
+        return -1;
+
+    int rc = libusb_control_transfer(
+        _handle, requestType, request, wValue, wIndex,
+        buffer.data(),
+        static_cast<uint16_t>(buffer.size()),
+        static_cast<unsigned int>(timeoutMs));
+
+    return rc;  // libusb returns bytes transferred on success, negative on error
 }
 
 int LibusbTransport::bulkWrite(uint8_t endpoint,
@@ -195,9 +263,16 @@ int LibusbTransport::bulkWrite(uint8_t endpoint,
         &transferred,
         static_cast<unsigned int>(timeoutMs));
 
-    if (rc == LIBUSB_SUCCESS || rc == LIBUSB_ERROR_TIMEOUT)
+    if (rc == LIBUSB_SUCCESS || rc == LIBUSB_ERROR_TIMEOUT) {
+        if (transferred < static_cast<int>(data.size()))
+            qDebug() << "rpiboot: bulkWrite partial: requested" << (int)data.size()
+                     << "transferred" << transferred
+                     << "(ep=0x" << Qt::hex << (int)endpoint << ")";
         return transferred;
-    return -1;
+    }
+
+    // Return the negative libusb error code so callers can report it
+    return rc;
 }
 
 int LibusbTransport::bulkRead(uint8_t endpoint,
@@ -217,7 +292,10 @@ int LibusbTransport::bulkRead(uint8_t endpoint,
 
     if (rc == LIBUSB_SUCCESS || rc == LIBUSB_ERROR_TIMEOUT)
         return transferred;
-    return -1;
+
+    // Return the negative libusb error code so callers can report it
+    // (matches bulkWrite behaviour — e.g. LIBUSB_ERROR_NO_DEVICE = -4)
+    return rc;
 }
 
 bool LibusbTransport::isOpen() const

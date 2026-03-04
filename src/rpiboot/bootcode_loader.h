@@ -5,8 +5,9 @@
  * Stage-2 bootcode upload for the rpiboot protocol.
  *
  * Selects the correct bootcode binary by chip generation, sends the
- * BootMessage header via a vendor control transfer, and streams the
- * payload via bulk OUT in 16 KB chunks.
+ * BootMessage header and payload using the upstream ep_write protocol:
+ * a zero-data vendor control transfer announcing the length, followed
+ * by a bulk OUT transfer of the actual data.
  */
 
 #ifndef RPIBOOT_BOOTCODE_LOADER_H
@@ -17,8 +18,8 @@
 
 #include <atomic>
 #include <filesystem>
+#include <span>
 #include <string>
-#include <vector>
 
 namespace rpiboot {
 
@@ -39,14 +40,12 @@ public:
     const std::string& lastError() const { return _lastError; }
 
 private:
-    bool sendBootMessage(IUsbTransport& transport,
-                         int32_t payloadLength,
-                         const std::atomic<bool>& cancelled);
-
-    bool sendPayload(IUsbTransport& transport,
-                     const std::vector<uint8_t>& data,
-                     ChipGeneration gen,
-                     const std::atomic<bool>& cancelled);
+    // Write data using the upstream rpiboot ep_write protocol:
+    // 1. Zero-data vendor control transfer with length in wValue/wIndex
+    // 2. Bulk OUT transfer of the actual data in BULK_CHUNK_SIZE chunks
+    bool epWrite(IUsbTransport& transport,
+                 std::span<const uint8_t> data,
+                 const std::atomic<bool>& cancelled);
 
     std::string _lastError;
 };

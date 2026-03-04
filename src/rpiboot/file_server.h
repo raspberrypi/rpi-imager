@@ -63,13 +63,13 @@ private:
     void parseMetadata(const std::string& filename,
                        const std::vector<uint8_t>& data);
 
+    DeviceMetadata _metadata;
+    std::string _lastError;
+
 public:
     // Default file resolver: read from the firmware directory
     static std::vector<uint8_t> readFileFromDisk(const std::filesystem::path& dir,
                                                   const std::string& filename);
-
-    DeviceMetadata _metadata;
-    std::string _lastError;
 };
 
 } // namespace rpiboot

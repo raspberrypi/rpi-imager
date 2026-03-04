@@ -20,6 +20,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace fastboot {
 
@@ -39,13 +40,27 @@ public:
                          std::string_view command,
                          int timeoutMs);
 
-    // Download data to the device.
+    // Download data to the device (for use with flash).
     // Sends "download:<hex-size>", waits for DATA response, then
     // streams the data via bulk OUT.
     bool download(rpiboot::IUsbTransport& transport,
                   std::span<const uint8_t> data,
                   rpiboot::ProgressCallback progress,
                   std::atomic<bool>& cancelled);
+
+    // Stage data on the device (for use with oem commands).
+    // Identical wire format to download() but uses "stage:" prefix.
+    bool stage(rpiboot::IUsbTransport& transport,
+               std::span<const uint8_t> data,
+               rpiboot::ProgressCallback progress,
+               std::atomic<bool>& cancelled);
+
+    // Upload data from the device to the host.
+    // Sends "upload", reads DATA<size>, then reads payload from bulk IN.
+    // Returns the data, or an empty vector on failure (lastError() set).
+    std::vector<uint8_t> upload(rpiboot::IUsbTransport& transport,
+                                 rpiboot::ProgressCallback progress,
+                                 std::atomic<bool>& cancelled);
 
     // Flash the previously downloaded data to a partition.
     // Sends "flash:<partition>" and waits for OKAY/FAIL.
@@ -65,11 +80,33 @@ public:
                     rpiboot::ProgressCallback progress,
                     std::atomic<bool>& cancelled);
 
+    // Write a file to the device filesystem.
+    // Stages the data, then sends "oem download-file <devicePath>".
+    bool writeDeviceFile(rpiboot::IUsbTransport& transport,
+                         std::string_view devicePath,
+                         std::span<const uint8_t> data,
+                         std::atomic<bool>& cancelled);
+
+    // Read a file from the device filesystem.
+    // Sends "oem upload-file <devicePath>", then uploads the data.
+    // Returns file contents, or empty vector on failure (lastError() set).
+    std::vector<uint8_t> readDeviceFile(rpiboot::IUsbTransport& transport,
+                                         std::string_view devicePath,
+                                         std::atomic<bool>& cancelled);
+
     const std::string& lastError() const { return _lastError; }
 
 private:
     // Read a single response packet from the device
     Response readResponse(rpiboot::IUsbTransport& transport, int timeoutMs);
+
+    // Send data to the device with a given command prefix ("download" or "stage").
+    // Shared implementation for download() and stage().
+    bool sendData(rpiboot::IUsbTransport& transport,
+                  std::string_view commandPrefix,
+                  std::span<const uint8_t> data,
+                  rpiboot::ProgressCallback progress,
+                  std::atomic<bool>& cancelled);
 
     std::string _lastError;
 

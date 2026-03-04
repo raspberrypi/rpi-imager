@@ -217,6 +217,21 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
 
         qDebug() << "Drive added:" << info.device;
     }
+
+    // Extract connected rpiboot chip names and notify if changed
+    QStringList newChips;
+    for (const auto &i : l) {
+        if (i.isRpiboot && !i.rpibootChipName.empty()) {
+            QString chip = QString::fromStdString(i.rpibootChipName);
+            if (!newChips.contains(chip))
+                newChips.append(chip);
+        }
+    }
+    newChips.sort();
+    if (newChips != _connectedRpibootChips) {
+        _connectedRpibootChips = newChips;
+        emit connectedRpibootChipsChanged(_connectedRpibootChips);
+    }
 }
 
 void DriveListModel::startPolling()

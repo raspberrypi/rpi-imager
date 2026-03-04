@@ -5,8 +5,11 @@
 
 #include "bootcode_loader.h"
 
+#include <QDebug>
+
 #include <cstring>
 #include <fstream>
+#include <thread>
 
 namespace rpiboot {
 
@@ -27,9 +30,6 @@ bool BootcodeLoader::send(IUsbTransport& transport,
     auto filename = bootcodeFilename(gen);
     auto path = firmwareDir / filename;
 
-    // Also try a .sig companion for signed-boot scenarios
-    auto sigPath = std::filesystem::path(path).concat(".sig");
-
     // Read the bootcode binary
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
@@ -48,56 +48,70 @@ bool BootcodeLoader::send(IUsbTransport& transport,
     file.read(reinterpret_cast<char*>(bootcode.data()), fileSize);
     file.close();
 
-    // Send BootMessage header
-    if (!sendBootMessage(transport, static_cast<int32_t>(bootcode.size()), cancelled))
-        return false;
-
-    if (cancelled.load())
-        return false;
-
-    // Send the bootcode payload
-    if (!sendPayload(transport, bootcode, gen, cancelled))
-        return false;
-
-    return true;
-}
-
-bool BootcodeLoader::sendBootMessage(IUsbTransport& transport,
-                                      int32_t payloadLength,
-                                      const std::atomic<bool>& cancelled)
-{
-    if (cancelled.load())
-        return false;
-
+    // Prepare BootMessage header
     BootMessage msg{};
-    msg.length = payloadLength;
-    // signature left zeroed (unsigned boot)
+    msg.length = static_cast<int32_t>(bootcode.size());
+    // signature left zeroed — BCM2711/BCM2712 do not use BootMessage signatures
+    // (signed boot on those chips is handled inside the bootcode binary itself)
 
-    // The protocol encodes the length in the control transfer's wValue/wIndex fields:
-    //   wValue = length & 0xFFFF
-    //   wIndex = length >> 16
-    uint16_t wValue = static_cast<uint16_t>(payloadLength & 0xFFFF);
-    uint16_t wIndex = static_cast<uint16_t>((payloadLength >> 16) & 0xFFFF);
-
-    auto data = std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
-
-    if (!transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST,
-                                    wValue, wIndex, data, DEFAULT_TIMEOUT_MS)) {
-        _lastError = "Failed to send BootMessage control transfer";
+    // Send BootMessage header via ep_write protocol
+    auto msgSpan = std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+    if (!epWrite(transport, msgSpan, cancelled)) {
+        _lastError = "Failed to send BootMessage: " + _lastError;
         return false;
     }
 
+    if (cancelled.load())
+        return false;
+
+    // Send bootcode payload via ep_write protocol
+    if (!epWrite(transport, bootcode, cancelled)) {
+        _lastError = "Failed to send bootcode payload: " + _lastError;
+        return false;
+    }
+
+    // Read the return value from the device via vendor control transfer IN.
+    // This matches upstream second_stage_boot(): sleep(1) then ep_read().
+    // The device may have already reset by the time we issue this read
+    // (especially BCM2711/2712), in which case the transfer fails harmlessly.
+    // For BCM2835, this also consumes the errata return packet.
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    uint8_t retcode[4] = {};
+    auto retBuf = std::span<uint8_t>(retcode, sizeof(retcode));
+    transport.controlTransferIn(
+        VENDOR_REQUEST_TYPE | 0x80, VENDOR_REQUEST,
+        static_cast<uint16_t>(sizeof(retcode) & 0xFFFF), 0,
+        retBuf, 20000);
+    // Result intentionally ignored — failure is expected when device resets quickly
+
     return true;
 }
 
-bool BootcodeLoader::sendPayload(IUsbTransport& transport,
-                                  const std::vector<uint8_t>& data,
-                                  ChipGeneration gen,
-                                  const std::atomic<bool>& cancelled)
+bool BootcodeLoader::epWrite(IUsbTransport& transport,
+                              std::span<const uint8_t> data,
+                              const std::atomic<bool>& cancelled)
 {
-    // Bulk OUT endpoint 1
-    constexpr uint8_t EP_OUT = 0x01;
+    if (cancelled.load())
+        return false;
 
+    // Step 1: Announce the payload length via a zero-data vendor control transfer
+    // This matches the upstream rpiboot ep_write() protocol exactly.
+    auto len = static_cast<uint32_t>(data.size());
+    uint16_t wValue = static_cast<uint16_t>(len & 0xFFFF);
+    uint16_t wIndex = static_cast<uint16_t>((len >> 16) & 0xFFFF);
+
+    if (!transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST,
+                                    wValue, wIndex, {}, DEFAULT_TIMEOUT_MS)) {
+        _lastError = "Control transfer failed";
+        qDebug() << "rpiboot: epWrite control transfer failed: len=" << len
+                 << "wValue=0x" << Qt::hex << wValue << "wIndex=0x" << wIndex;
+        return false;
+    }
+
+    // Step 2: Send the actual data via bulk transfer in BULK_CHUNK_SIZE chunks
+    const uint8_t EP_OUT = transport.outEndpoint();
     size_t offset = 0;
     while (offset < data.size()) {
         if (cancelled.load())
@@ -107,19 +121,15 @@ bool BootcodeLoader::sendPayload(IUsbTransport& transport,
         auto chunk = std::span<const uint8_t>(data.data() + offset, chunkSize);
 
         int transferred = transport.bulkWrite(EP_OUT, chunk, DEFAULT_TIMEOUT_MS);
-        if (transferred < 0) {
-            _lastError = "Bulk write failed during bootcode upload at offset " + std::to_string(offset);
+        if (transferred <= 0) {
+            _lastError = "Bulk write stalled at offset " + std::to_string(offset)
+                + " of " + std::to_string(data.size())
+                + " (libusb error " + std::to_string(transferred) + ")";
+            qDebug() << "rpiboot:" << _lastError.c_str()
+                     << "ep=0x" << Qt::hex << (int)EP_OUT;
             return false;
         }
         offset += static_cast<size_t>(transferred);
-    }
-
-    // BCM2835 has a USB errata that sends a malformed return packet.
-    // Read and discard it so it doesn't confuse later communication.
-    if (gen == ChipGeneration::BCM2835) {
-        uint8_t discard[512];
-        auto buf = std::span<uint8_t>(discard);
-        transport.bulkRead(EP_OUT | 0x80, buf, 500);
     }
 
     return true;

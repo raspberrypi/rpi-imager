@@ -5,14 +5,21 @@
 
 #include "file_server.h"
 
+#include <QDebug>
+
 #include <cstring>
 #include <fstream>
+#include <thread>
 
 namespace rpiboot {
 
-// Bulk endpoints used by the file server
-constexpr uint8_t EP_OUT = 0x01;
-constexpr uint8_t EP_IN  = 0x81;
+// Vendor IN request type for ep_read (device-to-host control transfer)
+constexpr uint8_t VENDOR_REQUEST_TYPE_IN = VENDOR_REQUEST_TYPE | 0x80;  // 0xC0
+
+// Timeout for reading FileMessages from the device.
+// Upstream uses 20s for a single blocking read. We use a shorter timeout
+// with a retry loop so the UI stays responsive during the wait.
+constexpr int EP_READ_TIMEOUT_MS = 3000;
 
 bool FileServer::run(IUsbTransport& transport,
                       const std::filesystem::path& firmwareDir,
@@ -27,19 +34,65 @@ bool FileServer::run(IUsbTransport& transport,
           };
 
     uint64_t filesServed = 0;
+    int consecutiveErrors = 0;
+    constexpr int MAX_RETRIES = 20;
+    std::string lastFilename;
+
+    if (progress)
+        progress(0, 0, "Waiting for device file requests...");
 
     while (!cancelled.load()) {
-        // Read a FileMessage from the device
+        // Read a FileMessage from the device via vendor control transfer IN.
+        // This matches upstream rpiboot's ep_read() protocol: the device
+        // sends command messages through control transfers, not bulk IN.
         FileMessage msg{};
         auto buf = std::span<uint8_t>(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
 
-        int bytesRead = transport.bulkRead(EP_IN, buf, 10000);
+        int bytesRead = transport.controlTransferIn(
+            VENDOR_REQUEST_TYPE_IN, VENDOR_REQUEST,
+            static_cast<uint16_t>(sizeof(msg) & 0xFFFF),
+            static_cast<uint16_t>(sizeof(msg) >> 16),
+            buf, EP_READ_TIMEOUT_MS);
+
         if (bytesRead < static_cast<int>(sizeof(FileCommand))) {
-            _lastError = "Failed to read FileMessage from device";
-            return false;
+            ++consecutiveErrors;
+            qDebug() << "rpiboot: FileServer controlTransferIn returned"
+                     << bytesRead << "bytes (need" << sizeof(FileCommand)
+                     << "), retry" << consecutiveErrors << "/" << MAX_RETRIES
+                     << (lastFilename.empty() ? "" : (", last file: " + lastFilename).c_str());
+
+            // Fatal USB errors — the device is gone, retrying is pointless.
+            // Matches upstream rpiboot which breaks on NO_DEVICE and IO errors.
+            // LIBUSB_ERROR_NO_DEVICE=-4, LIBUSB_ERROR_ACCESS=-3,
+            // LIBUSB_ERROR_PIPE=-9, LIBUSB_ERROR_OVERFLOW=-8
+            constexpr int LIBUSB_ERR_NO_DEVICE = -4;
+            if (bytesRead == LIBUSB_ERR_NO_DEVICE) {
+                _lastError = "Device disconnected (libusb error "
+                    + std::to_string(bytesRead) + ")"
+                    + (lastFilename.empty() ? "" : " after serving: " + lastFilename);
+                return false;
+            }
+
+            if (consecutiveErrors > MAX_RETRIES) {
+                _lastError = "Failed to read FileMessage from device (error "
+                    + std::to_string(bytesRead) + " after "
+                    + std::to_string(consecutiveErrors) + " retries"
+                    + (lastFilename.empty() ? "" : "; last file: " + lastFilename)
+                    + ")";
+                return false;
+            }
+            if (progress)
+                progress(filesServed, 0,
+                    "Waiting for device (retry " + std::to_string(consecutiveErrors)
+                    + "/" + std::to_string(MAX_RETRIES)
+                    + ", error " + std::to_string(bytesRead) + ")...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            continue;
         }
+        consecutiveErrors = 0;
 
         std::string filename(msg.name());
+        lastFilename = filename;
 
         switch (msg.command) {
         case FileCommand::GetFileSize:
@@ -65,7 +118,8 @@ bool FileServer::run(IUsbTransport& transport,
             return true;
 
         default:
-            _lastError = "Unknown file command: " + std::to_string(static_cast<int32_t>(msg.command));
+            _lastError = "Unknown file command " + std::to_string(static_cast<int32_t>(msg.command))
+                + " for file: " + filename;
             return false;
         }
     }
@@ -87,18 +141,18 @@ bool FileServer::handleGetFileSize(IUsbTransport& transport,
         data = resolver(filename);
     }
 
-    // Send the file size via a control transfer
-    // Size is encoded the same way as in BootMessage: wValue = low 16 bits, wIndex = high 16 bits
+    // Send the file size via a zero-data vendor control transfer.
+    // Size is encoded in wValue (low 16) and wIndex (high 16), matching
+    // the upstream pattern where ep_write(NULL, 0) or a direct
+    // libusb_control_transfer sends no data payload.
     int32_t size = isMetadata ? 0 : static_cast<int32_t>(data.size());
     uint16_t wValue = static_cast<uint16_t>(size & 0xFFFF);
     uint16_t wIndex = static_cast<uint16_t>((size >> 16) & 0xFFFF);
 
-    // Send the size as the control transfer data payload as well
-    auto sizeData = std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&size), sizeof(size));
-
     if (!transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST,
-                                    wValue, wIndex, sizeData, DEFAULT_TIMEOUT_MS)) {
+                                    wValue, wIndex, {}, DEFAULT_TIMEOUT_MS)) {
         _lastError = "Failed to send file size for: " + filename;
+        qDebug() << "rpiboot:" << _lastError.c_str() << "size=" << size;
         return false;
     }
 
@@ -111,41 +165,42 @@ bool FileServer::handleReadFile(IUsbTransport& transport,
                                  const std::filesystem::path& firmwareDir,
                                  const std::atomic<bool>& cancelled)
 {
-    // Star-prefixed filenames carry device metadata
+    // Star-prefixed filenames carry device metadata — the value is encoded
+    // in the filename itself, no file lookup needed.
     bool isMetadata = !filename.empty() && filename[0] == '*';
+
+    if (isMetadata) {
+        parseMetadata(filename, {});
+        // Metadata: zero-length ep_write response (control transfer only, no bulk)
+        transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST,
+                                  0, 0, {}, DEFAULT_TIMEOUT_MS);
+        return true;
+    }
 
     std::vector<uint8_t> data = resolver(filename);
 
-    if (isMetadata) {
-        parseMetadata(filename, data);
-        // Metadata files still get a zero-length response
-        int32_t zero = 0;
-        auto zd = std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&zero), sizeof(zero));
-        transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST, 0, 0, zd, DEFAULT_TIMEOUT_MS);
-        return true;
-    }
-
     if (data.empty()) {
-        // File not found -- send zero size
-        int32_t zero = 0;
-        auto zd = std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&zero), sizeof(zero));
-        transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST, 0, 0, zd, DEFAULT_TIMEOUT_MS);
+        // File not found: zero-length ep_write response
+        transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST,
+                                  0, 0, {}, DEFAULT_TIMEOUT_MS);
         return true;
     }
 
-    // Send file size via control transfer
+    // Send file data via ep_write protocol:
+    // 1. Control transfer announces the total size (no data payload)
+    // 2. Bulk OUT sends the actual file data in BULK_CHUNK_SIZE chunks
     int32_t totalSize = static_cast<int32_t>(data.size());
     uint16_t wValue = static_cast<uint16_t>(totalSize & 0xFFFF);
     uint16_t wIndex = static_cast<uint16_t>((totalSize >> 16) & 0xFFFF);
-    auto sizeData = std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&totalSize), sizeof(totalSize));
 
     if (!transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST,
-                                    wValue, wIndex, sizeData, DEFAULT_TIMEOUT_MS)) {
+                                    wValue, wIndex, {}, DEFAULT_TIMEOUT_MS)) {
         _lastError = "Failed to send ReadFile size header for: " + filename;
+        qDebug() << "rpiboot:" << _lastError.c_str() << "totalSize=" << totalSize;
         return false;
     }
 
-    // Stream file data via bulk OUT in BULK_CHUNK_SIZE chunks
+    // Stream file data via bulk OUT
     size_t offset = 0;
     while (offset < data.size()) {
         if (cancelled.load())
@@ -154,9 +209,14 @@ bool FileServer::handleReadFile(IUsbTransport& transport,
         size_t chunkSize = std::min(BULK_CHUNK_SIZE, data.size() - offset);
         auto chunk = std::span<const uint8_t>(data.data() + offset, chunkSize);
 
-        int transferred = transport.bulkWrite(EP_OUT, chunk, DEFAULT_TIMEOUT_MS);
+        int transferred = transport.bulkWrite(transport.outEndpoint(), chunk, DEFAULT_TIMEOUT_MS);
         if (transferred < 0) {
-            _lastError = "Bulk write failed sending file: " + filename + " at offset " + std::to_string(offset);
+            _lastError = "Bulk write failed sending file: " + filename
+                + " at offset " + std::to_string(offset)
+                + " of " + std::to_string(data.size())
+                + " (libusb error " + std::to_string(transferred) + ")";
+            qDebug() << "rpiboot:" << _lastError.c_str()
+                     << "ep=0x" << Qt::hex << (int)transport.outEndpoint();
             return false;
         }
         offset += static_cast<size_t>(transferred);
