@@ -206,6 +206,37 @@ TEST_CASE("Bootfiles extracts multiple files and iterates", "[rpiboot][bootfiles
     CHECK(map.count("c.txt") == 1);
 }
 
+TEST_CASE("Bootfiles find resolves chip-specific subdirectory via prefix", "[rpiboot][bootfiles]")
+{
+    std::vector<uint8_t> mcbContent = {0xDE, 0xAD};
+    std::vector<uint8_t> topLevel = {0xBE, 0xEF};
+
+    auto tar = createTarInMemory({
+        {"2712/mcb.bin", mcbContent},
+        {"config.txt", topLevel},
+    });
+
+    Bootfiles bf;
+    REQUIRE(bf.extractFromMemory(tar));
+
+    // Exact name works for top-level files
+    CHECK(bf.find("config.txt") != nullptr);
+
+    // Bare name without prefix → not found
+    CHECK(bf.find("mcb.bin") == nullptr);
+
+    // With correct chip prefix → found via "2712/mcb.bin"
+    auto* found = bf.find("mcb.bin", "2712");
+    REQUIRE(found != nullptr);
+    CHECK(*found == mcbContent);
+
+    // Wrong chip prefix → not found
+    CHECK(bf.find("mcb.bin", "2711") == nullptr);
+
+    // Exact path still works regardless of prefix
+    CHECK(bf.find("2712/mcb.bin") != nullptr);
+}
+
 TEST_CASE("Bootfiles extractFromMemory clears previous state", "[rpiboot][bootfiles]")
 {
     auto tar1 = createTarInMemory({{"first.txt", {1}}});

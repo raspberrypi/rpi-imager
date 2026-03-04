@@ -81,6 +81,23 @@ public:
         return true;
     }
 
+    // Control transfer IN: serves responses from the same queue as bulkRead,
+    // since the rpiboot protocol uses control IN where one might expect bulk IN.
+    int controlTransferIn(uint8_t /*requestType*/, uint8_t /*request*/,
+                          uint16_t /*wValue*/, uint16_t /*wIndex*/,
+                          std::span<uint8_t> buffer,
+                          int /*timeoutMs*/) override
+    {
+        if (_bulkReadQueue.empty())
+            return -1;
+
+        auto& front = _bulkReadQueue.front();
+        size_t toCopy = std::min(front.size(), buffer.size());
+        std::memcpy(buffer.data(), front.data(), toCopy);
+        _bulkReadQueue.pop_front();
+        return static_cast<int>(toCopy);
+    }
+
     int bulkWrite(uint8_t /*endpoint*/,
                   std::span<const uint8_t> data,
                   int /*timeoutMs*/) override

@@ -12,6 +12,8 @@
 #include "usb_transport.h"
 #include "rpiboot_types.h"
 
+#include <QString>
+
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -31,6 +33,7 @@ struct UsbDeviceInfo {
     uint16_t productId;
     std::vector<uint8_t> portPath;       // USB port numbers for multi-device tracking
     ChipGeneration chipGeneration;
+    uint8_t  serialNumberIndex = 0;      // bSerialNumber from USB descriptor (0 = ROM mode)
 };
 
 // RAII wrapper around libusb_context
@@ -73,6 +76,11 @@ public:
                          std::span<const uint8_t> data,
                          int timeoutMs) override;
 
+    int controlTransferIn(uint8_t requestType, uint8_t request,
+                          uint16_t wValue, uint16_t wIndex,
+                          std::span<uint8_t> buffer,
+                          int timeoutMs) override;
+
     int bulkWrite(uint8_t endpoint,
                   std::span<const uint8_t> data,
                   int timeoutMs) override;
@@ -83,9 +91,20 @@ public:
 
     bool isOpen() const override;
 
+    uint8_t outEndpoint() const override { return _outEp; }
+    uint8_t inEndpoint() const override { return _inEp; }
+
+    // Diagnostic string built during construction (set_configuration result,
+    // claim_interface result).  Included in performance-capture metadata.
+    const QString& initDiagnostics() const { return _initDiag; }
+
 private:
     libusb_device_handle* _handle = nullptr;
     bool _interfaceClaimed = false;
+    uint8_t _interface = 0;
+    uint8_t _outEp = 0x01;
+    uint8_t _inEp = 0x82;
+    QString _initDiag;
 };
 
 } // namespace rpiboot

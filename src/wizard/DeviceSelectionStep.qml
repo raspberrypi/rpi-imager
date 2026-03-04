@@ -249,6 +249,7 @@ WizardStepBase {
             required property string name
             required property string description
             required property string icon
+            required property bool isUsbBootConnected
             required property QtObject model
             
             width: hwlist.width
@@ -258,6 +259,7 @@ WizardStepBase {
             // Accessibility properties
             Accessible.role: Accessible.ListItem
             Accessible.name: hwitem.name + ". " + hwitem.description
+                          + (hwitem.isUsbBootConnected ? ". " + qsTr("Connected via USB") : "")
             Accessible.focusable: true
             Accessible.ignored: false
             
@@ -341,6 +343,16 @@ WizardStepBase {
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
+                            Accessible.ignored: true
+                        }
+
+                        Text {
+                            text: qsTr("Connected via USB")
+                            font.pixelSize: Style.fontSizeDescription
+                            font.family: Style.fontFamily
+                            color: Style.formControlActiveColor
+                            Layout.fillWidth: true
+                            visible: hwitem.isUsbBootConnected
                             Accessible.ignored: true
                         }
                     }

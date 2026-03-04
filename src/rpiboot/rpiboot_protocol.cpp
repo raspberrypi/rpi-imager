@@ -9,14 +9,12 @@
 
 namespace rpiboot {
 
-bool RpibootProtocol::execute(IUsbTransport& transport,
-                               ChipGeneration gen,
-                               SideloadMode mode,
-                               const std::filesystem::path& firmwareDir,
-                               ProgressCallback progress,
-                               std::atomic<bool>& cancelled)
+bool RpibootProtocol::uploadBootcode(IUsbTransport& transport,
+                                      ChipGeneration gen,
+                                      const std::filesystem::path& firmwareDir,
+                                      ProgressCallback progress,
+                                      std::atomic<bool>& cancelled)
 {
-    // ── Step 1: Upload second-stage bootloader ─────────────────────────
     if (progress)
         progress(0, 3, "Uploading bootloader...");
 
@@ -25,34 +23,16 @@ bool RpibootProtocol::execute(IUsbTransport& transport,
         return false;
     }
 
-    if (cancelled.load())
-        return false;
+    return true;
+}
 
-    // ── Step 2: Wait for device to re-enumerate ────────────────────────
-    // After receiving the bootcode, the device resets its USB connection
-    // and re-appears with a new device address.  We give it a moment.
-    if (progress)
-        progress(1, 3, "Waiting for device to restart...");
-
-    // Short delay for the device to re-enumerate on the USB bus.
-    // The caller (RpibootThread) is responsible for re-opening the
-    // transport if the device address changed.  For the simple
-    // single-transport case the device stays on the same handle.
-    for (int i = 0; i < 10 && !cancelled.load(); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        if (transport.isOpen())
-            break;
-    }
-
-    if (cancelled.load())
-        return false;
-
-    if (!transport.isOpen()) {
-        _lastError = "Device did not re-enumerate after bootcode upload";
-        return false;
-    }
-
-    // ── Step 3: File server ────────────────────────────────────────────
+bool RpibootProtocol::serveFiles(IUsbTransport& transport,
+                                  ChipGeneration gen,
+                                  SideloadMode mode,
+                                  const std::filesystem::path& firmwareDir,
+                                  ProgressCallback progress,
+                                  std::atomic<bool>& cancelled)
+{
     if (progress)
         progress(2, 3, "Loading firmware...");
 
@@ -74,9 +54,10 @@ bool RpibootProtocol::execute(IUsbTransport& transport,
     // Custom file resolver that first checks the extracted tar, then disk
     FileResolver resolver;
     if (haveBootfiles) {
-        resolver = [this, &sideloadDir](const std::string& filename) -> std::vector<uint8_t> {
-            // Try the tar archive first
-            const auto* data = _bootfiles.find(filename);
+        auto prefix = chipDirectoryPrefix(gen);
+        resolver = [this, &sideloadDir, prefix](const std::string& filename) -> std::vector<uint8_t> {
+            // Try the tar archive first (with chip-specific prefix fallback)
+            const auto* data = _bootfiles.find(filename, prefix);
             if (data)
                 return *data;
 
@@ -94,6 +75,41 @@ bool RpibootProtocol::execute(IUsbTransport& transport,
         progress(3, 3, "Device boot complete");
 
     return true;
+}
+
+bool RpibootProtocol::execute(IUsbTransport& transport,
+                               ChipGeneration gen,
+                               SideloadMode mode,
+                               const std::filesystem::path& firmwareDir,
+                               ProgressCallback progress,
+                               std::atomic<bool>& cancelled)
+{
+    if (!uploadBootcode(transport, gen, firmwareDir, progress, cancelled))
+        return false;
+
+    if (cancelled.load())
+        return false;
+
+    // Wait for device to re-enumerate.  Mock transports used in tests
+    // don't re-enumerate, so isOpen() returns true immediately.
+    if (progress)
+        progress(1, 3, "Waiting for device to restart...");
+
+    for (int i = 0; i < 10 && !cancelled.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        if (transport.isOpen())
+            break;
+    }
+
+    if (cancelled.load())
+        return false;
+
+    if (!transport.isOpen()) {
+        _lastError = "Device did not re-enumerate after bootcode upload";
+        return false;
+    }
+
+    return serveFiles(transport, gen, mode, firmwareDir, progress, cancelled);
 }
 
 std::filesystem::path RpibootProtocol::resolveSideloadDir(

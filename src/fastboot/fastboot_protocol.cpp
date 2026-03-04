@@ -83,22 +83,31 @@ Response FastbootProtocol::sendCommand(rpiboot::IUsbTransport& transport,
     }
 }
 
-// ── Download ───────────────────────────────────────────────────────────
+// ── Data transfer (shared by download and stage) ──────────────────────
 
-bool FastbootProtocol::download(rpiboot::IUsbTransport& transport,
+bool FastbootProtocol::sendData(rpiboot::IUsbTransport& transport,
+                                 std::string_view commandPrefix,
                                  std::span<const uint8_t> data,
                                  rpiboot::ProgressCallback progress,
                                  std::atomic<bool>& cancelled)
 {
-    // Send "download:<size-hex>"
+    _lastError.clear();
+
+    // Note: sends the command via raw bulkWrite rather than sendCommand(),
+    // so INFO/TEXT intermediates before the DATA response are not handled.
+    // The RPi fastboot gadget does not emit INFO before DATA for download/stage.
+
+    // Send "<prefix>:<size-hex>"
     char cmd[64];
-    snprintf(cmd, sizeof(cmd), "download:%08x", static_cast<unsigned>(data.size()));
+    snprintf(cmd, sizeof(cmd), "%.*s:%08x",
+             static_cast<int>(commandPrefix.size()), commandPrefix.data(),
+             static_cast<unsigned>(data.size()));
 
     auto cmdSpan = std::span<const uint8_t>(
         reinterpret_cast<const uint8_t*>(cmd), std::strlen(cmd));
     int written = transport.bulkWrite(EP_OUT, cmdSpan, 3000);
     if (written < 0) {
-        _lastError = "Failed to send download command";
+        _lastError = std::string("Failed to send ") + std::string(commandPrefix) + " command";
         return false;
     }
 
@@ -122,23 +131,146 @@ bool FastbootProtocol::download(rpiboot::IUsbTransport& transport,
 
         int xfer = transport.bulkWrite(EP_OUT, chunk, 5000);
         if (xfer < 0) {
-            _lastError = "Bulk write failed during download at offset " + std::to_string(offset);
+            _lastError = "Bulk write failed during " + std::string(commandPrefix)
+                + " at offset " + std::to_string(offset);
             return false;
         }
         offset += static_cast<size_t>(xfer);
 
         if (progress)
-            progress(offset, data.size(), "Downloading to device...");
+            progress(offset, data.size(), "Transferring to device...");
     }
 
     // Read final OKAY
     auto finalResp = readResponse(transport, 30000);
     if (finalResp.type != Response::Okay) {
-        _lastError = "Download failed: " + finalResp.message;
+        _lastError = std::string(commandPrefix) + " failed: " + finalResp.message;
         return false;
     }
 
     return true;
+}
+
+bool FastbootProtocol::download(rpiboot::IUsbTransport& transport,
+                                 std::span<const uint8_t> data,
+                                 rpiboot::ProgressCallback progress,
+                                 std::atomic<bool>& cancelled)
+{
+    return sendData(transport, "download", data, progress, cancelled);
+}
+
+bool FastbootProtocol::stage(rpiboot::IUsbTransport& transport,
+                              std::span<const uint8_t> data,
+                              rpiboot::ProgressCallback progress,
+                              std::atomic<bool>& cancelled)
+{
+    return sendData(transport, "stage", data, progress, cancelled);
+}
+
+// ── Upload (device → host) ────────────────────────────────────────────
+
+std::vector<uint8_t> FastbootProtocol::upload(rpiboot::IUsbTransport& transport,
+                                               rpiboot::ProgressCallback progress,
+                                               std::atomic<bool>& cancelled)
+{
+    _lastError.clear();
+
+    // Note: sends "upload" via raw bulkWrite rather than sendCommand(),
+    // so INFO/TEXT intermediates before the DATA response are not handled.
+    // The RPi fastboot gadget does not emit INFO before DATA for upload.
+
+    // Send "upload" command
+    const char* cmd = "upload";
+    auto cmdSpan = std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t*>(cmd), std::strlen(cmd));
+    int written = transport.bulkWrite(EP_OUT, cmdSpan, 3000);
+    if (written < 0) {
+        _lastError = "Failed to send upload command";
+        return {};
+    }
+
+    // Read DATA response with size
+    auto resp = readResponse(transport, 10000);
+    if (resp.type != Response::Data) {
+        _lastError = "Expected DATA response for upload, got: " + resp.message;
+        return {};
+    }
+
+    // Read payload from bulk IN
+    std::vector<uint8_t> result;
+    result.reserve(resp.dataSize);
+    size_t remaining = resp.dataSize;
+
+    while (remaining > 0) {
+        if (cancelled.load()) {
+            _lastError = "Cancelled";
+            return {};
+        }
+
+        uint8_t buf[rpiboot::BULK_CHUNK_SIZE];
+        size_t toRead = std::min<size_t>(remaining, sizeof(buf));
+        auto bufSpan = std::span<uint8_t>(buf, toRead);
+
+        int bytesRead = transport.bulkRead(EP_IN, bufSpan, 5000);
+        if (bytesRead <= 0) {
+            _lastError = "Bulk read failed during upload at offset "
+                + std::to_string(result.size());
+            return {};
+        }
+        result.insert(result.end(), buf, buf + bytesRead);
+        remaining -= static_cast<size_t>(bytesRead);
+
+        if (progress)
+            progress(result.size(), resp.dataSize, "Uploading from device...");
+    }
+
+    // Read final OKAY
+    auto finalResp = readResponse(transport, 10000);
+    if (finalResp.type != Response::Okay) {
+        _lastError = "Upload failed: " + finalResp.message;
+        return {};
+    }
+
+    return result;
+}
+
+// ── Device file transfer convenience methods ──────────────────────────
+
+bool FastbootProtocol::writeDeviceFile(rpiboot::IUsbTransport& transport,
+                                        std::string_view devicePath,
+                                        std::span<const uint8_t> data,
+                                        std::atomic<bool>& cancelled)
+{
+    _lastError.clear();
+
+    if (!stage(transport, data, nullptr, cancelled))
+        return false;
+
+    std::string cmd = "oem download-file " + std::string(devicePath);
+    auto resp = sendCommand(transport, cmd, 30000);
+    if (resp.type != Response::Okay) {
+        _lastError = "oem download-file failed for " + std::string(devicePath)
+            + ": " + resp.message;
+        return false;
+    }
+    return true;
+}
+
+std::vector<uint8_t> FastbootProtocol::readDeviceFile(rpiboot::IUsbTransport& transport,
+                                                       std::string_view devicePath,
+                                                       std::atomic<bool>& cancelled)
+{
+    _lastError.clear();
+
+    std::string cmd = "oem upload-file " + std::string(devicePath);
+    auto resp = sendCommand(transport, cmd, 30000);
+    if (resp.type != Response::Okay) {
+        _lastError = "oem upload-file failed for " + std::string(devicePath)
+            + ": " + resp.message;
+        return {};
+    }
+
+    return upload(transport, nullptr, cancelled);
 }
 
 // ── Flash ──────────────────────────────────────────────────────────────

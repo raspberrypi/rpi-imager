@@ -35,7 +35,11 @@ public:
 
     // Look up a file by name (path within the archive).
     // Returns a pointer to the data, or nullptr if not found.
-    const std::vector<uint8_t>* find(const std::string& name) const;
+    // If chipPrefix is non-empty and the exact name isn't found,
+    // tries "<chipPrefix>/<name>" to resolve chip-specific subdirectories
+    // (e.g. chipPrefix="2712" resolves "mcb.bin" → "2712/mcb.bin").
+    const std::vector<uint8_t>* find(const std::string& name,
+                                      std::string_view chipPrefix = {}) const;
 
     // Number of entries extracted
     size_t size() const { return _files.size(); }

@@ -316,6 +316,10 @@ ImageWriter::ImageWriter(QObject *parent)
     connect(&_drivelist, &DriveListModel::deviceRemoved,
             this, &ImageWriter::onSelectedDeviceRemoved);
     
+    // Forward connected rpiboot chip names to hardware list model for USB boot annotations
+    connect(&_drivelist, &DriveListModel::connectedRpibootChipsChanged,
+            &_hwlist, &HWListModel::setConnectedRpibootChips);
+
     // Connect drive list poll timing events for performance tracking
     // Only record polls that take longer than 200ms to avoid noise from normal fast polls
     connect(&_drivelist, &DriveListModel::eventDriveListPoll,
@@ -534,6 +538,7 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     _dst = device;
     _devLen = deviceSize;
     _selectedDeviceValid = !device.isEmpty();
+    _isRpibootDevice = false;  // Reset — setRpibootDevice() will re-set if needed
 
     // Reset write completion state when device selection changes
     if (device.isEmpty()) {
@@ -571,6 +576,7 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
 
     // Start FastbootFlashThread
     auto *fbt = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
+    fbt->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
     connect(fbt, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
     connect(fbt, &FastbootFlashThread::error, this, &ImageWriter::onError);
     connect(fbt, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
@@ -675,6 +681,18 @@ void ImageWriter::startWrite()
         _thread = nullptr;
     }
 
+    // Same for the rpiboot thread — if a previous attempt finished or was
+    // cancelled, the handler sets _rpibootThread = nullptr via deleteLater(),
+    // but the deletion may still be pending in the event queue.
+    if (_rpibootThread) {
+        if (_rpibootThread->isRunning()) {
+            _rpibootThread->cancel();
+            _rpibootThread->wait(5000);
+        }
+        delete _rpibootThread;
+        _rpibootThread = nullptr;
+    }
+
     if (!readyToWrite())
     {
         // Provide a user-visible error rather than silently returning, so the UI can recover
@@ -725,12 +743,18 @@ void ImageWriter::startWrite()
         }
         if (parts.size() >= 3) {
             for (const auto& p : parts[2].split('.'))
-                devInfo.portPath.push_back(static_cast<uint8_t>(p.toUInt()));
+                if (!p.isEmpty())
+                    devInfo.portPath.push_back(static_cast<uint8_t>(p.toUInt()));
         }
 
-        // Determine chip generation from the port path or stored PID
-        // For now, default to BCM2711; the scanner stores this info
-        devInfo.chipGeneration = rpiboot::ChipGeneration::BCM2711;
+        // Part 4 is the USB PID, which encodes the chip generation.
+        // Format added in rpiboot_scanner.cpp: rpiboot://bus:addr:portpath:pid
+        devInfo.chipGeneration = rpiboot::ChipGeneration::BCM2711;  // safe default
+        if (parts.size() >= 4) {
+            auto pid = static_cast<uint16_t>(parts[3].toUInt());
+            if (auto gen = rpiboot::chipGenerationFromPid(pid))
+                devInfo.chipGeneration = *gen;
+        }
 
         _rpibootThread = new RpibootThread(devInfo, _rpibootSideloadMode, this);
 
@@ -1363,6 +1387,20 @@ void ImageWriter::cancelWrite()
     if (_waitingForCacheVerification)
     {
         skipCacheVerification();
+        return;
+    }
+
+    if (_rpibootThread)
+    {
+        _rpibootThread->cancel();
+        connect(_rpibootThread, &QThread::finished, this, [this]() {
+            if (_rpibootThread) {
+                _rpibootThread->deleteLater();
+                _rpibootThread = nullptr;
+            }
+            setWriteState(WriteState::Cancelled);
+            emit cancelled();
+        });
         return;
     }
 

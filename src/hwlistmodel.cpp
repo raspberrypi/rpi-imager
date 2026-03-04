@@ -96,7 +96,8 @@ QHash<int, QByteArray> HWListModel::roleNames() const
         {IconRole, "icon"},
         {DescriptionRole, "description"},
         {MatchingTypeRole, "matching_type"},
-        {ArchitectureRole, "architecture"}
+        {ArchitectureRole, "architecture"},
+        {IsUsbBootConnectedRole, "isUsbBootConnected"}
     };
 }
 
@@ -122,6 +123,12 @@ QVariant HWListModel::data(const QModelIndex &index, int role) const {
         return device.matchingType;
     case ArchitectureRole:
         return device.architecture;
+    case IsUsbBootConnectedRole:
+        for (const auto &chip : _connectedRpibootChips) {
+            if (tagsMatchChip(device.tags, chip))
+                return true;
+        }
+        return false;
     }
 
     return {};
@@ -190,4 +197,35 @@ void HWListModel::setCurrentIndex(int index) {
 
 int HWListModel::currentIndex() const {
     return _currentIndex;
+}
+
+void HWListModel::setConnectedRpibootChips(const QStringList &chips) {
+    if (_connectedRpibootChips == chips)
+        return;
+    _connectedRpibootChips = chips;
+    if (!_hwDevices.isEmpty())
+        emit dataChanged(index(0), index(_hwDevices.size() - 1), {IsUsbBootConnectedRole});
+}
+
+bool HWListModel::tagsMatchChip(const QJsonArray &tags, const QString &chipName) {
+    QStringList prefixes;
+    if (chipName == QLatin1String("BCM2712"))
+        prefixes = {QStringLiteral("pi5-")};
+    else if (chipName == QLatin1String("BCM2711"))
+        prefixes = {QStringLiteral("pi4-")};
+    else if (chipName.startsWith(QLatin1String("BCM2836")) || chipName == QLatin1String("BCM2836/7"))
+        prefixes = {QStringLiteral("pi2-"), QStringLiteral("pi3-")};
+    else if (chipName == QLatin1String("BCM2835"))
+        prefixes = {QStringLiteral("pi1-")};
+    else
+        return false;
+
+    for (const auto &tag : tags) {
+        const QString t = tag.toString();
+        for (const auto &prefix : prefixes) {
+            if (t.startsWith(prefix))
+                return true;
+        }
+    }
+    return false;
 }

@@ -11,6 +11,7 @@
 #include "ringbuffer.h"
 #include "systemmemorymanager.h"
 
+#include <QDateTime>
 #include <QDebug>
 #include <QElapsedTimer>
 
@@ -21,9 +22,9 @@
 #include <cstring>
 #include <thread>
 
-// Fastboot VID/PID for the RPi fastboot gadget
-static constexpr uint16_t FASTBOOT_VID = 0x18d1;  // Google
-static constexpr uint16_t FASTBOOT_PID = 0x4ee0;  // Fastboot
+// Use the canonical FASTBOOT_VID/PID from rpiboot_types.h
+using rpiboot::FASTBOOT_VID;
+using rpiboot::FASTBOOT_PID;
 
 // Default max-download-size if the device doesn't report one
 static constexpr uint32_t DEFAULT_MAX_DOWNLOAD_SIZE = 256 * 1024 * 1024;  // 256 MB
@@ -57,6 +58,139 @@ void FastbootFlashThread::cancel()
         _compressedRing->cancel();
     if (_decompressedRing)
         _decompressedRing->cancel();
+}
+
+void FastbootFlashThread::setImageCustomisation(const QByteArray &config,
+                                                  const QByteArray &cmdline,
+                                                  const QByteArray &firstrun,
+                                                  const QByteArray &cloudinit,
+                                                  const QByteArray &cloudinitNetwork,
+                                                  const QByteArray &initFormat)
+{
+    _config = config;
+    _cmdline = cmdline;
+    _firstrun = firstrun;
+    _cloudinit = cloudinit;
+    _cloudinitNetwork = cloudinitNetwork;
+    _initFormat = initFormat;
+}
+
+bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
+                                              rpiboot::IUsbTransport& transport)
+{
+    bool hasCustomisation = !_config.isEmpty() || !_cmdline.isEmpty() ||
+                            !_firstrun.isEmpty() || !_cloudinit.isEmpty() ||
+                            !_cloudinitNetwork.isEmpty();
+    if (!hasCustomisation || _initFormat.isEmpty())
+        return true;
+
+    emit preparationStatusUpdate(tr("Applying OS customisation..."));
+
+    static const std::string BOOT = "/boot/firmware/";
+
+    // Helper: QByteArray → span
+    auto toSpan = [](const QByteArray& ba) {
+        return std::span<const uint8_t>(
+            reinterpret_cast<const uint8_t*>(ba.constData()),
+            static_cast<size_t>(ba.size()));
+    };
+
+    // ── config.txt: read, uncomment/append entries, write back ──
+    if (!_config.isEmpty()) {
+        auto configData = fb.readDeviceFile(transport, BOOT + "config.txt", _cancelled);
+        if (configData.empty()) {
+            emit error(tr("Failed to read config.txt: %1")
+                       .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+        QByteArray config(reinterpret_cast<const char*>(configData.data()),
+                          static_cast<int>(configData.size()));
+
+        auto items = _config.split('\n');
+        items.removeAll("");
+        for (const QByteArray& item : std::as_const(items)) {
+            if (config.contains("#" + item)) {
+                config.replace("#" + item, item);
+            } else if (!config.contains("\n" + item)) {
+                if (config.right(1) != "\n")
+                    config += "\n";
+                config += item + "\n";
+            }
+        }
+
+        if (!fb.writeDeviceFile(transport, BOOT + "config.txt", toSpan(config), _cancelled)) {
+            emit error(tr("Failed to write config.txt: %1")
+                       .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+    }
+
+    // ── firstrun.sh (systemd format) ──
+    QByteArray cmdlineAppend = _cmdline;
+    if (!_firstrun.isEmpty() && _initFormat == "systemd") {
+        if (!fb.writeDeviceFile(transport, BOOT + "firstrun.sh", toSpan(_firstrun), _cancelled)) {
+            emit error(tr("Failed to write firstrun.sh: %1")
+                       .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+        cmdlineAppend += " systemd.run=/boot/firstrun.sh"
+                         " systemd.run_success_action=reboot"
+                         " systemd.unit=kernel-command-line.target";
+    }
+
+    // ── cloud-init files ──
+    bool initCloud = (_initFormat == "cloudinit" || _initFormat == "cloudinit-rpi");
+    if (initCloud) {
+        QByteArray instanceId = "rpi-imager-" + QByteArray::number(QDateTime::currentMSecsSinceEpoch());
+        QByteArray metadata = "instance-id: " + instanceId + "\n";
+        if (!fb.writeDeviceFile(transport, BOOT + "meta-data", toSpan(metadata), _cancelled)) {
+            emit error(tr("Failed to write meta-data: %1")
+                       .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+
+        cmdlineAppend += " ds=nocloud;i=" + instanceId;
+
+        if (!_cloudinit.isEmpty()) {
+            QByteArray userData = "#cloud-config\n" + _cloudinit;
+            if (!fb.writeDeviceFile(transport, BOOT + "user-data", toSpan(userData), _cancelled)) {
+                emit error(tr("Failed to write user-data: %1")
+                           .arg(QString::fromStdString(fb.lastError())));
+                return false;
+            }
+        }
+
+        if (!_cloudinitNetwork.isEmpty()) {
+            if (!fb.writeDeviceFile(transport, BOOT + "network-config",
+                                     toSpan(_cloudinitNetwork), _cancelled)) {
+                emit error(tr("Failed to write network-config: %1")
+                           .arg(QString::fromStdString(fb.lastError())));
+                return false;
+            }
+        }
+    }
+
+    // ── cmdline.txt: read, append, write back ──
+    if (!cmdlineAppend.isEmpty()) {
+        auto cmdlineData = fb.readDeviceFile(transport, BOOT + "cmdline.txt", _cancelled);
+        if (cmdlineData.empty()) {
+            emit error(tr("Failed to read cmdline.txt: %1")
+                       .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+        QByteArray cmdline = QByteArray(reinterpret_cast<const char*>(cmdlineData.data()),
+                                         static_cast<int>(cmdlineData.size())).trimmed();
+        cmdline += cmdlineAppend;
+
+        if (!fb.writeDeviceFile(transport, BOOT + "cmdline.txt", toSpan(cmdline), _cancelled)) {
+            emit error(tr("Failed to write cmdline.txt: %1")
+                       .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+    }
+
+    qDebug() << "FastbootFlashThread: customisation applied successfully";
+    return true;
 }
 
 // ── Curl write callback → compressed ring buffer ─────────────────────
@@ -386,8 +520,8 @@ void FastbootFlashThread::run()
             break;
         }
 
-        // Flash the downloaded chunk
-        if (!fb.flash(*transport, "0", 120000)) {
+        // Flash the downloaded chunk to eMMC
+        if (!fb.flash(*transport, "/dev/mmcblk0", 120000)) {
             _decompressedRing->releaseReadSlot(slot);
             if (!_cancelled.load())
                 emit error(tr("Fastboot flash failed: %1")
@@ -440,7 +574,11 @@ void FastbootFlashThread::run()
         }
     }
 
-    // 9. Finalize
+    // 9. Apply OS customisation via fastboot file transfer
+    if (!applyCustomisation(fb, *transport))
+        return;
+
+    // 10. Finalize
     emit finalizing();
 
     auto resp = fb.sendCommand(*transport, "reboot", 10000);
