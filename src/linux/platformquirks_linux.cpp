@@ -732,7 +732,8 @@ static QString xmlEscape(const QString& input) {
     result.reserve(input.size() + 16);  // Reserve a bit extra for escapes
     
     for (const QChar& c : input) {
-        switch (c.unicode()) {
+        uint16_t codepoint = c.unicode();
+        switch (codepoint) {
             case '&':  result += QStringLiteral("&amp;");  break;
             case '<':  result += QStringLiteral("&lt;");   break;
             case '>':  result += QStringLiteral("&gt;");   break;
@@ -740,8 +741,8 @@ static QString xmlEscape(const QString& input) {
             case '\'': result += QStringLiteral("&apos;"); break;
             default:
                 // Also escape control characters (except tab, newline, carriage return)
-                if (c.unicode() < 0x20 && c != '\t' && c != '\n' && c != '\r') {
-                    result += QString("&#x%1;").arg(c.unicode(), 0, 16);
+                if (codepoint < 0x20 && c != '\t' && c != '\n' && c != '\r') {
+                    result += QString("&#x%1;").arg(codepoint, 0, 16);
                 } else {
                     result += c;
                 }
