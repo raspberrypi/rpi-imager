@@ -85,6 +85,7 @@ public:
 signals:
     void deviceRemoved(const QString &device);
     void eventDriveListPoll(quint32 durationMs);
+    void connectedRpibootChipsChanged(const QStringList &chips);
     
     /**
      * @brief Emitted when the lastError property changes
@@ -112,6 +113,7 @@ protected:
     QHash<int, QByteArray> _rolenames;
     DriveListModelPollThread _thread;
     QString _lastError;  // Last enumeration error message (empty if successful)
+    QStringList _connectedRpibootChips;
 };
 
 #endif // DRIVELISTMODEL_H

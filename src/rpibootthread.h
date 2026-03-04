@@ -14,6 +14,8 @@
 
 #include "rpiboot/rpiboot_types.h"
 
+namespace rpiboot { struct UsbDeviceInfo; }
+
 class RpibootThread : public QThread
 {
     Q_OBJECT
@@ -48,6 +50,7 @@ protected:
 
 private:
     bool waitForFastbootDevice();
+    bool waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice);
 
     DeviceInfo _device;
     rpiboot::SideloadMode _mode;

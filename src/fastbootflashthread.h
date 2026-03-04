@@ -21,6 +21,8 @@
 
 class RingBuffer;
 class AcceleratedCryptographicHash;
+namespace fastboot { class FastbootProtocol; }
+namespace rpiboot { class IUsbTransport; }
 
 class FastbootFlashThread : public QThread
 {
@@ -35,6 +37,15 @@ public:
     ~FastbootFlashThread() override;
 
     void cancel();
+
+    // Set OS customization data to apply after flashing.
+    // Mirrors the DownloadThread::setImageCustomisation() interface.
+    void setImageCustomisation(const QByteArray &config,
+                                const QByteArray &cmdline,
+                                const QByteArray &firstrun,
+                                const QByteArray &cloudinit,
+                                const QByteArray &cloudinitNetwork,
+                                const QByteArray &initFormat);
 
 signals:
     void success();
@@ -51,6 +62,8 @@ protected:
 private:
     void downloadProducer();
     void decompressConsumerProducer();
+    bool applyCustomisation(class fastboot::FastbootProtocol& fb,
+                             class rpiboot::IUsbTransport& transport);
 
     QString _fastbootId;
     QUrl _imageUrl;
@@ -73,6 +86,14 @@ private:
     // Error from pipeline threads
     QString _downloadError;
     QString _decompressError;
+
+    // OS customization (applied post-flash via fastboot file transfer)
+    QByteArray _config;
+    QByteArray _cmdline;
+    QByteArray _firstrun;
+    QByteArray _cloudinit;
+    QByteArray _cloudinitNetwork;
+    QByteArray _initFormat;
 };
 
 #endif // FASTBOOTFLASHTHREAD_H

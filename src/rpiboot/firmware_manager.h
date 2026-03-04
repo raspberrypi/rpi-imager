@@ -3,13 +3,11 @@
  * Copyright (C) 2025 Raspberry Pi Ltd
  *
  * Downloads and caches rpiboot firmware (fastboot gadget, bootcode
- * binaries, secure-boot-recovery, etc.) from the usbboot GitHub releases.
+ * binaries, secure-boot-recovery, etc.) from GitHub raw URLs.
  *
- * On each call the manager follows the GitHub /releases/latest
- * redirect to discover the current version tag, then downloads
- * the tarball only when the cached version is stale.
- * If the version check fails, the newest cached version is used;
- * as a last resort a hardcoded fallback URL is tried.
+ * Files are fetched individually from the master/main branches of
+ * the usbboot and rpi-sb-provisioner repositories and cached
+ * locally under a single "master/" directory.
  */
 
 #ifndef RPIBOOT_FIRMWARE_MANAGER_H
@@ -21,6 +19,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace rpiboot {
 
@@ -45,16 +44,26 @@ public:
 
     const std::string& lastError() const { return _lastError; }
 
-    // Hardcoded fallback — used only when the manifest is unreachable
-    // AND no cached version exists.
-    static constexpr const char* FALLBACK_FIRMWARE_VERSION = "2025.02.20";
-    static constexpr const char* FALLBACK_FIRMWARE_URL_TEMPLATE =
-        "https://github.com/raspberrypi/usbboot/releases/download/%s/rpiboot-firmware-%s.tar.gz";
+    static constexpr const char* USBBOOT_RAW_BASE =
+        "https://github.com/raspberrypi/usbboot/raw/refs/heads/master/";
+    static constexpr const char* PROVISIONER_RAW_BASE =
+        "https://github.com/raspberrypi/rpi-sb-provisioner/raw/refs/heads/main/";
 
 private:
-    // Discover the latest firmware version tag via the GitHub
-    // /releases/latest redirect.  Returns nullopt on any failure.
-    std::optional<std::string> fetchLatestVersion(std::atomic<bool>& cancelled);
+    struct ManifestEntry {
+        std::string url;
+        std::string localPath;  // relative to the version dir
+    };
+
+    // Build the list of files to download for a given mode + chip
+    std::vector<ManifestEntry> buildManifest(SideloadMode mode,
+                                              ChipGeneration chip) const;
+
+    // Download a single file via curl
+    bool downloadFile(const std::string& url,
+                       const std::filesystem::path& destPath,
+                       ProgressCallback progress,
+                       std::atomic<bool>& cancelled);
 
     // Check that a cached version directory contains the required files
     // for the given chip generation and sideload mode.
@@ -62,20 +71,15 @@ private:
                                  SideloadMode mode,
                                  ChipGeneration chip) const;
 
-    // Scan the cache root for the newest version directory that
-    // validates for the given mode + chip.
+    // Check whether <cacheRoot>/master/ validates for the given mode + chip.
     std::optional<std::filesystem::path> findCachedVersion(SideloadMode mode,
                                                             ChipGeneration chip) const;
 
-    // Remove all cached version directories except keepVersion.
-    void cleanOldVersions(const std::filesystem::path& root,
-                           const std::string& keepVersion);
-
-    // Download a firmware tarball from url and extract into destDir.
-    bool downloadAndExtract(const std::string& url,
-                             const std::filesystem::path& destDir,
-                             ProgressCallback progress,
-                             std::atomic<bool>& cancelled);
+    // For BCM2712 Fastboot: extract bootcode5.bin from the bootfiles.bin TAR
+    // (firmware/bootfiles.bin in usbboot, symlinked from
+    // mass-storage-gadget64/bootfiles.bin).  recovery5/bootcode5.bin is the
+    // EEPROM update binary and must NOT be used for mass-storage-gadget mode.
+    bool extractBootcodeFromBootfiles(const std::filesystem::path& versionDir);
 
     std::string _lastError;
 };

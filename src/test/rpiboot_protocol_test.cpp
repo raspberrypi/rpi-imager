@@ -95,23 +95,29 @@ TEST_CASE("BootcodeLoader sends BootMessage header and payload", "[rpiboot][boot
 
     REQUIRE(loader.send(mock, ChipGeneration::BCM2711, fw.path(), cancelled));
 
-    // Should have sent one control transfer (the BootMessage header)
-    REQUIRE(mock.capturedControlTransfers().size() == 1);
+    // Should have sent two zero-data control transfers (ep_write protocol):
+    // 1st announces the BootMessage size (24), 2nd announces the bootcode size
+    REQUIRE(mock.capturedControlTransfers().size() == 2);
 
-    auto& ct = mock.capturedControlTransfers()[0];
-    CHECK(ct.requestType == VENDOR_REQUEST_TYPE);
-    CHECK(ct.request == VENDOR_REQUEST);
-    CHECK(ct.wValue == static_cast<uint16_t>(bootcode.size() & 0xFFFF));
-    CHECK(ct.wIndex == static_cast<uint16_t>((bootcode.size() >> 16) & 0xFFFF));
+    auto& ct0 = mock.capturedControlTransfers()[0];
+    CHECK(ct0.requestType == VENDOR_REQUEST_TYPE);
+    CHECK(ct0.request == VENDOR_REQUEST);
+    CHECK(ct0.wValue == sizeof(BootMessage));
+    CHECK(ct0.wIndex == 0);
+    CHECK(ct0.data.empty());
 
-    // Control transfer data should be the BootMessage struct (24 bytes)
-    CHECK(ct.data.size() == sizeof(BootMessage));
+    auto& ct1 = mock.capturedControlTransfers()[1];
+    CHECK(ct1.requestType == VENDOR_REQUEST_TYPE);
+    CHECK(ct1.request == VENDOR_REQUEST);
+    CHECK(ct1.wValue == static_cast<uint16_t>(bootcode.size() & 0xFFFF));
+    CHECK(ct1.wIndex == static_cast<uint16_t>((bootcode.size() >> 16) & 0xFFFF));
+    CHECK(ct1.data.empty());
 
-    // Verify the payload was sent via bulk writes
+    // Bulk writes carry both the BootMessage (24 bytes) and bootcode payload
     size_t totalBulkBytes = 0;
     for (const auto& w : mock.capturedBulkWrites())
         totalBulkBytes += w.size();
-    CHECK(totalBulkBytes == bootcode.size());
+    CHECK(totalBulkBytes == sizeof(BootMessage) + bootcode.size());
 }
 
 TEST_CASE("BootcodeLoader fails when file is missing", "[rpiboot][bootcode]")
@@ -162,13 +168,14 @@ TEST_CASE("FileServer handles GetFileSize request", "[rpiboot][fileserver]")
     REQUIRE(server.run(mock, fw.path(), nullptr, cancelled));
 
     // Should have sent one control transfer with the file size
+    // Size is encoded in wValue (low 16 bits) / wIndex (high 16 bits), no data payload
     REQUIRE(mock.capturedControlTransfers().size() == 1);
     auto& ct = mock.capturedControlTransfers()[0];
 
-    // Size of "enable_uart=1\n" = 14 bytes
-    int32_t reportedSize;
-    std::memcpy(&reportedSize, ct.data.data(), sizeof(reportedSize));
-    CHECK(reportedSize == 14);
+    // Size of "enable_uart=1\n" = 14 bytes, encoded in wValue
+    CHECK(ct.data.empty());
+    CHECK(ct.wValue == 14);
+    CHECK(ct.wIndex == 0);
 }
 
 TEST_CASE("FileServer handles ReadFile request", "[rpiboot][fileserver]")
@@ -317,7 +324,7 @@ TEST_CASE("BootcodeLoader fails when control transfer fails", "[rpiboot][bootcod
     BootcodeLoader loader;
 
     CHECK_FALSE(loader.send(mock, ChipGeneration::BCM2711, fw.path(), cancelled));
-    CHECK_THAT(loader.lastError(), Catch::Matchers::ContainsSubstring("control transfer"));
+    CHECK_THAT(loader.lastError(), Catch::Matchers::ContainsSubstring("Control transfer failed"));
 }
 
 TEST_CASE("BootcodeLoader fails when bulk write fails", "[rpiboot][bootcode][negative]")
@@ -326,14 +333,15 @@ TEST_CASE("BootcodeLoader fails when bulk write fails", "[rpiboot][bootcode][neg
     TempFirmwareDir fw;
     fw.writeFile("bootcode4.bin", std::vector<uint8_t>(256, 0xAB));
 
-    // Let the control transfer succeed, fail the bulk write
+    // Let control transfers succeed, fail the first bulk write
+    // (the BootMessage bulk transfer in the first epWrite call)
     mock.failNextBulkWrites(1);
 
     std::atomic<bool> cancelled{false};
     BootcodeLoader loader;
 
     CHECK_FALSE(loader.send(mock, ChipGeneration::BCM2711, fw.path(), cancelled));
-    CHECK_THAT(loader.lastError(), Catch::Matchers::ContainsSubstring("Bulk write failed"));
+    CHECK_THAT(loader.lastError(), Catch::Matchers::ContainsSubstring("Bulk write stalled"));
 }
 
 TEST_CASE("BootcodeLoader fails for empty bootcode file", "[rpiboot][bootcode][negative]")
@@ -407,10 +415,11 @@ TEST_CASE("FileServer handles missing file gracefully", "[rpiboot][fileserver]")
     CHECK(server.run(mock, fw.path(), nullptr, cancelled));
 
     // Should have sent a control transfer with size=0 for the missing file
+    // Size is encoded in wValue/wIndex, no data payload
     REQUIRE(!mock.capturedControlTransfers().empty());
-    int32_t reportedSize;
-    std::memcpy(&reportedSize, mock.capturedControlTransfers()[0].data.data(), sizeof(reportedSize));
-    CHECK(reportedSize == 0);
+    CHECK(mock.capturedControlTransfers()[0].wValue == 0);
+    CHECK(mock.capturedControlTransfers()[0].wIndex == 0);
+    CHECK(mock.capturedControlTransfers()[0].data.empty());
 }
 
 TEST_CASE("FileServer returns false on short bulk read", "[rpiboot][fileserver][negative]")
@@ -502,7 +511,8 @@ TEST_CASE("resolveSideloadDir returns fastboot/ for Fastboot mode", "[rpiboot][p
     // Create a file only in the fastboot/ subdirectory
     fw.writeFile("fastboot/gadget.bin", "fastboot-payload");
 
-    // Queue: ReadFile for gadget.bin, then Done
+    // Queue: dummy return value for bootcode ep_read, then file server messages
+    mock.queueBulkReadResponse({0, 0, 0, 0});  // bootcode return value (consumed by BootcodeLoader)
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::GetFileSize, "gadget.bin"));
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::Done, ""));
 
@@ -515,19 +525,15 @@ TEST_CASE("resolveSideloadDir returns fastboot/ for Fastboot mode", "[rpiboot][p
     CHECK(ok);
 
     // Verify a control transfer was made for GetFileSize of gadget.bin
-    // with a non-zero size (the file was found in fastboot/ subdir)
+    // with a non-zero size (the file was found in fastboot/ subdir).
+    // File-server responses encode size in wValue/wIndex with no data payload.
+    // First two control transfers are from bootcode ep_write; file-server transfers follow.
     REQUIRE(!mock.capturedControlTransfers().empty());
-    // First control transfer is the bootcode header; file-server transfers follow
-    // Find the GetFileSize response (it should report 16 bytes = "fastboot-payload")
     bool foundNonZeroSize = false;
     for (const auto& ct : mock.capturedControlTransfers()) {
-        if (ct.data.size() == sizeof(int32_t)) {
-            int32_t size;
-            std::memcpy(&size, ct.data.data(), sizeof(size));
-            if (size == 16) {  // "fastboot-payload" is 16 bytes
-                foundNonZeroSize = true;
-                break;
-            }
+        if (ct.data.empty() && ct.wValue == 16) {  // "fastboot-payload" is 16 bytes
+            foundNonZeroSize = true;
+            break;
         }
     }
     CHECK(foundNonZeroSize);
@@ -545,6 +551,7 @@ TEST_CASE("resolveSideloadDir prefers secure-boot-recovery5/ for BCM2712", "[rpi
     fw.writeFile("bootcode5.bin", std::vector<uint8_t>(64, 0xBB));
 
     MockUsbTransport mock;
+    mock.queueBulkReadResponse({0, 0, 0, 0});  // bootcode return value
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::GetFileSize, "recovery.bin"));
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::Done, ""));
 
@@ -559,13 +566,9 @@ TEST_CASE("resolveSideloadDir prefers secure-boot-recovery5/ for BCM2712", "[rpi
     // The file size should be 12 ("new-for-2712") not 3 ("old")
     bool found2712Size = false;
     for (const auto& ct : mock.capturedControlTransfers()) {
-        if (ct.data.size() == sizeof(int32_t)) {
-            int32_t size;
-            std::memcpy(&size, ct.data.data(), sizeof(size));
-            if (size == 12) {
-                found2712Size = true;
-                break;
-            }
+        if (ct.data.empty() && ct.wValue == 12) {
+            found2712Size = true;
+            break;
         }
     }
     CHECK(found2712Size);
@@ -580,6 +583,7 @@ TEST_CASE("resolveSideloadDir falls back to base dir when subdir missing", "[rpi
     fw.writeFile("fallback.bin", "in-base-dir");
 
     MockUsbTransport mock;
+    mock.queueBulkReadResponse({0, 0, 0, 0});  // bootcode return value
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::GetFileSize, "fallback.bin"));
     mock.queueBulkReadResponse(makeFileMessage(FileCommand::Done, ""));
 
@@ -594,13 +598,9 @@ TEST_CASE("resolveSideloadDir falls back to base dir when subdir missing", "[rpi
     // The file should have been found in the base directory (11 bytes)
     bool foundFile = false;
     for (const auto& ct : mock.capturedControlTransfers()) {
-        if (ct.data.size() == sizeof(int32_t)) {
-            int32_t size;
-            std::memcpy(&size, ct.data.data(), sizeof(size));
-            if (size == 11) {  // "in-base-dir"
-                foundFile = true;
-                break;
-            }
+        if (ct.data.empty() && ct.wValue == 11) {  // "in-base-dir"
+            foundFile = true;
+            break;
         }
     }
     CHECK(foundFile);
