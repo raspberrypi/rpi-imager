@@ -43,7 +43,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QCryptographicHash>
-#include <QCoreApplication>
+#include <QUuid>
 #include <vector>
 #include <string>
 
@@ -353,12 +353,13 @@ namespace {
             }
 
             // 2. Extract bundled fallback chime to a temp file.
-            //    Use PID in filename to avoid symlink attacks and multi-instance collisions
+            //    Use a random UUID in filename to avoid symlink attacks
             //    (rpi-imager runs as root via pkexec, so temp file security matters).
             QFile bundled(":/sounds/chime.wav");
             if (bundled.exists()) {
                 static QString tempPath = QDir::tempPath()
-                    + QString("/rpi-imager-chime-%1.wav").arg(QCoreApplication::applicationPid());
+                    + QString("/rpi-imager-chime-%1.wav").arg(
+                        QUuid::createUuid().toString(QUuid::WithoutBraces));
 
                 // Remove any pre-existing file or symlink at this path
                 QFile::remove(tempPath);
