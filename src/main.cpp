@@ -229,6 +229,9 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(ImageWriter::staticVersion());
     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
 
+    // Log text scaling factor for debugging (all modes)
+    qDebug() << "Text scale factor:" << PlatformQuirks::detectTextScaleFactor();
+
     // Log display scaling information for debugging (embedded mode only)
     if (::isEmbeddedMode()) {
         QScreen *screen = QGuiApplication::primaryScreen();

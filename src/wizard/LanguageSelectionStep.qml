@@ -77,7 +77,7 @@ WizardStepBase {
                         Layout.fillWidth: true
                         editable: false
                         selectTextByMouse: true
-                        font.pixelSize: Style.fontSizeInput
+                        font.pointSize: Style.fontSizeInput
                         Accessible.description: qsTr("Select the language for the Raspberry Pi Imager interface")
                         onActivated: function(index) {
                             if (index >= 0 && index < _internalLanguages.length) {

@@ -110,7 +110,7 @@ ColumnLayout {
                     return qsTr("%1 SSH keys configured").arg(root.keys.length)
                 }
             }
-            font.pixelSize: Style.fontSizeFormLabel
+            font.pointSize: Style.fontSizeFormLabel
             color: Style.formLabelColor
             Layout.fillWidth: true
             Accessible.role: Accessible.StaticText
@@ -206,7 +206,7 @@ ColumnLayout {
                         }
                         return keyText
                     }
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                     font.family: "monospace"
                     color: Style.formLabelColor
                     elide: Text.ElideRight
@@ -239,7 +239,7 @@ ColumnLayout {
                 id: addKeyField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Paste key or click BROWSE to select file")
-                font.pixelSize: Style.fontSizeInput
+                font.pointSize: Style.fontSizeInput
                 Accessible.name: qsTr("SSH public key input")
                 Accessible.description: qsTr("Paste an SSH public key here or use the browse button to select a key file")
                 onAccepted: {

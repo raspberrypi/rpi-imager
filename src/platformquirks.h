@@ -88,6 +88,18 @@ namespace PlatformQuirks {
     bool isScrollInverted(bool qtInvertedFlag);
 
     /**
+     * Detect the platform's preferred text scaling factor.
+     *
+     * Returns a multiplier (1.0 = no scaling, 1.5 = 150%, etc.) reflecting
+     * the user's desktop text size preferences. On Linux, reads GSettings
+     * text-scaling-factor and font-name; on Windows, compares system font
+     * size to the default; on macOS, returns 1.0 (Retina handled by Qt).
+     *
+     * Must be called AFTER QGuiApplication is created.
+     */
+    qreal detectTextScaleFactor();
+
+    /**
      * Get the optimal device path for write I/O operations.
      * On macOS, converts /dev/diskN to /dev/rdiskN for direct I/O (bypasses buffer cache).
      * On other platforms, returns the path unchanged.

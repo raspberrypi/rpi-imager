@@ -51,7 +51,7 @@ WizardStepBase {
                     id: fieldUsername
                     Layout.fillWidth: true
                     placeholderText: qsTr("Enter your username")
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                     
                     validator: RegularExpressionValidator {
                         regularExpression: /^[a-z_][a-z0-9_-]*$/
@@ -68,7 +68,7 @@ WizardStepBase {
                     id: fieldPassword
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Saved (hidden) — leave blank to keep") : qsTr("Enter password")
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                 }
                 
                 WizardFormLabel {
@@ -81,7 +81,7 @@ WizardStepBase {
                     id: fieldPasswordConfirm
                     Layout.fillWidth: true
                     placeholderText: root.hasSavedUserPassword ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                 }
             }
             

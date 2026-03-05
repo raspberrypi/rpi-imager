@@ -41,7 +41,7 @@ BaseDialog {
     Text {
         id: titleText
         text: qsTr("Update available")
-        font.pixelSize: Style.fontSizeHeading
+        font.pointSize: Style.fontSizeHeading
         font.family: Style.fontFamilyBold
         font.bold: true
         color: Style.formLabelColor
@@ -59,7 +59,7 @@ BaseDialog {
             ? qsTr("Imager version %1 is available. Would you like to visit the website to download it?").arg(root.version)
             : qsTr("There is a newer version of Imager available. Would you like to visit the website to download it?")
         wrapMode: Text.WordWrap
-        font.pixelSize: Style.fontSizeDescription
+        font.pointSize: Style.fontSizeDescription
         font.family: Style.fontFamily
         color: Style.textDescriptionColor
         Layout.fillWidth: true

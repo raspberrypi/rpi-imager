@@ -65,7 +65,7 @@ BaseDialog {
         textFormat: Text.StyledText
         wrapMode: Text.WordWrap
         font.family: Style.fontFamily
-        font.pixelSize: Style.fontSizeDescription
+        font.pointSize: Style.fontSizeDescription
         color: Style.textDescriptionColor
         Layout.fillWidth: true
         text: root.riskText + "<br><br>" + root.systemDriveText + "<br><br>" + root.proceedText
@@ -105,7 +105,7 @@ BaseDialog {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         font.family: Style.fontFamily
-        font.pixelSize: Style.fontSizeDescription
+        font.pointSize: Style.fontSizeDescription
         color: Style.textDescriptionColor
         text: qsTr("To continue, type the exact drive name below:")
         Accessible.role: Accessible.StaticText

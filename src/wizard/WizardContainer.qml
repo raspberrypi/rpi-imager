@@ -417,7 +417,7 @@ Item {
                 Text {
                     id: sidebarHeader
                     text: qsTr("Setup steps")
-                    font.pixelSize: Style.fontSizeHeading
+                    font.pointSize: Style.fontSizeHeading
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.sidebarTextOnInactiveColor
@@ -495,7 +495,7 @@ Item {
                                     Layout.fillWidth: true
                                     Layout.alignment: Qt.AlignVCenter
                                     text: stepItem.modelData
-                                    font.pixelSize: Style.fontSizeSidebarItem
+                                    font.pointSize: Style.fontSizeSidebarItem
                                     font.family: Style.fontFamily
                                     color: (stepItem.index > root.getSidebarIndex(root.currentStep) || (stepItem.index === 3 && !root.customizationSupported))
                                                ? Style.formLabelDisabledColor
@@ -607,7 +607,7 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.alignment: Qt.AlignVCenter
                                             text: subItem.modelData
-                                            font.pixelSize: Style.fontSizeCaption
+                                            font.pointSize: Style.fontSizeCaption
                                             font.family: Style.fontFamily
                                             font.bold: subItem.isConfigured
                                             font.underline: subItem.isCurrentStep
@@ -1152,7 +1152,7 @@ Item {
         Text {
             id: titleText
             text: qsTr("Replace existing Raspberry Pi Connect token?")
-            font.pixelSize: Style.fontSizeHeading
+            font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
@@ -1172,7 +1172,7 @@ Item {
             text: qsTr("A new Raspberry Pi Connect token was received that differs from your current one.\n\n") +
                   qsTr("Do you want to overwrite the existing token?\n\n") +
                   qsTr("Warning: Only overwrite the token if you initiated this action.")
-            font.pixelSize: Style.fontSizeFormLabel
+            font.pointSize: Style.fontSizeFormLabel
             font.family: Style.fontFamily
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
@@ -1311,7 +1311,7 @@ Item {
             text: repositoryUrlDialog.isLocalFile 
                 ? qsTr("Open local repository file?")
                 : qsTr("Switch to a custom repository?")
-            font.pixelSize: Style.fontSizeHeading
+            font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
@@ -1332,7 +1332,7 @@ Item {
                 ? qsTr("You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.")
                 : qsTr("A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.\n\n") +
                   qsTr("Only accept if you trust this source and intentionally clicked a link to open this repository.")
-            font.pixelSize: Style.fontSizeFormLabel
+            font.pointSize: Style.fontSizeFormLabel
             font.family: Style.fontFamily
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
@@ -1360,7 +1360,7 @@ Item {
                 anchors.fill: parent
                 anchors.margins: Style.spacingSmall
                 text: repositoryUrlDialog.repoUrl
-                font.pixelSize: Style.fontSizeCaption
+                font.pointSize: Style.fontSizeCaption
                 font.family: "monospace"
                 color: Style.formLabelColor
                 wrapMode: Text.WrapAnywhere
