@@ -71,7 +71,7 @@ BaseDialog {
     Text {
         id: headerText
         text: qsTr("App Options")
-        font.pixelSize: Style.fontSizeLargeHeading
+        font.pointSize: Style.fontSizeLargeHeading
         font.family: Style.fontFamilyBold
         font.bold: true
         color: Style.formLabelColor
@@ -245,7 +245,7 @@ BaseDialog {
     Text {
         id: versionText
         text: qsTr("Version: %1").arg(imageWriter.constantVersion())
-        font.pixelSize: Style.fontSizeCaption
+        font.pointSize: Style.fontSizeCaption
         font.family: Style.fontFamily
         color: Style.textDescriptionColor
         Layout.fillWidth: true
@@ -424,7 +424,7 @@ BaseDialog {
         Text {
             id: confirmTitleText
             text: qsTr("Disable warnings?")
-            font.pixelSize: Style.fontSizeHeading
+            font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
@@ -440,7 +440,7 @@ BaseDialog {
             id: confirmDescriptionText
             textFormat: Text.StyledText
             wrapMode: Text.WordWrap
-            font.pixelSize: Style.fontSizeDescription
+            font.pointSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true
@@ -512,7 +512,7 @@ BaseDialog {
         Text {
             id: clearSettingsTitleText
             text: qsTr("Clear saved customisation?")
-            font.pixelSize: Style.fontSizeHeading
+            font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
@@ -528,7 +528,7 @@ BaseDialog {
             id: clearSettingsDescriptionText
             textFormat: Text.StyledText
             wrapMode: Text.WordWrap
-            font.pixelSize: Style.fontSizeDescription
+            font.pointSize: Style.fontSizeDescription
             font.family: Style.fontFamily
             color: Style.textDescriptionColor
             Layout.fillWidth: true

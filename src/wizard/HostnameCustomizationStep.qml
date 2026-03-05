@@ -61,7 +61,7 @@ WizardStepBase {
                     id: fieldHostname
                     Layout.fillWidth: true
                     placeholderText: qsTr("Enter your hostname")
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                     Accessible.description: qsTr("A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.")
                     
                     validator: RegularExpressionValidator {

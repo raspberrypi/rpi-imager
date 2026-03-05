@@ -22,7 +22,7 @@ Text {
         return null;
     }
     
-    font.pixelSize: Style.fontSizeDescription
+    font.pointSize: Style.fontSizeDescription
     font.family: Style.fontFamily
     color: Style.textDescriptionColor
     

@@ -261,14 +261,14 @@ WizardStepBase {
                 
                 Text {
                     text: "⚠"
-                    font.pixelSize: Style.fontSizeFormLabel
+                    font.pointSize: Style.fontSizeFormLabel
                     color: Style.formLabelColor
                     Accessible.ignored: true
                 }
                 
                 Text {
                     text: qsTr("Unable to download OS list. You can still use a local image file.")
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                     Layout.fillWidth: true
@@ -479,7 +479,7 @@ WizardStepBase {
                         
                         Text {
                             text: delegateItem.name
-                            font.pixelSize: Style.fontSizeFormLabel
+                            font.pointSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
                             font.bold: true
                             color: Style.formLabelColor
@@ -489,7 +489,7 @@ WizardStepBase {
                         
                         Text {
                             text: delegateItem.description
-                            font.pixelSize: Style.fontSizeDescription
+                            font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true
@@ -501,7 +501,7 @@ WizardStepBase {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                             color: Style.textMetadataColor
-                            font.pixelSize: Style.fontSizeSmall
+                            font.pointSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
                             // Hide for custom until a file is chosen; otherwise show status
                             visible: (typeof(delegateItem.url) === "string" && delegateItem.url !== "internal://custom" && delegateItem.url !== "internal://format")
@@ -525,7 +525,7 @@ WizardStepBase {
                         
                         Text {
                             text: delegateItem.release_date !== "" ? qsTr("Released: %1").arg(delegateItem.release_date) : ""
-                            font.pixelSize: Style.fontSizeSmall
+                            font.pointSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
                             color: Style.textMetadataColor
                             Layout.fillWidth: true

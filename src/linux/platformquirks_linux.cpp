@@ -1388,4 +1388,69 @@ void clearAppImageEnvironment() {
     unsetenv("LD_PRELOAD");
 }
 
+qreal detectTextScaleFactor()
+{
+    // If QT_SCALE_FACTOR is already set (embedded mode), don't add text scaling
+    // on top — the whole UI is already scaled uniformly by the launcher script.
+    if (!qgetenv("QT_SCALE_FACTOR").isEmpty()) {
+        return 1.0;
+    }
+
+    // Strategy 1: GSettings text-scaling-factor (GNOME/GTK accessibility scaling)
+    {
+        QProcess gsettings;
+        gsettings.start("gsettings", {"get", "org.gnome.desktop.interface", "text-scaling-factor"});
+        if (gsettings.waitForFinished(500)) {
+            bool ok = false;
+            qreal factor = gsettings.readAllStandardOutput().trimmed().toDouble(&ok);
+            if (ok && factor >= 0.5 && factor <= 3.0 && qAbs(factor - 1.0) > 0.05) {
+                qDebug() << "Text scale factor from GSettings text-scaling-factor:" << factor;
+                return factor;
+            }
+        }
+    }
+
+    // Strategy 2: GSettings font-name — parse size from "FontFamily Size" format
+    // e.g., "PibotoLt 14" → 14pt. Compare to 10pt baseline.
+    {
+        QProcess gsettings;
+        gsettings.start("gsettings", {"get", "org.gnome.desktop.interface", "font-name"});
+        if (gsettings.waitForFinished(500)) {
+            QString output = gsettings.readAllStandardOutput().trimmed();
+            // GSettings returns values in single quotes: 'PibotoLt 14'
+            output.remove('\'');
+            // The font size is the last whitespace-delimited token
+            int lastSpace = output.lastIndexOf(' ');
+            if (lastSpace > 0) {
+                bool ok = false;
+                qreal fontSize = output.mid(lastSpace + 1).toDouble(&ok);
+                if (ok && fontSize > 0) {
+                    const qreal baseline = 10.0;
+                    qreal factor = fontSize / baseline;
+                    if (factor >= 0.5 && factor <= 3.0 && qAbs(factor - 1.0) > 0.05) {
+                        qDebug() << "Text scale factor from GSettings font-name:" << factor
+                                 << "(font:" << output << ")";
+                        return factor;
+                    }
+                }
+            }
+        }
+    }
+
+    // Strategy 3: GDK_DPI_SCALE environment variable
+    {
+        QByteArray gdkDpiScale = qgetenv("GDK_DPI_SCALE");
+        if (!gdkDpiScale.isEmpty()) {
+            bool ok = false;
+            qreal factor = gdkDpiScale.toDouble(&ok);
+            if (ok && factor >= 0.5 && factor <= 3.0) {
+                qDebug() << "Text scale factor from GDK_DPI_SCALE:" << factor;
+                return factor;
+            }
+        }
+    }
+
+    return 1.0;
+}
+
 } // namespace PlatformQuirks

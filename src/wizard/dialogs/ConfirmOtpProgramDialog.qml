@@ -59,7 +59,7 @@ BaseDialog {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 font.family: Style.fontFamily
-                font.pixelSize: Style.fontSizeDescription
+                font.pointSize: Style.fontSizeDescription
                 font.bold: true
                 color: "#C62828"
                 text: qsTr("WARNING: OTP Programming is PERMANENT and IRREVERSIBLE")
@@ -71,7 +71,7 @@ BaseDialog {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 font.family: Style.fontFamily
-                font.pixelSize: Style.fontSizeSmall
+                font.pointSize: Style.fontSizeSmall
                 color: "#C62828"
                 text: qsTr("This operation will permanently program the secure boot public key hash into the device's one-time programmable (OTP) memory. Once programmed, this device will ONLY boot images signed with the corresponding private key. This action cannot be undone.")
                 Accessible.role: Accessible.StaticText
@@ -131,7 +131,7 @@ BaseDialog {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         font.family: Style.fontFamily
-        font.pixelSize: Style.fontSizeDescription
+        font.pointSize: Style.fontSizeDescription
         color: Style.textDescriptionColor
         text: qsTr("To confirm, type the device serial number below:")
         Accessible.role: Accessible.StaticText

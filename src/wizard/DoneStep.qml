@@ -53,7 +53,7 @@ WizardStepBase {
             Text {
                 id: choicesHeading
                 text: qsTr("Your choices:")
-                font.pixelSize: Style.fontSizeHeading
+                font.pointSize: Style.fontSizeHeading
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.formLabelColor
@@ -75,7 +75,7 @@ WizardStepBase {
                 Text {
                     id: deviceLabel
                     text: CommonStrings.device
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
@@ -87,7 +87,7 @@ WizardStepBase {
                 Text {
                     id: deviceValue
                     text: wizardContainer.selectedDeviceName || CommonStrings.noDeviceSelected
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
@@ -109,7 +109,7 @@ WizardStepBase {
                 Text {
                     id: osLabel
                     text: qsTr("Operating system:")
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
@@ -121,7 +121,7 @@ WizardStepBase {
                 Text {
                     id: osValue
                     text: wizardContainer.selectedOsName || CommonStrings.noImageSelected
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
@@ -143,7 +143,7 @@ WizardStepBase {
                 Text {
                     id: storageLabel
                     text: qsTr("Storage:")
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                     Accessible.role: Accessible.StaticText
@@ -155,7 +155,7 @@ WizardStepBase {
                 Text {
                     id: storageValue
                     text: wizardContainer.selectedStorageName || CommonStrings.noStorageSelected
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
@@ -179,7 +179,7 @@ WizardStepBase {
             Text {
                 id: customizationsHeading
                 text: qsTr("Customisations applied:")
-                font.pixelSize: Style.fontSizeFormLabel
+                font.pointSize: Style.fontSizeFormLabel
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.formLabelColor
@@ -239,17 +239,17 @@ WizardStepBase {
                         id: customizationColumn
                         width: parent.width
                         property var snapshot: wizardContainer.completionSnapshot
-                        Text { text: "✓ " + CommonStrings.hostnameConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.hostnameConfigured }
-                        Text { text: "✓ " + CommonStrings.localeConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.localeConfigured }
-                        Text { text: "✓ " + CommonStrings.userAccountConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.userConfigured }
-                        Text { text: "✓ " + CommonStrings.wifiConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.wifiConfigured }
-                        Text { text: "✓ " + CommonStrings.sshEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.sshEnabled }
-                        Text { text: "✓ " + CommonStrings.piConnectEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.piConnectEnabled }
-                        Text { text: "✓ " + CommonStrings.usbGadgetEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.featUsbGadgetEnabled }
-                        Text { text: "✓ " + CommonStrings.i2cEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifI2cEnabled }
-                        Text { text: "✓ " + CommonStrings.spiEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSpiEnabled }
-                        Text { text: "✓ " + CommonStrings.onewireEnabled; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.if1WireEnabled }
-                        Text { text: "✓ " + CommonStrings.serialConfigured; font.pixelSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSerial !== "" && customizationColumn.snapshot.ifSerial !== "Disabled" }
+                        Text { text: "✓ " + CommonStrings.hostnameConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.hostnameConfigured }
+                        Text { text: "✓ " + CommonStrings.localeConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.localeConfigured }
+                        Text { text: "✓ " + CommonStrings.userAccountConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.userConfigured }
+                        Text { text: "✓ " + CommonStrings.wifiConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.wifiConfigured }
+                        Text { text: "✓ " + CommonStrings.sshEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.sshEnabled }
+                        Text { text: "✓ " + CommonStrings.piConnectEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.piConnectEnabled }
+                        Text { text: "✓ " + CommonStrings.usbGadgetEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.featUsbGadgetEnabled }
+                        Text { text: "✓ " + CommonStrings.i2cEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifI2cEnabled }
+                        Text { text: "✓ " + CommonStrings.spiEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSpiEnabled }
+                        Text { text: "✓ " + CommonStrings.onewireEnabled; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.if1WireEnabled }
+                        Text { text: "✓ " + CommonStrings.serialConfigured; font.pointSize: Style.fontSizeDescription; font.family: Style.fontFamily; color: Style.formLabelColor; visible: customizationColumn.snapshot.ifSerial !== "" && customizationColumn.snapshot.ifSerial !== "Disabled" }
                     }
                 }
                 ScrollBar.vertical: ScrollBar { policy: contentItem.implicitHeight > height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff; width: Style.scrollBarWidth }
@@ -257,7 +257,7 @@ WizardStepBase {
             Text {
                 id: ejectInstruction
                 text: root.autoEjectEnabled ? qsTr("The storage device was ejected automatically. You can now remove it safely.") : qsTr("Please eject the storage device before removing it from your computer.")
-                font.pixelSize: Style.fontSizeDescription
+                font.pointSize: Style.fontSizeDescription
                 font.family: Style.fontFamily
                 color: Style.textDescriptionColor
                 Layout.fillWidth: true

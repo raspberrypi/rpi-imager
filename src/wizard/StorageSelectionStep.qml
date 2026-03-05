@@ -132,14 +132,14 @@ WizardStepBase {
                 // Warning icon
                 Text {
                     text: "⚠"
-                    font.pixelSize: Style.fontSizeFormLabel
+                    font.pointSize: Style.fontSizeFormLabel
                     color: "white"
                 }
                 
                 Text {
                     Layout.fillWidth: true
                     text: qsTr("Could not list storage devices: %1").arg(root.enumerationErrorMessage)
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: "white"
                     wrapMode: Text.WordWrap
@@ -431,7 +431,7 @@ WizardStepBase {
                         
                         MarqueeText {
                             text: dstitem.description
-                            font.pixelSize: Style.fontSizeFormLabel
+                            font.pointSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
                             font.bold: true
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.formLabelColor
@@ -441,7 +441,7 @@ WizardStepBase {
                         
                         Text {
                             text: dstitem.isRpiboot ? qsTr("Ready for USB boot") : imageWriter.formatSize(parseFloat(dstitem.size))
-                            font.pixelSize: Style.fontSizeDescription
+                            font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textDescriptionColor
                             Layout.fillWidth: true
@@ -451,7 +451,7 @@ WizardStepBase {
                         MarqueeText {
                             text: dstitem.mountpoints.length > 0 ? 
                                   qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", ")) : ""
-                            font.pixelSize: Style.fontSizeSmall
+                            font.pointSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textMetadataColor
                             Layout.fillWidth: true
@@ -463,7 +463,7 @@ WizardStepBase {
                     // Read-only indicator
                     Text {
                         text: qsTr("Read-only")
-                        font.pixelSize: Style.fontSizeDescription
+                        font.pointSize: Style.fontSizeDescription
                         font.family: Style.fontFamily
                         color: Style.formLabelErrorColor
                         visible: dstitem.unselectable

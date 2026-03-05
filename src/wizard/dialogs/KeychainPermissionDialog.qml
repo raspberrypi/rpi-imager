@@ -45,7 +45,7 @@ BaseDialog {
     Text {
         id: titleText
         text: qsTr("Keychain Access")
-        font.pixelSize: Style.fontSizeHeading
+        font.pointSize: Style.fontSizeHeading
         font.family: Style.fontFamilyBold
         font.bold: true
         color: Style.formLabelColor
@@ -62,7 +62,7 @@ BaseDialog {
         text: qsTr("Would you like to prefill the Wi‑Fi password from the system keychain?")
         wrapMode: Text.WordWrap
         color: Style.textDescriptionColor
-        font.pixelSize: Style.fontSizeDescription
+        font.pointSize: Style.fontSizeDescription
         Layout.fillWidth: true
         Accessible.role: Accessible.StaticText
         Accessible.name: text
@@ -76,7 +76,7 @@ BaseDialog {
         text: qsTr("This will require administrator authentication on macOS.")
         wrapMode: Text.WordWrap
         color: Style.textMetadataColor
-        font.pixelSize: Style.fontSizeSmall
+        font.pointSize: Style.fontSizeSmall
         Layout.fillWidth: true
         Accessible.role: Accessible.StaticText
         Accessible.name: text

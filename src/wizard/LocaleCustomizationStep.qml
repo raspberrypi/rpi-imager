@@ -125,7 +125,7 @@ WizardStepBase {
                     Layout.fillWidth: true
                     editable: false
                     selectTextByMouse: true
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                     onActivated: {
                         // Use Qt.callLater to ensure text is fully updated
                         Qt.callLater(root.onCapitalCityChanged)
@@ -134,7 +134,7 @@ WizardStepBase {
                 Text {
                     id: capitalCityInfoIcon
                     text: "ⓘ"
-                    font.pixelSize: Style.fontSizeFormLabel
+                    font.pointSize: Style.fontSizeFormLabel
                     color: capitalCityInfoArea.containsMouse ? Style.textDescriptionColor : Style.textMetadataColor
                     Layout.alignment: Qt.AlignVCenter
 
@@ -170,7 +170,7 @@ WizardStepBase {
                     Layout.fillWidth: true
                     editable: false
                     selectTextByMouse: true
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                     onActivated: {
                         root.userChangedTimezone = true
                     }
@@ -191,7 +191,7 @@ WizardStepBase {
                     Layout.fillWidth: true
                     editable: false
                     selectTextByMouse: true
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                     onActivated: {
                         root.userChangedKeyboard = true
                     }

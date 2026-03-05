@@ -71,7 +71,7 @@ CheckBox {
                 anchors.centerIn: parent
                 text: "✓"
                 color: Style.mainBackgroundColor
-                font.pixelSize: 14
+                font.pointSize: Style.fontSizeSm
                 font.bold: true
                 visible: control.checked
             }
