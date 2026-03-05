@@ -47,7 +47,7 @@ BaseDialog {
     Text {
         id: headerText
         text: qsTr("Debug Options")
-        font.pixelSize: Style.fontSizeLargeHeading
+        font.pointSize: Style.fontSizeLargeHeading
         font.family: Style.fontFamilyBold
         font.bold: true
         color: Style.formLabelColor
@@ -64,7 +64,7 @@ BaseDialog {
     Text {
         id: warningText
         text: qsTr("⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.")
-        font.pixelSize: Style.fontSizeDescription
+        font.pointSize: Style.fontSizeDescription
         font.family: Style.fontFamily
         color: Style.formLabelErrorColor
         wrapMode: Text.WordWrap
@@ -96,7 +96,7 @@ BaseDialog {
             // Section header for I/O options
             Text {
                 text: qsTr("I/O Options")
-                font.pixelSize: Style.fontSizeFormLabel
+                font.pointSize: Style.fontSizeFormLabel
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.textDescriptionColor
@@ -133,7 +133,7 @@ BaseDialog {
                 
                 Text {
                     text: qsTr("Queue Depth:")
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.formLabelColor
                 }
@@ -169,7 +169,7 @@ BaseDialog {
                 
                 Text {
                     text: Math.round(asyncQueueDepthSlider.value)
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
@@ -184,7 +184,7 @@ BaseDialog {
                 Layout.leftMargin: Style.spacingLarge
                 visible: chkAsyncIO.checked
                 text: qsTr("Buffer memory: ~%1-%2 MB (varies by system RAM)").arg(Math.round(asyncQueueDepthSlider.value * 1)).arg(Math.round(asyncQueueDepthSlider.value * 8))
-                font.pixelSize: Style.fontSizeSmall
+                font.pointSize: Style.fontSizeSmall
                 font.family: Style.fontFamily
                 color: Style.textDescriptionColor
             }
@@ -207,7 +207,7 @@ BaseDialog {
             // Section header for debugging options
             Text {
                 text: qsTr("Debugging")
-                font.pixelSize: Style.fontSizeFormLabel
+                font.pointSize: Style.fontSizeFormLabel
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.textDescriptionColor
@@ -232,7 +232,7 @@ BaseDialog {
             // Section header for network options
             Text {
                 text: qsTr("Network Options")
-                font.pixelSize: Style.fontSizeFormLabel
+                font.pointSize: Style.fontSizeFormLabel
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.textDescriptionColor
@@ -257,7 +257,7 @@ BaseDialog {
             // Section header for workarounds
             Text {
                 text: qsTr("Workarounds")
-                font.pixelSize: Style.fontSizeFormLabel
+                font.pointSize: Style.fontSizeFormLabel
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.textDescriptionColor
@@ -280,7 +280,7 @@ BaseDialog {
                 Layout.leftMargin: Style.spacingLarge
                 visible: chkSkipEndOfDevice.checked
                 text: qsTr("⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card's real capacity!")
-                font.pixelSize: Style.fontSizeSmall
+                font.pointSize: Style.fontSizeSmall
                 font.family: Style.fontFamily
                 color: Style.formLabelErrorColor
                 wrapMode: Text.WordWrap
@@ -294,7 +294,7 @@ BaseDialog {
             // Section header for advanced features
             Text {
                 text: qsTr("Advanced Features")
-                font.pixelSize: Style.fontSizeFormLabel
+                font.pointSize: Style.fontSizeFormLabel
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.textDescriptionColor
@@ -327,7 +327,7 @@ BaseDialog {
 
                     Text {
                         text: qsTr("Current Status")
-                        font.pixelSize: Style.fontSizeDescription
+                        font.pointSize: Style.fontSizeDescription
                         font.family: Style.fontFamilyBold
                         font.bold: true
                         color: Style.textDescriptionColor
@@ -360,7 +360,7 @@ BaseDialog {
                             }
                             return lines.join("\n");
                         }
-                        font.pixelSize: Style.fontSizeSmall
+                        font.pointSize: Style.fontSizeSmall
                         font.family: Style.fontFamily
                         color: Style.formLabelColor
                         wrapMode: Text.WordWrap

@@ -6,9 +6,19 @@
 pragma Singleton
 
 import QtQuick
+import RpiImager
 
 Item {
     id: root
+
+    // === TEXT SCALING ===
+    // Platform text-scaling factor (1.0 = default, 1.5 = 150%, etc.)
+    // Reads the user's desktop font size preference via PlatformHelper.
+    readonly property real textScale: PlatformHelper.textScaleFactor
+
+    // Scale a base value by the text scaling factor, rounding to nearest int.
+    // Use for one-off values that aren't in the Style token system.
+    function scaled(base) { return Math.round(base * textScale) }
 
     // === COLORS ===
     readonly property color mainBackgroundColor: "#ffffff"
@@ -90,51 +100,52 @@ Item {
     readonly property alias fontFamilyLight: robotoLight.name
     readonly property alias fontFamilyBold: robotoBold.name
 
-    // Font sizes
+    // Font sizes (point sizes — DPI-aware, scaled by Qt based on screen logical DPI)
+    // Additionally scaled by the platform text-scaling factor.
     // Base scale (single source of truth)
-    readonly property int fontSizeXs: 12
-    readonly property int fontSizeSm: 14
-    readonly property int fontSizeMd: 16
-    readonly property int fontSizeXl: 24
+    readonly property real fontSizeXs: scaled(12)
+    readonly property real fontSizeSm: scaled(14)
+    readonly property real fontSizeMd: scaled(16)
+    readonly property real fontSizeXl: scaled(24)
 
     // Role tokens mapped to base scale
-    readonly property int fontSizeTitle: fontSizeXl
-    readonly property int fontSizeHeading: fontSizeMd
-    readonly property int fontSizeLargeHeading: fontSizeMd
-    readonly property int fontSizeFormLabel: fontSizeSm
-    readonly property int fontSizeSubtitle: fontSizeSm
-    readonly property int fontSizeDescription: fontSizeXs
-    readonly property int fontSizeInput: fontSizeXs
-    readonly property int fontSizeCaption: fontSizeXs
-    readonly property int fontSizeSmall: fontSizeXs
-    readonly property int fontSizeSidebarItem: fontSizeSm
+    readonly property real fontSizeTitle: fontSizeXl
+    readonly property real fontSizeHeading: fontSizeMd
+    readonly property real fontSizeLargeHeading: fontSizeMd
+    readonly property real fontSizeFormLabel: fontSizeSm
+    readonly property real fontSizeSubtitle: fontSizeSm
+    readonly property real fontSizeDescription: fontSizeXs
+    readonly property real fontSizeInput: fontSizeXs
+    readonly property real fontSizeCaption: fontSizeXs
+    readonly property real fontSizeSmall: fontSizeXs
+    readonly property real fontSizeSidebarItem: fontSizeSm
 
-    // === SPACING ===
-    readonly property int spacingXXSmall: 2
-    readonly property int spacingXSmall: 5
-    readonly property int spacingTiny: 8
-    readonly property int spacingSmall: 10
-    readonly property int spacingSmallPlus: 12
-    readonly property int spacingMedium: 15
-    readonly property int spacingLarge: 20
-    readonly property int spacingExtraLarge: 30
+    // === SPACING (scaled by text scale factor) ===
+    readonly property int spacingXXSmall: scaled(2)
+    readonly property int spacingXSmall: scaled(5)
+    readonly property int spacingTiny: scaled(8)
+    readonly property int spacingSmall: scaled(10)
+    readonly property int spacingSmallPlus: scaled(12)
+    readonly property int spacingMedium: scaled(15)
+    readonly property int spacingLarge: scaled(20)
+    readonly property int spacingExtraLarge: scaled(30)
 
-    // === SIZES ===
-    readonly property int buttonHeightStandard: 40
-    readonly property int buttonWidthMinimum: 120
-    readonly property int buttonWidthSkip: 150
-    
-    readonly property int sectionMaxWidth: 500
-    readonly property int sectionMargins: 24
-    readonly property int sectionPadding: 16
-    readonly property int sectionBorderWidth: 1
-    readonly property int sectionBorderRadius: 8
-    readonly property int listItemBorderRadius: 5
-    readonly property int listItemPadding: 15
-    readonly property int cardPadding: 20
-    readonly property int scrollBarWidth: 10
-    readonly property int sidebarWidth: 200
-    readonly property int sidebarItemBorderRadius: 4
+    // === SIZES (scaled by text scale factor) ===
+    readonly property int buttonHeightStandard: scaled(40)
+    readonly property int buttonWidthMinimum: scaled(120)
+    readonly property int buttonWidthSkip: scaled(150)
+
+    readonly property int sectionMaxWidth: scaled(500)
+    readonly property int sectionMargins: scaled(24)
+    readonly property int sectionPadding: scaled(16)
+    readonly property int sectionBorderWidth: 1          // not scaled — visual decoration
+    readonly property int sectionBorderRadius: 8         // not scaled — visual decoration
+    readonly property int listItemBorderRadius: 5        // not scaled — visual decoration
+    readonly property int listItemPadding: scaled(15)
+    readonly property int cardPadding: scaled(20)
+    readonly property int scrollBarWidth: scaled(10)
+    readonly property int sidebarWidth: scaled(200)
+    readonly property int sidebarItemBorderRadius: 4     // not scaled — visual decoration
     // Embedded-mode overrides (0 radius to avoid software renderer artifacts)
     readonly property int sectionBorderRadiusEmbedded: 0
     readonly property int listItemBorderRadiusEmbedded: 0
@@ -142,13 +153,13 @@ Item {
     readonly property int buttonBorderRadiusEmbedded: 0
     // Sidebar item heights
     readonly property int sidebarItemHeight: buttonHeightStandard
-    readonly property int sidebarSubItemHeight: sidebarItemHeight - 12
+    readonly property int sidebarSubItemHeight: sidebarItemHeight - scaled(12)
 
-    // === LAYOUT ===
-    readonly property int formColumnSpacing: 20
-    readonly property int formRowSpacing: 15
-    readonly property int stepContentMargins: 24
-    readonly property int stepContentSpacing: 16
+    // === LAYOUT (scaled by text scale factor) ===
+    readonly property int formColumnSpacing: scaled(20)
+    readonly property int formRowSpacing: scaled(15)
+    readonly property int stepContentMargins: scaled(24)
+    readonly property int stepContentSpacing: scaled(16)
 
     // Font loaders
     FontLoader { id: roboto;      source: "fonts/Roboto-Regular.ttf" }

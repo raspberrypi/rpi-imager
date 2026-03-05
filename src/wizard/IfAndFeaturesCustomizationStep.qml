@@ -71,7 +71,7 @@ WizardStepBase {
                         Label {
                             text: qsTr("Interfaces")
                             font.bold: true
-                            font.pixelSize: Style.fontSizeTitle
+                            font.pointSize: Style.fontSizeTitle
                             Layout.alignment: Qt.AlignLeft
                         }
 
@@ -128,7 +128,7 @@ WizardStepBase {
                                 editable: false
                                 selectTextByMouse: false
                                 activeFocusOnTab: true
-                                font.pixelSize: Style.fontSizeInput
+                                font.pointSize: Style.fontSizeInput
                                 Layout.alignment: Qt.AlignRight
                             }
                         }
@@ -147,7 +147,7 @@ WizardStepBase {
                         Label {
                             text: qsTr("Features")
                             font.bold: true
-                            font.pixelSize: Style.fontSizeTitle
+                            font.pointSize: Style.fontSizeTitle
                             Layout.alignment: Qt.AlignLeft
                         }
 
@@ -351,7 +351,7 @@ WizardStepBase {
         // Dialog content
         Text {
             text: qsTr("USB Gadget Mode can change how your device behaves and may impact connectivity and host interaction.")
-            font.pixelSize: Style.fontSizeHeading
+            font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelErrorColor
@@ -364,7 +364,7 @@ WizardStepBase {
         Text {
             textFormat: Text.RichText
             text: qsTr("Please review the <a href='%1'>documentation</a> before proceeding.").arg(chkEnableUsbGadget.helpUrl)
-            font.pixelSize: Style.fontSizeFormLabel
+            font.pointSize: Style.fontSizeFormLabel
             font.family: Style.fontFamilyBold
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
@@ -382,7 +382,7 @@ WizardStepBase {
 
         Text {
             text: qsTr("Only continue if you are sure you know what you are doing.")
-            font.pixelSize: Style.fontSizeFormLabel
+            font.pointSize: Style.fontSizeFormLabel
             font.family: Style.fontFamilyBold
             color: Style.formLabelErrorColor
             wrapMode: Text.WordWrap

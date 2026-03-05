@@ -106,7 +106,7 @@ WizardStepBase {
                 // Icon or visual indicator
                 Text {
                     text: "⚠"
-                    font.pixelSize: 48
+                    font.pointSize: 48
                     color: Style.textDescriptionColor
                     Layout.alignment: Qt.AlignHCenter
                     Accessible.ignored: true
@@ -114,7 +114,7 @@ WizardStepBase {
                 
                 Text {
                     text: qsTr("Unable to load device list")
-                    font.pixelSize: Style.fontSizeHeading
+                    font.pointSize: Style.fontSizeHeading
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
@@ -128,7 +128,7 @@ WizardStepBase {
                 
                 Text {
                     text: qsTr("The device list could not be downloaded. Please check your internet connection and try again.\n\nYou can still write a local image file by pressing Next and selecting 'Use custom' on the following screen.")
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.textDescriptionColor
                     horizontalAlignment: Text.AlignHCenter
@@ -328,7 +328,7 @@ WizardStepBase {
                         
                         Text {
                             text: hwitem.name
-                            font.pixelSize: Style.fontSizeFormLabel
+                            font.pointSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
                             font.bold: true
                             color: Style.formLabelColor
@@ -338,7 +338,7 @@ WizardStepBase {
                         
                         Text {
                             text: hwitem.description
-                            font.pixelSize: Style.fontSizeDescription
+                            font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true
@@ -348,7 +348,7 @@ WizardStepBase {
 
                         Text {
                             text: qsTr("Connected via USB")
-                            font.pixelSize: Style.fontSizeDescription
+                            font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: Style.formControlActiveColor
                             Layout.fillWidth: true

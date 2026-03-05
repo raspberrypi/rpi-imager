@@ -80,7 +80,7 @@ WizardStepBase {
             ImTextField {
                 id: fieldConnectToken
                 Layout.fillWidth: true
-                font.pixelSize: Style.fontSizeInput
+                font.pointSize: Style.fontSizeInput
                 visible: useTokenPill.checked
                 enabled: root.tokenFieldEnabled
                 persistentSelection: true
@@ -311,7 +311,7 @@ WizardStepBase {
         Text {
             id: dialogTitle
             text: qsTr("Invalid Token")
-            font.pixelSize: Style.fontSizeHeading
+            font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelErrorColor
@@ -325,7 +325,7 @@ WizardStepBase {
         Text {
             id: dialogMessage
             text: qsTr("The token you entered is not valid. Please check the token and try again, or use the 'Open Raspberry Pi Connect' button to get a valid token.")
-            font.pixelSize: Style.fontSizeFormLabel
+            font.pointSize: Style.fontSizeFormLabel
             font.family: Style.fontFamily
             color: Style.formLabelColor
             wrapMode: Text.WordWrap
