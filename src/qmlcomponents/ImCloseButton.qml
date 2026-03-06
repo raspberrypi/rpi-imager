@@ -26,6 +26,7 @@ Text {
     anchors.topMargin: 10
 
     font.family: Style.fontFamily
+    font.pointSize: Style.fontSizeSm
     font.bold: true
     
     // Accessibility properties

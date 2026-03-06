@@ -89,6 +89,7 @@ BaseDialog {
         Text {
             text: qsTr("Device: %1").arg(root.deviceModel)
             font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeDescription
             color: Style.textDescriptionColor
             Accessible.role: Accessible.StaticText
             Accessible.name: text
@@ -97,6 +98,7 @@ BaseDialog {
         Text {
             text: qsTr("Serial: %1").arg(root.deviceSerial)
             font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeDescription
             color: Style.textDescriptionColor
             visible: root.deviceSerial !== ""
             Accessible.role: Accessible.StaticText
@@ -106,6 +108,7 @@ BaseDialog {
         Text {
             text: qsTr("Key fingerprint: %1").arg(root.keyFingerprint)
             font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeSm
             font.bold: true
             color: Style.textDescriptionColor
             Accessible.role: Accessible.StaticText
@@ -140,6 +143,7 @@ BaseDialog {
 
     Text {
         font.family: Style.fontFamily
+        font.pointSize: Style.fontSizeSm
         font.bold: true
         color: Style.textDescriptionColor
         text: root.deviceSerial
@@ -150,6 +154,8 @@ BaseDialog {
     TextField {
         id: confirmInput
         Layout.fillWidth: true
+        font.family: Style.fontFamily
+        font.pointSize: Style.fontSizeInput
         placeholderText: qsTr("Type device serial number exactly")
         text: ""
         activeFocusOnTab: true
