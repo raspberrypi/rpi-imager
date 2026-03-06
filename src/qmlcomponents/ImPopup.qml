@@ -90,6 +90,7 @@ Popup {
             anchors.fill: parent
             anchors.topMargin: Style.spacingSmall
             font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeSm
             font.bold: true
             Accessible.role: Accessible.Heading
             Accessible.name: text

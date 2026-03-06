@@ -83,9 +83,10 @@ BaseDialog {
         Layout.fillWidth: true
         Accessible.role: Accessible.Grouping
         Accessible.name: qsTr("Drive information")
-        Text { 
+        Text {
             text: qsTr("Size: %1").arg(root.sizeStr)
             font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeDescription
             color: Style.textDescriptionColor
             Accessible.role: Accessible.StaticText
             Accessible.name: text
@@ -93,6 +94,7 @@ BaseDialog {
         Text {
             text: qsTr("Mounted as: %1").arg(root.mountpoints && root.mountpoints.length > 0 ? root.mountpoints.join(", ") : qsTr("Not mounted"))
             font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeDescription
             color: Style.textDescriptionColor
             Accessible.role: Accessible.StaticText
             Accessible.name: text
