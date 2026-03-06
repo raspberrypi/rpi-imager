@@ -106,7 +106,7 @@ WizardStepBase {
                 // Icon or visual indicator
                 Text {
                     text: "⚠"
-                    font.pointSize: 48
+                    font.pointSize: Math.round(48 * Style.fontScale)
                     color: Style.textDescriptionColor
                     Layout.alignment: Qt.AlignHCenter
                     Accessible.ignored: true

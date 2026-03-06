@@ -356,7 +356,7 @@ WizardStepBase {
             }
             
             width: dstlist.width
-            height: shouldHide ? 0 : 80
+            height: shouldHide ? 0 : Style.scaled(80)
             visible: !shouldHide
             
             Rectangle {

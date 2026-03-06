@@ -1453,4 +1453,9 @@ qreal detectTextScaleFactor()
     return 1.0;
 }
 
+qreal fontDpiCorrection()
+{
+    return 72.0 / 96.0;
+}
+
 } // namespace PlatformQuirks

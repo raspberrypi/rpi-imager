@@ -138,7 +138,7 @@ FocusScope {
         RowLayout {
             id: buttonRow
             Layout.fillWidth: true
-            spacing: Style.spacingMedium
+            spacing: Style.spacingSmall
             
             // Embedded mode network info on the left
             Text {
@@ -157,7 +157,7 @@ FocusScope {
             RowLayout {
                 id: customButtonArea
                 Layout.fillWidth: true
-                spacing: Style.spacingMedium
+                spacing: Style.spacingSmall
                 visible: children.length > 0
             }
             
