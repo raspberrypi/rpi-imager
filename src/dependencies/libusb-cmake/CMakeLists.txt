@@ -105,6 +105,7 @@ if(APPLE)
 elseif(UNIX)
     target_compile_definitions(usb-1.0-static PRIVATE
         OS_LINUX=1
+        _GNU_SOURCE=1
         HAVE_CLOCK_GETTIME=1
         HAVE_EVENTFD=1
         HAVE_TIMERFD=1
