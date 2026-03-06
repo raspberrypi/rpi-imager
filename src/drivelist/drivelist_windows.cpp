@@ -448,7 +448,7 @@ std::string busTypeToString(STORAGE_BUS_TYPE busType)
         case BusTypeFileBackedVirtual: return "FILEBACKEDVIRTUAL";
         case BusTypeSpaces: return "SPACES";
         case BusTypeNvme: return "NVME";
-        case BusTypeScm: return "SCM";
+        case BusTypeSCM: return "SCM";
         case BusTypeUfs: return "UFS";
         default: return "INVALID";
     }
@@ -469,7 +469,7 @@ bool getAdapterInfo(HANDLE hPhysical, DeviceDescriptor& device)
     if (DeviceIoControl(hPhysical, IOCTL_STORAGE_QUERY_PROPERTY,
                         &query, sizeof(query), &adapterDesc, sizeof(adapterDesc),
                         &bytesReturned, nullptr)) {
-        device.busType = busTypeToString(adapterDesc.BusType);
+        device.busType = busTypeToString(static_cast<STORAGE_BUS_TYPE>(adapterDesc.BusType));
         device.busVersion = std::to_string(adapterDesc.BusMajorVersion) + "." +
                            std::to_string(adapterDesc.BusMinorVersion);
         device.busVersionNull = false;
