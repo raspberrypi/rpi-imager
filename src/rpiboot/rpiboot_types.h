@@ -10,6 +10,7 @@
 #ifndef RPIBOOT_TYPES_H
 #define RPIBOOT_TYPES_H
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
