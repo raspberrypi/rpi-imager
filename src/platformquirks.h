@@ -100,6 +100,15 @@ namespace PlatformQuirks {
     qreal detectTextScaleFactor();
 
     /**
+     * Returns a multiplier to correct font point sizes for the platform's
+     * logical DPI. Qt uses 96 DPI on Windows/Linux and 72 DPI on macOS, so
+     * the same pointSize renders ~33% more pixels on Windows/Linux.
+     * Returns 72/96 ≈ 0.75 on Windows/Linux, 1.0 on macOS.
+     * Apply only to font sizes — not to layout or spacing.
+     */
+    qreal fontDpiCorrection();
+
+    /**
      * Get the optimal device path for write I/O operations.
      * On macOS, converts /dev/diskN to /dev/rdiskN for direct I/O (bypasses buffer cache).
      * On other platforms, returns the path unchanged.

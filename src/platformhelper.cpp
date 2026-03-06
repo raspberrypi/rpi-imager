@@ -36,3 +36,7 @@ qreal PlatformHelper::textScaleFactor() const
     return PlatformQuirks::detectTextScaleFactor();
 }
 
+qreal PlatformHelper::fontDpiCorrection() const
+{
+    return PlatformQuirks::fontDpiCorrection();
+}

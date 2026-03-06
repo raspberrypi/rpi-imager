@@ -12,6 +12,8 @@ import RpiImager
 CheckBox {
     id: control
     Material.accent: Style.formControlActiveColor
+    font.pointSize: Style.fontSizeSm
+    font.family: Style.fontFamily
     activeFocusOnTab: true
     
     // Export the natural/desired width for dialog sizing calculations
