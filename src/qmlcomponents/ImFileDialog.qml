@@ -301,6 +301,8 @@ BaseDialog {
         TextField {
             id: pathField
             Layout.fillWidth: true
+            font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeInput
             text: dialog._toDisplayPath(dialog.currentFolder)
             placeholderText: dialog.isSaveDialog
                 ? qsTr("Enter path or URL\u2026")
@@ -344,6 +346,8 @@ BaseDialog {
         TextField {
             id: filenameField
             Layout.fillWidth: true
+            font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeInput
             text: dialog._currentFilename
             placeholderText: qsTr("Enter filename…")
             activeFocusOnTab: dialog.isSaveDialog
