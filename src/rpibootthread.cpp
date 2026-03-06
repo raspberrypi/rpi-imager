@@ -63,7 +63,7 @@ void RpibootThread::run()
     }
 
     emit eventFirmwareSetup(static_cast<quint32>(phaseTimer.elapsed()), true,
-                            QString::fromStdString(fwDir));
+                            QString::fromStdString(fwDir.string()));
 
     if (_cancelled.load()) return;
 
