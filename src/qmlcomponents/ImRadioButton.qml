@@ -11,6 +11,8 @@ import QtQuick.Layouts
 RadioButton {
     id: control
     Material.accent: Style.formControlActiveColor
+    font.pointSize: Style.fontSizeSm
+    font.family: Style.fontFamily
     activeFocusOnTab: true
     
     // Allow custom accessibility description

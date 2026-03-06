@@ -26,6 +26,9 @@ ComboBox {
         return null;
     }
     
+    font.family: Style.fontFamily
+    font.pointSize: Style.fontSizeInput
+
     // Focus properties
     activeFocusOnTab: true
     
@@ -232,7 +235,7 @@ ComboBox {
                     anchors.rightMargin: Style.spacingTiny
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr("%1 of %2").arg(filteredModel.count).arg(root.fullModelData.length)
-                    font.pointSize: Style.fontSizeSmall - 2
+                    font.pointSize: Math.round(10 * Style.fontScale)
                     font.italic: true
                     color: Style.textMetadataColor
                 }

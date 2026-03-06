@@ -69,6 +69,9 @@ public:
      */
     Q_PROPERTY(qreal textScaleFactor READ textScaleFactor CONSTANT)
     qreal textScaleFactor() const;
+
+    Q_PROPERTY(qreal fontDpiCorrection READ fontDpiCorrection CONSTANT)
+    qreal fontDpiCorrection() const;
 };
 
 #endif // PLATFORMHELPER_H

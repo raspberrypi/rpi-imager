@@ -13,11 +13,17 @@ Item {
 
     // === TEXT SCALING ===
     // Platform text-scaling factor (1.0 = default, 1.5 = 150%, etc.)
-    // Reads the user's desktop font size preference via PlatformHelper.
+    // Reflects OS-level accessibility preferences (Windows "Make text bigger",
+    // GNOME text-scaling-factor, etc.) that Qt QML does not honour automatically.
+    // DPI normalization is handled by Qt via font.pointSize + screen logical DPI.
     readonly property real textScale: PlatformHelper.textScaleFactor
 
+    // Font-specific scale: DPI correction (72/96 on Windows/Linux, 1.0 on macOS)
+    // multiplied by the accessibility text scale. Applied only to font sizes so
+    // that layout, spacing, and button sizes are unaffected.
+    readonly property real fontScale: PlatformHelper.fontDpiCorrection * textScale
+
     // Scale a base value by the text scaling factor, rounding to nearest int.
-    // Use for one-off values that aren't in the Style token system.
     function scaled(base) { return Math.round(base * textScale) }
 
     // === COLORS ===
@@ -101,12 +107,12 @@ Item {
     readonly property alias fontFamilyBold: robotoBold.name
 
     // Font sizes (point sizes — DPI-aware, scaled by Qt based on screen logical DPI)
-    // Additionally scaled by the platform text-scaling factor.
+    // Additionally scaled by the OS accessibility text-scaling factor.
     // Base scale (single source of truth)
-    readonly property real fontSizeXs: scaled(12)
-    readonly property real fontSizeSm: scaled(14)
-    readonly property real fontSizeMd: scaled(16)
-    readonly property real fontSizeXl: scaled(24)
+    readonly property real fontSizeXs: Math.round(12 * fontScale)
+    readonly property real fontSizeSm: Math.round(14 * fontScale)
+    readonly property real fontSizeMd: Math.round(16 * fontScale)
+    readonly property real fontSizeXl: Math.round(24 * fontScale)
 
     // Role tokens mapped to base scale
     readonly property real fontSizeTitle: fontSizeXl
@@ -115,7 +121,7 @@ Item {
     readonly property real fontSizeFormLabel: fontSizeSm
     readonly property real fontSizeSubtitle: fontSizeSm
     readonly property real fontSizeDescription: fontSizeXs
-    readonly property real fontSizeInput: fontSizeXs
+    readonly property real fontSizeInput: fontSizeSm
     readonly property real fontSizeCaption: fontSizeXs
     readonly property real fontSizeSmall: fontSizeXs
     readonly property real fontSizeSidebarItem: fontSizeSm

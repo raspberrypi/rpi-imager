@@ -116,6 +116,7 @@ BaseDialog {
     Text {
         id: driveNameText
         font.family: Style.fontFamily
+        font.pointSize: Style.fontSizeSm
         font.bold: true
         color: Style.textDescriptionColor
         text: root.driveName
@@ -131,6 +132,8 @@ BaseDialog {
     TextField {
         id: nameInput
         Layout.fillWidth: true
+        font.family: Style.fontFamily
+        font.pointSize: Style.fontSizeInput
         placeholderText: qsTr("Type drive name exactly as shown above")
         text: ""
         activeFocusOnTab: true

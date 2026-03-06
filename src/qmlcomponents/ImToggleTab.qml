@@ -29,6 +29,7 @@ Button {
     }
 
     font.family: Style.fontFamily
+    font.pointSize: Style.fontSizeSm
     font.capitalization: Font.AllUppercase
 
     // Background matches ImButton when inactive, ImButtonRed when active
