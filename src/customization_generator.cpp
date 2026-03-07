@@ -72,9 +72,10 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
     const QString userPass = s.value("sshUserPassword").toString(); // crypted if present
     const QString sshPublicKey = s.value("sshPublicKey").toString().trimmed();
     const QString sshAuthorizedKeys = s.value("sshAuthorizedKeys").toString().trimmed();
-    const QString ssid = s.value("wifiSSID").toString();
-    const QString cryptedPskFromSettings = s.value("wifiPasswordCrypt").toString();
-    bool hidden = s.value("wifiHidden").toBool();
+    const bool wifiConfigured = s.value("wifiConfigured", true).toBool();
+    const QString ssid = wifiConfigured ? s.value("wifiSSID").toString() : QString();
+    const QString cryptedPskFromSettings = wifiConfigured ? s.value("wifiPasswordCrypt").toString() : QString();
+    bool hidden = wifiConfigured ? s.value("wifiHidden").toBool() : false;
     if (!hidden)
         hidden = s.value("wifiSSIDHidden").toBool();
     const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
@@ -482,7 +483,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     // Raspberry Pi Connect token provisioning via cloud-init write_files (store in user's home)
     const bool piConnectEnabled = settings.value("piConnectEnabled").toBool();
     QString cleanToken = piConnectToken.trimmed();
-    const QString ssid = settings.value("wifiSSID").toString();
+    const bool wifiConfigured = settings.value("wifiConfigured", true).toBool();
+    const QString ssid = wifiConfigured ? settings.value("wifiSSID").toString() : QString();
     const QString wifiCountry = settings.value("recommendedWifiCountry").toString().trimmed();
     
     // Determine if we need runcmd section
@@ -554,9 +556,10 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
         }
     };
     
-    const QString ssid = settings.value("wifiSSID").toString();
-    const QString cryptedPskFromSettings = settings.value("wifiPasswordCrypt").toString();
-    const bool hidden = settings.value("wifiHidden").toBool();
+    const bool wifiConfigured = settings.value("wifiConfigured", true).toBool();
+    const QString ssid = wifiConfigured ? settings.value("wifiSSID").toString() : QString();
+    const QString cryptedPskFromSettings = wifiConfigured ? settings.value("wifiPasswordCrypt").toString() : QString();
+    const bool hidden = wifiConfigured ? settings.value("wifiHidden").toBool() : false;
     const QString regDom = settings.value("recommendedWifiCountry").toString().trimmed().toUpper();
     
     // Always generate network config with eth0 DHCP configuration
