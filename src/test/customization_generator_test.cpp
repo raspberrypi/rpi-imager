@@ -487,7 +487,8 @@ TEST_CASE("CustomisationGenerator cloud-init handles SSH public key only (no use
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh-ed25519"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    // SSH keys alone should NOT grant passwordless sudo — requires explicit opt-in
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
 }
 
 TEST_CASE("CustomisationGenerator handles multiple SSH keys in .pub file", "[customization][ssh]") {
@@ -688,9 +689,60 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key1"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key2"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    // SSH keys alone should NOT grant passwordless sudo — requires explicit opt-in
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
     // Password authentication should be explicitly disabled when using public-key auth
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: false"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init passwordless sudo when explicitly enabled", "[cloudinit][userdata][sudo]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$y$j9T$test$hash";
+    settings["passwordlessSudo"] = true;
+
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "testuser");
+    QString yaml = QString::fromUtf8(userdata);
+
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init no passwordless sudo by default", "[cloudinit][userdata][sudo]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$y$j9T$test$hash";
+
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "testuser");
+    QString yaml = QString::fromUtf8(userdata);
+
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+}
+
+TEST_CASE("CustomisationGenerator systemd script passwordless sudo", "[customization][sudo]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$y$j9T$test$hash";
+    settings["passwordlessSudo"] = true;
+
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString s = QString::fromUtf8(script);
+
+    REQUIRE_THAT(s.toStdString(), ContainsSubstring("testuser ALL=(ALL) NOPASSWD:ALL"));
+    REQUIRE_THAT(s.toStdString(), ContainsSubstring("/etc/sudoers.d/010_testuser-nopasswd"));
+    REQUIRE_THAT(s.toStdString(), ContainsSubstring("chmod 0440"));
+}
+
+TEST_CASE("CustomisationGenerator systemd script no passwordless sudo by default", "[customization][sudo]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$y$j9T$test$hash";
+
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString s = QString::fromUtf8(script);
+
+    REQUIRE_THAT(s.toStdString(), !ContainsSubstring("NOPASSWD"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with password auth", "[cloudinit][userdata]") {
