@@ -105,6 +105,7 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         pubkeyArgs += shellQuote(k);
     }
 
+    const bool passwordlessSudo = s.value("passwordlessSudo").toBool();
     const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
     const QString groups = QStringLiteral("users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo");
 
@@ -177,6 +178,13 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
         line(QStringLiteral("      fi"), script);
         line(QStringLiteral("   fi"), script);
         line(QStringLiteral("fi"), script);
+    }
+
+    // Passwordless sudo configuration
+    if (passwordlessSudo && (!userName.isEmpty() || !userPass.isEmpty() || !keyList.isEmpty())) {
+        const QString sudoersFile = QStringLiteral("/etc/sudoers.d/010_") + effectiveUser + QStringLiteral("-nopasswd");
+        line(QStringLiteral("echo ") + shellQuote(effectiveUser + QStringLiteral(" ALL=(ALL) NOPASSWD:ALL")) + QStringLiteral(" >") + shellQuote(sudoersFile), script);
+        line(QStringLiteral("chmod 0440 ") + shellQuote(sudoersFile), script);
     }
 
     if (!ssid.isEmpty()) {
@@ -372,6 +380,7 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     const QString userPass = settings.value("sshUserPassword").toString(); // expected crypted if present
     const QString sshPublicKey = settings.value("sshPublicKey").toString().trimmed();
     const QString sshAuthorizedKeys = settings.value("sshAuthorizedKeys").toString().trimmed();
+    const bool passwordlessSudo = settings.value("passwordlessSudo").toBool();
     
     // User configuration is independent of SSH - generate users section when:
     // - A username with password is configured (local user account), OR
@@ -414,6 +423,8 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
                     push(QStringLiteral("    - ") + k.trimmed(), cloud);
                 }
             }
+        }
+        if (passwordlessSudo) {
             push(QStringLiteral("  sudo: ALL=(ALL) NOPASSWD:ALL"), cloud);
         }
         push(QString(), cloud); // blank line

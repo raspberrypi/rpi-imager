@@ -4,9 +4,11 @@
  */
 
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import "../qmlcomponents"
 import "components"
+import "dialogs"
 
 import RpiImager
 
@@ -89,15 +91,71 @@ WizardStepBase {
                 id: helpText
                 text: qsTr("The username must be lowercase and contain only letters, numbers, underscores, and hyphens.")
             }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacingSmall
+
+                ImCheckBox {
+                    id: checkPasswordlessSudo
+                    text: qsTr("Enable passwordless sudo")
+                    checked: false
+                    Accessible.description: qsTr("Allow this user to run sudo commands without entering a password.")
+                    onCheckedChanged: {
+                        if (checked) {
+                            passwordlessSudoWarningDialog.askForConfirmation()
+                        }
+                    }
+                }
+
+                Text {
+                    id: sudoInfoIcon
+                    readonly property string infoText: qsTr("Allows any process running as this user to gain full root privileges without a password. Only enable this if you have a specific need, such as automated scripts or headless operation.")
+
+                    text: "ⓘ"
+                    font.pointSize: Style.fontSizeFormLabel
+                    color: sudoInfoArea.containsMouse || activeFocus ? Style.textDescriptionColor : Style.textMetadataColor
+                    Layout.alignment: Qt.AlignVCenter
+
+                    activeFocusOnTab: true
+                    focusPolicy: Qt.TabFocus
+
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: qsTr("Passwordless sudo information: ") + infoText
+
+                    ToolTip.text: infoText
+                    ToolTip.visible: sudoInfoArea.containsMouse || activeFocus
+
+                    MouseArea {
+                        id: sudoInfoArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.WhatsThisCursor
+                        acceptedButtons: Qt.NoButton
+                    }
+                }
+            }
         }
     }
     ]
+
+    PasswordlessSudoWarningDialog {
+        id: passwordlessSudoWarningDialog
+        imageWriter: root.imageWriter
+        parent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : undefined
+        anchors.centerIn: parent
+        visible: false
+
+        onCancelled: {
+            checkPasswordlessSudo.checked = false
+        }
+    }
 
     Component.onCompleted: {
         // Include labels before their corresponding fields so users hear the explanation first
         root.registerFocusGroup("user_fields", function(){
             // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
-            return [labelUsername, fieldUsername, labelPassword, fieldPassword, labelPasswordConfirm, fieldPasswordConfirm, helpText]
+            return [labelUsername, fieldUsername, labelPassword, fieldPassword, labelPasswordConfirm, fieldPasswordConfirm, helpText, checkPasswordlessSudo, sudoInfoIcon]
         }, 0)
         
         // Set initial focus on the username field
@@ -113,6 +171,8 @@ WizardStepBase {
             // Indicate a saved (crypted) password exists; do not prefill fields
             root.hasSavedUserPassword = true
         }
+        // Note: passwordlessSudo is intentionally NOT loaded from persisted settings.
+        // It must be explicitly enabled each session due to security implications.
     }
     
     // Validation
@@ -141,6 +201,12 @@ WizardStepBase {
             // Persist for future sessions
             imageWriter.setPersistedCustomisationSetting("sshUserName", usernameText)
             imageWriter.setPersistedCustomisationSetting("sshUserPassword", cryptedPwd)
+            // Passwordless sudo (session-only, never persisted)
+            if (checkPasswordlessSudo.checked) {
+                wizardContainer.customizationSettings.passwordlessSudo = true
+            } else {
+                delete wizardContainer.customizationSettings.passwordlessSudo
+            }
         } else if (usernameText.length > 0 && root.hasSavedUserPassword && fieldPassword.text.length === 0) {
             // User has a username (entered or kept from saved) and saved password (keeping it)
             wizardContainer.customizationSettings.sshUserName = usernameText
@@ -148,10 +214,17 @@ WizardStepBase {
             wizardContainer.userConfigured = true
             // Persist username (password already persisted)
             imageWriter.setPersistedCustomisationSetting("sshUserName", usernameText)
+            // Passwordless sudo (session-only, never persisted)
+            if (checkPasswordlessSudo.checked) {
+                wizardContainer.customizationSettings.passwordlessSudo = true
+            } else {
+                delete wizardContainer.customizationSettings.passwordlessSudo
+            }
         } else if (usernameText.length === 0 && fieldPassword.text.length === 0 && fieldPasswordConfirm.text.length === 0) {
             // User cleared all fields -> remove from runtime settings
             delete wizardContainer.customizationSettings.sshUserName
             delete wizardContainer.customizationSettings.sshUserPassword
+            delete wizardContainer.customizationSettings.passwordlessSudo
             wizardContainer.userConfigured = false
             // Remove from persistence
             imageWriter.removePersistedCustomisationSetting("sshUserName")
