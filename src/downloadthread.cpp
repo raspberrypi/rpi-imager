@@ -1702,6 +1702,8 @@ bool DownloadThread::_verify()
 {
     _lastVerifyNow = 0;
     _verifyTotal = _file->Tell();
+    _verifyThroughputBytes = 0;
+    _verifyThroughputTimer.start();
     
     // Use adaptive buffer size based on file size and system memory for optimal verification performance
     size_t verifyBufferSize = SystemMemoryManager::instance().getAdaptiveVerifyBufferSize(_verifyTotal);
@@ -1743,7 +1745,22 @@ bool DownloadThread::_verify()
 
         _verifyhash.addData(verifyBuf, static_cast<qint64>(lenRead));
         _lastVerifyNow += static_cast<qint64>(lenRead);
-        
+
+        // Calculate and emit verification read throughput periodically
+        {
+            qint64 elapsed = _verifyThroughputTimer.elapsed();
+            if (elapsed >= 500) {
+                qint64 bytesDelta = _lastVerifyNow.load() - _verifyThroughputBytes;
+                quint32 throughputKBps = 0;
+                if (bytesDelta > 0) {
+                    throughputKBps = static_cast<quint32>((bytesDelta * 1000) / (elapsed * 1024));
+                }
+                _verifyThroughputBytes = _lastVerifyNow.load();
+                _verifyThroughputTimer.restart();
+                emit bottleneckStateChanged(BottleneckState::Verifying, throughputKBps);
+            }
+        }
+
         // Allow subclasses to emit progress updates
         _onVerifyProgress();
     }

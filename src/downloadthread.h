@@ -314,7 +314,11 @@ protected:
     
     void _initializeSyncConfiguration();
     void _updateBottleneckState();
-    
+
+    // Verification throughput tracking
+    qint64 _verifyThroughputBytes{0};
+    QElapsedTimer _verifyThroughputTimer;
+
     // Bottleneck detection state
     BottleneckState _currentBottleneck;
     QElapsedTimer _bottleneckTimer;
