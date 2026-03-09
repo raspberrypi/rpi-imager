@@ -599,7 +599,6 @@ WizardStepBase {
     function onVerifyProgress(now, total) {
         if (root.isWriting) {
             root.isVerifying = true
-            root.bottleneckStatus = ""  // Clear write bottleneck during verification
             root.operationWarning = ""  // Clear write warnings during verification
             var progress = total > 0 ? (now / total) * 100 : 0
             progressBar.value = progress
