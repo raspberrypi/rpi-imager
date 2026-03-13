@@ -522,8 +522,23 @@ TEST_CASE("CustomisationGenerator cloud-init handles multiple SSH keys in .pub f
     
     // Both keys should be in separate YAML list items
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key1"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-ed25519 AAAAC3...key2"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-rsa AAAAB3...key1 user@host1\""));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-ed25519 AAAAC3...key2 user@host2\""));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init quotes SSH keys with YAML-special characters", "[cloudinit][ssh]") {
+    // Regression test for https://github.com/raspberrypi/rpi-imager/issues/1544
+    // SSH keys with a colon in the comment (e.g. "ssh:") were emitted unquoted,
+    // causing YAML to interpret them as mapping keys instead of strings.
+    QVariantMap settings;
+    settings["sshPublicKey"] = "sk-ssh-ed25519@openssh.com AAAAGnNr...DMtkAAAABHNzaDo= ssh:";
+
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    // Key must be quoted to prevent YAML from interpreting "ssh:" as a mapping key
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"sk-ssh-ed25519@openssh.com AAAAGnNr...DMtkAAAABHNzaDo= ssh:\""));
 }
 
 TEST_CASE("CustomisationGenerator handles very long hostname", "[customization][negative]") {
@@ -686,8 +701,8 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys",
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("enable_ssh: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key1"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key2"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-rsa AAAAB3...key1\""));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-rsa AAAAB3...key2\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
     // SSH keys alone should NOT grant passwordless sudo — requires explicit opt-in
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
@@ -1247,9 +1262,9 @@ TEST_CASE("Independent step: SSH with public keys only", "[cloudinit][independen
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: defaultuser"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-ed25519"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-ed25519"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
-    
+
     // No other customization should be present
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));

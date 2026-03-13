@@ -414,13 +414,13 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
             if (!sshAuthorizedKeys.isEmpty()) {
                 const QStringList keys = sshAuthorizedKeys.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
                 for (const QString& k : keys) {
-                    push(QStringLiteral("    - ") + k.trimmed(), cloud);
+                    push(QStringLiteral("    - \"") + k.trimmed() + QStringLiteral("\""), cloud);
                 }
             } else {
                 // Split sshPublicKey by newlines to handle .pub files with multiple keys
                 const QStringList keys = sshPublicKey.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
                 for (const QString& k : keys) {
-                    push(QStringLiteral("    - ") + k.trimmed(), cloud);
+                    push(QStringLiteral("    - \"") + k.trimmed() + QStringLiteral("\""), cloud);
                 }
             }
         }
