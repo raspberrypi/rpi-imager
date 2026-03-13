@@ -777,9 +777,8 @@ Item {
             // Before entering the writing step, apply customization (when supported)
             if (nextIndex === stepWriting) {
                 if (customizationSupported && imageWriter) {
-                    // Pass the complete customizationSettings object directly to the generator
-                    // This includes both persistent settings (hostname, wifi, etc.) and
-                    // ephemeral settings (piConnectEnabled) from the current wizard session
+                    // Inject session-ephemeral flags so the generator can gate on them
+                    customizationSettings.wifiConfigured = wifiConfigured
                     imageWriter.applyCustomisationFromSettings(customizationSettings)
                 }
                 
