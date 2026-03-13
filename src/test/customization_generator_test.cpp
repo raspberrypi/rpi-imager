@@ -215,6 +215,7 @@ TEST_CASE("CustomisationGenerator reference script comparison", "[customization]
 
 TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "TestNetwork";
     settings["wifiPasswordCrypt"] = "hashed_password_here";
     settings["recommendedWifiCountry"] = "GB";
@@ -237,6 +238,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
 
 TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK (open network)", "[customization]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OpenNetwork";
     settings["wifiPasswordCrypt"] = "";  // Empty PSK for open network
     settings["recommendedWifiCountry"] = "US";
@@ -371,6 +373,7 @@ TEST_CASE("CustomisationGenerator handles empty password with username", "[custo
 
 TEST_CASE("CustomisationGenerator handles special characters in WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Test Network (5GHz)";
     settings["wifiPasswordCrypt"] = "fakehash";
     settings["recommendedWifiCountry"] = "US";
@@ -385,6 +388,7 @@ TEST_CASE("CustomisationGenerator handles special characters in WiFi SSID", "[cu
 
 TEST_CASE("CustomisationGenerator handles quotes in WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "My \"Quoted\" Network";
     settings["wifiPasswordCrypt"] = "fakehash";
     settings["recommendedWifiCountry"] = "US";
@@ -400,6 +404,7 @@ TEST_CASE("CustomisationGenerator handles quotes in WiFi SSID", "[customization]
 
 TEST_CASE("CustomisationGenerator handles backslashes in WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Network\\With\\Backslashes";
     settings["wifiPasswordCrypt"] = "fakehash";
     settings["recommendedWifiCountry"] = "US";
@@ -413,6 +418,7 @@ TEST_CASE("CustomisationGenerator handles backslashes in WiFi SSID", "[customiza
 
 TEST_CASE("CustomisationGenerator handles non-ASCII UTF-8 WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Café ☕ 日本語";
     settings["wifiPasswordCrypt"] = "fakehash";  // Pre-computed PSK (passwords are ASCII-only per WPA2 spec)
     settings["recommendedWifiCountry"] = "FR";
@@ -853,6 +859,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi", "[cloudinit][network]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "TestNetwork";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     settings["recommendedWifiCountry"] = "DE";
@@ -883,6 +890,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidden WiFi", "[cloudinit][network]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "HiddenNetwork";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     settings["wifiHidden"] = true;
@@ -905,6 +913,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidde
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config for open WiFi (no password)", "[cloudinit][network]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OpenNetwork";
     settings["wifiPasswordCrypt"] = "";  // Empty = open network
     settings["recommendedWifiCountry"] = "US";
@@ -961,6 +970,7 @@ TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[clo
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with special characters in SSID", "[cloudinit][network][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Test \"Network\" (5GHz)";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     
@@ -979,6 +989,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with speci
 
 TEST_CASE("CustomisationGenerator cloud-init network-config escapes backslashes in SSID", "[cloudinit][network][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Network\\With\\Backslashes";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     
@@ -993,6 +1004,7 @@ TEST_CASE("CustomisationGenerator cloud-init network-config escapes backslashes 
 TEST_CASE("CustomisationGenerator cloud-init network-config escapes control characters in SSID", "[cloudinit][network][negative]") {
     QVariantMap settings;
     // SSID with tab, newline, and carriage return (valid per IEEE 802.11)
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = QString("Net\twork\nWith\rControl");
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     
@@ -1006,6 +1018,7 @@ TEST_CASE("CustomisationGenerator cloud-init network-config escapes control char
 TEST_CASE("CustomisationGenerator cloud-init network-config escapes mixed special characters in SSID", "[cloudinit][network][negative]") {
     QVariantMap settings;
     // Pathological SSID: quotes, backslashes, and control chars together
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = QString("Test\\\"Net\twork\"");
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     
@@ -1182,6 +1195,7 @@ TEST_CASE("Independent step: User credentials only (no SSH)", "[cloudinit][indep
 TEST_CASE("Independent step: WiFi only", "[cloudinit][independent][wifi]") {
     // WiFi step configured alone - no other customization
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "MyHomeNetwork";
     settings["wifiPasswordCrypt"] = "hashedwifipassword123";
     settings["recommendedWifiCountry"] = "GB";
@@ -1434,6 +1448,7 @@ TEST_CASE("Combined steps: User + WiFi (no SSH)", "[cloudinit][combined]") {
     QVariantMap settings;
     settings["sshUserName"] = "wifiuser";
     settings["sshUserPassword"] = "$6$salt$hash";
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OfficeWiFi";
     settings["wifiPasswordCrypt"] = "wifihash";
     
@@ -1506,6 +1521,7 @@ TEST_CASE("Combined steps: Full customization without SSH", "[cloudinit][combine
     settings["keyboard"] = "de";
     settings["sshUserName"] = "fulluser";
     settings["sshUserPassword"] = "$6$salt$hash";
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "FullWiFi";
     settings["wifiPasswordCrypt"] = "wifihash";
     settings["recommendedWifiCountry"] = "DE";
@@ -1544,6 +1560,7 @@ TEST_CASE("Combined steps: Full customization with SSH", "[cloudinit][combined]"
     settings["sshUserName"] = "sshuser";
     settings["sshUserPassword"] = "$6$salt$hash";
     settings["sshPasswordAuth"] = true;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "SSHWiFi";
     settings["wifiPasswordCrypt"] = "wifihash";
     settings["enableSPI"] = true;
