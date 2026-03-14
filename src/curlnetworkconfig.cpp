@@ -8,6 +8,12 @@
 #include "platformquirks.h"
 #include <QMutexLocker>
 #include <QDebug>
+#if __has_include(<QNetworkProxy>)
+#define HAS_QT_NETWORK_PROXY
+#include <QNetworkProxy>
+#include <QNetworkProxyFactory>
+#include <QNetworkProxyQuery>
+#endif
 
 // Static member initialization
 std::atomic<bool> CurlNetworkConfig::_curlInitialized{false};
@@ -89,6 +95,39 @@ void CurlNetworkConfig::setUserAgent(const QByteArray &ua)
 {
     QMutexLocker locker(&_mutex);
     _userAgent = ua;
+}
+
+void CurlNetworkConfig::detectSystemProxy(const QUrl &url)
+{
+#ifdef HAS_QT_NETWORK_PROXY
+    QMutexLocker locker(&_mutex);
+    if (_proxyDetected || !_proxy.isEmpty()) {
+        return;  // Already have a proxy configured (either detected or user-set)
+    }
+    _proxyDetected = true;  // Only attempt detection once
+
+    QNetworkProxyQuery npq{url};
+    QList<QNetworkProxy> proxyList = QNetworkProxyFactory::systemProxyForQuery(npq);
+    if (!proxyList.isEmpty()) {
+        QNetworkProxy proxy = proxyList.first();
+        if (proxy.type() != QNetworkProxy::NoProxy) {
+            QUrl proxyUrl;
+            proxyUrl.setScheme(proxy.type() == QNetworkProxy::Socks5Proxy ? "socks5h" : "http");
+            proxyUrl.setHost(proxy.hostName());
+            proxyUrl.setPort(proxy.port());
+
+            if (!proxy.user().isEmpty()) {
+                proxyUrl.setUserName(proxy.user());
+                proxyUrl.setPassword(proxy.password());
+            }
+
+            _proxy = proxyUrl.toEncoded();
+            qDebug() << "System proxy detected:" << proxyUrl.host() << ":" << proxyUrl.port();
+        }
+    }
+#else
+    Q_UNUSED(url)
+#endif
 }
 
 void CurlNetworkConfig::applyCurlSettings(CURL *curl, FetchProfile profile, char *errorBuffer) const

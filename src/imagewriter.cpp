@@ -1839,7 +1839,21 @@ void ImageWriter::onOsListFetchError(const QString &errorMessage, const QUrl &ur
     }
 
     qDebug() << "Failed to fetch URL [" << url << "]:" << errorMessage;
-    
+
+    // If the top-level OS list fetch fails with a connection error and we haven't
+    // tried IPv4-only yet, retry with IPv4-only mode. This handles Windows 11 systems
+    // with broken IPv6 routing where DNS returns AAAA records but IPv6 connections
+    // time out, while the browser's Happy Eyeballs falls back to IPv4 transparently.
+    if (isTopLevelRequest && _completeOsList.isEmpty()
+        && !CurlNetworkConfig::instance().ipv4Only()
+        && PlatformQuirks::hasNetworkConnectivity()) {
+        qDebug() << "OS list fetch failed with connectivity present - retrying with IPv4-only";
+        CurlNetworkConfig::instance().setIPv4Only(true);
+        _debugIPv4Only = true;
+        beginOSListFetch();
+        return;
+    }
+
     if (isTopLevelRequest) {
         if (_completeOsList.isEmpty()) {
             // No data at all - notify UI of offline state
@@ -1974,6 +1988,10 @@ void ImageWriter::beginOSListFetch() {
     if (!preflightValidateUrl(topUrl, QStringLiteral("repository:"))) {
         return;
     }
+
+    // Auto-detect system proxy (e.g. corporate proxy configured in Windows Internet Options).
+    // This is a no-op if a proxy was already detected or manually configured.
+    CurlNetworkConfig::instance().detectSystemProxy(topUrl);
 
     // Create a CurlFetcher to fetch the OS list
     auto *fetcher = new CurlFetcher(this);
