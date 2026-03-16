@@ -6,6 +6,7 @@
 #include "fastbootflashthread.h"
 #include "rpiboot/libusb_transport.h"
 #include "fastboot/fastboot_protocol.h"
+#include "fastboot/sparse_encoder.h"
 #include "curlnetworkconfig.h"
 #include "acceleratedcryptographichash.h"
 #include "ringbuffer.h"
@@ -85,6 +86,10 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
         return true;
 
     emit preparationStatusUpdate(tr("Applying OS customisation..."));
+    qDebug() << "applyCustomisation: initFormat=" << _initFormat
+             << "config=" << _config.size() << "bytes"
+             << "cmdline=" << _cmdline.size() << "bytes"
+             << "cloudinit=" << _cloudinit.size() << "bytes";
 
     static const std::string BOOT = "/boot/firmware/";
 
@@ -483,61 +488,124 @@ void FastbootFlashThread::run()
     std::thread downloadThread([this]() { downloadProducer(); });
     std::thread decompressThread([this]() { decompressConsumerProducer(); });
 
-    // 6. Flash consumer loop (runs in this thread)
-    quint64 totalFlashed = 0;
+    // 6. Flash consumer loop — sparse-encode and stream to device
+    //
+    // The sparse encoder converts the raw decompressed image into Android
+    // sparse image segments.  Zero-filled regions become DONT_CARE chunks
+    // (never transferred), dramatically reducing write time.
+    fastboot::SparseEncoder sparse(maxDownloadSize, _extractLen);
+    quint64 totalFed = 0;
+    bool flashError = false;
+
+    // Helper: send one sparse segment via download + flash
+    uint32_t segmentIndex = 0;
+    auto sendSegment = [&](std::span<const uint8_t> seg) -> bool {
+        rpiboot::ProgressCallback progressCb = [this, totalFed](
+            uint64_t current, uint64_t /*total*/, const std::string&) {
+            emit writeProgress(totalFed,
+                               _extractLen > 0 ? _extractLen : totalFed);
+        };
+
+        qDebug() << "FastbootFlashThread: downloading segment" << segmentIndex
+                 << "(" << seg.size() << "bytes)";
+
+        if (!fb.download(*transport, seg, progressCb, _cancelled)) {
+            qDebug() << "FastbootFlashThread: download FAILED for segment"
+                     << segmentIndex << ":" << QString::fromStdString(fb.lastError());
+            if (!_cancelled.load())
+                emit error(tr("Fastboot download failed: %1")
+                           .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+
+        qDebug() << "FastbootFlashThread: flashing segment" << segmentIndex;
+        if (!fb.flash(*transport, "mmcblk0", 120000)) {
+            qDebug() << "FastbootFlashThread: flash FAILED for segment"
+                     << segmentIndex << ":" << QString::fromStdString(fb.lastError());
+            if (!_cancelled.load())
+                emit error(tr("Fastboot flash failed: %1")
+                           .arg(QString::fromStdString(fb.lastError())));
+            return false;
+        }
+
+        qDebug() << "FastbootFlashThread: segment" << segmentIndex << "OK";
+        ++segmentIndex;
+        return true;
+    };
 
     while (!_cancelled.load()) {
         auto *slot = _decompressedRing->acquireReadSlot(100);
         if (!slot) {
-            if (_decompressedRing->isCancelled()) {
-                // Pipeline error — check for error messages from producer threads
+            if (_decompressedRing->isCancelled())
+                break;
+            if (_decompressedRing->isComplete()) {
+                sparse.finish();
                 break;
             }
-            if (_decompressedRing->isComplete())
-                break;  // All data consumed
             continue;
         }
 
-        // Incremental hash
+        // Incremental hash on raw decompressed data (before sparse encoding)
         if (_imageHash)
             _imageHash->addData(slot->data, static_cast<int>(slot->size));
 
-        // Download this chunk to the device
-        auto slotSpan = std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(slot->data), slot->size);
-
-        rpiboot::ProgressCallback progressCb = [this, totalFlashed](
-            uint64_t current, uint64_t /*total*/, const std::string&) {
-            emit writeProgress(totalFlashed + current,
-                               _extractLen > 0 ? _extractLen : totalFlashed + current);
-        };
-
-        if (!fb.download(*transport, slotSpan, progressCb, _cancelled)) {
-            _decompressedRing->releaseReadSlot(slot);
-            if (!_cancelled.load())
-                emit error(tr("Fastboot download failed: %1")
-                           .arg(QString::fromStdString(fb.lastError())));
-            break;
-        }
-
-        // Flash the downloaded chunk to eMMC
-        if (!fb.flash(*transport, "/dev/mmcblk0", 120000)) {
-            _decompressedRing->releaseReadSlot(slot);
-            if (!_cancelled.load())
-                emit error(tr("Fastboot flash failed: %1")
-                           .arg(QString::fromStdString(fb.lastError())));
-            break;
-        }
-
-        totalFlashed += slot->size;
+        totalFed += slot->size;
+        sparse.feed(slot->data, slot->size);
         _decompressedRing->releaseReadSlot(slot);
 
-        emit writeProgress(totalFlashed,
-                           _extractLen > 0 ? _extractLen : totalFlashed);
-
-        // Emit download progress too
-        emit downloadProgress(_dlnow.load(), _dltotal.load());
+        // Send any completed sparse segment
+        {
+            fastboot::SparseEncoder::SegmentStats segStats;
+            auto seg = sparse.takeSegment(&segStats);
+            if (!seg.empty()) {
+                qDebug() << "FastbootFlashThread: segment" << segmentIndex
+                         << "blocks=" << segStats.blocks
+                         << "(raw=" << segStats.rawBlocks
+                         << "fill=" << segStats.fillBlocks
+                         << "skip=" << segStats.dontCareBlocks << ")"
+                         << "chunks=" << segStats.chunks
+                         << "wire=" << segStats.wireBytes << "bytes";
+                if (!sendSegment(seg)) {
+                    flashError = true;
+                } else {
+                    emit writeProgress(totalFed,
+                                       _extractLen > 0 ? _extractLen : totalFed);
+                    emit downloadProgress(_dlnow.load(), _dltotal.load());
+                }
+            }
+        }
+        if (flashError)
+            break;
     }
+
+    // Send final segment after finish()
+    if (!flashError && !_cancelled.load()) {
+        fastboot::SparseEncoder::SegmentStats segStats;
+        auto seg = sparse.takeSegment(&segStats);
+        if (!seg.empty()) {
+            qDebug() << "FastbootFlashThread: final segment" << segmentIndex
+                     << "blocks=" << segStats.blocks
+                     << "(raw=" << segStats.rawBlocks
+                     << "fill=" << segStats.fillBlocks
+                     << "skip=" << segStats.dontCareBlocks << ")"
+                     << "wire=" << segStats.wireBytes << "bytes";
+            if (!sendSegment(seg))
+                flashError = true;
+        }
+    }
+
+    if (!flashError && !_cancelled.load()) {
+        qDebug() << "Sparse stats: raw=" << sparse.rawBlockCount()
+                 << "fill=" << sparse.fillBlockCount()
+                 << "dontcare=" << sparse.dontCareBlockCount()
+                 << "total=" << sparse.totalBlocksProcessed();
+    }
+
+    qDebug() << "FastbootFlashThread: flash loop ended —"
+             << "flashError=" << flashError
+             << "cancelled=" << _cancelled.load()
+             << "totalFed=" << totalFed
+             << "segments=" << segmentIndex;
 
     // 7. Wait for pipeline threads to finish
     if (_cancelled.load()) {
@@ -575,8 +643,12 @@ void FastbootFlashThread::run()
     }
 
     // 9. Apply OS customisation via fastboot file transfer
-    if (!applyCustomisation(fb, *transport))
+    qDebug() << "FastbootFlashThread: applying OS customisation...";
+    if (!applyCustomisation(fb, *transport)) {
+        qDebug() << "FastbootFlashThread: customisation FAILED";
         return;
+    }
+    qDebug() << "FastbootFlashThread: customisation OK";
 
     // 10. Finalize
     emit finalizing();
@@ -588,6 +660,6 @@ void FastbootFlashThread::run()
         // Non-fatal — flash succeeded even if reboot fails
     }
 
-    qDebug() << "FastbootFlashThread: flash complete, total" << totalFlashed << "bytes";
+    qDebug() << "FastbootFlashThread: flash complete, total" << totalFed << "bytes";
     emit success();
 }

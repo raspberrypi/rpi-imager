@@ -396,6 +396,35 @@ add_custom_target(test_fastboot_protocol
     COMMENT "Running fastboot protocol tests"
 )
 
+# Sparse encoder tests
+add_executable(sparse_encoder_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../fastboot/sparse_encoder.cpp
+    sparse_encoder_test.cpp
+)
+
+target_link_libraries(sparse_encoder_test PRIVATE
+    Catch2::Catch2WithMain
+)
+
+target_include_directories(sparse_encoder_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_compile_features(sparse_encoder_test PRIVATE cxx_std_20)
+target_compile_options(sparse_encoder_test PRIVATE
+    -Wall -Wextra -Wpedantic
+    $<$<CONFIG:Debug>:-g -O0>
+)
+catch_discover_tests(sparse_encoder_test)
+
+add_custom_target(test_sparse_encoder
+    COMMAND sparse_encoder_test
+    DEPENDS sparse_encoder_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running sparse encoder tests"
+)
+
 # Hardware integration tests (gated by RPIBOOT_TEST_DEVICE env var)
 add_executable(rpiboot_integration_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../rpiboot/rpiboot_types.h
@@ -454,7 +483,7 @@ add_custom_target(test_rpiboot_integration
 
 # Combined target for all rpiboot tests
 add_custom_target(test_rpiboot
-    DEPENDS rpiboot_protocol_test rpiboot_bootfiles_test fastboot_protocol_test
+    DEPENDS rpiboot_protocol_test rpiboot_bootfiles_test fastboot_protocol_test sparse_encoder_test
     COMMENT "Running all rpiboot unit tests"
 )
 

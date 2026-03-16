@@ -11,12 +11,17 @@
 ;   0x2711 - BCM2711   (Compute Module 4, Pi 4)
 ;   0x2712 - BCM2712   (Compute Module 5, Pi 5)
 ;
+; Also covers the RPi fastboot gadget that enumerates after rpiboot sideloads
+; the fastboot firmware:
+;
+;   VID 0x18D1 (Google) PID 0x4E40 - RPi Fastboot gadget
+;
 ; SPDX-License-Identifier: Apache-2.0
 ; Copyright (C) 2025 Raspberry Pi Ltd
 ;
 ; ---- Signing note -------------------------------------------------------
 ; For production release, generate and sign a catalog file:
-;   inf2cat /driver:<dir containing this inf> /os:10_x64,10_arm64
+;   inf2cat /driver:<dir containing this inf> /os:10_X64,10_VB_ARM64
 ;   signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a rpiboot-winusb.cat
 ; Then uncomment the CatalogFile line below.
 ; -------------------------------------------------------------------------
@@ -30,21 +35,31 @@ DriverVer   = 01/01/2025,2.0.0.0
 ; CatalogFile = rpiboot-winusb.cat
 
 [Manufacturer]
-%Provider% = Devices, NTamd64, NT
+%Provider% = Devices, NTamd64, NTarm64, NT
 
 ; ---- 64-bit device list -------------------------------------------------
 [Devices.NTamd64]
-%BCM2835% = WinUSB_Install, USB\VID_0A5C&PID_2763
-%BCM2836% = WinUSB_Install, USB\VID_0A5C&PID_2764
-%BCM2711% = WinUSB_Install, USB\VID_0A5C&PID_2711
-%BCM2712% = WinUSB_Install, USB\VID_0A5C&PID_2712
+%BCM2835%   = WinUSB_Install, USB\VID_0A5C&PID_2763
+%BCM2836%   = WinUSB_Install, USB\VID_0A5C&PID_2764
+%BCM2711%   = WinUSB_Install, USB\VID_0A5C&PID_2711
+%BCM2712%   = WinUSB_Install, USB\VID_0A5C&PID_2712
+%Fastboot%  = WinUSB_Install, USB\VID_18D1&PID_4E40
+
+; ---- ARM64 device list --------------------------------------------------
+[Devices.NTarm64]
+%BCM2835%   = WinUSB_Install, USB\VID_0A5C&PID_2763
+%BCM2836%   = WinUSB_Install, USB\VID_0A5C&PID_2764
+%BCM2711%   = WinUSB_Install, USB\VID_0A5C&PID_2711
+%BCM2712%   = WinUSB_Install, USB\VID_0A5C&PID_2712
+%Fastboot%  = WinUSB_Install, USB\VID_18D1&PID_4E40
 
 ; ---- 32-bit device list (kept for completeness) -------------------------
 [Devices.NT]
-%BCM2835% = WinUSB_Install, USB\VID_0A5C&PID_2763
-%BCM2836% = WinUSB_Install, USB\VID_0A5C&PID_2764
-%BCM2711% = WinUSB_Install, USB\VID_0A5C&PID_2711
-%BCM2712% = WinUSB_Install, USB\VID_0A5C&PID_2712
+%BCM2835%   = WinUSB_Install, USB\VID_0A5C&PID_2763
+%BCM2836%   = WinUSB_Install, USB\VID_0A5C&PID_2764
+%BCM2711%   = WinUSB_Install, USB\VID_0A5C&PID_2711
+%BCM2712%   = WinUSB_Install, USB\VID_0A5C&PID_2712
+%Fastboot%  = WinUSB_Install, USB\VID_18D1&PID_4E40
 
 ; ---- Driver install sections --------------------------------------------
 [WinUSB_Install]
@@ -67,6 +82,7 @@ HKR,,DeviceInterfaceGUIDs,0x10000,"{FABA5C01-B04D-4DA1-B0F2-51E9C1E77A62}"
 [Strings]
 Provider = "Raspberry Pi Ltd"
 BCM2835  = "Raspberry Pi USB Boot (CM1 / Pi Zero / Pi 1)"
-BCM2836  = "Raspberry Pi USB Boot (CM3 / Pi 2 / Pi 3)"
+BCM2836  = "Raspberry Pi USB Boot (CM0 /CM3 / Pi 2 / Pi 3)"
 BCM2711  = "Raspberry Pi USB Boot (CM4 / Pi 4)"
 BCM2712  = "Raspberry Pi USB Boot (CM5 / Pi 5)"
+Fastboot = "Raspberry Pi Fastboot"

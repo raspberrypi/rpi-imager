@@ -77,20 +77,19 @@ if (IMAGER_SIGNED_APP)
     # Signed build: uncomment CatalogFile= in a staged copy, run inf2cat to
     # produce rpiboot-winusb.cat, sign it with the same flags as the app, then
     # copy both files to deploy/.
-    file(MAKE_DIRECTORY "${_DRIVER_STAGING}")
-
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_DRIVER_STAGING}"
         COMMAND ${CMAKE_COMMAND}
-            -DINF_IN="${_INF_SRC}"
-            -DINF_OUT="${_DRIVER_STAGING}/rpiboot-winusb.inf"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/windows/EnableCatalogFile.cmake"
+            -DINF_IN=${_INF_SRC}
+            -DINF_OUT=${_DRIVER_STAGING}/rpiboot-winusb.inf
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/windows/EnableCatalogFile.cmake
         COMMENT "Preparing WinUSB INF for catalog generation"
         VERBATIM)
 
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND "${INF2CAT}"
-            /driver:"${_DRIVER_STAGING}"
-            /os:10_x64,10_arm64
+            "/driver:${_DRIVER_STAGING}"
+            /os:10_X64,10_VB_ARM64
         COMMENT "Generating WinUSB driver catalog (rpiboot-winusb.cat)"
         VERBATIM)
 

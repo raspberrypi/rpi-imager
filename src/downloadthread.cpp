@@ -44,6 +44,7 @@
 #include "imageadvancedoptions.h"
 #include "secureboot.h"
 #include "curlnetworkconfig.h"
+#include "fastboot/sparse_encoder.h"  // isBlockZero()
 #include <QTemporaryDir>
 
 using namespace std;
@@ -768,7 +769,7 @@ size_t DownloadThread::_writeData(const char *buf, size_t len)
 
     if (!_filename.isEmpty())
     {
-        return _writeFile(buf, len);
+        return _writeFileZeroSkip(buf, len);
     }
     else
     {
@@ -848,6 +849,86 @@ void DownloadThread::setCacheFile(const QString &filename, qint64 filesize)
 void DownloadThread::_hashData(const char *buf, size_t len)
 {
     _writehash.addData(buf, len);
+}
+
+/*
+ * Zero-skip wrapper: scans the buffer for 4KB-aligned zero-filled blocks
+ * and seeks past them instead of writing.  Non-zero regions are passed
+ * through to _writeFile().  This avoids transferring and writing GBs of
+ * zeros for typical OS images where most of the disk is empty.
+ *
+ * Only enabled when there is no expected hash for post-write verification.
+ * When verification is active, skipped (non-written) zero regions would
+ * still contain stale data from the previous image, causing a hash mismatch.
+ */
+size_t DownloadThread::_writeFileZeroSkip(const char *buf, size_t len)
+{
+    constexpr size_t BLK = fastboot::SPARSE_BLK_SZ;  // 4096
+
+    // First block hasn't been captured yet — pass through unconditionally
+    if (!_firstBlock)
+        return _writeFile(buf, len);
+
+    // When hash verification is enabled, we must write every byte so the
+    // read-back matches.  Fall through to the normal write path.
+    if (!_expectedHash.isEmpty())
+        return _writeFile(buf, len);
+
+    const auto* p = reinterpret_cast<const uint8_t*>(buf);
+    size_t off = 0;
+    size_t totalProcessed = 0;
+
+    while (off < len) {
+        // Handle any unaligned prefix (< 4096 bytes) — write it directly
+        size_t aligned = off;
+        if (aligned % BLK != 0)
+            aligned = std::min(((off / BLK) + 1) * BLK, len);
+
+        // Scan for zero blocks starting from the aligned position
+        size_t nonZeroStart = off;
+        size_t pos = aligned;
+
+        // Skip the unaligned prefix — we'll write it as part of the non-zero region
+        while (pos + BLK <= len) {
+            if (fastboot::isBlockZero(p + pos)) {
+                // Found a zero block. Write everything before it.
+                if (pos > nonZeroStart) {
+                    size_t writeLen = pos - nonZeroStart;
+                    size_t written = _writeFile(buf + nonZeroStart, writeLen);
+                    if (written != writeLen)
+                        return 0;
+                    totalProcessed += written;
+                }
+
+                // Count consecutive zero blocks
+                size_t zeroStart = pos;
+                while (pos + BLK <= len && fastboot::isBlockZero(p + pos))
+                    pos += BLK;
+
+                // Seek past the zero region
+                size_t zeroLen = pos - zeroStart;
+                if (_file->Seek(_file->Tell() + zeroLen) != rpi_imager::FileError::kSuccess)
+                    return 0;
+                totalProcessed += zeroLen;
+                _bytesWritten += zeroLen;
+                nonZeroStart = pos;
+            } else {
+                pos += BLK;
+            }
+        }
+
+        // Write any remaining data (non-zero tail + possible sub-block tail)
+        size_t remaining = len - nonZeroStart;
+        if (remaining > 0) {
+            size_t written = _writeFile(buf + nonZeroStart, remaining);
+            if (written != remaining)
+                return 0;
+            totalProcessed += written;
+        }
+        break;
+    }
+
+    return totalProcessed;
 }
 
 size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete)

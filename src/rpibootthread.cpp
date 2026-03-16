@@ -12,6 +12,8 @@
 #include <QElapsedTimer>
 #include <QThread>
 
+#include <thread>
+
 RpibootThread::RpibootThread(const DeviceInfo& device,
                                rpiboot::SideloadMode mode,
                                QObject* parent)
@@ -164,7 +166,29 @@ void RpibootThread::run()
     if (_cancelled.load()) return;
 
     // 2c: Open transport and run file server (on the second-stage device).
+    //
+    // For Fastboot sideloading, the device reboots into the fastboot gadget
+    // after receiving the firmware files — it does NOT send a "Done" command.
+    // On Windows/WinUSB, this means the file server never gets a clean
+    // disconnect signal; it just sees PIPE errors and garbage reads.
+    //
+    // To avoid blocking on pointless retries, we start scanning for the
+    // fastboot device in parallel.  Once it appears the file server can
+    // stop — the _fastbootFound flag is OR'd with _cancelled so the
+    // file server's cancellation check picks it up.
+    _fastbootFound.store(false);
+    QString fastbootId;
+
+    // Launch fastboot scanner in background for Fastboot mode
+    std::thread fastbootScanner;
+    if (_mode == SideloadMode::Fastboot) {
+        fastbootScanner = std::thread([this, &fastbootId]() {
+            pollForFastbootDevice(_fastbootFound, fastbootId);
+        });
+    }
+
     {
+        bool fileServerOk = false;
         try {
             LibusbContext ctx;
             auto transport = ctx.openDevice(fileServerDevice);
@@ -172,24 +196,57 @@ void RpibootThread::run()
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device after re-enumeration"));
                 emit error(tr("Failed to open USB device after re-enumeration"));
+                if (fastbootScanner.joinable()) {
+                    _cancelled.store(true);
+                    fastbootScanner.join();
+                }
                 return;
             }
 
             fileServeDiag = transport->initDiagnostics();
-            if (!protocol.serveFiles(*transport, _device.chipGeneration, _mode,
-                                      fwDir, progressCb, _cancelled)) {
+
+            // The file server checks cancelled.load() each iteration.
+            // Use a local atomic that we set when fastboot appears.
+            std::atomic<bool> combinedCancel{false};
+            auto wrappedProgress = [&](uint64_t current, uint64_t total, const std::string& status) {
+                // Check if fastboot appeared; if so, signal the file server to stop
+                if (_fastbootFound.load())
+                    combinedCancel.store(true);
+                progressCb(current, total, status);
+            };
+            fileServerOk = protocol.serveFiles(*transport, _device.chipGeneration, _mode,
+                                                fwDir, wrappedProgress, combinedCancel);
+        } catch (const std::exception& e) {
+            // If the fastboot device already appeared, this exception is expected
+            // (the transport died because the device rebooted).
+            if (!_fastbootFound.load()) {
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
-                                          QStringLiteral("fs_usb=[%1] %2").arg(fileServeDiag,
-                                          QString::fromStdString(protocol.lastError())));
-                if (!_cancelled.load())
-                    emit error(tr("rpiboot protocol failed: %1")
-                               .arg(QString::fromStdString(protocol.lastError())));
+                                          QString::fromUtf8(e.what()));
+                emit error(tr("USB error: %1").arg(e.what()));
+                if (fastbootScanner.joinable()) {
+                    _cancelled.store(true);
+                    fastbootScanner.join();
+                }
                 return;
             }
-        } catch (const std::exception& e) {
+            fileServerOk = true;  // Fastboot found — the exception is benign
+        }
+
+        // If fastboot was found while the file server was running, that's success
+        if (_fastbootFound.load())
+            fileServerOk = true;
+
+        if (!fileServerOk) {
             emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
-                                      QString::fromUtf8(e.what()));
-            emit error(tr("USB error: %1").arg(e.what()));
+                                      QStringLiteral("fs_usb=[%1] %2").arg(fileServeDiag,
+                                      QString::fromStdString(protocol.lastError())));
+            if (!_cancelled.load())
+                emit error(tr("rpiboot protocol failed: %1")
+                           .arg(QString::fromStdString(protocol.lastError())));
+            if (fastbootScanner.joinable()) {
+                _cancelled.store(true);
+                fastbootScanner.join();
+            }
             return;
         }
     }
@@ -201,18 +258,38 @@ void RpibootThread::run()
                                   .arg(bootcodeDiag)
                                   .arg(fileServeDiag));
 
-    if (_cancelled.load()) return;
+    if (_cancelled.load()) {
+        if (fastbootScanner.joinable()) {
+            _cancelled.store(true);
+            fastbootScanner.join();
+        }
+        return;
+    }
 
     // ── Step 3: Wait for the target device to appear ───────────────────
     switch (_mode) {
     case SideloadMode::Fastboot:
-        emit preparationStatusUpdate(tr("Waiting for fastboot device..."));
-        phaseTimer.restart();
+        if (_fastbootFound.load()) {
+            // Already found during the file server phase
+            qDebug() << "Fastboot device already detected during file server phase";
+        } else {
+            // File server exited cleanly (Done command) before fastboot appeared
+            emit preparationStatusUpdate(tr("Waiting for fastboot device..."));
+            phaseTimer.restart();
+        }
         {
-            bool found = waitForFastbootDevice();
+            // Wait for the background scanner to finish
+            if (fastbootScanner.joinable())
+                fastbootScanner.join();
+
+            bool found = _fastbootFound.load();
             emit eventFastbootWait(static_cast<quint32>(phaseTimer.elapsed()), found);
-            if (!found)
+            if (found) {
+                emit fastbootDeviceReady(fastbootId);
+            } else if (!_cancelled.load()) {
+                emit error(tr("Timed out waiting for fastboot device to appear."));
                 return;
+            }
         }
         break;
 
@@ -316,21 +393,18 @@ bool RpibootThread::waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice)
     return false;
 }
 
-bool RpibootThread::waitForFastbootDevice()
+bool RpibootThread::pollForFastbootDevice(std::atomic<bool>& found, QString& fastbootId)
 {
     using namespace rpiboot;
 
-    // After rpiboot sideloads the fastboot gadget, the CM re-enumerates
-    // with Google's fastboot VID/PID (0x18d1:0x4ee0) on the same physical
-    // USB port. Match by port path to correlate the new device.
+    // Poll for a fastboot device on the same physical USB port.
+    // Sets `found` to true and writes the bus:addr string to `fastbootId`.
+    // Respects _cancelled for clean shutdown.
     LibusbContext pollCtx;
 
-    constexpr int FB_POLLS = 60;
+    constexpr int FB_POLLS = 120;  // 60s — device may take 20s+ to reboot into fastboot
     for (int attempt = 0; attempt < FB_POLLS; ++attempt) {
         if (_cancelled.load()) return false;
-
-        emit preparationStatusUpdate(tr("Waiting for fastboot device (%1/%2s)...")
-                                         .arg((attempt + 1) / 2).arg(FB_POLLS / 2));
 
         QThread::msleep(500);
 
@@ -338,25 +412,23 @@ bool RpibootThread::waitForFastbootDevice()
             auto devices = pollCtx.scanFastbootDevices();
 
             for (const auto& dev : devices) {
-                // Match by USB port path — same physical port, different VID/PID
                 if (!_device.portPath.empty() && dev.portPath == _device.portPath) {
-                    QString busAddr = QStringLiteral("%1:%2")
+                    fastbootId = QStringLiteral("%1:%2")
                         .arg(dev.busNumber)
                         .arg(dev.deviceAddress);
-                    qDebug() << "Fastboot device appeared on same port:" << busAddr;
-                    emit fastbootDeviceReady(busAddr);
+                    qDebug() << "Fastboot device appeared on same port:" << fastbootId;
+                    found.store(true);
                     return true;
                 }
             }
 
-            // If we don't have port path info, accept any fastboot device
             if (_device.portPath.empty() && !devices.empty()) {
                 const auto& dev = devices[0];
-                QString busAddr = QStringLiteral("%1:%2")
+                fastbootId = QStringLiteral("%1:%2")
                     .arg(dev.busNumber)
                     .arg(dev.deviceAddress);
-                qDebug() << "Fastboot device appeared (no port matching):" << busAddr;
-                emit fastbootDeviceReady(busAddr);
+                qDebug() << "Fastboot device appeared (no port matching):" << fastbootId;
+                found.store(true);
                 return true;
             }
         } catch (const std::exception& e) {
@@ -365,6 +437,18 @@ bool RpibootThread::waitForFastbootDevice()
         }
     }
 
-    emit error(tr("Timed out waiting for fastboot device to appear."));
+    return false;
+}
+
+bool RpibootThread::waitForFastbootDevice()
+{
+    QString fastbootId;
+    std::atomic<bool> found{false};
+    if (pollForFastbootDevice(found, fastbootId)) {
+        emit fastbootDeviceReady(fastbootId);
+        return true;
+    }
+    if (!_cancelled.load())
+        emit error(tr("Timed out waiting for fastboot device to appear."));
     return false;
 }
