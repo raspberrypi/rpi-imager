@@ -21,6 +21,8 @@
 #include <iostream>
 #include <QProcess>
 #include <QDebug>
+#include <QFont>
+#include <QFontDatabase>
 
 namespace {
     // Network monitoring state
@@ -750,5 +752,28 @@ namespace TestAPI {
     }
 }
 #endif
+
+qreal detectTextScaleFactor()
+{
+    // Windows "Make text bigger" accessibility setting affects the system font
+    // size. Detect this by comparing to the default 9pt (Segoe UI).
+    QFont systemFont = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
+    qreal systemPointSize = systemFont.pointSizeF();
+    if (systemPointSize > 0) {
+        const qreal baseline = 9.0;  // Windows default: 9pt Segoe UI
+        qreal factor = systemPointSize / baseline;
+        if (factor >= 0.5 && factor <= 3.0 && qAbs(factor - 1.0) > 0.05) {
+            qDebug() << "Text scale factor from system font:" << factor
+                     << "(system font:" << systemFont.family() << systemPointSize << "pt)";
+            return factor;
+        }
+    }
+    return 1.0;
+}
+
+qreal fontDpiCorrection()
+{
+    return 72.0 / 96.0;
+}
 
 } // namespace PlatformQuirks

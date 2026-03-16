@@ -63,7 +63,7 @@ BaseDialog {
     Text {
         id: headerText
         text: qsTr("Content Repository")
-        font.pixelSize: Style.fontSizeLargeHeading
+        font.pointSize: Style.fontSizeLargeHeading
         font.family: Style.fontFamilyBold
         font.bold: true
         color: Style.formLabelColor
@@ -145,7 +145,7 @@ BaseDialog {
                     text: selectedRepo !== "" ? UrlFmt.display(selectedRepo) : ""
                     Layout.fillWidth: true
                     placeholderText: qsTr("Please select a custom repository json file")
-                    font.pixelSize: Style.fontSizeInput
+                    font.pointSize: Style.fontSizeInput
                     readOnly: true
                     activeFocusOnTab: true
                 }
@@ -177,7 +177,7 @@ BaseDialog {
                 Layout.fillWidth: true
                 text: popup.customRepoUri
                 placeholderText: "https://example.com/repo.json"
-                font.pixelSize: Style.fontSizeInput
+                font.pointSize: Style.fontSizeInput
                 activeFocusOnTab: true
                 inputMethodHints: Qt.ImhUrlCharactersOnly
 

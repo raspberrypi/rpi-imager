@@ -54,6 +54,68 @@ if (IMAGER_SIGNED_APP)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a
                 "${CMAKE_BINARY_DIR}/rpi-imager-callback-relay.exe")
+
+    # inf2cat.exe is always x86 regardless of host/target architecture
+    find_program(INF2CAT
+        NAMES inf2cat inf2cat.exe
+        PATHS ${w10_kit_versions}
+        PATH_SUFFIXES x86 bin/x86 bin
+        NO_DEFAULT_PATH
+        DOC "Path to inf2cat.exe from Windows SDK"
+    )
+    if (NOT INF2CAT)
+        message(FATAL_ERROR "Unable to locate inf2cat.exe (needed for WinUSB INF catalog signing)")
+    endif()
+    message(STATUS "Found inf2cat: ${INF2CAT}")
+endif()
+
+# ---- WinUSB INF deployment ----------------------------------------------
+set(_INF_SRC "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpiboot-winusb.inf")
+set(_DRIVER_STAGING "${CMAKE_BINARY_DIR}/driver_staging")
+
+if (IMAGER_SIGNED_APP)
+    # Signed build: uncomment CatalogFile= in a staged copy, run inf2cat to
+    # produce rpiboot-winusb.cat, sign it with the same flags as the app, then
+    # copy both files to deploy/.
+    file(MAKE_DIRECTORY "${_DRIVER_STAGING}")
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DINF_IN="${_INF_SRC}"
+            -DINF_OUT="${_DRIVER_STAGING}/rpiboot-winusb.inf"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/windows/EnableCatalogFile.cmake"
+        COMMENT "Preparing WinUSB INF for catalog generation"
+        VERBATIM)
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND "${INF2CAT}"
+            /driver:"${_DRIVER_STAGING}"
+            /os:10_x64,10_arm64
+        COMMENT "Generating WinUSB driver catalog (rpiboot-winusb.cat)"
+        VERBATIM)
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND "${SIGNTOOL}" sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a
+                "${_DRIVER_STAGING}/rpiboot-winusb.cat"
+        COMMENT "Signing WinUSB driver catalog"
+        VERBATIM)
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${_DRIVER_STAGING}/rpiboot-winusb.inf"
+            "${_DRIVER_STAGING}/rpiboot-winusb.cat"
+            "${CMAKE_BINARY_DIR}/deploy"
+        COMMENT "Copying signed WinUSB driver files to deploy"
+        VERBATIM)
+else()
+    # Unsigned build: copy INF as-is; no .cat is needed for pnputil installs
+    # performed by the installer running with admin privileges.
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${_INF_SRC}"
+            "${CMAKE_BINARY_DIR}/deploy"
+        COMMENT "Copying WinUSB INF to deploy"
+        VERBATIM)
 endif()
 
 # windeployqt

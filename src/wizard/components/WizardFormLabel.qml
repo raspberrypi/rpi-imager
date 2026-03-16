@@ -28,7 +28,7 @@ Text {
         return null;
     }
     
-    font.pixelSize: Style.fontSizeFormLabel
+    font.pointSize: Style.fontSizeFormLabel
     font.family: Style.fontFamily
     color: isError ? Style.formLabelErrorColor : 
            isDisabled ? Style.formLabelDisabledColor : 

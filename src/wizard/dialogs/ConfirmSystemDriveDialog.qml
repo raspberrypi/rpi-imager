@@ -65,7 +65,7 @@ BaseDialog {
         textFormat: Text.StyledText
         wrapMode: Text.WordWrap
         font.family: Style.fontFamily
-        font.pixelSize: Style.fontSizeDescription
+        font.pointSize: Style.fontSizeDescription
         color: Style.textDescriptionColor
         Layout.fillWidth: true
         text: root.riskText + "<br><br>" + root.systemDriveText + "<br><br>" + root.proceedText
@@ -83,9 +83,10 @@ BaseDialog {
         Layout.fillWidth: true
         Accessible.role: Accessible.Grouping
         Accessible.name: qsTr("Drive information")
-        Text { 
+        Text {
             text: qsTr("Size: %1").arg(root.sizeStr)
             font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeDescription
             color: Style.textDescriptionColor
             Accessible.role: Accessible.StaticText
             Accessible.name: text
@@ -93,6 +94,7 @@ BaseDialog {
         Text {
             text: qsTr("Mounted as: %1").arg(root.mountpoints && root.mountpoints.length > 0 ? root.mountpoints.join(", ") : qsTr("Not mounted"))
             font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeDescription
             color: Style.textDescriptionColor
             Accessible.role: Accessible.StaticText
             Accessible.name: text
@@ -105,7 +107,7 @@ BaseDialog {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         font.family: Style.fontFamily
-        font.pixelSize: Style.fontSizeDescription
+        font.pointSize: Style.fontSizeDescription
         color: Style.textDescriptionColor
         text: qsTr("To continue, type the exact drive name below:")
         Accessible.role: Accessible.StaticText
@@ -116,6 +118,7 @@ BaseDialog {
     Text {
         id: driveNameText
         font.family: Style.fontFamily
+        font.pointSize: Style.fontSizeSm
         font.bold: true
         color: Style.textDescriptionColor
         text: root.driveName
@@ -131,6 +134,8 @@ BaseDialog {
     TextField {
         id: nameInput
         Layout.fillWidth: true
+        font.family: Style.fontFamily
+        font.pointSize: Style.fontSizeInput
         placeholderText: qsTr("Type drive name exactly as shown above")
         text: ""
         activeFocusOnTab: true

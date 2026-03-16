@@ -154,15 +154,17 @@ const std::set<std::string> USB_STORAGE_DRIVERS = {
 // Generic/SCSI storage driver names
 const std::set<std::string> GENERIC_STORAGE_DRIVERS = {
     "SCSI", "SD", "PCISTOR",
-    "RTSOR", "JMCR", "JMCF", "RIMMPTSK", "RIMSPTSK", "RIXDPTSK",
-    "TI21SONY", "ESD7SK", "ESM7SK", "O2MD", "O2SD", "VIACR"
+    "RTSOR", "RTSPER", "JMCR", "JMCF", "RIMMPTSK", "RIMSPTSK", "RIXDPTSK",
+    "TI21SONY", "ESD7SK", "ESM7SK", "O2MD", "O2SD", "BHT", "VIACR"
 };
 
-// Virtual hard disk hardware ID patterns
+// Virtual hard disk hardware ID patterns (substring-matched against SCSI PnP IDs)
 const std::set<std::string> VHD_HARDWARE_IDS = {
     "Arsenal_________Virtual_",
     "KernSafeVirtual_________",
     "Msft____Virtual_Disk____",
+    "QEMU____QEMU_HARDDISK___",
+    "VBOX____HARDDISK________",
     "VMware__VMware_Virtual_S"
 };
 
@@ -170,6 +172,7 @@ const std::set<std::string> VHD_HARDWARE_IDS = {
 const GUID KNOWN_FOLDER_IDS[] = {
     FOLDERID_Windows,
     FOLDERID_Profile,
+    FOLDERID_ProgramData,
     FOLDERID_ProgramFiles,
     FOLDERID_ProgramFilesX86
 };
@@ -445,7 +448,7 @@ std::string busTypeToString(STORAGE_BUS_TYPE busType)
         case BusTypeFileBackedVirtual: return "FILEBACKEDVIRTUAL";
         case BusTypeSpaces: return "SPACES";
         case BusTypeNvme: return "NVME";
-        case BusTypeScm: return "SCM";
+        case BusTypeSCM: return "SCM";
         case BusTypeUfs: return "UFS";
         default: return "INVALID";
     }
@@ -466,7 +469,7 @@ bool getAdapterInfo(HANDLE hPhysical, DeviceDescriptor& device)
     if (DeviceIoControl(hPhysical, IOCTL_STORAGE_QUERY_PROPERTY,
                         &query, sizeof(query), &adapterDesc, sizeof(adapterDesc),
                         &bytesReturned, nullptr)) {
-        device.busType = busTypeToString(adapterDesc.BusType);
+        device.busType = busTypeToString(static_cast<STORAGE_BUS_TYPE>(adapterDesc.BusType));
         device.busVersion = std::to_string(adapterDesc.BusMajorVersion) + "." +
                            std::to_string(adapterDesc.BusMinorVersion);
         device.busVersionNull = false;

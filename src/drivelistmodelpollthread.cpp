@@ -4,6 +4,7 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
+#include "rpiboot/rpiboot_scanner.h"
 
 /*
  * SPDX-License-Identifier: Apache-2.0
@@ -73,6 +74,12 @@ void DriveListModelPollThread::resume()
     setScanMode(ScanMode::Normal);
 }
 
+void DriveListModelPollThread::setRpibootEnabled(bool enabled)
+{
+    _rpibootEnabled.store(enabled, std::memory_order_relaxed);
+    qDebug() << "Rpiboot scanning" << (enabled ? "enabled" : "disabled");
+}
+
 void DriveListModelPollThread::run()
 {
 #ifdef Q_OS_WIN
@@ -106,7 +113,12 @@ void DriveListModelPollThread::run()
         
         // Perform the scan
         t1.start();
-        emit newDriveList( Drivelist::ListStorageDevices() );
+        auto driveList = Drivelist::ListStorageDevices();
+        if (_rpibootEnabled.load(std::memory_order_relaxed)) {
+            auto rpibootDevices = rpiboot::scanRpibootDevices();
+            driveList.insert(driveList.end(), rpibootDevices.begin(), rpibootDevices.end());
+        }
+        emit newDriveList(driveList);
         quint32 elapsed = static_cast<quint32>(t1.elapsed());
         
         // Emit timing event for performance tracking (always, but listeners can filter)

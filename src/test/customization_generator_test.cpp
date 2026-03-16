@@ -215,6 +215,7 @@ TEST_CASE("CustomisationGenerator reference script comparison", "[customization]
 
 TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "TestNetwork";
     settings["wifiPasswordCrypt"] = "hashed_password_here";
     settings["recommendedWifiCountry"] = "GB";
@@ -237,6 +238,7 @@ TEST_CASE("CustomisationGenerator WiFi configuration", "[customization]") {
 
 TEST_CASE("CustomisationGenerator WiFi configuration with empty PSK (open network)", "[customization]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OpenNetwork";
     settings["wifiPasswordCrypt"] = "";  // Empty PSK for open network
     settings["recommendedWifiCountry"] = "US";
@@ -371,6 +373,7 @@ TEST_CASE("CustomisationGenerator handles empty password with username", "[custo
 
 TEST_CASE("CustomisationGenerator handles special characters in WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Test Network (5GHz)";
     settings["wifiPasswordCrypt"] = "fakehash";
     settings["recommendedWifiCountry"] = "US";
@@ -385,6 +388,7 @@ TEST_CASE("CustomisationGenerator handles special characters in WiFi SSID", "[cu
 
 TEST_CASE("CustomisationGenerator handles quotes in WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "My \"Quoted\" Network";
     settings["wifiPasswordCrypt"] = "fakehash";
     settings["recommendedWifiCountry"] = "US";
@@ -400,6 +404,7 @@ TEST_CASE("CustomisationGenerator handles quotes in WiFi SSID", "[customization]
 
 TEST_CASE("CustomisationGenerator handles backslashes in WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Network\\With\\Backslashes";
     settings["wifiPasswordCrypt"] = "fakehash";
     settings["recommendedWifiCountry"] = "US";
@@ -413,6 +418,7 @@ TEST_CASE("CustomisationGenerator handles backslashes in WiFi SSID", "[customiza
 
 TEST_CASE("CustomisationGenerator handles non-ASCII UTF-8 WiFi SSID", "[customization][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Café ☕ 日本語";
     settings["wifiPasswordCrypt"] = "fakehash";  // Pre-computed PSK (passwords are ASCII-only per WPA2 spec)
     settings["recommendedWifiCountry"] = "FR";
@@ -487,7 +493,8 @@ TEST_CASE("CustomisationGenerator cloud-init handles SSH public key only (no use
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh-ed25519"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    // SSH keys alone should NOT grant passwordless sudo — requires explicit opt-in
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
 }
 
 TEST_CASE("CustomisationGenerator handles multiple SSH keys in .pub file", "[customization][ssh]") {
@@ -521,8 +528,23 @@ TEST_CASE("CustomisationGenerator cloud-init handles multiple SSH keys in .pub f
     
     // Both keys should be in separate YAML list items
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key1"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-ed25519 AAAAC3...key2"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-rsa AAAAB3...key1 user@host1\""));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-ed25519 AAAAC3...key2 user@host2\""));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init quotes SSH keys with YAML-special characters", "[cloudinit][ssh]") {
+    // Regression test for https://github.com/raspberrypi/rpi-imager/issues/1544
+    // SSH keys with a colon in the comment (e.g. "ssh:") were emitted unquoted,
+    // causing YAML to interpret them as mapping keys instead of strings.
+    QVariantMap settings;
+    settings["sshPublicKey"] = "sk-ssh-ed25519@openssh.com AAAAGnNr...DMtkAAAABHNzaDo= ssh:";
+
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, true, "pi");
+    QString yaml = QString::fromUtf8(userdata);
+
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
+    // Key must be quoted to prevent YAML from interpreting "ssh:" as a mapping key
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"sk-ssh-ed25519@openssh.com AAAAGnNr...DMtkAAAABHNzaDo= ssh:\""));
 }
 
 TEST_CASE("CustomisationGenerator handles very long hostname", "[customization][negative]") {
@@ -685,12 +707,63 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH keys",
     
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("enable_ssh: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key1"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-rsa AAAAB3...key2"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-rsa AAAAB3...key1\""));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-rsa AAAAB3...key2\""));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    // SSH keys alone should NOT grant passwordless sudo — requires explicit opt-in
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
     // Password authentication should be explicitly disabled when using public-key auth
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_pwauth: false"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init passwordless sudo when explicitly enabled", "[cloudinit][userdata][sudo]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$y$j9T$test$hash";
+    settings["passwordlessSudo"] = true;
+
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "testuser");
+    QString yaml = QString::fromUtf8(userdata);
+
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+}
+
+TEST_CASE("CustomisationGenerator cloud-init no passwordless sudo by default", "[cloudinit][userdata][sudo]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$y$j9T$test$hash";
+
+    QByteArray userdata = CustomisationGenerator::generateCloudInitUserData(settings, QString(), false, false, "testuser");
+    QString yaml = QString::fromUtf8(userdata);
+
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
+    REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+}
+
+TEST_CASE("CustomisationGenerator systemd script passwordless sudo", "[customization][sudo]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$y$j9T$test$hash";
+    settings["passwordlessSudo"] = true;
+
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString s = QString::fromUtf8(script);
+
+    REQUIRE_THAT(s.toStdString(), ContainsSubstring("testuser ALL=(ALL) NOPASSWD:ALL"));
+    REQUIRE_THAT(s.toStdString(), ContainsSubstring("/etc/sudoers.d/010_testuser-nopasswd"));
+    REQUIRE_THAT(s.toStdString(), ContainsSubstring("chmod 0440"));
+}
+
+TEST_CASE("CustomisationGenerator systemd script no passwordless sudo by default", "[customization][sudo]") {
+    QVariantMap settings;
+    settings["sshUserName"] = "testuser";
+    settings["sshUserPassword"] = "$y$j9T$test$hash";
+
+    QByteArray script = CustomisationGenerator::generateSystemdScript(settings);
+    QString s = QString::fromUtf8(script);
+
+    REQUIRE_THAT(s.toStdString(), !ContainsSubstring("NOPASSWD"));
 }
 
 TEST_CASE("CustomisationGenerator generates cloud-init user-data with password auth", "[cloudinit][userdata]") {
@@ -786,6 +859,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with Pi Connect
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi", "[cloudinit][network]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "TestNetwork";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     settings["recommendedWifiCountry"] = "DE";
@@ -816,6 +890,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with WiFi"
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidden WiFi", "[cloudinit][network]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "HiddenNetwork";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     settings["wifiHidden"] = true;
@@ -838,6 +913,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with hidde
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config for open WiFi (no password)", "[cloudinit][network]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OpenNetwork";
     settings["wifiPasswordCrypt"] = "";  // Empty = open network
     settings["recommendedWifiCountry"] = "US";
@@ -894,6 +970,7 @@ TEST_CASE("CustomisationGenerator cloud-init WiFi country only (no SSID)", "[clo
 
 TEST_CASE("CustomisationGenerator generates cloud-init network-config with special characters in SSID", "[cloudinit][network][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Test \"Network\" (5GHz)";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     
@@ -912,6 +989,7 @@ TEST_CASE("CustomisationGenerator generates cloud-init network-config with speci
 
 TEST_CASE("CustomisationGenerator cloud-init network-config escapes backslashes in SSID", "[cloudinit][network][negative]") {
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "Network\\With\\Backslashes";
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     
@@ -926,6 +1004,7 @@ TEST_CASE("CustomisationGenerator cloud-init network-config escapes backslashes 
 TEST_CASE("CustomisationGenerator cloud-init network-config escapes control characters in SSID", "[cloudinit][network][negative]") {
     QVariantMap settings;
     // SSID with tab, newline, and carriage return (valid per IEEE 802.11)
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = QString("Net\twork\nWith\rControl");
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     
@@ -939,6 +1018,7 @@ TEST_CASE("CustomisationGenerator cloud-init network-config escapes control char
 TEST_CASE("CustomisationGenerator cloud-init network-config escapes mixed special characters in SSID", "[cloudinit][network][negative]") {
     QVariantMap settings;
     // Pathological SSID: quotes, backslashes, and control chars together
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = QString("Test\\\"Net\twork\"");
     settings["wifiPasswordCrypt"] = "fakecryptedhash123";
     
@@ -1115,6 +1195,7 @@ TEST_CASE("Independent step: User credentials only (no SSH)", "[cloudinit][indep
 TEST_CASE("Independent step: WiFi only", "[cloudinit][independent][wifi]") {
     // WiFi step configured alone - no other customization
     QVariantMap settings;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "MyHomeNetwork";
     settings["wifiPasswordCrypt"] = "hashedwifipassword123";
     settings["recommendedWifiCountry"] = "GB";
@@ -1195,9 +1276,9 @@ TEST_CASE("Independent step: SSH with public keys only", "[cloudinit][independen
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: defaultuser"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("ssh_authorized_keys:"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- ssh-ed25519"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- \"ssh-ed25519"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: true"));
-    
+
     // No other customization should be present
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("hostname:"));
     REQUIRE_THAT(yaml.toStdString(), !ContainsSubstring("timezone:"));
@@ -1367,6 +1448,7 @@ TEST_CASE("Combined steps: User + WiFi (no SSH)", "[cloudinit][combined]") {
     QVariantMap settings;
     settings["sshUserName"] = "wifiuser";
     settings["sshUserPassword"] = "$6$salt$hash";
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "OfficeWiFi";
     settings["wifiPasswordCrypt"] = "wifihash";
     
@@ -1439,6 +1521,7 @@ TEST_CASE("Combined steps: Full customization without SSH", "[cloudinit][combine
     settings["keyboard"] = "de";
     settings["sshUserName"] = "fulluser";
     settings["sshUserPassword"] = "$6$salt$hash";
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "FullWiFi";
     settings["wifiPasswordCrypt"] = "wifihash";
     settings["recommendedWifiCountry"] = "DE";
@@ -1477,6 +1560,7 @@ TEST_CASE("Combined steps: Full customization with SSH", "[cloudinit][combined]"
     settings["sshUserName"] = "sshuser";
     settings["sshUserPassword"] = "$6$salt$hash";
     settings["sshPasswordAuth"] = true;
+    settings["wifiConfigured"] = true;
     settings["wifiSSID"] = "SSHWiFi";
     settings["wifiPasswordCrypt"] = "wifihash";
     settings["enableSPI"] = true;

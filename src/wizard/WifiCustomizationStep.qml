@@ -279,7 +279,7 @@ WizardStepBase {
                     ImTextField {
                         id: fieldWifiSSID
                         Layout.fillWidth: true
-                        font.pixelSize: Style.fontSizeInput
+                        font.pointSize: Style.fontSizeInput
                         onTextChanged: updatePasswordFieldUI()
                         onActiveFocusChanged: {
                             if (activeFocus)
@@ -302,7 +302,7 @@ WizardStepBase {
                     ImPasswordField {
                         id: fieldWifiPassword
                         Layout.fillWidth: true
-                        font.pixelSize: Style.fontSizeInput
+                        font.pointSize: Style.fontSizeInput
                         visible: showPw
 
                         textField.onActiveFocusChanged: {
@@ -331,7 +331,7 @@ WizardStepBase {
                     ImPasswordField {
                         id: fieldWifiPasswordConfirm
                         Layout.fillWidth: true
-                        font.pixelSize: Style.fontSizeInput
+                        font.pointSize: Style.fontSizeInput
                         placeholderText: {
                             var canKeep = hadSavedCrypt && ssidUnchanged((fieldWifiSSID.text || "").trim(), originalSavedSSID)
                             return canKeep ? qsTr("Re-enter to change password") : qsTr("Re-enter password")
@@ -358,8 +358,7 @@ WizardStepBase {
                         wrapMode: Text.WordWrap
                         text: passwordErrorMessage()
                         color: (text === " ") ? "transparent" : Style.formLabelErrorColor
-                        //font.pixelSize: Style.fontSizeFormLabel
-                        font.pixelSize: 11
+                        font.pointSize: Style.fontSizeDescription
 
                         // lock a minimum height so even " " keeps the same line height
                         // TextMetrics is lighter than FontMetrics in Controls:

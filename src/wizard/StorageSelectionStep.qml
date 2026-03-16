@@ -132,14 +132,14 @@ WizardStepBase {
                 // Warning icon
                 Text {
                     text: "⚠"
-                    font.pixelSize: Style.fontSizeFormLabel
+                    font.pointSize: Style.fontSizeFormLabel
                     color: "white"
                 }
                 
                 Text {
                     Layout.fillWidth: true
                     text: qsTr("Could not list storage devices: %1").arg(root.enumerationErrorMessage)
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: "white"
                     wrapMode: Text.WordWrap
@@ -337,9 +337,10 @@ WizardStepBase {
             required property bool isSystem
             required property var mountpoints
             required property QtObject modelData
-            
+            property bool isRpiboot: modelData && typeof modelData.isRpiboot !== "undefined" ? modelData.isRpiboot : false
+
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
-            readonly property bool unselectable: isReadOnly
+            readonly property bool unselectable: isReadOnly && !isRpiboot
             
             // Accessibility properties
             Accessible.role: Accessible.ListItem
@@ -355,7 +356,7 @@ WizardStepBase {
             }
             
             width: dstlist.width
-            height: shouldHide ? 0 : 80
+            height: shouldHide ? 0 : Style.scaled(80)
             visible: !shouldHide
             
             Rectangle {
@@ -401,7 +402,8 @@ WizardStepBase {
                     // Storage icon
                     Image {
                         id: storageIcon
-                        source: dstitem.isUsb ? "../icons/ic_usb_40px.svg" :
+                        source: dstitem.isRpiboot ? "../icons/ic_rpiboot_40px.svg" :
+                                dstitem.isUsb ? "../icons/ic_usb_40px.svg" :
                                 dstitem.isScsi ? "../icons/ic_storage_40px.svg" :
                                 "../icons/ic_sd_storage_40px.svg"
                         Layout.preferredWidth: 40
@@ -429,7 +431,7 @@ WizardStepBase {
                         
                         MarqueeText {
                             text: dstitem.description
-                            font.pixelSize: Style.fontSizeFormLabel
+                            font.pointSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
                             font.bold: true
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.formLabelColor
@@ -438,8 +440,8 @@ WizardStepBase {
                         }
                         
                         Text {
-                            text: imageWriter.formatSize(parseFloat(dstitem.size))
-                            font.pixelSize: Style.fontSizeDescription
+                            text: dstitem.isRpiboot ? qsTr("Ready for USB boot") : imageWriter.formatSize(parseFloat(dstitem.size))
+                            font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textDescriptionColor
                             Layout.fillWidth: true
@@ -449,7 +451,7 @@ WizardStepBase {
                         MarqueeText {
                             text: dstitem.mountpoints.length > 0 ? 
                                   qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", ")) : ""
-                            font.pixelSize: Style.fontSizeSmall
+                            font.pointSize: Style.fontSizeSmall
                             font.family: Style.fontFamily
                             color: dstitem.unselectable ? Style.formLabelDisabledColor : Style.textMetadataColor
                             Layout.fillWidth: true
@@ -461,7 +463,7 @@ WizardStepBase {
                     // Read-only indicator
                     Text {
                         text: qsTr("Read-only")
-                        font.pixelSize: Style.fontSizeDescription
+                        font.pointSize: Style.fontSizeDescription
                         font.family: Style.fontFamily
                         color: Style.formLabelErrorColor
                         visible: dstitem.unselectable
@@ -489,7 +491,12 @@ WizardStepBase {
             return
         }
 
-        imageWriter.setDst(dstitem.device, dstitem.size)
+        // rpiboot devices use setRpibootDevice instead of setDst
+        if (dstitem.isRpiboot && typeof imageWriter.setRpibootDevice === "function") {
+            imageWriter.setRpibootDevice(dstitem.device)
+        } else {
+            imageWriter.setDst(dstitem.device, dstitem.size)
+        }
         selectedDeviceName = dstitem.description
         root.wizardContainer.selectedStorageName = dstitem.description
 

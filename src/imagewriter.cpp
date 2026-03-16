@@ -57,6 +57,8 @@
 #include <QHostAddress>
 #include <QDateTime>
 #include "curlfetcher.h"
+#include "rpibootthread.h"
+#include "fastbootflashthread.h"
 #include "curlnetworkconfig.h"
 #include <QDebug>
 #include <QJsonObject>
@@ -146,6 +148,7 @@ ImageWriter::ImageWriter(QObject *parent)
     _debugAsyncIO = true;       // Async I/O enabled by default for performance
     _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
     _debugSkipEndOfDevice = false; // Normal behavior; enable for counterfeit cards
+    _debugRpiboot = false;          // Rpiboot/fastboot support disabled by default
     
     // Calculate optimal async queue depth based on system memory
     _debugAsyncQueueDepth = SystemMemoryManager::instance().getOptimalAsyncQueueDepth();
@@ -313,6 +316,10 @@ ImageWriter::ImageWriter(QObject *parent)
     connect(&_drivelist, &DriveListModel::deviceRemoved,
             this, &ImageWriter::onSelectedDeviceRemoved);
     
+    // Forward connected rpiboot chip names to hardware list model for USB boot annotations
+    connect(&_drivelist, &DriveListModel::connectedRpibootChipsChanged,
+            &_hwlist, &HWListModel::setConnectedRpibootChips);
+
     // Connect drive list poll timing events for performance tracking
     // Only record polls that take longer than 200ms to avoid noise from normal fast polls
     connect(&_drivelist, &DriveListModel::eventDriveListPoll,
@@ -531,6 +538,7 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     _dst = device;
     _devLen = deviceSize;
     _selectedDeviceValid = !device.isEmpty();
+    _isRpibootDevice = false;  // Reset — setRpibootDevice() will re-set if needed
 
     // Reset write completion state when device selection changes
     if (device.isEmpty()) {
@@ -538,6 +546,75 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     }
 
     qDebug() << "Device selection changed to:" << device;
+}
+
+void ImageWriter::setRpibootDevice(const QString &deviceId)
+{
+    _rpibootDeviceId = deviceId;
+    _isRpibootDevice = true;
+    _selectedDeviceValid = true;
+    // Set _dst to the rpiboot ID so readyToWrite() passes
+    _dst = deviceId;
+    _devLen = 0;
+
+    qDebug() << "rpiboot device selected:" << deviceId;
+}
+
+bool ImageWriter::isRpibootDevice() const
+{
+    return _isRpibootDevice;
+}
+
+void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
+{
+    qDebug() << "rpiboot fastboot device ready:" << fastbootId;
+
+    if (_rpibootThread) {
+        _rpibootThread->deleteLater();
+        _rpibootThread = nullptr;
+    }
+
+    // Start FastbootFlashThread
+    auto *fbt = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
+    fbt->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    connect(fbt, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+    connect(fbt, &FastbootFlashThread::error, this, &ImageWriter::onError);
+    connect(fbt, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+    connect(fbt, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
+        emit downloadProgress(QVariant(now), QVariant(total));
+    });
+    connect(fbt, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
+        emit writeProgress(QVariant(now), QVariant(total));
+    });
+    connect(fbt, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+
+    // Wire fastboot timing events and progress to PerformanceStats
+    connect(fbt, &FastbootFlashThread::eventFastbootDeviceOpen,
+            this, [this](quint32 ms, bool ok, QString meta){
+                _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
+            });
+    connect(fbt, &FastbootFlashThread::downloadProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordDownloadProgress(now, total);
+            });
+    connect(fbt, &FastbootFlashThread::writeProgress,
+            this, [this](quint64 now, quint64 total){
+                _performanceStats->recordWriteProgress(now, total);
+            });
+
+    fbt->start();
+}
+
+void ImageWriter::onRpibootError(const QString &msg)
+{
+    qWarning() << "rpiboot error:" << msg;
+
+    if (_rpibootThread) {
+        _rpibootThread->deleteLater();
+        _rpibootThread = nullptr;
+    }
+
+    onError(msg);
 }
 
 /* Returns true if src and dst are set and destination device is still valid */
@@ -604,6 +681,18 @@ void ImageWriter::startWrite()
         _thread = nullptr;
     }
 
+    // Same for the rpiboot thread — if a previous attempt finished or was
+    // cancelled, the handler sets _rpibootThread = nullptr via deleteLater(),
+    // but the deletion may still be pending in the event queue.
+    if (_rpibootThread) {
+        if (_rpibootThread->isRunning()) {
+            _rpibootThread->cancel();
+            _rpibootThread->wait(5000);
+        }
+        delete _rpibootThread;
+        _rpibootThread = nullptr;
+    }
+
     if (!readyToWrite())
     {
         // Provide a user-visible error rather than silently returning, so the UI can recover
@@ -635,6 +724,63 @@ void ImageWriter::startWrite()
     }
 
     setWriteState(WriteState::Preparing);
+
+    if (_isRpibootDevice)
+    {
+        emit preparationStatusUpdate(tr("Preparing device for imaging..."));
+
+        // Parse the rpiboot device ID to extract USB bus/address/port info
+        RpibootThread::DeviceInfo devInfo;
+
+        // Parse "rpiboot://bus:addr:port1.port2..."
+        QString devPath = _rpibootDeviceId;
+        if (devPath.startsWith("rpiboot://"))
+            devPath = devPath.mid(10);
+        QStringList parts = devPath.split(':');
+        if (parts.size() >= 2) {
+            devInfo.busNumber = static_cast<uint8_t>(parts[0].toUInt());
+            devInfo.deviceAddress = static_cast<uint8_t>(parts[1].toUInt());
+        }
+        if (parts.size() >= 3) {
+            for (const auto& p : parts[2].split('.'))
+                if (!p.isEmpty())
+                    devInfo.portPath.push_back(static_cast<uint8_t>(p.toUInt()));
+        }
+
+        // Part 4 is the USB PID, which encodes the chip generation.
+        // Format added in rpiboot_scanner.cpp: rpiboot://bus:addr:portpath:pid
+        devInfo.chipGeneration = rpiboot::ChipGeneration::BCM2711;  // safe default
+        if (parts.size() >= 4) {
+            auto pid = static_cast<uint16_t>(parts[3].toUInt());
+            if (auto gen = rpiboot::chipGenerationFromPid(pid))
+                devInfo.chipGeneration = *gen;
+        }
+
+        _rpibootThread = new RpibootThread(devInfo, _rpibootSideloadMode, this);
+
+        // After sideload, start FastbootFlashThread
+        connect(_rpibootThread, &RpibootThread::fastbootDeviceReady, this, &ImageWriter::onRpibootFastbootReady);
+
+        connect(_rpibootThread, &RpibootThread::error, this, &ImageWriter::onRpibootError);
+        connect(_rpibootThread, &RpibootThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+
+        // Wire rpiboot timing events to PerformanceStats
+        connect(_rpibootThread, &RpibootThread::eventFirmwareSetup,
+                this, [this](quint32 ms, bool ok, QString meta){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootFirmwareSetup, ms, ok, meta);
+                });
+        connect(_rpibootThread, &RpibootThread::eventRpibootProtocol,
+                this, [this](quint32 ms, bool ok, QString meta){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootProtocol, ms, ok, meta);
+                });
+        connect(_rpibootThread, &RpibootThread::eventFastbootWait,
+                this, [this](quint32 ms, bool ok){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::RpibootFastbootWait, ms, ok);
+                });
+
+        _rpibootThread->start();
+        return;
+    }
 
     if (_src.toString() == "internal://format")
     {
@@ -1244,6 +1390,20 @@ void ImageWriter::cancelWrite()
         return;
     }
 
+    if (_rpibootThread)
+    {
+        _rpibootThread->cancel();
+        connect(_rpibootThread, &QThread::finished, this, [this]() {
+            if (_rpibootThread) {
+                _rpibootThread->deleteLater();
+                _rpibootThread = nullptr;
+            }
+            setWriteState(WriteState::Cancelled);
+            emit cancelled();
+        });
+        return;
+    }
+
     if (_thread)
     {
         connect(_thread, SIGNAL(finished()), SLOT(onCancelled()));
@@ -1679,7 +1839,21 @@ void ImageWriter::onOsListFetchError(const QString &errorMessage, const QUrl &ur
     }
 
     qDebug() << "Failed to fetch URL [" << url << "]:" << errorMessage;
-    
+
+    // If the top-level OS list fetch fails with a connection error and we haven't
+    // tried IPv4-only yet, retry with IPv4-only mode. This handles Windows 11 systems
+    // with broken IPv6 routing where DNS returns AAAA records but IPv6 connections
+    // time out, while the browser's Happy Eyeballs falls back to IPv4 transparently.
+    if (isTopLevelRequest && _completeOsList.isEmpty()
+        && !CurlNetworkConfig::instance().ipv4Only()
+        && PlatformQuirks::hasNetworkConnectivity()) {
+        qDebug() << "OS list fetch failed with connectivity present - retrying with IPv4-only";
+        CurlNetworkConfig::instance().setIPv4Only(true);
+        _debugIPv4Only = true;
+        beginOSListFetch();
+        return;
+    }
+
     if (isTopLevelRequest) {
         if (_completeOsList.isEmpty()) {
             // No data at all - notify UI of offline state
@@ -1814,6 +1988,10 @@ void ImageWriter::beginOSListFetch() {
     if (!preflightValidateUrl(topUrl, QStringLiteral("repository:"))) {
         return;
     }
+
+    // Auto-detect system proxy (e.g. corporate proxy configured in Windows Internet Options).
+    // This is a no-op if a proxy was already detected or manually configured.
+    CurlNetworkConfig::instance().detectSystemProxy(topUrl);
 
     // Create a CurlFetcher to fetch the OS list
     auto *fetcher = new CurlFetcher(this);
@@ -2963,6 +3141,20 @@ void ImageWriter::setDebugSkipEndOfDevice(bool enabled)
     if (_debugSkipEndOfDevice != enabled) {
         _debugSkipEndOfDevice = enabled;
         qDebug() << "Debug: Skip end-of-device operations" << (enabled ? "enabled (counterfeit card mode)" : "disabled");
+    }
+}
+
+bool ImageWriter::getDebugRpiboot() const
+{
+    return _debugRpiboot;
+}
+
+void ImageWriter::setDebugRpiboot(bool enabled)
+{
+    if (_debugRpiboot != enabled) {
+        _debugRpiboot = enabled;
+        _drivelist.setRpibootEnabled(enabled);
+        qDebug() << "Debug: Rpiboot/fastboot support" << (enabled ? "enabled" : "disabled");
     }
 }
 

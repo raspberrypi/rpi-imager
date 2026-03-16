@@ -442,4 +442,16 @@ DiskResult ejectDisk(const QString& device) {
     return runDiskOperation(bsdNameBytes.constData(), ejectUnmountCallback);
 }
 
+qreal detectTextScaleFactor()
+{
+    // macOS handles DPI scaling correctly via Retina support.
+    // No additional text scaling needed.
+    return 1.0;
+}
+
+qreal fontDpiCorrection()
+{
+    return 1.0;
+}
+
 } // namespace PlatformQuirks

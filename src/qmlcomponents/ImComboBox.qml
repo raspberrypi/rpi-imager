@@ -26,6 +26,9 @@ ComboBox {
         return null;
     }
     
+    font.family: Style.fontFamily
+    font.pointSize: Style.fontSizeInput
+
     // Focus properties
     activeFocusOnTab: true
     
@@ -222,7 +225,7 @@ ComboBox {
                     anchors.leftMargin: Style.spacingTiny
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr("Search: \"%1\"").arg(root.searchString)
-                    font.pixelSize: Style.fontSizeSmall
+                    font.pointSize: Style.fontSizeSmall
                     font.italic: true
                     color: Style.textDescriptionColor
                 }
@@ -232,7 +235,7 @@ ComboBox {
                     anchors.rightMargin: Style.spacingTiny
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr("%1 of %2").arg(filteredModel.count).arg(root.fullModelData.length)
-                    font.pixelSize: Style.fontSizeSmall - 2
+                    font.pointSize: Math.round(10 * Style.fontScale)
                     font.italic: true
                     color: Style.textMetadataColor
                 }
@@ -262,7 +265,7 @@ ComboBox {
                 anchors.centerIn: parent
                 visible: filteredModel.count === 0 && root.searchString.length > 0
                 text: qsTr("No matches")
-                font.pixelSize: Style.fontSizeSmall
+                font.pointSize: Style.fontSizeSmall
                 font.italic: true
                 color: Style.textMetadataColor
             }

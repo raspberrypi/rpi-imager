@@ -292,7 +292,7 @@ BaseDialog {
         Text {
             id: titleText
             text: dialog.dialogTitle
-            font.pixelSize: Style.fontSizeHeading
+            font.pointSize: Style.fontSizeHeading
             font.family: Style.fontFamilyBold
             font.bold: true
             color: Style.formLabelColor
@@ -301,6 +301,8 @@ BaseDialog {
         TextField {
             id: pathField
             Layout.fillWidth: true
+            font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeInput
             text: dialog._toDisplayPath(dialog.currentFolder)
             placeholderText: dialog.isSaveDialog
                 ? qsTr("Enter path or URL\u2026")
@@ -336,7 +338,7 @@ BaseDialog {
         
         Text {
             text: qsTr("File name:")
-            font.pixelSize: Style.fontSizeFormLabel
+            font.pointSize: Style.fontSizeFormLabel
             font.family: Style.fontFamily
             color: Style.formLabelColor
         }
@@ -344,6 +346,8 @@ BaseDialog {
         TextField {
             id: filenameField
             Layout.fillWidth: true
+            font.family: Style.fontFamily
+            font.pointSize: Style.fontSizeInput
             text: dialog._currentFilename
             placeholderText: qsTr("Enter filename…")
             activeFocusOnTab: dialog.isSaveDialog
@@ -459,7 +463,7 @@ BaseDialog {
 
                 Text { 
                     text: qsTr("Folders")
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     color: Style.textDescriptionColor
                     Layout.fillWidth: true
                     Layout.topMargin: 8
@@ -638,7 +642,7 @@ BaseDialog {
                         
                         contentItem: Text {
                             text: upEntry.text
-                            font.pixelSize: Style.fontSizeDescription
+                            font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             font.italic: true
                             color: Style.textDescriptionColor
@@ -740,7 +744,7 @@ BaseDialog {
                             anchors.centerIn: parent
                             visible: !dialog.isSaveDialog && filesOnlyModel.count === 0
                             text: qsTr("No files in this folder")
-                            font.pixelSize: Style.fontSizeDescription
+                            font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             font.italic: true
                             color: Style.textDescriptionColor
@@ -752,7 +756,7 @@ BaseDialog {
                         width: fileColumn.width
                         visible: dialog.isSaveDialog
                         text: qsTr("Navigate to a folder using the panel on the left,\nor type a path in the address bar above.")
-                        font.pixelSize: Style.fontSizeDescription
+                        font.pointSize: Style.fontSizeDescription
                         font.family: Style.fontFamily
                         font.italic: true
                         color: Style.textDescriptionColor

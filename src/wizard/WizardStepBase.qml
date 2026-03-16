@@ -96,7 +96,7 @@ FocusScope {
             MarqueeText {
                 id: titleText
                 text: root.title
-                font.pixelSize: Style.fontSizeTitle
+                font.pointSize: Style.fontSizeTitle
                 font.family: Style.fontFamilyBold
                 font.bold: true
                 color: Style.formLabelColor
@@ -113,7 +113,7 @@ FocusScope {
             MarqueeText {
                 id: subtitleText
                 text: root.subtitle
-                font.pixelSize: Style.fontSizeSubtitle
+                font.pointSize: Style.fontSizeSubtitle
                 font.family: Style.fontFamily
                 color: Style.textDescriptionColor
                 Layout.fillWidth: true
@@ -138,13 +138,13 @@ FocusScope {
         RowLayout {
             id: buttonRow
             Layout.fillWidth: true
-            spacing: Style.spacingMedium
+            spacing: Style.spacingSmall
             
             // Embedded mode network info on the left
             Text {
                 id: networkInfoLabel
                 text: root.networkInfoText
-                font.pixelSize: Style.fontSizeCaption
+                font.pointSize: Style.fontSizeCaption
                 font.family: Style.fontFamily
                 color: Style.textDescriptionColor
                 visible: root.imageWriter && root.imageWriter.isEmbeddedMode() && root.networkInfoText.length > 0
@@ -157,7 +157,7 @@ FocusScope {
             RowLayout {
                 id: customButtonArea
                 Layout.fillWidth: true
-                spacing: Style.spacingMedium
+                spacing: Style.spacingSmall
                 visible: children.length > 0
             }
             

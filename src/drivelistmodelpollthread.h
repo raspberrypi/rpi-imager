@@ -6,6 +6,7 @@
  * Copyright (C) 2020 Raspberry Pi Ltd
  */
 
+#include <atomic>
 #include <QThread>
 #include <QMutex>
 #include <QWaitCondition>
@@ -63,16 +64,24 @@ public:
      * Equivalent to setScanMode(ScanMode::Paused)
      */
     void pause();
-    
+
     /**
      * @brief Convenience method to resume normal scanning
-     * 
+     *
      * Equivalent to setScanMode(ScanMode::Normal)
      */
     void resume();
 
+    /**
+     * @brief Enable or disable rpiboot device scanning
+     *
+     * Thread-safe. When disabled, rpiboot devices will not appear in the drive list.
+     */
+    void setRpibootEnabled(bool enabled);
+
 protected:
     bool _terminate;
+    std::atomic<bool> _rpibootEnabled{false};
     ScanMode _scanMode;
     mutable QMutex _mutex;
     QWaitCondition _modeChanged;

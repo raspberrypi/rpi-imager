@@ -83,7 +83,7 @@ WizardStepBase {
                 visible: root.rsaKeyPath && root.rsaKeyPath.length > 0
                 text: qsTr("Selected: %1").arg(root.rsaKeyPath)
                 font.family: Style.fontFamily
-                font.pixelSize: Style.fontSizeCaption
+                font.pointSize: Style.fontSizeCaption
                 color: Style.textDescriptionColor
                 elide: Text.ElideMiddle
             }
@@ -117,7 +117,7 @@ WizardStepBase {
                 Layout.fillWidth: true
                 text: qsTr("Your boot partition will be signed using the selected RSA private key.")
                 font.family: Style.fontFamily
-                font.pixelSize: Style.fontSizeDescription
+                font.pointSize: Style.fontSizeDescription
                 color: Style.textDescriptionColor
                 wrapMode: Text.WordWrap
             }
@@ -126,7 +126,7 @@ WizardStepBase {
                 Layout.fillWidth: true
                 text: qsTr("This will create boot.img and boot.sig files required for Raspberry Pi Secure Boot.")
                 font.family: Style.fontFamily
-                font.pixelSize: Style.fontSizeDescription
+                font.pointSize: Style.fontSizeDescription
                 color: Style.textDescriptionColor
                 wrapMode: Text.WordWrap
             }
@@ -140,7 +140,7 @@ WizardStepBase {
                         Layout.fillWidth: true
                         text: qsTr("Public Key Fingerprint: %1").arg(root.getRsaKeyFingerprint() || qsTr("(unavailable)"))
                         font.family: Style.fontFamily
-                        font.pixelSize: Style.fontSizeCaption
+                        font.pointSize: Style.fontSizeCaption
                         color: Style.textDescriptionColor
                         wrapMode: Text.WrapAnywhere
                     }
@@ -154,9 +154,69 @@ WizardStepBase {
                 visible: !root.rsaKeyPath || root.rsaKeyPath.length === 0
                 text: qsTr("Please select an RSA private key above to enable secure boot signing.")
                 font.family: Style.fontFamily
-                font.pixelSize: Style.fontSizeDescription
+                font.pointSize: Style.fontSizeDescription
                 color: Style.formLabelErrorColor
                 wrapMode: Text.WordWrap
+            }
+
+            // OTP Provisioning section (only shown when an rpiboot device is selected)
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: Style.spacingLarge
+                implicitHeight: otpColumn.implicitHeight + Style.spacingMedium * 2
+                color: "transparent"
+                border.color: Style.titleSeparatorColor
+                border.width: 1
+                radius: Style.borderRadius
+                visible: typeof imageWriter.isRpibootDevice === "function" && imageWriter.isRpibootDevice()
+
+                ColumnLayout {
+                    id: otpColumn
+                    anchors.fill: parent
+                    anchors.margins: Style.spacingMedium
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("OTP Secure Boot Provisioning")
+                        font.family: Style.fontFamily
+                        font.pointSize: Style.fontSizeSubtitle
+                        font.bold: true
+                        color: Style.textTitleColor
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        font.family: Style.fontFamily
+                        font.pointSize: Style.fontSizeDescription
+                        color: Style.textDescriptionColor
+                        text: qsTr("Program the secure boot public key hash into the device's OTP memory. This is a permanent, irreversible operation.")
+                    }
+
+                    ImOptionPill {
+                        id: otpProvisionPill
+                        Layout.fillWidth: true
+                        Layout.topMargin: Style.spacingSmall
+                        text: qsTr("Provision Secure Boot OTP")
+                        accessibleDescription: qsTr("Permanently program the secure boot key into device OTP memory")
+                        checked: false
+                        enabled: root.rsaKeyPath && root.rsaKeyPath.length > 0
+                        onToggled: function(isChecked) {
+                            wizardContainer.otpProvisioningEnabled = isChecked
+                            root.rebuildFocusOrder()
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: otpProvisionPill.checked
+                        wrapMode: Text.WordWrap
+                        font.family: Style.fontFamily
+                        font.pointSize: Style.fontSizeCaption
+                        color: "#C62828"
+                        text: qsTr("WARNING: After OTP provisioning, this device will ONLY boot images signed with the selected key. This cannot be undone.")
+                    }
+                }
             }
         }
     }

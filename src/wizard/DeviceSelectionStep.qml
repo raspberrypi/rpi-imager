@@ -106,7 +106,7 @@ WizardStepBase {
                 // Icon or visual indicator
                 Text {
                     text: "⚠"
-                    font.pixelSize: 48
+                    font.pointSize: Math.round(48 * Style.fontScale)
                     color: Style.textDescriptionColor
                     Layout.alignment: Qt.AlignHCenter
                     Accessible.ignored: true
@@ -114,7 +114,7 @@ WizardStepBase {
                 
                 Text {
                     text: qsTr("Unable to load device list")
-                    font.pixelSize: Style.fontSizeHeading
+                    font.pointSize: Style.fontSizeHeading
                     font.family: Style.fontFamilyBold
                     font.bold: true
                     color: Style.formLabelColor
@@ -128,7 +128,7 @@ WizardStepBase {
                 
                 Text {
                     text: qsTr("The device list could not be downloaded. Please check your internet connection and try again.\n\nYou can still write a local image file by pressing Next and selecting 'Use custom' on the following screen.")
-                    font.pixelSize: Style.fontSizeDescription
+                    font.pointSize: Style.fontSizeDescription
                     font.family: Style.fontFamily
                     color: Style.textDescriptionColor
                     horizontalAlignment: Text.AlignHCenter
@@ -249,6 +249,7 @@ WizardStepBase {
             required property string name
             required property string description
             required property string icon
+            required property bool isUsbBootConnected
             required property QtObject model
             
             width: hwlist.width
@@ -258,6 +259,7 @@ WizardStepBase {
             // Accessibility properties
             Accessible.role: Accessible.ListItem
             Accessible.name: hwitem.name + ". " + hwitem.description
+                          + (hwitem.isUsbBootConnected ? ". " + qsTr("Connected via USB") : "")
             Accessible.focusable: true
             Accessible.ignored: false
             
@@ -326,7 +328,7 @@ WizardStepBase {
                         
                         Text {
                             text: hwitem.name
-                            font.pixelSize: Style.fontSizeFormLabel
+                            font.pointSize: Style.fontSizeFormLabel
                             font.family: Style.fontFamilyBold
                             font.bold: true
                             color: Style.formLabelColor
@@ -336,11 +338,21 @@ WizardStepBase {
                         
                         Text {
                             text: hwitem.description
-                            font.pixelSize: Style.fontSizeDescription
+                            font.pointSize: Style.fontSizeDescription
                             font.family: Style.fontFamily
                             color: Style.textDescriptionColor
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
+                            Accessible.ignored: true
+                        }
+
+                        Text {
+                            text: qsTr("Connected via USB")
+                            font.pointSize: Style.fontSizeDescription
+                            font.family: Style.fontFamily
+                            color: Style.formControlActiveColor
+                            Layout.fillWidth: true
+                            visible: hwitem.isUsbBootConnected
                             Accessible.ignored: true
                         }
                     }

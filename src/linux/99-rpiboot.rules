@@ -1,0 +1,14 @@
+# udev rules for Raspberry Pi USB boot devices (Broadcom VID)
+# Grants user access without root for rpiboot functionality in Imager.
+#
+# Install to /etc/udev/rules.d/ and reload: sudo udevadm control --reload-rules
+# SPDX-License-Identifier: Apache-2.0
+
+# BCM2835 (CM1, Pi Zero)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2763", MODE="0666"
+# BCM2836/7 (CM3, Pi 2/3)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2764", MODE="0666"
+# BCM2711 (CM4, Pi 4)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2711", MODE="0666"
+# BCM2712 (CM5, Pi 5)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2712", MODE="0666"

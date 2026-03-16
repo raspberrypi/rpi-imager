@@ -9,6 +9,7 @@
 #include <QByteArray>
 #include <QMutex>
 #include <QThreadPool>
+#include <QUrl>
 #include <atomic>
 #include <curl/curl.h>
 
@@ -56,6 +57,14 @@ public:
     void setUserAgent(const QByteArray &ua);
     
     /**
+     * Detect and cache the system proxy for a given URL.
+     * Uses QNetworkProxyFactory::systemProxyForQuery() to detect proxy settings
+     * configured at the OS level (Windows Internet Options, macOS System Preferences, etc.).
+     * Only detects once per URL scheme; result is cached for subsequent calls.
+     */
+    void detectSystemProxy(const QUrl &url);
+
+    /**
      * Apply standard curl settings for a given fetch profile.
      * 
      * This sets up:
@@ -102,6 +111,7 @@ private:
     static std::atomic<bool> _curlInitialized;
     std::atomic<bool> _ipv4Only{false};
     QByteArray _proxy;
+    bool _proxyDetected{false};
     QByteArray _userAgent;
     mutable QMutex _mutex;
     QThreadPool *_networkPool{nullptr};

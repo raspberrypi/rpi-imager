@@ -56,7 +56,8 @@ public:
      * but doesn't need frequent drive list updates.
      */
     void setSlowPolling();
-    
+    void setRpibootEnabled(bool enabled);
+
     /**
      * @brief Get child devices (e.g., APFS volumes) for a given device path
      * 
@@ -77,12 +78,14 @@ public:
     QString lastError() const { return _lastError; }
 
     enum driveListRoles {
-        deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole, childDevicesRole
+        deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole, childDevicesRole,
+        isRpibootRole
     };
 
 signals:
     void deviceRemoved(const QString &device);
     void eventDriveListPoll(quint32 durationMs);
+    void connectedRpibootChipsChanged(const QStringList &chips);
     
     /**
      * @brief Emitted when the lastError property changes
@@ -110,6 +113,7 @@ protected:
     QHash<int, QByteArray> _rolenames;
     DriveListModelPollThread _thread;
     QString _lastError;  // Last enumeration error message (empty if successful)
+    QStringList _connectedRpibootChips;
 };
 
 #endif // DRIVELISTMODEL_H
