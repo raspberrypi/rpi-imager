@@ -102,10 +102,15 @@ public:
 
     // Feed raw decompressed data.  May be called with any size.
     // Internally buffers partial blocks and emits complete segments.
-    void feed(const void* data, size_t size);
+    // Returns the number of bytes consumed.  When fewer than `size`
+    // bytes are consumed, a segment is ready — call takeSegment()
+    // then feed() again with the remainder.
+    size_t feed(const void* data, size_t size);
 
     // Signal end of input.  Zero-pads any partial block and finalises
-    // the last segment.
+    // the last segment.  May need to be called more than once if the
+    // partial block triggers a segment split — keep calling while
+    // takeSegment() returns data.
     void finish();
 
     // Per-segment statistics, populated by takeSegment().

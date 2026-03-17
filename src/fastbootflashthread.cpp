@@ -538,10 +538,8 @@ void FastbootFlashThread::run()
         if (!slot) {
             if (_decompressedRing->isCancelled())
                 break;
-            if (_decompressedRing->isComplete()) {
-                sparse.finish();
+            if (_decompressedRing->isComplete())
                 break;
-            }
             continue;
         }
 
@@ -550,11 +548,17 @@ void FastbootFlashThread::run()
             _imageHash->addData(slot->data, static_cast<int>(slot->size));
 
         totalFed += slot->size;
-        sparse.feed(slot->data, slot->size);
-        _decompressedRing->releaseReadSlot(slot);
 
-        // Send any completed sparse segment
-        {
+        // Feed data to the sparse encoder, draining completed segments
+        // as they appear.  feed() returns fewer bytes than offered when
+        // a segment is ready, so we loop until all data is consumed.
+        const auto* feedPtr = static_cast<const uint8_t*>(slot->data);
+        size_t feedRemaining = slot->size;
+        while (feedRemaining > 0 && !flashError) {
+            size_t consumed = sparse.feed(feedPtr, feedRemaining);
+            feedPtr += consumed;
+            feedRemaining -= consumed;
+
             fastboot::SparseEncoder::SegmentStats segStats;
             auto seg = sparse.takeSegment(&segStats);
             if (!seg.empty()) {
@@ -574,24 +578,29 @@ void FastbootFlashThread::run()
                 }
             }
         }
+        _decompressedRing->releaseReadSlot(slot);
+
         if (flashError)
             break;
     }
 
-    // Send final segment after finish()
-    if (!flashError && !_cancelled.load()) {
+    // Finish the sparse stream and drain all remaining segments.
+    // finish() may need multiple calls when the trailing partial block
+    // triggers a segment split.
+    while (!flashError && !_cancelled.load()) {
+        sparse.finish();
         fastboot::SparseEncoder::SegmentStats segStats;
         auto seg = sparse.takeSegment(&segStats);
-        if (!seg.empty()) {
-            qDebug() << "FastbootFlashThread: final segment" << segmentIndex
-                     << "blocks=" << segStats.blocks
-                     << "(raw=" << segStats.rawBlocks
-                     << "fill=" << segStats.fillBlocks
-                     << "skip=" << segStats.dontCareBlocks << ")"
-                     << "wire=" << segStats.wireBytes << "bytes";
-            if (!sendSegment(seg))
-                flashError = true;
-        }
+        if (seg.empty())
+            break;
+        qDebug() << "FastbootFlashThread: final segment" << segmentIndex
+                 << "blocks=" << segStats.blocks
+                 << "(raw=" << segStats.rawBlocks
+                 << "fill=" << segStats.fillBlocks
+                 << "skip=" << segStats.dontCareBlocks << ")"
+                 << "wire=" << segStats.wireBytes << "bytes";
+        if (!sendSegment(seg))
+            flashError = true;
     }
 
     if (!flashError && !_cancelled.load()) {

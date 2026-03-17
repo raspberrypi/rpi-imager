@@ -129,15 +129,12 @@ void SparseEncoder::processBlock(const uint8_t* block)
     if (isBlockZero(block)) {
         type = CHUNK_TYPE_DONT_CARE;
         ++_statsDontCare;
-        ++_segDontCare;
     } else if (isBlockFill(block, &fillVal)) {
         type = CHUNK_TYPE_FILL;
         ++_statsFill;
-        ++_segFill;
     } else {
         type = CHUNK_TYPE_RAW;
         ++_statsRaw;
-        ++_segRaw;
     }
 
     // Does this block continue the current run?
@@ -155,6 +152,14 @@ void SparseEncoder::processBlock(const uint8_t* block)
         continues = false;
         cost = SPARSE_CHUNK_HDR_SZ + (type == CHUNK_TYPE_RAW ? SPARSE_BLK_SZ
                                      : type == CHUNK_TYPE_FILL ? 4 : 0);
+    }
+
+    // Increment per-segment stats after the potential segment split so
+    // this block is counted against the segment it actually belongs to.
+    switch (type) {
+    case CHUNK_TYPE_DONT_CARE: ++_segDontCare; break;
+    case CHUNK_TYPE_FILL:      ++_segFill; break;
+    case CHUNK_TYPE_RAW:       ++_segRaw; break;
     }
 
     // Start a new run if not continuing
@@ -182,53 +187,68 @@ void SparseEncoder::processBlock(const uint8_t* block)
     ++_processedBlocks;
 }
 
-void SparseEncoder::feed(const void* data, size_t size)
+size_t SparseEncoder::feed(const void* data, size_t size)
 {
     _ready.clear();  // caller has consumed the previous segment
-    auto* src = static_cast<const uint8_t*>(data);
+    auto* begin = static_cast<const uint8_t*>(data);
+    auto* src = begin;
+    auto* end = src + size;
 
     // Drain partial block first
     if (_partialSize > 0) {
         size_t need = SPARSE_BLK_SZ - _partialSize;
-        size_t take = std::min(need, size);
+        size_t take = std::min(need, static_cast<size_t>(end - src));
         std::memcpy(_partial + _partialSize, src, take);
         _partialSize += take;
         src += take;
-        size -= take;
 
         if (_partialSize == SPARSE_BLK_SZ) {
             processBlock(_partial);
             _partialSize = 0;
+            // processBlock may have finalised a segment — stop so the
+            // caller can drain it before we overwrite _ready.
+            if (!_ready.empty())
+                return static_cast<size_t>(src - begin);
         } else {
-            return;  // still not a full block
+            return size;  // all consumed, still not a full block
         }
     }
 
     // Process full blocks directly from input (zero-copy classification)
-    while (size >= SPARSE_BLK_SZ) {
+    while (static_cast<size_t>(end - src) >= SPARSE_BLK_SZ) {
         processBlock(src);
         src += SPARSE_BLK_SZ;
-        size -= SPARSE_BLK_SZ;
+        if (!_ready.empty())
+            return static_cast<size_t>(src - begin);
     }
 
     // Buffer remainder
-    if (size > 0) {
-        std::memcpy(_partial, src, size);
-        _partialSize = size;
+    size_t rem = static_cast<size_t>(end - src);
+    if (rem > 0) {
+        std::memcpy(_partial, src, rem);
+        _partialSize = rem;
     }
+
+    return size;
 }
 
 void SparseEncoder::finish()
 {
     _ready.clear();  // caller has consumed the previous segment
+
     // Zero-pad and process any partial block
     if (_partialSize > 0) {
         std::memset(_partial + _partialSize, 0, SPARSE_BLK_SZ - _partialSize);
         processBlock(_partial);
         _partialSize = 0;
+        // processBlock may have finalised a segment — let the caller
+        // drain it first.  The next call to finish() will fall through
+        // to finaliseSegment() below.
+        if (!_ready.empty())
+            return;
     }
 
-    // Finalise the last segment
+    // Finalise the last segment (no-op if nothing pending)
     finaliseSegment();
 }
 

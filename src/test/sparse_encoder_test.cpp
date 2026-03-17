@@ -109,23 +109,30 @@ static std::vector<std::vector<uint8_t>> feedAndCollect(
 {
     std::vector<std::vector<uint8_t>> segments;
 
-    // Feed in 64KB chunks to exercise partial-block handling
+    // Feed in 64KB chunks to exercise partial-block handling.
+    // feed() may return fewer bytes than offered when a segment is ready,
+    // so we loop until all data is consumed.
     constexpr size_t FEED_SIZE = 65536;
     size_t off = 0;
     while (off < data.size()) {
         size_t chunk = std::min(FEED_SIZE, data.size() - off);
-        enc.feed(data.data() + off, chunk);
-        off += chunk;
+        size_t consumed = enc.feed(data.data() + off, chunk);
+        off += consumed;
 
         auto seg = enc.takeSegment();
         if (!seg.empty())
             segments.emplace_back(seg.begin(), seg.end());
     }
 
-    enc.finish();
-    auto seg = enc.takeSegment();
-    if (!seg.empty())
+    // finish() may need multiple calls if the trailing partial block
+    // triggers a segment split.
+    while (true) {
+        enc.finish();
+        auto seg = enc.takeSegment();
+        if (seg.empty())
+            break;
         segments.emplace_back(seg.begin(), seg.end());
+    }
 
     return segments;
 }
@@ -370,8 +377,17 @@ TEST_CASE("Large zero regions produce compact sparse output", "[sparse]")
 
     // Feed in 1MB chunks of zeros
     std::vector<uint8_t> zeros(1024 * 1024, 0);
-    for (uint64_t off = 0; off < IMAGE_SIZE; off += zeros.size())
-        enc.feed(zeros.data(), zeros.size());
+    for (uint64_t off = 0; off < IMAGE_SIZE; off += zeros.size()) {
+        const uint8_t* ptr = zeros.data();
+        size_t rem = zeros.size();
+        while (rem > 0) {
+            size_t consumed = enc.feed(ptr, rem);
+            ptr += consumed;
+            rem -= consumed;
+            // Drain any ready segment (shouldn't happen for zeros within 256MB limit)
+            enc.takeSegment();
+        }
+    }
     enc.finish();
 
     auto seg = enc.takeSegment();
@@ -400,17 +416,20 @@ TEST_CASE("Feeding data in odd chunk sizes works correctly", "[sparse]")
     constexpr size_t PRIME_CHUNK = 997;
     while (off < IMAGE_SIZE) {
         size_t chunk = std::min(PRIME_CHUNK, IMAGE_SIZE - off);
-        enc.feed(image.data() + off, chunk);
-        off += chunk;
+        size_t consumed = enc.feed(image.data() + off, chunk);
+        off += consumed;
 
         auto seg = enc.takeSegment();
         if (!seg.empty())
             segments.emplace_back(seg.begin(), seg.end());
     }
-    enc.finish();
-    auto seg = enc.takeSegment();
-    if (!seg.empty())
+    while (true) {
+        enc.finish();
+        auto seg = enc.takeSegment();
+        if (seg.empty())
+            break;
         segments.emplace_back(seg.begin(), seg.end());
+    }
 
     auto decoded = decodeSegments(segments);
     REQUIRE(decoded == image);
