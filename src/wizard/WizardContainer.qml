@@ -429,8 +429,9 @@ Item {
                 
                 // Step list
                 Repeater {
+                    id: stepRepeater
                     model: root.stepNames
-                    
+
                     Rectangle {
                         id: stepItem
                         required property int index
@@ -1572,15 +1573,18 @@ Item {
             if (target > maxY) target = Math.max(0, maxY)
             sidebarScroll.contentY = target
         } else {
-            // Center main group item
+            // Center main group item using its actual position (accounts for
+            // variable-height items like the expanded Customisation sub-list)
             var sidebarIdx = getSidebarIndex(currentStep)
-            var mainRowH = Style.sidebarItemHeight + Style.spacingXSmall
-            // account for header and its bottom margin
-            var target2 = sidebarHeader.y + sidebarHeader.implicitHeight + Style.spacingSmall + sidebarIdx * mainRowH - (sidebarScroll.height/2 - Style.sidebarItemHeight/2)
-            if (target2 < 0) target2 = 0
-            var maxY2 = sidebarScroll.contentHeight - sidebarScroll.height
-            if (target2 > maxY2) target2 = Math.max(0, maxY2)
-            sidebarScroll.contentY = target2
+            var item = stepRepeater.itemAt(sidebarIdx)
+            if (item) {
+                var itemY = item.mapToItem(sidebarScroll.contentItem, 0, 0).y
+                var target2 = itemY - (sidebarScroll.height/2 - Style.sidebarItemHeight/2)
+                if (target2 < 0) target2 = 0
+                var maxY2 = sidebarScroll.contentHeight - sidebarScroll.height
+                if (target2 > maxY2) target2 = Math.max(0, maxY2)
+                sidebarScroll.contentY = target2
+            }
         }
     }
 } 
