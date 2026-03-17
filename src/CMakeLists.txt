@@ -28,49 +28,34 @@ set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Which macOS architectur
 
 project(rpi-imager LANGUAGES CXX C)
 
-# Get version from git tag
 find_package(Git QUIET)
-if(GIT_FOUND)
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_DESCRIBE
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-endif()
 
-# Use git-derived version as the canonical version string
-if(GIT_DESCRIBE)
-    set(IMAGER_VERSION_STR "${GIT_DESCRIBE}")
-    message(STATUS "Version from git: ${IMAGER_VERSION_STR}")
-    
-    # Extract numeric version components from git tag for Windows metadata
-    # Expected format: v2.0.0 or v2.0.0-rc4-60-geac7c2f0
-    string(REGEX MATCH "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)" VERSION_MATCH "${GIT_DESCRIBE}")
-    if(VERSION_MATCH)
-        set(IMAGER_VERSION_MAJOR ${CMAKE_MATCH_1})
-        set(IMAGER_VERSION_MINOR ${CMAKE_MATCH_2})
-        set(IMAGER_VERSION_PATCH ${CMAKE_MATCH_3})
-    else()
-        # Fallback if tag doesn't match expected format
-        set(IMAGER_VERSION_MAJOR 0)
-        set(IMAGER_VERSION_MINOR 0)
-        set(IMAGER_VERSION_PATCH 0)
-        message(WARNING "Could not parse version from git tag: ${GIT_DESCRIBE}")
-    endif()
-else()
-    # Fallback when git is not available or no tags exist
-    set(IMAGER_VERSION_MAJOR 0)
-    set(IMAGER_VERSION_MINOR 0)
-    set(IMAGER_VERSION_PATCH 0)
-    set(IMAGER_VERSION_STR "0.0.0-unknown")
-    message(WARNING "Git not found or no tags available, using fallback version: ${IMAGER_VERSION_STR}")
-endif()
+# Build-time version: re-runs `git describe` on every build so that dirty
+# state and new commits are detected without needing to re-configure.
+# Generates:
+#   imager_version.h          — C++ header with #define IMAGER_VERSION_STR
+#   imager_version_vars.cmake — CMake include file for build-time template substitution
+set(IMAGER_VERSION_VARS "${CMAKE_CURRENT_BINARY_DIR}/imager_version_vars.cmake")
+add_custom_target(generate_version ALL
+    COMMAND ${CMAKE_COMMAND}
+        -DGIT_EXECUTABLE=${GIT_EXECUTABLE}
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake
+    BYPRODUCTS
+        ${CMAKE_CURRENT_BINARY_DIR}/imager_version.h
+        ${CMAKE_CURRENT_BINARY_DIR}/imager_version_vars.cmake
+    COMMENT "Checking build-time version via git describe"
+    VERBATIM
+)
 
-# Version variables for template substitution (Windows .rc, .manifest, etc.)
-# Note: IMAGER_VERSION_STR is used in C++ code, so it needs to be a compile definition
-add_definitions(-DIMAGER_VERSION_STR="${IMAGER_VERSION_STR}")
+# Path to the generic build-time template substitution script
+set(CONFIGURE_VERSIONED_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ConfigureVersionedFile.cmake")
+
+# Make the generated header includable; C++ code uses:
+#   #include "imager_version.h"
+# instead of relying on a -D compile definition.
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -409,6 +394,9 @@ if (WIN32)
 else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${DEPENDENCIES})
 endif()
+
+# Ensure version header is generated before compiling
+add_dependencies(${PROJECT_NAME} generate_version)
 
 # Set output name based on build type
 if(BUILD_CLI_ONLY)

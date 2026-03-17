@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "imager_version.h"
 #include "writeprogresswatchdog.h"
 #include "embedded_config.h"
 #include "config.h"

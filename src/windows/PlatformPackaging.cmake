@@ -141,12 +141,32 @@ add_custom_command(TARGET ${PROJECT_NAME}
 # NSIS or Inno Setup configuration
 option(ENABLE_INNO_INSTALLER "Build Inno Setup installer instead of NSIS" OFF)
 
+# Extra (non-version) variables needed by installer templates — written once
+# at configure time, combined with version vars at build time.
+set(_installer_extra_vars "${CMAKE_CURRENT_BINARY_DIR}/installer_extra_vars.cmake")
+file(WRITE "${_installer_extra_vars}"
+    "set(CMAKE_BINARY_DIR \"${CMAKE_BINARY_DIR}\")\n"
+    "set(CMAKE_SOURCE_DIR \"${CMAKE_SOURCE_DIR}\")\n"
+)
+
 if(ENABLE_INNO_INSTALLER)
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/installer")
-    configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.iss.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
-        @ONLY)
+
+    # Configure .iss at build time so the version matches the binary
+    add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
+        COMMAND ${CMAKE_COMMAND}
+            -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+            -DEXTRA_VARS_FILE=${_installer_extra_vars}
+            -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.iss.in
+            -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss
+            -P ${CONFIGURE_VERSIONED_SCRIPT}
+        DEPENDS
+            ${IMAGER_VERSION_VARS}
+            ${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.iss.in
+        COMMENT "Configuring rpi-imager.iss with build-time version"
+        VERBATIM
+    )
 
     find_program(INNO_COMPILER NAMES iscc ISCC "iscc.exe" PATHS
         "C:/Program Files (x86)/Inno Setup 6"
@@ -157,13 +177,13 @@ if(ENABLE_INNO_INSTALLER)
         if(IMAGER_SIGNED_APP)
             add_custom_target(inno_installer
                 COMMAND "${INNO_COMPILER}" "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss" "/DSIGNING_ENABLED" "/Ssign=${SIGNTOOL} sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a $p"
-                DEPENDS ${PROJECT_NAME}
+                DEPENDS ${PROJECT_NAME} "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
                 COMMENT "Building Inno Setup installer"
                 VERBATIM)
         else()
             add_custom_target(inno_installer
                 COMMAND "${INNO_COMPILER}" "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
-                DEPENDS ${PROJECT_NAME}
+                DEPENDS ${PROJECT_NAME} "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.iss"
                 COMMENT "Building Inno Setup installer"
                 VERBATIM)
         endif()
@@ -173,26 +193,57 @@ if(ENABLE_INNO_INSTALLER)
     endif()
 else()
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in")
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in"
-            "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi"
-            @ONLY)
+        # Configure .nsi at build time so the version matches the binary
+        add_custom_command(
+            OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi"
+            COMMAND ${CMAKE_COMMAND}
+                -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+                -DEXTRA_VARS_FILE=${_installer_extra_vars}
+                -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in
+                -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.nsi
+                -P ${CONFIGURE_VERSIONED_SCRIPT}
+            DEPENDS
+                ${IMAGER_VERSION_VARS}
+                ${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.nsi.in
+            COMMENT "Configuring rpi-imager.nsi with build-time version"
+            VERBATIM
+        )
     else()
         message(STATUS "NSIS template not found; skipping NSIS installer configuration")
     endif()
 endif()
 
-# Resource file generation (contains version info)
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.rc.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.rc"
-    @ONLY)
+# Resource file and manifest: generated at build time so version stays
+# in sync with the binary even without a re-configure.
+# Manifest must be generated before the .rc (which embeds it via RT_MANIFEST)
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.manifest"
+    COMMAND ${CMAKE_COMMAND}
+        -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+        -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.manifest.in
+        -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.manifest
+        -P ${CONFIGURE_VERSIONED_SCRIPT}
+    DEPENDS
+        ${IMAGER_VERSION_VARS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.manifest.in
+    COMMENT "Configuring rpi-imager.manifest with build-time version"
+    VERBATIM
+)
 
-# Manifest generation and copying
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.manifest.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.manifest"
-    @ONLY)
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.rc"
+    COMMAND ${CMAKE_COMMAND}
+        -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+        -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.rc.in
+        -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.rc
+        -P ${CONFIGURE_VERSIONED_SCRIPT}
+    DEPENDS
+        ${IMAGER_VERSION_VARS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/windows/rpi-imager.rc.in
+        "${CMAKE_CURRENT_BINARY_DIR}/rpi-imager.manifest"
+    COMMENT "Configuring rpi-imager.rc with build-time version"
+    VERBATIM
+)
 
 add_custom_command(TARGET ${PROJECT_NAME}
     PRE_BUILD
