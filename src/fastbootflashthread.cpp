@@ -144,8 +144,12 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
     }
 
     // ── cloud-init files ──
+    // Only write meta-data and the ds=nocloud cmdline when there is actual
+    // cloud-init content.  A stale cmdline entry (e.g. recommendedWifiCountry)
+    // alone should not trigger cloud-init file writes.
     bool initCloud = (_initFormat == "cloudinit" || _initFormat == "cloudinit-rpi");
-    if (initCloud) {
+    bool hasCloudContent = !_cloudinit.isEmpty() || !_cloudinitNetwork.isEmpty();
+    if (initCloud && hasCloudContent) {
         QByteArray instanceId = "rpi-imager-" + QByteArray::number(QDateTime::currentMSecsSinceEpoch());
         QByteArray metadata = "instance-id: " + instanceId + "\n";
         if (!fb.writeDeviceFile(transport, BOOT + "meta-data", toSpan(metadata), _cancelled)) {
@@ -552,7 +556,7 @@ void FastbootFlashThread::run()
         // Feed data to the sparse encoder, draining completed segments
         // as they appear.  feed() returns fewer bytes than offered when
         // a segment is ready, so we loop until all data is consumed.
-        const auto* feedPtr = static_cast<const uint8_t*>(slot->data);
+        const auto* feedPtr = reinterpret_cast<const uint8_t*>(slot->data);
         size_t feedRemaining = slot->size;
         while (feedRemaining > 0 && !flashError) {
             size_t consumed = sparse.feed(feedPtr, feedRemaining);

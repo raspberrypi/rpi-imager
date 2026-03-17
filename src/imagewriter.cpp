@@ -3231,23 +3231,25 @@ void ImageWriter::_applySystemdCustomisationFromSettings(const QVariantMap &s)
 {
     // Use CustomisationGenerator for script generation
     QByteArray script = rpi_imager::CustomisationGenerator::generateSystemdScript(s, _piConnectToken);
-    
-    // Extract recommendedWifiCountry for cmdline append
-    QByteArray cmdlineAppend;
-    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
-    if (!wifiCountry.isEmpty()) {
-        cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
-    }
 
-    // Check if secure boot should be enabled
-    // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
-    // iCloud-synced or network paths. The actual write operation will validate the file.
+    QByteArray cmdlineAppend;
     ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
-    bool secureBootEnabled = s.value("secureBootEnabled").toBool();
-    QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
-    if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
-        advOpts |= ImageOptions::EnableSecureBoot;
-        qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+
+    if (!script.isEmpty()) {
+        const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
+        if (!wifiCountry.isEmpty()) {
+            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+        }
+
+        // Check if secure boot should be enabled
+        // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
+        // iCloud-synced or network paths. The actual write operation will validate the file.
+        bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+        QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+        if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
+            advOpts |= ImageOptions::EnableSecureBoot;
+            qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+        }
     }
 
     setImageCustomisation(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), advOpts);
@@ -3265,24 +3267,30 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
     QByteArray netcfg = rpi_imager::CustomisationGenerator::generateCloudInitNetworkConfig(
         s, hasCcRpi);
     
-    // Extract recommendedWifiCountry for cmdline append
+    // Only emit cmdline / advanced options when there is actual content to
+    // customise.  A stale persisted recommendedWifiCountry should not cause
+    // device writes when customisation was skipped.
     QByteArray cmdlineAppend;
-    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
-    if (!wifiCountry.isEmpty()) {
-        cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
-    }
-    
-    // Check if secure boot should be enabled
-    // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
-    // iCloud-synced or network paths. The actual write operation will validate the file.
     ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
-    bool secureBootEnabled = s.value("secureBootEnabled").toBool();
-    QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
-    if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
-        advOpts |= ImageOptions::EnableSecureBoot;
-        qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+
+    bool hasContent = !cloud.isEmpty() || !netcfg.isEmpty();
+    if (hasContent) {
+        const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
+        if (!wifiCountry.isEmpty()) {
+            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+        }
+
+        // Check if secure boot should be enabled
+        // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
+        // iCloud-synced or network paths. The actual write operation will validate the file.
+        bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+        QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+        if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
+            advOpts |= ImageOptions::EnableSecureBoot;
+            qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+        }
     }
-    
+
     setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, advOpts);
 }
 

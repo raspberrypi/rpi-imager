@@ -2276,8 +2276,9 @@ bool DownloadThread::_customizeImage()
         }
 
         auto initCloud = _initFormat == "cloudinit" || _initFormat == "cloudinit-rpi";
+        auto hasCloudContent = !_cloudinit.isEmpty() || !_cloudinitNetwork.isEmpty();
         qDebug() << "_customizeImage: _initFormat=" << _initFormat << "initCloud=" << initCloud << "_cloudinit.isEmpty()=" << _cloudinit.isEmpty();
-        if (initCloud) {
+        if (initCloud && hasCloudContent) {
             // Write meta-data file for NoCloud datasource
             // cloud-init requires meta-data to be present for proper datasource detection
             // instance-id should be unique per imaging to ensure cloud-init processes user-data
