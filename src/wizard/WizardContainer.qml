@@ -15,6 +15,7 @@ Item {
     id: root
     
     required property ImageWriter imageWriter
+    property int sidebarWidthValue: Style.sidebarWidth
     property var optionsPopup: null
     // Show landing language selection step at startup
     property bool showLanguageSelection: false
@@ -172,10 +173,16 @@ Item {
         // Each step can then read from this and update it as needed
         if (imageWriter) {
             customizationSettings = imageWriter.getSavedCustomisationSettings()
-            
+
             // Check if secure boot RSA key is configured
             var rsaKeyPath = imageWriter.getStringSetting("secureboot_rsa_key")
             secureBootKeyConfigured = (rsaKeyPath && rsaKeyPath.length > 0)
+
+            // Restore persisted sidebar width
+            var savedWidth = imageWriter.getStringSetting("sidebarWidth")
+            if (savedWidth) {
+                sidebarWidthValue = clampSidebarWidth(parseInt(savedWidth))
+            }
         }
     }
     
@@ -211,6 +218,16 @@ Item {
     ]
     
     readonly property int firstCustomizationStep: stepHostnameCustomization
+
+    function clampSidebarWidth(width) {
+        return Math.max(Style.sidebarMinWidth, Math.min(Style.sidebarMaxWidth, width))
+    }
+
+    function saveSidebarWidth(width) {
+        if (imageWriter) {
+            imageWriter.setSetting("sidebarWidth", width.toString())
+        }
+    }
 
     // Helper function to map wizard step to sidebar index
     function getSidebarIndex(wizardStep) {
@@ -388,7 +405,10 @@ Item {
         
         // Sidebar
         Rectangle {
-            Layout.preferredWidth: Style.sidebarWidth
+            id: sidebar
+            Layout.preferredWidth: root.sidebarWidthValue
+            Layout.minimumWidth: Style.sidebarMinWidth
+            Layout.maximumWidth: Style.sidebarMaxWidth
             Layout.fillHeight: true
             color: Style.sidebarBackgroundColour
             border.color: Style.sidebarBorderColour
@@ -670,17 +690,62 @@ Item {
                 }
             }
         }
-        // Vertical separator between sidebar and content
+        // Interactive drag handle for resizing sidebar
         Item {
-            Layout.preferredWidth: 1
+            id: dragHandle
+            Layout.preferredWidth: Style.sidebarDragHandleWidth
             Layout.fillHeight: true
+
+            readonly property bool isActive: dragHandleMouseArea.containsMouse || dragHandleMouseArea.pressed
+
+            // Vertical separator line
             Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
                 width: 1
                 height: parent.height * 0.75
-                color: Style.titleSeparatorColor
+                color: dragHandle.isActive ? Style.sidebarDragHandleHoverColor : Style.titleSeparatorColor
+                Behavior on color { ColorAnimation { duration: 150 } }
             }
+
+            // Hover/drag highlight background
+            Rectangle {
+                anchors.fill: parent
+                color: dragHandle.isActive ? Style.sidebarDragHandleHoverBackground : "transparent"
+                Behavior on color { ColorAnimation { duration: 150 } }
+            }
+
+            MouseArea {
+                id: dragHandleMouseArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.SplitHCursor
+
+                property real startX: 0
+                property real startWidth: 0
+
+                onPressed: function(mouse) {
+                    startX = mouse.x + dragHandle.x
+                    startWidth = root.sidebarWidthValue
+                }
+
+                onPositionChanged: function(mouse) {
+                    if (pressed) {
+                        var delta = (mouse.x + dragHandle.x) - startX
+                        root.sidebarWidthValue = root.clampSidebarWidth(startWidth + delta)
+                    }
+                }
+
+                onReleased: root.saveSidebarWidth(root.sidebarWidthValue)
+
+                onDoubleClicked: {
+                    root.sidebarWidthValue = Style.sidebarWidth
+                    root.saveSidebarWidth(Style.sidebarWidth)
+                }
+            }
+
+            Accessible.role: Accessible.Separator
+            Accessible.name: qsTr("Sidebar resize handle")
         }
 
         // Main content area
