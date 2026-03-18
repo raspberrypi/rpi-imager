@@ -48,8 +48,14 @@ FastbootFlashThread::FastbootFlashThread(const QString& fastbootId,
 FastbootFlashThread::~FastbootFlashThread()
 {
     cancel();
-    if (!wait(5000))
-        terminate();
+    // Do NOT terminate() — forceful thread termination skips destructors
+    // for local variables (LibusbContext, RingBuffer, curl handles),
+    // leaking USB device handles and preventing future libusb_open calls.
+    // With all blocking points respecting _cancelled or using bounded
+    // timeouts, the thread should exit within a few seconds.
+    if (!wait(10000)) {
+        qWarning() << "FastbootFlashThread: thread did not finish within 10s after cancel";
+    }
 }
 
 void FastbootFlashThread::cancel()
@@ -423,6 +429,19 @@ void FastbootFlashThread::decompressConsumerProducer()
 // ── Main thread: Flash consumer ──────────────────────────────────────
 void FastbootFlashThread::run()
 {
+    try {
+        runImpl();
+    } catch (const std::exception& e) {
+        qCritical() << "FastbootFlashThread: uncaught exception:" << e.what();
+        emit error(tr("Fastboot error: %1").arg(QString::fromUtf8(e.what())));
+    } catch (...) {
+        qCritical() << "FastbootFlashThread: unknown uncaught exception";
+        emit error(tr("Fastboot error: unexpected internal error"));
+    }
+}
+
+void FastbootFlashThread::runImpl()
+{
     emit preparationStatusUpdate(tr("Connecting to fastboot device..."));
 
     // 1. Open the fastboot USB device
@@ -487,6 +506,7 @@ void FastbootFlashThread::run()
         _imageHash = std::make_unique<AcceleratedCryptographicHash>(QCryptographicHash::Sha256);
 
     // 5. Start pipeline threads
+    emit writing();
     emit preparationStatusUpdate(tr("Downloading and flashing OS image..."));
 
     std::thread downloadThread([this]() { downloadProducer(); });
@@ -643,6 +663,11 @@ void FastbootFlashThread::run()
         emit error(tr("Cancelled"));
         return;
     }
+
+    // A flash error was already reported via error() from sendSegment().
+    // Do not fall through to hash verification / customisation / success().
+    if (flashError)
+        return;
 
     // 8. Verify hash
     if (_imageHash) {

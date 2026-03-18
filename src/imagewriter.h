@@ -43,6 +43,7 @@ class WriteProgressWatchdog;
 class NativeFileDialog;
 #endif
 class RpibootThread;
+class FastbootFlashThread;
 
 class ImageWriter : public QObject
 {
@@ -496,6 +497,7 @@ protected:
     QString _rpibootDeviceId;
     bool _isRpibootDevice = false;
     RpibootThread *_rpibootThread = nullptr;
+    FastbootFlashThread *_fastbootFlashThread = nullptr;
     rpiboot::SideloadMode _rpibootSideloadMode = rpiboot::SideloadMode::Fastboot;
 
     void _parseCompressedFile();

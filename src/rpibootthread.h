@@ -49,7 +49,6 @@ protected:
     void run() override;
 
 private:
-    bool waitForFastbootDevice();
     bool pollForFastbootDevice(std::atomic<bool>& found, QString& fastbootId);
     bool waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice);
 

@@ -75,14 +75,71 @@ static std::vector<uint8_t> decodeSparse(std::span<const uint8_t> sparse)
     return out;
 }
 
-// Decode multiple sparse segments and concatenate the raw output
+// Apply a sparse image onto an existing buffer (RAW/FILL overwrite, DONT_CARE skips)
+static void applySparse(std::span<const uint8_t> sparse, std::vector<uint8_t>& out)
+{
+    REQUIRE(sparse.size() >= sizeof(SparseFileHeader));
+    SparseFileHeader fhdr;
+    std::memcpy(&fhdr, sparse.data(), sizeof(fhdr));
+    REQUIRE(fhdr.magic == SPARSE_MAGIC);
+    REQUIRE(out.size() >= static_cast<size_t>(fhdr.total_blks) * SPARSE_BLK_SZ);
+
+    size_t pos = SPARSE_FILE_HDR_SZ;
+    size_t outOff = 0;
+
+    for (uint32_t i = 0; i < fhdr.total_chunks; ++i) {
+        REQUIRE(pos + sizeof(SparseChunkHeader) <= sparse.size());
+        SparseChunkHeader chdr;
+        std::memcpy(&chdr, sparse.data() + pos, sizeof(chdr));
+        pos += sizeof(SparseChunkHeader);
+
+        size_t blockBytes = static_cast<size_t>(chdr.chunk_sz) * SPARSE_BLK_SZ;
+
+        switch (chdr.chunk_type) {
+        case CHUNK_TYPE_RAW:
+            REQUIRE(pos + blockBytes <= sparse.size());
+            std::memcpy(out.data() + outOff, sparse.data() + pos, blockBytes);
+            pos += blockBytes;
+            break;
+
+        case CHUNK_TYPE_FILL: {
+            REQUIRE(pos + 4 <= sparse.size());
+            uint32_t fillVal;
+            std::memcpy(&fillVal, sparse.data() + pos, 4);
+            pos += 4;
+            for (size_t j = 0; j < blockBytes; j += 4)
+                std::memcpy(out.data() + outOff + j, &fillVal, 4);
+            break;
+        }
+
+        case CHUNK_TYPE_DONT_CARE:
+            // Leave existing content untouched (skip)
+            break;
+
+        default:
+            FAIL("Unknown chunk type: " << chdr.chunk_type);
+        }
+
+        outOff += blockBytes;
+    }
+}
+
+// Decode multiple self-positioning sparse segments by overlaying them onto
+// a single output buffer.  Each segment covers the full image range: a
+// leading DONT_CARE chunk skips past previously-written blocks, then the
+// segment's real data is applied at the correct absolute offset.
 static std::vector<uint8_t> decodeSegments(const std::vector<std::vector<uint8_t>>& segments)
 {
-    std::vector<uint8_t> result;
-    for (const auto& seg : segments) {
-        auto decoded = decodeSparse({seg.data(), seg.size()});
-        result.insert(result.end(), decoded.begin(), decoded.end());
-    }
+    if (segments.empty()) return {};
+
+    // All segments share the same total_blks (full image block count)
+    SparseFileHeader fhdr;
+    std::memcpy(&fhdr, segments[0].data(), sizeof(fhdr));
+    std::vector<uint8_t> result(static_cast<size_t>(fhdr.total_blks) * SPARSE_BLK_SZ, 0);
+
+    for (const auto& seg : segments)
+        applySparse({seg.data(), seg.size()}, result);
+
     return result;
 }
 
@@ -139,7 +196,7 @@ static std::vector<std::vector<uint8_t>> feedAndCollect(
 
 // ── Tests ───────────────────────────────────────────────────────────────
 
-TEST_CASE("All-zero image produces only DONT_CARE chunks", "[sparse]")
+TEST_CASE("All-zero image produces FILL(0) chunks", "[sparse]")
 {
     constexpr size_t IMAGE_SIZE = 64 * SPARSE_BLK_SZ;  // 256 KB
     std::vector<uint8_t> image(IMAGE_SIZE, 0);
@@ -154,13 +211,14 @@ TEST_CASE("All-zero image produces only DONT_CARE chunks", "[sparse]")
     REQUIRE(decoded.size() == IMAGE_SIZE);
     REQUIRE(decoded == image);
 
-    // Check stats
-    REQUIRE(enc.dontCareBlockCount() == 64);
+    // Zero blocks are FILL(0), not DONT_CARE — raw disk images need
+    // explicit zeroing since DONT_CARE skips the region on the device.
+    REQUIRE(enc.fillBlockCount() == 64);
     REQUIRE(enc.rawBlockCount() == 0);
-    REQUIRE(enc.fillBlockCount() == 0);
+    REQUIRE(enc.dontCareBlockCount() == 0);
 
-    // The sparse segment should be tiny (header + one DONT_CARE chunk)
-    REQUIRE(segments[0].size() == SPARSE_FILE_HDR_SZ + SPARSE_CHUNK_HDR_SZ);
+    // header + one FILL chunk (12-byte header + 4-byte fill value)
+    REQUIRE(segments[0].size() == SPARSE_FILE_HDR_SZ + SPARSE_CHUNK_HDR_SZ + 4);
 }
 
 TEST_CASE("Fill-pattern image produces FILL chunks", "[sparse]")
@@ -243,8 +301,8 @@ TEST_CASE("Mixed image: raw + zero + fill + raw", "[sparse]")
     REQUIRE(decoded == image);
 
     REQUIRE(enc.rawBlockCount() == 2);
-    REQUIRE(enc.dontCareBlockCount() == 1);
-    REQUIRE(enc.fillBlockCount() == 1);
+    REQUIRE(enc.fillBlockCount() == 2);   // zero block + 0xAA block
+    REQUIRE(enc.dontCareBlockCount() == 0);
 }
 
 TEST_CASE("Segment splitting respects maxDownloadSize", "[sparse]")
@@ -313,7 +371,7 @@ TEST_CASE("Each segment has a valid sparse file header", "[sparse]")
     SparseEncoder enc(MAX_SEG, IMAGE_SIZE);
     auto segments = feedAndCollect(enc, image);
 
-    uint64_t totalBlocks = 0;
+    uint32_t expectedBlocks = static_cast<uint32_t>(IMAGE_SIZE / SPARSE_BLK_SZ);
     for (const auto& seg : segments) {
         REQUIRE(seg.size() >= sizeof(SparseFileHeader));
         SparseFileHeader fhdr;
@@ -323,11 +381,10 @@ TEST_CASE("Each segment has a valid sparse file header", "[sparse]")
         REQUIRE(fhdr.major_version == SPARSE_MAJOR_VER);
         REQUIRE(fhdr.blk_sz == SPARSE_BLK_SZ);
         REQUIRE(fhdr.total_chunks > 0);
-        REQUIRE(fhdr.total_blks > 0);
-        totalBlocks += fhdr.total_blks;
+        // Each segment covers the full image range (self-positioning via
+        // a leading DONT_CARE prefix for previously-written blocks).
+        REQUIRE(fhdr.total_blks == expectedBlocks);
     }
-
-    REQUIRE(totalBlocks == IMAGE_SIZE / SPARSE_BLK_SZ);
 }
 
 TEST_CASE("Empty image produces no segments", "[sparse]")
@@ -393,10 +450,10 @@ TEST_CASE("Large zero regions produce compact sparse output", "[sparse]")
     auto seg = enc.takeSegment();
     REQUIRE(!seg.empty());
 
-    // Should be just header + one DONT_CARE chunk
-    REQUIRE(seg.size() == SPARSE_FILE_HDR_SZ + SPARSE_CHUNK_HDR_SZ);
+    // Should be just header + one FILL chunk (12-byte header + 4-byte fill value)
+    REQUIRE(seg.size() == SPARSE_FILE_HDR_SZ + SPARSE_CHUNK_HDR_SZ + 4);
 
-    REQUIRE(enc.dontCareBlockCount() == BLOCKS);
+    REQUIRE(enc.fillBlockCount() == BLOCKS);
     REQUIRE(enc.rawBlockCount() == 0);
 }
 

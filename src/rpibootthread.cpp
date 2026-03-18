@@ -179,13 +179,29 @@ void RpibootThread::run()
     _fastbootFound.store(false);
     QString fastbootId;
 
-    // Launch fastboot scanner in background for Fastboot mode
+    // Launch fastboot scanner in background for Fastboot mode.
+    // Note: fastbootId is captured by reference — safe because the
+    // ScannerGuard below guarantees the scanner thread is joined before
+    // this variable goes out of scope on any exit path.
     std::thread fastbootScanner;
     if (_mode == SideloadMode::Fastboot) {
         fastbootScanner = std::thread([this, &fastbootId]() {
             pollForFastbootDevice(_fastbootFound, fastbootId);
         });
     }
+
+    // RAII guard: ensure the scanner thread is joined on all exit paths.
+    // Signals cancellation first so the scanner exits promptly.
+    struct ScannerGuard {
+        std::thread& thread;
+        std::atomic<bool>& cancelled;
+        ~ScannerGuard() {
+            if (thread.joinable()) {
+                cancelled.store(true);
+                thread.join();
+            }
+        }
+    } scannerGuard{fastbootScanner, _cancelled};
 
     {
         bool fileServerOk = false;
@@ -196,10 +212,6 @@ void RpibootThread::run()
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QStringLiteral("Failed to open USB device after re-enumeration"));
                 emit error(tr("Failed to open USB device after re-enumeration"));
-                if (fastbootScanner.joinable()) {
-                    _cancelled.store(true);
-                    fastbootScanner.join();
-                }
                 return;
             }
 
@@ -209,8 +221,8 @@ void RpibootThread::run()
             // Use a local atomic that we set when fastboot appears.
             std::atomic<bool> combinedCancel{false};
             auto wrappedProgress = [&](uint64_t current, uint64_t total, const std::string& status) {
-                // Check if fastboot appeared; if so, signal the file server to stop
-                if (_fastbootFound.load())
+                // Stop the file server when fastboot appears OR the user cancels
+                if (_fastbootFound.load() || _cancelled.load())
                     combinedCancel.store(true);
                 progressCb(current, total, status);
             };
@@ -223,10 +235,6 @@ void RpibootThread::run()
                 emit eventRpibootProtocol(static_cast<quint32>(phaseTimer.elapsed()), false,
                                           QString::fromUtf8(e.what()));
                 emit error(tr("USB error: %1").arg(e.what()));
-                if (fastbootScanner.joinable()) {
-                    _cancelled.store(true);
-                    fastbootScanner.join();
-                }
                 return;
             }
             fileServerOk = true;  // Fastboot found — the exception is benign
@@ -243,10 +251,6 @@ void RpibootThread::run()
             if (!_cancelled.load())
                 emit error(tr("rpiboot protocol failed: %1")
                            .arg(QString::fromStdString(protocol.lastError())));
-            if (fastbootScanner.joinable()) {
-                _cancelled.store(true);
-                fastbootScanner.join();
-            }
             return;
         }
     }
@@ -258,13 +262,8 @@ void RpibootThread::run()
                                   .arg(bootcodeDiag)
                                   .arg(fileServeDiag));
 
-    if (_cancelled.load()) {
-        if (fastbootScanner.joinable()) {
-            _cancelled.store(true);
-            fastbootScanner.join();
-        }
+    if (_cancelled.load())
         return;
-    }
 
     // ── Step 3: Wait for the target device to appear ───────────────────
     switch (_mode) {
@@ -278,7 +277,8 @@ void RpibootThread::run()
             phaseTimer.restart();
         }
         {
-            // Wait for the background scanner to finish
+            // Wait for the background scanner to finish (non-cancelling join —
+            // let it complete naturally or time out on its own).
             if (fastbootScanner.joinable())
                 fastbootScanner.join();
 
@@ -440,15 +440,3 @@ bool RpibootThread::pollForFastbootDevice(std::atomic<bool>& found, QString& fas
     return false;
 }
 
-bool RpibootThread::waitForFastbootDevice()
-{
-    QString fastbootId;
-    std::atomic<bool> found{false};
-    if (pollForFastbootDevice(found, fastbootId)) {
-        emit fastbootDeviceReady(fastbootId);
-        return true;
-    }
-    if (!_cancelled.load())
-        emit error(tr("Timed out waiting for fastboot device to appear."));
-    return false;
-}

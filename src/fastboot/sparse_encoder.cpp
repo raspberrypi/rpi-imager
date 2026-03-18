@@ -11,9 +11,10 @@
 
 namespace fastboot {
 
-// Minimum segment must hold: file header + one chunk header + one block
+// Minimum segment must hold: file header + leading DONT_CARE prefix +
+// one chunk header + one block + trailing DONT_CARE suffix
 static constexpr size_t MIN_SEGMENT_SIZE =
-    SPARSE_FILE_HDR_SZ + SPARSE_CHUNK_HDR_SZ + SPARSE_BLK_SZ;
+    SPARSE_FILE_HDR_SZ + 2 * SPARSE_CHUNK_HDR_SZ + SPARSE_CHUNK_HDR_SZ + SPARSE_BLK_SZ;
 
 SparseEncoder::SparseEncoder(uint32_t maxSegmentSize, uint64_t totalImageSize)
     : _maxSegmentSize(maxSegmentSize)
@@ -38,6 +39,25 @@ void SparseEncoder::beginSegment()
     _segRaw = 0;
     _segFill = 0;
     _segDontCare = 0;
+
+    // For continuation segments (not the first), prepend a DONT_CARE chunk
+    // that covers all blocks already written by previous segments.  This
+    // makes each segment self-positioning: the device firmware starts
+    // writing at LBA 0 and the DONT_CARE prefix causes it to lseek past
+    // already-written data before writing this segment's real content.
+    if (_processedBlocks > 0) {
+        auto skipBlocks = static_cast<uint32_t>(_processedBlocks);
+        SparseChunkHeader hdr{};
+        hdr.chunk_type = CHUNK_TYPE_DONT_CARE;
+        hdr.chunk_sz = skipBlocks;
+        hdr.total_sz = SPARSE_CHUNK_HDR_SZ;
+
+        size_t pos = _out.size();
+        _out.resize(pos + SPARSE_CHUNK_HDR_SZ);
+        std::memcpy(_out.data() + pos, &hdr, sizeof(hdr));
+        _segmentBlocks = skipBlocks;
+        ++_chunkCount;
+    }
 }
 
 
@@ -90,10 +110,36 @@ void SparseEncoder::finaliseSegment()
 {
     flushRun();
 
-    if (_chunkCount == 0)
-        return;  // nothing to emit
+    // No real image data was added to this segment — only the leading
+    // DONT_CARE prefix from beginSegment() (if any).  Discard it.
+    // The per-segment counters (_segRaw, _segFill, _segDontCare) are only
+    // incremented by processBlock(), never by the prefix, so all-zero
+    // means no real blocks were processed.
+    if (_segRaw == 0 && _segFill == 0 && _segDontCare == 0)
+        return;
 
-    // Write the file header
+    // Append a trailing DONT_CARE chunk if this segment doesn't reach the
+    // end of the image.  The device firmware validates that chunk block
+    // counts sum to total_blks, so every segment must account for the
+    // full image range: leading DONT_CARE (previous blocks) + real data +
+    // trailing DONT_CARE (future blocks).
+    if (_totalImageBlocks > 0 && _segmentBlocks < static_cast<uint32_t>(_totalImageBlocks)) {
+        auto tailBlocks = static_cast<uint32_t>(_totalImageBlocks) - _segmentBlocks;
+        SparseChunkHeader tail{};
+        tail.chunk_type = CHUNK_TYPE_DONT_CARE;
+        tail.chunk_sz = tailBlocks;
+        tail.total_sz = SPARSE_CHUNK_HDR_SZ;
+
+        size_t pos = _out.size();
+        _out.resize(pos + SPARSE_CHUNK_HDR_SZ);
+        std::memcpy(_out.data() + pos, &tail, sizeof(tail));
+        _segmentBlocks += tailBlocks;
+        ++_chunkCount;
+    }
+
+    // Write the file header.  total_blks is the full image block count so
+    // that the device firmware sees a consistent image length across all
+    // segments.
     SparseFileHeader fhdr{};
     fhdr.magic = SPARSE_MAGIC;
     fhdr.major_version = SPARSE_MAJOR_VER;
@@ -101,7 +147,9 @@ void SparseEncoder::finaliseSegment()
     fhdr.file_hdr_sz = SPARSE_FILE_HDR_SZ;
     fhdr.chunk_hdr_sz = SPARSE_CHUNK_HDR_SZ;
     fhdr.blk_sz = SPARSE_BLK_SZ;
-    fhdr.total_blks = _segmentBlocks;
+    fhdr.total_blks = _totalImageBlocks > 0
+        ? static_cast<uint32_t>(_totalImageBlocks)
+        : _segmentBlocks;
     fhdr.total_chunks = _chunkCount;
     fhdr.image_checksum = 0;
     std::memcpy(_out.data(), &fhdr, sizeof(fhdr));
@@ -122,14 +170,15 @@ void SparseEncoder::finaliseSegment()
 
 void SparseEncoder::processBlock(const uint8_t* block)
 {
-    // Classify the block
+    // Classify the block.  Both zero and uniform-fill blocks are encoded
+    // as FILL — never DONT_CARE — because this is a raw disk image where
+    // every byte is meaningful.  DONT_CARE would skip the region (lseek
+    // past it), leaving whatever was previously on the device.
+    // isBlockFill handles zero blocks too (fill value 0).
     uint16_t type;
     uint32_t fillVal = 0;
 
-    if (isBlockZero(block)) {
-        type = CHUNK_TYPE_DONT_CARE;
-        ++_statsDontCare;
-    } else if (isBlockFill(block, &fillVal)) {
+    if (isBlockFill(block, &fillVal)) {
         type = CHUNK_TYPE_FILL;
         ++_statsFill;
     } else {
@@ -142,12 +191,15 @@ void SparseEncoder::processBlock(const uint8_t* block)
     if (continues && type == CHUNK_TYPE_FILL && fillVal != _runFillValue)
         continues = false;
 
-    // Would this block fit in the current segment?
+    // Would this block fit in the current segment?  Reserve space for the
+    // trailing DONT_CARE chunk that finaliseSegment() appends to pad each
+    // segment to the full image block count.
+    size_t trailer = (_totalImageBlocks > 0) ? SPARSE_CHUNK_HDR_SZ : 0;
     size_t cost = continues
         ? (type == CHUNK_TYPE_RAW ? SPARSE_BLK_SZ : 0)
         : (SPARSE_CHUNK_HDR_SZ + (type == CHUNK_TYPE_RAW ? SPARSE_BLK_SZ
                                  : type == CHUNK_TYPE_FILL ? 4 : 0));
-    if (_out.size() + cost > _maxSegmentSize) {
+    if (_out.size() + cost + trailer > _maxSegmentSize) {
         finaliseSegment();
         continues = false;
         cost = SPARSE_CHUNK_HDR_SZ + (type == CHUNK_TYPE_RAW ? SPARSE_BLK_SZ

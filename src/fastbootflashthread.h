@@ -48,6 +48,7 @@ public:
                                 const QByteArray &initFormat);
 
 signals:
+    void writing();   // Emitted when download+flash pipeline starts
     void success();
     void error(QString msg);
     void finalizing();
@@ -60,6 +61,7 @@ protected:
     void run() override;
 
 private:
+    void runImpl();
     void downloadProducer();
     void decompressConsumerProducer();
     bool applyCustomisation(class fastboot::FastbootProtocol& fb,

@@ -60,6 +60,7 @@
 #include "curlfetcher.h"
 #include "rpibootthread.h"
 #include "fastbootflashthread.h"
+#include "fastbootflashthread.h"
 #include "curlnetworkconfig.h"
 #include <QDebug>
 #include <QJsonObject>
@@ -576,34 +577,46 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     }
 
     // Start FastbootFlashThread
-    auto *fbt = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
-    fbt->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
-    connect(fbt, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
-    connect(fbt, &FastbootFlashThread::error, this, &ImageWriter::onError);
-    connect(fbt, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
-    connect(fbt, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
+    _fastbootFlashThread = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
+    _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+    connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
+    connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
         emit downloadProgress(QVariant(now), QVariant(total));
     });
-    connect(fbt, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
+    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
         emit writeProgress(QVariant(now), QVariant(total));
     });
-    connect(fbt, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+    connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+    connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
+        setWriteState(WriteState::Writing);
+        startProgressPolling();
+    });
+
+    // Clean up thread pointer when finished
+    connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
+        if (_fastbootFlashThread) {
+            _fastbootFlashThread->deleteLater();
+            _fastbootFlashThread = nullptr;
+        }
+    });
 
     // Wire fastboot timing events and progress to PerformanceStats
-    connect(fbt, &FastbootFlashThread::eventFastbootDeviceOpen,
+    connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
             this, [this](quint32 ms, bool ok, QString meta){
                 _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
             });
-    connect(fbt, &FastbootFlashThread::downloadProgress,
+    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
             this, [this](quint64 now, quint64 total){
                 _performanceStats->recordDownloadProgress(now, total);
             });
-    connect(fbt, &FastbootFlashThread::writeProgress,
+    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
             this, [this](quint64 now, quint64 total){
                 _performanceStats->recordWriteProgress(now, total);
             });
 
-    fbt->start();
+    _fastbootFlashThread->start();
 }
 
 void ImageWriter::onRpibootError(const QString &msg)
@@ -692,6 +705,16 @@ void ImageWriter::startWrite()
         }
         delete _rpibootThread;
         _rpibootThread = nullptr;
+    }
+
+    // Same for the fastboot flash thread.
+    if (_fastbootFlashThread) {
+        if (_fastbootFlashThread->isRunning()) {
+            _fastbootFlashThread->cancel();
+            _fastbootFlashThread->wait(5000);
+        }
+        delete _fastbootFlashThread;
+        _fastbootFlashThread = nullptr;
     }
 
     if (!readyToWrite())
@@ -1398,6 +1421,20 @@ void ImageWriter::cancelWrite()
             if (_rpibootThread) {
                 _rpibootThread->deleteLater();
                 _rpibootThread = nullptr;
+            }
+            setWriteState(WriteState::Cancelled);
+            emit cancelled();
+        });
+        return;
+    }
+
+    if (_fastbootFlashThread)
+    {
+        _fastbootFlashThread->cancel();
+        connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
+            if (_fastbootFlashThread) {
+                _fastbootFlashThread->deleteLater();
+                _fastbootFlashThread = nullptr;
             }
             setWriteState(WriteState::Cancelled);
             emit cancelled();
@@ -2278,15 +2315,23 @@ void ImageWriter::setVerifyEnabled(bool verify)
 /* Relay events from download thread to QML */
 void ImageWriter::onSuccess()
 {
+    // Guard against a late success signal arriving after an error has
+    // already been reported (e.g. FastbootFlashThread falling through
+    // after a flash failure).
+    if (_writeState == WriteState::Failed || _writeState == WriteState::Cancelled) {
+        qDebug() << "Ignoring late success signal — write already in state:" << _writeState;
+        return;
+    }
+
     setWriteState(WriteState::Succeeded);
     stopProgressPolling();
-    
+
     // End performance stats session
     _performanceStats->endSession(true);
-    
+
     // Clear Pi Connect token on successful write completion
     clearConnectToken();
-    
+
     emit success();
 
     if (_settings.value("beep").toBool()) {
@@ -2313,6 +2358,9 @@ void ImageWriter::onError(QString msg)
     // after the user starts a new write attempt, causing dual-write crashes. (#1511)
     if (_thread && _thread->isRunning()) {
         _thread->cancelDownload();
+    }
+    if (_fastbootFlashThread && _fastbootFlashThread->isRunning()) {
+        _fastbootFlashThread->cancel();
     }
     
     // End performance stats session with error

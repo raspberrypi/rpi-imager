@@ -75,11 +75,10 @@ private:
     std::optional<std::filesystem::path> findCachedVersion(SideloadMode mode,
                                                             ChipGeneration chip) const;
 
-    // For BCM2712 Fastboot: extract bootcode5.bin from the bootfiles.bin TAR
-    // (firmware/bootfiles.bin in usbboot, symlinked from
-    // mass-storage-gadget64/bootfiles.bin).  recovery5/bootcode5.bin is the
-    // EEPROM update binary and must NOT be used for mass-storage-gadget mode.
-    bool extractBootcodeFromBootfiles(const std::filesystem::path& versionDir);
+    // Extract bootcode from the fastboot bootfiles.bin TAR archive.
+    // BCM2711 → bootcode4.bin, BCM2712 → bootcode5.bin.
+    bool extractBootcodeFromBootfiles(const std::filesystem::path& versionDir,
+                                       ChipGeneration chip);
 
     std::string _lastError;
 };

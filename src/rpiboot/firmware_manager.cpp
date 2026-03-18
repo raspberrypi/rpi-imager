@@ -35,19 +35,17 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
     const std::string usbboot(USBBOOT_RAW_BASE);
     const std::string provisioner(PROVISIONER_RAW_BASE);
 
-    // Bootcode file — always required
+    // Bootcode file — required for BCM2711/BCM2712.
+    // In Fastboot mode, bootcode is extracted from bootfiles.bin at cache
+    // time (see extractBootcodeFromBootfiles).  In SecureBootRecovery mode,
+    // a separate download is needed because the recovery binary differs.
+    // BCM2835/BCM2836_7 use a unified bootfiles.bin that the ROM loads
+    // directly — no separate bootcode file at all.
     if (chip == ChipGeneration::BCM2711) {
-        entries.push_back({usbboot + "firmware/2711/bootcode4.bin", "bootcode4.bin"});
+        if (mode == SideloadMode::SecureBootRecovery) {
+            entries.push_back({usbboot + "firmware/2711/bootcode4.bin", "bootcode4.bin"});
+        }
     } else if (chip == ChipGeneration::BCM2712) {
-        // For SecureBootRecovery, recovery5/bootcode5.bin IS the correct
-        // binary — it boots the device into EEPROM-update mode.
-        //
-        // For Fastboot, the correct bootcode5.bin lives INSIDE the
-        // firmware/bootfiles.bin TAR archive (symlinked as
-        // mass-storage-gadget64/bootfiles.bin).  recovery5/bootcode5.bin is
-        // the EEPROM update binary and will NOT transition the device to
-        // mass-storage/file-server mode.  It is extracted by
-        // extractBootcodeFromBootfiles() in ensureAvailable().
         if (mode == SideloadMode::SecureBootRecovery) {
             entries.push_back({usbboot + "recovery5/bootcode5.bin", "bootcode5.bin"});
         }
@@ -55,15 +53,21 @@ std::vector<FirmwareManager::ManifestEntry> FirmwareManager::buildManifest(
 
     switch (mode) {
     case SideloadMode::Fastboot:
+        // All chips share the same fastboot gadget kernel and config.
         entries.push_back({provisioner + "host-support/fastboot-gadget.img",
                            "fastboot/boot.img"});
-        // mass-storage-gadget64/bootfiles.bin is a git symlink pointing to
-        // ../firmware/bootfiles.bin — GitHub raw serves the symlink target
-        // text, not the binary.  Download the real file directly.
-        entries.push_back({usbboot + "firmware/bootfiles.bin",
-                           "fastboot/bootfiles.bin"});
         entries.push_back({usbboot + "mass-storage-gadget64/config.txt",
                            "fastboot/config.txt"});
+        // bootfiles.bin differs by chip family: older devices use a unified
+        // 2710 archive from rpi-sb-provisioner; BCM2711/BCM2712 use the
+        // usbboot firmware archive (which also contains bootcode).
+        if (chip == ChipGeneration::BCM2835 || chip == ChipGeneration::BCM2836_7) {
+            entries.push_back({provisioner + "host-support/fastboot-gadget.2710-bootfiles-bin",
+                               "fastboot/bootfiles.bin"});
+        } else {
+            entries.push_back({usbboot + "firmware/bootfiles.bin",
+                               "fastboot/bootfiles.bin"});
+        }
         break;
 
     case SideloadMode::SecureBootRecovery:
@@ -103,11 +107,12 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         return {};
     }
 
-    // For BCM2712+Fastboot, bootcode5.bin must be extracted from the
-    // bootfiles.bin TAR on every run to avoid stale/wrong cached binaries
-    // (e.g. a previously cached recovery5/bootcode5.bin).
+    // BCM2711 and BCM2712 in Fastboot mode extract their bootcode from
+    // bootfiles.bin rather than downloading it as a separate file.
+    // Re-extract on every run to avoid stale cached binaries.
     const bool needsBootcodeExtraction =
-        (chip == ChipGeneration::BCM2712 && mode == SideloadMode::Fastboot);
+        (mode == SideloadMode::Fastboot &&
+         (chip == ChipGeneration::BCM2711 || chip == ChipGeneration::BCM2712));
 
     // 2. Cache hit — all manifest files already exist (and no stale .tmp files)
     bool allExist = true;
@@ -165,10 +170,10 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         }
     }
 
-    // 3b. For BCM2712+Fastboot: extract the correct bootcode5.bin from the
-    // bootfiles.bin TAR (upstream uses check_file() against this same TAR).
+    // 3b. Extract the correct bootcode from bootfiles.bin for chips that
+    // need it (BCM2711 → bootcode4.bin, BCM2712 → bootcode5.bin).
     if (needsBootcodeExtraction) {
-        if (!extractBootcodeFromBootfiles(versionDir))
+        if (!extractBootcodeFromBootfiles(versionDir, chip))
             return {};  // _lastError set by helper
     }
 
@@ -300,13 +305,20 @@ bool FirmwareManager::validateCacheForDevice(const std::filesystem::path& versio
     if (!std::filesystem::exists(versionDir))
         return false;
 
-    // Check bootcode file for this chip (must exist and be non-empty to
-    // guard against partially-downloaded files from interrupted runs)
-    std::error_code ec;
-    auto bootcodeFile = versionDir / BootcodeLoader::bootcodeFilename(chip);
-    auto bootcodeSize = std::filesystem::file_size(bootcodeFile, ec);
-    if (ec || bootcodeSize == 0)
-        return false;
+    // BCM2835/BCM2836_7 in Fastboot mode use a unified bootfiles.bin that
+    // contains bootcode, kernel, and device tree — no separate bootcode file.
+    // BCM2711/BCM2712 expect a separate bootcode*.bin on disk.
+    const bool needsSeparateBootcode =
+        !(mode == SideloadMode::Fastboot &&
+          (chip == ChipGeneration::BCM2835 || chip == ChipGeneration::BCM2836_7));
+
+    if (needsSeparateBootcode) {
+        std::error_code ec;
+        auto bootcodeFile = versionDir / BootcodeLoader::bootcodeFilename(chip);
+        auto bootcodeSize = std::filesystem::file_size(bootcodeFile, ec);
+        if (ec || bootcodeSize == 0)
+            return false;
+    }
 
     // Check mode-specific subdirectory
     switch (mode) {
@@ -339,14 +351,13 @@ void FirmwareManager::clearCache()
 }
 
 // ── extractBootcodeFromBootfiles ─────────────────────────────────────────
-// For BCM2712 in Fastboot mode, bootcode5.bin must come from inside the
-// firmware/bootfiles.bin TAR archive (symlinked as
-// mass-storage-gadget64/bootfiles.bin).  The upstream rpiboot uses
-// check_file() with use_bootfiles=1 to read it from the same TAR.
-// recovery5/bootcode5.bin is the EEPROM update binary and is only correct
-// for SecureBootRecovery mode.
+// For BCM2711/BCM2712 in Fastboot mode, bootcode must come from inside
+// the firmware/bootfiles.bin TAR archive.  The archive stores chip-specific
+// files under directory prefixes (e.g. "2711/bootcode4.bin",
+// "2712/bootcode5.bin").
 
-bool FirmwareManager::extractBootcodeFromBootfiles(const std::filesystem::path& versionDir)
+bool FirmwareManager::extractBootcodeFromBootfiles(const std::filesystem::path& versionDir,
+                                                    ChipGeneration chip)
 {
     auto tarPath = versionDir / "fastboot" / "bootfiles.bin";
 
@@ -356,37 +367,35 @@ bool FirmwareManager::extractBootcodeFromBootfiles(const std::filesystem::path& 
         return false;
     }
 
-    // In firmware/bootfiles.bin (= mass-storage-gadget64/bootfiles.bin),
-    // BCM2712 bootcode is stored as "2712/bootcode5.bin".
-    // The rpi-sb-bootstrap.sh script confirms this layout:
-    //   tar -vxf /usr/share/rpiboot/mass-storage-gadget64/bootfiles.bin
-    //   # produces 2712/bootcode5.bin among other files
-    const auto* data = bootfiles.find("2712/bootcode5.bin");
+    auto bootcodeFilename = BootcodeLoader::bootcodeFilename(chip);
+    auto prefix = std::string(chipDirectoryPrefix(chip));
+
+    // Try chip-prefixed path first (e.g. "2711/bootcode4.bin"),
+    // then fall back to the bare filename at the TAR root.
+    const auto* data = bootfiles.find(prefix + "/" + bootcodeFilename);
+    if (!data || data->empty())
+        data = bootfiles.find(bootcodeFilename);
     if (!data || data->empty()) {
-        // Fallback: some builds may have it at the root
-        data = bootfiles.find("bootcode5.bin");
-    }
-    if (!data || data->empty()) {
-        _lastError = "bootcode5.bin not found inside fastboot/bootfiles.bin "
-                     "(tried 2712/bootcode5.bin and bootcode5.bin)";
+        _lastError = bootcodeFilename + " not found inside fastboot/bootfiles.bin "
+                     "(tried " + prefix + "/" + bootcodeFilename + " and " + bootcodeFilename + ")";
         return false;
     }
 
-    auto destPath = versionDir / "bootcode5.bin";
+    auto destPath = versionDir / bootcodeFilename;
     std::ofstream out(destPath, std::ios::binary);
     if (!out) {
-        _lastError = "Cannot write bootcode5.bin: " + destPath.string();
+        _lastError = "Cannot write " + bootcodeFilename + ": " + destPath.string();
         return false;
     }
     out.write(reinterpret_cast<const char*>(data->data()),
               static_cast<std::streamsize>(data->size()));
     if (!out) {
-        _lastError = "Write failed for bootcode5.bin";
+        _lastError = "Write failed for " + bootcodeFilename;
         return false;
     }
 
-    qDebug() << "FirmwareManager: extracted bootcode5.bin ("
-             << data->size() << "bytes) from fastboot/bootfiles.bin";
+    qDebug() << "FirmwareManager: extracted" << bootcodeFilename.c_str()
+             << "(" << data->size() << "bytes) from fastboot/bootfiles.bin";
     return true;
 }
 
