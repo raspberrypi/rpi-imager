@@ -230,6 +230,7 @@ WizardStepBase {
                 Layout.maximumHeight: Math.round(root.height * 0.4)
                 clip: true
                 activeFocusOnTab: true
+                focusPolicy: Qt.TabFocus
                 Accessible.role: Accessible.List
                 Accessible.name: {
                     // Build a list of visible customizations to announce

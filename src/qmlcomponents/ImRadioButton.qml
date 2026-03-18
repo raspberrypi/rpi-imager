@@ -14,6 +14,7 @@ RadioButton {
     font.pointSize: Style.fontSizeSm
     font.family: Style.fontFamily
     activeFocusOnTab: true
+    focusPolicy: Qt.TabFocus
     
     // Allow custom accessibility description
     property string accessibleDescription: ""

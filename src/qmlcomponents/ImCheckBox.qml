@@ -15,6 +15,7 @@ CheckBox {
     font.pointSize: Style.fontSizeSm
     font.family: Style.fontFamily
     activeFocusOnTab: true
+    focusPolicy: Qt.TabFocus
     
     // Export the natural/desired width for dialog sizing calculations
     readonly property real naturalWidth: textMetrics.width + (indicator ? indicator.width : 20) + spacing + leftPadding + rightPadding

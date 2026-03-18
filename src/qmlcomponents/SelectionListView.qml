@@ -45,6 +45,7 @@ ListView {
     clip: true
     focus: true
     activeFocusOnTab: true
+    focusPolicy: Qt.TabFocus
     boundsBehavior: Flickable.StopAtBounds
     currentIndex: -1
     

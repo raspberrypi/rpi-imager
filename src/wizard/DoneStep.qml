@@ -200,6 +200,7 @@ WizardStepBase {
                 clip: true
                 visible: root.anyCustomizationsApplied
                 activeFocusOnTab: true
+                focusPolicy: Qt.TabFocus
                 Accessible.role: Accessible.List
                 Accessible.name: {
                     // Build a list of visible customizations to announce using snapshot

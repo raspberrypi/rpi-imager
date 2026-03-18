@@ -50,6 +50,7 @@ Item {
 
     // Enable tab navigation to this field
     activeFocusOnTab: true
+    focusPolicy: Qt.TabFocus
 
     // Accessible properties
     Accessible.role: Accessible.EditableText

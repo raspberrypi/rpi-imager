@@ -168,6 +168,7 @@ Item {
             Material.accent: sw.activeFocus ? Style.raspberryRed : Style.formControlActiveColor
             checked: pill.checked
             activeFocusOnTab: true
+            focusPolicy: Qt.TabFocus
             
             // Access imageWriter from parent context
             property var imageWriter: {

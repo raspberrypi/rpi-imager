@@ -63,6 +63,7 @@ Button {
     }
 
     activeFocusOnTab: true
+    focusPolicy: Qt.TabFocus
     
     // Accessibility properties
     Accessible.role: Accessible.Button

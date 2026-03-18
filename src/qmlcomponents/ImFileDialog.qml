@@ -308,6 +308,7 @@ BaseDialog {
                 ? qsTr("Enter path or URL\u2026")
                 : qsTr("Enter folder or file path\u2026")
             activeFocusOnTab: true
+            focusPolicy: Qt.TabFocus
             onTextChanged: {
                 if (!dialog.isSaveDialog) {
                     dialog._pathFieldFile = dialog._looksLikeFilePath(text)
@@ -397,6 +398,7 @@ BaseDialog {
                     Layout.preferredHeight: contentHeight
                     clip: true
                     activeFocusOnTab: true
+                    focusPolicy: Qt.TabFocus
                     model: placesModel
                     currentIndex: -1  // No item selected by default
                     highlightFollowsCurrentItem: true
@@ -476,6 +478,7 @@ BaseDialog {
                     Layout.fillHeight: true
                     clip: true
                     activeFocusOnTab: true
+                    focusPolicy: Qt.TabFocus
                     model: dirsOnlyModel
                     spacing: 2
                     currentIndex: -1  // No item selected by default
