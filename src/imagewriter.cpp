@@ -487,7 +487,7 @@ void ImageWriter::setEngine(QQmlApplicationEngine *engine)
 }
 
 /* Set URL to download from */
-void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, QByteArray initFormat, QString releaseDate)
+void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, QByteArray initFormat, QString releaseDate, QString bmapUrl)
 {
     _src = url;
     _downloadLen = downloadLen;
@@ -498,6 +498,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
     _osReleaseDate = releaseDate;
+    _bmapUrl = bmapUrl;
     // Gzip ISIZE is 32-bit, so uncompressed size is unreliable for files >4GB.
     // When no trusted extract size is provided by the manifest, mark it so the
     // UI can show indeterminate progress instead of a misleading percentage.
@@ -579,6 +580,8 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     // Start FastbootFlashThread
     _fastbootFlashThread = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
     _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    if (!_bmapUrl.isEmpty())
+        _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
     connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
     connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
     connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);

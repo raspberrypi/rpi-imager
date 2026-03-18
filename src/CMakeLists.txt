@@ -267,6 +267,7 @@ set(SOURCES ${SOURCES}
     "rpiboot/secure_boot_provisioner.cpp"
     "rpibootthread.cpp"
     "fastboot/fastboot_protocol.cpp"
+    "fastboot/bmap.cpp"
     "fastboot/sparse_encoder.cpp"
     "fastbootflashthread.cpp"
 )

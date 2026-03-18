@@ -7,6 +7,7 @@
 #include "rpiboot/libusb_transport.h"
 #include "fastboot/fastboot_protocol.h"
 #include "fastboot/sparse_encoder.h"
+#include "fastboot/bmap.h"
 #include "curlnetworkconfig.h"
 #include "acceleratedcryptographichash.h"
 #include "ringbuffer.h"
@@ -515,9 +516,57 @@ void FastbootFlashThread::runImpl()
     // 6. Flash consumer loop — sparse-encode and stream to device
     //
     // The sparse encoder converts the raw decompressed image into Android
-    // sparse image segments.  Zero-filled regions become DONT_CARE chunks
-    // (never transferred), dramatically reducing write time.
+    // sparse image segments.  When a bmap is available, unmapped blocks
+    // become DONT_CARE (skipped entirely).  Otherwise zero-filled regions
+    // are FILL(0) to guarantee correctness on non-erased storage.
     fastboot::SparseEncoder sparse(maxDownloadSize, _extractLen);
+
+    // Fetch and apply optional block map
+    if (!_bmapUrl.isEmpty()) {
+        emit preparationStatusUpdate(tr("Fetching block map..."));
+        qDebug() << "FastbootFlashThread: fetching bmap from" << _bmapUrl;
+
+        QByteArray bmapData;
+        {
+            // Synchronous fetch — bmap files are tiny (few KB)
+            CURL *curl = curl_easy_init();
+            if (curl) {
+                std::string responseData;
+                auto writeCallback = +[](char *ptr, size_t size, size_t nmemb, void *userdata) -> size_t {
+                    auto *resp = static_cast<std::string*>(userdata);
+                    resp->append(ptr, size * nmemb);
+                    return size * nmemb;
+                };
+                curl_easy_setopt(curl, CURLOPT_URL, _bmapUrl.toString().toUtf8().constData());
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
+                curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+                curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+                CURLcode res = curl_easy_perform(curl);
+                curl_easy_cleanup(curl);
+
+                if (res == CURLE_OK)
+                    bmapData = QByteArray::fromStdString(responseData);
+                else
+                    qWarning() << "FastbootFlashThread: bmap fetch failed:" << curl_easy_strerror(res);
+            }
+        }
+
+        if (!bmapData.isEmpty()) {
+            auto blockMap = std::make_unique<fastboot::BlockMap>();
+            std::string parseError;
+            if (blockMap->parse(std::string_view(bmapData.constData(), bmapData.size()), &parseError)) {
+                qDebug() << "FastbootFlashThread: bmap loaded —"
+                         << blockMap->mappedBlockCount() << "of"
+                         << blockMap->blockCount() << "blocks mapped ("
+                         << (100 * blockMap->mappedBlockCount() / std::max<uint64_t>(blockMap->blockCount(), 1))
+                         << "%)";
+                sparse.setBlockMap(std::move(blockMap));
+            } else {
+                qWarning() << "FastbootFlashThread: bmap parse failed:" << QString::fromStdString(parseError);
+            }
+        }
+    }
     quint64 totalFed = 0;
     bool flashError = false;
 

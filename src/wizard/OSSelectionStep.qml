@@ -721,7 +721,8 @@ WizardStepBase {
                     categorySelected,
                     model.name,
                     typeof(model.init_format) != "undefined" ? model.init_format : "",
-                    typeof(model.release_date) != "undefined" ? model.release_date : ""
+                    typeof(model.release_date) != "undefined" ? model.release_date : "",
+                    typeof(model.bmap_url) != "undefined" ? model.bmap_url : ""
                 )
                 imageWriter.setSWCapabilitiesList(model.capabilities)
 

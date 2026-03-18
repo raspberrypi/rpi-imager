@@ -5,10 +5,12 @@
  * Streaming encoder for the Android sparse image format.
  *
  * Converts a raw disk image into a series of sparse image segments,
- * each fitting within the fastboot max-download-size.  Zero-filled
- * regions are emitted as DONT_CARE chunks (never transferred or
- * written), and uniform-fill regions as 4-byte FILL chunks.  This
- * dramatically reduces transfer time for typical OS images.
+ * each fitting within the fastboot max-download-size.  Uniform-fill
+ * regions (including zeros) are emitted as 4-byte FILL chunks.  When
+ * a block map (bmap) is provided, unmapped blocks are emitted as
+ * DONT_CARE (skipped entirely — never transferred or written).
+ * Without a bmap, zero blocks are FILL(0) to guarantee correctness
+ * regardless of prior device state.
  */
 
 #ifndef FASTBOOT_SPARSE_ENCODER_H
@@ -17,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -99,6 +102,13 @@ public:
     // maxSegmentSize: max bytes per sparse segment (fastboot max-download-size).
     // totalImageSize: uncompressed image size in bytes (0 if unknown).
     SparseEncoder(uint32_t maxSegmentSize, uint64_t totalImageSize);
+    ~SparseEncoder();
+
+    // Set a block map for DONT_CARE optimisation.  When set, blocks that
+    // fall outside the mapped ranges are emitted as DONT_CARE instead of
+    // FILL(0), since the bmap guarantees they are unallocated free space.
+    // Must be called before the first feed().  Takes ownership.
+    void setBlockMap(std::unique_ptr<class BlockMap> map);
 
     // Feed raw decompressed data.  May be called with any size.
     // Internally buffers partial blocks and emits complete segments.
@@ -142,6 +152,9 @@ private:
 
     uint32_t _maxSegmentSize;
     uint64_t _totalImageBlocks;
+
+    // Optional block map for DONT_CARE optimisation
+    std::unique_ptr<class BlockMap> _blockMap;
 
     // Output buffer — one segment at a time
     std::vector<uint8_t> _out;

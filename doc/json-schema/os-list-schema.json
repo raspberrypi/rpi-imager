@@ -519,6 +519,16 @@
                                         "usb_otg"
                                     ]
                                 }
+                            },
+                            "bmap_url": {
+                                "$id": "#/properties/os_list/items/anyOf/0/properties/bmap_url",
+                                "type": "string",
+                                "title": "The bmap_url schema",
+                                "description": "Optional. URL of a .bmap (block map) file for this image. When provided and flashing via the fastboot protocol, unmapped blocks are skipped (DONT_CARE) instead of written, significantly reducing flash time. The bmap file is a small XML document listing which block ranges contain allocated data, as produced by bmaptool. Has no effect on normal SD card writes.",
+                                "default": "",
+                                "examples": [
+                                    "https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-03-01/2026-03-01-raspios-trixie-arm64-lite.img.bmap"
+                                ]
                             }
                         },
                         "additionalProperties": true

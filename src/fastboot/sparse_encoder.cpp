@@ -4,6 +4,7 @@
  */
 
 #include "sparse_encoder.h"
+#include "bmap.h"
 
 #include <algorithm>
 #include <cassert>
@@ -26,6 +27,14 @@ SparseEncoder::SparseEncoder(uint32_t maxSegmentSize, uint64_t totalImageSize)
     _out.reserve(maxSegmentSize);
     _ready.reserve(maxSegmentSize);
     beginSegment();
+}
+
+SparseEncoder::~SparseEncoder() = default;
+
+void SparseEncoder::setBlockMap(std::unique_ptr<BlockMap> map)
+{
+    assert(_processedBlocks == 0);  // must be called before first feed()
+    _blockMap = std::move(map);
 }
 
 void SparseEncoder::beginSegment()
@@ -170,15 +179,23 @@ void SparseEncoder::finaliseSegment()
 
 void SparseEncoder::processBlock(const uint8_t* block)
 {
-    // Classify the block.  Both zero and uniform-fill blocks are encoded
-    // as FILL — never DONT_CARE — because this is a raw disk image where
-    // every byte is meaningful.  DONT_CARE would skip the region (lseek
-    // past it), leaving whatever was previously on the device.
-    // isBlockFill handles zero blocks too (fill value 0).
+    // Classify the block.
+    //
+    // With a block map: unmapped blocks are DONT_CARE (the bmap guarantees
+    // they are unallocated filesystem free space — safe to skip).
+    //
+    // Without a block map: zero blocks are FILL(0), not DONT_CARE, because
+    // every byte in a raw disk image is meaningful and DONT_CARE would
+    // leave prior device content in place.
+    //
+    // isBlockFill handles zero blocks (fill value 0).
     uint16_t type;
     uint32_t fillVal = 0;
 
-    if (isBlockFill(block, &fillVal)) {
+    if (_blockMap && !_blockMap->isMappedSequential(_processedBlocks)) {
+        type = CHUNK_TYPE_DONT_CARE;
+        ++_statsDontCare;
+    } else if (isBlockFill(block, &fillVal)) {
         type = CHUNK_TYPE_FILL;
         ++_statsFill;
     } else {
