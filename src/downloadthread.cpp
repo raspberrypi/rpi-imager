@@ -574,6 +574,8 @@ void DownloadThread::run()
     // Track HTTP/2 failures for graceful fallback
     int http2FailureCount = 0;
     const int MAX_HTTP2_FAILURES = 3;
+    // One-shot flag: retry once with HTTP/1.1 on SSL connect failure (e.g. Schannel+HTTP/2 on Windows)
+    bool http2SslFallback = false;
     
     if (_inputBufferSize)
         curl_easy_setopt(_c, CURLOPT_BUFFERSIZE, _inputBufferSize);
@@ -637,7 +639,8 @@ void DownloadThread::run()
     while (ret == CURLE_PARTIAL_FILE || ret == CURLE_OPERATION_TIMEDOUT
            || (ret == CURLE_HTTP2_STREAM && _lastDlNow != _lastFailureOffset)
            || (ret == CURLE_HTTP2 && _lastDlNow != _lastFailureOffset)
-           || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset) )
+           || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset)
+           || (ret == CURLE_SSL_CONNECT_ERROR && !http2SslFallback) )
     {
         time_t t = time(NULL);
         qDebug() << "HTTP connection lost. Error:" << curl_easy_strerror(ret) << "Time:" << t;
@@ -646,11 +649,19 @@ void DownloadThread::run()
         if (ret == CURLE_HTTP2_STREAM || ret == CURLE_HTTP2) {
             http2FailureCount++;
             qDebug() << "HTTP/2 failure count:" << http2FailureCount << "/" << MAX_HTTP2_FAILURES;
-            
+
             if (http2FailureCount >= MAX_HTTP2_FAILURES) {
                 qDebug() << "Too many HTTP/2 failures, falling back to HTTP/1.1";
                 curl_easy_setopt(_c, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
             }
+        }
+
+        // On SSL connect error (e.g. Schannel + HTTP/2 ALPN incompatibility on Windows),
+        // fall back to HTTP/1.1 and retry once. If it fails again, the loop exits.
+        if (ret == CURLE_SSL_CONNECT_ERROR) {
+            qDebug() << "SSL connect error, retrying with HTTP/1.1";
+            curl_easy_setopt(_c, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+            http2SslFallback = true;
         }
 
         /* If last failure happened less than 5 seconds ago, something else may
