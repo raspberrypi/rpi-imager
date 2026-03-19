@@ -433,6 +433,24 @@ ImageWriter::~ImageWriter()
     qDebug() << "Stopping network monitoring";
     PlatformQuirks::stopNetworkMonitoring();
     
+    // Cancel FastbootFlashThread before stopping drive list polling.
+    // Both use libusb; concurrent libusb_exit (FastbootFlashThread) and
+    // libusb_init (DriveListModelPollThread) trigger a macOS libusb deadlock
+    // where darwin_exit holds active_contexts_lock while waiting for the
+    // IONotification thread, which itself needs that lock for a pending IOKit
+    // callback.  Stopping FastbootFlashThread first eliminates the conflict.
+    if (_fastbootFlashThread) {
+        qDebug() << "Stopping FastbootFlashThread";
+        _fastbootFlashThread->cancel();
+        if (!_fastbootFlashThread->wait(10000)) {
+            qWarning() << "FastbootFlashThread did not stop within 10s, terminating";
+            _fastbootFlashThread->terminate();
+            _fastbootFlashThread->wait();
+        }
+        delete _fastbootFlashThread;
+        _fastbootFlashThread = nullptr;
+    }
+
     // Stop background drive list polling
     qDebug() << "Stopping background drive list polling";
     _drivelist.stopPolling();

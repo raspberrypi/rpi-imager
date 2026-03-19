@@ -22,7 +22,12 @@ DriveListModelPollThread::~DriveListModelPollThread()
     _terminate = true;
     _modeChanged.wakeAll();  // Wake thread if it's waiting
     if (!wait(2000)) {
+        // Thread is stuck (e.g. blocked in libusb_init due to a libusb macOS
+        // deadlock).  Force-kill it and wait for it to die — QThread::~QThread()
+        // calls qFatal() if the thread is still running when it runs, so we
+        // must not return until the OS has confirmed the thread is gone.
         terminate();
+        wait();
     }
 }
 

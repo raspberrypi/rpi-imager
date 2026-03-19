@@ -24,13 +24,12 @@ RpibootThread::RpibootThread(const DeviceInfo& device,
 RpibootThread::~RpibootThread()
 {
     cancel();
-    // Do NOT terminate() — forceful thread termination skips destructors
-    // for local variables (LibusbContext, unique_ptr<LibusbTransport>),
-    // leaking USB device handles and preventing future libusb_open calls.
-    // With all blocking points respecting _cancelled or using bounded
-    // timeouts, the thread should exit within a few seconds.
     if (!wait(10000)) {
-        qWarning() << "RpibootThread: thread did not finish within 10s after cancel";
+        // See FastbootFlashThread::~FastbootFlashThread() for the same pattern.
+        // Force-kill if stuck (e.g. libusb macOS deadlock during cleanup).
+        qWarning() << "RpibootThread: thread did not finish within 10s after cancel, terminating";
+        terminate();
+        wait();
     }
 }
 

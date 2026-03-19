@@ -49,13 +49,17 @@ FastbootFlashThread::FastbootFlashThread(const QString& fastbootId,
 FastbootFlashThread::~FastbootFlashThread()
 {
     cancel();
-    // Do NOT terminate() — forceful thread termination skips destructors
-    // for local variables (LibusbContext, RingBuffer, curl handles),
-    // leaking USB device handles and preventing future libusb_open calls.
-    // With all blocking points respecting _cancelled or using bounded
-    // timeouts, the thread should exit within a few seconds.
     if (!wait(10000)) {
-        qWarning() << "FastbootFlashThread: thread did not finish within 10s after cancel";
+        // Thread is stuck — most likely deadlocked in libusb_exit on macOS
+        // (libusb bug: darwin_exit holds active_contexts_lock while waiting
+        // for the IONotification run loop, which itself needs that lock to
+        // process a pending IOKit callback).  Since we are in the destructor
+        // path and the process will exit shortly, force-kill the thread.
+        // QThread::~QThread() calls qFatal() if the thread is still running,
+        // so we must wait until the OS has confirmed it is gone.
+        qWarning() << "FastbootFlashThread: thread did not finish within 10s after cancel, terminating";
+        terminate();
+        wait();
     }
 }
 
