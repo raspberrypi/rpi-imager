@@ -44,6 +44,7 @@
 #include "imageadvancedoptions.h"
 #include "secureboot.h"
 #include "curlnetworkconfig.h"
+#include "fastboot/sparse_encoder.h"  // isBlockZero()
 #include <QTemporaryDir>
 
 using namespace std;
@@ -573,6 +574,8 @@ void DownloadThread::run()
     // Track HTTP/2 failures for graceful fallback
     int http2FailureCount = 0;
     const int MAX_HTTP2_FAILURES = 3;
+    // One-shot flag: retry once with HTTP/1.1 on SSL connect failure (e.g. Schannel+HTTP/2 on Windows)
+    bool http2SslFallback = false;
     
     if (_inputBufferSize)
         curl_easy_setopt(_c, CURLOPT_BUFFERSIZE, _inputBufferSize);
@@ -636,7 +639,8 @@ void DownloadThread::run()
     while (ret == CURLE_PARTIAL_FILE || ret == CURLE_OPERATION_TIMEDOUT
            || (ret == CURLE_HTTP2_STREAM && _lastDlNow != _lastFailureOffset)
            || (ret == CURLE_HTTP2 && _lastDlNow != _lastFailureOffset)
-           || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset) )
+           || (ret == CURLE_RECV_ERROR && _lastDlNow != _lastFailureOffset)
+           || (ret == CURLE_SSL_CONNECT_ERROR && !http2SslFallback) )
     {
         time_t t = time(NULL);
         qDebug() << "HTTP connection lost. Error:" << curl_easy_strerror(ret) << "Time:" << t;
@@ -645,11 +649,19 @@ void DownloadThread::run()
         if (ret == CURLE_HTTP2_STREAM || ret == CURLE_HTTP2) {
             http2FailureCount++;
             qDebug() << "HTTP/2 failure count:" << http2FailureCount << "/" << MAX_HTTP2_FAILURES;
-            
+
             if (http2FailureCount >= MAX_HTTP2_FAILURES) {
                 qDebug() << "Too many HTTP/2 failures, falling back to HTTP/1.1";
                 curl_easy_setopt(_c, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
             }
+        }
+
+        // On SSL connect error (e.g. Schannel + HTTP/2 ALPN incompatibility on Windows),
+        // fall back to HTTP/1.1 and retry once. If it fails again, the loop exits.
+        if (ret == CURLE_SSL_CONNECT_ERROR) {
+            qDebug() << "SSL connect error, retrying with HTTP/1.1";
+            curl_easy_setopt(_c, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+            http2SslFallback = true;
         }
 
         /* If last failure happened less than 5 seconds ago, something else may
@@ -768,7 +780,7 @@ size_t DownloadThread::_writeData(const char *buf, size_t len)
 
     if (!_filename.isEmpty())
     {
-        return _writeFile(buf, len);
+        return _writeFileZeroSkip(buf, len);
     }
     else
     {
@@ -848,6 +860,86 @@ void DownloadThread::setCacheFile(const QString &filename, qint64 filesize)
 void DownloadThread::_hashData(const char *buf, size_t len)
 {
     _writehash.addData(buf, len);
+}
+
+/*
+ * Zero-skip wrapper: scans the buffer for 4KB-aligned zero-filled blocks
+ * and seeks past them instead of writing.  Non-zero regions are passed
+ * through to _writeFile().  This avoids transferring and writing GBs of
+ * zeros for typical OS images where most of the disk is empty.
+ *
+ * Only enabled when there is no expected hash for post-write verification.
+ * When verification is active, skipped (non-written) zero regions would
+ * still contain stale data from the previous image, causing a hash mismatch.
+ */
+size_t DownloadThread::_writeFileZeroSkip(const char *buf, size_t len)
+{
+    constexpr size_t BLK = fastboot::SPARSE_BLK_SZ;  // 4096
+
+    // First block hasn't been captured yet — pass through unconditionally
+    if (!_firstBlock)
+        return _writeFile(buf, len);
+
+    // When hash verification is enabled, we must write every byte so the
+    // read-back matches.  Fall through to the normal write path.
+    if (!_expectedHash.isEmpty())
+        return _writeFile(buf, len);
+
+    const auto* p = reinterpret_cast<const uint8_t*>(buf);
+    size_t off = 0;
+    size_t totalProcessed = 0;
+
+    while (off < len) {
+        // Handle any unaligned prefix (< 4096 bytes) — write it directly
+        size_t aligned = off;
+        if (aligned % BLK != 0)
+            aligned = std::min(((off / BLK) + 1) * BLK, len);
+
+        // Scan for zero blocks starting from the aligned position
+        size_t nonZeroStart = off;
+        size_t pos = aligned;
+
+        // Skip the unaligned prefix — we'll write it as part of the non-zero region
+        while (pos + BLK <= len) {
+            if (fastboot::isBlockZero(p + pos)) {
+                // Found a zero block. Write everything before it.
+                if (pos > nonZeroStart) {
+                    size_t writeLen = pos - nonZeroStart;
+                    size_t written = _writeFile(buf + nonZeroStart, writeLen);
+                    if (written != writeLen)
+                        return 0;
+                    totalProcessed += written;
+                }
+
+                // Count consecutive zero blocks
+                size_t zeroStart = pos;
+                while (pos + BLK <= len && fastboot::isBlockZero(p + pos))
+                    pos += BLK;
+
+                // Seek past the zero region
+                size_t zeroLen = pos - zeroStart;
+                if (_file->Seek(_file->Tell() + zeroLen) != rpi_imager::FileError::kSuccess)
+                    return 0;
+                totalProcessed += zeroLen;
+                _bytesWritten += zeroLen;
+                nonZeroStart = pos;
+            } else {
+                pos += BLK;
+            }
+        }
+
+        // Write any remaining data (non-zero tail + possible sub-block tail)
+        size_t remaining = len - nonZeroStart;
+        if (remaining > 0) {
+            size_t written = _writeFile(buf + nonZeroStart, remaining);
+            if (written != remaining)
+                return 0;
+            totalProcessed += written;
+        }
+        break;
+    }
+
+    return totalProcessed;
 }
 
 size_t DownloadThread::_writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete)
@@ -2195,8 +2287,9 @@ bool DownloadThread::_customizeImage()
         }
 
         auto initCloud = _initFormat == "cloudinit" || _initFormat == "cloudinit-rpi";
+        auto hasCloudContent = !_cloudinit.isEmpty() || !_cloudinitNetwork.isEmpty();
         qDebug() << "_customizeImage: _initFormat=" << _initFormat << "initCloud=" << initCloud << "_cloudinit.isEmpty()=" << _cloudinit.isEmpty();
-        if (initCloud) {
+        if (initCloud && hasCloudContent) {
             // Write meta-data file for NoCloud datasource
             // cloud-init requires meta-data to be present for proper datasource detection
             // instance-id should be unique per imaging to ensure cloud-init processes user-data

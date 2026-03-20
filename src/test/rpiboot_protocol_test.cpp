@@ -75,7 +75,6 @@ static std::vector<uint8_t> makeFileMessage(FileCommand cmd, const std::string& 
 
 TEST_CASE("BootcodeLoader selects correct bootcode filename", "[rpiboot][bootcode]")
 {
-    CHECK(BootcodeLoader::bootcodeFilename(ChipGeneration::BCM2835) == "bootcode.bin");
     CHECK(BootcodeLoader::bootcodeFilename(ChipGeneration::BCM2836_7) == "bootcode.bin");
     CHECK(BootcodeLoader::bootcodeFilename(ChipGeneration::BCM2711) == "bootcode4.bin");
     CHECK(BootcodeLoader::bootcodeFilename(ChipGeneration::BCM2712) == "bootcode5.bin");
@@ -143,7 +142,7 @@ TEST_CASE("BootcodeLoader respects cancellation", "[rpiboot][bootcode]")
     BootcodeLoader loader;
 
     // Should return false without sending anything
-    CHECK_FALSE(loader.send(mock, ChipGeneration::BCM2835, fw.path(), cancelled));
+    CHECK_FALSE(loader.send(mock, ChipGeneration::BCM2836_7, fw.path(), cancelled));
     CHECK(mock.capturedControlTransfers().empty());
     CHECK(mock.capturedBulkWrites().empty());
 }
@@ -274,7 +273,7 @@ TEST_CASE("FileServer uses custom resolver", "[rpiboot][fileserver]")
 
 TEST_CASE("chipGenerationFromPid returns correct enum", "[rpiboot][types]")
 {
-    CHECK(chipGenerationFromPid(0x2763) == ChipGeneration::BCM2835);
+    CHECK_FALSE(chipGenerationFromPid(0x2763).has_value()); // BCM2835 not supported
     CHECK(chipGenerationFromPid(0x2764) == ChipGeneration::BCM2836_7);
     CHECK(chipGenerationFromPid(0x2711) == ChipGeneration::BCM2711);
     CHECK(chipGenerationFromPid(0x2712) == ChipGeneration::BCM2712);

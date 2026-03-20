@@ -93,7 +93,14 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
     // Determine if virtual based on subsystems
     // Pure block devices (subsystems == "block") are virtual (loop devices, etc.)
     // Physical devices have additional subsystems like "block:scsi:usb:pci"
-    device.isVirtual = (subsystems == "block");
+    //
+    // Loop devices are always virtual by definition — they are kernel constructs
+    // backed by files. We check the device name explicitly because lsblk in
+    // util-linux 2.39.x (shipped in Ubuntu 24.04 LTS) has a bug where the
+    // "subsystems" column intermittently returns empty for loop devices, causing
+    // them to flicker between virtual/non-virtual.
+    // See: https://github.com/util-linux/util-linux/pull/3089
+    device.isVirtual = name.startsWith("/dev/loop") || (subsystems == "block");
 
     // Physical USB drives and MMC cards should never be marked as virtual
     if (subsystems.contains("usb") || subsystems.contains("mmc")) {

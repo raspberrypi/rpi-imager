@@ -180,6 +180,7 @@ public:
     // actually finishes (not when it's queued). The caller should NOT free/reuse the
     // buffer until onComplete is called.
     // If onComplete is null or async is disabled, the buffer can be reused after return.
+    size_t _writeFileZeroSkip(const char *buf, size_t len);
     size_t _writeFile(const char *buf, size_t len, WriteCompleteCallback onComplete = nullptr);
 
 signals:

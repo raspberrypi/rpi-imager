@@ -12,9 +12,6 @@ else()
     set(MACOSX_BUNDLE_BUNDLE_NAME "${APP_NAME}")
     set(MACOSX_BUNDLE_EXECUTABLE_NAME "${PROJECT_NAME}")
     set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.raspberrypi.rpi-imager")
-    set(MACOSX_BUNDLE_BUNDLE_VERSION "${IMAGER_VERSION_STR}")
-    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${IMAGER_VERSION_STR}")
-    set(MACOSX_BUNDLE_LONG_VERSION_STRING "${IMAGER_VERSION_STR}")
     set(MACOSX_BUNDLE_ICON_FILE "AppIcon")
     string(TIMESTAMP CURRENT_YEAR "%Y")
     set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2020-${CURRENT_YEAR} Raspberry Pi Ltd")
@@ -23,18 +20,44 @@ else()
 
     set(APP_BUNDLE_PATH "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app")
     set(DMG_PATH "${CMAKE_BINARY_DIR}/${APP_NAME}.dmg")
-    set(FINAL_DMG_PATH "${CMAKE_BINARY_DIR}/${APP_NAME}-${IMAGER_VERSION_STR}.dmg")
 
-    configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in"
-    "${CMAKE_BINARY_DIR}/Info.plist"
-    @ONLY
-)
+    # Extra (non-version) variables for Info.plist.in — the MACOSX_BUNDLE_*_VERSION
+    # vars are set at build time from IMAGER_VERSION_STR by the template itself.
+    set(_plist_extra_vars "${CMAKE_CURRENT_BINARY_DIR}/plist_extra_vars.cmake")
+    file(WRITE "${_plist_extra_vars}"
+        "set(MACOSX_BUNDLE_BUNDLE_NAME \"${MACOSX_BUNDLE_BUNDLE_NAME}\")\n"
+        "set(MACOSX_BUNDLE_EXECUTABLE_NAME \"${MACOSX_BUNDLE_EXECUTABLE_NAME}\")\n"
+        "set(MACOSX_BUNDLE_GUI_IDENTIFIER \"${MACOSX_BUNDLE_GUI_IDENTIFIER}\")\n"
+        "set(MACOSX_BUNDLE_BUNDLE_VERSION \"\${IMAGER_VERSION_STR}\")\n"
+        "set(MACOSX_BUNDLE_SHORT_VERSION_STRING \"\${IMAGER_VERSION_STR}\")\n"
+        "set(MACOSX_BUNDLE_LONG_VERSION_STRING \"\${IMAGER_VERSION_STR}\")\n"
+        "set(MACOSX_BUNDLE_ICON_FILE \"${MACOSX_BUNDLE_ICON_FILE}\")\n"
+        "set(MACOSX_BUNDLE_COPYRIGHT \"${MACOSX_BUNDLE_COPYRIGHT}\")\n"
+    )
+
+    # Generate Info.plist at build time so version is always fresh
+    add_custom_command(
+        OUTPUT "${CMAKE_BINARY_DIR}/Info.plist"
+        COMMAND ${CMAKE_COMMAND}
+            -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+            -DEXTRA_VARS_FILE=${_plist_extra_vars}
+            -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in
+            -DOUTPUT=${CMAKE_BINARY_DIR}/Info.plist
+            -P ${CONFIGURE_VERSIONED_SCRIPT}
+        DEPENDS
+            ${IMAGER_VERSION_VARS}
+            ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in
+        COMMENT "Configuring Info.plist with build-time version"
+        VERBATIM
+    )
+    add_custom_target(generate_plist DEPENDS "${CMAKE_BINARY_DIR}/Info.plist")
+    add_dependencies(generate_plist generate_version)
+    add_dependencies(${PROJECT_NAME} generate_plist)
 
 add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo "Cleaning up previous macOS DMG files..."
     COMMAND ${CMAKE_COMMAND} -E remove -f "${DMG_PATH}"
-    COMMAND ${CMAKE_COMMAND} -E remove -f "${FINAL_DMG_PATH}"
+    COMMAND sh -c "rm -f '${CMAKE_BINARY_DIR}/${APP_NAME}'-*.dmg"
     COMMENT "Cleaning previous macOS build artifacts"
 )
 
@@ -191,33 +214,73 @@ if(EXISTS "${PRECOMPILED_ASSETS_CAR}" AND NOT BUILD_CLI_ONLY)
     )
 endif()
 
+# Extra (non-version) variables needed by DMG shell scripts
+set(_dmg_extra_vars "${CMAKE_CURRENT_BINARY_DIR}/dmg_extra_vars.cmake")
+file(WRITE "${_dmg_extra_vars}"
+    "set(CMAKE_PROJECT_NAME \"${CMAKE_PROJECT_NAME}\")\n"
+    "set(CMAKE_BINARY_DIR \"${CMAKE_BINARY_DIR}\")\n"
+    "set(CMAKE_CURRENT_SOURCE_DIR \"${CMAKE_CURRENT_SOURCE_DIR}\")\n"
+    "set(CMAKE_COMMAND \"${CMAKE_COMMAND}\")\n"
+    "set(Qt6_ROOT \"${Qt6_ROOT}\")\n"
+    "set(QT_DIR \"${QT_DIR}\")\n"
+    "set(CMAKE_PREFIX_PATH \"${CMAKE_PREFIX_PATH}\")\n"
+    "set(IMAGER_SIGNING_IDENTITY \"${IMAGER_SIGNING_IDENTITY}\")\n"
+    "set(IMAGER_NOTARIZE_APP \"${IMAGER_NOTARIZE_APP}\")\n"
+    "set(IMAGER_NOTARIZE_KEYCHAIN_PROFILE \"${IMAGER_NOTARIZE_KEYCHAIN_PROFILE}\")\n"
+)
+
 if(IMAGER_SIGNED_APP)
     if(IMAGER_SIGNING_IDENTITY)
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/mac/create_styled_dmg.sh.in"
-            "${CMAKE_BINARY_DIR}/create_styled_dmg.sh"
-            @ONLY
+        # Generate shell scripts at build time so version is always fresh
+        add_custom_command(
+            OUTPUT "${CMAKE_BINARY_DIR}/create_styled_dmg.sh"
+            COMMAND ${CMAKE_COMMAND}
+                -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+                -DEXTRA_VARS_FILE=${_dmg_extra_vars}
+                -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/mac/create_styled_dmg.sh.in
+                -DOUTPUT=${CMAKE_BINARY_DIR}/create_styled_dmg.sh
+                -P ${CONFIGURE_VERSIONED_SCRIPT}
+            COMMAND chmod +x "${CMAKE_BINARY_DIR}/create_styled_dmg.sh"
+            DEPENDS
+                ${IMAGER_VERSION_VARS}
+                ${CMAKE_CURRENT_SOURCE_DIR}/mac/create_styled_dmg.sh.in
+            COMMENT "Configuring create_styled_dmg.sh with build-time version"
+            VERBATIM
         )
-        configure_file(
-            "${CMAKE_CURRENT_SOURCE_DIR}/mac/macos_post_build.sh.in"
-            "${CMAKE_BINARY_DIR}/macos_post_build.sh"
-            @ONLY
+        add_custom_command(
+            OUTPUT "${CMAKE_BINARY_DIR}/macos_post_build.sh"
+            COMMAND ${CMAKE_COMMAND}
+                -DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}
+                -DEXTRA_VARS_FILE=${_dmg_extra_vars}
+                -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/mac/macos_post_build.sh.in
+                -DOUTPUT=${CMAKE_BINARY_DIR}/macos_post_build.sh
+                -P ${CONFIGURE_VERSIONED_SCRIPT}
+            COMMAND chmod +x "${CMAKE_BINARY_DIR}/macos_post_build.sh"
+            DEPENDS
+                ${IMAGER_VERSION_VARS}
+                ${CMAKE_CURRENT_SOURCE_DIR}/mac/macos_post_build.sh.in
+            COMMENT "Configuring macos_post_build.sh with build-time version"
+            VERBATIM
         )
-        execute_process(COMMAND chmod +x "${CMAKE_BINARY_DIR}/macos_post_build.sh")
         add_custom_target(dmg
             COMMAND "${CMAKE_BINARY_DIR}/macos_post_build.sh"
             DEPENDS ${PROJECT_NAME}
+                "${CMAKE_BINARY_DIR}/create_styled_dmg.sh"
+                "${CMAKE_BINARY_DIR}/macos_post_build.sh"
             COMMENT "Creating signed macOS DMG"
             VERBATIM)
     else()
         message(FATAL_ERROR "Signing requested, but no signing identity provided")
     endif()
 else()
+    # Unsigned DMG: use a CMake script so the filename gets the build-time version
     add_custom_target(dmg
-        COMMAND ${CMAKE_COMMAND} -E echo "Creating DMG..."
-        COMMAND hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_BUNDLE_PATH}" -ov -format UDBZ "${DMG_PATH}"
-        COMMAND ${CMAKE_COMMAND} -E echo "Creating versioned DMG at ${FINAL_DMG_PATH}..."
-        COMMAND ${CMAKE_COMMAND} -E copy "${DMG_PATH}" "${FINAL_DMG_PATH}"
+        COMMAND ${CMAKE_COMMAND}
+            "-DVERSION_VARS_FILE=${IMAGER_VERSION_VARS}"
+            "-DAPP_NAME=${APP_NAME}"
+            "-DAPP_BUNDLE_PATH=${APP_BUNDLE_PATH}"
+            "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CreateUnsignedDMG.cmake"
         DEPENDS ${PROJECT_NAME}
         COMMENT "Creating macOS DMG"
         VERBATIM)

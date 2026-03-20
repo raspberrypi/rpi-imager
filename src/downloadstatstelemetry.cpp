@@ -4,6 +4,7 @@
  */
 
 #include "downloadstatstelemetry.h"
+#include "imager_version.h"
 #include "curlnetworkconfig.h"
 #include "config.h"
 #include <QSettings>

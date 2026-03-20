@@ -438,6 +438,37 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices[0].isRemovable == true);
     }
 
+    SECTION("Marks loop devices as virtual even with empty subsystems (lsblk bug)")
+    {
+        // util-linux 2.39.x (shipped in Ubuntu 24.04 LTS) has a bug where
+        // the "subsystems" column intermittently returns empty for loop devices.
+        // See: https://github.com/util-linux/util-linux/pull/3089
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/loop1",
+                "type": "loop",
+                "subsystems": "",
+                "ro": false,
+                "rm": true,
+                "hotplug": false,
+                "size": "1073741824",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": "/snap/chromium/3352"
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+
+        REQUIRE(devices.size() == 1);
+        CHECK(devices[0].device == "/dev/loop1");
+        CHECK(devices[0].isVirtual == true);
+        CHECK(devices[0].isSystem == true);  // /snap/ mount makes it a system device
+    }
+
     SECTION("Handles lsblk returning size as string vs number")
     {
         // Some lsblk versions return size as string, others as number

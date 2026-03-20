@@ -35,6 +35,7 @@ public:
         DevicesRole,
         CapabilitiesRole,
         ExtractSha256Role,
+        BmapUrlRole,
         ExtractSizeRole,
         IconRole,
         ImageDownloadSizeRole,
@@ -63,6 +64,7 @@ public:
         QString tooltip;
         QString website;
         QString extractSha256;
+        QString bmapUrl;       // Optional bmap file URL for fastboot DONT_CARE optimisation
         QString architecture; // Architecture this OS expects (armel, armhf, armv8)
 
         quint64 imageDownloadSize = 0;

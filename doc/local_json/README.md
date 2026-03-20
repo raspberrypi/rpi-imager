@@ -67,6 +67,26 @@ The `--device-capabilities` option accepts one or more of the following values:
 
 **Note:** Interface capabilities (`i2c`, `spi`, `onewire`, `serial`, `usb_otg`) require both hardware (device) and OS support to be available in the customization wizard. You typically need to specify the same capabilities in both `--capabilities` and `--device-capabilities`.
 
+### Block map (bmap) support
+
+When flashing via the fastboot protocol (USB-C direct flash to Compute
+Modules or Pi 5), Imager can use a `.bmap` file to skip unallocated blocks,
+significantly reducing flash time.
+
+If a `.bmap` file exists alongside a local image (same name with `.bmap`
+extension appended, e.g., `image.img.xz.bmap` or `image.img.bmap`), the
+script will automatically include a `bmap_url` field in the manifest entry
+pointing to the sidecar file.
+
+You can generate a bmap file for any image using
+[bmaptool](https://github.com/intel/bmap-tools):
+```
+bmaptool create image.img -o image.img.bmap
+```
+
+The bmap has no effect on normal SD card writes — it only optimises the
+fastboot sideload path.
+
 ### Examples
 
 Create a manifest with USB Gadget mode enabled for all official Raspberry Pi OS images (downloads from official servers):

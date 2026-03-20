@@ -49,12 +49,13 @@ protected:
     void run() override;
 
 private:
-    bool waitForFastbootDevice();
+    bool pollForFastbootDevice(std::atomic<bool>& found, QString& fastbootId);
     bool waitForBootDeviceReEnum(rpiboot::UsbDeviceInfo& outDevice);
 
     DeviceInfo _device;
     rpiboot::SideloadMode _mode;
     std::atomic<bool> _cancelled{false};
+    std::atomic<bool> _fastbootFound{false};
 };
 
 #endif // RPIBOOTTHREAD_H

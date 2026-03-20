@@ -56,24 +56,40 @@ bool FileServer::run(IUsbTransport& transport,
 
         if (bytesRead < static_cast<int>(sizeof(FileCommand))) {
             ++consecutiveErrors;
+            int maxRetries = MAX_RETRIES;
             qDebug() << "rpiboot: FileServer controlTransferIn returned"
                      << bytesRead << "bytes (need" << sizeof(FileCommand)
-                     << "), retry" << consecutiveErrors << "/" << MAX_RETRIES
+                     << "), retry" << consecutiveErrors << "/" << maxRetries
                      << (lastFilename.empty() ? "" : (", last file: " + lastFilename).c_str());
 
             // Fatal USB errors — the device is gone, retrying is pointless.
-            // Matches upstream rpiboot which breaks on NO_DEVICE and IO errors.
-            // LIBUSB_ERROR_NO_DEVICE=-4, LIBUSB_ERROR_ACCESS=-3,
-            // LIBUSB_ERROR_PIPE=-9, LIBUSB_ERROR_OVERFLOW=-8
+            // Matches upstream rpiboot which breaks on NO_DEVICE and IO.
+            constexpr int LIBUSB_ERR_IO        = -1;
             constexpr int LIBUSB_ERR_NO_DEVICE = -4;
-            if (bytesRead == LIBUSB_ERR_NO_DEVICE) {
+            if (bytesRead == LIBUSB_ERR_NO_DEVICE || bytesRead == LIBUSB_ERR_IO) {
+                // If we already served files, the device rebooted into the
+                // next stage (e.g. fastboot gadget) without sending Done.
+                if (filesServed > 0) {
+                    qDebug() << "rpiboot: device disconnected after serving"
+                             << filesServed << "file(s) — treating as successful completion";
+                    if (progress)
+                        progress(filesServed, filesServed, "Device rebooted into next stage");
+                    return true;
+                }
                 _lastError = "Device disconnected (libusb error "
                     + std::to_string(bytesRead) + ")"
                     + (lastFilename.empty() ? "" : " after serving: " + lastFilename);
                 return false;
             }
 
-            if (consecutiveErrors > MAX_RETRIES) {
+            if (consecutiveErrors > maxRetries) {
+                if (filesServed > 0) {
+                    qDebug() << "rpiboot: max retries reached after serving"
+                             << filesServed << "file(s) — treating as successful completion";
+                    if (progress)
+                        progress(filesServed, filesServed, "Device rebooted into next stage");
+                    return true;
+                }
                 _lastError = "Failed to read FileMessage from device (error "
                     + std::to_string(bytesRead) + " after "
                     + std::to_string(consecutiveErrors) + " retries"
@@ -84,15 +100,70 @@ bool FileServer::run(IUsbTransport& transport,
             if (progress)
                 progress(filesServed, 0,
                     "Waiting for device (retry " + std::to_string(consecutiveErrors)
-                    + "/" + std::to_string(MAX_RETRIES)
+                    + "/" + std::to_string(maxRetries)
                     + ", error " + std::to_string(bytesRead) + ")...");
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
+        // Validate the message before resetting the error counter.
+        // After the device reboots (e.g. into fastboot), reads may return
+        // garbage bytes — we must not reset consecutiveErrors, interpret
+        // the filename, or pass garbage to std::filesystem::path.
+        auto isGarbage = [&msg]() {
+            // Invalid command?
+            if (msg.command != FileCommand::GetFileSize &&
+                msg.command != FileCommand::ReadFile &&
+                msg.command != FileCommand::Done)
+                return true;
+            // Valid command but garbage filename?  rpiboot filenames are
+            // always printable ASCII (or '*'-prefixed metadata).  If the
+            // filename contains non-printable or non-ASCII bytes the
+            // entire message is corrupted.
+            for (auto ch : msg.name()) {
+                auto uch = static_cast<unsigned char>(ch);
+                if (uch < 0x20 || uch > 0x7E)
+                    return true;
+            }
+            return false;
+        };
+        if (isGarbage()) {
+            ++consecutiveErrors;
+            int maxRetries = MAX_RETRIES;
+            qDebug() << "rpiboot: garbage message (cmd="
+                     << static_cast<int32_t>(msg.command)
+                     << "0x" << Qt::hex << static_cast<uint32_t>(msg.command) << Qt::dec
+                     << ") retry" << consecutiveErrors << "/" << maxRetries;
+            if (consecutiveErrors > maxRetries) {
+                if (filesServed > 0) {
+                    qDebug() << "rpiboot: max retries reached after serving"
+                             << filesServed << "file(s) — treating as successful completion";
+                    if (progress)
+                        progress(filesServed, filesServed, "Device rebooted into next stage");
+                    return true;
+                }
+                _lastError = "Unknown file command "
+                    + std::to_string(static_cast<int32_t>(msg.command));
+                return false;
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            continue;
+        }
+
         consecutiveErrors = 0;
 
         std::string filename(msg.name());
         lastFilename = filename;
+
+        // Upstream rpiboot exits on empty filename (any command value).
+        // The device sends this as the "done" signal after all files are served.
+        if (filename.empty()) {
+            // Acknowledge with a zero-length response, matching upstream
+            transport.controlTransfer(VENDOR_REQUEST_TYPE, VENDOR_REQUEST,
+                                      0, 0, {}, DEFAULT_TIMEOUT_MS);
+            if (progress)
+                progress(filesServed, filesServed, "Device boot complete");
+            return true;
+        }
 
         switch (msg.command) {
         case FileCommand::GetFileSize:
@@ -118,9 +189,7 @@ bool FileServer::run(IUsbTransport& transport,
             return true;
 
         default:
-            _lastError = "Unknown file command " + std::to_string(static_cast<int32_t>(msg.command))
-                + " for file: " + filename;
-            return false;
+            break;  // unreachable — validated above
         }
     }
 

@@ -4,6 +4,7 @@
  */
 
 #include "curlnetworkconfig.h"
+#include "imager_version.h"
 #include "config.h"
 #include "platformquirks.h"
 #include <QMutexLocker>

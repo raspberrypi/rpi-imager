@@ -339,10 +339,6 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         }
     };
     
-    // Don't let cloud-init manage DNS - let dhcpcd/NetworkManager handle it
-    push(QStringLiteral("manage_resolv_conf: false"), cloud);
-    push(QString(), cloud);
-    
     const QString hostname = settings.value("hostname").toString().trimmed();
     if (!hostname.isEmpty()) {
         push(QStringLiteral("hostname: ") + hostname, cloud);
@@ -552,6 +548,13 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
         }
     }
     
+    // Don't let cloud-init manage DNS - let dhcpcd/NetworkManager handle it
+    // Only include this when there is actual customisation content, so that
+    // skipping customisation produces an empty payload.
+    if (!cloud.isEmpty()) {
+        cloud.prepend("manage_resolv_conf: false\n\n");
+    }
+
     return cloud;
 }
 
@@ -573,24 +576,23 @@ QByteArray CustomisationGenerator::generateCloudInitNetworkConfig(const QVariant
     const bool hidden = wifiConfigured ? settings.value("wifiHidden").toBool() : false;
     const QString regDom = settings.value("recommendedWifiCountry").toString().trimmed().toUpper();
     
-    // Always generate network config with eth0 DHCP configuration
-    // This ensures wired ethernet works out of the box with both IPv4 and IPv6
-    push(QStringLiteral("network:"), netcfg);
-    push(QStringLiteral("  version: 2"), netcfg);
-    
-    // Configure eth0 with DHCP for both IPv4 and IPv6
-    push(QStringLiteral("  ethernets:"), netcfg);
-    push(QStringLiteral("    eth0:"), netcfg);
-    push(QStringLiteral("      dhcp4: true"), netcfg);
-    push(QStringLiteral("      dhcp6: true"), netcfg);
-    push(QStringLiteral("      optional: true"), netcfg);
-    
     // Generate WiFi config if we have an SSID
     // Cloud-init requires at least one access-point if wifis: is defined, so we can't
     // generate wifis config with just a regulatory domain. When we have an SSID, we set
     // the regulatory domain in the network config here. When there's no SSID, the regulatory
     // domain is set via cmdline parameter (cfg80211.ieee80211_regdom) in imagewriter.cpp
     if (!ssid.isEmpty()) {
+        // Include eth0 DHCP alongside wifi to ensure wired ethernet continues to work
+        // when cloud-init applies the network-config (which would otherwise replace the
+        // distro default). Only needed when we're providing a network-config file.
+        push(QStringLiteral("network:"), netcfg);
+        push(QStringLiteral("  version: 2"), netcfg);
+        push(QStringLiteral("  ethernets:"), netcfg);
+        push(QStringLiteral("    eth0:"), netcfg);
+        push(QStringLiteral("      dhcp4: true"), netcfg);
+        push(QStringLiteral("      dhcp6: true"), netcfg);
+        push(QStringLiteral("      optional: true"), netcfg);
+
         push(QStringLiteral("  wifis:"), netcfg);
         push(QStringLiteral("    wlan0:"), netcfg);
         push(QStringLiteral("      dhcp4: true"), netcfg);

@@ -47,7 +47,12 @@ public:
                                 const QByteArray &cloudinitNetwork,
                                 const QByteArray &initFormat);
 
+    // Set optional bmap URL for DONT_CARE block optimisation.
+    // When set, unmapped blocks are skipped during fastboot flash.
+    void setBmapUrl(const QUrl &url) { _bmapUrl = url; }
+
 signals:
+    void writing();   // Emitted when download+flash pipeline starts
     void success();
     void error(QString msg);
     void finalizing();
@@ -60,6 +65,7 @@ protected:
     void run() override;
 
 private:
+    void runImpl();
     void downloadProducer();
     void decompressConsumerProducer();
     bool applyCustomisation(class fastboot::FastbootProtocol& fb,
@@ -67,6 +73,7 @@ private:
 
     QString _fastbootId;
     QUrl _imageUrl;
+    QUrl _bmapUrl;
     quint64 _downloadLen;
     quint64 _extractLen;
     QByteArray _expectedHash;

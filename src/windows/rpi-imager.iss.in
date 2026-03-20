@@ -78,8 +78,11 @@ Root: HKCR; Subkey: "rpi-imager\DefaultIcon"; ValueType: string; ValueName: ""; 
 Root: HKCR; Subkey: "rpi-imager\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\rpi-imager-callback-relay.exe"" ""%1"""; Flags: uninsdeletekey
 
 [Files]
-; WinUSB driver INF for Raspberry Pi USB boot mode devices (rpiboot)
-Source: "@CMAKE_SOURCE_DIR@\windows\rpiboot-winusb.inf"; DestDir: "{app}"; Flags: ignoreversion
+; WinUSB driver for Raspberry Pi USB boot mode devices (rpiboot).
+; For signed builds the INF has CatalogFile= uncommented and the matching
+; signed .cat is included; for unsigned builds only the bare INF is present.
+Source: "@CMAKE_BINARY_DIR@\deploy\rpiboot-winusb.inf"; DestDir: "{app}"; Flags: ignoreversion
+Source: "@CMAKE_BINARY_DIR@\deploy\rpiboot-winusb.cat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; Main program files
 Source: "@CMAKE_BINARY_DIR@\deploy\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion signonce

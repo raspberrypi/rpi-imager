@@ -1,6 +1,6 @@
 # Remote nghttp2
 
-set(NGHTTP2_VERSION "1.68.0")
+set(NGHTTP2_VERSION "1.68.1")
 FetchContent_Declare(nghttp2
     GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
     GIT_TAG        v${NGHTTP2_VERSION}

@@ -362,7 +362,7 @@ WizardStepBase {
         }
 
         Text {
-            textFormat: Text.RichText
+            textFormat: Text.StyledText
             text: qsTr("Please review the <a href='%1'>documentation</a> before proceeding.").arg(chkEnableUsbGadget.helpUrl)
             font.pointSize: Style.fontSizeFormLabel
             font.family: Style.fontFamilyBold

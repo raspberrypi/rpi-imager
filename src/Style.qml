@@ -151,6 +151,14 @@ Item {
     readonly property int cardPadding: scaled(20)
     readonly property int scrollBarWidth: scaled(10)
     readonly property int sidebarWidth: scaled(200)
+    readonly property int sidebarMinWidth: scaled(150)
+    readonly property int sidebarMaxWidth: scaled(350)
+    readonly property int sidebarDragHandleWidth: scaled(8)
+    readonly property color sidebarDragHandleHoverColor: listViewHoverRowBackgroundColor
+    readonly property color sidebarDragHandleHoverBackground: Qt.rgba(
+        listViewHoverRowBackgroundColor.r,
+        listViewHoverRowBackgroundColor.g,
+        listViewHoverRowBackgroundColor.b, 0.3)
     readonly property int sidebarItemBorderRadius: 4     // not scaled — visual decoration
     // Embedded-mode overrides (0 radius to avoid software renderer artifacts)
     readonly property int sectionBorderRadiusEmbedded: 0

@@ -38,6 +38,7 @@ Text {
     // Make it keyboard accessible
     focus: true
     activeFocusOnTab: true
+    focusPolicy: Qt.TabFocus
     Keys.onReturnPressed: root.clicked()
     Keys.onEnterPressed: root.clicked()
     Keys.onSpacePressed: root.clicked()

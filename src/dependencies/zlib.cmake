@@ -1,6 +1,6 @@
 # Bundled zlib
 
-set(ZLIB_VERSION "1.4.1.1")
+set(ZLIB_VERSION "1.3.2")
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
@@ -8,7 +8,7 @@ set(ZLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 FetchContent_Declare(zlib
     GIT_REPOSITORY https://github.com/madler/zlib.git
-    GIT_TAG 5a82f71ed1dfc0bec044d9702463dbdf84ea3b71 # v1.4.1.1, as of 27/05/2025
+    GIT_TAG v${ZLIB_VERSION}
     ${USE_OVERRIDE_FIND_PACKAGE}
 )
 FetchContent_GetProperties(zlib)

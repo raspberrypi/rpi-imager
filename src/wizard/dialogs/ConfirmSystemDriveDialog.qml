@@ -139,6 +139,7 @@ BaseDialog {
         placeholderText: qsTr("Type drive name exactly as shown above")
         text: ""
         activeFocusOnTab: true
+        focusPolicy: Qt.TabFocus
         // Combine all information in the name for VoiceOver
         Accessible.name: qsTr("Drive name input. Type exactly: %1. %2").arg(root.driveName).arg(placeholderText)
         Accessible.description: ""

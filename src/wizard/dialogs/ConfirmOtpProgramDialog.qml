@@ -31,7 +31,7 @@ BaseDialog {
             return (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? [warningText] : []
         }, 0)
         registerFocusGroup("input", function(){
-            return [confirmInput]
+            return [jtagLockCheck, confirmInput]
         }, 1)
         registerFocusGroup("buttons", function(){
             return [cancelButton, programButton]
@@ -159,6 +159,7 @@ BaseDialog {
         placeholderText: qsTr("Type device serial number exactly")
         text: ""
         activeFocusOnTab: true
+        focusPolicy: Qt.TabFocus
         Accessible.name: qsTr("Confirmation input. Type exactly: %1").arg(root.deviceSerial)
         Keys.onPressed: (event) => {
             if ((event.key === Qt.Key_V && (event.modifiers & (Qt.ControlModifier | Qt.MetaModifier))) ||

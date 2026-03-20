@@ -5,6 +5,7 @@
 
 #include "downloadextractthread.h"
 #include "imagewriter.h"
+#include "imager_version.h"
 #include "writeprogresswatchdog.h"
 #include "embedded_config.h"
 #include "config.h"
@@ -58,6 +59,7 @@
 #include <QDateTime>
 #include "curlfetcher.h"
 #include "rpibootthread.h"
+#include "fastbootflashthread.h"
 #include "fastbootflashthread.h"
 #include "curlnetworkconfig.h"
 #include <QDebug>
@@ -431,6 +433,24 @@ ImageWriter::~ImageWriter()
     qDebug() << "Stopping network monitoring";
     PlatformQuirks::stopNetworkMonitoring();
     
+    // Cancel FastbootFlashThread before stopping drive list polling.
+    // Both use libusb; concurrent libusb_exit (FastbootFlashThread) and
+    // libusb_init (DriveListModelPollThread) trigger a macOS libusb deadlock
+    // where darwin_exit holds active_contexts_lock while waiting for the
+    // IONotification thread, which itself needs that lock for a pending IOKit
+    // callback.  Stopping FastbootFlashThread first eliminates the conflict.
+    if (_fastbootFlashThread) {
+        qDebug() << "Stopping FastbootFlashThread";
+        _fastbootFlashThread->cancel();
+        if (!_fastbootFlashThread->wait(10000)) {
+            qWarning() << "FastbootFlashThread did not stop within 10s, terminating";
+            _fastbootFlashThread->terminate();
+            _fastbootFlashThread->wait();
+        }
+        delete _fastbootFlashThread;
+        _fastbootFlashThread = nullptr;
+    }
+
     // Stop background drive list polling
     qDebug() << "Stopping background drive list polling";
     _drivelist.stopPolling();
@@ -485,7 +505,7 @@ void ImageWriter::setEngine(QQmlApplicationEngine *engine)
 }
 
 /* Set URL to download from */
-void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, QByteArray initFormat, QString releaseDate)
+void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, QByteArray expectedHash, bool multifilesinzip, QString parentcategory, QString osname, QByteArray initFormat, QString releaseDate, QString bmapUrl)
 {
     _src = url;
     _downloadLen = downloadLen;
@@ -496,6 +516,7 @@ void ImageWriter::setSrc(const QUrl &url, quint64 downloadLen, quint64 extrLen, 
     _osName = osname;
     _initFormat = (initFormat == "none") ? "" : initFormat;
     _osReleaseDate = releaseDate;
+    _bmapUrl = bmapUrl;
     // Gzip ISIZE is 32-bit, so uncompressed size is unreliable for files >4GB.
     // When no trusted extract size is provided by the manifest, mark it so the
     // UI can show indeterminate progress instead of a misleading percentage.
@@ -575,34 +596,48 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     }
 
     // Start FastbootFlashThread
-    auto *fbt = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
-    fbt->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
-    connect(fbt, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
-    connect(fbt, &FastbootFlashThread::error, this, &ImageWriter::onError);
-    connect(fbt, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
-    connect(fbt, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
+    _fastbootFlashThread = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
+    _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+    if (!_bmapUrl.isEmpty())
+        _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
+    connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+    connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
+    connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
         emit downloadProgress(QVariant(now), QVariant(total));
     });
-    connect(fbt, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
+    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
         emit writeProgress(QVariant(now), QVariant(total));
     });
-    connect(fbt, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+    connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+    connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
+        setWriteState(WriteState::Writing);
+        startProgressPolling();
+    });
+
+    // Clean up thread pointer when finished
+    connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
+        if (_fastbootFlashThread) {
+            _fastbootFlashThread->deleteLater();
+            _fastbootFlashThread = nullptr;
+        }
+    });
 
     // Wire fastboot timing events and progress to PerformanceStats
-    connect(fbt, &FastbootFlashThread::eventFastbootDeviceOpen,
+    connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
             this, [this](quint32 ms, bool ok, QString meta){
                 _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
             });
-    connect(fbt, &FastbootFlashThread::downloadProgress,
+    connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
             this, [this](quint64 now, quint64 total){
                 _performanceStats->recordDownloadProgress(now, total);
             });
-    connect(fbt, &FastbootFlashThread::writeProgress,
+    connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
             this, [this](quint64 now, quint64 total){
                 _performanceStats->recordWriteProgress(now, total);
             });
 
-    fbt->start();
+    _fastbootFlashThread->start();
 }
 
 void ImageWriter::onRpibootError(const QString &msg)
@@ -691,6 +726,16 @@ void ImageWriter::startWrite()
         }
         delete _rpibootThread;
         _rpibootThread = nullptr;
+    }
+
+    // Same for the fastboot flash thread.
+    if (_fastbootFlashThread) {
+        if (_fastbootFlashThread->isRunning()) {
+            _fastbootFlashThread->cancel();
+            _fastbootFlashThread->wait(5000);
+        }
+        delete _fastbootFlashThread;
+        _fastbootFlashThread = nullptr;
     }
 
     if (!readyToWrite())
@@ -1397,6 +1442,20 @@ void ImageWriter::cancelWrite()
             if (_rpibootThread) {
                 _rpibootThread->deleteLater();
                 _rpibootThread = nullptr;
+            }
+            setWriteState(WriteState::Cancelled);
+            emit cancelled();
+        });
+        return;
+    }
+
+    if (_fastbootFlashThread)
+    {
+        _fastbootFlashThread->cancel();
+        connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
+            if (_fastbootFlashThread) {
+                _fastbootFlashThread->deleteLater();
+                _fastbootFlashThread = nullptr;
             }
             setWriteState(WriteState::Cancelled);
             emit cancelled();
@@ -2277,15 +2336,23 @@ void ImageWriter::setVerifyEnabled(bool verify)
 /* Relay events from download thread to QML */
 void ImageWriter::onSuccess()
 {
+    // Guard against a late success signal arriving after an error has
+    // already been reported (e.g. FastbootFlashThread falling through
+    // after a flash failure).
+    if (_writeState == WriteState::Failed || _writeState == WriteState::Cancelled) {
+        qDebug() << "Ignoring late success signal — write already in state:" << _writeState;
+        return;
+    }
+
     setWriteState(WriteState::Succeeded);
     stopProgressPolling();
-    
+
     // End performance stats session
     _performanceStats->endSession(true);
-    
+
     // Clear Pi Connect token on successful write completion
     clearConnectToken();
-    
+
     emit success();
 
     if (_settings.value("beep").toBool()) {
@@ -2312,6 +2379,9 @@ void ImageWriter::onError(QString msg)
     // after the user starts a new write attempt, causing dual-write crashes. (#1511)
     if (_thread && _thread->isRunning()) {
         _thread->cancelDownload();
+    }
+    if (_fastbootFlashThread && _fastbootFlashThread->isRunning()) {
+        _fastbootFlashThread->cancel();
     }
     
     // End performance stats session with error
@@ -3231,23 +3301,25 @@ void ImageWriter::_applySystemdCustomisationFromSettings(const QVariantMap &s)
 {
     // Use CustomisationGenerator for script generation
     QByteArray script = rpi_imager::CustomisationGenerator::generateSystemdScript(s, _piConnectToken);
-    
-    // Extract recommendedWifiCountry for cmdline append
-    QByteArray cmdlineAppend;
-    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
-    if (!wifiCountry.isEmpty()) {
-        cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
-    }
 
-    // Check if secure boot should be enabled
-    // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
-    // iCloud-synced or network paths. The actual write operation will validate the file.
+    QByteArray cmdlineAppend;
     ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
-    bool secureBootEnabled = s.value("secureBootEnabled").toBool();
-    QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
-    if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
-        advOpts |= ImageOptions::EnableSecureBoot;
-        qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+
+    if (!script.isEmpty()) {
+        const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
+        if (!wifiCountry.isEmpty()) {
+            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+        }
+
+        // Check if secure boot should be enabled
+        // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
+        // iCloud-synced or network paths. The actual write operation will validate the file.
+        bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+        QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+        if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
+            advOpts |= ImageOptions::EnableSecureBoot;
+            qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+        }
     }
 
     setImageCustomisation(QByteArray(), cmdlineAppend, script, QByteArray(), QByteArray(), advOpts);
@@ -3265,24 +3337,30 @@ void ImageWriter::_applyCloudInitCustomisationFromSettings(const QVariantMap &s)
     QByteArray netcfg = rpi_imager::CustomisationGenerator::generateCloudInitNetworkConfig(
         s, hasCcRpi);
     
-    // Extract recommendedWifiCountry for cmdline append
+    // Only emit cmdline / advanced options when there is actual content to
+    // customise.  A stale persisted recommendedWifiCountry should not cause
+    // device writes when customisation was skipped.
     QByteArray cmdlineAppend;
-    const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
-    if (!wifiCountry.isEmpty()) {
-        cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
-    }
-    
-    // Check if secure boot should be enabled
-    // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
-    // iCloud-synced or network paths. The actual write operation will validate the file.
     ImageOptions::AdvancedOptions advOpts = NoAdvancedOptions;
-    bool secureBootEnabled = s.value("secureBootEnabled").toBool();
-    QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
-    if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
-        advOpts |= ImageOptions::EnableSecureBoot;
-        qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+
+    bool hasContent = !cloud.isEmpty() || !netcfg.isEmpty();
+    if (hasContent) {
+        const QString wifiCountry = s.value("recommendedWifiCountry").toString().trimmed();
+        if (!wifiCountry.isEmpty()) {
+            cmdlineAppend = QByteArray(" ") + QByteArray("cfg80211.ieee80211_regdom=") + wifiCountry.toUtf8();
+        }
+
+        // Check if secure boot should be enabled
+        // Note: Don't validate rsaKeyPath with QFile::exists() here - it can be slow on
+        // iCloud-synced or network paths. The actual write operation will validate the file.
+        bool secureBootEnabled = s.value("secureBootEnabled").toBool();
+        QString rsaKeyPath = _settings.value("secureboot_rsa_key").toString();
+        if (secureBootEnabled && !rsaKeyPath.isEmpty()) {
+            advOpts |= ImageOptions::EnableSecureBoot;
+            qDebug() << "Secure boot enabled with RSA key:" << rsaKeyPath;
+        }
     }
-    
+
     setImageCustomisation(QByteArray(), cmdlineAppend, QByteArray(), cloud, netcfg, advOpts);
 }
 

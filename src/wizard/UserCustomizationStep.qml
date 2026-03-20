@@ -117,8 +117,8 @@ WizardStepBase {
                     color: sudoInfoArea.containsMouse || activeFocus ? Style.textDescriptionColor : Style.textMetadataColor
                     Layout.alignment: Qt.AlignVCenter
 
-                    activeFocusOnTab: true
-                    focusPolicy: Qt.TabFocus
+                    activeFocusOnTab: root.imageWriter ? root.imageWriter.isScreenReaderActive() : false
+                    focusPolicy: (root.imageWriter && root.imageWriter.isScreenReaderActive()) ? Qt.TabFocus : Qt.NoFocus
 
                     Accessible.role: Accessible.StaticText
                     Accessible.name: qsTr("Passwordless sudo information: ") + infoText
