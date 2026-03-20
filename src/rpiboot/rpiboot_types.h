@@ -23,10 +23,10 @@ namespace rpiboot {
 // Broadcom USB Vendor ID shared by all Pi silicon
 constexpr uint16_t BROADCOM_VID = 0x0a5c;
 
-// USB Product IDs that identify each chip generation in boot mode
+// USB Product IDs that identify each chip generation in boot mode.
+// BCM2835 (PID 0x2763, CM1/Pi Zero/Pi 1A+) is intentionally not supported.
 enum class ChipGeneration : uint16_t {
-    BCM2835   = 0x2763,   // CM1, Pi Zero, Pi 1A+
-    BCM2836_7 = 0x2764,   // CM3, Pi 2/3
+    BCM2836_7 = 0x2764,   // CM3/CM3+, Pi 2/3 (BCM2836 and BCM2837 share this PID)
     BCM2711   = 0x2711,   // CM4, Pi 4
     BCM2712   = 0x2712,   // CM5, Pi 5
 };
@@ -35,7 +35,6 @@ enum class ChipGeneration : uint16_t {
 inline std::optional<ChipGeneration> chipGenerationFromPid(uint16_t pid)
 {
     switch (pid) {
-    case static_cast<uint16_t>(ChipGeneration::BCM2835):   return ChipGeneration::BCM2835;
     case static_cast<uint16_t>(ChipGeneration::BCM2836_7): return ChipGeneration::BCM2836_7;
     case static_cast<uint16_t>(ChipGeneration::BCM2711):   return ChipGeneration::BCM2711;
     case static_cast<uint16_t>(ChipGeneration::BCM2712):   return ChipGeneration::BCM2712;
@@ -47,7 +46,6 @@ inline std::optional<ChipGeneration> chipGenerationFromPid(uint16_t pid)
 inline std::string_view chipGenerationName(ChipGeneration gen)
 {
     switch (gen) {
-    case ChipGeneration::BCM2835:   return "BCM2835";
     case ChipGeneration::BCM2836_7: return "BCM2836/7";
     case ChipGeneration::BCM2711:   return "BCM2711";
     case ChipGeneration::BCM2712:   return "BCM2712";
@@ -61,7 +59,6 @@ inline std::string_view chipGenerationName(ChipGeneration gen)
 inline std::string_view chipDirectoryPrefix(ChipGeneration gen)
 {
     switch (gen) {
-    case ChipGeneration::BCM2835:   return "2835";
     case ChipGeneration::BCM2836_7: return "2836";
     case ChipGeneration::BCM2711:   return "2711";
     case ChipGeneration::BCM2712:   return "2712";
@@ -73,7 +70,6 @@ inline std::string_view chipDirectoryPrefix(ChipGeneration gen)
 inline std::string deviceDescription(ChipGeneration gen)
 {
     switch (gen) {
-    case ChipGeneration::BCM2835:   return "Compute Module 1 (USB Boot)";
     case ChipGeneration::BCM2836_7: return "Compute Module 3 (USB Boot)";
     case ChipGeneration::BCM2711:   return "Compute Module 4 (USB Boot)";
     case ChipGeneration::BCM2712:   return "Compute Module 5 (USB Boot)";

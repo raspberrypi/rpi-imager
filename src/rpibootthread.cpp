@@ -421,14 +421,20 @@ bool RpibootThread::pollForFastbootDevice(std::atomic<bool>& found, QString& fas
                 }
             }
 
-            if (_device.portPath.empty() && !devices.empty()) {
+            // Port-path fallback: only safe when exactly one fastboot device is
+            // present.  With multiple devices we cannot tell which one belongs to
+            // the CM we just booted, so skip rather than pick the wrong device.
+            if (_device.portPath.empty() && devices.size() == 1) {
                 const auto& dev = devices[0];
                 fastbootId = QStringLiteral("%1:%2")
                     .arg(dev.busNumber)
                     .arg(dev.deviceAddress);
-                qDebug() << "Fastboot device appeared (no port matching):" << fastbootId;
+                qDebug() << "Fastboot device appeared (no port path, sole device):" << fastbootId;
                 found.store(true);
                 return true;
+            } else if (_device.portPath.empty() && devices.size() > 1) {
+                qWarning() << "rpiboot: multiple fastboot devices present but no port path"
+                           << "— cannot identify which device to use";
             }
         } catch (const std::exception& e) {
             qWarning() << "rpiboot: USB scan failed during fastboot wait:" << e.what();
