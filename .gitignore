@@ -8,6 +8,7 @@ obj-**
 # IDE Configurations
 .vscode
 .zed
+.idea
 
 # Debian packaging
 debian/rpi-imager/**
