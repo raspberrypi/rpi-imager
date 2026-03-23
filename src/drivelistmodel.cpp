@@ -124,12 +124,22 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         if (i.size == 0 && !isRpibootDevice)
             continue;
 
-        // Allow read/write virtual devices (mounted disk images) but filter out:
-        // - Read-only virtual devices
-        // - System virtual devices (like APFS volumes on macOS)
-        // - Virtual devices that are not removable/ejectable (likely system virtual devices)
-        if (i.isVirtual && (i.isReadOnly || i.isSystem || !i.isRemovable))
-            continue;
+        // Filter virtual devices (loop devices, APFS volumes, VHDs, Storage Spaces).
+        // Read-only and system virtual devices are always hidden.
+        // On macOS/Windows, also require removable/ejectable — isSystem detection
+        // can miss edge cases (e.g., APFS on non-ejectable external enclosures,
+        // non-system Storage Spaces pools).
+        // On Linux, isSystem is set by explicit mountpoint checks (/, /usr, /var,
+        // /home, /boot, /snap/*) which is sufficient — and loop devices created
+        // via losetup are never removable, so requiring it would hide them.
+        if (i.isVirtual) {
+            if (i.isReadOnly || i.isSystem)
+                continue;
+#ifndef Q_OS_LINUX
+            if (!i.isRemovable)
+                continue;
+#endif
+        }
 
         QString deviceNamePlusSize = QString::fromStdString(i.uniqueKey());
         drivesInNewList.insert(deviceNamePlusSize);
