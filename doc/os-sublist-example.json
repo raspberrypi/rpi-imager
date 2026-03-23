@@ -44,6 +44,7 @@
       "capabilities": [
         "secure_boot",
         "rpi_connect",
+        "passwordless_sudo",
         "i2c",
         "spi",
         "onewire",
