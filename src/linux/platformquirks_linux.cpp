@@ -764,8 +764,28 @@ void attachConsole() {
 }
 
 const char* getBundlePath() {
-    // APPIMAGE is set by the AppImage runtime before our code runs
-    return ::getenv("APPIMAGE");
+    // Prefer $APPIMAGE (set by AppImage runtime) so that pkexec re-launches
+    // the AppImage wrapper rather than the unpacked binary inside it.
+    const char* appimage = ::getenv("APPIMAGE");
+    if (appimage)
+        return appimage;
+
+    // Fallback: resolve our own executable path. This covers native (non-AppImage)
+    // installs so that self-elevation via tryElevate() works for any packaging.
+    // Not cached: /proc/self/exe can change to "(deleted)" after a package upgrade,
+    // and we'd rather return null than a stale path.
+    static thread_local char resolved[PATH_MAX];
+    ssize_t len = ::readlink("/proc/self/exe", resolved, sizeof(resolved) - 1);
+    if (len <= 0)
+        return nullptr;
+    resolved[len] = '\0';
+
+    // After a package upgrade, the kernel appends " (deleted)" to the target.
+    // Treat that as unavailable rather than passing a bogus path to pkexec.
+    if (strstr(resolved, " (deleted)"))
+        return nullptr;
+
+    return resolved;
 }
 
 bool isElevatableBundle() {
@@ -828,39 +848,39 @@ static const char* const POLKIT_ACTIONS_DIRS[] = {
     nullptr
 };
 
-// Internal helper to check if policy exists for a specific path
-static bool hasPolkitPolicyForPath(const char* appImagePath) {
-    if (!appImagePath) {
+// Internal helper to check if a polkit policy exists that authorizes pkexec
+// to run the given binary path. Scans all .policy files in the standard polkit
+// action directories for a matching exec.path annotation.
+static bool hasPolkitPolicyForPath(const char* binaryPath) {
+    if (!binaryPath) {
         return false;
     }
 
-    char policyFilename[256];
-    if (!generatePolkitPolicyFilename(appImagePath, policyFilename, sizeof(policyFilename))) {
-        return false;
-    }
+    // Build the search string: the exec.path annotation matching our binary
+    QString escapedPath = xmlEscape(QString::fromUtf8(binaryPath));
+    QByteArray searchString = QString("org.freedesktop.policykit.exec.path\">%1</annotate>")
+        .arg(escapedPath).toUtf8();
 
-    // Check if the policy contains the exact AppImage path (XML-escaped form)
-    // Since we now XML-escape the path when writing, we must search for the escaped form
-    QString escapedPath = xmlEscape(QString::fromUtf8(appImagePath));
-    QString searchPath = QString("org.freedesktop.policykit.exec.path\">%1</annotate>")
-        .arg(escapedPath);
-
-    // Search both polkit directories for the policy file
-    char policyPath[512];
     for (int i = 0; POLKIT_ACTIONS_DIRS[i]; i++) {
-        std::snprintf(policyPath, sizeof(policyPath),
-            "%s/%s", POLKIT_ACTIONS_DIRS[i], policyFilename);
-
-        QFile policyFile(policyPath);
-        if (!policyFile.open(QIODevice::ReadOnly))
+        QDir dir(POLKIT_ACTIONS_DIRS[i]);
+        if (!dir.exists())
             continue;
 
-        QByteArray content = policyFile.readAll();
-        policyFile.close();
+        const QStringList policyFiles = dir.entryList(
+            QStringList() << QStringLiteral("*.policy"), QDir::Files);
+        for (const QString& filename : policyFiles) {
+            QFile policyFile(dir.filePath(filename));
+            if (!policyFile.open(QIODevice::ReadOnly))
+                continue;
 
-        if (content.contains(searchPath.toUtf8()))
-            return true;
+            QByteArray content = policyFile.readAll();
+            policyFile.close();
+
+            if (content.contains(searchString))
+                return true;
+        }
     }
+
     return false;
 }
 
@@ -1066,23 +1086,26 @@ bool launchDetached(const QString& program, const QStringList& arguments) {
 }
 
 bool tryElevate(int argc, char** argv) {
-    // Only attempt elevation if running from AppImage, not root, and have policy
-    const char* appImagePath = getBundlePath();
-    if (!appImagePath || ::geteuid() == 0) {
+    // Only attempt elevation if not already root, have a bundle path, and have a polkit policy
+    const char* bundlePath = getBundlePath();
+    if (!bundlePath || ::geteuid() == 0) {
         return false;
     }
-    
-    if (access("/usr/bin/pkexec", X_OK) != 0 || !hasPolkitPolicyForPath(appImagePath)) {
+
+    if (access("/usr/bin/pkexec", X_OK) != 0 || !hasPolkitPolicyForPath(bundlePath)) {
         return false;
     }
-    
-    // Build argument list: pkexec --disable-internal-agent /path/to/appimage [args...]
+
+    // --disable-internal-agent prevents pkexec from spawning its own polkit agent.
+    // We rely on the desktop environment's agent (e.g., gnome-shell, kde-polkit)
+    // to show the auth dialog. Without this flag, pkexec's built-in text-mode agent
+    // can interfere with the GUI agent, causing duplicate prompts or hangs.
     char** newArgv = new char*[argc + 3];
     int newArgc = 0;
-    
+
     newArgv[newArgc++] = strdup("/usr/bin/pkexec");
     newArgv[newArgc++] = strdup("--disable-internal-agent");
-    newArgv[newArgc++] = strdup(appImagePath);
+    newArgv[newArgc++] = strdup(bundlePath);
     
     for (int i = 1; i < argc; i++) {
         newArgv[newArgc++] = strdup(argv[i]);

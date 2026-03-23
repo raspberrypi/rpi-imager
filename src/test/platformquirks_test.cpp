@@ -242,12 +242,17 @@ TEST_CASE("clearAppImageEnvironment doesn't crash", "[platformquirks][linux]") {
     REQUIRE_NOTHROW(PlatformQuirks::clearAppImageEnvironment());
 }
 
-TEST_CASE("isElevatableBundle returns false outside AppImage", "[platformquirks][linux]") {
-    // When not running from an AppImage, APPIMAGE env var is not set
+TEST_CASE("getBundlePath resolves executable outside AppImage", "[platformquirks][linux]") {
+    // When not running from an AppImage, getBundlePath falls back to /proc/self/exe
     const char* appImage = getenv("APPIMAGE");
     if (appImage == nullptr) {
-        CHECK(PlatformQuirks::isElevatableBundle() == false);
-        CHECK(PlatformQuirks::getBundlePath() == nullptr);
+        const char* path = PlatformQuirks::getBundlePath();
+        // Should resolve to the test binary via /proc/self/exe
+        CHECK(path != nullptr);
+        CHECK(access(path, F_OK) == 0);
+        // isElevatableBundle should be true (binary exists), even though
+        // tryElevate will bail out if no polkit policy is installed
+        CHECK(PlatformQuirks::isElevatableBundle() == true);
     }
 }
 
