@@ -50,6 +50,6 @@ undoview
 wasm-exceptions
 wasm-jspi
 wasm-simd128
-wayland-compositor
+wayland-server
 wayland-compositor-quick
 windeployqt
