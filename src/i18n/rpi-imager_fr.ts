@@ -48,6 +48,34 @@
         <translation>Modifier</translation>
     </message>
     <message>
+        <source>Saved Customisation</source>
+        <translation>Personnalisation enregistrée</translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation>Effacer</translation>
+    </message>
+    <message>
+        <source>This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.</source>
+        <translation>Cela supprimera tous les paramètres de personnalisation du système d'exploitation enregistrés, tels que le nom d'hôte, le WiFi et les identifiants utilisateur.</translation>
+    </message>
+    <message>
+        <source>Remove all saved OS customisation settings such as hostname, WiFi, and user credentials</source>
+        <translation>Effacer tous les paramètres de personnalisation du système d'exploitation enregistrés, tels que le nom d'hôte, le WiFi et les identifiants utilisateur.</translation>
+    </message>
+    <message>
+        <source>Clear saved customisation?</source>
+        <translation>Effacer la personnalisation enregistrée&#xa0;?</translation>
+    </message>
+    <message>
+        <source>Keep saved customisation settings and return to the options dialog</source>
+        <translation>Garder les paramètres de personnalisation enregistrés et revenir à la fenêtre des options</translation>
+    </message>
+    <message>
+        <source>Remove all saved OS customisation settings permanently</source>
+        <translation>Supprimer tous les paramètres de personnalisation du système d'exploitation enregistrés de manière permanente</translation>
+    </message>
+    <message>
         <source>Close the options dialog without saving any changes</source>
         <translation>Fermer la fenêtre des options sans rien enregistrer</translation>
     </message>
