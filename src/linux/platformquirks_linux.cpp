@@ -892,6 +892,61 @@ bool hasElevationPolicyInstalled() {
     return hasPolkitPolicyForPath(bundlePath);
 }
 
+// Internal helper to remove stale polkit policy files left behind when the
+// AppImage was moved, renamed, or deleted. Called during policy installation
+// (which runs as root) so we have write access to the polkit directories.
+// Only touches files matching our naming convention (com.raspberrypi.rpi-imager.appimage-*.policy).
+static void cleanupStalePolkitPolicies(const char* currentPath) {
+    const QByteArray execPathTag("org.freedesktop.policykit.exec.path\">");
+    const QByteArray closeTag("</annotate>");
+
+    for (int i = 0; POLKIT_ACTIONS_DIRS[i]; i++) {
+        QDir dir(POLKIT_ACTIONS_DIRS[i]);
+        if (!dir.exists())
+            continue;
+
+        const QStringList policyFiles = dir.entryList(
+            QStringList() << QStringLiteral("com.raspberrypi.rpi-imager.appimage-*.policy"),
+            QDir::Files);
+
+        for (const QString& filename : policyFiles) {
+            QString fullPath = dir.filePath(filename);
+            QFile file(fullPath);
+            if (!file.open(QIODevice::ReadOnly))
+                continue;
+
+            QByteArray content = file.readAll();
+            file.close();
+
+            // Extract the exec.path value from the policy XML
+            int tagStart = content.indexOf(execPathTag);
+            if (tagStart < 0)
+                continue;
+            tagStart += execPathTag.size();
+            int tagEnd = content.indexOf(closeTag, tagStart);
+            if (tagEnd < 0)
+                continue;
+
+            QByteArray referencedPath = content.mid(tagStart, tagEnd - tagStart).trimmed();
+            if (referencedPath.isEmpty())
+                continue;
+
+            // Keep the policy if it references the current AppImage path
+            if (currentPath && referencedPath == currentPath)
+                continue;
+
+            // Remove if the referenced binary no longer exists
+            struct stat st;
+            if (stat(referencedPath.constData(), &st) != 0) {
+                if (QFile::remove(fullPath)) {
+                    std::fprintf(stderr, "Removed stale polkit policy: %s (target %s no longer exists)\n",
+                                 qPrintable(fullPath), referencedPath.constData());
+                }
+            }
+        }
+    }
+}
+
 // Internal helper to install polkit policy for a specific path
 static bool installPolkitPolicyForPath(const char* appImagePath) {
     if (!appImagePath || ::geteuid() != 0) {
@@ -915,7 +970,10 @@ static bool installPolkitPolicyForPath(const char* appImagePath) {
                      static_cast<int>(strlen(appImagePath)), appImagePath);
         return false;
     }
-    
+
+    // Clean up stale policy files from previous AppImage locations before installing the new one
+    cleanupStalePolkitPolicies(appImagePath);
+
     char policyFilename[256];
     if (!generatePolkitPolicyFilename(appImagePath, policyFilename, sizeof(policyFilename))) {
         return false;
