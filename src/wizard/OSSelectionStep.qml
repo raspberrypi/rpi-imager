@@ -704,6 +704,7 @@ WizardStepBase {
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.wizardContainer.piConnectAvailable = false
                 root.wizardContainer.secureBootAvailable = imageWriter.isSecureBootForcedByCliFlag()
+                root.wizardContainer.passwordlessSudoAvailable = false
                 root.wizardContainer.ccRpiAvailable = false
                 root.wizardContainer.ifAndFeaturesAvailable = false
                 root.nextButtonEnabled = true
@@ -730,6 +731,7 @@ WizardStepBase {
                 root.wizardContainer.customizationSupported = imageWriter.imageSupportsCustomization()
                 root.wizardContainer.piConnectAvailable = imageWriter.checkSWCapability("rpi_connect")
                 root.wizardContainer.secureBootAvailable = imageWriter.checkSWCapability("secure_boot") || imageWriter.isSecureBootForcedByCliFlag()
+                root.wizardContainer.passwordlessSudoAvailable = imageWriter.checkSWCapability("passwordless_sudo")
                 root.wizardContainer.ccRpiAvailable = imageWriter.imageSupportsCcRpi()
                 
                 // Check if any interface/feature capabilities are available (requires both HW and SW support)
@@ -752,6 +754,9 @@ WizardStepBase {
                 if (!root.wizardContainer.secureBootAvailable) {
                     delete root.wizardContainer.customizationSettings.secureBootEnabled
                     root.wizardContainer.secureBootEnabled = false
+                }
+                if (!root.wizardContainer.passwordlessSudoAvailable) {
+                    delete root.wizardContainer.customizationSettings.passwordlessSudo
                 }
                 // Interface/feature settings are capability-dependent and never
                 // persisted, but older versions may have saved them.  Scrub any

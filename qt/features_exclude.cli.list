@@ -11,7 +11,6 @@ qdoc
 qev
 qtattributionsscanner
 qtplugininfo
-qtprotobufgen
 pixeltool
 windeployqt
 distancefieldgenerator
@@ -39,10 +38,6 @@ tabletevent
 tuiotouch
 
 # Printing
-printdialog
-printer
-printpreviewdialog
-printpreviewwidget
 printsupport
 
 # Text processing (GUI-related)
@@ -54,25 +49,11 @@ textodfwriter
 # Image formats (for GUI)
 gif
 
-# 3D and advanced graphics
-qt3d-animation
-qt3d-extras
-qt3d-input
-qt3d-logic
-qt3d-opengl-renderer
-qt3d-render
-qt3d-rhi-renderer
-
 # PDF support
 pdf
-qtpdf-build
-qtpdf-quick-build
-qtpdf-widgets-build
 
 # Advanced networking (keep basic networking - HTTPS/SSL is REQUIRED)
 # NOTE: Do NOT exclude ssl, networkproxy, or http - these are essential for downloads
-bluetooth
-nfc
 
 # Calendars and localization (advanced)
 hijricalendar
@@ -80,17 +61,9 @@ islamiccivilcalendar
 jalalicalendar
 emojisegmenter
 
-# State machines and scripting
-statemachine
-statemachine-qml
-scxml
-scxml-ecmascriptdatamodel
-
 # Advanced data models
 concatenatetablesproxymodel
 identityproxymodel
-itemmodeltester
-sqlmodel
 
 # IPC and system integration
 localserver
@@ -100,10 +73,7 @@ systemsemaphore
 gssapi
 
 # Testing and debugging
-batch_test_support
 testlib
-testlib_selfcover
-valgrind
 
 # WebAssembly features
 wasm-exceptions
@@ -113,15 +83,10 @@ wasm-simd128
 # Wayland compositor
 wayland-compositor-quick
 
-# WebEngine features
-webengine-developer-build
-webengine-jumbo-build
-
 # Domain validation
 topleveldomain
 
 # Misc
-example-hwr
 poll-exit-on-error
 socks5
-sql-sqlite
+sql

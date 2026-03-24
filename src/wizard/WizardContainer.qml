@@ -68,6 +68,8 @@ Item {
     property bool piConnectAvailable: false
     // Whether selected OS supports Secure Boot signing
     property bool secureBootAvailable: false
+    // Whether selected OS supports passwordless sudo configuration
+    property bool passwordlessSudoAvailable: false
     // Whether secure boot key is configured in App Options
     property bool secureBootKeyConfigured: false
 
@@ -363,6 +365,7 @@ Item {
         // Reset OS capability flags - these will be set correctly by OS selection
         piConnectAvailable = false
         secureBootAvailable = false
+        passwordlessSudoAvailable = false
         ccRpiAvailable = false
         ifI2cEnabled = false
         ifSpiEnabled = false

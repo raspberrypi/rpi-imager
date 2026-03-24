@@ -95,6 +95,7 @@ WizardStepBase {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Style.spacingSmall
+                visible: root.wizardContainer && root.wizardContainer.passwordlessSudoAvailable
 
                 ImCheckBox {
                     id: checkPasswordlessSudo

@@ -46,6 +46,7 @@ The `--capabilities` option accepts one or more of the following values:
 |------------|-------------|
 | `i2c` | Enable I2C interface option |
 | `onewire` | Enable 1-Wire interface option |
+| `passwordless_sudo` | Enable passwordless sudo option in user setup |
 | `rpi_connect` | Enable Raspberry Pi Connect setup |
 | `secure_boot` | Enable secure boot signing |
 | `serial` | Enable serial interface option |

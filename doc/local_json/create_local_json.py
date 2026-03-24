@@ -17,13 +17,14 @@ CHUNK_SIZE = 1024 * 1024 # read files in 1MB chunks
 
 # Valid OS capabilities (see doc/json-schema/os-list-schema.json)
 VALID_OS_CAPABILITIES = {
-    "i2c":         "Enable I2C interface option",
-    "onewire":     "Enable 1-Wire interface option",
-    "rpi_connect": "Enable Raspberry Pi Connect setup",
-    "secure_boot": "Enable secure boot signing",
-    "serial":      "Enable serial interface option",
-    "spi":         "Enable SPI interface option",
-    "usb_otg":     "Enable USB Gadget mode option",
+    "i2c":               "Enable I2C interface option",
+    "onewire":           "Enable 1-Wire interface option",
+    "passwordless_sudo": "Enable passwordless sudo option in user setup",
+    "rpi_connect":       "Enable Raspberry Pi Connect setup",
+    "secure_boot":       "Enable secure boot signing",
+    "serial":            "Enable serial interface option",
+    "spi":               "Enable SPI interface option",
+    "usb_otg":           "Enable USB Gadget mode option",
 }
 
 # Valid device (hardware) capabilities

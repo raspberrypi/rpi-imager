@@ -1056,6 +1056,7 @@ echo "All files validated successfully!"
    - Set `architecture` for proper sorting on device selection
    - Use `capabilities` to enable hardware-specific features
    - Interface capabilities (i2c, spi, etc.) need both device and OS support
+   - OS-only capabilities (rpi_connect, secure_boot, passwordless_sudo) only need OS support
 
 ## Common Pitfalls
 

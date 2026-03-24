@@ -501,7 +501,7 @@
                                 "$id": "#/properties/os_list/items/anyOf/0/properties/capabilities",
                                 "type": "array",
                                 "title": "The capabilities schema",
-                                "description": "Optional. Array of strings representing OS capabilities. Used to enable or disable features in the customization wizard. Supported OS capabilities include: 'rpi_connect' (enables Raspberry Pi Connect setup), 'secure_boot' (enables secure boot signing), 'i2c' (enables I2C interface option), 'spi' (enables SPI interface option), 'onewire' (enables 1-Wire interface option), 'serial' (enables serial interface option), 'usb_otg' (enables USB Gadget mode option). Note: Interface capabilities (i2c, spi, onewire, serial, usb_otg) require both hardware and OS support - specify in both device and OS capabilities for them to be available.",
+                                "description": "Optional. Array of strings representing OS capabilities. Used to enable or disable features in the customization wizard. Supported OS capabilities include: 'rpi_connect' (enables Raspberry Pi Connect setup), 'secure_boot' (enables secure boot signing), 'passwordless_sudo' (enables passwordless sudo option in user setup), 'i2c' (enables I2C interface option), 'spi' (enables SPI interface option), 'onewire' (enables 1-Wire interface option), 'serial' (enables serial interface option), 'usb_otg' (enables USB Gadget mode option). Note: Interface capabilities (i2c, spi, onewire, serial, usb_otg) require both hardware and OS support - specify in both device and OS capabilities for them to be available.",
                                 "default": [],
                                 "examples": [
                                     ["rpi_connect", "secure_boot", "i2c", "spi", "onewire", "serial", "usb_otg"],
@@ -512,6 +512,7 @@
                                     "enum": [
                                         "rpi_connect",
                                         "secure_boot",
+                                        "passwordless_sudo",
                                         "i2c",
                                         "spi",
                                         "onewire",

@@ -60,10 +60,10 @@ namespace PlatformQuirks {
     /** Attach to or allocate a console for output (Windows-specific). */
     void attachConsole();
 
-    /** Check if running from a self-contained application bundle (e.g., AppImage). */
+    /** Check if running from a binary that could be elevated via pkexec. */
     bool isElevatableBundle();
 
-    /** Get the path to the application bundle file. */
+    /** Get the path to the current executable (AppImage path or /proc/self/exe). */
     const char* getBundlePath();
 
     /** Check if automatic privilege elevation is configured. */
