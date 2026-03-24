@@ -305,7 +305,7 @@ get_cmake_opts() {
 # Usage: get_common_skip_opts
 # Returns options to skip modules not needed on any platform
 get_common_skip_opts() {
-    echo "-skip qt3d -skip qtandroidextras -skip qtwinextras"
+    echo ""
 }
 
 # =============================================================================

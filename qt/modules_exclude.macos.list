@@ -35,6 +35,4 @@ qtopcua
 qtscxml
 qtsensors
 qtwebsockets
-# Additional modules that pull in unwanted dependencies
-qtbase-sql
 

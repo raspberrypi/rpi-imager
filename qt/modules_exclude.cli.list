@@ -62,6 +62,3 @@ qtlottie
 qtremoteobjects
 qt5compat
 qtscxml
-
-# Database (optional - comment out if you need SQL features)
-qtbase-sql
