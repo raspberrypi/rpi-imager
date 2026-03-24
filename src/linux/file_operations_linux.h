@@ -121,7 +121,7 @@ class LinuxFileOperations : public FileOperations {
   mutable std::mutex pending_mutex_;
   
   // Note: write_latency_stats_ is inherited from FileOperations base class
-  
+
   FileError OpenInternal(const char* path, int flags, mode_t mode = 0);
   static bool IsBlockDevicePath(const std::string& path);
   

@@ -113,11 +113,11 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
     if (ring_ == nullptr || pending_writes_.load() == 0) {
         return;
     }
-    
+
     struct io_uring_cqe* cqe;
     int ret;
     bool processed_at_least_one = false;
-    
+
     if (wait && !cancelled_.load()) {
         // Use timeout-based wait so we can check for cancellation
         // Also add overall timeout to prevent infinite waiting if device stops responding
@@ -154,6 +154,7 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
         
         AsyncWriteCallback callback = nullptr;
         std::size_t expected_size = 0;
+        bool found_in_map = false;
         std::chrono::steady_clock::time_point submit_time;
         {
             std::lock_guard<std::mutex> lock(pending_mutex_);
@@ -163,31 +164,42 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
                 expected_size = it->second.size;
                 submit_time = it->second.submit_time;
                 pending_callbacks_.erase(it);
+                found_in_map = true;
             }
         }
-        
+
+        // Orphaned completion: entry was already consumed (e.g. by sync fallback
+        // clearing the map, or a duplicate CQE). Just consume and move on.
+        if (!found_in_map) {
+            Log("io_uring: completion for unknown write_id " + std::to_string(write_id) +
+                " (result=" + std::to_string(result) + ") - ignoring orphaned completion");
+            io_uring_cqe_seen(ring_, cqe);
+            ret = io_uring_peek_cqe(ring_, &cqe);
+            continue;
+        }
+
         // Record write latency (submit to completion) - uses base class's thread-safe stats
         auto completionTime = std::chrono::steady_clock::now();
         auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(completionTime - submit_time).count();
         write_latency_stats_.recordCompletion(submit_time);
-        
+
         // Adaptive recovery: if individual write latency is very high, reduce queue depth
         // This helps the system recover when conditions change (memory pressure, slow device)
         constexpr int kMinQueueDepthForReduction = kMinAsyncQueueDepth * 2;  // Trigger reduction above 2x minimum
-        
+
         int currentPending = pending_writes_.load();
-        
+
         // Only reduce if we've drained to the current depth (reached equilibrium)
         // This prevents rapid successive reductions before the system can stabilize
-        if (latency > kHighLatencyThresholdMs && 
-            async_queue_depth_ >= kMinQueueDepthForReduction && 
+        if (latency > kHighLatencyThresholdMs &&
+            async_queue_depth_ >= kMinQueueDepthForReduction &&
             currentPending <= async_queue_depth_ &&  // Must be at equilibrium first
             !sync_fallback_mode_) {
           int newDepth = async_queue_depth_ / 2;
           Log("High write latency detected (" + std::to_string(latency) + "ms) - reducing queue depth to " + std::to_string(newDepth));
           ReduceQueueDepthForRecovery(newDepth);
         }
-        
+
         FileError error = FileError::kSuccess;
         if (result < 0) {
             if (result == -ECANCELED) {
@@ -210,11 +222,11 @@ void LinuxFileOperations::ProcessCompletions(bool wait) {
             oss << "io_uring short write: expected " << expected_size << ", got " << result;
             Log(oss.str());
         }
-        
+
         if (callback) {
             callback(error, error == FileError::kSuccess ? expected_size : 0);
         }
-        
+
         pending_writes_.fetch_sub(1);
         io_uring_cqe_seen(ring_, cqe);
         processed_at_least_one = true;
@@ -666,11 +678,19 @@ FileError LinuxFileOperations::AsyncWriteSequential(const std::uint8_t* data, st
 }
 
 void LinuxFileOperations::PollAsyncCompletions() {
-#ifdef HAVE_LIBURING
-  if (io_uring_available_ && ring_ != nullptr && pending_writes_.load() > 0) {
-    ProcessCompletions(false);  // Non-blocking poll
-  }
-#endif
+  // Intentionally a no-op on Linux.
+  //
+  // Unlike Windows IOCP, io_uring's CQ is not thread-safe for multiple
+  // consumers. The extract thread is the sole CQ consumer — it polls via
+  // ProcessCompletions() inside AsyncWriteSequential() and
+  // WaitForPendingWrites(). External callers (watchdog timer, download
+  // thread's _updateBottleneckState) must not touch the CQ directly, as
+  // concurrent peek/cqe_seen calls cause double-processing or skipped
+  // completions.
+  //
+  // This is safe because the extract thread's blocking wait uses 100ms
+  // timeouts with cancellation checks, so completions are always drained
+  // promptly without external prodding.
 }
 
 void LinuxFileOperations::CancelAsyncIO() {
@@ -695,9 +715,12 @@ void LinuxFileOperations::CancelAsyncIO() {
     }
   }
   io_uring_submit(ring_);
-  
-  // Process completions (cancelled ops will return -ECANCELED)
-  ProcessCompletions(false);
+
+  // Note: we do NOT call ProcessCompletions here. CancelAsyncIO may be
+  // called from any thread (e.g. main thread via cancelDownload), but the
+  // extract thread is the sole CQ consumer. The cancelled_ flag will cause
+  // the extract thread to exit its write loop, and WaitForPendingWrites
+  // will drain the -ECANCELED completions.
 #endif
 }
 
@@ -895,13 +918,16 @@ bool LinuxFileOperations::DrainAndSwitchToSync(int stallTimeoutSeconds) {
   auto lastProgressTime = startTime;
   int lastPending = pending;
   
+  // Wait for the extract thread to drain pending writes.
+  // We do NOT call ProcessCompletions here — the extract thread is the sole
+  // CQ consumer (io_uring is not thread-safe for multiple consumers).
+  // Once sync_fallback_mode_ is set above, the extract thread will stop
+  // submitting new writes and drain the remaining ones via its own
+  // ProcessCompletions calls in AsyncWriteSequential/WaitForPendingWrites.
   while (pending_writes_.load() > 0) {
-    // Actively poll for completions
-    ProcessCompletions(false);
-    
     int currentPending = pending_writes_.load();
     auto now = std::chrono::steady_clock::now();
-    
+
     if (currentPending < lastPending) {
       // Progress! Reset the stall timer
       Log("DrainAndSwitchToSync: Draining... " + std::to_string(currentPending) + " remaining");
@@ -913,14 +939,14 @@ bool LinuxFileOperations::DrainAndSwitchToSync(int stallTimeoutSeconds) {
       if (stallDuration.count() >= stallTimeoutSeconds) {
         int remaining = pending_writes_.load();
         auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
-        Log("DrainAndSwitchToSync: Stalled - no completions for " + 
-            std::to_string(stallTimeoutSeconds) + "s, " + std::to_string(remaining) + 
+        Log("DrainAndSwitchToSync: Stalled - no completions for " +
+            std::to_string(stallTimeoutSeconds) + "s, " + std::to_string(remaining) +
             " writes still pending after " + std::to_string(totalElapsed.count()) + "s total");
         return false;
       }
     }
-    
-    // Brief sleep to avoid spinning
+
+    // Brief sleep to avoid spinning — the extract thread is doing the actual draining
     usleep(100000);  // 100ms
   }
   
