@@ -1521,7 +1521,8 @@ void ImageWriter::skipCacheVerification()
 void ImageWriter::onCancelled()
 {
     setWriteState(WriteState::Cancelled);
-    
+    stopProgressPolling();
+
     // Clean up thread
     QObject *senderObj = sender();
     if (senderObj) {
