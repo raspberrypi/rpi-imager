@@ -460,25 +460,26 @@ Item {
                         required property int index
                         required property var modelData
                         Layout.fillWidth: true
-                        Layout.preferredHeight: (function(){
-                            var base = Style.sidebarItemHeight
-                            return sublistContainer.visible ? (base + Style.spacingXXSmall + sublistContainer.implicitHeight) : base
-                        })()
+                        Layout.preferredHeight: sublistContainer.visible
+                            ? (Style.sidebarItemHeight + Style.spacingXXSmall + sublistContainer.implicitHeight)
+                            : Style.sidebarItemHeight
                         color: Style.transparent
                         border.color: Style.transparent
                         border.width: 0
                         radius: 0
-                        property bool isClickable: (function(){
+                        // Reference permissibleStepsBitmap and currentStep directly so QML
+                        // tracks them as dependencies and re-evaluates when they change.
+                        property int _targetStep: root.getWizardStepFromSidebarIndex(stepItem.index)
+                        property bool isClickable: {
                             if (root.isWriting) return false
                             // If customization not supported, do not allow navigating back to customization group
                             if (!root.customizationSupported && stepItem.index === 3) return false
-                            
-                            // Get the step index for this sidebar item
-                            var targetStep = root.getWizardStepFromSidebarIndex(stepItem.index)
-                            
-                            // Allow navigation to any permissible step or backward navigation
-                            return root.isStepPermissible(targetStep) || targetStep < root.currentStep
-                        })()
+
+                            // Read permissibleStepsBitmap directly to create a reactive dependency
+                            var bit = 1 << _targetStep
+                            var isPermissible = (root.permissibleStepsBitmap & bit) !== 0
+                            return isPermissible || _targetStep < root.currentStep
+                        }
  
                         // Header band with active background/border
                         Rectangle {
