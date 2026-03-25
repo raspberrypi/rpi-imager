@@ -164,6 +164,12 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
         descParts.append(QObject::tr("Internal SD card reader"));
     }
 
+    // Fallback for loop devices with no label/vendor/model
+    if (name.startsWith("/dev/loop") && descParts.isEmpty()) {
+        QString shortName = name.mid(5);  // "/dev/loop0" -> "loop0"
+        descParts.append(QObject::tr("Loopback device (%1)").arg(shortName));
+    }
+
     // Collect mountpoints from this device
     QString mountpoint = bdev["mountpoint"].toString();
     if (!mountpoint.isEmpty()) {

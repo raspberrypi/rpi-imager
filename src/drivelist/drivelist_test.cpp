@@ -438,6 +438,33 @@ TEST_CASE("Linux lsblk parsing", "[drivelist][linux][unit]")
         CHECK(devices[0].isRemovable == true);
     }
 
+    SECTION("Loop devices get fallback description when label/vendor/model are empty")
+    {
+        const std::string json = R"({
+            "blockdevices": [{
+                "kname": "/dev/loop0",
+                "type": "loop",
+                "subsystems": "block",
+                "ro": false,
+                "rm": true,
+                "hotplug": false,
+                "size": "1073741824",
+                "phy-sec": 512,
+                "log-sec": 512,
+                "label": "",
+                "vendor": "",
+                "model": "",
+                "mountpoint": "/mnt/image"
+            }]
+        })";
+
+        auto devices = parseLinuxBlockDevices(json, false);
+
+        REQUIRE(devices.size() == 1);
+        CHECK_THAT(devices[0].description, ContainsSubstring("loop0"));
+        CHECK(!devices[0].description.empty());
+    }
+
     SECTION("Marks loop devices as virtual even with empty subsystems (lsblk bug)")
     {
         // util-linux 2.39.x (shipped in Ubuntu 24.04 LTS) has a bug where
