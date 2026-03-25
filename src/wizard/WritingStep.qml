@@ -59,12 +59,16 @@ WizardStepBase {
     nextButtonEnabled: root.isWriting || root.isComplete || (!beginWriteDelay.running && imageWriter.readyToWrite())
     showBackButton: true
 
-    property bool isWriting: false
-    property bool isVerifying: false
-    property bool cancelPending: false
-    property bool isFinalising: false
-    property bool isComplete: false
-    property bool confirmOpen: false
+    readonly property bool isWriting: {
+        var s = imageWriter.writeState
+        return s === ImageWriter.Preparing || s === ImageWriter.Writing ||
+               s === ImageWriter.Verifying || s === ImageWriter.Finalizing ||
+               s === ImageWriter.Cancelling
+    }
+    readonly property bool isVerifying: imageWriter.writeState === ImageWriter.Verifying
+    readonly property bool isCancelling: imageWriter.writeState === ImageWriter.Cancelling
+    readonly property bool isFinalising: imageWriter.writeState === ImageWriter.Finalizing
+    readonly property bool isComplete: imageWriter.writeState === ImageWriter.Succeeded
     property string bottleneckStatus: ""
     property int writeThroughputKBps: 0
     property string operationWarning: ""  // Non-fatal warning message (e.g., sync fallback)
@@ -82,7 +86,7 @@ WizardStepBase {
     )
 
     // Disable back while writing
-    backButtonEnabled: !root.isWriting && !root.cancelPending && !root.isFinalising
+    backButtonEnabled: !root.isWriting
 
     // Content
     content: [
@@ -101,7 +105,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: !root.isWriting && !root.cancelPending && !root.isFinalising && !root.isComplete
+            visible: !root.isWriting && !root.isComplete
 
             Text {
                 id: summaryHeading
@@ -206,7 +210,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: !root.isWriting && !root.cancelPending && !root.isFinalising && !root.isComplete && root.anyCustomizationsApplied
+            visible: !root.isWriting && !root.isComplete && root.anyCustomizationsApplied
 
             Text {
                 id: customizationsHeading
@@ -298,7 +302,7 @@ WizardStepBase {
             Layout.maximumWidth: Style.sectionMaxWidth
             Layout.alignment: Qt.AlignHCenter
             spacing: Style.spacingMedium
-            visible: root.isWriting || root.cancelPending || root.isFinalising || root.isComplete
+            visible: root.isWriting || root.isComplete
 
             Text {
                 id: progressText
@@ -327,7 +331,7 @@ WizardStepBase {
 
                 Material.accent: Style.progressBarVerifyForegroundColor
                 Material.background: Style.progressBarBackgroundColor
-                visible: (root.isWriting || root.isFinalising)
+                visible: root.isWriting
                 Accessible.role: Accessible.ProgressBar
                 Accessible.name: qsTr("Write progress")
                 Accessible.description: progressText.text
@@ -380,9 +384,6 @@ WizardStepBase {
                 imageWriter.skipCurrentVerification()
             } else {
                 // Cancel the actual write operation
-                root.cancelPending = true
-                root.isVerifying = false
-                root.isFinalising = true
                 progressBar.value = 100
                 progressText.text = qsTr("Finalising…")
                 imageWriter.cancelWrite()
@@ -402,7 +403,6 @@ WizardStepBase {
     }
 
     function onFinalizing() {
-        root.isVerifying = false
         progressText.text = qsTr("Finalising...")
         progressBar.value = 100
     }
@@ -565,8 +565,6 @@ WizardStepBase {
         onTriggered: {
             // Ensure our window regains focus before elevating privileges
             root.forceActiveFocus()
-            root.isWriting = true
-            wizardContainer.isWriting = true
             root.bottleneckStatus = ""
             root.writeThroughputKBps = 0
             root.operationWarning = ""
@@ -574,7 +572,7 @@ WizardStepBase {
             root.isIndeterminateProgress = !imageWriter.isExtractSizeKnown()
             progressText.text = qsTr("Starting write process...")
             progressBar.value = 0
-            Qt.callLater(function(){ imageWriter.startWrite() })
+            imageWriter.startWrite()
         }
     }
 
@@ -599,7 +597,6 @@ WizardStepBase {
 
     function onVerifyProgress(now, total) {
         if (root.isWriting) {
-            root.isVerifying = true
             root.operationWarning = ""  // Clear write warnings during verification
             var progress = total > 0 ? (now / total) * 100 : 0
             progressBar.value = progress
@@ -617,28 +614,17 @@ WizardStepBase {
     Connections {
         target: imageWriter
         function onSuccess() {
-            root.isWriting = false
-            wizardContainer.isWriting = false
-            root.cancelPending = false
-            root.isFinalising = false
-            root.isComplete = true
             progressText.text = qsTr("Write completed successfully!")
 
             // Automatically advance to the done screen
             wizardContainer.nextStep()
         }
         function onError(msg) {
-            root.isWriting = false
-            wizardContainer.isWriting = false
-            root.cancelPending = false
-            root.isFinalising = false
             progressText.text = qsTr("Write failed: %1").arg(msg)
         }
 
         function onFinalizing() {
-            if (root.isWriting || root.cancelPending) {
-                root.isVerifying = false
-                root.isFinalising = true
+            if (root.isWriting) {
                 progressText.text = qsTr("Finalising…")
                 progressBar.value = 100
             }

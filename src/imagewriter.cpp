@@ -702,7 +702,8 @@ void ImageWriter::startWrite()
     // fix (#1511) prevents false stall timeouts during macOS auth, so users should
     // no longer reach this path.  The guard remains as defence-in-depth. (#1511)
     if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing ||
-        _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing) {
+        _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing ||
+        _writeState == WriteState::Cancelling) {
         qDebug() << "startWrite: ignoring — write already in progress, state:" << _writeState;
         return;
     }
@@ -1127,7 +1128,8 @@ void ImageWriter::startWrite()
         // Also transition state to Verifying when verify progress first arrives
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, [this](quint64 /*now*/, quint64 /*total*/){
-                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing && _writeState != WriteState::Succeeded)
+                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing &&
+                        _writeState != WriteState::Succeeded && _writeState != WriteState::Cancelling)
                         setWriteState(WriteState::Verifying);
                 });
         
@@ -1429,6 +1431,8 @@ void ImageWriter::startWrite()
 /* Cancel write - for user-initiated cancellation only */
 void ImageWriter::cancelWrite()
 {
+    setWriteState(WriteState::Cancelling);
+
     if (_waitingForCacheVerification)
     {
         skipCacheVerification();
@@ -2304,6 +2308,7 @@ void ImageWriter::setWriteState(WriteState state)
         case WriteState::Writing:
         case WriteState::Verifying:
         case WriteState::Finalizing:
+        case WriteState::Cancelling:
             // Pause all scanning during write operations
             // Device removal will be detected by I/O errors in the write thread
             // This avoids 20+ seconds of overhead from drive enumeration
@@ -2339,7 +2344,8 @@ void ImageWriter::onSuccess()
     // Guard against a late success signal arriving after an error has
     // already been reported (e.g. FastbootFlashThread falling through
     // after a flash failure).
-    if (_writeState == WriteState::Failed || _writeState == WriteState::Cancelled) {
+    if (_writeState == WriteState::Failed || _writeState == WriteState::Cancelled ||
+        _writeState == WriteState::Cancelling) {
         qDebug() << "Ignoring late success signal — write already in state:" << _writeState;
         return;
     }
@@ -2364,9 +2370,10 @@ void ImageWriter::onError(QString msg)
 {
     // Guard against duplicate errors - device removal disconnects error signal,
     // but this catches any already-queued signals
-    if (_cancelledDueToDeviceRemoval || 
-        _writeState == WriteState::Failed || 
-        _writeState == WriteState::Cancelled) {
+    if (_cancelledDueToDeviceRemoval ||
+        _writeState == WriteState::Failed ||
+        _writeState == WriteState::Cancelled ||
+        _writeState == WriteState::Cancelling) {
         qDebug() << "Ignoring duplicate/late error:" << msg;
         return;
     }
@@ -3766,7 +3773,7 @@ void ImageWriter::onSelectedDeviceRemoved(const QString &device)
         _selectedDeviceValid = false;
 
         // If we're currently writing to this device, cancel the write immediately
-        if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing || _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing) {
+        if (_writeState == WriteState::Preparing || _writeState == WriteState::Writing || _writeState == WriteState::Verifying || _writeState == WriteState::Finalizing || _writeState == WriteState::Cancelling) {
             _selectedDeviceValid = false;
             qDebug() << "Cancelling write operation due to device removal";
             
@@ -3918,7 +3925,8 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
         // Also transition state to Verifying when verify progress first arrives
         connect(downloadThread, &DownloadExtractThread::verifyProgressChanged,
                 this, [this](quint64 /*now*/, quint64 /*total*/){
-                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing && _writeState != WriteState::Succeeded)
+                    if (_writeState != WriteState::Verifying && _writeState != WriteState::Finalizing &&
+                        _writeState != WriteState::Succeeded && _writeState != WriteState::Cancelling)
                         setWriteState(WriteState::Verifying);
                 });
         

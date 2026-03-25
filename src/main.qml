@@ -615,7 +615,6 @@ ApplicationWindow {
     // Called from C++ when a write was cancelled because the storage device was removed
     function onWriteCancelledDueToDeviceRemoval() {
         if (wizardContainer) {
-            wizardContainer.isWriting = false;
             wizardContainer.selectedStorageName = "";
         }
         // Clear backend dst reference

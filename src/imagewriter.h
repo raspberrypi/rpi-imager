@@ -59,6 +59,7 @@ public:
         Writing,
         Verifying,
         Finalizing,
+        Cancelling,
         Succeeded,
         Failed,
         Cancelled

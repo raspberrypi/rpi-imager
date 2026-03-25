@@ -38,8 +38,13 @@ Item {
     // Each bit represents a step: bit 0 = Device, bit 1 = OS, etc.
     property int permissibleStepsBitmap: 1  // Start with Device step (bit 0) always permissible
     
-    // Track writing state
-    property bool isWriting: false
+    // Track writing state — derived from the C++ state machine
+    readonly property bool isWriting: {
+        var s = imageWriter.writeState
+        return s === ImageWriter.Preparing || s === ImageWriter.Writing ||
+               s === ImageWriter.Verifying || s === ImageWriter.Finalizing ||
+               s === ImageWriter.Cancelling
+    }
     
     // Track if we're in "write another" flow (skip to writing step after storage selection)
     property bool writeAnotherMode: false
@@ -1493,20 +1498,9 @@ Item {
     }
     
     function onWriteCancelled() {
-        // Reset write state
-        isWriting = false
-        
         // Navigate back to writing step (which will show the summary since isWriting is false)
         if (currentStep !== stepWriting) {
             jumpToStep(stepWriting)
-        }
-        
-        // Reset the writing step's state if it exists
-        if (wizardStack.currentItem && wizardStack.currentItem.objectName === "writingStep") {
-            wizardStack.currentItem.isWriting = false
-            wizardStack.currentItem.cancelPending = false
-            wizardStack.currentItem.isFinalising = false
-            wizardStack.currentItem.isComplete = false
         }
     }
     
@@ -1543,7 +1537,6 @@ Item {
         // Start at OS selection if offline, device selection if online
         currentStep = hasNetworkConnectivity ? 0 : 1
         permissibleStepsBitmap = 1  // Reset to only Device step permissible
-        isWriting = false
         writeAnotherMode = false
         selectedDeviceName = ""
         selectedOsName = ""
@@ -1588,6 +1581,7 @@ Item {
         // Reset only the storage selection to allow choosing a new storage device
         // while preserving device, OS, and customization settings
         selectedStorageName = ""
+        imageWriter.setDst("", 0)
         
         // Reset ephemeral Pi Connect state (session-only, not preserved)
         // The token is already cleared when write completes, but ensure the enabled flag is reset
