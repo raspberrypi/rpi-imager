@@ -343,7 +343,8 @@ int main(int argc, char *argv[])
         {"disable-telemetry", "Disable telemetry (persist setting)"},
         {"enable-telemetry", "Use default telemetry setting (clear override)"},
         {"qml-file-dialogs", "Force use of QML file dialogs instead of native dialogs"},
-        {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"}
+        {"enable-secure-boot", "Force enable secure boot customization step regardless of OS capabilities"},
+        {"non-root", "Allow running without elevated privileges"}
     });
 
     // Accept rpi-imager:// callback URLs as positional argument (used by callback relay on Windows)
@@ -752,7 +753,7 @@ int main(int argc, char *argv[])
     });
 
     // Emit permission warning signal after UI is loaded so dialog can be shown
-    if (hasPermissionIssue)
+    if (hasPermissionIssue && !parser.isSet("non-root"))
     {
         // Common message parts to reduce translation effort
         QString header = QObject::tr("Raspberry Pi Imager requires elevated privileges to write to storage devices.");
