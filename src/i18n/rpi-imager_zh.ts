@@ -313,7 +313,7 @@
     <name>ConfirmUnfilterDialog</name>
     <message>
         <source>By disabling system drive filtering, &lt;b&gt;system drives will be shown&lt;/b&gt; in the list.</source>
-        <translation>禁用系统驱动器过滤后，&lt;b&gt;系统驱动器;/b&gt;将显示在列表中。</translation>
+        <translation>禁用系统驱动器过滤后，&lt;b&gt;系统驱动器&lt;/b&gt;将显示在列表中。</translation>
     </message>
     <message>
         <source>KEEP FILTER ON</source>
