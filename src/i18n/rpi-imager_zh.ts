@@ -37,7 +37,7 @@
     </message>
     <message>
         <source>If you disable warnings, Raspberry Pi Imager will &lt;b&gt;not show confirmation prompts before writing images&lt;/b&gt;. You will still be required to &lt;b&gt;type the exact name&lt;/b&gt; when selecting a system drive.</source>
-        <translation>如果你禁用警告，树莓派启动盘制作工具将 &lt;b&gt;不会在写入镜像之前显示确认提示&lt;/b&gt;。在选择系统驱动器时，你仍然需要 &lt;b&gt;输入完全相同的名称&lt;/b&gt;。</translation>
+        <translation>如果你禁用警告，树莓派启动盘制作工具（Raspberry Pi Imager）将 &lt;b&gt;不会在写入镜像之前显示确认提示&lt;/b&gt;。在选择系统驱动器时，你仍然需要 &lt;b&gt;输入完全相同的名称&lt;/b&gt;。</translation>
     </message>
     <message>
         <source>Content Repository</source>
@@ -53,7 +53,7 @@
     </message>
     <message>
         <source>Save the selected options and apply them to Raspberry Pi Imager</source>
-        <translation>保存所选选项并将其应用到树莓派启动盘制作工具</translation>
+        <translation>保存所选选项并将其应用到树莓派启动盘制作工具（Raspberry Pi Imager）</translation>
     </message>
     <message>
         <source>Keep warnings enabled and return to the options dialog</source>
@@ -73,7 +73,7 @@
     </message>
     <message>
         <source>Send anonymous usage statistics to help improve Raspberry Pi Imager</source>
-        <translation>发送匿名使用统计数据以帮助改进树莓派启动盘制作工具</translation>
+        <translation>发送匿名使用统计数据以帮助改进树莓派启动盘制作工具（Raspberry Pi Imager）</translation>
     </message>
     <message>
         <source>Skip confirmation dialogs before writing images (advanced users only)</source>
@@ -211,7 +211,7 @@
     </message>
     <message>
         <source>Hostname configured</source>
-        <translation>已配置域名</translation>
+        <translation>已配置主机名</translation>
     </message>
     <message>
         <source>User account configured</source>
@@ -356,7 +356,7 @@
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
-        <translation>使用方向键导航，按 Enter 或 Space 键选择</translation>
+        <translation>使用方向键导航，按回车键或空格键选择</translation>
     </message>
 </context>
 <context>
@@ -403,7 +403,7 @@
     </message>
     <message>
         <source>Close Raspberry Pi Imager and exit the application</source>
-        <translation>关闭树莓派启动盘制作工具并退出应用程序</translation>
+        <translation>关闭树莓派启动盘制作工具（Raspberry Pi Imager）并退出应用程序</translation>
     </message>
     <message>
         <source>Return to storage selection to write the same image to another storage device</source>
@@ -923,7 +923,7 @@
     </message>
     <message>
         <source>Home</source>
-        <translation>主页</translation>
+        <translation>主目录</translation>
     </message>
     <message>
         <source>File name:</source>
@@ -1147,11 +1147,11 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Choose your language for Raspberry Pi Imager</source>
-        <translation>选择树莓派启动盘制作工具的语言</translation>
+        <translation>选择树莓派启动盘制作工具（Raspberry Pi Imager）的语言</translation>
     </message>
     <message>
         <source>Select the language for the Raspberry Pi Imager interface</source>
-        <translation>选择树莓派启动盘制作工具界面的语言</translation>
+        <translation>选择树莓派启动盘制作工具（Raspberry Pi Imager）界面的语言</translation>
     </message>
 </context>
 <context>
@@ -1232,7 +1232,7 @@ or type a path in the address bar above.</source>
     <name>MacFile</name>
     <message>
         <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
-        <translation>树莓派启动盘制作工具需要访问磁盘以写入镜像。</translation>
+        <translation>树莓派启动盘制作工具（Raspberry Pi Imager）需要访问磁盘以写入镜像。</translation>
     </message>
 </context>
 <context>
@@ -1301,7 +1301,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
-        <translation>使用方向键导航，按 Enter 或 Space 键选择</translation>
+        <translation>使用方向键导航，按回车键或空格键选择</translation>
     </message>
     <message>
         <source>Operating system category</source>
@@ -1309,7 +1309,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select, Left arrow to go back</source>
-        <translation>使用方向键导航，按 Enter 或 Space 键选择，按左箭头键返回</translation>
+        <translation>使用方向键导航，按回车键或空格键选择，按左箭头键返回</translation>
     </message>
     <message>
         <source>Released: %1</source>
@@ -1399,7 +1399,7 @@ or type a path in the address bar above.</source>
     <name>QObject</name>
     <message>
         <source>Raspberry Pi Imager requires elevated privileges to write to storage devices.</source>
-        <translation>树莓派启动盘制作工具需要提升的权限才能写入存储设备。</translation>
+        <translation>树莓派启动盘制作工具（Raspberry Pi Imager）需要提升的权限才能写入存储设备。</translation>
     </message>
     <message>
         <source>Without this, you will encounter permission errors when writing images.</source>
@@ -1829,7 +1829,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Continue using the current version of Raspberry Pi Imager</source>
-        <translation>继续使用当前版本的树莓派启动盘制作工具</translation>
+        <translation>继续使用当前版本的树莓派启动盘制作工具（Raspberry Pi Imager）</translation>
     </message>
     <message>
         <source>Open the Raspberry Pi website in your browser to download the latest version</source>
@@ -2315,7 +2315,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Raspberry Pi Imager is still busy. Are you sure you want to quit?</source>
-        <translation>树莓派启动盘制作工具仍在忙碌中。你确定要退出吗？</translation>
+        <translation>树莓派启动盘制作工具（Raspberry Pi Imager）仍在忙碌中。你确定要退出吗？</translation>
     </message>
     <message>
         <source>Storage device removed</source>
@@ -2339,15 +2339,15 @@ to show system drives.</source>
     </message>
     <message>
         <source>Return to Raspberry Pi Imager and continue the current operation</source>
-        <translation>返回树莓派启动盘制作工具并继续当前操作</translation>
+        <translation>返回树莓派启动盘制作工具（Raspberry Pi Imager）并继续当前操作</translation>
     </message>
     <message>
         <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
-        <translation>强制退出树莓派启动盘制作工具并取消当前写入操作</translation>
+        <translation>强制退出树莓派启动盘制作工具（Raspberry Pi Imager）并取消当前写入操作</translation>
     </message>
     <message>
         <source>Raspberry Pi Imager %1</source>
-        <translation>树莓派启动盘制作工具 %1</translation>
+        <translation>树莓派启动盘制作工具（Raspberry Pi Imager） %1</translation>
     </message>
     <message>
         <source>Insufficient Permissions</source>
@@ -2363,7 +2363,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
-        <translation>退出树莓派启动盘制作工具 - 你必须以更高的权限重新启动才能写入镜像</translation>
+        <translation>退出树莓派启动盘制作工具（Raspberry Pi Imager） - 你必须以更高的权限重新启动才能写入镜像</translation>
     </message>
     <message>
         <source>Install Authorization</source>
@@ -2371,7 +2371,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
-        <translation>安装系统授权以允许提升树莓派启动盘制作工具的运行权限</translation>
+        <translation>安装系统授权以允许提升树莓派启动盘制作工具（Raspberry Pi Imager）的运行权限</translation>
     </message>
     <message>
         <source>Save Performance Data</source>
