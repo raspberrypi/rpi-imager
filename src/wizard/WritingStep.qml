@@ -56,7 +56,7 @@ WizardStepBase {
         }
     }
     backButtonAccessibleDescription: qsTr("Return to previous customization step")
-    nextButtonEnabled: root.isWriting || root.isComplete || imageWriter.readyToWrite()
+    nextButtonEnabled: root.isWriting || root.isComplete || (!beginWriteDelay.running && imageWriter.readyToWrite())
     showBackButton: true
 
     property bool isWriting: false
