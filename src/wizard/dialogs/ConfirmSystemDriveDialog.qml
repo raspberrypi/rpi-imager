@@ -180,7 +180,7 @@ BaseDialog {
             id: continueButton
             text: qsTr("CONTINUE")
             accessibleDescription: qsTr("Proceed to write the image to this system drive after confirming the drive name")
-            enabled: nameInput.text === root.driveName
+            enabled: root.driveName.length > 0 && nameInput.text === root.driveName
             activeFocusOnTab: true
             onClicked: {
                 if (!enabled) return

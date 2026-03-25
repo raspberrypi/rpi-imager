@@ -497,8 +497,8 @@ WizardStepBase {
         } else {
             imageWriter.setDst(dstitem.device, dstitem.size)
         }
-        selectedDeviceName = dstitem.description
-        root.wizardContainer.selectedStorageName = dstitem.description
+        selectedDeviceName = dstitem.description || dstitem.device
+        root.wizardContainer.selectedStorageName = dstitem.description || dstitem.device
 
         // Do not auto-advance; enable Next
         root.nextButtonEnabled = true
@@ -654,8 +654,8 @@ WizardStepBase {
         overlayParent: root.wizardContainer && root.wizardContainer.overlayRootRef ? root.wizardContainer.overlayRootRef : (root.Window.window ? root.Window.window.overlayRootItem : null)
         onConfirmed: {
             root.imageWriter.setDst(systemDriveConfirm.device, systemDriveConfirm.deviceSize)
-            root.selectedDeviceName = systemDriveConfirm.driveName
-            root.wizardContainer.selectedStorageName = systemDriveConfirm.driveName
+            root.selectedDeviceName = systemDriveConfirm.driveName || systemDriveConfirm.device
+            root.wizardContainer.selectedStorageName = systemDriveConfirm.driveName || systemDriveConfirm.device
             // Re-enable filtering after selection via confirmation path
             filterSystemDrives.checked = true
             // updateStorageStatus will be called via onCheckedChanged
