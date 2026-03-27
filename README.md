@@ -1,6 +1,6 @@
 # Raspberry Pi Imager
 
-![](/home/chuwi-qa/Документы/github/rpi-imager/screenshot.png)
+![](./screenshot.png)
 
 Raspberry Pi Imaging Utility
 
