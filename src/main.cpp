@@ -490,11 +490,11 @@ int main(int argc, char *argv[])
             if (reply.isValid() && reply.value().contains("com.raspberrypi.rpi-imager"))
             {
                 // Another instance is running - send callback URL to it via D-Bus
-                QDBusInterface iface("com.raspberrypi.rpi-imager", "/com/raspberrypi/rpi-imager",
+                QDBusInterface iface("com.raspberrypi.rpi-imager", "/com/raspberrypi/rpi_imager",
                                    "com.raspberrypi.rpi-imager", bus);
                 QDBusMessage msg = QDBusMessage::createMethodCall(
                     "com.raspberrypi.rpi-imager",
-                    "/com/raspberrypi/rpi-imager",
+                    "/com/raspberrypi/rpi_imager",
                     "com.raspberrypi.rpi-imager",
                     "HandleUrl");
                 msg << callbackUrl.toString();
@@ -542,7 +542,7 @@ int main(int argc, char *argv[])
     {
         QObject *dbusObject = new QObject(&app);
         UriHandlerAdaptor *adaptor = new UriHandlerAdaptor(&imageWriter, dbusObject);
-        if (bus.registerObject("/com/raspberrypi/rpi-imager", dbusObject))
+        if (bus.registerObject("/com/raspberrypi/rpi_imager", dbusObject))
         {
             if (bus.registerService("com.raspberrypi.rpi-imager"))
             {
