@@ -57,11 +57,11 @@
     </message>
     <message>
         <source>This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.</source>
-        <translation>Cela supprimera tous les paramètres de personnalisation du système d'exploitation enregistrés, tels que le nom d'hôte, le WiFi et les identifiants utilisateur.</translation>
+        <translation>Cette action supprimera tous les paramètres de personnalisation du système d&apos;exploitation enregistrés, tels que le nom d&apos;hôte, le Wi-Fi et les identifiants utilisateur.</translation>
     </message>
     <message>
         <source>Remove all saved OS customisation settings such as hostname, WiFi, and user credentials</source>
-        <translation>Effacer tous les paramètres de personnalisation du système d'exploitation enregistrés, tels que le nom d'hôte, le WiFi et les identifiants utilisateur.</translation>
+        <translation>Supprimer tous les paramètres de personnalisation du système d&apos;exploitation enregistrés, tels que le nom d&apos;hôte, le Wi-Fi et les identifiants utilisateur.</translation>
     </message>
     <message>
         <source>Clear saved customisation?</source>
@@ -69,11 +69,11 @@
     </message>
     <message>
         <source>Keep saved customisation settings and return to the options dialog</source>
-        <translation>Garder les paramètres de personnalisation enregistrés et revenir à la fenêtre des options</translation>
+        <translation>Conserver les paramètres de personnalisation enregistrés et revenir à la fenêtre des options</translation>
     </message>
     <message>
         <source>Remove all saved OS customisation settings permanently</source>
-        <translation>Supprimer tous les paramètres de personnalisation du système d'exploitation enregistrés de manière permanente</translation>
+        <translation>Supprimer de manière permanente tous les paramètres de personnalisation du système d&apos;exploitation enregistrés</translation>
     </message>
     <message>
         <source>Close the options dialog without saving any changes</source>
@@ -133,7 +133,7 @@
     </message>
     <message>
         <source>PEM Files (*.pem);;All Files (*)</source>
-        <translation>Fichiers PEM Files (*.pem);;Tous les fichiers (*)</translation>
+        <translation>Fichiers PEM (*.pem);;Tous les fichiers (*)</translation>
     </message>
     <message>
         <source>PEM Files (*.pem)</source>
