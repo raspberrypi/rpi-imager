@@ -22,7 +22,8 @@ DriveListModel::DriveListModel(QObject *parent)
         {isSystemRole, "isSystem"},
         {mountpointsRole, "mountpoints"},
         {childDevicesRole, "childDevices"},
-        {isRpibootRole, "isRpiboot"}
+        {isRpibootRole, "isRpiboot"},
+        {isWritableByUserRole, "isWritableByUser"}
     };
 
     // Enumerate drives in separate thread, but process results in UI thread
@@ -102,6 +103,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
         QStringList mountpoints;
         QStringList childDevices;
         bool isRpiboot = false;
+        bool isWritableByUser = true;
     };
     QList<NewDriveInfo> drivesToAdd;
 
@@ -174,6 +176,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
             info.mountpoints = mountpoints;
             info.childDevices = childDevices;
             info.isRpiboot = isRpibootDevice;
+            info.isWritableByUser = i.isWritableByUser;
             drivesToAdd.append(info);
         }
     }
@@ -221,7 +224,7 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
             info.device, info.description, info.size,
             info.isUSB, info.isScsi, info.isReadOnly, info.isSystem,
             info.mountpoints, info.childDevices,
-            info.isRpiboot,
+            info.isRpiboot, info.isWritableByUser,
             this);
         endInsertRows();
 

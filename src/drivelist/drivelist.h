@@ -210,6 +210,7 @@ struct DeviceDescriptor {
     bool isSCSI = false;          ///< Connected via SCSI/SAS
     bool isUSB = false;           ///< Connected via USB
     bool isUAS = false;           ///< Connected via USB Attached SCSI
+    bool isWritableByUser = true; ///< Current user has write access to the device node (Linux only; always true on other platforms)
 
     // Null indicators (for optional fields)
     bool busVersionNull = true;

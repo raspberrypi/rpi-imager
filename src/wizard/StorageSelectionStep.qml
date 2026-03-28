@@ -65,6 +65,7 @@ WizardStepBase {
     property bool hasValidStorageOptions: false
     property bool hasAnyDevices: false
     property bool hasOnlyReadOnlyDevices: false
+    property bool hasUnwritableDevices: false
     property string enumerationErrorMessage: ""
     
     Component.onCompleted: {
@@ -149,7 +150,42 @@ WizardStepBase {
             Accessible.role: Accessible.AlertMessage
             Accessible.name: qsTr("Error: Could not list storage devices. %1").arg(root.enumerationErrorMessage)
         }
-        
+
+        // Info banner shown when some devices are not writable by the current user
+        Rectangle {
+            id: unwritableBanner
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? unwritableBannerContent.implicitHeight + Style.spacingMedium * 2 : 0
+            visible: root.hasUnwritableDevices
+            color: Style.formLabelWarningColor
+            opacity: 0.9
+
+            RowLayout {
+                id: unwritableBannerContent
+                anchors.fill: parent
+                anchors.margins: Style.spacingMedium
+                spacing: Style.spacingSmall
+
+                Text {
+                    text: "⚠"
+                    font.pointSize: Style.fontSizeFormLabel
+                    color: "white"
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Some storage devices cannot be written to by the current user. Run with elevated privileges (e.g. sudo) to access them.")
+                    font.pointSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: "white"
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: qsTr("Warning: Some storage devices require elevated privileges. Run with sudo to access them.")
+        }
+
         // Storage device list fills available space
         SelectionListView {
             id: dstlist
@@ -335,16 +371,17 @@ WizardStepBase {
             required property bool isScsi
             required property bool isReadOnly
             required property bool isSystem
+            required property bool isWritableByUser
             required property var mountpoints
             required property QtObject modelData
             property bool isRpiboot: modelData && typeof modelData.isRpiboot !== "undefined" ? modelData.isRpiboot : false
 
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
-            readonly property bool unselectable: isReadOnly && !isRpiboot
-            
+            readonly property bool unselectable: (isReadOnly || !isWritableByUser) && !isRpiboot
+
             // Accessibility properties
             Accessible.role: Accessible.ListItem
-            Accessible.name: dstitem.description + ". " + imageWriter.formatSize(parseFloat(dstitem.size)) + (dstitem.mountpoints.length > 0 ? ". " + qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", ")) : "") + (dstitem.unselectable ? ". " + qsTr("Read-only") : "")
+            Accessible.name: dstitem.description + ". " + imageWriter.formatSize(parseFloat(dstitem.size)) + (dstitem.mountpoints.length > 0 ? ". " + qsTr("Mounted as %1").arg(dstitem.mountpoints.join(", ")) : "") + (dstitem.isReadOnly && !dstitem.isRpiboot ? ". " + qsTr("Read-only") : (!dstitem.isWritableByUser && !dstitem.isRpiboot ? ". " + qsTr("No write permission") : ""))
             Accessible.focusable: true
             Accessible.ignored: false
             
@@ -460,9 +497,9 @@ WizardStepBase {
                         }
                     }
                     
-                    // Read-only indicator
+                    // Read-only / no-permission indicator
                     Text {
-                        text: qsTr("Read-only")
+                        text: !dstitem.isWritableByUser ? qsTr("No write permission") : qsTr("Read-only")
                         font.pointSize: Style.fontSizeDescription
                         font.family: Style.fontFamily
                         color: Style.formLabelErrorColor
@@ -524,28 +561,30 @@ WizardStepBase {
         var isReadOnlyRole = 0x106
         var isSystemRole = 0x107
         var mountpointsRole = 0x108
-        
+        var isWritableByUserRole = 0x10b
+
         var isReadOnly = model.data(modelIndex, isReadOnlyRole)
-        if (isReadOnly) {
-            return  // Can't select read-only devices
+        var isWritableByUser = model.data(modelIndex, isWritableByUserRole)
+        if (isReadOnly || isWritableByUser === false) {
+            return  // Can't select read-only or unwritable devices
         }
-        
+
         var isSystem = model.data(modelIndex, isSystemRole)
         var device = model.data(modelIndex, deviceRole)
         var description = model.data(modelIndex, descriptionRole)
         var size = model.data(modelIndex, sizeRole)
         var mountpoints = model.data(modelIndex, mountpointsRole) || []
-        
+
         // Create a mock item object with the required properties
         var mockItem = {
-            unselectable: isReadOnly,
+            unselectable: isReadOnly || isWritableByUser === false,
             isSystem: isSystem,
             device: device,
             description: description,
             size: size,
             mountpoints: mountpoints
         }
-        
+
         root.selectDstItem(mockItem)
     }
 
@@ -558,14 +597,16 @@ WizardStepBase {
         
         var isReadOnlyRole = 0x106
         var isSystemRole = 0x107
-        
+        var isWritableByUserRole = 0x10b
+
         var idx = model.index(index, 0)
         var isReadOnly = model.data(idx, isReadOnlyRole)
+        var isWritableByUser = model.data(idx, isWritableByUserRole)
         var isSystem = model.data(idx, isSystemRole)
-        
-        // Item is selectable if it's not read-only and either not a system drive or filter is off
+
+        // Item is selectable if it's not read-only, writable by user, and not hidden
         var shouldHide = isSystem && filterSystemDrives.checked
-        return !isReadOnly && !shouldHide
+        return !isReadOnly && isWritableByUser !== false && !shouldHide
     }
     
     // Check if there are any selectable items in the list
@@ -588,7 +629,7 @@ WizardStepBase {
         var model = root.imageWriter.getDriveList()
         root.hasValidStorageOptions = hasSelectableItems()
         root.hasAnyDevices = model && model.rowCount() > 0
-        
+
         // Check if we only have read-only devices
         if (root.hasAnyDevices && !root.hasValidStorageOptions) {
             var isReadOnlyRole = 0x106
@@ -605,6 +646,26 @@ WizardStepBase {
         } else {
             root.hasOnlyReadOnlyDevices = false
         }
+
+        // Check whether any visible device is unwritable by the current user
+        var isWritableByUserRole = 0x10b
+        var isSystemRole = 0x107
+        var foundUnwritable = false
+        if (root.hasAnyDevices) {
+            for (var j = 0; j < model.rowCount(); j++) {
+                var jdx = model.index(j, 0)
+                var isSystem = model.data(jdx, isSystemRole)
+                // Only consider visible (non-hidden) devices
+                if (isSystem && filterSystemDrives.checked)
+                    continue
+                var writable = model.data(jdx, isWritableByUserRole)
+                if (writable === false) {
+                    foundUnwritable = true
+                    break
+                }
+            }
+        }
+        root.hasUnwritableDevices = foundUnwritable
     }
     
     // Get the storage status message for accessibility

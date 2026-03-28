@@ -14,6 +14,7 @@
 #include "embedded_config.h"
 
 #include <optional>
+#include <unistd.h>
 #include <QProcess>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -218,6 +219,13 @@ std::optional<DeviceDescriptor> parseBlockDevice(const QJsonObject& bdev, bool e
         }
         // Non-embedded mode: keep NVMe marked as system (filtered out)
     }
+
+    // Check whether the current effective user can write to the device node.
+    // This is relevant when running with --non-root: the application is started
+    // directly as a regular user (no sudo, no setuid), so the real UID equals
+    // the effective UID and ::access() gives the correct result. Root users will
+    // always get isWritableByUser = true since they own all device nodes.
+    device.isWritableByUser = (::access(name.toLocal8Bit().constData(), W_OK) == 0);
 
     return device;
 }
