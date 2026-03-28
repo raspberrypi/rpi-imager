@@ -89,6 +89,7 @@ Item {
     /// the check-boxes/radio-buttons have labels that might be disabled
     readonly property color formLabelColor: "black"
     readonly property color formLabelErrorColor: "red"
+    readonly property color formLabelWarningColor: "#e8a000"
     readonly property color formLabelDisabledColor: "grey"
     // Active color for radio buttons, checkboxes, and switches
     readonly property color formControlActiveColor: "#1955AE"
