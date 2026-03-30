@@ -57,7 +57,7 @@
     </message>
     <message>
         <source>Keep warnings enabled and return to the options dialog</source>
-        <translation>Оставить предупреждения включенными и вернуться в диалоговое окно параметров.</translation>
+        <translation>Оставить предупреждения включенными и вернуться в диалоговое окно параметров</translation>
     </message>
     <message>
         <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
@@ -81,7 +81,7 @@
     </message>
     <message>
         <source>Change the source of operating system images between official Raspberry Pi repository and custom sources</source>
-        <translation>Изменить источник образов операционной системы с официального репозитория Raspberry Pi на пользовательские.</translation>
+        <translation>Изменить источник образов операционной системы с официального репозитория Raspberry Pi на пользовательские</translation>
     </message>
     <message>
         <source>Secure Boot RSA Key</source>
@@ -97,7 +97,7 @@
     </message>
     <message>
         <source>Select an RSA 2048-bit private key for signing boot images in secure boot mode</source>
-        <translation>Выберите закрытый ключ RSA 2048-бит для подписи загрузочных образов в режиме безопасной загрузки.</translation>
+        <translation>Выберите закрытый ключ RSA 2048-бит для подписи загрузочных образов в режиме безопасной загрузки</translation>
     </message>
     <message>
         <source>Select RSA Private Key</source>
@@ -278,7 +278,7 @@
     </message>
     <message>
         <source>Type drive name exactly as shown above</source>
-        <translation>Введите имя диска точно так, как указано выше.</translation>
+        <translation>Введите имя диска точно так, как указано выше</translation>
     </message>
     <message>
         <source>CANCEL</source>
@@ -290,11 +290,11 @@
     </message>
     <message>
         <source>Cancel operation and return to storage selection to choose a different device</source>
-        <translation>Отменить операцию и вернуться к выбору хранилища, чтобы выбрать другое устройство.</translation>
+        <translation>Отменить операцию и вернуться к выбору хранилища, чтобы выбрать другое устройство</translation>
     </message>
     <message>
         <source>Proceed to write the image to this system drive after confirming the drive name</source>
-        <translation>Продолжить запись образа на этот системный диск после подтверждения имени диска.</translation>
+        <translation>Продолжить запись образа на этот системный диск после подтверждения имени диска</translation>
     </message>
     <message>
         <source>Drive information</source>
@@ -329,7 +329,7 @@
     </message>
     <message>
         <source>Remove the safety filter and display system drives in the storage device list</source>
-        <translation>Удалить безопасный фильтр и отобразить системные диски в списке устройств хранения.</translation>
+        <translation>Удалить безопасный фильтр и отобразить системные диски в списке устройств хранения</translation>
     </message>
 </context>
 <context>
@@ -356,7 +356,7 @@
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
-        <translation>Используйте клавиши со стрелками для навигации, Enter или пробел для выбора.</translation>
+        <translation>Используйте клавиши со стрелками для навигации, Enter или пробел для выбора</translation>
     </message>
 </context>
 <context>
@@ -399,15 +399,15 @@
     </message>
     <message>
         <source>Reboot the system to apply changes</source>
-        <translation>Перезагрузите систему, чтобы изменения вступили в силу.</translation>
+        <translation>Перезагрузите систему, чтобы изменения вступили в силу</translation>
     </message>
     <message>
         <source>Close Raspberry Pi Imager and exit the application</source>
-        <translation>Закрыть Raspberry Pi Imager и выйти из приложения.</translation>
+        <translation>Закрыть Raspberry Pi Imager и выйти из приложения</translation>
     </message>
     <message>
         <source>Return to storage selection to write the same image to another storage device</source>
-        <translation>Вернуться к выбору хранилища, чтобы записать этот образ на другое устройство хранения.</translation>
+        <translation>Вернуться к выбору хранилища, чтобы записать этот образ на другое устройство хранения</translation>
     </message>
     <message>
         <source>customization</source>
@@ -738,7 +738,7 @@
     </message>
     <message>
         <source>Save hostname and continue to next customisation step</source>
-        <translation>Сохранить имя хоста и перейти к следующему шагу настройки.</translation>
+        <translation>Сохранить имя хоста и перейти к следующему шагу настройки</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -829,7 +829,7 @@
     </message>
     <message>
         <source>Save interface and feature settings and continue to writing step</source>
-        <translation>Сохранить настройки интерфейса и функций и перейти к этапу записи.</translation>
+        <translation>Сохранить настройки интерфейса и функций и перейти к этапу записи</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -857,7 +857,7 @@
     </message>
     <message>
         <source>Confirm that you understand the risks and continue with USB Gadget Mode enabled</source>
-        <translation>Подтвердить, что вы понимаете риски, и продолжить работу с включенным режимом USB-гаджета.</translation>
+        <translation>Подтвердить, что вы понимаете риски, и продолжить работу с включенным режимом USB-гаджета</translation>
     </message>
     <message>
         <source>This button will be enabled after 2 seconds</source>
@@ -1058,11 +1058,11 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>%1 %2</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>%1.%2 %3</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Unknown precondition failure.</source>
@@ -1133,7 +1133,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
-        <translation>Получить пароль Wi-Fi из системной связки ключей, используя аутентификацию администратора.</translation>
+        <translation>Получить пароль Wi-Fi из системной связки ключей, используя аутентификацию администратора</translation>
     </message>
 </context>
 <context>
@@ -1198,7 +1198,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Select your location for suggested time zone and keyboard layout</source>
-        <translation>Выберите свое местоположение для получения рекомендуемого часового пояса и раскладки клавиатуры.</translation>
+        <translation>Выберите свое местоположение для получения рекомендуемого часового пояса и раскладки клавиатуры</translation>
     </message>
     <message>
         <source>Capital city:</source>
@@ -1206,7 +1206,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Save localisation settings and continue to next customisation step</source>
-        <translation>Сохранить настройки локализации и перейти к следующему шагу настройки.</translation>
+        <translation>Сохранить настройки локализации и перейти к следующему шагу настройки</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1302,7 +1302,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
-        <translation>Используйте клавиши со стрелками для навигации, Enter или пробел для выбора.</translation>
+        <translation>Используйте клавиши со стрелками для навигации, Enter или пробел для выбора</translation>
     </message>
     <message>
         <source>Operating system category</source>
@@ -1310,7 +1310,7 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select, Left arrow to go back</source>
-        <translation>Используйте клавиши со стрелками для навигации, Enter или пробел для выбора, стрелку влево для возврата назад.</translation>
+        <translation>Используйте клавиши со стрелками для навигации, Enter или пробел для выбора, стрелку влево для возврата назад</translation>
     </message>
     <message>
         <source>Released: %1</source>
@@ -1381,11 +1381,11 @@ or type a path in the address bar above.</source>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Close this dialog and return to the token field</source>
-        <translation>Закрыть это диалоговое окно и вернуться к полю ввода токена.</translation>
+        <translation>Закрыть это диалоговое окно и вернуться к полю ввода токена</translation>
     </message>
     <message>
         <source>Authentication token:</source>
@@ -1530,11 +1530,11 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Close the repository dialog without changing the content source</source>
-        <translation>Закрыть диалоговое окно репозитория, не меняя источник контента.</translation>
+        <translation>Закрыть диалоговое окно репозитория, не меняя источник контента</translation>
     </message>
     <message>
         <source>Apply the new content repository and restart the wizard from the beginning</source>
-        <translation>Применить новый репозиторий контента и перезапустить мастер настройки с самого начала.</translation>
+        <translation>Применить новый репозиторий контента и перезапустить мастер настройки с самого начала</translation>
     </message>
     <message>
         <source>Choose the source for operating system images</source>
@@ -1565,7 +1565,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Save secure boot settings and continue to next customisation step</source>
-        <translation>Сохранить настройки безопасной загрузки и перейти к следующему шагу настройки.</translation>
+        <translation>Сохранить настройки безопасной загрузки и перейти к следующему шагу настройки</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -1581,7 +1581,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi</source>
-        <translation>Подпишите загрузочный раздел с помощью вашего ключа RSA, чтобы включить безопасную проверку загрузки на Raspberry Pi.</translation>
+        <translation>Подпишите загрузочный раздел с помощью вашего ключа RSA, чтобы включить безопасную проверку загрузки на Raspberry Pi</translation>
     </message>
     <message>
         <source>Learn about Secure Boot</source>
@@ -1684,15 +1684,15 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>SSH key %1: %2, %3</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>SSH key %1: %2</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>SSH key %1</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Remove</source>
@@ -1724,7 +1724,7 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
     <message>
         <source>Select SSH Public Key</source>
-        <translation type="unfinished">Выбрать открытый ключ SSH</translation>
+        <translation>Выбрать открытый ключ SSH</translation>
     </message>
     <message>
         <source>Add the entered SSH key</source>
@@ -1871,7 +1871,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Re-enter to change password</source>
-        <translation>Введите еще раз, чтобы изменить пароль.</translation>
+        <translation>Введите еще раз, чтобы изменить пароль</translation>
     </message>
     <message>
         <source>Create a user account for your Raspberry Pi</source>
@@ -1986,7 +1986,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Save Wi-Fi settings and continue to next customisation step</source>
-        <translation>Сохранить настройки Wi-Fi и перейти к следующему шагу настройки.</translation>
+        <translation>Сохранить настройки Wi-Fi и перейти к следующему шагу настройки</translation>
     </message>
     <message>
         <source>Return to previous step</source>
@@ -2026,7 +2026,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Re-enter to change password</source>
-        <translation>Введите еще раз, чтобы изменить пароль.</translation>
+        <translation>Введите еще раз, чтобы изменить пароль</translation>
     </message>
 </context>
 <context>
@@ -2065,11 +2065,11 @@ to show system drives.</source>
     </message>
     <message>
         <source>Wi‑Fi</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Raspberry Pi Connect</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>App Options</source>
@@ -2330,7 +2330,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>OK</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Close the error dialog and continue</source>
@@ -2350,7 +2350,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Raspberry Pi Imager %1</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>Insufficient Permissions</source>
@@ -2366,7 +2366,7 @@ to show system drives.</source>
     </message>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
-        <translation>Выйти из Raspberry Pi Imager — вам потребуется перезапустить его с повышенными привилегиями для записи образов.</translation>
+        <translation>Выйти из Raspberry Pi Imager — вам потребуется перезапустить его с повышенными привилегиями для записи образов</translation>
     </message>
     <message>
         <source>Install Authorization</source>
@@ -2374,19 +2374,19 @@ to show system drives.</source>
     </message>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
-        <translation>Установите системную авторизацию, чтобы разрешить запуск Raspberry Pi Imager с повышенными привилегиями.</translation>
+        <translation>Установите системную авторизацию, чтобы разрешить запуск Raspberry Pi Imager с повышенными привилегиями</translation>
     </message>
     <message>
         <source>Save Performance Data</source>
-        <translation type="unfinished">Сохранить данные о производительности</translation>
+        <translation>Сохранить данные о производительности</translation>
     </message>
     <message>
         <source>JSON files (*.json)</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished">Все файлы (*)</translation>
+        <translation>Все файлы (*)</translation>
     </message>
 </context>
 </TS>
