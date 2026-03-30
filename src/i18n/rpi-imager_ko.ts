@@ -115,6 +115,42 @@
         <source>All Files (*)</source>
         <translation>모든 파일 (*)</translation>
     </message>
+    <message>
+        <source>Audio notification unavailable - no viable audio player found on this system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved Customisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove all saved OS customisation settings such as hostname, WiFi, and user credentials</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Version: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear saved customisation?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep saved customisation settings and return to the options dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove all saved OS customisation settings permanently</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>AsyncCacheWriter</name>
@@ -144,10 +180,6 @@
     <message>
         <source>Image files (%1)</source>
         <translation>이미지 파일 (%1)</translation>
-    </message>
-    <message>
-        <source>Imager Repository Files (*.json)</source>
-        <translation>이미저 저장소 파일 (*.json)</translation>
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
@@ -257,6 +289,69 @@
         <source>Authorized keys files (authorized_keys)</source>
         <translation>인증 키 파일(authorized_keys)</translation>
     </message>
+    <message>
+        <source>Imager Repository Files (*.json *.%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ConfirmOtpProgramDialog</name>
+    <message>
+        <source>WARNING: OTP Programming is PERMANENT and IRREVERSIBLE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This operation will permanently program the secure boot public key hash into the device&apos;s one-time programmable (OTP) memory. Once programmed, this device will ONLY boot images signed with the corresponding private key. This action cannot be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Key fingerprint: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Also lock JTAG debug port (additional irreversible action)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>To confirm, type the device serial number below:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial to type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Type device serial number exactly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirmation input. Type exactly: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished">취소</translation>
+    </message>
+    <message>
+        <source>Cancel OTP programming and return to previous screen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PROGRAM OTP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Permanently program the secure boot key into device OTP memory</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmSystemDriveDialog</name>
@@ -333,6 +428,125 @@
     </message>
 </context>
 <context>
+    <name>DebugOptionsDialog</name>
+    <message>
+        <source>Debug Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I/O Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Direct I/O (F_NOCACHE / O_DIRECT)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Async I/O</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Queue Depth:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Async queue depth: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Buffer memory: ~%1-%2 MB (varies by system RAM)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Periodic Sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Debugging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verbose Performance Logging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Log detailed timing information for each write operation to help diagnose performance issues.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Network Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Force IPv4-only Downloads</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workarounds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Counterfeit Card Mode (skip end-of-device checks)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Advanced Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Rpiboot/Fastboot Support</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Current Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the debug options dialog without saving any changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply the selected debug options</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>DeviceSelectionStep</name>
     <message>
         <source>Select your Raspberry Pi device</source>
@@ -357,6 +571,28 @@
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
         <translation>화살표 키를 사용해 이동하고 Enter 또는 Space로 선택하세요</translation>
+    </message>
+    <message>
+        <source>Unable to load device list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The device list could not be downloaded. Please check your internet connection and try again.
+
+You can still write a local image file by pressing Next and selecting &apos;Use custom&apos; on the following screen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry downloading the device list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connected via USB</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -437,12 +673,30 @@
         <translation>디렉토리 변경 오류 &apos;%1&apos;</translation>
     </message>
     <message>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>저장소에서 읽는 동안 오류가 발생했습니다.&lt;br&gt;SD 카드가 고장 났을 수 있습니다</translation>
+        <source>The write operation has stalled.
+
+No data has been written for 30 seconds. This could be caused by:
+• Storage device disconnected or unresponsive
+• Device has failed or is faulty
+• System resource exhaustion
+
+Please check the storage device and try again.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>쓰기 확인에 실패했습니다. SD 카드 내용이 기록된 내용과 다릅니다</translation>
+        <source>Failed to acquire write buffer slot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The download has stalled.
+
+No data received for 30 seconds. This could be caused by:
+• Network connection lost or unstable
+• Remote server became unresponsive
+• Firewall or proxy blocking the connection
+
+Please check your network connection and try again.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -456,32 +710,12 @@
         <translation>저장 장치를 열 수 없습니다 &apos;%1&apos;.</translation>
     </message>
     <message>
-        <source>Write error while zero&apos;ing out MBR</source>
-        <translation>MBR을 zero&apos;ing out 하는 동안 쓰기 오류 발생 </translation>
-    </message>
-    <message>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>SD card의 마지막 부분을 비워내는 동안 오류가 발생했습니다.&lt;br&gt;카드가 잘못된 용량을 표기하고 있을 수 있습니다(위조 품목).</translation>
-    </message>
-    <message>
         <source>Error downloading: %1</source>
         <translation>다운로드 중 오류: %1</translation>
     </message>
     <message>
         <source>Access denied error while writing file to disk.</source>
         <translation>디스크에 파일을 쓰는 동안 액세스 거부 오류가 발생했습니다.</translation>
-    </message>
-    <message>
-        <source>Error writing to storage (while flushing)</source>
-        <translation>저장소에 쓰는 중 오류 발생(flushing..)</translation>
-    </message>
-    <message>
-        <source>Error writing to storage (while fsync)</source>
-        <translation>스토리지에 쓰는 중 오류 발생(fsync..)</translation>
-    </message>
-    <message>
-        <source>Error writing first block (partition table)</source>
-        <translation>첫 번째 블록을 쓰는 중 오류 발생 (파티션 테이블)</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
@@ -540,10 +774,6 @@
         <translation>디스크 장치 &apos;%1&apos;을 열 때 오류가 발생했습니다</translation>
     </message>
     <message>
-        <source>Error getting device size</source>
-        <translation>장치 크기를 가져오는 중 오류가 발생했습니다</translation>
-    </message>
-    <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
         <translation>저장 장치에 쓰는 중 오류가 발생했습니다. 장치가 기록 가능하고 충분한 공간이 있으며 쓰기 방지가 되지 않았는지 확인하십시오</translation>
     </message>
@@ -554,10 +784,6 @@
     <message>
         <source>Opening drive...</source>
         <translation>드라이브를 열고 있습니다...</translation>
-    </message>
-    <message>
-        <source>Discarding existing data on drive...</source>
-        <translation>드라이브의 기존 데이터를 삭제 중...</translation>
     </message>
     <message>
         <source>Zero&apos;ing out first and last MB of drive...</source>
@@ -668,8 +894,170 @@
         <translation>사용자 지정 파일을 기록 중...</translation>
     </message>
     <message>
-        <source>Failed to allocate buffer for MBR zeroing</source>
-        <translation>MBR 초기화를 위한 버퍼를 할당하지 못했습니다</translation>
+        <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>getting device size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to allocate buffer for MBR zeroing.
+
+The system may be low on memory.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>preparing storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out end of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timeout writing to end of storage device.
+
+This may indicate a counterfeit SD card with fake capacity.
+
+Please try a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write error while trying to zero out last part of card.
+
+This could indicate the card is advertising wrong capacity (possible counterfeit).
+
+Please try a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device responding slowly. Restarting in compatibility mode...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>storage operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open storage device.
+
+The device may be in use by another application, or you may not have permission to access it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to storage device during %1.
+
+This could be caused by:
+• Device disconnected or became unresponsive
+• Device is full or write-protected
+• Hardware failure or bad sectors
+
+Please check the device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error reading from storage device during %1.
+
+The device may have been disconnected or is malfunctioning.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error seeking on storage device during %1.
+
+The device may be malfunctioning or disconnected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error getting storage device size.
+
+The device may not be properly recognized.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error closing storage device.
+
+The device may have been disconnected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to lock storage device.
+
+The device may be in use by another application. Please close any applications using this device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error syncing data to storage device.
+
+The device may have been disconnected or is not responding. Data may not have been fully written.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error flushing data to storage device.
+
+The device may have been disconnected or is not responding.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device timed out during %1.
+
+The device is not responding. This may indicate:
+• Device was disconnected
+• Device has failed
+• Driver or system issue
+
+Please disconnect and reconnect the device, then try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown storage error during %1.
+
+Please try again or use a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The storage device is not responding. This may indicate:
+• The device was disconnected
+• The device has failed
+• A driver or system issue
+
+Please disconnect and reconnect the device, then try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to storage device.
+
+Some writes failed to complete. This could be caused by:
+• Storage device disconnected during write
+• Device is full or write-protected
+• Hardware failure
+
+Please check the device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>flush</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>writing partition table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>final flush</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>final sync</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -713,6 +1101,109 @@
     <message>
         <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
         <translation>장치를 포맷할 수 없습니다: 권한이 부족합니다. 관리자 권한으로 실행하십시오(sudo)</translation>
+    </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>FastbootFlashThread</name>
+    <message>
+        <source>Applying OS customisation...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read config.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write config.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write firstrun.sh: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write meta-data: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write user-data: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write network-config: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read cmdline.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write cmdline.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to initialize curl</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No entries in image archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot error: unexpected internal error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connecting to fastboot device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open fastboot device: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Downloading and flashing OS image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fetching block map...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot download failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot flash failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Decompression failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Image hash mismatch. Expected: %1 Got: %2</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -867,12 +1358,16 @@
 <context>
     <name>ImComboBox</name>
     <message>
-        <source>Type to search: &quot;%1&quot;</source>
-        <translation>검색하려면 입력하세요: "%1"</translation>
+        <source>Search: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>(press again to cycle)</source>
-        <translation>(다시 눌러 순환)</translation>
+        <source>%1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No matches</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -942,6 +1437,10 @@ or type a path in the address bar above.</source>
     <message>
         <source>Save</source>
         <translation>저장</translation>
+    </message>
+    <message>
+        <source>Enter folder or file path…</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1021,20 +1520,12 @@ or type a path in the address bar above.</source>
 <context>
     <name>ImageWriter</name>
     <message>
-        <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation>입력 파일이 올바른 디스크 이미지가 아닙니다.&lt;br&gt;파일사이즈 %1 바이트가 512바이트의 배수가 아닙니다</translation>
-    </message>
-    <message>
         <source>Select image</source>
         <translation>이미지 선택하기</translation>
     </message>
     <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
         <translation>STP가 이더넷 스위치에서 활성화되었습니다. IP를 얻는 데 시간이 오래 걸릴 수 있습니다</translation>
-    </message>
-    <message>
-        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1.</source>
-        <translation>저장 용량이 충분하지 않습니다.&lt;br&gt;최소 %1 이상이어야 합니다</translation>
     </message>
     <message>
         <source>B</source>
@@ -1111,6 +1602,50 @@ or type a path in the address bar above.</source>
     <message>
         <source>JSON files (*.json);;All files (*)</source>
         <translation>JSON 파일 (*.json);;모든 파일 (*)</translation>
+    </message>
+    <message>
+        <source>Preparing device for imaging...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage capacity is not large enough.
+
+The image requires at least %1 of storage.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input file is not a valid disk image.
+
+File size %1 bytes is not a multiple of 512 bytes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start write operation: insufficient memory.
+
+The system does not have enough available memory to perform this operation. Try closing other applications to free up memory, then try again.
+
+Technical details: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start write operation: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by download speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by decompression speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by storage device speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verifying written data</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1228,19 +1763,13 @@ or type a path in the address bar above.</source>
         <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
         <translation>키보드 레이아웃을 선택하면 입력 시 올바른 문자를 생성합니다. 수도 선택에 따라 자동으로 추천되지만, 다른 레이아웃을 사용하는 경우 변경할 수 있습니다</translation>
     </message>
-</context>
-<context>
-    <name>MacFile</name>
     <message>
-        <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
-        <translation>라즈베리 파이 이미저가 이미지를 기록하려면 디스크에 접근해야 합니다</translation>
+        <source>Why am I being asked this?</source>
+        <translation type="unfinished"></translation>
     </message>
-</context>
-<context>
-    <name>NativeFileDialog</name>
     <message>
-        <source>File type:</source>
-        <translation>파일 형식:</translation>
+        <source>This also sets the Wi-Fi regulatory domain for your region.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1315,6 +1844,49 @@ or type a path in the address bar above.</source>
     <message>
         <source>Released: %1</source>
         <translation>릴리즈: %1</translation>
+    </message>
+    <message>
+        <source>Unable to download OS list. You can still use a local image file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry downloading the OS list</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PasswordlessSudoWarningDialog</name>
+    <message>
+        <source>Passwordless Sudo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enabling passwordless sudo allows any process running as this user to gain full root privileges without authentication. This significantly weakens the security of your system.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only enable this if you understand the risks and have a specific need, such as automated scripts or headless operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished">취소</translation>
+    </message>
+    <message>
+        <source>Cancel and keep sudo requiring a password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>ENABLE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable passwordless sudo for this user account</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1429,6 +2001,14 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
         <translation>root로 실행되지 않았습니다.
 
 자동 권한 상승을 설정하려면 &quot;권한 설치&quot;를 클릭하거나 수동으로 실행하십시오: sudo %1</translation>
+    </message>
+    <message>
+        <source>Internal SD card reader</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loopback device (%1)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1554,6 +2134,65 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     </message>
 </context>
 <context>
+    <name>RpibootThread</name>
+    <message>
+        <source>Downloading firmware...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to obtain rpiboot firmware: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connecting to device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open USB device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>rpiboot protocol failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to restart...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open USB device after re-enumeration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for fastboot device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timed out waiting for fastboot device to appear.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to disconnect (%1/%2)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device disconnected, waiting for reconnect...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to reconnect (%1/%2s)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timed out waiting for device to re-enumerate after bootcode upload (waited %1s).</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>SecureBootCustomizationStep</name>
     <message>
         <source>Customisation: Secure Boot</source>
@@ -1646,6 +2285,26 @@ Click &quot;Install Authorization&quot; to set up automatic privilege elevation,
     <message>
         <source>All Files (*)</source>
         <translation>모든 파일 (*)</translation>
+    </message>
+    <message>
+        <source>OTP Secure Boot Provisioning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Program the secure boot public key hash into the device&apos;s OTP memory. This is a permanent, irreversible operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Provision Secure Boot OTP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Permanently program the secure boot key into device OTP memory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>WARNING: After OTP provisioning, this device will ONLY boot images signed with the selected key. This cannot be undone.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1817,6 +2476,22 @@ to show system drives.</source>
         <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
         <translation>현재 유효한 저장 장치가 없습니다. &apos;시스템 드라이브 제외&apos;를 해제해 숨겨진 시스템 드라이브를 표시하거나 새 저장 장치를 연결하세요</translation>
     </message>
+    <message>
+        <source>Could not list storage devices: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error: Could not list storage devices. %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready for USB boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not list storage devices: %1. This may be a permissions issue. Try running the application with administrator privileges.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>UpdateAvailableDialog</name>
@@ -1835,6 +2510,14 @@ to show system drives.</source>
     <message>
         <source>Open the Raspberry Pi website in your browser to download the latest version</source>
         <translation>라즈베리 파이 웹사이트를 열어 최신 버전을 다운로드합니다</translation>
+    </message>
+    <message>
+        <source>Imager version %1 is available. Would you like to visit the website to download it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1910,6 +2593,22 @@ to show system drives.</source>
     <message>
         <source>Re-enter the password to confirm it matches.</source>
         <translation>비밀번호가 일치하는지 확인하려면 재입력하세요</translation>
+    </message>
+    <message>
+        <source>Enable passwordless sudo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allow this user to run sudo commands without entering a password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allows any process running as this user to gain full root privileges without a password. Only enable this if you have a specific need, such as automated scripts or headless operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwordless sudo information: </source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2062,10 +2761,6 @@ to show system drives.</source>
         <translation>사용자</translation>
     </message>
     <message>
-        <source>Wi-Fi</source>
-        <translation>Wi-Fi</translation>
-    </message>
-    <message>
         <source>Raspberry Pi Connect</source>
         <translation>라즈베리 파이 커넥트</translation>
     </message>
@@ -2137,6 +2832,64 @@ to show system drives.</source>
         <source>Warning: Only overwrite the token if you initiated this action.</source>
         <translation>경고: 이 작업을 수행한 경우에만 토큰을 덮어쓰세요</translation>
     </message>
+    <message>
+        <source>Wi‑Fi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sidebar resize handle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open local repository file?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Switch to a custom repository?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.
+
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only accept if you trust this source and intentionally clicked a link to open this repository.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Repository URL: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation type="unfinished">열기</translation>
+    </message>
+    <message>
+        <source>Switch repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open the local manifest file and use it as the OS repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Switch to the custom repository from the link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">취소</translation>
+    </message>
+    <message>
+        <source>Keep your current repository settings</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardStepBase</name>
@@ -2147,6 +2900,23 @@ to show system drives.</source>
     <message>
         <source>Skip customisation</source>
         <translation>사용자 지정을 건너뛰기</translation>
+    </message>
+</context>
+<context>
+    <name>WriteProgressWatchdog</name>
+    <message>
+        <source>Switched to compatibility mode - write continuing...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write stalled - no progress for %1 seconds.
+
+Please check your storage device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device not responding. Restarting in compatibility mode...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2283,6 +3053,10 @@ to show system drives.</source>
         <source>Please wait... %1</source>
         <translation>잠시만 기다려 주세요… %1</translation>
     </message>
+    <message>
+        <source>Writing... %1 MB written</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -2381,6 +3155,14 @@ to show system drives.</source>
     <message>
         <source>All files (*)</source>
         <translation>모든 파일 (*)</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Using data from %1</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>
