@@ -164,7 +164,7 @@ bool FastbootProtocol::stage(rpiboot::IUsbTransport& transport,
                               rpiboot::ProgressCallback progress,
                               std::atomic<bool>& cancelled)
 {
-    return sendData(transport, "stage", data, progress, cancelled);
+    return sendData(transport, "download", data, progress, cancelled);
 }
 
 // ── Upload (device → host) ────────────────────────────────────────────
