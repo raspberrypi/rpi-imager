@@ -338,9 +338,11 @@ WizardStepBase {
             required property var mountpoints
             required property QtObject modelData
             property bool isRpiboot: modelData && typeof modelData.isRpiboot !== "undefined" ? modelData.isRpiboot : false
+            property bool isFastbootStorage: modelData && typeof modelData.isFastbootStorage !== "undefined" ? modelData.isFastbootStorage : false
+            property string fastbootStorageType: modelData && typeof modelData.fastbootStorageType !== "undefined" ? modelData.fastbootStorageType : ""
 
             readonly property bool shouldHide: isSystem && filterSystemDrives.checked
-            readonly property bool unselectable: isReadOnly && !isRpiboot
+            readonly property bool unselectable: isReadOnly && !isRpiboot && !isFastbootStorage
             
             // Accessibility properties
             Accessible.role: Accessible.ListItem
@@ -403,6 +405,10 @@ WizardStepBase {
                     Image {
                         id: storageIcon
                         source: dstitem.isRpiboot ? "../icons/ic_rpiboot_40px.svg" :
+                                dstitem.isFastbootStorage ? (
+                                    dstitem.fastbootStorageType === "nvme" ? "../icons/ic_storage_40px.svg" :
+                                    "../icons/ic_sd_storage_40px.svg"
+                                ) :
                                 dstitem.isUsb ? "../icons/ic_usb_40px.svg" :
                                 dstitem.isScsi ? "../icons/ic_storage_40px.svg" :
                                 "../icons/ic_sd_storage_40px.svg"
@@ -491,8 +497,10 @@ WizardStepBase {
             return
         }
 
-        // rpiboot devices use setRpibootDevice instead of setDst
-        if (dstitem.isRpiboot && typeof imageWriter.setRpibootDevice === "function") {
+        // Fastboot storage devices use setFastbootDevice
+        if (dstitem.isFastbootStorage && typeof imageWriter.setFastbootDevice === "function") {
+            imageWriter.setFastbootDevice(dstitem.device, dstitem.size)
+        } else if (dstitem.isRpiboot && typeof imageWriter.setRpibootDevice === "function") {
             imageWriter.setRpibootDevice(dstitem.device)
         } else {
             imageWriter.setDst(dstitem.device, dstitem.size)
@@ -524,22 +532,26 @@ WizardStepBase {
         var isReadOnlyRole = 0x106
         var isSystemRole = 0x107
         var mountpointsRole = 0x108
-        
+        var isFastbootStorageRole = 0x10B
+
         var isReadOnly = model.data(modelIndex, isReadOnlyRole)
         if (isReadOnly) {
             return  // Can't select read-only devices
         }
-        
+
         var isSystem = model.data(modelIndex, isSystemRole)
         var device = model.data(modelIndex, deviceRole)
         var description = model.data(modelIndex, descriptionRole)
         var size = model.data(modelIndex, sizeRole)
         var mountpoints = model.data(modelIndex, mountpointsRole) || []
-        
+        var isFastbootStorage = model.data(modelIndex, isFastbootStorageRole) || false
+
         // Create a mock item object with the required properties
         var mockItem = {
             unselectable: isReadOnly,
             isSystem: isSystem,
+            isFastbootStorage: isFastbootStorage,
+            isRpiboot: false,
             device: device,
             description: description,
             size: size,

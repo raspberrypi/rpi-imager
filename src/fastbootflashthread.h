@@ -29,6 +29,7 @@ class FastbootFlashThread : public QThread
     Q_OBJECT
 public:
     explicit FastbootFlashThread(const QString& fastbootId,
+                                  const QString& blockDevice,
                                   const QUrl& imageUrl,
                                   quint64 downloadLen,
                                   quint64 extractLen,
@@ -72,6 +73,7 @@ private:
                              class rpiboot::IUsbTransport& transport);
 
     QString _fastbootId;
+    QString _blockDevice;
     QUrl _imageUrl;
     QUrl _bmapUrl;
     quint64 _downloadLen;

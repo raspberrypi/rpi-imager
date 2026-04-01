@@ -322,6 +322,10 @@ ImageWriter::ImageWriter(QObject *parent)
     connect(&_drivelist, &DriveListModel::connectedRpibootChipsChanged,
             &_hwlist, &HWListModel::setConnectedRpibootChips);
 
+    // Auto-bootstrap: when a new rpiboot device is detected, start sideloading fastbootd
+    connect(&_drivelist, &DriveListModel::rpibootDeviceDetected,
+            this, &ImageWriter::onRpibootDeviceDetected);
+
     // Connect drive list poll timing events for performance tracking
     // Only record polls that take longer than 200ms to avoid noise from normal fast polls
     connect(&_drivelist, &DriveListModel::eventDriveListPoll,
@@ -560,6 +564,7 @@ void ImageWriter::setDst(const QString &device, quint64 deviceSize)
     _devLen = deviceSize;
     _selectedDeviceValid = !device.isEmpty();
     _isRpibootDevice = false;  // Reset — setRpibootDevice() will re-set if needed
+    _isFastbootDevice = false;  // Reset — setFastbootDevice() will re-set if needed
 
     // Reset write completion state when device selection changes
     if (device.isEmpty()) {
@@ -586,6 +591,110 @@ bool ImageWriter::isRpibootDevice() const
     return _isRpibootDevice;
 }
 
+void ImageWriter::setFastbootDevice(const QString &device, quint64 size)
+{
+    // device format: "fastboot://bus:addr/blockdevice"
+    QString path = device;
+    if (path.startsWith("fastboot://"))
+        path = path.mid(11); // strip scheme
+
+    // Parse "bus:addr/blockdevice"
+    int slashIdx = path.indexOf('/');
+    if (slashIdx > 0) {
+        _fastbootId = path.left(slashIdx);
+        _fastbootBlockDevice = path.mid(slashIdx + 1);
+    } else {
+        _fastbootId = path;
+        _fastbootBlockDevice = QStringLiteral("mmcblk0");
+    }
+
+    _isFastbootDevice = true;
+    _isRpibootDevice = false;
+    _dst = device;
+    _devLen = size;
+    _selectedDeviceValid = true;
+
+    qDebug() << "Fastboot device selected:" << device
+             << "id=" << _fastbootId << "block=" << _fastbootBlockDevice;
+}
+
+void ImageWriter::onRpibootDeviceDetected(const QString &deviceId,
+                                            uint8_t busNumber, uint8_t deviceAddress,
+                                            const QList<uint8_t> &portPath, uint16_t productId)
+{
+    // Only auto-bootstrap when rpiboot/fastboot debug mode is enabled
+    if (!_debugRpiboot)
+        return;
+
+    // Compute port path key for dedup
+    QString ppKey;
+    for (int i = 0; i < portPath.size(); ++i) {
+        if (i > 0) ppKey += '.';
+        ppKey += QString::number(portPath[i]);
+    }
+
+    // Skip if already bootstrapping this device
+    if (_bootstrappingDevices.contains(ppKey))
+        return;
+
+    _bootstrappingDevices.insert(ppKey);
+    qDebug() << "Auto-bootstrap: starting rpiboot for" << ppKey << "deviceId=" << deviceId;
+
+    // Create DeviceInfo from parameters
+    RpibootThread::DeviceInfo devInfo;
+    devInfo.busNumber = busNumber;
+    devInfo.deviceAddress = deviceAddress;
+    for (const auto& p : portPath)
+        devInfo.portPath.push_back(p);
+
+    // Determine chip generation from PID
+    devInfo.chipGeneration = rpiboot::ChipGeneration::BCM2711; // safe default
+    if (auto gen = rpiboot::chipGenerationFromPid(productId))
+        devInfo.chipGeneration = *gen;
+
+    auto *thread = new RpibootThread(devInfo, _rpibootSideloadMode, this);
+
+    connect(thread, &RpibootThread::fastbootDeviceReady, this,
+            [this, ppKey](const QString &fastbootId) {
+                onBootstrapComplete(ppKey, fastbootId);
+            });
+    connect(thread, &RpibootThread::error, this,
+            [this, ppKey](const QString &msg) {
+                onBootstrapError(ppKey, msg);
+            });
+    connect(thread, &RpibootThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+
+    _activeBootstrapThreads[ppKey] = thread;
+    thread->start();
+}
+
+void ImageWriter::onBootstrapComplete(const QString &portPathKey, const QString &fastbootId)
+{
+    qDebug() << "Auto-bootstrap complete:" << portPathKey << "fastbootId=" << fastbootId;
+
+    // Clean up the thread
+    if (_activeBootstrapThreads.contains(portPathKey)) {
+        _activeBootstrapThreads[portPathKey]->deleteLater();
+        _activeBootstrapThreads.remove(portPathKey);
+    }
+    _bootstrappingDevices.remove(portPathKey);
+
+    // Enable fastboot scanning so the poll thread discovers storage devices
+    _drivelist.setFastbootScanEnabled(true);
+}
+
+void ImageWriter::onBootstrapError(const QString &portPathKey, const QString &msg)
+{
+    qWarning() << "Auto-bootstrap error for" << portPathKey << ":" << msg;
+
+    // Clean up the thread
+    if (_activeBootstrapThreads.contains(portPathKey)) {
+        _activeBootstrapThreads[portPathKey]->deleteLater();
+        _activeBootstrapThreads.remove(portPathKey);
+    }
+    _bootstrappingDevices.remove(portPathKey);
+}
+
 void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
 {
     qDebug() << "rpiboot fastboot device ready:" << fastbootId;
@@ -596,7 +705,7 @@ void ImageWriter::onRpibootFastbootReady(const QString &fastbootId)
     }
 
     // Start FastbootFlashThread
-    _fastbootFlashThread = new FastbootFlashThread(fastbootId, _src, _downloadLen, _extrLen, _expectedHash, this);
+    _fastbootFlashThread = new FastbootFlashThread(fastbootId, QStringLiteral("mmcblk0"), _src, _downloadLen, _extrLen, _expectedHash, this);
     _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
     if (!_bmapUrl.isEmpty())
         _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
@@ -770,6 +879,51 @@ void ImageWriter::startWrite()
     }
 
     setWriteState(WriteState::Preparing);
+
+    if (_isFastbootDevice)
+    {
+        // Already in fastboot mode — go directly to flash
+        emit preparationStatusUpdate(tr("Starting fastboot flash..."));
+        _fastbootFlashThread = new FastbootFlashThread(
+            _fastbootId, _fastbootBlockDevice, _src, _downloadLen, _extrLen, _expectedHash, this);
+        _fastbootFlashThread->setImageCustomisation(_config, _cmdline, _firstrun, _cloudinit, _cloudinitNetwork, _initFormat);
+        if (!_bmapUrl.isEmpty())
+            _fastbootFlashThread->setBmapUrl(QUrl(_bmapUrl));
+        connect(_fastbootFlashThread, &FastbootFlashThread::success, this, &ImageWriter::onSuccess);
+        connect(_fastbootFlashThread, &FastbootFlashThread::error, this, &ImageWriter::onError);
+        connect(_fastbootFlashThread, &FastbootFlashThread::preparationStatusUpdate, this, &ImageWriter::onPreparationStatusUpdate);
+        connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress, this, [this](quint64 now, quint64 total) {
+            emit downloadProgress(QVariant(now), QVariant(total));
+        });
+        connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress, this, [this](quint64 now, quint64 total) {
+            emit writeProgress(QVariant(now), QVariant(total));
+        });
+        connect(_fastbootFlashThread, &FastbootFlashThread::finalizing, this, &ImageWriter::onFinalizing);
+        connect(_fastbootFlashThread, &FastbootFlashThread::writing, this, [this]() {
+            setWriteState(WriteState::Writing);
+            startProgressPolling();
+        });
+        connect(_fastbootFlashThread, &QThread::finished, this, [this]() {
+            if (_fastbootFlashThread) {
+                _fastbootFlashThread->deleteLater();
+                _fastbootFlashThread = nullptr;
+            }
+        });
+        connect(_fastbootFlashThread, &FastbootFlashThread::eventFastbootDeviceOpen,
+                this, [this](quint32 ms, bool ok, QString meta){
+                    _performanceStats->recordEvent(PerformanceStats::EventType::FastbootDeviceOpen, ms, ok, meta);
+                });
+        connect(_fastbootFlashThread, &FastbootFlashThread::downloadProgress,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordDownloadProgress(now, total);
+                });
+        connect(_fastbootFlashThread, &FastbootFlashThread::writeProgress,
+                this, [this](quint64 now, quint64 total){
+                    _performanceStats->recordWriteProgress(now, total);
+                });
+        _fastbootFlashThread->start();
+        return;
+    }
 
     if (_isRpibootDevice)
     {
@@ -3232,6 +3386,7 @@ void ImageWriter::setDebugRpiboot(bool enabled)
     if (_debugRpiboot != enabled) {
         _debugRpiboot = enabled;
         _drivelist.setRpibootEnabled(enabled);
+        _drivelist.setFastbootScanEnabled(enabled);
         qDebug() << "Debug: Rpiboot/fastboot support" << (enabled ? "enabled" : "disabled");
     }
 }

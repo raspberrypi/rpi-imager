@@ -7,6 +7,7 @@
  */
 
 #include <atomic>
+#include <map>
 #include <QThread>
 #include <QMutex>
 #include <QWaitCondition>
@@ -79,13 +80,36 @@ public:
      */
     void setRpibootEnabled(bool enabled);
 
+    /**
+     * @brief Enable or disable fastboot device scanning
+     *
+     * Thread-safe. When enabled, the poll thread queries fastboot-mode devices
+     * for their block devices and includes them in the drive list.
+     */
+    void setFastbootScanEnabled(bool enabled);
+
 protected:
     bool _terminate;
     std::atomic<bool> _rpibootEnabled{false};
+    std::atomic<bool> _fastbootScanEnabled{false};
     ScanMode _scanMode;
     mutable QMutex _mutex;
     QWaitCondition _modeChanged;
-    
+
+    // Fastboot device cache — lives on poll thread, no mutex needed
+    struct FastbootStorageInfo {
+        std::string blockDevice;
+        uint64_t sizeBytes;
+        std::string storageType;
+    };
+    struct FastbootDeviceCache {
+        std::string fastbootId;    // "bus:addr"
+        std::string productName;
+        std::vector<uint8_t> portPath;
+        std::vector<FastbootStorageInfo> storage;
+    };
+    std::map<std::string, FastbootDeviceCache> _fastbootCache; // key = port path string
+
     virtual void run() override;
 
 signals:
