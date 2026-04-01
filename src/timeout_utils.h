@@ -167,7 +167,7 @@ namespace TimeoutDefaults {
     
     // === Progress watchdog thresholds ===
     constexpr int kWatchdogCheckIntervalMs = 1000;         // How often watchdog checks progress
-    constexpr int kWatchdogStallTimeoutMs = 60000;         // Normal stall timeout (60s)
+    constexpr int kWatchdogStallTimeoutMs = 180000;        // Normal stall timeout (180s, matches async timeout for slow cards)
     constexpr int kWatchdogAsyncTimeoutMs = 180000;        // Extended timeout when async pending (180s)
     constexpr int kWatchdogReduceDepthThresholdMs = 30000; // Try reducing queue depth after 30s
     constexpr int kWatchdogRestartThresholdMs = 120000;    // Restart only if drain fails (120s)
