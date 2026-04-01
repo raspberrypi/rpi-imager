@@ -1689,6 +1689,12 @@ void DownloadThread::_writeComplete()
         }
     }
 
+    // Stop the watchdog before the final sync. No progress indicators can
+    // advance during fdatasync/fsync, but the device is still working — slow
+    // cards can take minutes to flush their internal cache after sustained writes.
+    // Uses BlockingQueuedConnection so the watchdog is stopped before we block.
+    emit finalSyncStarting();
+
     rpi_imager::FileError flushResult = _file->Flush();
     if (flushResult != rpi_imager::FileError::kSuccess)
     {

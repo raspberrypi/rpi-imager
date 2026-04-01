@@ -1364,6 +1364,18 @@ void ImageWriter::startWrite()
                     _progressWatchdog->start(_thread);
                 }
             });
+    // Stop the watchdog before the post-write sync. The fdatasync/fsync can
+    // block for minutes on slow cards and no progress indicators advance during
+    // it, so the watchdog would otherwise fire a false stall timeout.
+    // BlockingQueuedConnection ensures the watchdog is stopped before the
+    // download thread enters fdatasync (safe — main thread never waits on
+    // the download thread during normal operation).
+    connect(_thread, &DownloadThread::finalSyncStarting,
+            this, [this](){
+                if (_progressWatchdog) {
+                    _progressWatchdog->stop();
+                }
+            }, Qt::BlockingQueuedConnection);
     connect(_thread, &DownloadThread::eventDriveMbrZeroing,
             this, [this](quint32 durationMs, bool success, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DriveMbrZeroing, durationMs, success, metadata);
@@ -4176,6 +4188,18 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
                     _progressWatchdog->start(_thread);
                 }
             });
+    // Stop the watchdog before the post-write sync. The fdatasync/fsync can
+    // block for minutes on slow cards and no progress indicators advance during
+    // it, so the watchdog would otherwise fire a false stall timeout.
+    // BlockingQueuedConnection ensures the watchdog is stopped before the
+    // download thread enters fdatasync (safe — main thread never waits on
+    // the download thread during normal operation).
+    connect(_thread, &DownloadThread::finalSyncStarting,
+            this, [this](){
+                if (_progressWatchdog) {
+                    _progressWatchdog->stop();
+                }
+            }, Qt::BlockingQueuedConnection);
     connect(_thread, &DownloadThread::eventDriveMbrZeroing,
             this, [this](quint32 durationMs, bool success, QString metadata){
                 _performanceStats->recordEvent(PerformanceStats::EventType::DriveMbrZeroing, durationMs, success, metadata);
