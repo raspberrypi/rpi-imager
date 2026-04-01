@@ -222,6 +222,13 @@ struct DeviceDescriptor {
     std::vector<uint8_t> usbPortPath;   ///< USB port numbers for multi-device tracking
     std::string rpibootChipName;        ///< Human-readable chip name (e.g. "BCM2711")
 
+    // Fastboot storage fields (block device on a fastboot-mode Compute Module)
+    bool isFastbootStorage = false;      ///< Device is a block device queried via fastboot
+    std::string fastbootId;              ///< "bus:addr" for USB transport
+    std::string fastbootBlockDevice;     ///< e.g., "mmcblk0", "nvme0n1"
+    std::string fastbootStorageType;     ///< "emmc", "sd", "nvme", "usb", "scsi"
+    std::vector<uint8_t> fastbootPortPath; ///< USB port path for multi-device tracking
+
     /**
      * @brief Check if this device should be shown in the UI
      *
@@ -234,8 +241,9 @@ struct DeviceDescriptor {
      * @return true if device should be displayed to user
      */
     [[nodiscard]] bool isDisplayable() const noexcept {
-        // rpiboot devices are always displayable despite having size == 0
+        // rpiboot and fastboot storage devices are always displayable
         if (isRpiboot) return true;
+        if (isFastbootStorage) return true;
 
         // Skip zero-sized devices
         if (size == 0) return false;
@@ -272,6 +280,15 @@ struct DeviceDescriptor {
      * @return String combining device path and size
      */
     [[nodiscard]] std::string uniqueKey() const {
+        if (isFastbootStorage) {
+            std::string key = "fastboot:";
+            for (size_t i = 0; i < fastbootPortPath.size(); ++i) {
+                if (i > 0) key += '.';
+                key += std::to_string(fastbootPortPath[i]);
+            }
+            key += ":" + fastbootBlockDevice;
+            return key;
+        }
         if (isRpiboot) {
             std::string key = "rpiboot:" + rpibootChipName + ":";
             for (size_t i = 0; i < usbPortPath.size(); ++i) {

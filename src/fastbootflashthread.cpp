@@ -32,6 +32,7 @@ using rpiboot::FASTBOOT_PID;
 static constexpr uint32_t DEFAULT_MAX_DOWNLOAD_SIZE = 256 * 1024 * 1024;  // 256 MB
 
 FastbootFlashThread::FastbootFlashThread(const QString& fastbootId,
+                                           const QString& blockDevice,
                                            const QUrl& imageUrl,
                                            quint64 downloadLen,
                                            quint64 extractLen,
@@ -39,6 +40,7 @@ FastbootFlashThread::FastbootFlashThread(const QString& fastbootId,
                                            QObject* parent)
     : QThread(parent)
     , _fastbootId(fastbootId)
+    , _blockDevice(blockDevice)
     , _imageUrl(imageUrl)
     , _downloadLen(downloadLen)
     , _extractLen(extractLen)
@@ -596,7 +598,7 @@ void FastbootFlashThread::runImpl()
         }
 
         qDebug() << "FastbootFlashThread: flashing segment" << segmentIndex;
-        if (!fb.flash(*transport, "mmcblk0", 120000)) {
+        if (!fb.flash(*transport, _blockDevice.toStdString(), 120000)) {
             qDebug() << "FastbootFlashThread: flash FAILED for segment"
                      << segmentIndex << ":" << QString::fromStdString(fb.lastError());
             if (!_cancelled.load())

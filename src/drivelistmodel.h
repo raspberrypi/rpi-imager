@@ -77,9 +77,12 @@ public:
      */
     QString lastError() const { return _lastError; }
 
+    void setFastbootScanEnabled(bool enabled);
+
     enum driveListRoles {
         deviceRole = Qt::UserRole + 1, descriptionRole, sizeRole, isUsbRole, isScsiRole, isReadOnlyRole, isSystemRole, mountpointsRole, childDevicesRole,
-        isRpibootRole
+        isRpibootRole,
+        isFastbootStorageRole, fastbootBlockDeviceRole, fastbootStorageTypeRole
     };
 
 signals:
@@ -104,6 +107,10 @@ signals:
      * offer troubleshooting steps (e.g., "Try running as administrator").
      */
     void enumerationError(const QString &errorMessage);
+
+    void rpibootDeviceDetected(const QString &deviceId,
+                               uint8_t busNumber, uint8_t deviceAddress,
+                               const QList<uint8_t> &portPath, uint16_t productId);
 
 public slots:
     void processDriveList(std::vector<Drivelist::DeviceDescriptor> l);

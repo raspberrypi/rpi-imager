@@ -344,6 +344,9 @@ public:
     /* Returns true if the current target is an rpiboot device */
     Q_INVOKABLE bool isRpibootDevice() const;
 
+    /* Set a fastboot storage device as the write target */
+    Q_INVOKABLE void setFastbootDevice(const QString &device, quint64 size);
+
     /* Performance data export - opens native save dialog and writes performance data to file.
        If native dialogs aren't available, emits performanceSaveDialogNeeded for QML fallback. */
     Q_INVOKABLE bool exportPerformanceData();
@@ -422,6 +425,11 @@ protected slots:
     void onOsListRefreshTimeout();
     void onRpibootFastbootReady(const QString &fastbootId);
     void onRpibootError(const QString &msg);
+    void onRpibootDeviceDetected(const QString &deviceId,
+                                  uint8_t busNumber, uint8_t deviceAddress,
+                                  const QList<uint8_t> &portPath, uint16_t productId);
+    void onBootstrapComplete(const QString &portPathKey, const QString &fastbootId);
+    void onBootstrapError(const QString &portPathKey, const QString &msg);
 
 private:
     void setWriteState(WriteState state);
@@ -500,6 +508,15 @@ protected:
     RpibootThread *_rpibootThread = nullptr;
     FastbootFlashThread *_fastbootFlashThread = nullptr;
     rpiboot::SideloadMode _rpibootSideloadMode = rpiboot::SideloadMode::Fastboot;
+
+    // Fastboot storage device selection (pre-bootstrapped)
+    bool _isFastbootDevice = false;
+    QString _fastbootId;
+    QString _fastbootBlockDevice;
+
+    // Auto-bootstrap tracking
+    QSet<QString> _bootstrappingDevices;           // port path keys in progress
+    QMap<QString, RpibootThread*> _activeBootstrapThreads;
 
     void _parseCompressedFile();
     void _parseXZFile();
