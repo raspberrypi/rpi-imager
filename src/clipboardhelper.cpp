@@ -53,3 +53,12 @@ bool ClipboardHelper::hasText() const
     return false;
 }
 
+void ClipboardHelper::refresh()
+{
+    // Force re-evaluation of the hasText property.
+    // On Linux (X11/Wayland), QClipboard::dataChanged is not reliably
+    // emitted for external clipboard changes, so we emit manually
+    // when the context menu is about to show.
+    emit clipboardChanged();
+}
+

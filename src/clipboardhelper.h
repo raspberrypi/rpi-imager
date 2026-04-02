@@ -24,6 +24,7 @@ public:
     Q_INVOKABLE void setText(const QString &text);
     Q_INVOKABLE QString getText() const;
     bool hasText() const;
+    Q_INVOKABLE void refresh();
 
 signals:
     void clipboardChanged();

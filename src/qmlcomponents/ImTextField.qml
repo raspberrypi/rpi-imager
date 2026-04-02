@@ -68,7 +68,12 @@ TextField {
     
     Menu {
         id: contextMenu
-        
+
+        // On Linux (X11/Wayland), QClipboard::dataChanged is not reliably
+        // emitted for external clipboard changes, so force a fresh check
+        // each time the context menu opens.
+        onAboutToShow: ClipboardHelper.refresh()
+
         MenuItem {
             text: qsTr("Cut")
             enabled: root.selectedText.length > 0 && !root.readOnly && root.echoMode === TextInput.Normal
