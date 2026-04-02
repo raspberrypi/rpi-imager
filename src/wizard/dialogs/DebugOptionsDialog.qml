@@ -36,7 +36,7 @@ BaseDialog {
             return []
         }, 0)
         registerFocusGroup("options", function(){ 
-            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem, chkSkipEndOfDevice.focusItem, chkRpiboot.focusItem]
+            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem, chkSkipEndOfDevice.focusItem, chkRpiboot.focusItem, browseGadgetButton]
         }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, applyButton]
@@ -311,6 +311,68 @@ BaseDialog {
                 }
             }
 
+            // Custom fastboot gadget file picker (only visible when rpiboot enabled)
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: Style.spacingLarge
+                visible: chkRpiboot.checked
+                spacing: Style.spacingSmall
+
+                Text {
+                    text: qsTr("Custom Fastboot Gadget:")
+                    font.pointSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    color: Style.formLabelColor
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Text {
+                    id: gadgetPathText
+                    text: gadgetPathText.gadgetPath || qsTr("(default)")
+                    font.pointSize: Style.fontSizeDescription
+                    font.family: Style.fontFamily
+                    font.italic: !gadgetPathText.gadgetPath
+                    color: gadgetPathText.gadgetPath ? Style.formLabelColor : Style.textDescriptionColor
+                    Layout.fillWidth: true
+                    elide: Text.ElideMiddle
+                    Layout.alignment: Qt.AlignVCenter
+
+                    property string gadgetPath: ""
+                }
+
+                ImButton {
+                    id: browseGadgetButton
+                    text: qsTr("Browse...")
+                    accessibleDescription: qsTr("Select a local fastboot gadget boot.img file")
+                    Layout.minimumWidth: 80
+                    activeFocusOnTab: true
+                    onClicked: {
+                        gadgetFileDialog.open()
+                    }
+                }
+
+                ImButton {
+                    text: qsTr("Clear")
+                    accessibleDescription: qsTr("Revert to the default fastboot gadget from GitHub")
+                    Layout.minimumWidth: 60
+                    activeFocusOnTab: true
+                    visible: !!gadgetPathText.gadgetPath
+                    onClicked: {
+                        gadgetPathText.gadgetPath = ""
+                    }
+                }
+            }
+
+            ImFileDialog {
+                id: gadgetFileDialog
+                parent: popup.parent
+                dialogTitle: qsTr("Select Fastboot Gadget Image")
+                nameFilters: [qsTr("Boot images (*.img *.bin)"), qsTr("All files (*)")]
+                onAccepted: {
+                    gadgetPathText.gadgetPath = selectedFile
+                }
+            }
+
             // Status display
             Rectangle {
                 Layout.fillWidth: true
@@ -344,6 +406,8 @@ BaseDialog {
                             lines.push("IPv4-only: " + (chkIPv4Only.checked ? "Enabled" : "Disabled"));
                             lines.push("Counterfeit Card Mode: " + (chkSkipEndOfDevice.checked ? "Enabled" : "Disabled"));
                             lines.push("Rpiboot/Fastboot: " + (chkRpiboot.checked ? "Enabled" : "Disabled"));
+                            if (chkRpiboot.checked && gadgetPathText.gadgetPath)
+                                lines.push("Custom Gadget: " + gadgetPathText.gadgetPath);
                             if (chkDirectIO.checked && chkAsyncIO.checked) {
                                 lines.push("✓ Optimal: Direct I/O + Async I/O for best performance");
                             } else if (chkDirectIO.checked) {
@@ -425,6 +489,7 @@ BaseDialog {
             chkIPv4Only.checked = imageWriter.getDebugIPv4Only();
             chkSkipEndOfDevice.checked = imageWriter.getDebugSkipEndOfDevice();
             chkRpiboot.checked = imageWriter.getDebugRpiboot();
+            gadgetPathText.gadgetPath = imageWriter.getDebugCustomFastbootGadget();
 
             initialized = true;
             isInitializing = false;
@@ -441,6 +506,7 @@ BaseDialog {
         imageWriter.setDebugIPv4Only(chkIPv4Only.checked);
         imageWriter.setDebugSkipEndOfDevice(chkSkipEndOfDevice.checked);
         imageWriter.setDebugRpiboot(chkRpiboot.checked);
+        imageWriter.setDebugCustomFastbootGadget(gadgetPathText.gadgetPath || "");
 
         console.log("Debug options applied: DirectIO=" + chkDirectIO.checked +
                     ", AsyncIO=" + chkAsyncIO.checked +

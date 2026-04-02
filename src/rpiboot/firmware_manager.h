@@ -39,6 +39,13 @@ public:
     // Return the cache root (platform-appropriate app data directory)
     std::filesystem::path cacheRoot() const;
 
+    // Set a local fastboot gadget image (boot.img) to use instead of
+    // downloading from GitHub.  When non-empty, ensureAvailable() copies
+    // this file into the cache as fastboot/boot.img, bypassing the
+    // remote download for that entry.
+    void setCustomFastbootGadget(const std::string& path) { _customFastbootGadget = path; }
+    const std::string& customFastbootGadget() const { return _customFastbootGadget; }
+
     // Clear all cached firmware
     void clearCache();
 
@@ -81,6 +88,7 @@ private:
                                        ChipGeneration chip);
 
     std::string _lastError;
+    std::string _customFastbootGadget;
 };
 
 } // namespace rpiboot

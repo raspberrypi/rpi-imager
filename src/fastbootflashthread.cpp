@@ -16,6 +16,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QScopeGuard>
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -104,7 +105,27 @@ bool FastbootFlashThread::applyCustomisation(fastboot::FastbootProtocol& fb,
              << "cmdline=" << _cmdline.size() << "bytes"
              << "cloudinit=" << _cloudinit.size() << "bytes";
 
-    static const std::string BOOT = "/boot/firmware/";
+    // Mount the boot partition on the device so file I/O commands can
+    // reach the filesystem we just flashed.
+    static const std::string MOUNTPOINT = "/mnt/bootfs";
+    std::string bootPartition = _blockDevice.toStdString() + "p1";
+
+    if (!fb.mountDevice(transport, bootPartition, MOUNTPOINT, "vfat")) {
+        emit error(tr("Failed to mount boot partition: %1")
+                   .arg(QString::fromStdString(fb.lastError())));
+        return false;
+    }
+
+    // All file paths are relative to the mountpoint
+    static const std::string BOOT = MOUNTPOINT + "/";
+
+    // Ensure umount happens even on early return
+    auto umountGuard = qScopeGuard([&] {
+        if (!fb.umountDevice(transport, MOUNTPOINT)) {
+            qWarning() << "applyCustomisation: umount failed:"
+                       << QString::fromStdString(fb.lastError());
+        }
+    });
 
     // Helper: QByteArray → span
     auto toSpan = [](const QByteArray& ba) {
