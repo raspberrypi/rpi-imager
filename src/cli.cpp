@@ -58,6 +58,7 @@ int Cli::run()
         {"quiet", "Only write to console on error"},
         {"log-file", "Log output to file (for debugging)", "path", ""},
         {"secure-boot-key", "Path to RSA private key (PEM format) for secure boot signing", "key-file", ""},
+        {"non-root", "Allow running without elevated privileges"}
     });
 
     parser.addPositionalArgument("src", "Image file/URL");
@@ -65,7 +66,7 @@ int Cli::run()
     parser.process(*_app);
 
     // Check for elevated privileges on platforms that require them (Linux/Windows)
-    if (!PlatformQuirks::hasElevatedPrivileges())
+    if (!PlatformQuirks::hasElevatedPrivileges() && !parser.isSet("non-root"))
     {
         // Common error message
         const char* commonMsg = "Writing to storage devices requires elevated privileges.";
