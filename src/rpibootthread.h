@@ -34,6 +34,7 @@ public:
     ~RpibootThread() override;
 
     void cancel();
+    void setCustomFastbootGadget(const QString &path) { _customFastbootGadget = path; }
 
 signals:
     void success();
@@ -56,6 +57,7 @@ private:
     rpiboot::SideloadMode _mode;
     std::atomic<bool> _cancelled{false};
     std::atomic<bool> _fastbootFound{false};
+    QString _customFastbootGadget;
 };
 
 #endif // RPIBOOTTHREAD_H

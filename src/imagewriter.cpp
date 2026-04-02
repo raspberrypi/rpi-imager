@@ -957,6 +957,8 @@ void ImageWriter::startWrite()
         }
 
         _rpibootThread = new RpibootThread(devInfo, _rpibootSideloadMode, this);
+        if (!_debugCustomFastbootGadget.isEmpty())
+            _rpibootThread->setCustomFastbootGadget(_debugCustomFastbootGadget);
 
         // After sideload, start FastbootFlashThread
         connect(_rpibootThread, &RpibootThread::fastbootDeviceReady, this, &ImageWriter::onRpibootFastbootReady);
@@ -3388,6 +3390,19 @@ void ImageWriter::setDebugRpiboot(bool enabled)
         _drivelist.setRpibootEnabled(enabled);
         _drivelist.setFastbootScanEnabled(enabled);
         qDebug() << "Debug: Rpiboot/fastboot support" << (enabled ? "enabled" : "disabled");
+    }
+}
+
+QString ImageWriter::getDebugCustomFastbootGadget() const
+{
+    return _debugCustomFastbootGadget;
+}
+
+void ImageWriter::setDebugCustomFastbootGadget(const QString &path)
+{
+    if (_debugCustomFastbootGadget != path) {
+        _debugCustomFastbootGadget = path;
+        qDebug() << "Debug: Custom fastboot gadget" << (path.isEmpty() ? "cleared" : path);
     }
 }
 

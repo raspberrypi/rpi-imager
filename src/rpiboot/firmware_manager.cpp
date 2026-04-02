@@ -177,7 +177,23 @@ std::filesystem::path FirmwareManager::ensureAvailable(SideloadMode mode,
         }
     }
 
-    // 3b. Extract the correct bootcode from bootfiles.bin for chips that
+    // 3b. If a custom fastboot gadget was provided, copy it into the cache
+    // in place of the downloaded fastboot-gadget.img.
+    if (mode == SideloadMode::Fastboot && !_customFastbootGadget.empty()) {
+        auto gadgetDest = versionDir / "fastboot" / "boot.img";
+        std::filesystem::create_directories(gadgetDest.parent_path(), ec);
+        qDebug() << "FirmwareManager: using custom fastboot gadget:"
+                 << QString::fromStdString(_customFastbootGadget);
+        std::error_code copyEc;
+        std::filesystem::copy_file(_customFastbootGadget, gadgetDest,
+                                    std::filesystem::copy_options::overwrite_existing, copyEc);
+        if (copyEc) {
+            _lastError = "Failed to copy custom fastboot gadget: " + copyEc.message();
+            return {};
+        }
+    }
+
+    // 3c. Extract the correct bootcode from bootfiles.bin for chips that
     // need it (BCM2711 → bootcode4.bin, BCM2712 → bootcode5.bin).
     if (needsBootcodeExtraction) {
         if (!extractBootcodeFromBootfiles(versionDir, chip))

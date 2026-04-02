@@ -279,6 +279,8 @@ public:
     Q_INVOKABLE void setDebugSkipEndOfDevice(bool enabled);
     Q_INVOKABLE bool getDebugRpiboot() const;
     Q_INVOKABLE void setDebugRpiboot(bool enabled);
+    Q_INVOKABLE QString getDebugCustomFastbootGadget() const;
+    Q_INVOKABLE void setDebugCustomFastbootGadget(const QString &path);
 
     // Customisation API
     Q_INVOKABLE void applyCustomisationFromSettings(const QVariantMap &settings);  // Main entry: generates scripts from settings
@@ -502,6 +504,7 @@ protected:
     bool _debugIPv4Only;
     bool _debugSkipEndOfDevice;
     bool _debugRpiboot;
+    QString _debugCustomFastbootGadget;
 
     QString _rpibootDeviceId;
     bool _isRpibootDevice = false;

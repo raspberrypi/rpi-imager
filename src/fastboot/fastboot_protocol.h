@@ -80,6 +80,18 @@ public:
                     rpiboot::ProgressCallback progress,
                     std::atomic<bool>& cancelled);
 
+    // Mount a block device partition on the device.
+    // Sends "oem mount <device> <mountpoint> [fstype]".
+    bool mountDevice(rpiboot::IUsbTransport& transport,
+                     std::string_view device,
+                     std::string_view mountpoint,
+                     std::string_view fstype = {});
+
+    // Unmount a mountpoint on the device.
+    // Sends "oem umount <mountpoint>".
+    bool umountDevice(rpiboot::IUsbTransport& transport,
+                      std::string_view mountpoint);
+
     // Write a file to the device filesystem.
     // Stages the data, then sends "oem download-file <devicePath>".
     bool writeDeviceFile(rpiboot::IUsbTransport& transport,

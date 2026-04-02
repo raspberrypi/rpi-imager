@@ -49,6 +49,8 @@ void RpibootThread::run()
     phaseTimer.start();
 
     FirmwareManager fwMgr;
+    if (!_customFastbootGadget.isEmpty())
+        fwMgr.setCustomFastbootGadget(_customFastbootGadget.toStdString());
     auto fwDir = fwMgr.ensureAvailable(_mode, _device.chipGeneration,
         [this](uint64_t current, uint64_t total, const std::string& status) {
             emit preparationStatusUpdate(QString::fromStdString(status));

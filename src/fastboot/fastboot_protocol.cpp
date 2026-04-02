@@ -234,6 +234,36 @@ std::vector<uint8_t> FastbootProtocol::upload(rpiboot::IUsbTransport& transport,
     return result;
 }
 
+// ── Device mount/umount ─────────────────────────────────────────────
+
+bool FastbootProtocol::mountDevice(rpiboot::IUsbTransport& transport,
+                                    std::string_view device,
+                                    std::string_view mountpoint,
+                                    std::string_view fstype)
+{
+    std::string cmd = "oem mount " + std::string(device) + " " + std::string(mountpoint);
+    if (!fstype.empty())
+        cmd += " " + std::string(fstype);
+
+    auto resp = sendCommand(transport, cmd, 30000);
+    if (resp.type != Response::Okay) {
+        _lastError = "oem mount failed: " + resp.message;
+        return false;
+    }
+    return true;
+}
+
+bool FastbootProtocol::umountDevice(rpiboot::IUsbTransport& transport,
+                                     std::string_view mountpoint)
+{
+    auto resp = sendCommand(transport, "oem umount " + std::string(mountpoint), 30000);
+    if (resp.type != Response::Okay) {
+        _lastError = "oem umount failed: " + resp.message;
+        return false;
+    }
+    return true;
+}
+
 // ── Device file transfer convenience methods ──────────────────────────
 
 bool FastbootProtocol::writeDeviceFile(rpiboot::IUsbTransport& transport,
