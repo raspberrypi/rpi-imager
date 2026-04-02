@@ -726,7 +726,13 @@ TEST_CASE("CustomisationGenerator cloud-init passwordless sudo when explicitly e
     QString yaml = QString::fromUtf8(userdata);
 
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
+    // sudo: user property for standard cloud-init
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("sudo: ALL=(ALL) NOPASSWD:ALL"));
+    // runcmd fallback for implementations that don't process sudo: user property
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("runcmd:"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("testuser ALL=(ALL) NOPASSWD:ALL"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("/etc/sudoers.d/010_testuser-nopasswd"));
+    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("chmod"));
 }
 
 TEST_CASE("CustomisationGenerator cloud-init no passwordless sudo by default", "[cloudinit][userdata][sudo]") {
