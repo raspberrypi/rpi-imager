@@ -384,13 +384,13 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     // - SSH is enabled with public keys (key-only authentication needs a user)
     const bool hasUserCredentials = !userName.isEmpty() && !userPass.isEmpty();
     const bool hasSshKeys = sshEnabled && (!sshPublicKey.isEmpty() || !sshAuthorizedKeys.isEmpty());
-    
+
+    // Determine effective username (used by both users: section and runcmd)
+    const QString effectiveUser = userName.isEmpty() ? (sshEnabled ? currentUser : QStringLiteral("pi")) : userName;
+    const bool needsRuncmdForSudo = passwordlessSudo && (hasUserCredentials || hasSshKeys);
+
     if (hasUserCredentials || hasSshKeys) {
         push(QStringLiteral("users:"), cloud);
-        // Determine effective username:
-        // - Use provided username if available
-        // - For SSH-only with keys, fall back to current system user or "pi"
-        const QString effectiveUser = userName.isEmpty() ? (sshEnabled ? currentUser : QStringLiteral("pi")) : userName;
         push(QStringLiteral("- name: ") + effectiveUser, cloud);
         push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
         push(QStringLiteral("  shell: /bin/bash"), cloud);
@@ -498,15 +498,23 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     // Only create runcmd if we actually have commands to add
     bool needsRuncmdForWifi = !wifiCountry.isEmpty() && ssid.isEmpty();
     bool needsRuncmdForPiConnect = piConnectEnabled && !cleanToken.isEmpty();
-    bool needsRuncmd = needsRuncmdForPiConnect || needsRuncmdForWifi;
-    
+    bool needsRuncmd = needsRuncmdForPiConnect || needsRuncmdForWifi || needsRuncmdForSudo;
+
     if (needsRuncmd) {
         push(QString(), cloud);
         push(QStringLiteral("runcmd:"), cloud);
-        
+
+        // Passwordless sudo: create sudoers file explicitly via runcmd.
+        // The sudo: user property works on standard cloud-init but is not
+        // reliably processed by all implementations (e.g. cc_raspberry_pi).
+        // Creating the file directly matches the systemd firstrun.sh approach.
+        if (needsRuncmdForSudo) {
+            const QString sudoersFile = QStringLiteral("/etc/sudoers.d/010_") + effectiveUser + QStringLiteral("-nopasswd");
+            push(QStringLiteral("  - [ sh, -c, \"echo '") + effectiveUser + QStringLiteral(" ALL=(ALL) NOPASSWD:ALL' >") + sudoersFile + QStringLiteral("\" ]"), cloud);
+            push(QStringLiteral("  - [ chmod, '0440', '") + sudoersFile + QStringLiteral("' ]"), cloud);
+        }
+
         if (needsRuncmdForPiConnect) {
-            // Use the same effective user logic as user configuration above
-            const QString effectiveUser = userName.isEmpty() ? (sshEnabled ? currentUser : QStringLiteral("pi")) : userName;
             const QString configDir = QStringLiteral("/home/") + effectiveUser + QStringLiteral("/") + PI_CONNECT_CONFIG_PATH;
             const QString targetPath = configDir + QStringLiteral("/") + PI_CONNECT_DEPLOY_KEY_FILENAME;
             
