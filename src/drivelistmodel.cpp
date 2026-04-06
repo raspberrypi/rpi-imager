@@ -8,6 +8,7 @@
 #include "drivelist/drivelist.h"
 #include <QSet>
 #include <QDebug>
+#include <QFile>
 
 DriveListModel::DriveListModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -116,6 +117,17 @@ void DriveListModel::processDriveList(std::vector<Drivelist::DeviceDescriptor> l
 
         // Should already be caught by isSystem variable, but just in case...
         if (mountpoints.contains("/") || mountpoints.contains("C://"))
+            continue;
+
+        // Hide drives that have an .rpiignore file on any mountpoint
+        bool hasRpiIgnore = false;
+        for (const auto &mountpoint : mountpoints) {
+            if (QFile::exists(mountpoint + "/.rpiignore")) {
+                hasRpiIgnore = true;
+                break;
+            }
+        }
+        if (hasRpiIgnore)
             continue;
 
         bool isRpibootDevice = i.isRpiboot;
