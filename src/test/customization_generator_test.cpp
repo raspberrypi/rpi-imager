@@ -665,7 +665,6 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with SSH user",
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("enable_ssh: true"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: testuser"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     // Password hash should be quoted for proper YAML parsing
@@ -686,7 +685,6 @@ TEST_CASE("CustomisationGenerator generates cloud-init user-data with user crede
     // User configuration MUST be generated even without SSH
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: localuser"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$5$fakesalt$fakehash456\""));
@@ -1173,7 +1171,6 @@ TEST_CASE("Independent step: User credentials only (no SSH)", "[cloudinit][indep
     // User configuration MUST be generated independently of SSH
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("users:"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("- name: alice"));
-    REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("shell: /bin/bash"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("lock_passwd: false"));
     REQUIRE_THAT(yaml.toStdString(), ContainsSubstring("passwd: \"$6$rounds=4096$salt$hashvalue\""));

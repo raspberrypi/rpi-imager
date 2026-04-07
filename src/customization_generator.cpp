@@ -108,7 +108,6 @@ QByteArray CustomisationGenerator::generateSystemdScript(const QVariantMap& s, c
 
     const bool passwordlessSudo = s.value("passwordlessSudo").toBool();
     const QString effectiveUser = userName.isEmpty() ? QStringLiteral("pi") : userName;
-    const QString groups = QStringLiteral("users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo");
 
     line(QStringLiteral("#!/bin/sh"), script);
     line(QStringLiteral(""), script);
@@ -392,7 +391,6 @@ QByteArray CustomisationGenerator::generateCloudInitUserData(const QVariantMap& 
     if (hasUserCredentials || hasSshKeys) {
         push(QStringLiteral("users:"), cloud);
         push(QStringLiteral("- name: ") + effectiveUser, cloud);
-        push(QStringLiteral("  groups: users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo"), cloud);
         push(QStringLiteral("  shell: /bin/bash"), cloud);
         
         if (!userPass.isEmpty()) {
