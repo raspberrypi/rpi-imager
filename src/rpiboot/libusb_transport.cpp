@@ -7,6 +7,7 @@
 #include <libusb.h>
 #include <cstring>
 #include <stdexcept>
+#include <thread>
 #include <QDebug>
 
 namespace rpiboot {
@@ -255,24 +256,46 @@ int LibusbTransport::bulkWrite(uint8_t endpoint,
     if (!_handle)
         return -1;
 
-    int transferred = 0;
-    int rc = libusb_bulk_transfer(
-        _handle, endpoint,
-        const_cast<uint8_t*>(data.data()),
-        static_cast<int>(data.size()),
-        &transferred,
-        static_cast<unsigned int>(timeoutMs));
+    constexpr int MAX_RETRIES = 3;
+    constexpr int RETRY_DELAY_MS = 50;
 
-    if (rc == LIBUSB_SUCCESS || rc == LIBUSB_ERROR_TIMEOUT) {
-        if (transferred < static_cast<int>(data.size()))
-            qDebug() << "rpiboot: bulkWrite partial: requested" << (int)data.size()
-                     << "transferred" << transferred
-                     << "(ep=0x" << Qt::hex << (int)endpoint << ")";
-        return transferred;
+    for (int attempt = 0; ; ++attempt) {
+        int transferred = 0;
+        int rc = libusb_bulk_transfer(
+            _handle, endpoint,
+            const_cast<uint8_t*>(data.data()),
+            static_cast<int>(data.size()),
+            &transferred,
+            static_cast<unsigned int>(timeoutMs));
+
+        if (rc == LIBUSB_SUCCESS || rc == LIBUSB_ERROR_TIMEOUT) {
+            if (transferred < static_cast<int>(data.size()))
+                qDebug() << "rpiboot: bulkWrite partial: requested" << (int)data.size()
+                         << "transferred" << transferred
+                         << "(ep=0x" << Qt::hex << (int)endpoint << ")";
+            return transferred;
+        }
+
+        // Only retry transient USB errors; fatal errors (NO_DEVICE, ACCESS,
+        // INVALID_PARAM, NOT_SUPPORTED) are returned immediately.
+        bool retriable = (rc == LIBUSB_ERROR_IO ||
+                          rc == LIBUSB_ERROR_PIPE ||
+                          rc == LIBUSB_ERROR_INTERRUPTED ||
+                          rc == LIBUSB_ERROR_OTHER);
+
+        if (!retriable || attempt >= MAX_RETRIES)
+            return rc;
+
+        qDebug() << "rpiboot: bulkWrite error" << rc
+                 << "on ep=0x" << Qt::hex << (int)endpoint << Qt::dec
+                 << "— retry" << (attempt + 1) << "/" << MAX_RETRIES;
+
+        // Clear endpoint halt on pipe (stall) errors before retrying
+        if (rc == LIBUSB_ERROR_PIPE)
+            libusb_clear_halt(_handle, endpoint);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_DELAY_MS));
     }
-
-    // Return the negative libusb error code so callers can report it
-    return rc;
 }
 
 int LibusbTransport::bulkRead(uint8_t endpoint,
