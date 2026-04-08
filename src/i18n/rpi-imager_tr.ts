@@ -53,7 +53,7 @@
     </message>
     <message>
         <source>Save the selected options and apply them to Raspberry Pi Imager</source>
-        <translation>Seçilen seçenekleri kaydet ve Raspberry Pi Imager'a uygula</translation>
+        <translation>Seçilen seçenekleri kaydet ve Raspberry Pi Imager&apos;a uygula</translation>
     </message>
     <message>
         <source>Keep warnings enabled and return to the options dialog</source>
@@ -73,7 +73,7 @@
     </message>
     <message>
         <source>Send anonymous usage statistics to help improve Raspberry Pi Imager</source>
-        <translation>Raspberry Pi Imager'ı geliştirmeye yardımcı olmak için anonim kullanım istatistikleri gönder</translation>
+        <translation>Raspberry Pi Imager&apos;ı geliştirmeye yardımcı olmak için anonim kullanım istatistikleri gönder</translation>
     </message>
     <message>
         <source>Skip confirmation dialogs before writing images (advanced users only)</source>
@@ -115,6 +115,42 @@
         <source>All Files (*)</source>
         <translation>Tüm Dosyalar (*)</translation>
     </message>
+    <message>
+        <source>Audio notification unavailable - no viable audio player found on this system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved Customisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove all saved OS customisation settings such as hostname, WiFi, and user credentials</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Version: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear saved customisation?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep saved customisation settings and return to the options dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove all saved OS customisation settings permanently</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>AsyncCacheWriter</name>
@@ -144,10 +180,6 @@
     <message>
         <source>Image files (%1)</source>
         <translation>İmaj dosyaları (%1)</translation>
-    </message>
-    <message>
-        <source>Imager Repository Files (*.json)</source>
-        <translation>Imager Depo Dosyaları (*.json)</translation>
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
@@ -257,6 +289,69 @@
         <source>Authorized keys files (authorized_keys)</source>
         <translation>Yetkilendirilmiş anahtar dosyaları (authorized_keys)</translation>
     </message>
+    <message>
+        <source>Imager Repository Files (*.json *.%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ConfirmOtpProgramDialog</name>
+    <message>
+        <source>WARNING: OTP Programming is PERMANENT and IRREVERSIBLE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This operation will permanently program the secure boot public key hash into the device&apos;s one-time programmable (OTP) memory. Once programmed, this device will ONLY boot images signed with the corresponding private key. This action cannot be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Key fingerprint: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Also lock JTAG debug port (additional irreversible action)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>To confirm, type the device serial number below:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial to type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Type device serial number exactly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirmation input. Type exactly: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished">İPTAL</translation>
+    </message>
+    <message>
+        <source>Cancel OTP programming and return to previous screen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PROGRAM OTP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Permanently program the secure boot key into device OTP memory</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmSystemDriveDialog</name>
@@ -333,6 +428,161 @@
     </message>
 </context>
 <context>
+    <name>DebugOptionsDialog</name>
+    <message>
+        <source>Debug Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I/O Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Direct I/O (F_NOCACHE / O_DIRECT)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Async I/O</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Queue Depth:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Async queue depth: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Buffer memory: ~%1-%2 MB (varies by system RAM)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Periodic Sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Debugging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verbose Performance Logging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Log detailed timing information for each write operation to help diagnose performance issues.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Network Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Force IPv4-only Downloads</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workarounds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Counterfeit Card Mode (skip end-of-device checks)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Advanced Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Rpiboot/Fastboot Support</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Custom Fastboot Gadget:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(default)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select a local fastboot gadget boot.img file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Revert to the default fastboot gadget from GitHub</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Fastboot Gadget Image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Boot images (*.img *.bin)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
+        <translation type="unfinished">Tüm dosyalar (*)</translation>
+    </message>
+    <message>
+        <source>Current Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the debug options dialog without saving any changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply the selected debug options</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>DeviceSelectionStep</name>
     <message>
         <source>Select your Raspberry Pi device</source>
@@ -357,6 +607,28 @@
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
         <translation>Gezinmek için ok tuşlarını, seçmek için Enter veya Boşluk tuşunu kullanın</translation>
+    </message>
+    <message>
+        <source>Unable to load device list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The device list could not be downloaded. Please check your internet connection and try again.
+
+You can still write a local image file by pressing Next and selecting &apos;Use custom&apos; on the following screen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry downloading the device list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connected via USB</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -403,7 +675,7 @@
     </message>
     <message>
         <source>Close Raspberry Pi Imager and exit the application</source>
-        <translation>Raspberry Pi Imager'ı kapat ve uygulamadan çık</translation>
+        <translation>Raspberry Pi Imager&apos;ı kapat ve uygulamadan çık</translation>
     </message>
     <message>
         <source>Return to storage selection to write the same image to another storage device</source>
@@ -437,12 +709,30 @@
         <translation>Dizin değiştirirken hata oluştu &apos;%1&apos;</translation>
     </message>
     <message>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>Depolamadan okuma hatası.&lt;br&gt;SD kart arızalı olabilir.</translation>
+        <source>The write operation has stalled.
+
+No data has been written for 30 seconds. This could be caused by:
+• Storage device disconnected or unresponsive
+• Device has failed or is faulty
+• System resource exhaustion
+
+Please check the storage device and try again.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>Yazma doğrulanamadı. SD kartın içeriği, üzerine yazılandan farklı.</translation>
+        <source>Failed to acquire write buffer slot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The download has stalled.
+
+No data received for 30 seconds. This could be caused by:
+• Network connection lost or unstable
+• Remote server became unresponsive
+• Firewall or proxy blocking the connection
+
+Please check your network connection and try again.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -456,32 +746,12 @@
         <translation>Depolama cihazı açılamıyor &apos;%1&apos;.</translation>
     </message>
     <message>
-        <source>Write error while zero&apos;ing out MBR</source>
-        <translation>MBR sıfırlanırken yazma hatası</translation>
-    </message>
-    <message>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>Kartın son kısmını sıfırlamaya çalışırken yazma hatası. Kart yanlış kapasite bildiriyor olabilir (olası sahte ürün).</translation>
-    </message>
-    <message>
         <source>Error downloading: %1</source>
         <translation>İndirilirken hata oluştu: %1</translation>
     </message>
     <message>
         <source>Access denied error while writing file to disk.</source>
         <translation>Dosyayı diske yazarken erişim reddedildi hatası.</translation>
-    </message>
-    <message>
-        <source>Error writing to storage (while flushing)</source>
-        <translation>Depolama alanına yazma hatası (flushing sırasında)</translation>
-    </message>
-    <message>
-        <source>Error writing to storage (while fsync)</source>
-        <translation>Depoya yazma hatası (fsync sırasında)</translation>
-    </message>
-    <message>
-        <source>Error writing first block (partition table)</source>
-        <translation>İlk bloğu yazma hatası (bölüm tablosu)</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
@@ -540,10 +810,6 @@
         <translation>Disk aygıtı açılırken hata oluştu: &apos;%1&apos;</translation>
     </message>
     <message>
-        <source>Error getting device size</source>
-        <translation>Cihaz boyutu alınırken hata oluştu</translation>
-    </message>
-    <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
         <translation>Depolama aygıtına yazılırken hata oluştu. Lütfen cihazın yazılabilir olduğunu, yeterli alana sahip olduğunu ve yazma korumalı olmadığını kontrol edin.</translation>
     </message>
@@ -556,12 +822,8 @@
         <translation>Sürücü açılıyor...</translation>
     </message>
     <message>
-        <source>Discarding existing data on drive...</source>
-        <translation>Sürücüdeki mevcut veriler atılıyor...</translation>
-    </message>
-    <message>
         <source>Zero&apos;ing out first and last MB of drive...</source>
-        <translation>Sürücünün ilk ve son MB'ı sıfırlanıyor...</translation>
+        <translation>Sürücünün ilk ve son MB&apos;ı sıfırlanıyor...</translation>
     </message>
     <message>
         <source>Starting download...</source>
@@ -668,8 +930,170 @@
         <translation>Özelleştirme dosyaları yazılıyor...</translation>
     </message>
     <message>
-        <source>Failed to allocate buffer for MBR zeroing</source>
-        <translation>MBR sıfırlama için tampon bellek ayrılamadı</translation>
+        <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>getting device size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to allocate buffer for MBR zeroing.
+
+The system may be low on memory.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>preparing storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out end of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timeout writing to end of storage device.
+
+This may indicate a counterfeit SD card with fake capacity.
+
+Please try a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write error while trying to zero out last part of card.
+
+This could indicate the card is advertising wrong capacity (possible counterfeit).
+
+Please try a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device responding slowly. Restarting in compatibility mode...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>storage operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open storage device.
+
+The device may be in use by another application, or you may not have permission to access it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to storage device during %1.
+
+This could be caused by:
+• Device disconnected or became unresponsive
+• Device is full or write-protected
+• Hardware failure or bad sectors
+
+Please check the device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error reading from storage device during %1.
+
+The device may have been disconnected or is malfunctioning.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error seeking on storage device during %1.
+
+The device may be malfunctioning or disconnected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error getting storage device size.
+
+The device may not be properly recognized.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error closing storage device.
+
+The device may have been disconnected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to lock storage device.
+
+The device may be in use by another application. Please close any applications using this device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error syncing data to storage device.
+
+The device may have been disconnected or is not responding. Data may not have been fully written.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error flushing data to storage device.
+
+The device may have been disconnected or is not responding.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device timed out during %1.
+
+The device is not responding. This may indicate:
+• Device was disconnected
+• Device has failed
+• Driver or system issue
+
+Please disconnect and reconnect the device, then try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown storage error during %1.
+
+Please try again or use a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The storage device is not responding. This may indicate:
+• The device was disconnected
+• The device has failed
+• A driver or system issue
+
+Please disconnect and reconnect the device, then try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to storage device.
+
+Some writes failed to complete. This could be caused by:
+• Storage device disconnected during write
+• Device is full or write-protected
+• Hardware failure
+
+Please check the device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>flush</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>writing partition table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>final flush</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>final sync</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -714,6 +1138,113 @@
         <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
         <translation>Cihaz biçimlendirilemiyor: yetersiz izin. Lütfen yönetici ayrıcalıklarıyla (sudo) çalıştırın.</translation>
     </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>FastbootFlashThread</name>
+    <message>
+        <source>Applying OS customisation...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to mount boot partition: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read config.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write config.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write firstrun.sh: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write meta-data: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write user-data: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write network-config: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read cmdline.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write cmdline.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to initialize curl</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No entries in image archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot error: unexpected internal error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connecting to fastboot device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open fastboot device: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Downloading and flashing OS image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fetching block map...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot download failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot flash failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Decompression failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Image hash mismatch. Expected: %1 Got: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>HWListModel</name>
@@ -726,7 +1257,7 @@
     <name>HostnameCustomizationStep</name>
     <message>
         <source>A hostname is a unique name that identifies your Raspberry Pi on the network. It should contain only letters, numbers, and hyphens.</source>
-        <translation>Ana makine adı (hostname), Raspberry Pi'nizi ağda tanımlayan benzersiz bir isimdir. Sadece harf, rakam ve tire içermelidir.</translation>
+        <translation>Ana makine adı (hostname), Raspberry Pi&apos;nizi ağda tanımlayan benzersiz bir isimdir. Sadece harf, rakam ve tire içermelidir.</translation>
     </message>
     <message>
         <source>Customisation: Choose hostname</source>
@@ -761,7 +1292,7 @@
     </message>
     <message>
         <source>Enable SPI</source>
-        <translation>SPI'yı Etkinleştir</translation>
+        <translation>SPI&apos;yı Etkinleştir</translation>
     </message>
     <message>
         <source>Enable Serial:</source>
@@ -805,11 +1336,11 @@
     </message>
     <message>
         <source>Enable I2C</source>
-        <translation>I2C'yi Etkinleştir</translation>
+        <translation>I2C&apos;yi Etkinleştir</translation>
     </message>
     <message>
         <source>Enable 1-Wire</source>
-        <translation>1-Wire'ı Etkinleştir</translation>
+        <translation>1-Wire&apos;ı Etkinleştir</translation>
     </message>
     <message>
         <source>Enable the I2C (Inter-Integrated Circuit) interface for connecting sensors and other low-speed peripherals</source>
@@ -825,7 +1356,7 @@
     </message>
     <message>
         <source>Enable USB device mode to use your Raspberry Pi as a USB peripheral for networking and storage</source>
-        <translation>Raspberry Pi'nizi ağ ve depolama için bir USB çevre birimi olarak kullanmak üzere USB cihaz modunu etkinleştirir</translation>
+        <translation>Raspberry Pi&apos;nizi ağ ve depolama için bir USB çevre birimi olarak kullanmak üzere USB cihaz modunu etkinleştirir</translation>
     </message>
     <message>
         <source>Save interface and feature settings and continue to writing step</source>
@@ -867,12 +1398,16 @@
 <context>
     <name>ImComboBox</name>
     <message>
-        <source>Type to search: &quot;%1&quot;</source>
-        <translation>Aramak için yazın: "%1"</translation>
+        <source>Search: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>(press again to cycle)</source>
-        <translation>(değiştirmek için tekrar basın)</translation>
+        <source>%1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No matches</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -943,6 +1478,10 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
         <source>Save</source>
         <translation>Kaydet</translation>
     </message>
+    <message>
+        <source>Enter folder or file path…</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImOptionButton</name>
@@ -962,11 +1501,11 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     <name>ImPasswordField</name>
     <message>
         <source>Password is visible. Press F2 to hide.</source>
-        <translation>Parola görünür. Gizlemek için F2'ye basın.</translation>
+        <translation>Parola görünür. Gizlemek için F2&apos;ye basın.</translation>
     </message>
     <message>
         <source>Password is hidden. Press F2 to show.</source>
-        <translation>Parola gizli. Göstermek için F2'ye basın.</translation>
+        <translation>Parola gizli. Göstermek için F2&apos;ye basın.</translation>
     </message>
     <message>
         <source>Hide password</source>
@@ -1021,20 +1560,12 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
 <context>
     <name>ImageWriter</name>
     <message>
-        <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation>Giriş dosyası geçerli bir disk görüntüsü değil.&lt;br&gt;%1 bayt dosya boyutu 512 baytın katı değil.</translation>
-    </message>
-    <message>
         <source>Select image</source>
         <translation>İmaj seç</translation>
     </message>
     <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
         <translation>Ethernet anahtarınızda (switch) STP etkin. IP alınması uzun sürecektir.</translation>
-    </message>
-    <message>
-        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1.</source>
-        <translation>Depolama kapasitesi yeterli değil.&lt;br&gt;En az %1 olması gerekiyor.</translation>
     </message>
     <message>
         <source>B</source>
@@ -1111,6 +1642,54 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     <message>
         <source>JSON files (*.json);;All files (*)</source>
         <translation>JSON dosyaları (*.json);;Tüm dosyalar (*)</translation>
+    </message>
+    <message>
+        <source>Starting fastboot flash...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preparing device for imaging...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage capacity is not large enough.
+
+The image requires at least %1 of storage.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input file is not a valid disk image.
+
+File size %1 bytes is not a multiple of 512 bytes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start write operation: insufficient memory.
+
+The system does not have enough available memory to perform this operation. Try closing other applications to free up memory, then try again.
+
+Technical details: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start write operation: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by download speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by decompression speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by storage device speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verifying written data</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1222,25 +1801,19 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>Choose your time zone so your Raspberry Pi displays the correct local time. This is automatically recommended based on your capital city selection, but you can change it if the suggestion is incorrect.</source>
-        <translation>Raspberry Pi'nizin doğru yerel saati göstermesi için saat diliminizi seçin. Bu, başkent seçiminize göre otomatik olarak önerilir ancak öneri yanlışsa değiştirebilirsiniz.</translation>
+        <translation>Raspberry Pi&apos;nizin doğru yerel saati göstermesi için saat diliminizi seçin. Bu, başkent seçiminize göre otomatik olarak önerilir ancak öneri yanlışsa değiştirebilirsiniz.</translation>
     </message>
     <message>
         <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
         <translation>Yazarken tuşların doğru karakterleri üretmesi için klavye düzeninizi seçin. Bu, başkent seçiminize göre otomatik olarak önerilir ancak farklı bir klavye düzeni kullanıyorsanız değiştirebilirsiniz.</translation>
     </message>
-</context>
-<context>
-    <name>MacFile</name>
     <message>
-        <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
-        <translation>Raspberry Pi Imager'ın imajı yazabilmesi için diske erişmesi gerekiyor.</translation>
+        <source>Why am I being asked this?</source>
+        <translation type="unfinished"></translation>
     </message>
-</context>
-<context>
-    <name>NativeFileDialog</name>
     <message>
-        <source>File type:</source>
-        <translation>Dosya türü:</translation>
+        <source>This also sets the Wi-Fi regulatory domain for your region.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1282,7 +1855,7 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>Select an operating system to install on your Raspberry Pi</source>
-        <translation>Raspberry Pi'nize yüklemek için bir işletim sistemi seçin</translation>
+        <translation>Raspberry Pi&apos;nize yüklemek için bir işletim sistemi seçin</translation>
     </message>
     <message>
         <source>Operating system list</source>
@@ -1316,6 +1889,49 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
         <source>Released: %1</source>
         <translation>Yayınlanma: %1</translation>
     </message>
+    <message>
+        <source>Unable to download OS list. You can still use a local image file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry downloading the OS list</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PasswordlessSudoWarningDialog</name>
+    <message>
+        <source>Passwordless Sudo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enabling passwordless sudo allows any process running as this user to gain full root privileges without authentication. This significantly weakens the security of your system.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only enable this if you understand the risks and have a specific need, such as automated scripts or headless operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished">İPTAL</translation>
+    </message>
+    <message>
+        <source>Cancel and keep sudo requiring a password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>ENABLE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable passwordless sudo for this user account</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>PiConnectCustomizationStep</name>
@@ -1325,7 +1941,7 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>Enable Raspberry Pi Connect</source>
-        <translation>Raspberry Pi Connect'i Etkinleştir</translation>
+        <translation>Raspberry Pi Connect&apos;i Etkinleştir</translation>
     </message>
     <message>
         <source>What is Raspberry Pi Connect?</source>
@@ -1333,7 +1949,7 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>Open Raspberry Pi Connect</source>
-        <translation>Raspberry Pi Connect'i Aç</translation>
+        <translation>Raspberry Pi Connect&apos;i Aç</translation>
     </message>
     <message>
         <source>Token received from browser</source>
@@ -1345,7 +1961,7 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>Enable secure remote access to your Raspberry Pi through the Raspberry Pi Connect cloud service</source>
-        <translation>Raspberry Pi Connect bulut hizmeti aracılığıyla Raspberry Pi'nize güvenli uzaktan erişimi etkinleştirin</translation>
+        <translation>Raspberry Pi Connect bulut hizmeti aracılığıyla Raspberry Pi&apos;nize güvenli uzaktan erişimi etkinleştirin</translation>
     </message>
     <message>
         <source>Save Raspberry Pi Connect settings and continue to next customisation step</source>
@@ -1361,7 +1977,7 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the &apos;Open Raspberry Pi Connect&apos; button to sign in.</source>
-        <translation>Raspberry Pi Connect'ten aldığınız doğrulama belirtecini girin veya yapıştırın. Oturum açmak için 'Raspberry Pi Connect'i Aç' butonunu kullanırsanız belirteç otomatik olarak doldurulacaktır.</translation>
+        <translation>Raspberry Pi Connect&apos;ten aldığınız doğrulama belirtecini girin veya yapıştırın. Oturum açmak için &apos;Raspberry Pi Connect&apos;i Aç&apos; butonunu kullanırsanız belirteç otomatik olarak doldurulacaktır.</translation>
     </message>
     <message>
         <source>Waiting for token (%1s)</source>
@@ -1377,7 +1993,7 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>The token you entered is not valid. Please check the token and try again, or use the &apos;Open Raspberry Pi Connect&apos; button to get a valid token.</source>
-        <translation>Girdiğiniz belirteç geçerli değil. Lütfen belirteci kontrol edip tekrar deneyin veya geçerli bir belirteç almak için 'Raspberry Pi Connect'i Aç' butonunu kullanın.</translation>
+        <translation>Girdiğiniz belirteç geçerli değil. Lütfen belirteci kontrol edip tekrar deneyin veya geçerli bir belirteç almak için &apos;Raspberry Pi Connect&apos;i Aç&apos; butonunu kullanın.</translation>
     </message>
     <message>
         <source>OK</source>
@@ -1393,7 +2009,7 @@ veya yukarıdaki adres çubuğuna bir yol yazın.</translation>
     </message>
     <message>
         <source>Sign in to receive a token and enable Raspberry Pi Connect</source>
-        <translation>Belirteç almak ve Raspberry Pi Connect'i etkinleştirmek için oturum açın</translation>
+        <translation>Belirteç almak ve Raspberry Pi Connect&apos;i etkinleştirmek için oturum açın</translation>
     </message>
 </context>
 <context>
@@ -1428,14 +2044,46 @@ Lütfen yüksek ayrıcalıklarla çalıştırın: sudo %1</translation>
 Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
         <translation>Root olarak çalışmıyorsunuz.
 
-Otomatik ayrıcalık yükseltmeyi ayarlamak için "Yetkilendirmeyi Yükle"ye tıklayın veya şu komutla manuel olarak çalıştırın: sudo %1</translation>
+Otomatik ayrıcalık yükseltmeyi ayarlamak için &quot;Yetkilendirmeyi Yükle&quot;ye tıklayın veya şu komutla manuel olarak çalıştırın: sudo %1</translation>
+    </message>
+    <message>
+        <source>Invalid Windows physical drive path: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open disk for cleaning. Error code: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clear partition table. Error code: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start disk cleanup utility. Please ensure you have administrator privileges.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disk cleaning operation timed out. The disk may be in use by another application.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clean disk. Error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clean disk after %1 attempts. %2</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>RemoteAccessStep</name>
     <message>
         <source>Enable SSH</source>
-        <translation>SSH'ı Etkinleştir</translation>
+        <translation>SSH&apos;ı Etkinleştir</translation>
     </message>
     <message>
         <source>Use password authentication</source>
@@ -1463,7 +2111,7 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için "Yetkilendirmeyi Yükle"ye tı
     </message>
     <message>
         <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
-        <translation>Raspberry Pi'nizin uzaktan komut satırı kontrolü için güvenli kabuk (SSH) erişimini etkinleştirin</translation>
+        <translation>Raspberry Pi&apos;nizin uzaktan komut satırı kontrolü için güvenli kabuk (SSH) erişimini etkinleştirin</translation>
     </message>
     <message>
         <source>Save SSH settings and continue to next customisation step</source>
@@ -1487,10 +2135,9 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için "Yetkilendirmeyi Yükle"ye tı
     </message>
     <message>
         <source>Choose how you will authenticate when connecting to your Raspberry Pi via SSH. Password authentication uses the account credentials you configured. Public key authentication uses a cryptographic key pair and is more secure.</source>
-        <translation>Raspberry Pi'nize SSH üzerinden bağlanırken nasıl doğrulama yapacağınızı seçin. Parola doğrulaması yapılandırdığınız hesap bilgilerini kullanır. Kamu anahtarı doğrulaması ise kriptografik bir anahtar çifti kullanır ve daha güvenlidir.</translation>
+        <translation>Raspberry Pi&apos;nize SSH üzerinden bağlanırken nasıl doğrulama yapacağınızı seçin. Parola doğrulaması yapılandırdığınız hesap bilgilerini kullanır. Kamu anahtarı doğrulaması ise kriptografik bir anahtar çifti kullanır ve daha güvenlidir.</translation>
     </message>
 </context>
-
 <context>
     <name>RepositoryDialog</name>
     <message>
@@ -1554,7 +2201,65 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için "Yetkilendirmeyi Yükle"ye tı
         <translation>İşletim sistemi listesini özel bir web adresinden indirin</translation>
     </message>
 </context>
-
+<context>
+    <name>RpibootThread</name>
+    <message>
+        <source>Downloading firmware...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to obtain rpiboot firmware: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connecting to device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open USB device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>rpiboot protocol failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to restart...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open USB device after re-enumeration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for fastboot device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timed out waiting for fastboot device to appear.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to disconnect (%1/%2)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device disconnected, waiting for reconnect...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to reconnect (%1/%2s)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timed out waiting for device to re-enumerate after bootcode upload (waited %1s).</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
 <context>
     <name>SecureBootCustomizationStep</name>
     <message>
@@ -1583,7 +2288,7 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için "Yetkilendirmeyi Yükle"ye tı
     </message>
     <message>
         <source>Sign the boot partition with your RSA key to enable secure boot verification on Raspberry Pi</source>
-        <translation>Raspberry Pi'de güvenli önyükleme doğrulamasını etkinleştirmek için önyükleme bölümünü RSA anahtarınızla imzalayın</translation>
+        <translation>Raspberry Pi&apos;de güvenli önyükleme doğrulamasını etkinleştirmek için önyükleme bölümünü RSA anahtarınızla imzalayın</translation>
     </message>
     <message>
         <source>Learn about Secure Boot</source>
@@ -1649,8 +2354,27 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için "Yetkilendirmeyi Yükle"ye tı
         <source>All Files (*)</source>
         <translation>Tüm Dosyalar (*)</translation>
     </message>
+    <message>
+        <source>OTP Secure Boot Provisioning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Program the secure boot public key hash into the device&apos;s OTP memory. This is a permanent, irreversible operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Provision Secure Boot OTP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Permanently program the secure boot key into device OTP memory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>WARNING: After OTP provisioning, this device will ONLY boot images signed with the selected key. This cannot be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
-
 <context>
     <name>SshKeyManager</name>
     <message>
@@ -1711,7 +2435,7 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için "Yetkilendirmeyi Yükle"ye tı
     </message>
     <message>
         <source>Paste key or click BROWSE to select file</source>
-        <translation>Anahtarı yapıştırın veya dosya seçmek için GÖZAT'a tıklayın</translation>
+        <translation>Anahtarı yapıştırın veya dosya seçmek için GÖZAT&apos;a tıklayın</translation>
     </message>
     <message>
         <source>SSH public key input</source>
@@ -1738,7 +2462,6 @@ Otomatik ayrıcalık yükseltmeyi ayarlamak için "Yetkilendirmeyi Yükle"ye tı
         <translation>Eklemek için bir SSH kamu anahtarı dosyası seçin</translation>
     </message>
 </context>
-
 <context>
     <name>StorageSelectionStep</name>
     <message>
@@ -1787,7 +2510,7 @@ Try connecting a new device, or uncheck
 &apos;Exclude system drives&apos; below.</source>
         <translation>Görünen tüm cihazlar salt okunur.
 Yeni bir cihaz bağlamayı deneyin veya aşağıdaki
-'Sistem sürücülerini hariç tut' seçeneğinin işaretini kaldırın.</translation>
+&apos;Sistem sürücülerini hariç tut&apos; seçeneğinin işaretini kaldırın.</translation>
     </message>
     <message>
         <source>All devices are read-only.
@@ -1801,7 +2524,7 @@ Uncheck &apos;Exclude system drives&apos; below
 to show system drives.</source>
         <translation>Tüm cihazlar filtre tarafından gizlendi.
 Sistem sürücülerini göstermek için aşağıdaki
-'Sistem sürücülerini hariç tut' seçeneğinin işaretini kaldırın.</translation>
+&apos;Sistem sürücülerini hariç tut&apos; seçeneğinin işaretini kaldırın.</translation>
     </message>
     <message>
         <source>When checked, system drives are hidden from the list. Uncheck to show all drives including system drives.</source>
@@ -1813,7 +2536,7 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos; to show hidden system drives.</source>
-        <translation>Şu anda geçerli bir depolama aygıtı mevcut değil. Görünen tüm cihazlar salt okunur. Yeni bir depolama aygıtı bağlamayı deneyin veya gizli sistem sürücülerini göstermek için 'Sistem sürücülerini hariç tut' seçeneğinin işaretini kaldırın.</translation>
+        <translation>Şu anda geçerli bir depolama aygıtı mevcut değil. Görünen tüm cihazlar salt okunur. Yeni bir depolama aygıtı bağlamayı deneyin veya gizli sistem sürücülerini göstermek için &apos;Sistem sürücülerini hariç tut&apos; seçeneğinin işaretini kaldırın.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.</source>
@@ -1821,10 +2544,25 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
-        <translation>Şu anda geçerli bir depolama aygıtı mevcut değil. Gizli sistem sürücülerini göstermek için 'Sistem sürücülerini hariç tut' seçeneğinin işaretini kaldırın veya yeni bir depolama aygıtı bağlayın.</translation>
+        <translation>Şu anda geçerli bir depolama aygıtı mevcut değil. Gizli sistem sürücülerini göstermek için &apos;Sistem sürücülerini hariç tut&apos; seçeneğinin işaretini kaldırın veya yeni bir depolama aygıtı bağlayın.</translation>
+    </message>
+    <message>
+        <source>Could not list storage devices: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error: Could not list storage devices. %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready for USB boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not list storage devices: %1. This may be a permissions issue. Try running the application with administrator privileges.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
-
 <context>
     <name>UpdateAvailableDialog</name>
     <message>
@@ -1833,15 +2571,23 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>There is a newer version of Imager available. Would you like to visit the website to download it?</source>
-        <translation>Imager'ın daha yeni bir sürümü mevcut. İndirmek için web sitesini ziyaret etmek ister misiniz?</translation>
+        <translation>Imager&apos;ın daha yeni bir sürümü mevcut. İndirmek için web sitesini ziyaret etmek ister misiniz?</translation>
     </message>
     <message>
         <source>Continue using the current version of Raspberry Pi Imager</source>
-        <translation>Raspberry Pi Imager'ın mevcut sürümünü kullanmaya devam et</translation>
+        <translation>Raspberry Pi Imager&apos;ın mevcut sürümünü kullanmaya devam et</translation>
     </message>
     <message>
         <source>Open the Raspberry Pi website in your browser to download the latest version</source>
         <translation>En son sürümü indirmek için tarayıcınızda Raspberry Pi web sitesini açın</translation>
+    </message>
+    <message>
+        <source>Imager version %1 is available. Would you like to visit the website to download it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1880,7 +2626,7 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Create a user account for your Raspberry Pi</source>
-        <translation>Raspberry Pi'niz için bir kullanıcı hesabı oluşturun</translation>
+        <translation>Raspberry Pi&apos;niz için bir kullanıcı hesabı oluşturun</translation>
     </message>
     <message>
         <source>Enter your username</source>
@@ -1918,8 +2664,23 @@ Sistem sürücülerini göstermek için aşağıdaki
         <source>Re-enter the password to confirm it matches.</source>
         <translation>Eşleştiğinden emin olmak için parolayı tekrar girin.</translation>
     </message>
+    <message>
+        <source>Enable passwordless sudo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allow this user to run sudo commands without entering a password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allows any process running as this user to gain full root privileges without a password. Only enable this if you have a specific need, such as automated scripts or headless operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwordless sudo information: </source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
-
 <context>
     <name>WifiCustomizationStep</name>
     <message>
@@ -1956,7 +2717,7 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Configure Wi-Fi for a password-protected network with WPA2/WPA3 encryption</source>
-        <translation>Wi-Fi'yi WPA2/WPA3 şifrelemeli, parola korumalı bir ağ için yapılandırın</translation>
+        <translation>Wi-Fi&apos;yi WPA2/WPA3 şifrelemeli, parola korumalı bir ağ için yapılandırın</translation>
     </message>
     <message>
         <source>Open network</source>
@@ -1964,7 +2725,7 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Configure Wi-Fi for an unencrypted network without password protection</source>
-        <translation>Wi-Fi'yi parola koruması olmayan şifresiz bir ağ için yapılandırın</translation>
+        <translation>Wi-Fi&apos;yi parola koruması olmayan şifresiz bir ağ için yapılandırın</translation>
     </message>
     <message>
         <source>Enter a password</source>
@@ -2035,7 +2796,6 @@ Sistem sürücülerini göstermek için aşağıdaki
         <translation>Parolayı değiştirmek için tekrar girin</translation>
     </message>
 </context>
-
 <context>
     <name>WizardContainer</name>
     <message>
@@ -2150,8 +2910,61 @@ Sistem sürücülerini göstermek için aşağıdaki
         <source>Warning: Only overwrite the token if you initiated this action.</source>
         <translation>Uyarı: Belirtecin üzerine yalnızca bu işlemi siz başlattıysanız yazın.</translation>
     </message>
-</context>
+    <message>
+        <source>Sidebar resize handle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open local repository file?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Switch to a custom repository?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.
 
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only accept if you trust this source and intentionally clicked a link to open this repository.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Repository URL: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation type="unfinished">Aç</translation>
+    </message>
+    <message>
+        <source>Switch repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open the local manifest file and use it as the OS repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Switch to the custom repository from the link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">İptal</translation>
+    </message>
+    <message>
+        <source>Keep your current repository settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
 <context>
     <name>WizardStepBase</name>
     <message>
@@ -2163,7 +2976,23 @@ Sistem sürücülerini göstermek için aşağıdaki
         <translation>Özelleştirmeyi atla</translation>
     </message>
 </context>
+<context>
+    <name>WriteProgressWatchdog</name>
+    <message>
+        <source>Switched to compatibility mode - write continuing...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write stalled - no progress for %1 seconds.
 
+Please check your storage device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device not responding. Restarting in compatibility mode...</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
 <context>
     <name>WritingStep</name>
     <message>
@@ -2298,8 +3127,11 @@ Sistem sürücülerini göstermek için aşağıdaki
         <source>Please wait... %1</source>
         <translation>Lütfen bekleyin... %1</translation>
     </message>
+    <message>
+        <source>Writing... %1 MB written</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
-
 <context>
     <name>main</name>
     <message>
@@ -2352,11 +3184,11 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Return to Raspberry Pi Imager and continue the current operation</source>
-        <translation>Raspberry Pi Imager'a dön ve mevcut işleme devam et</translation>
+        <translation>Raspberry Pi Imager&apos;a dön ve mevcut işleme devam et</translation>
     </message>
     <message>
         <source>Force quit Raspberry Pi Imager and cancel the current write operation</source>
-        <translation>Raspberry Pi Imager'dan çıkmaya zorla ve mevcut yazma işlemini iptal et</translation>
+        <translation>Raspberry Pi Imager&apos;dan çıkmaya zorla ve mevcut yazma işlemini iptal et</translation>
     </message>
     <message>
         <source>Raspberry Pi Imager %1</source>
@@ -2376,7 +3208,7 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Exit Raspberry Pi Imager - you must restart with elevated privileges to write images</source>
-        <translation>Raspberry Pi Imager'dan çık - imaj yazmak için yönetici ayrıcalıklarıyla yeniden başlatmalısınız</translation>
+        <translation>Raspberry Pi Imager&apos;dan çık - imaj yazmak için yönetici ayrıcalıklarıyla yeniden başlatmalısınız</translation>
     </message>
     <message>
         <source>Install Authorization</source>
@@ -2384,7 +3216,7 @@ Sistem sürücülerini göstermek için aşağıdaki
     </message>
     <message>
         <source>Install system authorization to allow Raspberry Pi Imager to run with elevated privileges</source>
-        <translation>Raspberry Pi Imager'ın yüksek ayrıcalıklarla çalışmasına izin vermek için sistem yetkilendirmesini yükleyin</translation>
+        <translation>Raspberry Pi Imager&apos;ın yüksek ayrıcalıklarla çalışmasına izin vermek için sistem yetkilendirmesini yükleyin</translation>
     </message>
     <message>
         <source>Save Performance Data</source>
@@ -2398,5 +3230,13 @@ Sistem sürücülerini göstermek için aşağıdaki
         <source>All files (*)</source>
         <translation>Tüm dosyalar (*)</translation>
     </message>
+    <message>
+        <source>Offline</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Using data from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
-</TS> 
+</TS>

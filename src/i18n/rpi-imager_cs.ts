@@ -115,6 +115,42 @@
         <source>All Files (*)</source>
         <translation>Všechny soubory (*)</translation>
     </message>
+    <message>
+        <source>Audio notification unavailable - no viable audio player found on this system</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Saved Customisation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove all saved OS customisation settings such as hostname, WiFi, and user credentials</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Version: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear saved customisation?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This will remove all saved OS customisation settings such as hostname, WiFi, and user credentials.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep saved customisation settings and return to the options dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove all saved OS customisation settings permanently</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>AsyncCacheWriter</name>
@@ -144,10 +180,6 @@
     <message>
         <source>Image files (%1)</source>
         <translation>Soubory s obrazem (%1)</translation>
-    </message>
-    <message>
-        <source>Imager Repository Files (*.json)</source>
-        <translation>Soubory repozitáře (*.json)</translation>
     </message>
     <message>
         <source>Public Key files (*.pub)</source>
@@ -257,6 +289,69 @@
         <source>Authorized keys files (authorized_keys)</source>
         <translation>Ověřené soubory s klíči (authorized_keys)</translation>
     </message>
+    <message>
+        <source>Imager Repository Files (*.json *.%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ConfirmOtpProgramDialog</name>
+    <message>
+        <source>WARNING: OTP Programming is PERMANENT and IRREVERSIBLE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This operation will permanently program the secure boot public key hash into the device&apos;s one-time programmable (OTP) memory. Once programmed, this device will ONLY boot images signed with the corresponding private key. This action cannot be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Key fingerprint: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Also lock JTAG debug port (additional irreversible action)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>To confirm, type the device serial number below:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Serial to type: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Type device serial number exactly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirmation input. Type exactly: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished">ZRUŠIT</translation>
+    </message>
+    <message>
+        <source>Cancel OTP programming and return to previous screen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PROGRAM OTP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Permanently program the secure boot key into device OTP memory</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ConfirmSystemDriveDialog</name>
@@ -333,6 +428,161 @@
     </message>
 </context>
 <context>
+    <name>DebugOptionsDialog</name>
+    <message>
+        <source>Debug Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I/O Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Direct I/O (F_NOCACHE / O_DIRECT)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Async I/O</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Queue Depth:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Async queue depth: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Buffer memory: ~%1-%2 MB (varies by system RAM)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Periodic Sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Debugging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verbose Performance Logging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Log detailed timing information for each write operation to help diagnose performance issues.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Network Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Force IPv4-only Downloads</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workarounds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Counterfeit Card Mode (skip end-of-device checks)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Advanced Features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable Rpiboot/Fastboot Support</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Custom Fastboot Gadget:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>(default)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select a local fastboot gadget boot.img file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Revert to the default fastboot gadget from GitHub</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Fastboot Gadget Image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Boot images (*.img *.bin)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All files (*)</source>
+        <translation type="unfinished">Všechny soubory (*)</translation>
+    </message>
+    <message>
+        <source>Current Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close the debug options dialog without saving any changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Apply the selected debug options</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>DeviceSelectionStep</name>
     <message>
         <source>Select your Raspberry Pi device</source>
@@ -357,6 +607,28 @@
     <message>
         <source>Use arrow keys to navigate, Enter or Space to select</source>
         <translation>K navigaci použijte šipky, pro výběr stiskněte Enter nebo mezerník</translation>
+    </message>
+    <message>
+        <source>Unable to load device list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The device list could not be downloaded. Please check your internet connection and try again.
+
+You can still write a local image file by pressing Next and selecting &apos;Use custom&apos; on the following screen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry downloading the device list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connected via USB</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -433,35 +705,45 @@
         <translation>Operační systém nepřipojil oddíl FAT32</translation>
     </message>
     <message>
-        <source>Error changing to directory '%1'</source>
-        <translation>Chyba při vstupu do adresáře '%1'</translation>
+        <source>Error changing to directory &apos;%1&apos;</source>
+        <translation>Chyba při vstupu do adresáře &apos;%1&apos;</translation>
     </message>
     <message>
-        <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
-        <translation>Chyba pří čtení z úložiště.&lt;br&gt;SD karta může být poškozená.</translation>
+        <source>The write operation has stalled.
+
+No data has been written for 30 seconds. This could be caused by:
+• Storage device disconnected or unresponsive
+• Device has failed or is faulty
+• System resource exhaustion
+
+Please check the storage device and try again.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Verifying write failed. Contents of SD card is different from what was written to it.</source>
-        <translation>Ověřování zápisu skončilo s chybou. Obsah SD karty se neshoduje s tím, co na ni bylo zapsané.</translation>
+        <source>Failed to acquire write buffer slot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The download has stalled.
+
+No data received for 30 seconds. This could be caused by:
+• Network connection lost or unstable
+• Remote server became unresponsive
+• Firewall or proxy blocking the connection
+
+Please check your network connection and try again.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>DownloadThread</name>
     <message>
-        <source>Please verify if 'Raspberry Pi Imager' is allowed access to 'removable volumes' in privacy settings (under 'files and folders' or alternatively give it 'full disk access').</source>
-        <translation>Prosím ověřte, zda má 'Raspberry Pi Imager' přístup k 'vyměnitelným svazkům' v nastaveních soukromí (pod 'soubory a složky', případně mu udělte 'plný přístup k disku').</translation>
+        <source>Please verify if &apos;Raspberry Pi Imager&apos; is allowed access to &apos;removable volumes&apos; in privacy settings (under &apos;files and folders&apos; or alternatively give it &apos;full disk access&apos;).</source>
+        <translation>Prosím ověřte, zda má &apos;Raspberry Pi Imager&apos; přístup k &apos;vyměnitelným svazkům&apos; v nastaveních soukromí (pod &apos;soubory a složky&apos;, případně mu udělte &apos;plný přístup k disku&apos;).</translation>
     </message>
     <message>
-        <source>Cannot open storage device '%1'.</source>
-        <translation>Nepodařilo se otevřít úložné zařízení '%1'.</translation>
-    </message>
-    <message>
-        <source>Write error while zero'ing out MBR</source>
-        <translation>Chyba zápisu při přepisování MBR nulami</translation>
-    </message>
-    <message>
-        <source>Write error while trying to zero out last part of card.&lt;br&gt;Card could be advertising wrong capacity (possible counterfeit).</source>
-        <translation>Chyba zápisu při přepisování poslední části karty nulami.&lt;br&gt;Karta pravděpodobně udává nesprávnou kapacitu (může být neoriginální).</translation>
+        <source>Cannot open storage device &apos;%1&apos;.</source>
+        <translation>Nepodařilo se otevřít úložné zařízení &apos;%1&apos;.</translation>
     </message>
     <message>
         <source>Error downloading: %1</source>
@@ -474,18 +756,6 @@
     <message>
         <source>Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.</source>
         <translation>Zdá se, že je zapnutý Řízený přístup ke složkám. Přidejte prosím rpi-imager.exe do seznamu výjimek a zkuste znovu.</translation>
-    </message>
-    <message>
-        <source>Error writing to storage (while flushing)</source>
-        <translation>Chyba při zápisu na úložiště (během volání flush)</translation>
-    </message>
-    <message>
-        <source>Error writing to storage (while fsync)</source>
-        <translation>Chyba při zápisu na úložiště (během volání fsync)</translation>
-    </message>
-    <message>
-        <source>Error writing first block (partition table)</source>
-        <translation>Chyba při zápisu prvního bloku (tabulky oddílů)</translation>
     </message>
     <message>
         <source>Error reading from storage.&lt;br&gt;SD card may be broken.</source>
@@ -536,12 +806,8 @@
         <translation>Chyba I/O zařízení. Úložné zařízení mohlo být odpojeno nebo nefunguje správně.</translation>
     </message>
     <message>
-        <source>Error opening disk device '%1'</source>
-        <translation>Chyba při otevírání disku '%1'</translation>
-    </message>
-    <message>
-        <source>Error getting device size</source>
-        <translation>Chyba při zjišťování velikosti zařízení</translation>
+        <source>Error opening disk device &apos;%1&apos;</source>
+        <translation>Chyba při otevírání disku &apos;%1&apos;</translation>
     </message>
     <message>
         <source>Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected.</source>
@@ -556,11 +822,7 @@
         <translation>Otevírání disku...</translation>
     </message>
     <message>
-        <source>Discarding existing data on drive...</source>
-        <translation>Probíhá odstranění stávajících dat na disku…</translation>
-    </message>
-    <message>
-        <source>Zero'ing out first and last MB of drive...</source>
+        <source>Zero&apos;ing out first and last MB of drive...</source>
         <translation>Přepisování prvního a posledního MB disku nulami...</translation>
     </message>
     <message>
@@ -576,8 +838,8 @@
         <translation>Přizpůsobování OS...</translation>
     </message>
     <message>
-        <source>Cannot open storage device '%1'. Please run with elevated privileges (sudo).</source>
-        <translation>Nepodařilo se otevřít úložné zařízení '%1'. Spusťte prosím s vyššími právy (sudo).</translation>
+        <source>Cannot open storage device &apos;%1&apos;. Please run with elevated privileges (sudo).</source>
+        <translation>Nepodařilo se otevřít úložné zařízení &apos;%1&apos;. Spusťte prosím s vyššími právy (sudo).</translation>
     </message>
     <message>
         <source>Creating signed boot image...</source>
@@ -668,8 +930,170 @@
         <translation>Zapisování souborů s přizpůsobeními...</translation>
     </message>
     <message>
-        <source>Failed to allocate buffer for MBR zeroing</source>
-        <translation>Nepodařilo se alokovat vyrovnávací paměť pro přepsání MBR nulami</translation>
+        <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>getting device size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to allocate buffer for MBR zeroing.
+
+The system may be low on memory.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>preparing storage device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zero&apos;ing out end of drive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timeout writing to end of storage device.
+
+This may indicate a counterfeit SD card with fake capacity.
+
+Please try a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write error while trying to zero out last part of card.
+
+This could indicate the card is advertising wrong capacity (possible counterfeit).
+
+Please try a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device responding slowly. Restarting in compatibility mode...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>storage operation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open storage device.
+
+The device may be in use by another application, or you may not have permission to access it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to storage device during %1.
+
+This could be caused by:
+• Device disconnected or became unresponsive
+• Device is full or write-protected
+• Hardware failure or bad sectors
+
+Please check the device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error reading from storage device during %1.
+
+The device may have been disconnected or is malfunctioning.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error seeking on storage device during %1.
+
+The device may be malfunctioning or disconnected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error getting storage device size.
+
+The device may not be properly recognized.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error closing storage device.
+
+The device may have been disconnected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to lock storage device.
+
+The device may be in use by another application. Please close any applications using this device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error syncing data to storage device.
+
+The device may have been disconnected or is not responding. Data may not have been fully written.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error flushing data to storage device.
+
+The device may have been disconnected or is not responding.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device timed out during %1.
+
+The device is not responding. This may indicate:
+• Device was disconnected
+• Device has failed
+• Driver or system issue
+
+Please disconnect and reconnect the device, then try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown storage error during %1.
+
+Please try again or use a different storage device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The storage device is not responding. This may indicate:
+• The device was disconnected
+• The device has failed
+• A driver or system issue
+
+Please disconnect and reconnect the device, then try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error writing to storage device.
+
+Some writes failed to complete. This could be caused by:
+• Storage device disconnected during write
+• Device is full or write-protected
+• Hardware failure
+
+Please check the device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>flush</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>writing partition table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>final flush</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>final sync</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -713,6 +1137,113 @@
     <message>
         <source>Cannot format device: insufficient permissions. Please run with elevated privileges (sudo).</source>
         <translation>Nelze naformátovat zařízení: nedostatečná oprávnění. Spusťte prosím s vyššími právy (sudo).</translation>
+    </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to unmount disk &apos;%1&apos;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>FastbootFlashThread</name>
+    <message>
+        <source>Applying OS customisation...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to mount boot partition: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read config.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write config.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write firstrun.sh: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write meta-data: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write user-data: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write network-config: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to read cmdline.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to write cmdline.txt: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to initialize curl</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No entries in image archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot error: unexpected internal error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connecting to fastboot device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open fastboot device: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Downloading and flashing OS image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fetching block map...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot download failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fastboot flash failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Decompression failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Image hash mismatch. Expected: %1 Got: %2</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -788,8 +1319,8 @@
         <translation>Režim USB Gadget může změnit chování vašeho zařízení a ovlivnit připojení a interakci s hostitelem.</translation>
     </message>
     <message>
-        <source>Please review the &lt;a href='%1'&gt;documentation&lt;/a&gt; before proceeding.</source>
-        <translation>Před pokračováním si prosím prostudujte &lt;a href='%1'&gt;dokumentaci&lt;/a&gt;.</translation>
+        <source>Please review the &lt;a href=&apos;%1&apos;&gt;documentation&lt;/a&gt; before proceeding.</source>
+        <translation>Před pokračováním si prosím prostudujte &lt;a href=&apos;%1&apos;&gt;dokumentaci&lt;/a&gt;.</translation>
     </message>
     <message>
         <source>Only continue if you are sure you know what you are doing.</source>
@@ -867,12 +1398,16 @@
 <context>
     <name>ImComboBox</name>
     <message>
-        <source>Type to search: "%1"</source>
-        <translation>Zadejte pro vyhledávání: "%1"</translation>
+        <source>Search: &quot;%1&quot;</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>(press again to cycle)</source>
-        <translation>(stiskněte znovu pro přepnutí)</translation>
+        <source>%1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No matches</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -942,6 +1477,10 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
     <message>
         <source>Save</source>
         <translation>Uložit</translation>
+    </message>
+    <message>
+        <source>Enter folder or file path…</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1021,20 +1560,12 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
 <context>
     <name>ImageWriter</name>
     <message>
-        <source>Input file is not a valid disk image.&lt;br&gt;File size %1 bytes is not a multiple of 512 bytes.</source>
-        <translation>Vstupní soubor není platným obrazem disku.&lt;br&gt;Velikost souboru %1 bytů není  násobkem 512 bytů.</translation>
-    </message>
-    <message>
         <source>Select image</source>
         <translation>Vyberte obraz</translation>
     </message>
     <message>
         <source>STP is enabled on your Ethernet switch. Getting IP will take long time.</source>
         <translation>Na vašem síťovém přepínači je povolený protokol STP. Získání IP bude trvat déle.</translation>
-    </message>
-    <message>
-        <source>Storage capacity is not large enough.&lt;br&gt;Needs to be at least %1.</source>
-        <translation>Velikost úložiště není dostatečná.&lt;br&gt;Je potřeba alespoň %1.</translation>
     </message>
     <message>
         <source>B</source>
@@ -1112,6 +1643,54 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
         <source>JSON files (*.json);;All files (*)</source>
         <translation>JSON soubory (*.json);;Všechny soubory (*)</translation>
     </message>
+    <message>
+        <source>Starting fastboot flash...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preparing device for imaging...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage capacity is not large enough.
+
+The image requires at least %1 of storage.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Input file is not a valid disk image.
+
+File size %1 bytes is not a multiple of 512 bytes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start write operation: insufficient memory.
+
+The system does not have enough available memory to perform this operation. Try closing other applications to free up memory, then try again.
+
+Technical details: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start write operation: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by download speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by decompression speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Limited by storage device speed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verifying written data</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>KeychainPermissionDialog</name>
@@ -1129,11 +1708,11 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
     </message>
     <message>
         <source>Skip keychain access and manually enter the Wi-Fi password</source>
-        <translation>Přeskočit přístup do klíčenky a zadat heslo k Wi‑Fi ručně</translation>
+        <translation>Přeskočit přístup do klíčenky a zadat heslo k&#x202f;Wi‑Fi ručně</translation>
     </message>
     <message>
         <source>Retrieve the Wi-Fi password from the system keychain using administrator authentication</source>
-        <translation>Získat heslo k Wi‑Fi ze systémové klíčenky pomocí ověření administrátorem</translation>
+        <translation>Získat heslo k&#x202f;Wi‑Fi ze systémové klíčenky pomocí ověření administrátorem</translation>
     </message>
 </context>
 <context>
@@ -1217,7 +1796,7 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
         <translation>Přeskočit všechna přizpůsobeni a pokračovat přímo k zápisu obrazu</translation>
     </message>
     <message>
-        <source>Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country's Wi-Fi regulations.</source>
+        <source>Choose your nearest capital city. This will automatically recommend the correct time zone and keyboard layout for your region, and set the wireless regulatory domain for your country&apos;s Wi-Fi regulations.</source>
         <translation>Vyberte nejbližší hlavní město. Tím se automaticky doporučí správné časové pásmo a rozložení klávesnice pro váš region a nastaví se bezdrátová regulační oblast podle platných předpisů vaší země.</translation>
     </message>
     <message>
@@ -1228,19 +1807,13 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
         <source>Choose your keyboard layout so keys produce the correct characters when typing. This is automatically recommended based on your capital city selection, but you can change it if you use a different keyboard layout.</source>
         <translation>Vyberte rozložení klávesnice tak, aby psala správné znaky. Výchozí rozložení je doporučeno na základě zvoleného hlavního města, ale můžete jej změnit, pokud používáte jiné rozložení klávesnice.</translation>
     </message>
-</context>
-<context>
-    <name>MacFile</name>
     <message>
-        <source>Raspberry Pi Imager needs to access the disk to write the image.</source>
-        <translation>Raspberry Pi Imager vyžaduje přístup k disku aby mohl zapsat obraz.</translation>
+        <source>Why am I being asked this?</source>
+        <translation type="unfinished"></translation>
     </message>
-</context>
-<context>
-    <name>NativeFileDialog</name>
     <message>
-        <source>File type:</source>
-        <translation>Typ souboru:</translation>
+        <source>This also sets the Wi-Fi regulatory domain for your region.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1316,6 +1889,49 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
         <source>Released: %1</source>
         <translation>Vydáno: %1</translation>
     </message>
+    <message>
+        <source>Unable to download OS list. You can still use a local image file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Retry downloading the OS list</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PasswordlessSudoWarningDialog</name>
+    <message>
+        <source>Passwordless Sudo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enabling passwordless sudo allows any process running as this user to gain full root privileges without authentication. This significantly weakens the security of your system.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only enable this if you understand the risks and have a specific need, such as automated scripts or headless operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CANCEL</source>
+        <translation type="unfinished">ZRUŠIT</translation>
+    </message>
+    <message>
+        <source>Cancel and keep sudo requiring a password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>ENABLE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enable passwordless sudo for this user account</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>PiConnectCustomizationStep</name>
@@ -1337,7 +1953,7 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
     </message>
     <message>
         <source>Token received from browser</source>
-        <translation>Token byl získán z prohlížeče</translation>
+        <translation>Token byl získán z&#x202f;prohlížeče</translation>
     </message>
     <message>
         <source>Open the Raspberry Pi Connect website in your browser to sign in and receive an authentication token</source>
@@ -1360,8 +1976,8 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
         <translation>Přeskočit všechna přizpůsobeni a pokračovat přímo k zápisu obrazu</translation>
     </message>
     <message>
-        <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the 'Open Raspberry Pi Connect' button to sign in.</source>
-        <translation>Zadejte nebo vložte autentizační token z Raspberry Pi Connect. Token se vyplní automaticky, pokud k přihlášení použijete tlačítko 'Spustit Raspberry Pi Connect'.</translation>
+        <source>Enter or paste the authentication token from Raspberry Pi Connect. The token will be automatically filled if you use the &apos;Open Raspberry Pi Connect&apos; button to sign in.</source>
+        <translation>Zadejte nebo vložte autentizační token z Raspberry Pi Connect. Token se vyplní automaticky, pokud k přihlášení použijete tlačítko &apos;Spustit Raspberry Pi Connect&apos;.</translation>
     </message>
     <message>
         <source>Waiting for token (%1s)</source>
@@ -1376,8 +1992,8 @@ nebo zadejte cestu do adresního řádku nahoře.</translation>
         <translation>Neplatný token</translation>
     </message>
     <message>
-        <source>The token you entered is not valid. Please check the token and try again, or use the 'Open Raspberry Pi Connect' button to get a valid token.</source>
-        <translation>Zadaný token není platný. Zkontrolujte token a zkuste to znovu, nebo použijte tlačítko 'Spustit Raspberry Pi Connect' pro získání platného tokenu.</translation>
+        <source>The token you entered is not valid. Please check the token and try again, or use the &apos;Open Raspberry Pi Connect&apos; button to get a valid token.</source>
+        <translation>Zadaný token není platný. Zkontrolujte token a zkuste to znovu, nebo použijte tlačítko &apos;Spustit Raspberry Pi Connect&apos; pro získání platného tokenu.</translation>
     </message>
     <message>
         <source>OK</source>
@@ -1425,10 +2041,42 @@ Spusťte prosím s vyššími právy: sudo %1</translation>
     <message>
         <source>You are not running as root.
 
-Click "Install Authorization" to set up automatic privilege elevation, or run manually with: sudo %1</source>
+Click &quot;Install Authorization&quot; to set up automatic privilege elevation, or run manually with: sudo %1</source>
         <translation>Nepracujete jako root
 
-Klikněte na "Nainstalovat oprávnění" pro automatické získání vyšších práv, nebo spusťte ručně pomocí: sudo %1</translation>
+Klikněte na &quot;Nainstalovat oprávnění&quot; pro automatické získání vyšších práv, nebo spusťte ručně pomocí: sudo %1</translation>
+    </message>
+    <message>
+        <source>Invalid Windows physical drive path: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open disk for cleaning. Error code: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clear partition table. Error code: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to start disk cleanup utility. Please ensure you have administrator privileges.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disk cleaning operation timed out. The disk may be in use by another application.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clean disk. Error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Unknown error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to clean disk after %1 attempts. %2</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1554,6 +2202,65 @@ Klikněte na "Nainstalovat oprávnění" pro automatické získání vyšších 
     </message>
 </context>
 <context>
+    <name>RpibootThread</name>
+    <message>
+        <source>Downloading firmware...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to obtain rpiboot firmware: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connecting to device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open USB device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>rpiboot protocol failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USB error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to restart...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to open USB device after re-enumeration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for fastboot device...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timed out waiting for fastboot device to appear.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to disconnect (%1/%2)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Device disconnected, waiting for reconnect...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for device to reconnect (%1/%2s)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Timed out waiting for device to re-enumerate after bootcode upload (waited %1s).</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>SecureBootCustomizationStep</name>
     <message>
         <source>Customisation: Secure Boot</source>
@@ -1646,6 +2353,26 @@ Klikněte na "Nainstalovat oprávnění" pro automatické získání vyšších 
     <message>
         <source>All Files (*)</source>
         <translation>Všechny soubory (*)</translation>
+    </message>
+    <message>
+        <source>OTP Secure Boot Provisioning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Program the secure boot public key hash into the device&apos;s OTP memory. This is a permanent, irreversible operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Provision Secure Boot OTP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Permanently program the secure boot key into device OTP memory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>WARNING: After OTP provisioning, this device will ONLY boot images signed with the selected key. This cannot be undone.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1780,10 +2507,10 @@ Klikněte na "Nainstalovat oprávnění" pro automatické získání vyšších 
     <message>
         <source>All visible devices are read-only.
 Try connecting a new device, or uncheck
-'Exclude system drives' below.</source>
+&apos;Exclude system drives&apos; below.</source>
         <translation>Všechna viditelná zařízení jsou pouze pro čtení.
 Zkuste připojit nové zařízení nebo zrušte zaškrtnutí
-'Skrýt systémové disky' níže.</translation>
+&apos;Skrýt systémové disky&apos; níže.</translation>
     </message>
     <message>
         <source>All devices are read-only.
@@ -1793,10 +2520,10 @@ Připojte prosím zapisovatelné úložné zařízení.</translation>
     </message>
     <message>
         <source>All devices are hidden by the filter.
-Uncheck 'Exclude system drives' below
+Uncheck &apos;Exclude system drives&apos; below
 to show system drives.</source>
         <translation>Všechna zařízení jsou skryta filtrem.
-Zrušte zaškrtnutí 'Skrýt systémové disky',
+Zrušte zaškrtnutí &apos;Skrýt systémové disky&apos;,
 abyste zobrazili systémové disky.</translation>
     </message>
     <message>
@@ -1808,16 +2535,32 @@ abyste zobrazili systémové disky.</translation>
         <translation>Nebyla nalezena žádná úložná zařízení. Pro pokračování připojte úložné zařízení.</translation>
     </message>
     <message>
-        <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck 'Exclude system drives' to show hidden system drives.</source>
-        <translation>Nejsou k dispozici žádná platná úložná zařízení. Všechna dostupná zařízení jsou pouze pro čtení. Zrušte zaškrtnutí 'Skrýt systémové disky' pro zobrazení skrytých systémových disků nebo připojte nové úložné zařízení.</translation>
+        <source>No valid storage devices are currently available. All visible devices are read-only. Try connecting a new storage device, or uncheck &apos;Exclude system drives&apos; to show hidden system drives.</source>
+        <translation>Nejsou k dispozici žádná platná úložná zařízení. Všechna dostupná zařízení jsou pouze pro čtení. Zrušte zaškrtnutí &apos;Skrýt systémové disky&apos; pro zobrazení skrytých systémových disků nebo připojte nové úložné zařízení.</translation>
     </message>
     <message>
         <source>No valid storage devices are currently available. All devices are read-only. Please connect a writable storage device to continue.</source>
         <translation>Nejsou k dispozici žádná platná úložná zařízení. Všechna zařízení jsou pouze pro čtení. Pro pokračování prosím připojte zapisovatelné úložné zařízení.</translation>
     </message>
     <message>
-        <source>No valid storage devices are currently available. Uncheck 'Exclude system drives' to show hidden system drives, or connect a new storage device.</source>
-        <translation>Nejsou k dispozici žádná platná úložná zařízení. Zrušte zaškrtnutí 'Skrýt systémové disky' pro zobrazení skrytých systémových disků nebo připojte nové úložné zařízení.</translation>
+        <source>No valid storage devices are currently available. Uncheck &apos;Exclude system drives&apos; to show hidden system drives, or connect a new storage device.</source>
+        <translation>Nejsou k dispozici žádná platná úložná zařízení. Zrušte zaškrtnutí &apos;Skrýt systémové disky&apos; pro zobrazení skrytých systémových disků nebo připojte nové úložné zařízení.</translation>
+    </message>
+    <message>
+        <source>Could not list storage devices: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error: Could not list storage devices. %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ready for USB boot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not list storage devices: %1. This may be a permissions issue. Try running the application with administrator privileges.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1837,6 +2580,14 @@ abyste zobrazili systémové disky.</translation>
     <message>
         <source>Open the Raspberry Pi website in your browser to download the latest version</source>
         <translation>Otevřete webovou stránku Raspberry Pi ve svém prohlížeči a stáhněte nejnovější verzi</translation>
+    </message>
+    <message>
+        <source>Imager version %1 is available. Would you like to visit the website to download it?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1912,6 +2663,22 @@ abyste zobrazili systémové disky.</translation>
     <message>
         <source>Re-enter the password to confirm it matches.</source>
         <translation>Zadejte heslo znovu pro potvrzení, že se shoduje.</translation>
+    </message>
+    <message>
+        <source>Enable passwordless sudo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allow this user to run sudo commands without entering a password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Allows any process running as this user to gain full root privileges without a password. Only enable this if you have a specific need, such as automated scripts or headless operation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwordless sudo information: </source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2021,7 +2788,7 @@ abyste zobrazili systémové disky.</translation>
         <translation>Zaškrtněte, pokud vaše Wi‑Fi síť nevysílá svůj název a pro připojení vyžaduje ruční zadání SSID.</translation>
     </message>
     <message>
-        <source>Passwords don't match</source>
+        <source>Passwords don&apos;t match</source>
         <translation>Hesla se neshodují</translation>
     </message>
     <message>
@@ -2143,6 +2910,60 @@ abyste zobrazili systémové disky.</translation>
         <source>Warning: Only overwrite the token if you initiated this action.</source>
         <translation>Upozornění: Token přepište pouze, pokud jste tuto akci sami iniciovali.</translation>
     </message>
+    <message>
+        <source>Sidebar resize handle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open local repository file?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Switch to a custom repository?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You are opening a local Raspberry Pi Imager manifest file. This will replace the current OS list with the contents of this file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A website is requesting to switch Raspberry Pi Imager to use a custom OS repository.
+
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only accept if you trust this source and intentionally clicked a link to open this repository.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Repository URL: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation type="unfinished">Otevřít</translation>
+    </message>
+    <message>
+        <source>Switch repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open the local manifest file and use it as the OS repository</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Switch to the custom repository from the link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Zrušit</translation>
+    </message>
+    <message>
+        <source>Keep your current repository settings</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WizardStepBase</name>
@@ -2153,6 +2974,23 @@ abyste zobrazili systémové disky.</translation>
     <message>
         <source>Skip customisation</source>
         <translation>Přeskočit přizpůsobení</translation>
+    </message>
+</context>
+<context>
+    <name>WriteProgressWatchdog</name>
+    <message>
+        <source>Switched to compatibility mode - write continuing...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write stalled - no progress for %1 seconds.
+
+Please check your storage device and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Storage device not responding. Restarting in compatibility mode...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2289,6 +3127,10 @@ abyste zobrazili systémové disky.</translation>
         <source>Please wait... %1</source>
         <translation>Prosím počkejte... %1</translation>
     </message>
+    <message>
+        <source>Writing... %1 MB written</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>main</name>
@@ -2387,6 +3229,14 @@ abyste zobrazili systémové disky.</translation>
     <message>
         <source>All files (*)</source>
         <translation>Všechny soubory (*)</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Using data from %1</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>
