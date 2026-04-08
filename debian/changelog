@@ -1,3 +1,26 @@
+rpi-imager (2.0.8) unstable; urgency=medium
+
+  * Fastboot:
+    - Enumerate storage devices
+    - Add mount, unmount, and custom gadget support
+    - Rename stage to download
+    - Retry on transient USB errors
+  * OS Customisation:
+    - Don't set any groups, leave it to the OS
+    - Use explicit runcmds for passwordless sudo
+    - Require active locale selection; no pre-filled defaults
+  * UI:
+    - Refresh clipboard status as text fields show
+  * SSH:
+    - Add state machine for handling PuTTY's multiline SSH keys
+  * Linux:
+    - Explicitly exclude libsystemd
+  * i18n: Updated French, Slovak translation dictionaries
+  * Documentation:
+    - Add a screenshot of the interface
+
+ -- Tom Dewey <tom.dewey@raspberrypi.com>  Wed, 08 Apr 2026 12:00:00 +0100
+
 rpi-imager (2.0.7) unstable; urgency=medium
 
   * Write Operations:
