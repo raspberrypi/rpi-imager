@@ -338,6 +338,11 @@ export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
 # Hook for removing files before AppImage creation
 echo "Pre-packaging hook - opportunity to remove unwanted files"
 
+# Remove libsystemd if it slipped through --exclude-library
+# It must come from the host system to work with lsblk/libmount/DBus
+# (see https://github.com/raspberrypi/rpi-imager/issues/1304, #1577)
+rm -f "$APPDIR/usr/lib/libsystemd"*
+
 # Remove unused QML Controls themes (size optimization)
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Universal"
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Fusion"
