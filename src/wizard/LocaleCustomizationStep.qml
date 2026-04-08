@@ -23,6 +23,7 @@ WizardStepBase {
     nextButtonAccessibleDescription: qsTr("Save localisation settings and continue to next customisation step")
     backButtonAccessibleDescription: qsTr("Return to previous step")
     skipButtonAccessibleDescription: qsTr("Skip all customisation and proceed directly to writing the image")
+    nextButtonEnabled: comboCapitalCity.currentIndex !== -1
 
     // Initial focus will automatically go to title, then subtitle, then first control (handled by WizardStepBase)
     
@@ -36,11 +37,15 @@ WizardStepBase {
         comboCapitalCity.model = imageWriter.getCapitalCitiesList()
         comboTimezone.model = imageWriter.getTimezoneList()
         comboKeyboard.model = imageWriter.getKeymapLayoutList()
-        
-        // Prefill from conserved customization settings; fallback to platform defaults
+
+        // Start with no selection so the user must make an active choice
+        comboCapitalCity.currentIndex = -1
+        comboTimezone.currentIndex = -1
+        comboKeyboard.currentIndex = -1
+
+        // Restore from conserved customization settings only
         var settings = wizardContainer.customizationSettings
-        
-        // Restore saved capital city if available
+
         if (settings.capitalCity) {
             var cityIndex = comboCapitalCity.find(settings.capitalCity)
             if (cityIndex !== -1) {
@@ -50,17 +55,16 @@ WizardStepBase {
                 root.onCapitalCityChanged()
             }
         }
-        
-        var tzToSet = settings.timezone || imageWriter.getTimezone()
-        var tzIndex = comboTimezone.find(tzToSet)
-        if (tzIndex !== -1) comboTimezone.currentIndex = tzIndex
-        else comboTimezone.editText = tzToSet
 
-        var defaultKeyboard = (tzToSet === "Europe/London") ? "gb" : "us"
-        var kbToSet = settings.keyboard || defaultKeyboard
-        var kbIndex = comboKeyboard.find(kbToSet)
-        if (kbIndex !== -1) comboKeyboard.currentIndex = kbIndex
-        else comboKeyboard.editText = kbToSet
+        if (settings.timezone) {
+            var tzIndex = comboTimezone.find(settings.timezone)
+            if (tzIndex !== -1) comboTimezone.currentIndex = tzIndex
+        }
+
+        if (settings.keyboard) {
+            var kbIndex = comboKeyboard.find(settings.keyboard)
+            if (kbIndex !== -1) comboKeyboard.currentIndex = kbIndex
+        }
 
         // Register focus group for locale controls in proper tab order
         // Labels are automatically skipped when screen reader is not active (via activeFocusOnTab)
