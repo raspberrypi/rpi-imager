@@ -15,6 +15,10 @@ rpi-imager (2.0.8) unstable; urgency=medium
     - Add state machine for handling PuTTY's multiline SSH keys
   * Linux:
     - Explicitly exclude libsystemd
+  * Write Operations:
+    - Increase watchdog stall timeout to 180s to match the async write timeout
+    - Exclude final data sync from write watchdog to avoid false stalls on slow
+      cards
   * i18n: Updated French, Slovak translation dictionaries
   * Documentation:
     - Add a screenshot of the interface
