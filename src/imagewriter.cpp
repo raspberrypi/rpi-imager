@@ -3412,9 +3412,16 @@ QString ImageWriter::getDebugCustomFastbootGadget() const
 
 void ImageWriter::setDebugCustomFastbootGadget(const QString &path)
 {
-    if (_debugCustomFastbootGadget != path) {
-        _debugCustomFastbootGadget = path;
-        qDebug() << "Debug: Custom fastboot gadget" << (path.isEmpty() ? "cleared" : path);
+    // The QML file dialog returns file:// URLs; convert to a local path
+    // so downstream code (FirmwareManager::ensureAvailable) can use it
+    // with std::filesystem::copy_file.
+    QString localPath = path;
+    if (localPath.startsWith(QStringLiteral("file://"))) {
+        localPath = QUrl(localPath).toLocalFile();
+    }
+    if (_debugCustomFastbootGadget != localPath) {
+        _debugCustomFastbootGadget = localPath;
+        qDebug() << "Debug: Custom fastboot gadget" << (localPath.isEmpty() ? "cleared" : localPath);
     }
 }
 
