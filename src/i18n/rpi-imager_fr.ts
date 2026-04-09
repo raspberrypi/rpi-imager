@@ -145,11 +145,11 @@
     </message>
     <message>
         <source>Audio notification unavailable - no viable audio player found on this system</source>
-        <translation type="unfinished"></translation>
+        <translation>Notification audio indisponible - aucun lecteur audio utilisable trouvé sur ce système</translation>
     </message>
     <message>
         <source>Version: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Version&#xa0;: %1</translation>
     </message>
 </context>
 <context>
@@ -291,66 +291,66 @@
     </message>
     <message>
         <source>Imager Repository Files (*.json *.%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichiers Dépôt Imager</translation>
     </message>
 </context>
 <context>
     <name>ConfirmOtpProgramDialog</name>
     <message>
         <source>WARNING: OTP Programming is PERMANENT and IRREVERSIBLE</source>
-        <translation type="unfinished"></translation>
+        <translation>ATTENTION&#xa0;! La programmation OTP est PERMANENTE et IRRÉVERSIBLE</translation>
     </message>
     <message>
         <source>This operation will permanently program the secure boot public key hash into the device&apos;s one-time programmable (OTP) memory. Once programmed, this device will ONLY boot images signed with the corresponding private key. This action cannot be undone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Cette opération programmera de manière permanente le hachage de la clé publique de démarrage sécurisé dans la mémoire programmable une fois (OTP) de l&apos;appareil. Une fois programmé, cet appareil NE démarrera QU&apos;avec les images signées au moyen de la clé privée correspondante. Cette action ne peut pas être annulée.</translation>
     </message>
     <message>
         <source>Device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Appareil&#xa0;: %1</translation>
     </message>
     <message>
         <source>Serial: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No de série&#xa0;: %1</translation>
     </message>
     <message>
         <source>Key fingerprint: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Empreinte de la clé&#xa0;: %1</translation>
     </message>
     <message>
         <source>Also lock JTAG debug port (additional irreversible action)</source>
-        <translation type="unfinished"></translation>
+        <translation>Verrouiller aussi le port JTAG de débogage (action irréversible supplémentaire)</translation>
     </message>
     <message>
         <source>To confirm, type the device serial number below:</source>
-        <translation type="unfinished"></translation>
+        <translation>Pour confirmer, saisir ci-dessous le numéro de série de l&apos;appareil&#xa0;:</translation>
     </message>
     <message>
         <source>Serial to type: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>No de série à saisir&#xa0;: %1</translation>
     </message>
     <message>
         <source>Type device serial number exactly</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir le numéro de série exact</translation>
     </message>
     <message>
         <source>Confirmation input. Type exactly: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirmation de saisie. Saisir exactement&#xa0;: %1</translation>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>Cancel OTP programming and return to previous screen</source>
-        <translation type="unfinished"></translation>
+        <translation>Annuler la programmation OTP et revenir à l&apos;étape précédente</translation>
     </message>
     <message>
         <source>PROGRAM OTP</source>
-        <translation type="unfinished"></translation>
+        <translation>PROGRAMMER OTP</translation>
     </message>
     <message>
         <source>Permanently program the secure boot key into device OTP memory</source>
-        <translation type="unfinished"></translation>
+        <translation>Programmer de manière permanente la clé de démarrage sécurisée dans la mémoire OTP</translation>
     </message>
 </context>
 <context>
@@ -431,155 +431,155 @@
     <name>DebugOptionsDialog</name>
     <message>
         <source>Debug Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Options de débogage</translation>
     </message>
     <message>
         <source>⚠️ These options are for debugging and testing. Changing them may affect performance and data integrity.</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠️ Ces options sont destinées au débogage et aux tests. Leur modification peut compromettre les performances et l&apos;intégrité des données.</translation>
     </message>
     <message>
         <source>I/O Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Options I/O</translation>
     </message>
     <message>
         <source>Enable Direct I/O (F_NOCACHE / O_DIRECT)</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer l&apos;I/O directe (F_NOCACHE / O_DIRECT)</translation>
     </message>
     <message>
         <source>Bypass the operating system page cache for writes. Slower but ensures data goes directly to device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Contourner le cache de pages du système d&apos;exploitation pour les écritures. Plus lent, mais garantit que les données vont directement sur l&apos;appareil.</translation>
     </message>
     <message>
         <source>Enable Async I/O</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer l&apos;I/O asynchrone</translation>
     </message>
     <message>
         <source>Queue multiple writes to overlap device latency. Improves performance with Direct I/O enabled.</source>
-        <translation type="unfinished"></translation>
+        <translation>Mettre en attente plusieurs opérations d&apos;écriture pour compenser la latence de l&apos;appareil. Améliore les performances lorsque l&apos;I/O directe est activée.</translation>
     </message>
     <message>
         <source>Queue Depth:</source>
-        <translation type="unfinished"></translation>
+        <translation>Longueur de la file d&apos;attente&#xa0;:</translation>
     </message>
     <message>
         <source>Async queue depth: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Longueur de la file d&apos;attente asynchrone&#xa0;:</translation>
     </message>
     <message>
         <source>Buffer memory: ~%1-%2 MB (varies by system RAM)</source>
-        <translation type="unfinished"></translation>
+        <translation>Mémoire tampon&#xa0;:~%1-%2 MB (dépend de la mémoire vive du système)</translation>
     </message>
     <message>
         <source>Enable Periodic Sync</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer la synchronisation périodique</translation>
     </message>
     <message>
         <source>Periodically flush data to disk during writes. Automatically disabled when Direct I/O is active.</source>
-        <translation type="unfinished"></translation>
+        <translation>Écrire périodiquement les données sur le disque au cours des opérations d&apos;écriture. Cette option est automatiquement désactivée lorsque l&apos;I/O directe est active.</translation>
     </message>
     <message>
         <source>Debugging</source>
-        <translation type="unfinished"></translation>
+        <translation>Débogage</translation>
     </message>
     <message>
         <source>Verbose Performance Logging</source>
-        <translation type="unfinished"></translation>
+        <translation>Journalisation détaillée des performances</translation>
     </message>
     <message>
         <source>Log detailed timing information for each write operation to help diagnose performance issues.</source>
-        <translation type="unfinished"></translation>
+        <translation>Enregistrer des informations détaillées sur la durée de chaque opération d&apos;écriture pour faciliter le diagnostic des problèmes de performances.</translation>
     </message>
     <message>
         <source>Network Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Options réseau</translation>
     </message>
     <message>
         <source>Force IPv4-only Downloads</source>
-        <translation type="unfinished"></translation>
+        <translation>Forcer les téléchargements en IPv4 uniquement</translation>
     </message>
     <message>
         <source>Only use IPv4 for downloads. Enable this if you experience connection issues due to broken IPv6 routing.</source>
-        <translation type="unfinished"></translation>
+        <translation>N&apos;utiliser que IPv4 pour les téléchargements. Activer ceci si des problèmes de connexion ont lieu en raison d&apos;un routage IPv6 défaillant.</translation>
     </message>
     <message>
         <source>Workarounds</source>
-        <translation type="unfinished"></translation>
+        <translation>Contournements</translation>
     </message>
     <message>
         <source>Counterfeit Card Mode (skip end-of-device checks)</source>
-        <translation type="unfinished"></translation>
+        <translation>Mode carte contrefaite (ignorer les vérifications de fin de carte)</translation>
     </message>
     <message>
         <source>Skip operations at the end of the storage device. Enable this for counterfeit SD cards that report a fake larger capacity. The image must be smaller than the card&apos;s real capacity.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ignorer les opérations à la fin du périphérique de stockage. Activer cette option avec les cartes SD contrefaites indiquant une capacité supérieure à la réalité. L&apos;image doit être d&apos;une taille inférieure à la capacité réelle de la carte.</translation>
     </message>
     <message>
         <source>⚠️ Only enable this if your SD card reports a larger capacity than it actually has. Make sure your image is smaller than the card&apos;s real capacity!</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠️ N&apos;activer ceci que si la carte SD annonce une capacité plus grande que sa capacité réelle. Assurez-vous que la taille de l&apos;image est plus petite que la capacité réelle de la carte&#xa0;!</translation>
     </message>
     <message>
         <source>Advanced Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Fonctionnalités avancées</translation>
     </message>
     <message>
         <source>Enable Rpiboot/Fastboot Support</source>
-        <translation type="unfinished"></translation>
+        <translation>Activer la prise en charge de rpiboot/fastboot</translation>
     </message>
     <message>
         <source>Scan for Raspberry Pi devices in USB boot mode (rpiboot). Requires libusb.</source>
-        <translation type="unfinished"></translation>
+        <translation>Chercher les appareils Raspberry Pi en mode démarrage USB (rpiboot). Nécessite libusb.</translation>
     </message>
     <message>
         <source>Custom Fastboot Gadget:</source>
-        <translation type="unfinished"></translation>
+        <translation>Gadget fastboot personnalisé&#xa0;:</translation>
     </message>
     <message>
         <source>(default)</source>
-        <translation type="unfinished"></translation>
+        <translation>(défaut)</translation>
     </message>
     <message>
         <source>Browse...</source>
-        <translation type="unfinished"></translation>
+        <translation>Parcourir...</translation>
     </message>
     <message>
         <source>Select a local fastboot gadget boot.img file</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner un fichier gadget fastboot boot.img local</translation>
     </message>
     <message>
         <source>Clear</source>
-        <translation type="unfinished">Effacer</translation>
+        <translation>Effacer</translation>
     </message>
     <message>
         <source>Revert to the default fastboot gadget from GitHub</source>
-        <translation type="unfinished"></translation>
+        <translation>Revenir au gadget fastboot par défaut de Github</translation>
     </message>
     <message>
         <source>Select Fastboot Gadget Image</source>
-        <translation type="unfinished"></translation>
+        <translation>Sélectionner une image fastboot gadget</translation>
     </message>
     <message>
         <source>Boot images (*.img *.bin)</source>
-        <translation type="unfinished"></translation>
+        <translation>Images de démarrage (*.img *.bin)</translation>
     </message>
     <message>
         <source>All files (*)</source>
-        <translation type="unfinished">Tous les fichiers (*)</translation>
+        <translation>Tous les fichiers (*)</translation>
     </message>
     <message>
         <source>Current Status</source>
-        <translation type="unfinished"></translation>
+        <translation>Statut actuel</translation>
     </message>
     <message>
         <source>Close the debug options dialog without saving any changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Fermer la fenêtre des options de débogage sans enregistrer les modifications</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished"></translation>
+        <translation>Appliquer</translation>
     </message>
     <message>
         <source>Apply the selected debug options</source>
-        <translation type="unfinished"></translation>
+        <translation>Appliquer les options de débogage sélectionnées</translation>
     </message>
 </context>
 <context>
@@ -2111,7 +2111,7 @@ Cliquer &quot;Autorisation d&apos;installation&quot; pour permettre l&apos;élé
     </message>
     <message>
         <source>Enable secure shell access for remote command-line control of your Raspberry Pi</source>
-        <translation>Activer l&apos;accès Secure Shell pour contrôler à distance en ligne de commande votre Rasbperry Pi</translation>
+        <translation>Activer l&apos;accès Secure Shell pour contrôler à distance en ligne de commande votre Raspberry Pi</translation>
     </message>
     <message>
         <source>Save SSH settings and continue to next customisation step</source>
