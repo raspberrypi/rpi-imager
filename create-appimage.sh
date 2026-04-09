@@ -333,15 +333,22 @@ export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 export LINUXDEPLOY_PLUGIN_QT_IGNORE_GLOB="*/translations/*"
 # Exclude libsystemd - it must come from the host system to work correctly with DBus
 # Including it causes compatibility issues (see https://github.com/raspberrypi/rpi-imager/issues/1304)
-"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*" --exclude-library="libsystemd*" --verbosity=0
+"$LINUXDEPLOY" --appdir="$APPDIR" --plugin=qt --exclude-library="libwayland-*" --exclude-library="libsystemd*" --exclude-library="libdbus-*" --exclude-library="libcap*" --verbosity=0
 
 # Hook for removing files before AppImage creation
 echo "Pre-packaging hook - opportunity to remove unwanted files"
 
-# Remove libsystemd if it slipped through --exclude-library
-# It must come from the host system to work with lsblk/libmount/DBus
-# (see https://github.com/raspberrypi/rpi-imager/issues/1304, #1577)
+# Remove host-coupled libraries that linuxdeploy-plugin-qt deploys despite --exclude-library
+# These must come from the host system:
+#   libsystemd: works with lsblk/libmount/DBus (see #1304, #1577)
+#   libdbus-1:  communicates with host session bus, NEEDED libsystemd which we exclude
+#   libcap:     kernel capabilities interface, orphaned transitive dep of libsystemd
 rm -f "$APPDIR/usr/lib/libsystemd"*
+rm -f "$APPDIR/usr/lib/libdbus-1"*
+rm -f "$APPDIR/usr/lib/libcap"*
+rm -rf "$APPDIR/usr/share/doc/libsystemd"*
+rm -rf "$APPDIR/usr/share/doc/libdbus"*
+rm -rf "$APPDIR/usr/share/doc/libcap"*
 
 # Remove unused QML Controls themes (size optimization)
 rm -rf "$APPDIR/usr/qml/QtQuick/Controls/Universal"
@@ -388,8 +395,14 @@ rm -f "$PWD/rpi-imager-$ARCH.AppImage"  # Legacy symlink name
 # Ensure LD_LIBRARY_PATH is still set for this call too
 export LD_LIBRARY_PATH="$QT_DIR/lib:$LD_LIBRARY_PATH"
 # Explicitly specify the desktop file to ensure correct naming
+# Re-specify --exclude-library flags: linuxdeploy re-resolves dependencies during
+# output generation, which would re-bundle excluded libraries.
 "$LINUXDEPLOY" --appdir="$APPDIR" \
     --desktop-file="$APPDIR/usr/share/applications/com.raspberrypi.rpi-imager.desktop" \
+    --exclude-library="libsystemd*" \
+    --exclude-library="libdbus-*" \
+    --exclude-library="libcap*" \
+    --exclude-library="libwayland-*" \
     --output=appimage \
     --verbosity=0
 
