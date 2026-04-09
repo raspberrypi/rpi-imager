@@ -610,25 +610,27 @@
     </message>
     <message>
         <source>Unable to load device list</source>
-        <translation type="unfinished"></translation>
+        <translation>Impossible de charger la liste des appareils</translation>
     </message>
     <message>
         <source>The device list could not be downloaded. Please check your internet connection and try again.
 
 You can still write a local image file by pressing Next and selecting &apos;Use custom&apos; on the following screen.</source>
-        <translation type="unfinished"></translation>
+        <translation>La liste des appareils n&apos;a pas pu être téléchargée. Vérifier la connexion Internet et ré-essayer.
+
+Il est possible d&apos;écrire une image locale en cliquant sur Continuer et en sélectionnant «&#xa0;Utiliser image personnalisée#xa0;» à l&apos;étape suivante.</translation>
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>Ré-essayer</translation>
     </message>
     <message>
         <source>Retry downloading the device list</source>
-        <translation type="unfinished"></translation>
+        <translation>Ré-essayer de télécharger la liste des appareils</translation>
     </message>
     <message>
         <source>Connected via USB</source>
-        <translation type="unfinished"></translation>
+        <translation>Connecté via USB</translation>
     </message>
 </context>
 <context>
@@ -1399,15 +1401,15 @@ Please check the device and try again.</source>
     <name>ImComboBox</name>
     <message>
         <source>Search: &quot;%1&quot;</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Recherche : %1</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">%1 sur %2</translation>
     </message>
     <message>
         <source>No matches</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Pas de correspondance</translation>
     </message>
 </context>
 <context>
@@ -1480,7 +1482,7 @@ ou saisir un chemin dans la barre d&apos;adresse ci-dessus.</translation>
     </message>
     <message>
         <source>Enter folder or file path…</source>
-        <translation type="unfinished"></translation>
+        <translation>Saisir le chemin du dossier ou du fichier…</translation>
     </message>
 </context>
 <context>
@@ -1918,7 +1920,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>CANCEL</source>
-        <translation type="unfinished">ANNULER</translation>
+        <translation>ANNULER</translation>
     </message>
     <message>
         <source>Cancel and keep sudo requiring a password</source>
@@ -1926,7 +1928,7 @@ Technical details: %1</source>
     </message>
     <message>
         <source>ENABLE</source>
-        <translation type="unfinished"></translation>
+        <translation>ACTIVER</translation>
     </message>
     <message>
         <source>Enable passwordless sudo for this user account</source>
@@ -2942,11 +2944,11 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished">Ouvrir</translation>
+        <translation>Ouvrir</translation>
     </message>
     <message>
         <source>Switch repository</source>
-        <translation type="unfinished"></translation>
+        <translation>Changer de dépôt</translation>
     </message>
     <message>
         <source>Open the local manifest file and use it as the OS repository</source>
@@ -3232,11 +3234,11 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>Offline</source>
-        <translation type="unfinished"></translation>
+        <translation>Hors ligne</translation>
     </message>
     <message>
         <source>Using data from %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Utilisation des données de %1</translation>
     </message>
 </context>
 </TS>
