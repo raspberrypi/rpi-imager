@@ -719,11 +719,18 @@ No data has been written for 30 seconds. This could be caused by:
 • System resource exhaustion
 
 Please check the storage device and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;operation d&apos;écriture s&apos;est interrompue.
+
+Aucune donnée écrite durant 30 secondes. La cause peut en être&#xa0;:
+• périphérique de stockage déconnecté ou sans réponse
+• appareil en panne ou défectueux
+• épuisement des ressources système
+
+Veuillez vérifier le périphérique de stockage et ré-essayer.</translation>
     </message>
     <message>
         <source>Failed to acquire write buffer slot</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de l&apos;acquisition du tampon d&apos;écriture</translation>
     </message>
     <message>
         <source>The download has stalled.
@@ -734,7 +741,14 @@ No data received for 30 seconds. This could be caused by:
 • Firewall or proxy blocking the connection
 
 Please check your network connection and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Le téléchargement s&apos;est interrompu.
+
+Aucune donnée reçue durant 30 secondes. La cause peut en être&#xa0;:
+• connexion réseau perdue ou instable
+• pas de réponse du serveur distant
+• un pare-feu ou un serveur mandataire bloque la connexion
+
+Veuillez vérifier la connexion réseau et ré-essayer.</translation>
     </message>
 </context>
 <context>
@@ -933,15 +947,15 @@ Please check your network connection and try again.</source>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de démontage du disque «&#xa0;%1&#xa0;». Veuillez fermer toute application qui utilise le disque et ré-essayer.</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;.</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de démontage du disque «&#xa0;%1&#xa0;».</translation>
     </message>
     <message>
         <source>getting device size</source>
-        <translation type="unfinished"></translation>
+        <translation>obtention de la taille du périphérique</translation>
     </message>
     <message>
         <source>Failed to allocate buffer for MBR zeroing.
@@ -951,11 +965,11 @@ The system may be low on memory.</source>
     </message>
     <message>
         <source>preparing storage device</source>
-        <translation type="unfinished"></translation>
+        <translation>préparation du périphérique de stockage</translation>
     </message>
     <message>
         <source>Zero&apos;ing out end of drive...</source>
-        <translation type="unfinished"></translation>
+        <translation>Mise à zéro de la fin du périphérique...</translation>
     </message>
     <message>
         <source>Timeout writing to end of storage device.
@@ -979,7 +993,7 @@ Please try a different storage device.</source>
     </message>
     <message>
         <source>storage operation</source>
-        <translation type="unfinished"></translation>
+        <translation>opération de stockage</translation>
     </message>
     <message>
         <source>Failed to open storage device.
@@ -1079,23 +1093,23 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>flush</source>
-        <translation type="unfinished"></translation>
+        <translation>vidage</translation>
     </message>
     <message>
         <source>sync</source>
-        <translation type="unfinished"></translation>
+        <translation>sync</translation>
     </message>
     <message>
         <source>writing partition table</source>
-        <translation type="unfinished"></translation>
+        <translationWiFi>écriture de la table de partition</translation>
     </message>
     <message>
         <source>final flush</source>
-        <translation type="unfinished"></translation>
+        <translationWiFi>vidage final</translation>
     </message>
     <message>
         <source>final sync</source>
-        <translation type="unfinished"></translation>
+        <translation>sync final</translation>
     </message>
 </context>
 <context>
@@ -1142,86 +1156,86 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;. Please close any applications using the disk and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de démontage du disque «&#xa0;%1&#xa0;». Veuillez fermer toute application qui utilise le disque et ré-essayer.</translation>
     </message>
     <message>
         <source>Failed to unmount disk &apos;%1&apos;.</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de démontage du disque «&#xa0;%1&#xa0;».</translation>
     </message>
 </context>
 <context>
     <name>FastbootFlashThread</name>
     <message>
         <source>Applying OS customisation...</source>
-        <translation type="unfinished"></translation>
+        <translation>Application de la personnalisation OS</translation>
     </message>
     <message>
         <source>Failed to mount boot partition: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de montage de la partition boot&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to read config.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de lecture du fichier config.txt&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to write config.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;écriture du fichier config.txt&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to write firstrun.sh: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;écriture du fichier firstun.sh&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to write meta-data: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;écriture du fichier meta-data&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to write user-data: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;écriture du fichier user-data&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to write network-config: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;écriture du fichier network-config&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to read cmdline.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de lecture du fichier cmdline.txt&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to write cmdline.txt: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;écriture du fichier cmdline.txt&#xa0;: %1</translation>
     </message>
     <message>
         <source>Failed to initialize curl</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;initialisation curl</translation>
     </message>
     <message>
         <source>No entries in image archive</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucune valeur dans l&apos;archive d&apos;image</translation>
     </message>
     <message>
         <source>Fastboot error: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur fastboot&#xa0;: %1</translation>
     </message>
     <message>
         <source>Fastboot error: unexpected internal error</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur fastboot&#xa0;: erreur interne inattendue</translation>
     </message>
     <message>
         <source>Connecting to fastboot device...</source>
-        <translation type="unfinished"></translation>
+        <translation>Connexion au périphérique fastboot...</translation>
     </message>
     <message>
         <source>Failed to open fastboot device: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec d&apos;ouverture du périphérique fastboot&#xa0;: %1</translation>
     </message>
     <message>
         <source>Downloading and flashing OS image...</source>
-        <translation type="unfinished"></translation>
+        <translation>Téléchargement et copie l&apos;image OS...</translation>
     </message>
     <message>
         <source>Fetching block map...</source>
-        <translation type="unfinished"></translation>
+        <translation>Récupération de la carte des blocs...</translation>
     </message>
     <message>
         <source>Fastboot download failed: %1</source>
@@ -1401,7 +1415,7 @@ Please check the device and try again.</source>
     <name>ImComboBox</name>
     <message>
         <source>Search: &quot;%1&quot;</source>
-        <translation type="unfinished">Recherche : %1</translation>
+        <translation type="unfinished">Recherche&#xa0;: %1</translation>
     </message>
     <message>
         <source>%1 of %2</source>
