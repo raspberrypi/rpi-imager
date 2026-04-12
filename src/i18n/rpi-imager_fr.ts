@@ -1239,27 +1239,27 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>Fastboot download failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec du téléchargement fastboot#xa0;: %1</translation>
     </message>
     <message>
         <source>Fastboot flash failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de copie fastboot#xa0;: %1</translation>
     </message>
     <message>
         <source>Download failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec du téléchargement#xa0;: %1</translation>
     </message>
     <message>
         <source>Decompression failed: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec de décompression#xa0;: %1</translation>
     </message>
     <message>
         <source>Cancelled</source>
-        <translation type="unfinished"></translation>
+        <translation>Annulé</translation>
     </message>
     <message>
         <source>Image hash mismatch. Expected: %1 Got: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Hachages d&apos;image non concordants. Attendu#xa0;: %1 Reçu#xa0;: %2</translation>
     </message>
 </context>
 <context>
@@ -1415,15 +1415,15 @@ Please check the device and try again.</source>
     <name>ImComboBox</name>
     <message>
         <source>Search: &quot;%1&quot;</source>
-        <translation type="unfinished">Recherche&#xa0;: %1</translation>
+        <translation>Recherche&#xa0;: %1</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished">%1 sur %2</translation>
+        <translation>%1 sur %2</translation>
     </message>
     <message>
         <source>No matches</source>
-        <translation type="unfinished">Pas de correspondance</translation>
+        <translation>Pas de correspondance</translation>
     </message>
 </context>
 <context>
@@ -1661,11 +1661,11 @@ ou saisir un chemin dans la barre d&apos;adresse ci-dessus.</translation>
     </message>
     <message>
         <source>Starting fastboot flash...</source>
-        <translation type="unfinished"></translation>
+        <translation>Début de copie fastboot...</translation>
     </message>
     <message>
         <source>Preparing device for imaging...</source>
-        <translation type="unfinished"></translation>
+        <translation>Préparation du périphérique pour copie...</translation>
     </message>
     <message>
         <source>Storage capacity is not large enough.
@@ -1689,23 +1689,23 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Failed to start write operation: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec au démarrage de l&apos;opération d&apos;écriture&#xa0;: %1</translation>
     </message>
     <message>
         <source>Limited by download speed</source>
-        <translation type="unfinished"></translation>
+        <translation>Limité par la vitesse de téléchargement</translation>
     </message>
     <message>
         <source>Limited by decompression speed</source>
-        <translation type="unfinished"></translation>
+        <translation>Limité par la vitesse de décompression</translation>
     </message>
     <message>
         <source>Limited by storage device speed</source>
-        <translation type="unfinished"></translation>
+        <translation>Limité par la vitesse du périphérique de stockage</translation>
     </message>
     <message>
         <source>Verifying written data</source>
-        <translation type="unfinished"></translation>
+        <translation>Vérification des données écrites</translation>
     </message>
 </context>
 <context>
@@ -1825,11 +1825,11 @@ Technical details: %1</source>
     </message>
     <message>
         <source>Why am I being asked this?</source>
-        <translation type="unfinished"></translation>
+        <translation>Pourquoi cette question&#xa0;?</translation>
     </message>
     <message>
         <source>This also sets the Wi-Fi regulatory domain for your region.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ce réglage définit le domaine de réglation Wi-Fi de votre région.</translation>
     </message>
 </context>
 <context>
@@ -2974,7 +2974,7 @@ pour afficher les disques système.</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>Keep your current repository settings</source>
