@@ -99,12 +99,16 @@ bool FastbootProtocol::sendData(rpiboot::IUsbTransport& transport,
 
     // Send "<prefix>:<size-hex>"
     char cmd[64];
-    snprintf(cmd, sizeof(cmd), "%.*s:%08x",
+    int cmdLen = snprintf(cmd, sizeof(cmd), "%.*s:%08x",
              static_cast<int>(commandPrefix.size()), commandPrefix.data(),
              static_cast<unsigned>(data.size()));
+    if (cmdLen < 0 || static_cast<size_t>(cmdLen) >= sizeof(cmd)) {
+        _lastError = "Command prefix too long for fastboot protocol buffer";
+        return false;
+    }
 
     auto cmdSpan = std::span<const uint8_t>(
-        reinterpret_cast<const uint8_t*>(cmd), std::strlen(cmd));
+        reinterpret_cast<const uint8_t*>(cmd), static_cast<size_t>(cmdLen));
     int written = transport.bulkWrite(EP_OUT, cmdSpan, 3000);
     if (written < 0) {
         _lastError = std::string("Failed to send ") + std::string(commandPrefix) + " command";
