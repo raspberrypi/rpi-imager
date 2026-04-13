@@ -169,9 +169,25 @@ DeviceWrapperFatPartition *DeviceWrapper::fatPartition(int nr)
         if (nr > gpt.NumberOfPartitionEntries)
             throw std::runtime_error("Partition does not exist");
 
-        pread((char *) &gptpart, sizeof(gptpart), gpt.PartitionEntryLBA*512 + gpt.SizeOfPartitionEntry*(nr-1));
+        /* Overflow-safe offset calculation for GPT partition entry */
+        quint64 entryLBA = gpt.PartitionEntryLBA;
+        quint64 entrySize = gpt.SizeOfPartitionEntry;
+        quint64 entryIndex = static_cast<quint64>(nr - 1);
+        if (entryLBA > UINT64_MAX / 512)
+            throw std::runtime_error("GPT partition entry LBA overflow");
+        quint64 baseOffset = entryLBA * 512;
+        if (entrySize && entryIndex > (UINT64_MAX - baseOffset) / entrySize)
+            throw std::runtime_error("GPT partition entry offset overflow");
+        pread((char *) &gptpart, sizeof(gptpart), baseOffset + entrySize * entryIndex);
 
-        return new DeviceWrapperFatPartition(this, gptpart.StartingLBA*512, (gptpart.EndingLBA-gptpart.StartingLBA+1)*512, this);
+        /* Overflow-safe size calculation for GPT partition */
+        if (gptpart.EndingLBA < gptpart.StartingLBA)
+            throw std::runtime_error("GPT partition ending LBA before starting LBA");
+        quint64 sectorCount = gptpart.EndingLBA - gptpart.StartingLBA + 1;
+        if (gptpart.StartingLBA > UINT64_MAX / 512 || sectorCount > UINT64_MAX / 512)
+            throw std::runtime_error("GPT partition offset/size overflow");
+
+        return new DeviceWrapperFatPartition(this, gptpart.StartingLBA * 512, sectorCount * 512, this);
     }
 
     /* MBR table handling */
@@ -184,6 +200,10 @@ DeviceWrapperFatPartition *DeviceWrapper::fatPartition(int nr)
     if (!mbr.part[nr-1].starting_sector || !mbr.part[nr-1].nr_of_sectors)
         throw std::runtime_error("Partition does not exist");
 
-    return new DeviceWrapperFatPartition(this, mbr.part[nr-1].starting_sector*512, mbr.part[nr-1].nr_of_sectors*512, this);
+    /* Overflow-safe offset/size for MBR partition (uint32_t * 512) */
+    quint64 mbrStart = static_cast<quint64>(mbr.part[nr-1].starting_sector) * 512;
+    quint64 mbrSize  = static_cast<quint64>(mbr.part[nr-1].nr_of_sectors) * 512;
+
+    return new DeviceWrapperFatPartition(this, mbrStart, mbrSize, this);
 }
 
