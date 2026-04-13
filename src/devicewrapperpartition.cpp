@@ -19,7 +19,9 @@ DeviceWrapperPartition::~DeviceWrapperPartition()
 
 void DeviceWrapperPartition::read(char *data, qint64 size)
 {
-    if (_offset+size > _partEnd)
+    // Overflow-safe bounds check: rewrite (offset + size > end) as (size > end - offset)
+    // to avoid wrapping past UINT64_MAX when offset is near the limit.
+    if (size < 0 || static_cast<quint64>(size) > _partEnd - _offset)
     {
         throw std::runtime_error("Error: trying to read beyond partition");
     }
@@ -30,11 +32,11 @@ void DeviceWrapperPartition::read(char *data, qint64 size)
 
 void DeviceWrapperPartition::seek(qint64 pos)
 {
-    if (pos > _partLen)
+    if (pos < 0 || static_cast<quint64>(pos) > _partLen)
     {
         throw std::runtime_error("Error: trying to seek beyond partition");
     }
-    _offset = pos+_partStart;
+    _offset = static_cast<quint64>(pos) + _partStart;
 }
 
 qint64 DeviceWrapperPartition::pos() const
@@ -44,7 +46,8 @@ qint64 DeviceWrapperPartition::pos() const
 
 void DeviceWrapperPartition::write(const char *data, qint64 size)
 {
-    if (_offset+size > _partEnd)
+    // Overflow-safe bounds check (see read() comment).
+    if (size < 0 || static_cast<quint64>(size) > _partEnd - _offset)
     {
         throw std::runtime_error("Error: trying to write beyond partition");
     }
