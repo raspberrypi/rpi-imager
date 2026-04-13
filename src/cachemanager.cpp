@@ -8,6 +8,7 @@
 #include <QCryptographicHash>
 #include <QFile>
 #include <QDir>
+#include <QTemporaryFile>
 #include <QDebug>
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -522,16 +523,16 @@ bool CacheVerificationWorker::ensureCacheDirectoryExists()
         }
     }
     
-    // Test write access
-    QString testFile = cacheDir + QDir::separator() + "test_write_access.tmp";
-    QFile test(testFile);
-    if (!test.open(QIODevice::WriteOnly)) {
+    // Test write access using QTemporaryFile which atomically creates a unique
+    // file with restrictive permissions, avoiding TOCTOU races and symlink attacks.
+    QTemporaryFile test(cacheDir + QDir::separator() + "write_test_XXXXXX");
+    test.setAutoRemove(true);
+    if (!test.open()) {
         qDebug() << "Cache directory not writable:" << cacheDir;
         return false;
     }
     test.write("test");
-    test.close();
-    QFile::remove(testFile);
+    // QTemporaryFile auto-removes on destruction
     
     return true;
 }
