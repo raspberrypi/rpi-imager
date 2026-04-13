@@ -9,6 +9,29 @@
 #include <QRegularExpression>
 #include "ssid_helper.h"
 #include "location_helper.h"
+#include <string.h>
+
+// Securely zero a QByteArray's internal buffer using memset_s (C11 Annex K),
+// which the compiler is forbidden from optimising away.
+// Note: QByteArray uses copy-on-write, so this only clears THIS instance's
+// buffer.  Copies returned to callers (e.g. from getPSK()) must be managed
+// by the caller.
+static void secureClearByteArray(QByteArray &ba) {
+    if (ba.isEmpty())
+        return;
+    // .data() triggers COW detach, but that's what we want: we need a
+    // writable pointer, and if we're the only holder the buffer is the
+    // original.  If someone else shares it, they still hold a ref and
+    // we can only zero our own copy — the caller is responsible for
+    // clearing their copy.
+    memset_s(ba.data(), ba.size(), 0, ba.size());
+    ba.clear();
+}
+
+MacWlanCredentials::~MacWlanCredentials()
+{
+    secureClearByteArray(_ssid);
+}
 
 QByteArray MacWlanCredentials::getSSID()
 {
@@ -113,6 +136,7 @@ QByteArray MacWlanCredentials::getPSKForSSID(const QByteArray &ssid)
                     if (bestModDate.isEmpty() || (!modDateStr.isEmpty() && modDateStr > bestModDate))
                     {
                         bestModDate = modDateStr;
+                        secureClearByteArray(bestPsk);
                         bestPsk = QByteArray(static_cast<const char*>(pwdData), pwdLen);
                     }
 

@@ -11,6 +11,7 @@
 class MacWlanCredentials : public WlanCredentials
 {
 public:
+    ~MacWlanCredentials();
     virtual QByteArray getSSID();
     virtual QByteArray getPSK();
     virtual QByteArray getPSKForSSID(const QByteArray &ssid);
