@@ -1117,22 +1117,34 @@ bool launchDetached(const QString& program, const QStringList& arguments) {
         }
         
         // Grandchild - build argv and exec
-        
+
         // Clear AppImage environment before running external tools
         clearAppImageEnvironment();
-        
+
         QByteArray programBytes = program.toUtf8();
         std::vector<QByteArray> argBytes;
         std::vector<char*> argv;
-        
+
         argv.push_back(programBytes.data());
         for (const QString& arg : arguments) {
             argBytes.push_back(arg.toUtf8());
             argv.push_back(argBytes.back().data());
         }
         argv.push_back(nullptr);
-        
-        execvp(programBytes.constData(), argv.data());
+
+        // Resolve to absolute path to prevent PATH hijack under elevated privileges.
+        QByteArray resolvedProgram = programBytes;
+        if (!programBytes.startsWith('/')) {
+            static const char *searchDirs[] = {"/usr/bin/", "/bin/", "/usr/sbin/", "/sbin/", nullptr};
+            for (const char **dir = searchDirs; *dir; ++dir) {
+                QByteArray candidate = QByteArray(*dir) + programBytes;
+                if (access(candidate.constData(), X_OK) == 0) {
+                    resolvedProgram = candidate;
+                    break;
+                }
+            }
+        }
+        execv(resolvedProgram.constData(), argv.data());
         _exit(127);  // exec failed
     }
     
@@ -1252,7 +1264,7 @@ void execElevated(const QStringList& extraArgs) {
     
     fflush(stdout);
     fflush(stderr);
-    execvp("pkexec", argv.data());
+    execv("/usr/bin/pkexec", argv.data());
     
     // Only reached if exec failed
     qWarning() << "Failed to exec pkexec:" << strerror(errno);
