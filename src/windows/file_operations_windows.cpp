@@ -673,17 +673,38 @@ FileError WindowsFileOperations::LockVolume() {
     return FileError::kOpenError;
   }
 
-  DWORD bytes_returned;
-  if (!DeviceIoControl(handle_, FSCTL_LOCK_VOLUME,
-                       nullptr, 0, nullptr, 0, &bytes_returned, nullptr)) {
-    // Lock may fail for files (not devices), which is okay
+  // Retry with geometric backoff — the volume may be temporarily held by
+  // Explorer, antivirus, or Windows search indexer after a dismount.
+  constexpr int kMaxRetries = 8;
+  constexpr int kInitialDelayMs = 100;
+  int delayMs = kInitialDelayMs;
+
+  for (int attempt = 0; attempt <= kMaxRetries; attempt++) {
+    DWORD bytes_returned;
+    if (DeviceIoControl(handle_, FSCTL_LOCK_VOLUME,
+                        nullptr, 0, nullptr, 0, &bytes_returned, nullptr)) {
+      if (attempt > 0) {
+        Log("FSCTL_LOCK_VOLUME succeeded on retry " + std::to_string(attempt));
+      }
+      return FileError::kSuccess;
+    }
+
     DWORD error = GetLastError();
-    if (error != ERROR_INVALID_FUNCTION) {
-      return FileError::kLockError;
+    // ERROR_INVALID_FUNCTION means this isn't a volume (e.g. a regular file) — not an error
+    if (error == ERROR_INVALID_FUNCTION) {
+      return FileError::kSuccess;
+    }
+
+    if (attempt < kMaxRetries) {
+      Log("FSCTL_LOCK_VOLUME failed (error " + std::to_string(error) +
+          "), retrying in " + std::to_string(delayMs) + "ms");
+      Sleep(delayMs);
+      delayMs *= 2;
     }
   }
 
-  return FileError::kSuccess;
+  Log("FSCTL_LOCK_VOLUME failed after " + std::to_string(kMaxRetries) + " retries, giving up");
+  return FileError::kLockError;
 }
 
 FileError WindowsFileOperations::UnlockVolume() {

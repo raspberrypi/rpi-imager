@@ -320,9 +320,53 @@ bool DownloadThread::_openAndPrepareDevice()
 
     // Device path is already platform-optimized by caller (e.g., rdisk on macOS)
     rpi_imager::FileError result = _file->OpenDevice(filename_str);
+
+#ifdef Q_OS_WIN
+    // On Windows, the device may be temporarily held by the OS after volume
+    // dismount/clean operations (especially on Windows 11 25H2+).
+    // Retry with geometric backoff, keeping the user informed.
+    if (result != rpi_imager::FileError::kSuccess)
+    {
+        int lastErr = _file->GetLastErrorCode();
+        // Only retry for transient access errors, not permanent failures
+        if (lastErr == ERROR_ACCESS_DENIED || lastErr == ERROR_SHARING_VIOLATION || lastErr == ERROR_NOT_READY)
+        {
+            constexpr int kMaxRetries = 8;
+            constexpr int kInitialDelayMs = 250;
+            int delayMs = kInitialDelayMs;
+
+            for (int attempt = 1; attempt <= kMaxRetries && !_cancelled; attempt++)
+            {
+                int totalWaitSec = 0;
+                int d = kInitialDelayMs;
+                for (int i = 1; i < attempt; i++) { totalWaitSec += d; d *= 2; }
+                totalWaitSec = (totalWaitSec + delayMs) / 1000;
+
+                emit preparationStatusUpdate(tr("Waiting for drive to become available... (%1s)")
+                    .arg(totalWaitSec));
+                qDebug() << "OpenDevice retry" << attempt << "of" << kMaxRetries
+                         << "after error" << lastErr << "- waiting" << delayMs << "ms";
+
+                QThread::msleep(delayMs);
+                delayMs *= 2;
+
+                result = _file->OpenDevice(filename_str);
+                if (result == rpi_imager::FileError::kSuccess)
+                {
+                    qDebug() << "OpenDevice succeeded on retry" << attempt;
+                    break;
+                }
+                lastErr = _file->GetLastErrorCode();
+                if (lastErr != ERROR_ACCESS_DENIED && lastErr != ERROR_SHARING_VIOLATION && lastErr != ERROR_NOT_READY)
+                    break;  // Non-transient error, stop retrying
+            }
+        }
+    }
+#endif
+
     qint64 authOpenMs = authTimer.elapsed();
     qDebug() << "Device authorization and open took" << authOpenMs << "ms";
-    
+
     if (result != rpi_imager::FileError::kSuccess)
     {
 #ifdef Q_OS_DARWIN

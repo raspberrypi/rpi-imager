@@ -16,7 +16,15 @@
 
 #include <windows.h>
 #include <winioctl.h>
+#include <ntdddisk.h>
 #include <shlobj.h>
+
+// IOCTL_DISK_ARE_VOLUMES_READY (Windows 8+) waits for the OS to finish
+// bringing volumes online after partition table changes.
+// Define it ourselves in case the SDK headers are too old.
+#ifndef IOCTL_DISK_ARE_VOLUMES_READY
+#define IOCTL_DISK_ARE_VOLUMES_READY CTL_CODE(IOCTL_DISK_BASE, 0x0087, METHOD_BUFFERED, FILE_READ_ACCESS)
+#endif
 
 namespace DiskpartUtil {
 
@@ -111,14 +119,25 @@ DiskpartResult unmountVolumes(const QByteArray &device, TimingCallback timingCal
                 DWORD bytesReturned;
                 
                 // Lock the volume (prevents other processes from accessing it)
-                for (int attempt = 0; attempt < 10; attempt++)
+                // Use geometric backoff — Windows 11 25H2+ may hold handles longer
                 {
-                    if (DeviceIoControl(hVolume, FSCTL_LOCK_VOLUME, nullptr, 0, nullptr, 0, &bytesReturned, nullptr))
+                    bool locked = false;
+                    int lockDelayMs = 100;
+                    for (int attempt = 0; attempt < 8; attempt++)
                     {
-                        qDebug() << "Locked volume" << driveLetter;
-                        break;
+                        if (DeviceIoControl(hVolume, FSCTL_LOCK_VOLUME, nullptr, 0, nullptr, 0, &bytesReturned, nullptr))
+                        {
+                            qDebug() << "Locked volume" << driveLetter;
+                            locked = true;
+                            break;
+                        }
+                        qDebug() << "FSCTL_LOCK_VOLUME failed for" << driveLetter
+                                 << "- retrying in" << lockDelayMs << "ms";
+                        QThread::msleep(lockDelayMs);
+                        lockDelayMs *= 2;
                     }
-                    QThread::msleep(50);  // Reduced from 100ms
+                    if (!locked)
+                        qDebug() << "Could not lock volume" << driveLetter << "- proceeding with dismount anyway";
                 }
                 
                 // Dismount the volume (flushes buffers and invalidates handles)
@@ -276,15 +295,27 @@ DiskpartResult cleanDiskFast(const QByteArray &device, TimingCallback timingCall
         {
             qDebug() << "Updated disk properties";
         }
+
+        // Wait for the OS to finish processing volume changes (Windows 8+).
+        // This is a proper waitable IOCTL — it blocks until all volumes on the
+        // disk have been brought online (or torn down), rather than relying on
+        // an arbitrary sleep.  Falls back to a fixed delay if the IOCTL is not
+        // supported on this OS version.
+        QElapsedTimer volumeReadyTimer;
+        volumeReadyTimer.start();
+        if (DeviceIoControl(hDisk, IOCTL_DISK_ARE_VOLUMES_READY, nullptr, 0, nullptr, 0, &bytesReturned, nullptr))
+        {
+            qDebug() << "IOCTL_DISK_ARE_VOLUMES_READY completed in" << volumeReadyTimer.elapsed() << "ms";
+        }
+        else
+        {
+            DWORD error = GetLastError();
+            qDebug() << "IOCTL_DISK_ARE_VOLUMES_READY failed with error" << error << "- falling back to fixed delay";
+            QThread::msleep(500);
+        }
     }
-    
+
     CloseHandle(hDisk);
-    
-    if (success)
-    {
-        // Brief pause to let Windows process the changes (reduced from 1 second)
-        QThread::msleep(200);
-    }
     
     quint32 rescanElapsed = static_cast<quint32>(rescanTimer.elapsed());
     if (timingCallback && success)
