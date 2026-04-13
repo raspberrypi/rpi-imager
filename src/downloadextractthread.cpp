@@ -102,7 +102,7 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize);
     
     // Create ring buffer for decompress -> write path (decompressed data)
-    _writeRingBuffer = std::make_unique<RingBuffer>(writeSlots, actualWriteSize, pageSize);
+    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize);
     
     qDebug() << "Using buffer size:" << _writeBufferSize << "bytes with page size:" << pageSize << "bytes";
     qDebug() << "Input ring buffer:" << inputSlots << "slots of" << actualInputSize << "bytes";
@@ -404,14 +404,17 @@ void DownloadExtractThread::extractImageRun()
             // Emit progress updates during extraction
             _emitProgressUpdate();
 
-            // Create a completion callback that releases the ring buffer slot
+            // Create a completion callback that releases the ring buffer slot.
             // This enables ZERO-COPY async I/O: the slot stays valid until the
             // async write truly completes, then is returned to the pool.
-            // Capture slot and buffer pointers by value for the callback.
-            RingBuffer* ringBuf = _writeRingBuffer.get();
+            // Capture a shared_ptr copy to extend the ring buffer's lifetime
+            // until all outstanding async callbacks have completed, preventing
+            // use-after-free if the owning thread resets _writeRingBuffer
+            // while callbacks are still pending.
+            std::shared_ptr<RingBuffer> ringBufRef = _writeRingBuffer;
             RingBuffer::Slot* slotToRelease = slot;
-            DownloadThread::WriteCompleteCallback releaseCallback = [ringBuf, slotToRelease]() {
-                ringBuf->releaseReadSlot(slotToRelease);
+            DownloadThread::WriteCompleteCallback releaseCallback = [ringBufRef, slotToRelease]() {
+                ringBufRef->releaseReadSlot(slotToRelease);
             };
             
             // IMPORTANT: Call _writeFile directly from extraction thread instead of via

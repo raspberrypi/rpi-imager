@@ -54,9 +54,10 @@ protected:
     static const int RING_BUFFER_SLOTS;  // Number of slots in ring buffer
     RingBuffer::Slot* _currentReadSlot;  // Current slot being read by libarchive
     
-    // Ring buffer for decompress -> write path (decompressed data)
-    // Uses 4 slots to ensure buffers aren't reused while hash computation is pending
-    std::unique_ptr<RingBuffer> _writeRingBuffer;
+    // Ring buffer for decompress -> write path (decompressed data).
+    // Uses 4 slots to ensure buffers aren't reused while hash computation is pending.
+    // shared_ptr so that async I/O completion callbacks can safely extend its lifetime.
+    std::shared_ptr<RingBuffer> _writeRingBuffer;
     RingBuffer::Slot* _currentWriteSlot;  // Current slot being written
     
     bool _ethreadStarted, _isImage;
