@@ -376,7 +376,7 @@ Result<void> DiskFormatter::WriteFatTables(
     const Fat32Config& config) const {
   
   std::uint32_t sectors_per_fat = CalculateSectorsPerFat(config);
-  std::uint32_t fat_size_bytes = sectors_per_fat * kSectorSize;
+  std::uint64_t fat_size_bytes = static_cast<std::uint64_t>(sectors_per_fat) * kSectorSize;
   
   // Use aligned buffer for O_DIRECT compatibility on Linux
   AlignedBuffer fat_table(fat_size_bytes);
@@ -393,7 +393,8 @@ Result<void> DiskFormatter::WriteFatTables(
 
   // Write both FAT copies
   for (std::uint8_t fat_num = 0; fat_num < config.num_fats; ++fat_num) {
-    std::uint64_t fat_offset = static_cast<std::uint64_t>(fat_start_sector + (fat_num * sectors_per_fat)) * kSectorSize;
+    std::uint64_t fat_offset = (static_cast<std::uint64_t>(fat_start_sector)
+        + static_cast<std::uint64_t>(fat_num) * sectors_per_fat) * kSectorSize;
     FileError error = file_ops_->WriteAtOffset(fat_offset, fat_table.data(), fat_size_bytes);
     if (error != FileError::kSuccess) {
       return Result<void>(ConvertError(error));
