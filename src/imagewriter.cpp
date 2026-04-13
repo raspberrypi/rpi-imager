@@ -4430,7 +4430,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
 void ImageWriter::reboot()
 {
     qDebug() << "Rebooting system.";
-    (void)system("reboot");
+    QProcess::execute(QStringLiteral("/sbin/reboot"), QStringList());
 }
 
 void ImageWriter::openUrl(const QUrl &url)
@@ -4571,13 +4571,10 @@ void ImageWriter::openUrl(const QUrl &url)
         qDebug() << "Started open";
     }
 #elif defined(Q_OS_WIN)
-    // Use start on Windows
-    success = PlatformQuirks::launchDetached("cmd", QStringList() << "/c" << "start" << url.toString());
-    if (!success) {
-        qWarning() << "Failed to start cmd /c start process";
-    } else {
-        qDebug() << "Started cmd /c start";
-    }
+    // Use QDesktopServices directly on Windows.
+    // Do NOT use cmd /c start — it passes the URL through the shell,
+    // allowing metacharacters (&, |, etc.) to execute arbitrary commands.
+    success = false;
 #endif
 
     // Fallback to Qt's method if platform command failed or platform is unsupported
