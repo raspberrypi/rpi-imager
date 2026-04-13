@@ -1173,23 +1173,25 @@ bool DeviceWrapperFatPartition::getDirEntry(const QString &longFilename, struct 
 
         QString longFilenameWithNull = longFilename + QChar::Null;
         char *longFilenameStr = (char *) longFilenameWithNull.utf16();
-        int lenBytes = longFilenameWithNull.length() * 2;
-        int lfnFragments = (lenBytes + 25) / 26;
+        size_t lenBytes = static_cast<size_t>(longFilenameWithNull.length()) * 2;
+        size_t lfnFragments = (lenBytes + 25) / 26;
 
         qDebug() << "getDirEntry: writing" << lfnFragments << "long filename fragments";
 
         /* long file name directory entries are added in reverse order before the 8.3 entry */
-        for (int i = lfnFragments; i > 0; i--)
+        for (size_t i = lfnFragments; i > 0; i--)
         {
             memset(&longEntry, 0xff, sizeof(longEntry));
             longEntry.LDIR_Attr = ATTR_LONG_NAME;
             longEntry.LDIR_Chksum = shortFileNameChecksum;
-            longEntry.LDIR_Ord = (i == lfnFragments) ? (LAST_LONG_ENTRY | i) : i;
+            longEntry.LDIR_Ord = (i == lfnFragments) ? (LAST_LONG_ENTRY | static_cast<uint8_t>(i)) : static_cast<uint8_t>(i);
             longEntry.LDIR_FstClusLO = 0;
             longEntry.LDIR_Type = 0;
 
             size_t start = (i-1) * 26;
-            memcpy(longEntry.LDIR_Name1, longFilenameStr+start, qMin(lenBytes-start, sizeof(longEntry.LDIR_Name1)));
+            if (start < lenBytes) {
+                memcpy(longEntry.LDIR_Name1, longFilenameStr+start, qMin(lenBytes-start, sizeof(longEntry.LDIR_Name1)));
+            }
             start += sizeof(longEntry.LDIR_Name1);
             if (start < lenBytes)
             {
