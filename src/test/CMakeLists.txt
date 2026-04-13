@@ -487,4 +487,54 @@ add_custom_target(test_rpiboot
     COMMENT "Running all rpiboot unit tests"
 )
 
+# ============================================================================
+# Disk Formatter Tests
+# ============================================================================
+
+# Standalone test (not Catch2) — uses POSIX fork/exec for system tool validation
+if(NOT WIN32)
+    add_executable(disk_formatter_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../disk_formatter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../aligned_buffer.h
+        ${PLATFORM_FILE_OPS}
+        disk_formatter_test.cpp
+    )
+
+    # Enable Qt MOC for Q_OBJECT classes (e.g. MacFile on macOS)
+    set_target_properties(disk_formatter_test PROPERTIES AUTOMOC ON)
+
+    target_include_directories(disk_formatter_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+
+    # Qt6::Core needed by platform file_operations (QFile, QDebug)
+    target_link_libraries(disk_formatter_test PRIVATE
+        Qt6::Core
+    )
+
+    target_compile_features(disk_formatter_test PRIVATE cxx_std_20)
+    target_compile_options(disk_formatter_test PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+
+    if(APPLE)
+        target_link_libraries(disk_formatter_test PRIVATE
+            "-framework Security"
+            "-framework DiskArbitration"
+            "-framework CoreFoundation"
+        )
+    endif()
+
+    add_custom_target(test_disk_formatter
+        COMMAND disk_formatter_test
+        DEPENDS disk_formatter_test
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Running disk formatter tests"
+    )
+endif()
+
 

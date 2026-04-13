@@ -12,6 +12,10 @@
 #include <cstdlib>
 #include <cassert>
 #include <cstring>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 namespace fs = std::filesystem;
 using namespace rpi_imager;
@@ -184,94 +188,162 @@ class DiskFormatterTest {
     return true;
   }
   
+  // Run a command with separate argv (no shell interpretation).
+  // Returns the exit status, or -1 on fork/exec failure.
+  static int runCommand(const char *path, const std::vector<const char*> &argv) {
+    pid_t pid = fork();
+    if (pid < 0) return -1;
+    if (pid == 0) {
+      // Redirect stdout/stderr to /dev/null
+      int devnull = open("/dev/null", O_WRONLY);
+      if (devnull >= 0) { dup2(devnull, 1); dup2(devnull, 2); close(devnull); }
+      execv(path, const_cast<char *const *>(argv.data()));
+      _exit(127);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+  }
+
+  // Validate that a string looks like a /dev/loop device path.
+  static bool isValidLoopDevice(const char *s) {
+    // Must match /dev/loop[0-9]+
+    if (strncmp(s, "/dev/loop", 9) != 0) return false;
+    const char *p = s + 9;
+    if (*p == '\0') return false;
+    while (*p) { if (*p < '0' || *p > '9') return false; p++; }
+    return true;
+  }
+
   static bool TestSystemToolValidation() {
     std::cout << "Testing with system tools...\n";
-    
+
     const std::string test_file = "/tmp/test_system.img";
     const std::uint64_t disk_size = 64 * 1024 * 1024;  // 64MB
-    
+
     fs::remove(test_file);
-    
+
     DiskFormatter formatter;
     auto result = formatter.FormatFile(test_file, disk_size);
-    
+
     if (!result) {
-      std::cout << "❌ Failed to format file\n";
+      std::cout << "Failed to format file\n";
       return false;
     }
-    
+
     bool all_passed = true;
-    
-    // Test with fdisk to check partition table
-    std::string fdisk_cmd = "fdisk -l " + test_file + " 2>/dev/null";
-    if (std::system(fdisk_cmd.c_str()) != 0) {
-      std::cout << "⚠️  fdisk validation failed (tool may not be available)\n";
-    } else {
-      std::cout << "✅ fdisk validation passed\n";
-    }
-    
-    // Test with file command to detect filesystem
-    std::string file_cmd = "file " + test_file + " 2>/dev/null | grep -q 'DOS/MBR boot sector'";
-    if (std::system(file_cmd.c_str()) != 0) {
-      std::cout << "⚠️  file command validation failed\n";
-    } else {
-      std::cout << "✅ file command validation passed\n";
-    }
-    
-    // Try to mount the filesystem (requires loop device support)
-    std::string mkdir_cmd = "mkdir -p /tmp/test_mount 2>/dev/null";
-    std::system(mkdir_cmd.c_str());
-    
-    // Set up loop device and mount
-    std::string loop_cmd = "sudo losetup -f --show " + test_file + " 2>/dev/null";
-    FILE* loop_pipe = popen(loop_cmd.c_str(), "r");
-    if (loop_pipe) {
-      char loop_device[256] = {};
-      if (fgets(loop_device, sizeof(loop_device), loop_pipe)) {
-        // Remove newline
-        loop_device[strcspn(loop_device, "\n")] = 0;
-        
-        // Mount the first partition
-        std::string mount_cmd = "sudo mount " + std::string(loop_device) + "p1 /tmp/test_mount 2>/dev/null";
-        if (std::system(mount_cmd.c_str()) == 0) {
-          std::cout << "✅ Mount test passed\n";
-          
-          // Test creating a file
-          std::string touch_cmd = "sudo touch /tmp/test_mount/test.txt 2>/dev/null";
-          if (std::system(touch_cmd.c_str()) == 0) {
-            std::cout << "✅ File creation test passed\n";
-            std::system("sudo rm /tmp/test_mount/test.txt 2>/dev/null");
-          } else {
-            std::cout << "⚠️  File creation test failed\n";
-          }
-          
-          // Unmount
-          std::system("sudo umount /tmp/test_mount 2>/dev/null");
-        } else {
-          std::cout << "⚠️  Mount test failed (may require sudo privileges)\n";
-        }
-        
-        // Detach loop device
-        std::string detach_cmd = "sudo losetup -d " + std::string(loop_device) + " 2>/dev/null";
-        std::system(detach_cmd.c_str());
+
+    // Test with fdisk to check partition table (safe: test_file is a hardcoded constant)
+    {
+      std::vector<const char*> argv = {"fdisk", "-l", test_file.c_str(), nullptr};
+      if (runCommand("/usr/sbin/fdisk", argv) != 0) {
+        std::cout << "fdisk validation failed (tool may not be available)\n";
+      } else {
+        std::cout << "fdisk validation passed\n";
       }
-      pclose(loop_pipe);
-    } else {
-      std::cout << "⚠️  Loop device test skipped (requires sudo)\n";
     }
-    
-    // Clean up
-    std::system("rmdir /tmp/test_mount 2>/dev/null");
-    
+
+    // Test with file command to detect filesystem
+    {
+      std::vector<const char*> argv = {"file", test_file.c_str(), nullptr};
+      if (runCommand("/usr/bin/file", argv) != 0) {
+        std::cout << "file command validation failed\n";
+      } else {
+        std::cout << "file command validation passed\n";
+      }
+    }
+
+    // Set up loop device and mount (requires sudo)
+    {
+      std::vector<const char*> mkdirArgv = {"mkdir", "-p", "/tmp/test_mount", nullptr};
+      runCommand("/bin/mkdir", mkdirArgv);
+    }
+
+    // Use popen for losetup since we need to read its output, but validate the result
+    {
+      // Use fork/exec to safely get loop device name
+      int pipefd[2];
+      if (pipe(pipefd) == 0) {
+        pid_t pid = fork();
+        if (pid == 0) {
+          close(pipefd[0]);
+          dup2(pipefd[1], 1); // stdout -> pipe
+          close(pipefd[1]);
+          int devnull = open("/dev/null", O_WRONLY);
+          if (devnull >= 0) { dup2(devnull, 2); close(devnull); }
+          const char *argv[] = {"sudo", "losetup", "-f", "--show", test_file.c_str(), nullptr};
+          execv("/usr/bin/sudo", const_cast<char *const *>(argv));
+          _exit(127);
+        } else if (pid > 0) {
+          close(pipefd[1]);
+          char loop_device[256] = {};
+          ssize_t n = read(pipefd[0], loop_device, sizeof(loop_device) - 1);
+          close(pipefd[0]);
+          int status = 0;
+          waitpid(pid, &status, 0);
+
+          if (n > 0) {
+            loop_device[strcspn(loop_device, "\n")] = 0;
+
+            // Validate loop device path before using it in any command
+            if (isValidLoopDevice(loop_device)) {
+              std::string loopPart = std::string(loop_device) + "p1";
+
+              // Mount
+              std::vector<const char*> mountArgv = {"sudo", "mount", "-t", "vfat",
+                                                     loopPart.c_str(), "/tmp/test_mount", nullptr};
+              if (runCommand("/usr/bin/sudo", mountArgv) == 0) {
+                std::cout << "Mount test passed\n";
+
+                // Test file creation
+                std::vector<const char*> touchArgv = {"sudo", "touch", "/tmp/test_mount/test.txt", nullptr};
+                if (runCommand("/usr/bin/sudo", touchArgv) == 0) {
+                  std::cout << "File creation test passed\n";
+                  std::vector<const char*> rmArgv = {"sudo", "rm", "/tmp/test_mount/test.txt", nullptr};
+                  runCommand("/usr/bin/sudo", rmArgv);
+                } else {
+                  std::cout << "File creation test failed\n";
+                }
+
+                // Unmount
+                std::vector<const char*> umountArgv = {"sudo", "umount", "/tmp/test_mount", nullptr};
+                runCommand("/usr/bin/sudo", umountArgv);
+              } else {
+                std::cout << "Mount test failed (may require sudo privileges)\n";
+              }
+
+              // Detach loop device
+              std::vector<const char*> detachArgv = {"sudo", "losetup", "-d", loop_device, nullptr};
+              runCommand("/usr/bin/sudo", detachArgv);
+            } else {
+              std::cout << "Invalid loop device path returned, skipping mount test\n";
+            }
+          }
+        } else {
+          close(pipefd[0]);
+          close(pipefd[1]);
+          std::cout << "Loop device test skipped (fork failed)\n";
+        }
+      }
+    }
+
+    // Clean up mount point
+    {
+      std::vector<const char*> argv = {"rmdir", "/tmp/test_mount", nullptr};
+      runCommand("/bin/rmdir", argv);
+    }
+
     // Verify filesystem with fsck.fat if available
-    std::string fsck_cmd = "fsck.fat -v " + test_file + " 2>/dev/null";
-    if (std::system(fsck_cmd.c_str()) == 0) {
-      std::cout << "✅ fsck.fat validation passed\n";
-    } else {
-      std::cout << "⚠️  fsck.fat validation skipped (tool may not be available)\n";
+    {
+      std::vector<const char*> argv = {"fsck.fat", "-v", test_file.c_str(), nullptr};
+      if (runCommand("/usr/sbin/fsck.fat", argv) == 0) {
+        std::cout << "fsck.fat validation passed\n";
+      } else {
+        std::cout << "fsck.fat validation skipped (tool may not be available)\n";
+      }
     }
-    
-    std::cout << "✅ System tool validation completed\n";
+
+    std::cout << "System tool validation completed\n";
     return all_passed;
   }
 };
