@@ -10,6 +10,9 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <pwd.h>
+#include <limits.h>
+#include <errno.h>
+#include <string>
 
 #include <QtDBus/QtDBus>
 
@@ -76,29 +79,37 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
     // terminate that read at any time by closing our end, which then
     // unblocks the inhibitor.
 
-    // Generate and claim a unique filename for the FIFO in /run (runtime directory).
-    snprintf(_fifoName, sizeof(_fifoName), "/run/rpi-imager-suspend_XXXXXX");
-
-    int fd = mkstemp(_fifoName);
-
-    if (fd < 0)
+    // Create a FIFO with a unique name in /run.
+    // We use random bytes to generate the name and call mkfifo() directly,
+    // which atomically fails with EEXIST if the name is taken.
+    // This avoids the TOCTOU race of mkstemp() -> unlink() -> mkfifo().
+    _fifoName[0] = '\0';
+    for (int attempt = 0; attempt < 16; attempt++)
     {
-        // It just isn't working out. :-(
+        unsigned long rnd = 0;
+        int rfd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+        if (rfd >= 0) {
+            (void)read(rfd, &rnd, sizeof(rnd));
+            close(rfd);
+        } else {
+            rnd = static_cast<unsigned long>(getpid()) ^ static_cast<unsigned long>(attempt * 65537);
+        }
+        snprintf(_fifoName, sizeof(_fifoName), "/run/rpi-imager-suspend_%lx", rnd);
+
+        if (mkfifo(_fifoName, 0600) == 0)
+            break; // Success — FIFO created atomically
+
+        if (errno != EEXIST) {
+            // Unexpected error (permissions, etc.)
+            _fifoName[0] = '\0';
+            return;
+        }
+        // Name collision — retry with a new random value
         _fifoName[0] = '\0';
-        return;
     }
 
-    // The name was claimed with a regular file. Close the handle to that file
-    // and then replace the file with a FIFO.
-    close(fd);
-    unlink(_fifoName);
-    
-    if (mkfifo(_fifoName, 0600) < 0)
-    {
-        // Can't make the FIFO. Oh well. :-(
-        _fifoName[0] = '\0';
-        return;
-    }
+    if (_fifoName[0] == '\0')
+        return; // All attempts exhausted
 
     // Open the FIFO, creating our end of the pipe.
     _controlFd = open(_fifoName, O_RDWR);
@@ -194,8 +205,23 @@ ProcessScopedSuspendInhibitor::ProcessScopedSuspendInhibitor(const char *fileNam
         argv.push_back(_fifoName);
         argv.push_back(NULL);
         
-        // (execvp() does not return on success)
-        execvp(fileName, const_cast<char* const*>(argv.data()));
+        // Resolve to absolute path to prevent PATH hijack when running
+        // with elevated privileges. execvp searches PATH which is unsafe.
+        const char *resolvedPath = fileName;
+        char resolvedBuf[PATH_MAX];
+        // Check common system binary locations
+        static const char *searchDirs[] = {"/usr/bin/", "/bin/", "/usr/sbin/", "/sbin/", nullptr};
+        for (const char **dir = searchDirs; *dir; ++dir) {
+            std::string candidate = std::string(*dir) + fileName;
+            if (access(candidate.c_str(), X_OK) == 0) {
+                strncpy(resolvedBuf, candidate.c_str(), sizeof(resolvedBuf) - 1);
+                resolvedBuf[sizeof(resolvedBuf) - 1] = '\0';
+                resolvedPath = resolvedBuf;
+                break;
+            }
+        }
+        // (execv() does not return on success)
+        execv(resolvedPath, const_cast<char* const*>(argv.data()));
         
         // If we get here, exec failed. Must use _exit() not exit() in forked child.
         _exit(127);
