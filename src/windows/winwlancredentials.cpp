@@ -50,6 +50,20 @@ inline QString unescapeXml(QString str)
     return str;
 }
 
+WinWlanCredentials::~WinWlanCredentials()
+{
+    // Securely erase credentials from memory to prevent recovery
+    // from core dumps, swap, or cold-boot attacks.
+    if (!_psk.isEmpty()) {
+        SecureZeroMemory(_psk.data(), _psk.size());
+        _psk.clear();
+    }
+    if (!_ssid.isEmpty()) {
+        SecureZeroMemory(_ssid.data(), _ssid.size());
+        _ssid.clear();
+    }
+}
+
 WinWlanCredentials::WinWlanCredentials()
 {
     if (!hWlanApi)
@@ -119,12 +133,17 @@ WinWlanCredentials::WinWlanCredentials()
                                           NULL, &xmlstr, &flags, &access)) == ERROR_SUCCESS && xmlstr)
                         {
                             QString xml = QString::fromWCharArray(xmlstr);
-                            qDebug() << "XML wlan profile:" << xml;
                             QRegularExpression rx("<keyMaterial>(.+)</keyMaterial>");
                             QRegularExpressionMatch match = rx.match(xml);
 
                             if (match.hasMatch()) {
                                 _psk = unescapeXml(match.captured(1)).toLatin1();
+                            }
+
+                            // Zero the local XML string that contains the plaintext PSK
+                            // inside <keyMaterial> tags before it goes out of scope.
+                            if (xml.size() > 0) {
+                                SecureZeroMemory(xml.data(), xml.size() * sizeof(QChar));
                             }
 
                             WlanFreeMemory(xmlstr);

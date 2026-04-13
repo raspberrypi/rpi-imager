@@ -12,6 +12,7 @@ class WinWlanCredentials : public WlanCredentials
 {
 public:
     WinWlanCredentials();
+    ~WinWlanCredentials();
     virtual QByteArray getSSID();
     virtual QByteArray getPSK();
     virtual QByteArray getPSKForSSID(const QByteArray &ssid);
