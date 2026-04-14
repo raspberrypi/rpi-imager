@@ -1034,10 +1034,7 @@ void ImageWriter::startWrite()
 
     if (_extrLen && !_multipleFilesInZip && _extrLen % 512 != 0)
     {
-        emit error(tr("Input file is not a valid disk image.\n\n"
-                      "File size %1 bytes is not a multiple of 512 bytes.")
-                   .arg(_extrLen));
-        return;
+        qDebug() << "Image size" << _extrLen << "is not a multiple of 512 bytes. The last sector will be zero-padded.";
     }
 
     // Start performance stats session early so cache lookup is captured
