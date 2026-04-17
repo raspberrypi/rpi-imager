@@ -1043,6 +1043,47 @@ int WindowsFileOperations::GetLastErrorCode() const {
   return last_error_code_;
 }
 
+WriteErrorClass WindowsFileOperations::ClassifyLastWriteError() const {
+  switch (last_error_code_) {
+    case ERROR_ACCESS_DENIED: {
+      // Probe Windows Defender Controlled Folder Access. If enabled, surface
+      // the dedicated category so the UI can point the user at the allow-list.
+      HKEY key;
+      LONG rc = RegOpenKeyExA(
+          HKEY_LOCAL_MACHINE,
+          "SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
+          0,
+          KEY_READ | KEY_WOW64_64KEY,
+          &key);
+      if (rc == ERROR_SUCCESS) {
+        DWORD value = 0;
+        DWORD size = sizeof(value);
+        DWORD type = 0;
+        rc = RegQueryValueExA(key, "EnableControlledFolderAccess", nullptr, &type,
+                              reinterpret_cast<LPBYTE>(&value), &size);
+        RegCloseKey(key);
+        if (rc == ERROR_SUCCESS && type == REG_DWORD && value == 1) {
+          return WriteErrorClass::kAccessDeniedControlledFolderAccess;
+        }
+      }
+      return WriteErrorClass::kAccessDenied;
+    }
+    case ERROR_DISK_FULL:
+      return WriteErrorClass::kDiskFull;
+    case ERROR_WRITE_PROTECT:
+      return WriteErrorClass::kWriteProtected;
+    case ERROR_SECTOR_NOT_FOUND:
+    case ERROR_CRC:
+      return WriteErrorClass::kMediaError;
+    case ERROR_INVALID_PARAMETER:
+      return WriteErrorClass::kInvalidParameter;
+    case ERROR_IO_DEVICE:
+      return WriteErrorClass::kIoDeviceError;
+    default:
+      return WriteErrorClass::kUnknown;
+  }
+}
+
 // ============= Async I/O Implementation (using IOCP) =============
 
 bool WindowsFileOperations::SetAsyncQueueDepth(int depth) {

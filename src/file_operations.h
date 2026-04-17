@@ -40,6 +40,21 @@ enum class FileError {
   kTimeout  // Device/OS failed to complete I/O within timeout period
 };
 
+// Coarse classification of the most recent write error, platform-agnostic.
+// Implementations inspect OS-specific state (errno / GetLastError / registry)
+// and fold it into one of these categories so callers can render localized
+// user-facing messages without leaking platform error codes.
+enum class WriteErrorClass {
+  kUnknown,
+  kAccessDenied,                           // generic permission denial
+  kAccessDeniedControlledFolderAccess,     // Windows Defender CFA is blocking writes
+  kDiskFull,
+  kWriteProtected,
+  kMediaError,                             // CRC / sector-not-found / bad media
+  kInvalidParameter,
+  kIoDeviceError,                          // device disconnected or I/O hardware fault
+};
+
 // Thread-safe write latency statistics for async I/O
 // Tracks per-write latencies and wall-clock time from first submit to last complete.
 // All members are thread-safe and can be updated from async completion callbacks.
@@ -295,6 +310,11 @@ class FileOperations {
 
   // Get the last platform-specific error code (Windows error code, errno on Unix)
   virtual int GetLastErrorCode() const = 0;
+
+  // Classify the last write error into a platform-agnostic category so callers
+  // can render localized user messages. The default maps everything to
+  // kUnknown; platform implementations override to inspect OS state.
+  virtual WriteErrorClass ClassifyLastWriteError() const { return WriteErrorClass::kUnknown; }
 
   // Check if direct I/O (bypassing page cache) is enabled
   virtual bool IsDirectIOEnabled() const = 0;

@@ -60,6 +60,10 @@ class WindowsFileOperations : public FileOperations {
   // Get the last Windows error code
   int GetLastErrorCode() const override;
 
+  // Classify the last write error, including a Windows Defender Controlled
+  // Folder Access probe when access is denied.
+  WriteErrorClass ClassifyLastWriteError() const override;
+
   // Check if direct I/O is enabled
   bool IsDirectIOEnabled() const override { return using_direct_io_; }
   

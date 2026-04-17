@@ -1517,49 +1517,36 @@ void DownloadThread::_onWriteError()
     if (_cancelled)
         return;
 
-#ifdef Q_OS_WIN
-    // TODO: Implement platform-specific error handling in FileOperations
-    // For now, provide generic error message instead of: if (_file.errorCode() == ERROR_ACCESS_DENIED)
-    if (false) // Temporarily disabled
+    switch (_file->ClassifyLastWriteError())
     {
-        QString msg = tr("Access denied error while writing file to disk.");
-        QSettings registry("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Controlled Folder Access",
-                           QSettings::Registry64Format);
-        if (registry.value("EnableControlledFolderAccess").toInt() == 1)
-        {
-            msg += "<br>"+tr("Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again.");
-        }
-        else
-        {
-            msg += "<br>"+tr("The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again.");
-        }
-        _onDownloadError(msg);
+        case rpi_imager::WriteErrorClass::kAccessDeniedControlledFolderAccess:
+            _onDownloadError(tr("Access denied error while writing file to disk.") + "<br>" +
+                             tr("Controlled Folder Access seems to be enabled. Please add rpi-imager.exe to the list of allowed apps and try again."));
+            return;
+        case rpi_imager::WriteErrorClass::kAccessDenied:
+            _onDownloadError(tr("Access denied error while writing file to disk.") + "<br>" +
+                             tr("The disk may be write-protected or in use by another application. Please ensure the disk is not mounted and try again."));
+            return;
+        case rpi_imager::WriteErrorClass::kDiskFull:
+            _onDownloadError(tr("Disk is full. Please use a larger storage device."));
+            return;
+        case rpi_imager::WriteErrorClass::kWriteProtected:
+            _onDownloadError(tr("The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only."));
+            return;
+        case rpi_imager::WriteErrorClass::kMediaError:
+            _onDownloadError(tr("Media error detected. The storage device may be damaged or counterfeit. Please try a different device."));
+            return;
+        case rpi_imager::WriteErrorClass::kInvalidParameter:
+            _onDownloadError(tr("Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device."));
+            return;
+        case rpi_imager::WriteErrorClass::kIoDeviceError:
+            _onDownloadError(tr("I/O device error. The storage device may have been disconnected or is malfunctioning."));
+            return;
+        case rpi_imager::WriteErrorClass::kUnknown:
+            break;
     }
-    else if (_file->GetLastErrorCode() == ERROR_DISK_FULL)
-    {
-        _onDownloadError(tr("Disk is full. Please use a larger storage device."));
-    }
-    else if (_file->GetLastErrorCode() == ERROR_WRITE_PROTECT)
-    {
-        _onDownloadError(tr("The disk is write-protected. Please check if the disk has a physical write-protect switch or is read-only."));
-    }
-    else if (_file->GetLastErrorCode() == ERROR_SECTOR_NOT_FOUND || _file->GetLastErrorCode() == ERROR_CRC)
-    {
-        _onDownloadError(tr("Media error detected. The storage device may be damaged or counterfeit. Please try a different device."));
-    }
-    else if (_file->GetLastErrorCode() == ERROR_INVALID_PARAMETER)
-    {
-        _onDownloadError(tr("Invalid disk parameter. The storage device may not be properly recognized. Please try reconnecting the device."));
-    }
-    else if (_file->GetLastErrorCode() == ERROR_IO_DEVICE)
-    {
-        _onDownloadError(tr("I/O device error. The storage device may have been disconnected or is malfunctioning."));
-    }
-    else
-    {
-        _onDownloadError(tr("Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected."));
-    }
-#endif
+
+    _onDownloadError(tr("Error writing to storage device. Please check if the device is writable, has sufficient space, and is not write-protected."));
 }
 
 void DownloadThread::_closeFiles()
