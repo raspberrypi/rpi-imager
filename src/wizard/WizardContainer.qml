@@ -301,7 +301,7 @@ Item {
         if (stepLabel === qsTr("Remote access")) return sshEnabled
         if (stepLabel === qsTr("Secure Boot")) return secureBootEnabled
         if (stepLabel === qsTr("Raspberry Pi Connect")) return piConnectEnabled
-        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || if1WireEnabled || ifSerial !== "" || featUsbGadgetEnabled)
+        if (stepLabel === qsTr("Interfaces & Features")) return (ifI2cEnabled || ifSpiEnabled || if1WireEnabled || (ifSerial !== "" && ifSerial !== "Disabled") || featUsbGadgetEnabled)
         
         return false
     }
