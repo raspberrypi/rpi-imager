@@ -1101,11 +1101,11 @@ Please check the device and try again.</source>
     </message>
     <message>
         <source>writing partition table</source>
-        <translationWiFi>écriture de la table de partition</translation>
+        <translation>écriture de la table de partition</translation>
     </message>
     <message>
         <source>final flush</source>
-        <translationWiFi>vidage final</translation>
+        <translation>vidage final</translation>
     </message>
     <message>
         <source>final sync</source>
