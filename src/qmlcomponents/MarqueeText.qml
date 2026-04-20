@@ -142,7 +142,7 @@ Item {
         acceptedButtons: Qt.NoButton  // Don't consume clicks
 
         onContainsMouseChanged: {
-            if (containsMouse && root.truncated) {
+            if (containsMouse && root.truncated && !PlatformHelper.prefersReducedMotion) {
                 scrollingText.x = 0
                 scrollAnimation.restart()
             } else {

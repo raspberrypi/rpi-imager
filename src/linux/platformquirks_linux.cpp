@@ -1276,6 +1276,70 @@ bool isScrollInverted(bool qtInvertedFlag) {
     return qtInvertedFlag;
 }
 
+bool prefersReducedMotion() {
+    // Use absolute paths for external commands — this function may run in an
+    // elevated (root) context after pkexec.  Relative names would search PATH,
+    // which could be user-controlled.
+
+    // GNOME: org.gnome.desktop.interface enable-animations
+    // This is the standard accessibility setting on GNOME-based desktops.
+    {
+        const QString bin = QStringLiteral("/usr/bin/gsettings");
+        if (QFileInfo::exists(bin)) {
+            QProcess gsettings;
+            gsettings.start(bin, {"get", "org.gnome.desktop.interface", "enable-animations"});
+            if (gsettings.waitForFinished(500)) {
+                QString value = gsettings.readAllStandardOutput().trimmed();
+                if (value == "false") {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // KDE Plasma 5.67+: AnimationDurationFactor=0 disables animations
+    {
+        const QString bin = QStringLiteral("/usr/bin/kreadconfig5");
+        if (QFileInfo::exists(bin)) {
+            QProcess kreadconfig;
+            kreadconfig.start(bin, {"--group", "KDE", "--key", "AnimationDurationFactor"});
+            if (kreadconfig.waitForFinished(500)) {
+                QString value = kreadconfig.readAllStandardOutput().trimmed();
+                bool ok = false;
+                double factor = value.toDouble(&ok);
+                if (ok && factor == 0.0) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Fallback: GTK3 settings file — works on Raspberry Pi OS, XFCE, MATE,
+    // LXDE, LXQt, and any other GTK-based desktop without GSettings.
+    // Users can set gtk-enable-animations=0 in ~/.config/gtk-3.0/settings.ini
+    {
+        QString gtkSettingsPath = QDir::homePath() + "/.config/gtk-3.0/settings.ini";
+        QFile gtkSettings(gtkSettingsPath);
+        if (gtkSettings.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            while (!gtkSettings.atEnd()) {
+                QString line = gtkSettings.readLine().trimmed();
+                if (line.startsWith("gtk-enable-animations")) {
+                    int eq = line.indexOf('=');
+                    if (eq >= 0) {
+                        QString value = line.mid(eq + 1).trimmed();
+                        if (value == "0" || value == "false") {
+                            return true;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
 QString getWriteDevicePath(const QString& devicePath) {
     // Linux uses the same device path for both buffered and direct I/O.
     // Direct I/O is controlled via O_DIRECT flag, not device path.

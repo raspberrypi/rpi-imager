@@ -210,7 +210,7 @@ Item {
                         border.color: sw.checked ? Style.formControlActiveColor : "#bdbebf"
                         
                         Behavior on x {
-                            NumberAnimation { duration: 100 }
+                            NumberAnimation { duration: PlatformHelper.prefersReducedMotion ? 0 : 100 }
                         }
                     }
                 }

@@ -391,6 +391,12 @@ bool isScrollInverted(bool qtInvertedFlag) {
     return qtInvertedFlag;
 }
 
+bool prefersReducedMotion() {
+    // System Settings > Accessibility > Display > Reduce motion
+    // Available since macOS 10.12 (Sierra).
+    return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
+}
+
 QString getWriteDevicePath(const QString& devicePath) {
     // On macOS, use raw disk device (/dev/rdisk) for direct I/O.
     // This bypasses the macOS buffer cache and provides significantly

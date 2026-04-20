@@ -714,14 +714,14 @@ Item {
                 width: 1
                 height: parent.height * 0.75
                 color: dragHandle.isActive ? Style.sidebarDragHandleHoverColor : Style.titleSeparatorColor
-                Behavior on color { ColorAnimation { duration: 150 } }
+                Behavior on color { ColorAnimation { duration: PlatformHelper.prefersReducedMotion ? 0 : 150 } }
             }
 
             // Hover/drag highlight background
             Rectangle {
                 anchors.fill: parent
                 color: dragHandle.isActive ? Style.sidebarDragHandleHoverBackground : "transparent"
-                Behavior on color { ColorAnimation { duration: 150 } }
+                Behavior on color { ColorAnimation { duration: PlatformHelper.prefersReducedMotion ? 0 : 150 } }
             }
 
             MouseArea {
@@ -774,34 +774,34 @@ Item {
                     property: "opacity"
                     from: 0
                     to: 1
-                    duration: 250
+                    duration: PlatformHelper.prefersReducedMotion ? 0 : 250
                 }
             }
-            
+
             pushExit: Transition {
                 PropertyAnimation {
                     property: "opacity"
                     from: 1
                     to: 0
-                    duration: 250
+                    duration: PlatformHelper.prefersReducedMotion ? 0 : 250
                 }
             }
-            
+
             popEnter: Transition {
                 PropertyAnimation {
                     property: "opacity"
                     from: 0
                     to: 1
-                    duration: 250
+                    duration: PlatformHelper.prefersReducedMotion ? 0 : 250
                 }
             }
-            
+
             popExit: Transition {
                 PropertyAnimation {
                     property: "opacity"
                     from: 1
                     to: 0
-                    duration: 250
+                    duration: PlatformHelper.prefersReducedMotion ? 0 : 250
                 }
             }
             

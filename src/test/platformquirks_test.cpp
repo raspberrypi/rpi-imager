@@ -157,6 +157,12 @@ TEST_CASE("hasElevatedPrivileges returns without crashing", "[platformquirks][sa
     INFO("Running with elevated privileges: " << elevated);
 }
 
+TEST_CASE("prefersReducedMotion returns without crashing", "[platformquirks][sanity]") {
+    bool reduced = PlatformQuirks::prefersReducedMotion();
+    CHECK((reduced == true || reduced == false));
+    INFO("Prefers reduced motion: " << reduced);
+}
+
 TEST_CASE("hasNetworkConnectivity returns without crashing", "[platformquirks][sanity]") {
     bool connected = PlatformQuirks::hasNetworkConnectivity();
     CHECK((connected == true || connected == false));

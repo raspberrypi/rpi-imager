@@ -328,6 +328,7 @@ WizardStepBase {
                 from: 0
                 to: 100
                 indeterminate: root.isIndeterminateProgress && !root.isVerifying && !root.isFinalising
+                               && !PlatformHelper.prefersReducedMotion
 
                 Material.accent: Style.progressBarVerifyForegroundColor
                 Material.background: Style.progressBarBackgroundColor

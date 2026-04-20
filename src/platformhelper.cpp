@@ -40,3 +40,8 @@ qreal PlatformHelper::fontDpiCorrection() const
 {
     return PlatformQuirks::fontDpiCorrection();
 }
+
+bool PlatformHelper::prefersReducedMotion() const
+{
+    return PlatformQuirks::prefersReducedMotion();
+}

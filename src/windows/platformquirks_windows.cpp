@@ -479,6 +479,14 @@ bool isScrollInverted(bool qtInvertedFlag) {
     return scrollDirection == 0;
 }
 
+bool prefersReducedMotion() {
+    // Windows Settings > Accessibility > Visual effects > Animation effects
+    // SPI_GETCLIENTAREAANIMATION reflects the "Show animations in Windows" toggle.
+    BOOL animationsEnabled = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animationsEnabled, 0);
+    return !animationsEnabled;
+}
+
 QString getWriteDevicePath(const QString& devicePath) {
     // Windows uses PhysicalDrive paths which don't have a raw device equivalent.
     // Direct I/O is controlled via FILE_FLAG_NO_BUFFERING, not device path.

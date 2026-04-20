@@ -88,6 +88,18 @@ namespace PlatformQuirks {
     bool isScrollInverted(bool qtInvertedFlag);
 
     /**
+     * Check if the user's OS accessibility settings prefer reduced motion.
+     *
+     * Returns true when the platform signals that animations should be
+     * minimised or disabled — e.g. "Show animations" off on Windows,
+     * "Reduce motion" on macOS, or "enable-animations false" on GNOME.
+     *
+     * The result is read once (at call time) and not cached, so callers
+     * that need a live value should re-query when appropriate.
+     */
+    bool prefersReducedMotion();
+
+    /**
      * Detect the platform's preferred text scaling factor.
      *
      * Returns a multiplier (1.0 = no scaling, 1.5 = 150%, etc.) reflecting

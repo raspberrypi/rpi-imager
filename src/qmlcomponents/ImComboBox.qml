@@ -254,8 +254,8 @@ ComboBox {
             
             focus: popupComponent.visible
             interactive: true
-            flickDeceleration: 3000
-            maximumFlickVelocity: 2500
+            flickDeceleration: PlatformHelper.prefersReducedMotion ? 100000 : 3000
+            maximumFlickVelocity: PlatformHelper.prefersReducedMotion ? 0 : 2500
             
             preferredHighlightBegin: 0
             preferredHighlightEnd: height
@@ -382,7 +382,7 @@ ComboBox {
                 id: listScrollAnimation
                 target: dropdownList
                 property: "contentY"
-                duration: 150
+                duration: PlatformHelper.prefersReducedMotion ? 0 : 150
                 easing.type: Easing.OutCubic
             }
             

@@ -125,7 +125,7 @@ Item {
         focusPolicy: Qt.NoFocus
         
         Behavior on opacity {
-            NumberAnimation { duration: 150 }
+            NumberAnimation { duration: PlatformHelper.prefersReducedMotion ? 0 : 150 }
         }
         
         // Accessibility

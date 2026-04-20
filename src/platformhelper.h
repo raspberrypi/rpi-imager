@@ -72,6 +72,20 @@ public:
 
     Q_PROPERTY(qreal fontDpiCorrection READ fontDpiCorrection CONSTANT)
     qreal fontDpiCorrection() const;
+
+    /**
+     * @brief Check if the OS accessibility settings prefer reduced motion
+     *
+     * Encapsulates platform-specific reduced motion detection:
+     * - On Windows: Reads "Show animations" from SystemParametersInfo
+     * - On macOS: Reads "Reduce motion" from NSWorkspace accessibility
+     * - On Linux: Reads GSettings enable-animations (GNOME) or
+     *   AnimationDurationFactor (KDE)
+     *
+     * @return true if the user has disabled or reduced OS animations
+     */
+    Q_PROPERTY(bool prefersReducedMotion READ prefersReducedMotion CONSTANT)
+    bool prefersReducedMotion() const;
 };
 
 #endif // PLATFORMHELPER_H

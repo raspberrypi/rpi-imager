@@ -56,7 +56,7 @@ Dialog {
         color: Qt.rgba(0, 0, 0, 0.3)
         Behavior on opacity {
             NumberAnimation {
-                duration: 150
+                duration: PlatformHelper.prefersReducedMotion ? 0 : 150
             }
         }
     }

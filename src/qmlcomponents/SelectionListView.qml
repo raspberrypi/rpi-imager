@@ -48,6 +48,11 @@ ListView {
     focusPolicy: Qt.TabFocus
     boundsBehavior: Flickable.StopAtBounds
     currentIndex: -1
+
+    // Disable kinetic flick scrolling when the OS prefers reduced motion
+    maximumFlickVelocity: PlatformHelper.prefersReducedMotion ? 0 : 2500
+    flickDeceleration: PlatformHelper.prefersReducedMotion ? 100000 : 1500
+    highlightMoveDuration: PlatformHelper.prefersReducedMotion ? 0 : -1
     
     // Keep delegates instantiated beyond the visible area to prevent
     // itemAtIndex() returning null during keyboard/accessibility navigation
