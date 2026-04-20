@@ -80,7 +80,28 @@ DownloadExtractThread::DownloadExtractThread(const QByteArray &url, const QByteA
     // Get optimal buffer slot sizes (hints based on total system memory)
     size_t inputBufferSizeHint = SystemMemoryManager::instance().getOptimalInputBufferSize();
     size_t writeBufferSizeHint = _writeBufferSize;  // Already set from getOptimalWriteBufferSize()
-    
+
+    // Cap write buffer to the device's maximum single-request I/O size.
+    // This prevents the OS from splitting each write into many sub-requests,
+    // which amplifies queue pressure on devices with low queue depth. See #1592.
+    {
+        auto limits = rpi_imager::FileOperations::QueryDeviceIOLimits(_filename.toStdString());
+        if (limits.max_transfer_bytes > 0 && limits.max_transfer_bytes < writeBufferSizeHint)
+        {
+            size_t deviceMaxBytes = limits.max_transfer_bytes;
+            // Align down to page boundary for O_DIRECT / FILE_FLAG_NO_BUFFERING compatibility
+            deviceMaxBytes = (deviceMaxBytes / pageSize) * pageSize;
+            if (deviceMaxBytes >= pageSize)
+            {
+                qDebug() << "Capping write buffer from" << writeBufferSizeHint
+                         << "to" << deviceMaxBytes << "bytes"
+                         << "(device max transfer:" << limits.max_transfer_bytes << ")";
+                writeBufferSizeHint = deviceMaxBytes;
+                _writeBufferSize = deviceMaxBytes;
+            }
+        }
+    }
+
     // Use COORDINATED ring buffer allocation to prevent memory exhaustion
     // This ensures both ring buffers together fit within 30% of available memory.
     // Buffer sizes may be scaled down on low-memory systems while maintaining
@@ -130,6 +151,42 @@ DownloadExtractThread::~DownloadExtractThread()
     // Ring buffer destructors handle memory cleanup
     _writeRingBuffer.reset();
     _ringBuffer.reset();
+}
+
+void DownloadExtractThread::_onDevicePrepared()
+{
+    // If the user asked to ignore device limits and the write buffer was capped
+    // below the RAM-based optimum, reallocate the ring buffers at full size.
+    // This runs after _openAndPrepareDevice() but before any ring buffer access.
+    if (!_debugIgnoreDeviceLimits)
+        return;
+
+    size_t optimalWriteSize = SystemMemoryManager::instance().getOptimalWriteBufferSize();
+    if (_writeBufferSize >= optimalWriteSize)
+        return;  // wasn't capped — nothing to do
+
+    qDebug() << "Ignoring device I/O limits: reallocating ring buffers"
+             << "(write buffer" << _writeBufferSize << "->" << optimalWriteSize << ")";
+
+    size_t pageSize = SystemMemoryManager::instance().getSystemPageSize();
+    size_t inputBufferSizeHint = SystemMemoryManager::instance().getOptimalInputBufferSize();
+    size_t writeBufferSizeHint = optimalWriteSize;
+
+    size_t inputSlots, writeSlots;
+    size_t actualInputSize, actualWriteSize;
+    size_t totalMemory = SystemMemoryManager::instance().getCoordinatedRingBufferConfig(
+        inputBufferSizeHint, writeBufferSizeHint,
+        inputSlots, writeSlots,
+        actualInputSize, actualWriteSize);
+
+    _writeBufferSize = actualWriteSize;
+    _ringBuffer = std::make_unique<RingBuffer>(inputSlots, actualInputSize, pageSize);
+    _writeRingBuffer = std::make_shared<RingBuffer>(writeSlots, actualWriteSize, pageSize);
+
+    qDebug() << "Reallocated ring buffers:"
+             << "input" << inputSlots << "x" << actualInputSize
+             << "write" << writeSlots << "x" << actualWriteSize
+             << "total" << (totalMemory / (1024 * 1024)) << "MB";
 }
 
 void DownloadExtractThread::_emitProgressUpdate()

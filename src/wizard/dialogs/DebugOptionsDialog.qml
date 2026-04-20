@@ -36,7 +36,7 @@ BaseDialog {
             return []
         }, 0)
         registerFocusGroup("options", function(){ 
-            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem, chkSkipEndOfDevice.focusItem, chkRpiboot.focusItem, browseGadgetButton]
+            return [chkDirectIO.focusItem, chkAsyncIO.focusItem, chkIgnoreDeviceLimits.focusItem, chkPeriodicSync.focusItem, chkVerboseLogging.focusItem, chkIPv4Only.focusItem, chkSkipEndOfDevice.focusItem, chkRpiboot.focusItem, browseGadgetButton]
         }, 1)
         registerFocusGroup("buttons", function(){ 
             return [cancelButton, applyButton]
@@ -187,6 +187,17 @@ BaseDialog {
                 font.pointSize: Style.fontSizeSmall
                 font.family: Style.fontFamily
                 color: Style.textDescriptionColor
+            }
+
+            ImOptionPill {
+                id: chkIgnoreDeviceLimits
+                text: qsTr("Ignore Device I/O Limits")
+                accessibleDescription: qsTr("Ignore the device-reported queue depth and transfer size limits. Useful for USB-NVMe enclosures that under-report their capabilities.")
+                Layout.fillWidth: true
+                visible: chkAsyncIO.checked
+                Component.onCompleted: {
+                    focusItem.activeFocusOnTab = true
+                }
             }
 
             ImOptionPill {
@@ -487,6 +498,7 @@ BaseDialog {
             chkPeriodicSync.checked = imageWriter.getDebugPeriodicSync();
             chkVerboseLogging.checked = imageWriter.getDebugVerboseLogging();
             chkIPv4Only.checked = imageWriter.getDebugIPv4Only();
+            chkIgnoreDeviceLimits.checked = imageWriter.getDebugIgnoreDeviceLimits();
             chkSkipEndOfDevice.checked = imageWriter.getDebugSkipEndOfDevice();
             chkRpiboot.checked = imageWriter.getDebugRpiboot();
             gadgetPathText.gadgetPath = imageWriter.getDebugCustomFastbootGadget();
@@ -504,6 +516,7 @@ BaseDialog {
         imageWriter.setDebugPeriodicSync(chkPeriodicSync.checked);
         imageWriter.setDebugVerboseLogging(chkVerboseLogging.checked);
         imageWriter.setDebugIPv4Only(chkIPv4Only.checked);
+        imageWriter.setDebugIgnoreDeviceLimits(chkIgnoreDeviceLimits.checked);
         imageWriter.setDebugSkipEndOfDevice(chkSkipEndOfDevice.checked);
         imageWriter.setDebugRpiboot(chkRpiboot.checked);
         imageWriter.setDebugCustomFastbootGadget(gadgetPathText.gadgetPath || "");

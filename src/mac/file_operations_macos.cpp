@@ -30,6 +30,9 @@ using rpi_imager::TimeoutDefaults::kMinAsyncQueueDepth;
 
 namespace rpi_imager {
 
+// Forward declaration — defined at bottom of file
+FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path);
+
 // Use the common logging function from file_operations.cpp
 static void Log(const std::string& msg) {
     FileOperationsLog(msg);
@@ -175,11 +178,24 @@ FileError MacOSFileOperations::OpenDevice(const std::string& path) {
       std::cout << "Warning: Could not enable direct I/O, continuing with buffered I/O" << std::endl;
     }
     
-    std::cout << "Successfully opened device with authorization, fd=" << fd_ 
+    // Query device I/O limits via ioctl now that we have an open fd.
+    // DKIOCGETMAXBYTECOUNTWRITE returns the maximum single write size the driver accepts.
+#ifdef DKIOCGETMAXBYTECOUNTWRITE
+    {
+      uint64_t maxWriteBytes = 0;
+      if (ioctl(fd_, DKIOCGETMAXBYTECOUNTWRITE, &maxWriteBytes) == 0 && maxWriteBytes > 0) {
+        device_io_limits_.max_transfer_bytes = static_cast<size_t>(maxWriteBytes);
+        std::cout << "Device max write transfer: " << maxWriteBytes << " bytes" << std::endl;
+      }
+    }
+#endif
+    // macOS doesn't expose queue depth directly; leave suggested_queue_depth as 0
+
+    std::cout << "Successfully opened device with authorization, fd=" << fd_
               << (using_direct_io_ ? " (direct I/O enabled)" : " (buffered I/O)") << std::endl;
     return FileError::kSuccess;
   }
-  
+
   // For regular files, use standard POSIX open
   return OpenInternal(path.c_str(), O_RDWR);
 }
@@ -852,6 +868,13 @@ void MacOSFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
 }
 
 // GetAsyncIOStats() inherited from FileOperations base class
+
+// macOS requires authorization to open block devices, so pre-open queries are not practical.
+// Device I/O limits are populated post-open via ioctl in OpenDevice() instead.
+FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path) {
+  (void)path;
+  return {};
+}
 
 // Platform-specific factory function implementation
 std::unique_ptr<FileOperations> CreatePlatformFileOperations() {

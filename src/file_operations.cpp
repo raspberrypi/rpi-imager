@@ -35,12 +35,17 @@ void FileOperationsLog(const std::string& msg) {
 #endif
 }
 
-// This function is implemented in the platform-specific source files
+// These functions are implemented in the platform-specific source files
 // Each platform provides its own implementation
 extern std::unique_ptr<FileOperations> CreatePlatformFileOperations();
+extern FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path);
 
 std::unique_ptr<FileOperations> FileOperations::Create() {
   return CreatePlatformFileOperations();
+}
+
+FileOperations::DeviceIOLimits FileOperations::QueryDeviceIOLimits(const std::string& path) {
+  return QueryPlatformDeviceIOLimits(path);
 }
 
 } // namespace rpi_imager 

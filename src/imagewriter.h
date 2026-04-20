@@ -277,6 +277,8 @@ public:
     Q_INVOKABLE void setDebugIPv4Only(bool enabled);
     Q_INVOKABLE bool getDebugSkipEndOfDevice() const;
     Q_INVOKABLE void setDebugSkipEndOfDevice(bool enabled);
+    Q_INVOKABLE bool getDebugIgnoreDeviceLimits() const;
+    Q_INVOKABLE void setDebugIgnoreDeviceLimits(bool enabled);
     Q_INVOKABLE bool getDebugRpiboot() const;
     Q_INVOKABLE void setDebugRpiboot(bool enabled);
     Q_INVOKABLE QString getDebugCustomFastbootGadget() const;
@@ -503,6 +505,7 @@ protected:
     int _debugAsyncQueueDepth;
     bool _debugIPv4Only;
     bool _debugSkipEndOfDevice;
+    bool _debugIgnoreDeviceLimits;
     bool _debugRpiboot;
     QString _debugCustomFastbootGadget;
 

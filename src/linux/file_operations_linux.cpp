@@ -32,7 +32,12 @@ using rpi_imager::TimeoutDefaults::kAsyncFirstCompletionTimeoutMs;
 #include <liburing.h>
 #endif
 
+#include <fstream>
+
 namespace rpi_imager {
+
+// Forward declaration — defined at bottom of file, called from OpenDevice()
+FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path);
 
 // Use the common logging function from file_operations.cpp
 static void Log(const std::string& msg) {
@@ -272,7 +277,17 @@ FileError LinuxFileOperations::OpenDevice(const std::string& path) {
   first_async_error_ = FileError::kSuccess;
   cancelled_.store(false);
   write_latency_stats_.reset();
-  
+
+  if (result == FileError::kSuccess) {
+    device_io_limits_ = QueryPlatformDeviceIOLimits(current_path_);
+    if (device_io_limits_.max_transfer_bytes > 0 || device_io_limits_.suggested_queue_depth > 0) {
+      std::ostringstream oss;
+      oss << "Device I/O limits: max_transfer=" << device_io_limits_.max_transfer_bytes
+          << " bytes, suggested_queue_depth=" << device_io_limits_.suggested_queue_depth;
+      Log(oss.str());
+    }
+  }
+
   return result;
 }
 
@@ -982,6 +997,39 @@ void LinuxFileOperations::ReduceQueueDepthForRecovery(int newDepth) {
 #else
   (void)newDepth;
 #endif
+}
+
+// Query device I/O limits from sysfs without requiring an open file descriptor.
+// Returns zero-initialized struct if the device path isn't a block device or sysfs is unavailable.
+FileOperations::DeviceIOLimits QueryPlatformDeviceIOLimits(const std::string& path) {
+  FileOperations::DeviceIOLimits limits;
+
+  // Extract device name from path (e.g. "/dev/sda" -> "sda")
+  if (path.find("/dev/") != 0)
+    return limits;
+  std::string devname = path.substr(5);
+  if (devname.empty())
+    return limits;
+
+  std::string queueDir = "/sys/block/" + devname + "/queue/";
+
+  // Read nr_requests — block layer scheduler queue depth
+  {
+    std::ifstream f(queueDir + "nr_requests");
+    int val = 0;
+    if (f >> val && val > 0)
+      limits.suggested_queue_depth = val;
+  }
+
+  // Read max_sectors_kb — maximum single I/O request size the block layer will accept
+  {
+    std::ifstream f(queueDir + "max_sectors_kb");
+    int val = 0;
+    if (f >> val && val > 0)
+      limits.max_transfer_bytes = static_cast<size_t>(val) * 1024;
+  }
+
+  return limits;
 }
 
 // Platform-specific factory function implementation

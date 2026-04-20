@@ -150,6 +150,7 @@ ImageWriter::ImageWriter(QObject *parent)
     _debugAsyncIO = true;       // Async I/O enabled by default for performance
     _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
     _debugSkipEndOfDevice = false; // Normal behavior; enable for counterfeit cards
+    _debugIgnoreDeviceLimits = false; // Use device-reported I/O limits by default
     _debugRpiboot = false;          // Rpiboot/fastboot support disabled by default
     
     // Calculate optimal async queue depth based on system memory
@@ -1540,6 +1541,7 @@ void ImageWriter::startWrite()
     _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
     _thread->setDebugIPv4Only(_debugIPv4Only);
     _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
+    _thread->setDebugIgnoreDeviceLimits(_debugIgnoreDeviceLimits);
 
     // Only set up cache operations for remote downloads, not when using cached files as source
     if (!_expectedHash.isEmpty() && !QUrl(urlstr).isLocalFile())
@@ -3387,6 +3389,19 @@ void ImageWriter::setDebugSkipEndOfDevice(bool enabled)
     }
 }
 
+bool ImageWriter::getDebugIgnoreDeviceLimits() const
+{
+    return _debugIgnoreDeviceLimits;
+}
+
+void ImageWriter::setDebugIgnoreDeviceLimits(bool enabled)
+{
+    if (_debugIgnoreDeviceLimits != enabled) {
+        _debugIgnoreDeviceLimits = enabled;
+        qDebug() << "Debug: Ignore device I/O limits" << (enabled ? "enabled" : "disabled");
+    }
+}
+
 bool ImageWriter::getDebugRpiboot() const
 {
     return _debugRpiboot;
@@ -4371,6 +4386,7 @@ void ImageWriter::_continueStartWriteAfterCacheVerification(bool cacheIsValid)
     _thread->setDebugAsyncQueueDepth(_debugAsyncQueueDepth);
     _thread->setDebugIPv4Only(_debugIPv4Only);
     _thread->setDebugSkipEndOfDevice(_debugSkipEndOfDevice);
+    _thread->setDebugIgnoreDeviceLimits(_debugIgnoreDeviceLimits);
 
     // Handle caching setup for downloads using CacheManager
     // Only set up caching when we're downloading (not using cached file as source)

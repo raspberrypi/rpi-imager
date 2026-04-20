@@ -95,6 +95,7 @@ DownloadThread::DownloadThread(const QByteArray &url, const QByteArray &localfil
     _debugAsyncQueueDepth = 16; // Default queue depth
     _debugIPv4Only = false;     // Use both IPv4 and IPv6 by default
     _debugSkipEndOfDevice = false; // For counterfeit cards with fake capacity
+    _debugIgnoreDeviceLimits = false; // Ignore device-reported I/O limits
     
     // Initialize bottleneck detection
     _currentBottleneck = BottleneckState::None;
@@ -399,6 +400,31 @@ bool DownloadThread::_openAndPrepareDevice()
         _file->SetDirectIOEnabled(true);
     }
     
+    // Cap async queue depth based on device-reported I/O limits.
+    // USB card readers often expose very few request slots (e.g. nr_requests=2).
+    // Without this cap, submitting hundreds of concurrent writes can overwhelm the
+    // device queue and stall async completions entirely. See #1592.
+    {
+        const auto& limits = _file->GetDeviceIOLimits();
+        if (_debugAsyncIO && limits.suggested_queue_depth > 0 && !_debugIgnoreDeviceLimits)
+        {
+            // Use 3x the device's queue depth for write-ahead latency hiding.
+            // Network downloads feed the write queue in bursts (jitter + decompression),
+            // so we need more headroom than pure sequential I/O to prevent device
+            // starvation during pipeline stalls.  See #1592.
+            int deviceCap = qMax(4, limits.suggested_queue_depth * 3);
+            if (deviceCap < _debugAsyncQueueDepth)
+            {
+                qDebug() << "Capping async queue depth from" << _debugAsyncQueueDepth
+                         << "to" << deviceCap
+                         << "(device suggested:" << limits.suggested_queue_depth << ")";
+                _debugAsyncQueueDepth = deviceCap;
+            }
+        }
+        if (limits.max_transfer_bytes > 0)
+            qDebug() << "Device max transfer:" << limits.max_transfer_bytes << "bytes";
+    }
+
     // Configure async I/O if enabled
     if (_debugAsyncIO && _file->IsAsyncIOSupported()) {
         bool asyncConfigured = _file->SetAsyncQueueDepth(_debugAsyncQueueDepth);
@@ -569,6 +595,11 @@ void DownloadThread::run()
     {
         return;
     }
+
+    // Give subclasses a chance to adjust buffers now that debug flags and device
+    // limits are known.  Called after _openAndPrepareDevice() but before any
+    // ring-buffer access (which starts when curl_easy_perform delivers data).
+    _onDevicePrepared();
 
     // URL logged only on error
     if (_url.startsWith("file://") && _url.at(7) != '/')
@@ -2244,6 +2275,12 @@ void DownloadThread::setDebugSkipEndOfDevice(bool enabled)
 {
     _debugSkipEndOfDevice = enabled;
     qDebug() << "DownloadThread: Skip end-of-device operations" << (enabled ? "enabled (for counterfeit cards)" : "disabled");
+}
+
+void DownloadThread::setDebugIgnoreDeviceLimits(bool enabled)
+{
+    _debugIgnoreDeviceLimits = enabled;
+    qDebug() << "DownloadThread: Ignore device I/O limits" << (enabled ? "enabled" : "disabled");
 }
 
 bool DownloadThread::_customizeImage()

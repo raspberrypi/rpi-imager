@@ -537,4 +537,45 @@ if(NOT WIN32)
     )
 endif()
 
+# ============================================================================
+# Device I/O Limits Diagnostic Test
+# ============================================================================
+# Reports raw DeviceIOLimits values for all connected drives.
+# Validates the queue-depth and max-transfer heuristics against real hardware.
 
+add_executable(device_io_limits_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../file_operations.cpp
+    ${PLATFORM_FILE_OPS}
+    device_io_limits_test.cpp
+)
+
+set_target_properties(device_io_limits_test PROPERTIES AUTOMOC ON)
+
+target_include_directories(device_io_limits_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_link_libraries(device_io_limits_test PRIVATE
+    Catch2::Catch2WithMain
+    Qt6::Core
+)
+
+if(APPLE)
+    target_link_libraries(device_io_limits_test PRIVATE
+        "-framework Security"
+        "-framework DiskArbitration"
+        "-framework CoreFoundation"
+    )
+endif()
+
+target_compile_features(device_io_limits_test PRIVATE cxx_std_20)
+
+catch_discover_tests(device_io_limits_test)
+
+add_custom_target(test_device_io_limits
+    COMMAND device_io_limits_test
+    DEPENDS device_io_limits_test
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Running device I/O limits diagnostic"
+)

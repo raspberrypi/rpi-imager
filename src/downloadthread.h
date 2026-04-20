@@ -135,6 +135,7 @@ public:
     void setDebugAsyncQueueDepth(int depth);
     void setDebugIPv4Only(bool enabled);
     void setDebugSkipEndOfDevice(bool enabled);
+    void setDebugIgnoreDeviceLimits(bool enabled);
 
     /*
      * Thread safe download progress query functions
@@ -246,6 +247,7 @@ protected:
     virtual void _onVerifyProgress() {}  // Called during verify loop for progress updates
     int _authopen(const QByteArray &filename);
     bool _openAndPrepareDevice();
+    virtual void _onDevicePrepared() {}  // Hook for subclasses after device open, before writes
     void _writeCache(const char *buf, size_t len);
     qint64 _sectorsWritten();
     void _closeFiles();
@@ -313,7 +315,8 @@ protected:
     int _debugAsyncQueueDepth;
     bool _debugIPv4Only;
     bool _debugSkipEndOfDevice;
-    
+    bool _debugIgnoreDeviceLimits;
+
     void _initializeSyncConfiguration();
     void _updateBottleneckState();
 
