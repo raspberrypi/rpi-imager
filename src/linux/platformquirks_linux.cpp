@@ -1298,9 +1298,12 @@ bool prefersReducedMotion() {
     }
 
     // KDE Plasma 5.67+: AnimationDurationFactor=0 disables animations
+    // Prefer kreadconfig6 (Plasma 6), fallback to kreadconfig5 (Plasma 5).
     {
-        const QString sessionVersion = qEnvironmentVariable("KDE_SESSION_VERSION");
-        const QString bin = QStringLiteral("/usr/bin/kreadconfig") + sessionVersion;
+        QString bin = QStringLiteral("/usr/bin/kreadconfig6");
+        if(!QFileInfo::exists(bin)) {
+            bin = QStringLiteral("/usr/bin/kreadconfig5");
+        }
         if (QFileInfo::exists(bin)) {
             QProcess kreadconfig;
             kreadconfig.start(bin, {"--group", "KDE", "--key", "AnimationDurationFactor"});
