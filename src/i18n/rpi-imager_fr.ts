@@ -3037,7 +3037,7 @@ Please check your storage device and try again.</source>
     </message>
     <message>
         <source>This action is PERMANENT and CANNOT be undone.</source>
-        <translation>Cette action est PERMANENTE et NE PEUX PAS être annulée.</translation>
+        <translation>Cette action est PERMANENTE et NE PEUT PAS être annulée.</translation>
     </message>
     <message>
         <source>I understand, erase and write</source>
