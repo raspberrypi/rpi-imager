@@ -61,7 +61,7 @@
     </message>
     <message>
         <source>Disable confirmation prompts before writing images, requiring only exact name entry for system drives</source>
-        <translation>Yazma öncesi onay kutularını devre dışı bırak, Sistem sürücüleri için sadece isim onayı gerektirir</translation>
+        <translation>Yazma öncesi onay kutularını devre dışı bırak (Sistem sürücüleri için sadece isim onayı gerektirir)</translation>
     </message>
     <message>
         <source>Play an audio notification when the image write process completes</source>
@@ -85,7 +85,7 @@
     </message>
     <message>
         <source>Secure Boot RSA Key</source>
-        <translation>Güvenli Önyükleme RSA Anahtarı</translation>
+        <translation>Güvenli Önyükleme (Secure Boot) RSA Anahtarı</translation>
     </message>
     <message>
         <source>Change</source>
